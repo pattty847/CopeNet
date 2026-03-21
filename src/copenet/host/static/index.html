@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>CopeNet</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #0d0e12;
+      --surface: #16181e;
+      --border: #2a2d36;
+      --text: #e6e8ec;
+      --text-muted: #8b909a;
+      --accent: #7c9cff;
+      --accent-dim: #5a7ae8;
+      --success: #6bcb8f;
+      --error: #e86c6c;
+      --radius: 10px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: "Outfit", system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      display: flex;
+      flex-direction: column;
+    }
+    header {
+      padding: 0.75rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 0.75rem;
+    }
+    header h1 {
+      font-size: 1.1rem;
+      font-weight: 600;
+      margin: 0;
+      letter-spacing: 0.02em;
+    }
+    .pill {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.7rem;
+      padding: 0.2rem 0.5rem;
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--text-muted);
+    }
+    .status { display: flex; align-items: center; gap: 0.35rem; }
+    .status::before {
+      content: "";
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--text-muted);
+    }
+    .status.connected::before { background: var(--success); }
+    .status.error::before { background: var(--error); }
+    main {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 200px 1fr;
+      grid-template-rows: 1fr auto;
+      gap: 0;
+      min-height: 0;
+    }
+    .sessions-panel {
+      grid-row: 1 / -1;
+      border-right: 1px solid var(--border);
+      padding: 0.75rem;
+      overflow-y: auto;
+      background: var(--surface);
+    }
+    .sessions-panel h2 {
+      font-size: 0.7rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: var(--text-muted);
+      margin: 0 0 0.5rem 0;
+    }
+    .session-item {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.8rem;
+      padding: 0.4rem 0.5rem;
+      border-radius: 6px;
+      cursor: pointer;
+      margin-bottom: 2px;
+      word-break: break-all;
+    }
+    .session-item:hover { background: var(--border); }
+    .session-item.active { background: var(--accent-dim); color: #fff; }
+    .chat-area {
+      display: flex;
+      flex-direction: column;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .messages {
+      flex: 1;
+      overflow-y: auto;
+      padding: 1rem 1.25rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.75rem;
+    }
+    .msg {
+      max-width: 85%;
+      padding: 0.6rem 0.85rem;
+      border-radius: var(--radius);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+    .msg.user {
+      align-self: flex-end;
+      background: var(--accent-dim);
+      color: #fff;
+    }
+    .msg.assistant {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .msg .meta { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .input-row {
+      padding: 0.75rem 1.25rem;
+      border-top: 1px solid var(--border);
+      background: var(--surface);
+      display: flex;
+      gap: 0.5rem;
+      align-items: flex-end;
+    }
+    .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 0.35rem; }
+    .prompt-select {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.25rem 0.5rem;
+      max-width: 220px;
+    }
+    .prompt-select:focus { outline: none; border-color: var(--accent); }
+    .input-row textarea {
+      flex: 1;
+      min-height: 44px;
+      max-height: 160px;
+      padding: 0.6rem 0.75rem;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--bg);
+      color: var(--text);
+      font-family: inherit;
+      font-size: 0.9rem;
+      resize: none;
+    }
+    .input-row textarea::placeholder { color: var(--text-muted); }
+    .input-row textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+    .input-row button {
+      padding: 0.6rem 1rem;
+      border-radius: var(--radius);
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      font-weight: 500;
+      cursor: pointer;
+      font-family: inherit;
+    }
+    .input-row button:hover { background: var(--accent-dim); }
+    .input-row button:disabled { opacity: 0.5; cursor: not-allowed; }
+    .empty-state {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: var(--text-muted);
+      font-size: 0.9rem;
+    }
+    .error-banner {
+      padding: 0.5rem 1rem;
+      background: rgba(232, 108, 108, 0.15);
+      color: var(--error);
+      font-size: 0.85rem;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>CopeNet</h1>
+    <span class="pill">codex-cli</span>
+    <span id="status" class="status">Disconnected</span>
+  </header>
+  <main>
+    <aside class="sessions-panel">
+      <h2>Sessions</h2>
+      <div id="sessions-list"></div>
+    </aside>
+    <div class="chat-area">
+      <div id="error-banner" class="error-banner" style="display: none;"></div>
+      <div id="messages" class="messages">
+        <div id="empty-state" class="empty-state">Pick a session or type a message to start.</div>
+      </div>
+      <div class="input-row">
+        <div class="input-wrap">
+          <select id="prompt-preset" class="prompt-select" title="System prompt preset">
+            <option value="">None</option>
+          </select>
+          <textarea id="input" placeholder="Message the agent…" rows="1"></textarea>
+        </div>
+        <button id="send" type="button">Send</button>
+      </div>
+    </div>
+  </main>
+  <script src="/static/app.js"></script>
+</body>
+</html>
