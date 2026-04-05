@@ -1,5 +1,21 @@
-"""System prompt presets for CopeNet (bundled and user-selectable)."""
+"""Prompt profiles and task overlays for CopeNet."""
 
-from copenet.prompts.loader import get_preset_text, list_presets
+from copenet.prompts.loader import (
+    compose_prompt,
+    get_preset_text,
+    get_profile_text,
+    get_task_mode_text,
+    list_presets,
+    list_profiles,
+    list_task_modes,
+)
 
-__all__ = ["get_preset_text", "list_presets"]
+__all__ = [
+    "compose_prompt",
+    "get_preset_text",
+    "get_profile_text",
+    "get_task_mode_text",
+    "list_presets",
+    "list_profiles",
+    "list_task_modes",
+]

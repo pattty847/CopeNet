@@ -10,7 +10,7 @@ from uuid import uuid4
 from fastapi import WebSocket, WebSocketDisconnect
 
 from copenet.orchestrator import ChatSendRequest, Orchestrator, SessionInFlightError
-from copenet.prompts import get_preset_text, list_presets
+from copenet.prompts import compose_prompt, list_profiles, list_task_modes
 from copenet.host.rpc_schema import (
     ChatEventPayload,
     EventFrame,
@@ -102,12 +102,13 @@ class CopeNetWsServer:
                 elif req.method == "chat.history":
                     await self._handle_chat_history(req.id, req.params, send_json)
                 elif req.method == "sessions.list":
+                    include_archived = bool((req.params or {}).get("includeArchived", False))
                     await send_json(
                         make_response_frame(
                             ResponseFrame(
                                 id=req.id,
                                 ok=True,
-                                payload={"sessions": self._orchestrator.list_sessions()},
+                                payload={"sessions": self._orchestrator.list_sessions(include_archived=include_archived)},
                             )
                         )
                     )
@@ -117,10 +118,138 @@ class CopeNetWsServer:
                             ResponseFrame(
                                 id=req.id,
                                 ok=True,
-                                payload={"prompts": list_presets()},
+                                payload={
+                                    "prompts": list_profiles(),
+                                    "profiles": list_profiles(),
+                                    "taskModes": list_task_modes(),
+                                },
                             )
                         )
                     )
+                elif req.method == "providers.list":
+                    await send_json(
+                        make_response_frame(
+                            ResponseFrame(
+                                id=req.id,
+                                ok=True,
+                                payload={"providers": await self._orchestrator.list_providers_catalog()},
+                            )
+                        )
+                    )
+                elif req.method == "models.list":
+                    provider_id = str((req.params or {}).get("provider") or "").strip() or None
+                    kind = str((req.params or {}).get("kind") or "chat").strip() or "chat"
+                    await send_json(
+                        make_response_frame(
+                            ResponseFrame(
+                                id=req.id,
+                                ok=True,
+                                payload={"models": await self._orchestrator.list_models(provider_id=provider_id, kind=kind)},
+                            )
+                        )
+                    )
+                elif req.method == "sessions.create":
+                    raw = req.params or {}
+                    provider = str(raw.get("provider") or "").strip()
+                    model = str(raw.get("model") or "").strip() or None
+                    key = str(raw.get("key") or "").strip() or None
+                    title = str(raw.get("title") or "").strip() or None
+                    system_prompt_id = str(raw.get("systemPromptId") or "").strip() or None
+                    task_prompt_id = str(raw.get("taskPromptId") or "").strip() or None
+                    if not provider:
+                        await send_json(
+                            make_response_frame(
+                                ResponseFrame(
+                                    id=req.id,
+                                    ok=False,
+                                    error=RpcError(code="INVALID_REQUEST", message="provider is required"),
+                                )
+                            )
+                        )
+                        continue
+                    try:
+                        session = self._orchestrator.create_session_with_profile(
+                            provider=provider,
+                            model=model,
+                            key=key,
+                            title=title,
+                            system_prompt_id=system_prompt_id,
+                            task_prompt_id=task_prompt_id,
+                        )
+                    except Exception as exc:
+                        await send_json(
+                            make_response_frame(
+                                ResponseFrame(
+                                    id=req.id,
+                                    ok=False,
+                                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                                )
+                            )
+                        )
+                        continue
+                    await send_json(make_response_frame(ResponseFrame(id=req.id, ok=True, payload={"session": session})))
+                elif req.method == "sessions.rename":
+                    raw = req.params or {}
+                    key = str(raw.get("key") or "").strip()
+                    if not key:
+                        await send_json(
+                            make_response_frame(
+                                ResponseFrame(
+                                    id=req.id,
+                                    ok=False,
+                                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                                )
+                            )
+                        )
+                        continue
+                    try:
+                        session = self._orchestrator.rename_session(
+                            session_key=key,
+                            title=str(raw.get("title") or "").strip() or None,
+                        )
+                    except Exception as exc:
+                        await send_json(
+                            make_response_frame(
+                                ResponseFrame(
+                                    id=req.id,
+                                    ok=False,
+                                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                                )
+                            )
+                        )
+                        continue
+                    await send_json(make_response_frame(ResponseFrame(id=req.id, ok=True, payload={"session": session})))
+                elif req.method == "sessions.archive":
+                    raw = req.params or {}
+                    key = str(raw.get("key") or "").strip()
+                    if not key:
+                        await send_json(
+                            make_response_frame(
+                                ResponseFrame(
+                                    id=req.id,
+                                    ok=False,
+                                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                                )
+                            )
+                        )
+                        continue
+                    try:
+                        session = self._orchestrator.archive_session(
+                            session_key=key,
+                            archived=bool(raw.get("archived", True)),
+                        )
+                    except Exception as exc:
+                        await send_json(
+                            make_response_frame(
+                                ResponseFrame(
+                                    id=req.id,
+                                    ok=False,
+                                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                                )
+                            )
+                        )
+                        continue
+                    await send_json(make_response_frame(ResponseFrame(id=req.id, ok=True, payload={"session": session})))
                 elif req.method == "sessions.resolve":
                     key = str((req.params or {}).get("key") or "").strip()
                     if not key:
@@ -196,7 +325,12 @@ class CopeNetWsServer:
                                 "chat.abort",
                                 "chat.history",
                                 "prompts.list",
+                                "providers.list",
+                                "models.list",
                                 "sessions.list",
+                                "sessions.create",
+                                "sessions.rename",
+                                "sessions.archive",
                                 "sessions.resolve",
                             ],
                             "events": ["connect.challenge", "chat"],
@@ -225,10 +359,9 @@ class CopeNetWsServer:
             return
 
         run_id = idempotency_key or str(uuid4())
-        system_prompt: str | None = None
-        preset_id = str(raw.get("systemPromptId") or "").strip()
-        if preset_id:
-            system_prompt = get_preset_text(preset_id)
+        profile_id = str(raw.get("systemPromptId") or "").strip()
+        task_prompt_id = str(raw.get("taskPromptId") or "").strip()
+        system_prompt = compose_prompt(profile_id or None, task_prompt_id or None)
 
         await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"runId": run_id, "status": "started"})))
 
@@ -242,6 +375,9 @@ class CopeNetWsServer:
                         state=str(payload.get("state") or "error"),
                         message=payload.get("message") if isinstance(payload.get("message"), dict) else None,
                         error_message=str(payload.get("errorMessage")) if payload.get("errorMessage") else None,
+                        provider=str(payload.get("provider")) if payload.get("provider") else None,
+                        model=str(payload.get("model")) if payload.get("model") else None,
+                        capabilities=payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else None,
                     )
                 )
             )
@@ -254,6 +390,9 @@ class CopeNetWsServer:
                         message=message,
                         idempotency_key=run_id,
                         provider=str(raw.get("provider") or "codex-cli"),
+                        model=str(raw.get("model") or "").strip() or None,
+                        system_prompt_id=profile_id or None,
+                        task_prompt_id=task_prompt_id or None,
                         timeout_ms=int(raw.get("timeoutMs")) if raw.get("timeoutMs") else None,
                         system_prompt=system_prompt,
                     ),

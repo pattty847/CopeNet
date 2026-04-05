@@ -29,6 +29,7 @@ class TranscriptMessage:
     role: str
     content: str
     provider: str
+    model: str | None
     provider_session_id: str | None
     timestamp: str
     state: str | None = None
@@ -40,6 +41,7 @@ class TranscriptMessage:
             "role": self.role,
             "content": self.content,
             "provider": self.provider,
+            "model": self.model,
             "providerSessionId": self.provider_session_id,
             "timestamp": self.timestamp,
         }

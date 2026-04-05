@@ -28,6 +28,9 @@ class ChatEventPayload:
     state: ChatState
     message: dict[str, Any] | None = None
     error_message: str | None = None
+    provider: str | None = None
+    model: str | None = None
+    capabilities: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -120,6 +123,9 @@ def make_chat_event(payload: ChatEventPayload) -> dict[str, Any]:
                 "state": payload.state,
                 "message": payload.message,
                 "errorMessage": payload.error_message,
+                "provider": payload.provider,
+                "model": payload.model,
+                "capabilities": payload.capabilities,
             },
             seq=payload.seq,
         )

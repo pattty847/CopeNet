@@ -8,7 +8,7 @@ import os
 import shutil
 from typing import AsyncIterator, Callable
 
-from copenet.providers.base import ProviderEvent
+from copenet.providers.base import ProviderEvent, ProviderModel
 from copenet.runner.cli_runner import CliRunner, RunnerEvent, RunnerResult
 
 
@@ -26,6 +26,7 @@ class CodexCliProvider:
     """Provider adapter that talks to Codex CLI via subprocess."""
 
     name = "codex-cli"
+    display_name = "Codex"
 
     def __init__(
         self,
@@ -115,11 +116,34 @@ class CodexCliProvider:
 
         return (None, normalized_thread)
 
+    async def describe(self) -> dict[str, object]:
+        """Report provider status for UI catalog rendering."""
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "supportsModelSelection": False,
+            "modelCount": 0,
+            "capabilities": {
+                "chat": True,
+                "embeddings": False,
+                "toolCalls": True,
+                "streaming": True,
+                "resume": True,
+            },
+        }
+
+    async def list_models(self) -> list[ProviderModel]:
+        """Codex CLI does not expose model selection through this adapter."""
+        return []
+
     async def run(
         self,
         prompt: str,
         provider_session_id: str | None,
         abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
     ) -> AsyncIterator[ProviderEvent]:
         """Run a single Codex turn and stream provider events."""
         args = self._build_args(prompt=prompt, provider_session_id=provider_session_id)

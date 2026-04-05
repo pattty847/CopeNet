@@ -1,6 +1,14 @@
 """Provider adapters for CopeNet."""
 
-from .base import Provider, ProviderEvent
+from .base import Provider, ProviderEvent, ProviderModel
 from .codex_cli import CodexCliProvider
+from .local_http import LmStudioProvider, OllamaProvider
 
-__all__ = ["Provider", "ProviderEvent", "CodexCliProvider"]
+__all__ = [
+    "Provider",
+    "ProviderEvent",
+    "ProviderModel",
+    "CodexCliProvider",
+    "LmStudioProvider",
+    "OllamaProvider",
+]

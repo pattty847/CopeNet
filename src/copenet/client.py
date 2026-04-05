@@ -33,6 +33,7 @@ class GatewayClient:
         message: str,
         idempotency_key: str,
         provider: str,
+        model: str | None,
         on_event: ChatEventCallback,
         on_started: Callable[[str], Awaitable[None]] | None = None,
     ) -> dict[str, Any]:
@@ -73,6 +74,7 @@ class GatewayClient:
                             "message": message,
                             "idempotencyKey": idempotency_key,
                             "provider": provider,
+                            "model": model,
                         },
                     }
                 )

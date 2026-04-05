@@ -7,6 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Outfit:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" />
   <style>
     :root {
       --bg: #0d0e12;
@@ -50,6 +51,11 @@
       border-radius: 6px;
       background: var(--surface);
       color: var(--text-muted);
+      border: 1px solid transparent;
+    }
+    .pill.pill-unavailable {
+      color: #e8a0a0;
+      border-color: rgba(232, 108, 108, 0.35);
     }
     .status { display: flex; align-items: center; gap: 0.35rem; }
     .status::before {
@@ -83,22 +89,126 @@
       color: var(--text-muted);
       margin: 0 0 0.5rem 0;
     }
-    .session-item {
-      font-family: "JetBrains Mono", monospace;
-      font-size: 0.8rem;
-      padding: 0.4rem 0.5rem;
-      border-radius: 6px;
+    .sessions-toolbar {
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      margin-bottom: 0.85rem;
+    }
+    .panel-button,
+    .secondary-button,
+    .ghost-button {
+      padding: 0.6rem 0.85rem;
+      border-radius: 8px;
+      border: 1px solid var(--border);
       cursor: pointer;
-      margin-bottom: 2px;
+      font-family: inherit;
+      font-size: 0.82rem;
+    }
+    .panel-button {
+      background: linear-gradient(180deg, var(--accent), var(--accent-dim));
+      color: #fff;
+      border: none;
+      font-weight: 600;
+    }
+    .secondary-button {
+      background: var(--surface);
+      color: var(--text);
+    }
+    .ghost-button {
+      background: transparent;
+      color: var(--text-muted);
+    }
+    .session-item {
+      padding: 0.55rem 0.6rem;
+      border-radius: 8px;
+      cursor: pointer;
+      margin-bottom: 0.45rem;
+      word-break: break-all;
+      border: 1px solid transparent;
+    }
+    .session-item:hover { background: rgba(124, 156, 255, 0.08); border-color: rgba(124, 156, 255, 0.18); }
+    .session-item.active { background: rgba(124, 156, 255, 0.16); border-color: rgba(124, 156, 255, 0.28); }
+    .session-title {
+      font-size: 0.84rem;
+      font-weight: 600;
+      color: var(--text);
+      margin-bottom: 0.25rem;
+    }
+    .session-key {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.7rem;
+      color: var(--text-muted);
+      margin-bottom: 0.35rem;
       word-break: break-all;
     }
-    .session-item:hover { background: var(--border); }
-    .session-item.active { background: var(--accent-dim); color: #fff; }
+    .session-meta {
+      display: flex;
+      gap: 0.3rem;
+      flex-wrap: wrap;
+      margin-bottom: 0.3rem;
+    }
+    .mini-pill {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.64rem;
+      padding: 0.12rem 0.35rem;
+      border-radius: 999px;
+      background: rgba(255, 255, 255, 0.05);
+      color: var(--text-muted);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+    }
+    .session-updated {
+      font-size: 0.7rem;
+      color: var(--text-muted);
+    }
     .chat-area {
       display: flex;
       flex-direction: column;
       min-height: 0;
       overflow: hidden;
+    }
+    .chat-header {
+      padding: 0.9rem 1.25rem 0.85rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      align-items: flex-start;
+      background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0));
+    }
+    .chat-header-main {
+      min-width: 0;
+    }
+    .chat-title {
+      font-size: 1rem;
+      font-weight: 600;
+      margin-bottom: 0.25rem;
+    }
+    .chat-subtitle {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      word-break: break-all;
+    }
+    .chat-header-meta {
+      display: flex;
+      gap: 0.4rem;
+      flex-wrap: wrap;
+      margin-top: 0.5rem;
+    }
+    .chat-header-actions {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .composer-banner {
+      padding: 0.7rem 1.25rem;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      background: rgba(124, 156, 255, 0.06);
+      color: var(--text-muted);
+      font-size: 0.8rem;
     }
     .messages {
       flex: 1;
@@ -126,9 +236,109 @@
       border: 1px solid var(--border);
       font-family: "JetBrains Mono", monospace;
       font-size: 0.85rem;
+      word-break: break-word;
+    }
+    .msg.assistant .rendered-content > :first-child { margin-top: 0; }
+    .msg.assistant .rendered-content > :last-child { margin-bottom: 0; }
+    .msg.assistant .rendered-content p,
+    .msg.assistant .rendered-content ul,
+    .msg.assistant .rendered-content ol,
+    .msg.assistant .rendered-content pre,
+    .msg.assistant .rendered-content blockquote,
+    .msg.assistant .rendered-content h1,
+    .msg.assistant .rendered-content h2,
+    .msg.assistant .rendered-content h3,
+    .msg.assistant .rendered-content h4 {
+      margin: 0 0 0.8rem;
+    }
+    .msg.assistant .rendered-content p:last-child,
+    .msg.assistant .rendered-content ul:last-child,
+    .msg.assistant .rendered-content ol:last-child,
+    .msg.assistant .rendered-content pre:last-child,
+    .msg.assistant .rendered-content blockquote:last-child {
+      margin-bottom: 0;
+    }
+    .msg.assistant .rendered-content code {
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.82em;
+      background: rgba(255,255,255,0.06);
+      padding: 0.12rem 0.3rem;
+      border-radius: 6px;
+    }
+    .msg.assistant .rendered-content pre {
+      overflow-x: auto;
+      padding: 0.8rem;
+      border-radius: 10px;
+      background: rgba(0,0,0,0.28);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .msg.assistant .rendered-content pre code {
+      background: transparent;
+      padding: 0;
+      border-radius: 0;
+      display: block;
+      white-space: pre;
+    }
+    .msg.assistant .rendered-content ul,
+    .msg.assistant .rendered-content ol {
+      padding-left: 1.35rem;
+    }
+    .msg.assistant .rendered-content blockquote {
+      margin-left: 0;
+      padding-left: 0.8rem;
+      border-left: 3px solid rgba(124, 156, 255, 0.35);
+      color: var(--text-muted);
+    }
+    .msg.assistant .rendered-content a {
+      color: #a8bcff;
+    }
+    .msg.assistant .rendered-content .katex-display {
+      overflow-x: auto;
+      overflow-y: hidden;
+      padding: 0.35rem 0;
+    }
+    .msg.pending {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px dashed var(--border);
+    }
+    .msg.pending .body-pending {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      color: var(--text-muted);
+      font-family: "Outfit", system-ui, sans-serif;
+      font-size: 0.85rem;
+    }
+    .msg.pending .pending-dots {
+      display: inline-flex;
+      gap: 3px;
+      align-items: center;
+    }
+    .msg.pending .pending-dots span {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--accent);
+      opacity: 0.35;
+      animation: pending-bounce 1s ease-in-out infinite;
+    }
+    .msg.pending .pending-dots span:nth-child(2) { animation-delay: 0.15s; }
+    .msg.pending .pending-dots span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes pending-bounce {
+      0%, 80%, 100% { opacity: 0.25; transform: translateY(0); }
+      40% { opacity: 1; transform: translateY(-3px); }
+    }
+    .msg.agent-error {
+      align-self: flex-start;
+      background: rgba(232, 108, 108, 0.1);
+      border: 1px solid rgba(232, 108, 108, 0.35);
+      font-family: "JetBrains Mono", monospace;
+      font-size: 0.85rem;
       white-space: pre-wrap;
       word-break: break-word;
     }
+    .msg.agent-error .meta { color: var(--error); }
     .msg .meta { font-size: 0.7rem; color: var(--text-muted); margin-bottom: 0.25rem; }
     .input-row {
       padding: 0.75rem 1.25rem;
@@ -139,6 +349,12 @@
       align-items: flex-end;
     }
     .input-wrap { flex: 1; display: flex; flex-direction: column; gap: 0.35rem; }
+    .toolbar-row {
+      display: flex;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      align-items: center;
+    }
     .prompt-select {
       font-family: "JetBrains Mono", monospace;
       font-size: 0.75rem;
@@ -148,6 +364,19 @@
       border-radius: 6px;
       padding: 0.25rem 0.5rem;
       max-width: 220px;
+    }
+    .title-field {
+      font-family: inherit;
+      font-size: 0.82rem;
+      color: var(--text);
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 0.42rem 0.55rem;
+    }
+    .model-select {
+      min-width: 220px;
+      max-width: 360px;
     }
     .prompt-select:focus { outline: none; border-color: var(--accent); }
     .input-row textarea {
@@ -194,35 +423,95 @@
       color: var(--error);
       font-size: 0.85rem;
     }
+    .draft-config {
+      display: none;
+      gap: 0.5rem;
+      flex-wrap: wrap;
+      margin-top: 0.65rem;
+    }
+    .draft-config.open {
+      display: flex;
+    }
+    .draft-label {
+      font-size: 0.72rem;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    @media (max-width: 900px) {
+      main {
+        grid-template-columns: 1fr;
+      }
+      .sessions-panel {
+        grid-row: auto;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+      }
+      .chat-header {
+        flex-direction: column;
+      }
+      .chat-header-actions {
+        justify-content: flex-start;
+      }
+    }
   </style>
 </head>
 <body>
   <header>
     <h1>CopeNet</h1>
-    <span class="pill">codex-cli</span>
+    <span id="provider-pill" class="pill" title="Active chat provider">Codex</span>
     <span id="status" class="status">Disconnected</span>
   </header>
   <main>
     <aside class="sessions-panel">
-      <h2>Sessions</h2>
+      <div class="sessions-toolbar">
+        <h2>Sessions</h2>
+        <button id="new-chat" class="panel-button" type="button">New Chat</button>
+      </div>
       <div id="sessions-list"></div>
     </aside>
     <div class="chat-area">
+      <div class="chat-header">
+        <div class="chat-header-main">
+          <div id="chat-title" class="chat-title">New Chat</div>
+          <div id="chat-subtitle" class="chat-subtitle">Create a session to lock a runtime and model.</div>
+          <div class="chat-header-meta">
+            <span id="chat-provider-badge" class="pill">Provider</span>
+            <span id="chat-model-badge" class="pill">Model</span>
+            <span id="chat-profile-badge" class="pill">Profile</span>
+            <span id="chat-mode-badge" class="pill">Task</span>
+            <span id="chat-lock-badge" class="pill">Draft</span>
+          </div>
+          <div id="draft-config" class="draft-config">
+            <span class="draft-label">Draft Settings</span>
+            <select id="draft-provider-select" class="prompt-select" title="Model runtime"></select>
+            <select id="draft-model-select" class="prompt-select model-select" title="Model"></select>
+            <select id="draft-profile-select" class="prompt-select" title="Profile"></select>
+            <select id="draft-task-select" class="prompt-select" title="Task mode"></select>
+            <button id="prompt-settings" class="secondary-button" type="button" title="Advanced prompt settings coming soon">Settings</button>
+          </div>
+        </div>
+        <div class="chat-header-actions">
+          <button id="rename-session" class="secondary-button" type="button">Save Title</button>
+          <button id="archive-session" class="ghost-button" type="button">Archive</button>
+        </div>
+      </div>
       <div id="error-banner" class="error-banner" style="display: none;"></div>
+      <div id="composer-banner" class="composer-banner">Start a new session by picking a runtime and model, then send your first message.</div>
       <div id="messages" class="messages">
         <div id="empty-state" class="empty-state">Pick a session or type a message to start.</div>
       </div>
       <div class="input-row">
         <div class="input-wrap">
-          <select id="prompt-preset" class="prompt-select" title="System prompt preset">
-            <option value="">None</option>
-          </select>
           <textarea id="input" placeholder="Message the agent…" rows="1"></textarea>
         </div>
         <button id="send" type="button">Send</button>
       </div>
     </div>
   </main>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/dompurify@3.1.6/dist/purify.min.js"></script>
+  <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
   <script src="/static/app.js"></script>
 </body>
 </html>

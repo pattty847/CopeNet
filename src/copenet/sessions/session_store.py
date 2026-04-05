@@ -27,7 +27,12 @@ class SessionIndexEntry:
 
     session_id: str
     session_key: str
+    title: str | None
     provider: str
+    model: str | None
+    system_prompt_id: str | None
+    task_prompt_id: str | None
+    archived: bool
     provider_session_id: str | None
     created_at: str
     updated_at: str
@@ -45,7 +50,12 @@ class SessionIndexEntry:
             session_id=str(raw.get("session_id") or raw.get("sessionId") or "").strip()
             or str(raw.get("session_key") or raw.get("sessionKey") or "").strip(),
             session_key=str(raw.get("session_key") or raw.get("sessionKey") or "").strip(),
+            title=(str(raw.get("title")).strip() if raw.get("title") else None),
             provider=str(raw.get("provider") or "").strip(),
+            model=(str(raw.get("model")).strip() if raw.get("model") else None),
+            system_prompt_id=(str(raw.get("system_prompt_id") or raw.get("systemPromptId")).strip() if (raw.get("system_prompt_id") or raw.get("systemPromptId")) else None),
+            task_prompt_id=(str(raw.get("task_prompt_id") or raw.get("taskPromptId")).strip() if (raw.get("task_prompt_id") or raw.get("taskPromptId")) else None),
+            archived=bool(raw.get("archived", False)),
             provider_session_id=(str(provider_session_id_raw).strip() if provider_session_id_raw else None),
             created_at=str(raw.get("created_at") or raw.get("createdAt") or utc_now_iso()),
             updated_at=str(raw.get("updated_at") or raw.get("updatedAt") or utc_now_iso()),
@@ -72,10 +82,12 @@ class SessionStore:
         """Return backing file path."""
         return self._path
 
-    def list_sessions(self) -> list[SessionIndexEntry]:
+    def list_sessions(self, include_archived: bool = False) -> list[SessionIndexEntry]:
         """Return all sessions sorted by most recent update."""
         with self._lock:
             entries = list(self._load_map().values())
+        if not include_archived:
+            entries = [entry for entry in entries if not entry.archived]
         entries.sort(key=lambda item: item.updated_at, reverse=True)
         return entries
 
@@ -84,10 +96,22 @@ class SessionStore:
         with self._lock:
             return self._load_map().get(session_key.strip())
 
-    def resolve_or_create(self, session_key: str, provider: str) -> SessionIndexEntry:
-        """Resolve existing session or create a new one."""
+    def create_session(
+        self,
+        session_key: str,
+        provider: str,
+        model: str | None = None,
+        title: str | None = None,
+        system_prompt_id: str | None = None,
+        task_prompt_id: str | None = None,
+    ) -> SessionIndexEntry:
+        """Create a new locked session."""
         normalized_key = session_key.strip()
         normalized_provider = provider.strip()
+        normalized_model = model.strip() if model else None
+        normalized_title = title.strip() if title else None
+        normalized_system_prompt_id = system_prompt_id.strip() if system_prompt_id else None
+        normalized_task_prompt_id = task_prompt_id.strip() if task_prompt_id else None
         if not normalized_key:
             raise ValueError("session_key is required")
         if not normalized_provider:
@@ -97,18 +121,18 @@ class SessionStore:
             sessions = self._load_map()
             existing = sessions.get(normalized_key)
             if existing is not None:
-                if existing.provider != normalized_provider:
-                    existing.provider = normalized_provider
-                existing.updated_at = utc_now_iso()
-                sessions[normalized_key] = existing
-                self._save_map(sessions)
-                return existing
+                raise ValueError(f"session already exists: {normalized_key}")
 
             now = utc_now_iso()
             created = SessionIndexEntry(
                 session_id=str(uuid4()),
                 session_key=normalized_key,
+                title=normalized_title,
                 provider=normalized_provider,
+                model=normalized_model,
+                system_prompt_id=normalized_system_prompt_id,
+                task_prompt_id=normalized_task_prompt_id,
+                archived=False,
                 provider_session_id=None,
                 created_at=now,
                 updated_at=now,
@@ -118,6 +142,121 @@ class SessionStore:
             sessions[normalized_key] = created
             self._save_map(sessions)
             return created
+
+    def create_generated_session_key(self, provider: str, model: str | None = None) -> str:
+        """Generate a readable unique session key."""
+        provider_slug = "".join(ch if ch.isalnum() else "-" for ch in provider.lower()).strip("-") or "chat"
+        model_slug = "".join(ch if ch.isalnum() else "-" for ch in (model or "default").lower()).strip("-") or "default"
+        prefix = f"{provider_slug}-{model_slug}"[:48].strip("-") or "chat"
+
+        with self._lock:
+            sessions = self._load_map()
+            if prefix not in sessions:
+                return prefix
+            counter = 2
+            while f"{prefix}-{counter}" in sessions:
+                counter += 1
+            return f"{prefix}-{counter}"
+
+    def resolve_or_create(
+        self,
+        session_key: str,
+        provider: str,
+        model: str | None = None,
+        system_prompt_id: str | None = None,
+        task_prompt_id: str | None = None,
+    ) -> SessionIndexEntry:
+        """Resolve an existing session or create a new one when missing."""
+        normalized_key = session_key.strip()
+        if not normalized_key:
+            raise ValueError("session_key is required")
+        existing = self.get(normalized_key)
+        if existing is not None:
+            return existing
+        return self.create_session(
+            session_key=normalized_key,
+            provider=provider,
+            model=model,
+            system_prompt_id=system_prompt_id,
+            task_prompt_id=task_prompt_id,
+        )
+
+    def assert_session_binding(
+        self,
+        session_key: str,
+        provider: str,
+        model: str | None = None,
+        system_prompt_id: str | None = None,
+        task_prompt_id: str | None = None,
+    ) -> SessionIndexEntry:
+        """Ensure the requested provider/model matches the locked session binding."""
+        normalized_key = session_key.strip()
+        normalized_provider = provider.strip()
+        normalized_model = model.strip() if model else None
+        normalized_system_prompt_id = system_prompt_id.strip() if system_prompt_id else None
+        normalized_task_prompt_id = task_prompt_id.strip() if task_prompt_id else None
+        if not normalized_key:
+            raise ValueError("session_key is required")
+
+        with self._lock:
+            sessions = self._load_map()
+            entry = sessions.get(normalized_key)
+            if entry is None:
+                raise KeyError(f"unknown session_key: {normalized_key}")
+            if entry.archived:
+                raise RuntimeError(f"session is archived: {normalized_key}")
+            if entry.provider != normalized_provider:
+                raise RuntimeError(
+                    f"session is locked to provider {entry.provider}; requested {normalized_provider}"
+                )
+            if entry.model != normalized_model:
+                raise RuntimeError(
+                    f"session is locked to model {entry.model or 'default'}; requested {normalized_model or 'default'}"
+                )
+            if entry.system_prompt_id and entry.system_prompt_id != normalized_system_prompt_id:
+                raise RuntimeError(
+                    f"session is locked to profile {entry.system_prompt_id}; requested {normalized_system_prompt_id or 'none'}"
+                )
+            if entry.task_prompt_id and entry.task_prompt_id != normalized_task_prompt_id:
+                raise RuntimeError(
+                    f"session is locked to task mode {entry.task_prompt_id}; requested {normalized_task_prompt_id or 'none'}"
+                )
+            return entry
+
+    def rename_session(self, session_key: str, title: str | None) -> SessionIndexEntry:
+        """Update the session display title without changing its identity key."""
+        normalized_key = session_key.strip()
+        normalized_title = title.strip() if title else None
+        if not normalized_key:
+            raise ValueError("session_key is required")
+
+        with self._lock:
+            sessions = self._load_map()
+            entry = sessions.get(normalized_key)
+            if entry is None:
+                raise KeyError(f"unknown session_key: {normalized_key}")
+            entry.title = normalized_title
+            entry.updated_at = utc_now_iso()
+            sessions[normalized_key] = entry
+            self._save_map(sessions)
+            return entry
+
+    def set_archived(self, session_key: str, archived: bool) -> SessionIndexEntry:
+        """Archive or restore a session."""
+        normalized_key = session_key.strip()
+        if not normalized_key:
+            raise ValueError("session_key is required")
+
+        with self._lock:
+            sessions = self._load_map()
+            entry = sessions.get(normalized_key)
+            if entry is None:
+                raise KeyError(f"unknown session_key: {normalized_key}")
+            entry.archived = archived
+            entry.updated_at = utc_now_iso()
+            sessions[normalized_key] = entry
+            self._save_map(sessions)
+            return entry
 
     def update_provider_session_id(self, session_key: str, provider_session_id: str) -> SessionIndexEntry:
         """Persist provider session ID (for resume continuity)."""
