@@ -13,6 +13,8 @@ from copenet.harness import ChatHarness
 from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, Provider, ProviderEvent
 from copenet.sessions import SessionStore, TranscriptMessage, TranscriptStore
 from copenet.sessions.transcript_store import utc_now_iso as transcript_now
+from copenet.tracing import RunTraceWriter
+from copenet.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
 from copenet._paths import default_sessions_dir
 
 
@@ -62,6 +64,7 @@ class Orchestrator:
         sessions_dir: Path | None = None,
     ) -> None:
         base = sessions_dir if sessions_dir is not None else default_sessions_dir()
+        self._workdir = Path(os.environ.get("COPNET_WORKDIR") or os.getcwd()).resolve()
         self._session_store = session_store or SessionStore(path=base / "index.json")
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
         self._providers: dict[str, Provider] = {}
@@ -77,6 +80,9 @@ class Orchestrator:
             base_url=os.environ.get("COPNET_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
         )
         self._harness = ChatHarness()
+        self._tool_policy = ToolPolicy()
+        self._tool_registry = ToolRegistry(policy=self._tool_policy)
+        self._trace_enabled = os.environ.get("COPNET_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
         self._active_abort_by_run: dict[str, asyncio.Event] = {}
         self._active_run_by_session: dict[str, str] = {}
         self._idempotency_cache: dict[str, dict] = {}
@@ -103,6 +109,13 @@ class Orchestrator:
         dedupe_key = f"chat:{run_id}"
         prior_history = self.history(session_key=session_key, limit=2)
         is_first_turn = len(prior_history) == 0
+        trace = RunTraceWriter(
+            run_id=run_id,
+            session_key=session_key,
+            provider=provider_name,
+            model=request.model,
+            enabled=self._trace_enabled,
+        )
         async with self._lock:
             cached = self._idempotency_cache.get(dedupe_key)
             if cached is not None:
@@ -131,6 +144,23 @@ class Orchestrator:
             self._active_abort_by_run[run_id] = abort_event
             self._active_run_by_session[session_key] = run_id
 
+        trace.record(
+            "run_started",
+            {
+                "messagePreview": message[:200],
+                "profile": request.system_prompt_id,
+                "taskMode": request.task_prompt_id,
+                "workdir": str(self._workdir),
+            },
+        )
+        trace.record(
+            "session_resolved",
+            {
+                "providerSessionId": entry.provider_session_id,
+                "sessionId": entry.session_id,
+            },
+        )
+
         self._transcript_store.append_message(
             entry.session_id,
             TranscriptMessage(
@@ -147,6 +177,7 @@ class Orchestrator:
         provider = self._providers[provider_name]
         seq = 0
         assistant_parts: list[str] = []
+        tool_execution_payload: dict | None = None
         try:
             plan, event_stream = await self._harness.run_turn(
                 provider=provider,
@@ -155,13 +186,46 @@ class Orchestrator:
                 abort_event=abort_event,
                 model=request.model,
                 system_prompt=request.system_prompt,
+                available_tools=self._tool_registry.list_tools(),
+                tool_executor=self._tool_registry.execute,
+                tool_context=ToolExecutionContext(
+                    workdir=self._workdir,
+                    session_key=session_key,
+                    provider_name=provider_name,
+                    model=request.model,
+                    session_store=self._session_store,
+                    transcript_store=self._transcript_store,
+                    providers=self._providers,
+                    policy=self._tool_policy,
+                    trace=trace.record,
+                ),
+                trace=trace.record,
             )
+            if not plan.will_attempt_tool_loop:
+                trace.record(
+                    "provider_turn_started",
+                    {
+                        "phase": "provider",
+                        "providerSessionId": entry.provider_session_id,
+                    },
+                )
             async for event in event_stream:
                 if event.provider_session_id and event.provider_session_id != entry.provider_session_id:
                     entry = self._session_store.update_provider_session_id(
                         session_key=session_key,
                         provider_session_id=event.provider_session_id,
                     )
+                    trace.record(
+                        "provider_session_updated",
+                        {
+                            "providerSessionId": event.provider_session_id,
+                        },
+                    )
+
+                if event.kind == "meta" and isinstance(event.metadata, dict):
+                    tool_payload = event.metadata.get("toolExecution")
+                    if isinstance(tool_payload, dict):
+                        tool_execution_payload = tool_payload
 
                 if event.kind == "delta" and event.text:
                     assistant_parts.append(event.text)
@@ -183,10 +247,21 @@ class Orchestrator:
                             "capabilities": {
                                 "toolCalls": plan.capability_profile.tool_calls,
                             },
+                            "toolExecution": tool_execution_payload,
                         }
                     )
                 elif event.kind == "final":
                     break
+
+            if not plan.will_attempt_tool_loop:
+                trace.record(
+                    "provider_turn_completed",
+                    {
+                        "phase": "provider",
+                        "providerSessionId": entry.provider_session_id,
+                        "deltaCount": len(assistant_parts),
+                    },
+                )
 
             assistant_text = "".join(part for part in assistant_parts if part).strip()
             if assistant_text:
@@ -201,7 +276,15 @@ class Orchestrator:
                         provider_session_id=entry.provider_session_id,
                         timestamp=transcript_now(),
                         state="final",
+                        tool_execution=tool_execution_payload,
                     ),
+                )
+                trace.record(
+                    "assistant_finalized",
+                    {
+                        "responseLength": len(assistant_text),
+                        "toolExecutionAttached": bool(tool_execution_payload),
+                    },
                 )
                 if is_first_turn and not (entry.title or "").strip():
                     self._schedule_title_generation(
@@ -231,8 +314,16 @@ class Orchestrator:
                 "capabilities": {
                     "toolCalls": plan.capability_profile.tool_calls,
                 },
+                "toolExecution": tool_execution_payload,
             }
             await emit(final_payload)
+            trace.record(
+                "run_completed",
+                {
+                    "status": "ok",
+                    "toolExecutionAttached": bool(tool_execution_payload),
+                },
+            )
             async with self._lock:
                 self._idempotency_cache[dedupe_key] = final_payload
             return {"runId": run_id, "status": "ok"}
@@ -248,6 +339,13 @@ class Orchestrator:
                 "model": request.model,
             }
             await emit(error_payload)
+            trace.record(
+                "run_failed",
+                {
+                    "phase": "send_chat",
+                    "error": str(exc),
+                },
+            )
             async with self._lock:
                 self._idempotency_cache[dedupe_key] = error_payload
             return {"runId": run_id, "status": "error", "summary": str(exc)}
@@ -337,6 +435,10 @@ class Orchestrator:
                 label = _label_for_provider_id(pid)
                 rows.append({"id": pid, "displayName": label, "available": False, "error": err})
         return rows
+
+    def list_tools(self) -> list[dict]:
+        """List available CopeNet-native tool descriptors."""
+        return self._tool_registry.list_public_tools()
 
     async def list_models(self, provider_id: str | None = None, kind: str = "chat") -> list[dict]:
         """List models for one provider or all providers."""

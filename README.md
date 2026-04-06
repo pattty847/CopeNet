@@ -80,6 +80,7 @@ Environment variables:
 - `COPNET_TOKEN` (default: `dev-token`)
 - `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
+- `COPNET_TRACE` (`1` to enable per-run JSONL traces)
 - `COPNET_LM_STUDIO_BASE_URL` (default: `http://127.0.0.1:1234`)
 - `COPNET_OLLAMA_BASE_URL` (default: `http://127.0.0.1:11434`)
 
@@ -140,6 +141,19 @@ See [`docs/architecture.md`](docs/architecture.md) for subsystem map and request
   - LM Studio: `http://127.0.0.1:1234`
 - Check your env var overrides.
 - Restart CopeNet after changing endpoints.
+
+### Debugging a weird tool run
+
+- Enable tracing: `COPNET_TRACE=1 uv run cope`
+- Reproduce the run once
+- Open the newest file under `~/.copenet/logs/runs/`
+- Inspect the event order:
+  - `harness_planned`
+  - `tool_requested`
+  - `tool_executed` or `tool_blocked`
+  - `assistant_finalized`
+
+See [`docs/tracing.md`](docs/tracing.md) for the trace schema and workflow.
 
 ### Prompt/profile changes not applying
 

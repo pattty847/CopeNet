@@ -33,6 +33,7 @@ class TranscriptMessage:
     provider_session_id: str | None
     timestamp: str
     state: str | None = None
+    tool_execution: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Convert message into a JSON-serializable dictionary."""
@@ -47,6 +48,8 @@ class TranscriptMessage:
         }
         if self.state:
             payload["state"] = self.state
+        if self.tool_execution:
+            payload["toolExecution"] = self.tool_execution
         return payload
 
 

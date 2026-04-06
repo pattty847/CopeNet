@@ -31,6 +31,7 @@ class ChatEventPayload:
     provider: str | None = None
     model: str | None = None
     capabilities: dict[str, Any] | None = None
+    tool_execution: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -126,6 +127,7 @@ def make_chat_event(payload: ChatEventPayload) -> dict[str, Any]:
                 "provider": payload.provider,
                 "model": payload.model,
                 "capabilities": payload.capabilities,
+                "toolExecution": payload.tool_execution,
             },
             seq=payload.seq,
         )

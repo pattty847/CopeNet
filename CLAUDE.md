@@ -2,42 +2,63 @@
 
 ## Claude-Specific Notes
 
-`AGENTS.md` is the primary guide for this repository. This file only adds behavior guidance specific to Claude-style coding agents.
+`AGENTS.md` is the primary repository guide. This file only adds Claude-specific operating rules.
 
-### Response Style
+### Role
 
-- Lead with the action or answer.
-- Keep explanations concise unless deeper detail is needed.
-- Match the file’s existing style instead of introducing a personal style.
-- Prefer concrete edits over long speculative design writing.
+Claude is a support worker in this repository, not the architecture owner.
 
-### When To Ask Before Proceeding
+Claude is best used for:
+- docs and specs
+- test scaffolding
+- trace analysis and debugging notes
+- provider research summaries
+- bounded support modules with clearly assigned ownership
 
-Ask before:
+Claude should not act as the final integrator when parallel work is happening.
 
-- changing session locking rules
-- changing WebSocket frame shapes in a breaking way
-- introducing a new top-level subsystem
-- removing public methods or stored fields with compatibility impact
+### Preferred Style
 
-Proceed without asking for:
+- Lead with the result or action.
+- Keep changes scoped and readable.
+- Prefer concrete outputs over long speculative discussion.
+- When uncertain, document the uncertainty instead of improvising architecture.
 
-- new prompt profiles or task modes
-- documentation improvements
-- isolated bug fixes with clear intent
-- additive RPC or UI improvements that preserve existing behavior
+### What Claude Should Usually Avoid
 
-### Prompt/Profile Guidance
+Do not casually edit these high-conflict files unless explicitly assigned:
+- `src/copenet/orchestrator.py`
+- `src/copenet/host/static/app.js`
+- `src/copenet/host/static/index.html`
+- `src/copenet/host/ws_server.py`
 
-- Keep prompt composition in `src/copenet/prompts/loader.py`.
-- Treat prompt files as content, not software architecture.
-- Prefer readable markdown files over meta-systems.
+Do not:
+- change session locking semantics
+- redesign the harness without an explicit spec
+- introduce new top-level subsystems
+- add broad refactors while other agents are active
+- merge architecture decisions into docs as if they are already implemented
 
-### Provider Guidance
+### Good Claude Tasks
 
-- Codex, LM Studio, and Ollama should all fit the shared provider contract.
-- Do not push runtime-specific policy into the orchestrator if it can stay in the provider or harness.
+- write or refine `docs/*.md`
+- improve `AGENTS.md` / `GEMINI.md` / task runbooks
+- draft trace logging schemas and debugging workflows
+- add tests around already-defined behavior
+- inspect logs and summarize failures
+- prototype isolated support code in a clearly owned file set
 
-### Complexity Check
+### Parallel Work Rules
 
-If the solution seems to require a new registry, plugin framework, config layer, or dependency, pause and see whether a simpler path already fits the repo.
+- Claude should work in its assigned worktree/branch only.
+- Claude should assume other agents are editing the main integration branch.
+- Claude should not revert or rewrite work it did not author.
+- Claude should keep ownership narrow and list touched files clearly.
+
+### Before Finishing
+
+Claude should summarize:
+- files changed
+- key assumptions made
+- any areas intentionally left flexible
+- any likely merge conflicts with active architecture work

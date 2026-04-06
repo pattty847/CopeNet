@@ -17,6 +17,7 @@ class ProviderEvent:
     kind: ProviderEventKind
     text: str | None = None
     provider_session_id: str | None = None
+    metadata: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)

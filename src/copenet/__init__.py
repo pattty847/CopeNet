@@ -10,12 +10,21 @@ from copenet.harness import (
     HarnessResult,
     HarnessTurnPlan,
     ModelCapabilityProfile,
-    ToolCallRequest,
-    ToolSpec,
 )
 from copenet.sessions import SessionStore, TranscriptStore
 from copenet.host.ws_server import CopeNetWsServer
 from copenet.client import GatewayClient, GatewayConfig
+from copenet.tracing import RunTraceWriter
+from copenet.tools import (
+    ContextPack,
+    ToolCallRequest,
+    ToolDescriptor,
+    ToolExecutionRequest,
+    ToolExecutionResult,
+    ToolInvocationEnvelope,
+    ToolPolicy,
+    ToolSpec,
+)
 
 __all__ = [
     "ChatSendRequest",
@@ -27,9 +36,16 @@ __all__ = [
     "HarnessTurnPlan",
     "ModelCapabilityProfile",
     "Orchestrator",
+    "RunTraceWriter",
     "SessionInFlightError",
     "SessionStore",
+    "ContextPack",
     "ToolCallRequest",
+    "ToolDescriptor",
+    "ToolExecutionRequest",
+    "ToolExecutionResult",
+    "ToolInvocationEnvelope",
+    "ToolPolicy",
     "ToolSpec",
     "TranscriptStore",
 ]

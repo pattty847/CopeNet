@@ -171,6 +171,53 @@ class GatewayClient:
                     payload = frame.get("payload") or {}
                     return payload if isinstance(payload, dict) else {"ok": True}
 
+    async def list_tools(self) -> list[dict[str, Any]]:
+        """Fetch the public CopeNet tool catalog."""
+        connect_req_id = f"connect-{uuid.uuid4().hex[:8]}"
+        list_req_id = f"tools-{uuid.uuid4().hex[:8]}"
+        async with websockets.connect(self._config.url, max_size=2 * 1024 * 1024) as ws:
+            while True:
+                raw = await ws.recv()
+                frame = self._parse_frame(raw)
+                if frame.get("type") == "event" and frame.get("event") == "connect.challenge":
+                    await ws.send(
+                        self._to_json(
+                            {
+                                "type": "req",
+                                "id": connect_req_id,
+                                "method": "connect",
+                                "params": {"auth": {"token": self._config.token}},
+                            }
+                        )
+                    )
+                    continue
+                if frame.get("type") == "res" and frame.get("id") == connect_req_id:
+                    if frame.get("ok") is not True:
+                        err = frame.get("error") or {}
+                        raise RuntimeError(f"connect failed: {err.get('message') or 'unknown error'}")
+                    break
+
+            await ws.send(
+                self._to_json(
+                    {
+                        "type": "req",
+                        "id": list_req_id,
+                        "method": "tools.list",
+                        "params": {},
+                    }
+                )
+            )
+            while True:
+                raw = await ws.recv()
+                frame = self._parse_frame(raw)
+                if frame.get("type") == "res" and frame.get("id") == list_req_id:
+                    if frame.get("ok") is not True:
+                        err = frame.get("error") or {}
+                        raise RuntimeError(f"tools.list failed: {err.get('message') or 'unknown error'}")
+                    payload = frame.get("payload") or {}
+                    tools = payload.get("tools") if isinstance(payload, dict) else []
+                    return tools if isinstance(tools, list) else []
+
     @staticmethod
     def _parse_frame(raw: str) -> dict[str, Any]:
         parsed = json.loads(raw)

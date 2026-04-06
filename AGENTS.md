@@ -132,6 +132,19 @@ Common checks:
 - `uv run cope`
 - browser validation of the affected session/runtime flow
 
+### Tracing
+
+When `COPNET_TRACE=1` is enabled, CopeNet writes one JSONL trace per run under `~/.copenet/logs/runs/` or `COPNET_DATA_DIR/logs/runs/`.
+
+Agents should inspect traces in this order:
+- `harness_planned`
+- `tool_requested`
+- `tool_executed` or `tool_blocked`
+- `assistant_finalized`
+- `run_completed` or `run_failed`
+
+Use traces to explain behavior differences, policy rejections, and provider/tool mismatches before proposing architectural changes.
+
 When adding tests:
 
 - test storage against real temp directories

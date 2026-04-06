@@ -297,6 +297,75 @@
       overflow-y: hidden;
       padding: 0.35rem 0;
     }
+    .tool-trace {
+      margin-bottom: 0.65rem;
+      border: 1px solid rgba(124, 156, 255, 0.18);
+      border-radius: 9px;
+      background: rgba(124, 156, 255, 0.06);
+      overflow: hidden;
+    }
+    .tool-trace summary {
+      list-style: none;
+      cursor: pointer;
+      padding: 0.45rem 0.6rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      color: var(--text);
+      font-size: 0.74rem;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .tool-trace summary::-webkit-details-marker {
+      display: none;
+    }
+    .tool-trace summary::after {
+      content: "Peek";
+      color: var(--text-muted);
+      font-size: 0.68rem;
+    }
+    .tool-trace[open] summary::after {
+      content: "Hide";
+    }
+    .tool-trace-body {
+      padding: 0 0.6rem 0.6rem;
+      display: grid;
+      gap: 0.35rem;
+    }
+    .tool-trace-row {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      align-items: center;
+      color: var(--text-muted);
+      font-size: 0.7rem;
+      font-family: "JetBrains Mono", monospace;
+    }
+    .tool-trace-code {
+      padding: 0.16rem 0.35rem;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.06);
+      color: var(--text);
+      border: 1px solid rgba(255,255,255,0.06);
+    }
+    .tool-trace-ok {
+      color: var(--success);
+    }
+    .tool-trace-error {
+      color: var(--error);
+    }
+    .tool-trace-summary {
+      font-size: 0.74rem;
+      color: var(--text);
+      font-family: "Outfit", system-ui, sans-serif;
+      line-height: 1.4;
+    }
+    .tool-trace-error-text {
+      font-size: 0.72rem;
+      color: var(--error);
+      font-family: "Outfit", system-ui, sans-serif;
+      line-height: 1.4;
+    }
     .msg.pending {
       align-self: flex-start;
       background: var(--surface);

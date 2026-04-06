@@ -148,6 +148,16 @@ class CopeNetWsServer:
                             )
                         )
                     )
+                elif req.method == "tools.list":
+                    await send_json(
+                        make_response_frame(
+                            ResponseFrame(
+                                id=req.id,
+                                ok=True,
+                                payload={"tools": self._orchestrator.list_tools()},
+                            )
+                        )
+                    )
                 elif req.method == "sessions.create":
                     raw = req.params or {}
                     provider = str(raw.get("provider") or "").strip()
@@ -327,6 +337,7 @@ class CopeNetWsServer:
                                 "prompts.list",
                                 "providers.list",
                                 "models.list",
+                                "tools.list",
                                 "sessions.list",
                                 "sessions.create",
                                 "sessions.rename",
@@ -378,6 +389,7 @@ class CopeNetWsServer:
                         provider=str(payload.get("provider")) if payload.get("provider") else None,
                         model=str(payload.get("model")) if payload.get("model") else None,
                         capabilities=payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else None,
+                        tool_execution=payload.get("toolExecution") if isinstance(payload.get("toolExecution"), dict) else None,
                     )
                 )
             )

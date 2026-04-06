@@ -517,6 +517,61 @@
     body.innerHTML = '<p>' + escapeHtml(prepared).replace(/\n/g, '<br />') + '</p>';
   }
 
+  function setToolTraceContent(container, toolExecution) {
+    if (!container) return;
+    container.innerHTML = '';
+    if (!toolExecution || typeof toolExecution !== 'object') {
+      container.style.display = 'none';
+      return;
+    }
+    container.style.display = '';
+
+    const details = document.createElement('details');
+    details.className = 'tool-trace';
+
+    const summary = document.createElement('summary');
+    const summaryLabel = document.createElement('span');
+    const toolId = toolExecution.toolId || 'tool';
+    const status = toolExecution.ok === false ? 'error' : 'ok';
+    summaryLabel.textContent = 'Tool Call · ' + toolId;
+    summary.appendChild(summaryLabel);
+    details.appendChild(summary);
+
+    const body = document.createElement('div');
+    body.className = 'tool-trace-body';
+
+    const row = document.createElement('div');
+    row.className = 'tool-trace-row';
+
+    const toolPill = document.createElement('span');
+    toolPill.className = 'tool-trace-code';
+    toolPill.textContent = toolId;
+    row.appendChild(toolPill);
+
+    const statusPill = document.createElement('span');
+    statusPill.className = status === 'ok' ? 'tool-trace-ok' : 'tool-trace-error';
+    statusPill.textContent = status === 'ok' ? 'Success' : 'Error';
+    row.appendChild(statusPill);
+    body.appendChild(row);
+
+    if (toolExecution.summary) {
+      const summaryText = document.createElement('div');
+      summaryText.className = 'tool-trace-summary';
+      summaryText.textContent = toolExecution.summary;
+      body.appendChild(summaryText);
+    }
+
+    if (toolExecution.error) {
+      const errorText = document.createElement('div');
+      errorText.className = 'tool-trace-error-text';
+      errorText.textContent = toolExecution.error;
+      body.appendChild(errorText);
+    }
+
+    details.appendChild(body);
+    container.appendChild(details);
+  }
+
   function addMessage(role, content, isStreaming, meta) {
     if (emptyState) emptyState.style.display = 'none';
     const div = document.createElement('div');
@@ -525,6 +580,14 @@
     metaEl.className = 'meta';
     metaEl.textContent = role === 'user' ? 'You' : addMetaLabel(meta);
     div.appendChild(metaEl);
+    let toolTraceEl = null;
+    if (role === 'assistant') {
+      toolTraceEl = document.createElement('div');
+      toolTraceEl.className = 'tool-trace-wrap';
+      toolTraceEl.style.display = 'none';
+      div.appendChild(toolTraceEl);
+      setToolTraceContent(toolTraceEl, meta && meta.toolExecution);
+    }
     const body = document.createElement('div');
     if (role === 'assistant') {
       setAssistantBodyContent(body, content || '');
@@ -535,7 +598,7 @@
     div.appendChild(body);
     messagesEl.appendChild(div);
     messagesEl.scrollTop = messagesEl.scrollHeight;
-    return body;
+    return { body, toolTraceEl, root: div };
   }
 
   function showPendingIndicator(meta) {
@@ -723,7 +786,7 @@
       list.forEach((message) => {
         const role = (message.role || 'user').toLowerCase();
         const content = typeof message.content === 'string' ? message.content : (message.content && message.content.text) || '';
-        addMessage(role, content, false, role === 'assistant' ? { provider: message.provider, model: message.model } : null);
+        addMessage(role, content, false, role === 'assistant' ? { provider: message.provider, model: message.model, toolExecution: message.toolExecution } : null);
       });
       messagesEl.scrollTop = messagesEl.scrollHeight;
     } catch (_) {
@@ -961,7 +1024,8 @@
         const state = (payload.state || '').toLowerCase();
         const meta = {
           provider: payload.provider || (payload.message && payload.message.provider) || providerForUi(),
-          model: payload.model || (payload.message && payload.message.model) || modelForUi()
+          model: payload.model || (payload.message && payload.message.model) || modelForUi(),
+          toolExecution: payload.toolExecution || null
         };
         const msg = payload.message;
 
@@ -972,15 +1036,25 @@
             const nextText = (last.dataset.rawText || '') + msg.content;
             last.dataset.rawText = nextText;
             setAssistantBodyContent(last, nextText);
+            const root = last.closest('.msg.assistant');
+            if (root) {
+              setToolTraceContent(root.querySelector('.tool-trace-wrap'), payload.toolExecution || null);
+            }
           } else {
-            const body = addMessage('assistant', msg.content, true, meta);
-            body.dataset.rawText = msg.content;
+            const parts = addMessage('assistant', msg.content, true, meta);
+            parts.body.dataset.rawText = msg.content;
           }
           messagesEl.scrollTop = messagesEl.scrollHeight;
         } else if (state === 'final' || state === 'error' || state === 'aborted') {
           removePendingIndicator();
           const last = messagesEl.querySelector('.msg.assistant .streaming-body');
-          if (last) last.classList.remove('streaming-body');
+          if (last) {
+            last.classList.remove('streaming-body');
+            const root = last.closest('.msg.assistant');
+            if (root) {
+              setToolTraceContent(root.querySelector('.tool-trace-wrap'), payload.toolExecution || null);
+            }
+          }
           if (state === 'error') {
             addAgentErrorMessage(payload.errorMessage || 'The agent run failed.');
           }
