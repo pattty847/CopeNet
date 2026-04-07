@@ -134,14 +134,23 @@ Common checks:
 
 ### Tracing
 
-When `COPNET_TRACE=1` is enabled, CopeNet writes one JSONL trace per run under `~/.copenet/logs/runs/` or `COPNET_DATA_DIR/logs/runs/`.
+When `COPNET_TRACE=1` is enabled, CopeNet writes one JSONL trace per run to `~/.copenet/logs/runs/<run-id>.jsonl`.
 
-Agents should inspect traces in this order:
-- `harness_planned`
-- `tool_requested`
-- `tool_executed` or `tool_blocked`
-- `assistant_finalized`
-- `run_completed` or `run_failed`
+Full event reference: [docs/TRACING.md](docs/TRACING.md)
+Debugging runbook: [docs/DEBUGGING.md](docs/DEBUGGING.md)
+Known gaps and past findings: [docs/TRACE-FINDINGS.md](docs/TRACE-FINDINGS.md)
+
+**Triage order for a bad run:**
+
+1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`?
+2. Check `tool_requested` — did the model invoke the expected tool with correct arguments?
+3. Check `tool_executed` or `tool_blocked` — was this a policy rejection or a real failure?
+4. Check `assistant_finalized` — was `toolExecutionAttached` as expected?
+5. Check `run_failed` — the `error` field is the primary diagnostic.
+
+**No trace file?** The provider failed to initialize before the run started. Check provider availability via `providers.list` or startup logs.
+
+**Tool loop not triggering despite available tools?** Check `harness_planned.capabilityProfile.promptedToolUse`. This is the gate, not `availableToolIds`.
 
 Use traces to explain behavior differences, policy rejections, and provider/tool mismatches before proposing architectural changes.
 

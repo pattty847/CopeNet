@@ -128,9 +128,15 @@ python -m copenet.host
 from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 ```
 
-## Architecture
+## Docs
 
-See [`docs/architecture.md`](docs/architecture.md) for subsystem map and request flow.
+- [Architecture](docs/architecture.md)
+- [Event Contract](docs/EVENT-CONTRACT.md)
+- [Session Continuity](docs/SESSION-CONTINUITY.md)
+- [Capability Matrix](docs/CAPABILITY-MATRIX.md)
+- [TRACING](docs/TRACING.md)
+- [DEBUGGING](docs/DEBUGGING.md)
+- [RUNBOOK](docs/RUNBOOK.md)
 
 ## Troubleshooting
 
@@ -153,7 +159,7 @@ See [`docs/architecture.md`](docs/architecture.md) for subsystem map and request
   - `tool_executed` or `tool_blocked`
   - `assistant_finalized`
 
-See [`docs/tracing.md`](docs/tracing.md) for the trace schema and workflow.
+See [`docs/TRACING.md`](docs/TRACING.md) for the trace schema and workflow.
 
 ### Prompt/profile changes not applying
 

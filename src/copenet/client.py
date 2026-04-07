@@ -27,6 +27,52 @@ class GatewayClient:
     def __init__(self, config: GatewayConfig | None = None) -> None:
         self._config = config or GatewayConfig()
 
+    async def _rpc(self, method: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+        """Send one non-streaming RPC request and return the payload."""
+        connect_req_id = f"connect-{uuid.uuid4().hex[:8]}"
+        req_id = f"{method}-{uuid.uuid4().hex[:8]}"
+        async with websockets.connect(self._config.url, max_size=10 * 1024 * 1024) as ws:
+            while True:
+                raw = await ws.recv()
+                frame = self._parse_frame(raw)
+                if frame.get("type") == "event" and frame.get("event") == "connect.challenge":
+                    await ws.send(
+                        self._to_json(
+                            {
+                                "type": "req",
+                                "id": connect_req_id,
+                                "method": "connect",
+                                "params": {"auth": {"token": self._config.token}},
+                            }
+                        )
+                    )
+                    continue
+                if frame.get("type") == "res" and frame.get("id") == connect_req_id:
+                    if frame.get("ok") is not True:
+                        err = frame.get("error") or {}
+                        raise RuntimeError(f"connect failed: {err.get('message') or 'unknown error'}")
+                    break
+
+            await ws.send(
+                self._to_json(
+                    {
+                        "type": "req",
+                        "id": req_id,
+                        "method": method,
+                        "params": params or {},
+                    }
+                )
+            )
+            while True:
+                raw = await ws.recv()
+                frame = self._parse_frame(raw)
+                if frame.get("type") == "res" and frame.get("id") == req_id:
+                    if frame.get("ok") is not True:
+                        err = frame.get("error") or {}
+                        raise RuntimeError(f"{method} failed: {err.get('message') or 'unknown error'}")
+                    payload = frame.get("payload") or {}
+                    return payload if isinstance(payload, dict) else {}
+
     async def stream_chat(
         self,
         session_key: str,
@@ -124,99 +170,44 @@ class GatewayClient:
 
     async def abort(self, session_key: str, run_id: str | None = None) -> dict[str, Any]:
         """Send chat.abort for a session/run."""
-        connect_req_id = f"connect-{uuid.uuid4().hex[:8]}"
-        abort_req_id = f"abort-{uuid.uuid4().hex[:8]}"
-        async with websockets.connect(self._config.url, max_size=2 * 1024 * 1024) as ws:
-            while True:
-                raw = await ws.recv()
-                frame = self._parse_frame(raw)
-                if frame.get("type") == "event" and frame.get("event") == "connect.challenge":
-                    await ws.send(
-                        self._to_json(
-                            {
-                                "type": "req",
-                                "id": connect_req_id,
-                                "method": "connect",
-                                "params": {"auth": {"token": self._config.token}},
-                            }
-                        )
-                    )
-                    continue
-                if frame.get("type") == "res" and frame.get("id") == connect_req_id:
-                    if frame.get("ok") is not True:
-                        err = frame.get("error") or {}
-                        raise RuntimeError(f"connect failed: {err.get('message') or 'unknown error'}")
-                    break
-
-            params: dict[str, Any] = {"sessionKey": session_key}
-            if run_id:
-                params["runId"] = run_id
-            await ws.send(
-                self._to_json(
-                    {
-                        "type": "req",
-                        "id": abort_req_id,
-                        "method": "chat.abort",
-                        "params": params,
-                    }
-                )
-            )
-            while True:
-                raw = await ws.recv()
-                frame = self._parse_frame(raw)
-                if frame.get("type") == "res" and frame.get("id") == abort_req_id:
-                    if frame.get("ok") is not True:
-                        err = frame.get("error") or {}
-                        raise RuntimeError(f"chat.abort failed: {err.get('message') or 'unknown error'}")
-                    payload = frame.get("payload") or {}
-                    return payload if isinstance(payload, dict) else {"ok": True}
+        params: dict[str, Any] = {"sessionKey": session_key}
+        if run_id:
+            params["runId"] = run_id
+        payload = await self._rpc("chat.abort", params)
+        return payload if isinstance(payload, dict) else {"ok": True}
 
     async def list_tools(self) -> list[dict[str, Any]]:
         """Fetch the public CopeNet tool catalog."""
-        connect_req_id = f"connect-{uuid.uuid4().hex[:8]}"
-        list_req_id = f"tools-{uuid.uuid4().hex[:8]}"
-        async with websockets.connect(self._config.url, max_size=2 * 1024 * 1024) as ws:
-            while True:
-                raw = await ws.recv()
-                frame = self._parse_frame(raw)
-                if frame.get("type") == "event" and frame.get("event") == "connect.challenge":
-                    await ws.send(
-                        self._to_json(
-                            {
-                                "type": "req",
-                                "id": connect_req_id,
-                                "method": "connect",
-                                "params": {"auth": {"token": self._config.token}},
-                            }
-                        )
-                    )
-                    continue
-                if frame.get("type") == "res" and frame.get("id") == connect_req_id:
-                    if frame.get("ok") is not True:
-                        err = frame.get("error") or {}
-                        raise RuntimeError(f"connect failed: {err.get('message') or 'unknown error'}")
-                    break
+        payload = await self._rpc("tools.list", {})
+        tools = payload.get("tools") if isinstance(payload, dict) else []
+        return tools if isinstance(tools, list) else []
 
-            await ws.send(
-                self._to_json(
-                    {
-                        "type": "req",
-                        "id": list_req_id,
-                        "method": "tools.list",
-                        "params": {},
-                    }
-                )
-            )
-            while True:
-                raw = await ws.recv()
-                frame = self._parse_frame(raw)
-                if frame.get("type") == "res" and frame.get("id") == list_req_id:
-                    if frame.get("ok") is not True:
-                        err = frame.get("error") or {}
-                        raise RuntimeError(f"tools.list failed: {err.get('message') or 'unknown error'}")
-                    payload = frame.get("payload") or {}
-                    tools = payload.get("tools") if isinstance(payload, dict) else []
-                    return tools if isinstance(tools, list) else []
+    async def list_providers(self) -> list[dict[str, Any]]:
+        """Fetch the public provider catalog."""
+        payload = await self._rpc("providers.list", {})
+        providers = payload.get("providers") if isinstance(payload, dict) else []
+        return providers if isinstance(providers, list) else []
+
+    async def list_models(self, provider: str | None = None, kind: str = "chat") -> list[dict[str, Any]]:
+        """Fetch models for one provider or all providers."""
+        params: dict[str, Any] = {"kind": kind}
+        if provider:
+            params["provider"] = provider
+        payload = await self._rpc("models.list", params)
+        models = payload.get("models") if isinstance(payload, dict) else []
+        return models if isinstance(models, list) else []
+
+    async def list_sessions(self, include_archived: bool = False) -> list[dict[str, Any]]:
+        """Fetch known sessions."""
+        payload = await self._rpc("sessions.list", {"includeArchived": include_archived})
+        sessions = payload.get("sessions") if isinstance(payload, dict) else []
+        return sessions if isinstance(sessions, list) else []
+
+    async def history(self, session_key: str, limit: int = 200) -> list[dict[str, Any]]:
+        """Fetch chat history for one session."""
+        payload = await self._rpc("chat.history", {"sessionKey": session_key, "limit": limit})
+        messages = payload.get("messages") if isinstance(payload, dict) else []
+        return messages if isinstance(messages, list) else []
 
     @staticmethod
     def _parse_frame(raw: str) -> dict[str, Any]:
