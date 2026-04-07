@@ -3,6 +3,7 @@
 ## Claude-Specific Notes
 
 `AGENTS.md` is the primary repository guide. This file only adds Claude-specific operating rules.
+Follow `AGENTS.md` sections on **Data Flow and Validation Discipline** as default behavior.
 
 ### Role
 
@@ -23,6 +24,7 @@ Claude should not act as the final integrator when parallel work is happening.
 - Keep changes scoped and readable.
 - Prefer concrete outputs over long speculative discussion.
 - When uncertain, document the uncertainty instead of improvising architecture.
+- In internal CopeNet flows, trust typed contracts and avoid redundant defensive guards.
 
 ### What Claude Should Usually Avoid
 
@@ -38,6 +40,7 @@ Do not:
 - introduce new top-level subsystems
 - add broad refactors while other agents are active
 - merge architecture decisions into docs as if they are already implemented
+- add repeated downstream type checks after boundary normalization already happened
 
 ### Good Claude Tasks
 

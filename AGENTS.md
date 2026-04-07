@@ -56,6 +56,37 @@ See [docs/architecture.md](/Users/copeharder/Programming/CopeNet/docs/architectu
 - Make errors actionable.
 - Do not add speculative abstraction for features we have not chosen yet.
 
+## Data Flow and Validation Discipline
+
+Keep runtime validation strict at trust boundaries and intentionally minimal everywhere else.
+
+### Trust boundaries (validate here)
+
+- WebSocket frame parsing and RPC request envelopes (`host/ws_server.py`, `host/rpc_schema.py`)
+- External provider HTTP responses and runtime API payloads
+- CLI/user input parsing
+- Any raw payload entering CopeNet from outside the process
+
+### Internal flows (trust contracts here)
+
+- RPC layer → orchestrator → harness → providers
+- normalized client RPC payloads after `_rpc()` return
+- typed provider events and metadata (`ProviderEvent`, session/transcript models)
+
+Inside these internal flows, do **not** add duplicate `isinstance`, `type(...)`, extra `None` guards, or repeated `str()/int()` coercion once data was already normalized upstream.
+
+### Normalization rule
+
+- Normalize once per flow at the boundary.
+- Reuse that normalized shape downstream.
+- If repeated guards appear, move validation earlier instead of re-checking in each layer.
+
+### Function shape preferences
+
+- Prefer short functions with early returns and low branching.
+- Avoid nested ternaries deeper than one level.
+- Prefer small typed DTOs (dataclass/Pydantic) between layers over ad-hoc dict shape checks.
+
 ## Session Semantics
 
 This is the easiest place to create confusing regressions, so treat it carefully.
