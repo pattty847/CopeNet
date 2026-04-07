@@ -174,6 +174,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                         "model": request.model,
                         "capabilities": {
                             "toolCalls": plan.capability_profile.tool_calls,
+                            "promptedToolUse": plan.capability_profile.prompted_tool_use,
                         },
                         "toolExecution": tool_execution_payload,
                     }
@@ -241,6 +242,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "model": request.model,
             "capabilities": {
                 "toolCalls": plan.capability_profile.tool_calls,
+                "promptedToolUse": plan.capability_profile.prompted_tool_use,
             },
             "toolExecution": tool_execution_payload,
         }

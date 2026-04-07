@@ -77,7 +77,7 @@ class ChatHarness:
             tool_calls=bool((caps or {}).get("toolCalls", False)),
             streaming=bool((caps or {}).get("streaming", True)),
             resume=bool((caps or {}).get("resume", False)),
-            prompted_tool_use=bool((caps or {}).get("toolCalls", False)),
+            prompted_tool_use=bool((caps or {}).get("promptedToolUse", (caps or {}).get("toolCalls", False))),
         )
         plan = HarnessTurnPlan(
             provider=provider_name,
