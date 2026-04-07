@@ -69,7 +69,7 @@ Keep runtime validation strict at trust boundaries and intentionally minimal eve
 
 ### Internal flows (trust contracts here)
 
-- orchestrator → RPC layer → harness → providers
+- RPC layer → orchestrator → harness → providers
 - normalized client RPC payloads after `_rpc()` return
 - typed provider events and metadata (`ProviderEvent`, session/transcript models)
 
