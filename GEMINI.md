@@ -3,6 +3,7 @@
 ## Gemini-Specific Notes
 
 `AGENTS.md` is the primary repository guide. This file adds Gemini-specific operating rules for future provider and search-oriented work.
+Follow `AGENTS.md` sections on **Data Flow and Validation Discipline** as default behavior.
 
 ### Role
 
@@ -22,6 +23,7 @@ Gemini is a strong fit for:
 - runtime capability comparison
 - prompt experiments for structured tool use
 - evaluating how to expose search or grounding features through CopeNet
+- boundary validation design that keeps internal flows contract-trusting
 
 ### What Gemini Should Usually Avoid
 
@@ -36,6 +38,7 @@ Do not:
 - invent product behavior that has not been chosen
 - couple provider-specific search behavior into shared architecture without approval
 - refactor session or transcript persistence
+- add duplicate downstream guards in orchestrator/RPC/harness paths after boundary normalization
 
 ### Good Gemini Tasks
 
