@@ -42,7 +42,7 @@ src/copenet/
 │   ├── api.py
 │   ├── ws_server.py
 │   ├── rpc_*.py
-│   └── static/
+│   └── static/\n│       ├── js/\n│       │   ├── controllers/\n│       │   └── render/\n│       └── app.js
 ├── providers/
 │   ├── base.py
 │   ├── codex_cli.py
