@@ -204,3 +204,62 @@ Consolidation is complete when:
 - backend package boundaries are clearer and navigable;
 - contributor standards consistently enforce boundary validation discipline;
 - adding a feature no longer implies touching a single oversized orchestration/UI file.
+## First Prompt Pass (Worker Kickoff)
+
+Use this as the default first prompt for fast worker models (Cursor/Composer, Claude, Gemini):
+
+```text
+You are performing a behavior-preserving refactor slice in CopeNet.
+
+Read first:
+- AGENTS.md
+- CLAUDE.md or GEMINI.md (whichever applies)
+- docs/refactor-blueprint.md
+
+Task type:
+- Boundary cleanup OR extraction-only refactor
+
+Rules:
+- No feature changes
+- No RPC payload changes
+- No session semantic changes
+- No transcript schema changes
+- Validate only at trust boundaries; do not add internal defensive slop
+
+Required output:
+1. Scope and explicit non-scope
+2. Files touched
+3. Behavior invariants verified
+4. Checks run
+5. Patch
+6. Follow-up extraction opportunities (max 3)
+```
+
+If the worker cannot state invariants before editing, it must stop and ask for clarification.
+
+## Deeper-Dive Refactor Prompt (Codebase Inspection Pass)
+
+Use this before large refactor batches so workers inspect first and propose bounded slices:
+
+```text
+Perform a deep architecture inspection of CopeNet for behavior-preserving refactor planning.
+
+Focus areas:
+- trust boundary normalization points
+- redundant internal type/shape guards
+- oversized files crossing thresholds
+- mixed-responsibility modules
+- import surfaces that need compatibility shims
+
+Deliver:
+1. Top 10 concrete refactor candidates
+2. Why each candidate matters (maintainability, slop reduction, risk)
+3. Suggested extraction order
+4. Allowed-files and forbidden-files per slice
+5. Verification checklist per slice
+
+Do not implement code in this pass.
+```
+
+This inspection pass should be completed before assigning multi-hour worker runs.
+
