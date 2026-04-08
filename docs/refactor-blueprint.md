@@ -58,7 +58,7 @@ src/copenet/
 - `host/`: transport, RPC envelope parsing, websocket lifecycle, static hosting.
 - `providers/`: provider-specific translation and runtime interaction only.
 - `prompts/`: prompt composition and preset authoring.
-- `client.py`: stable remote interface for external callers.
+- client.py: stable remote interface for external callers.\n- runner/: CLI entry points and execution orchestration.
 
 ## Frontend ES Module Strategy (No Build Step)
 
