@@ -1,147 +1,206 @@
-# CopeNet Backend Refactor Blueprint
+# CopeNet Architecture Consolidation Blueprint
 
-This document is the worker handoff for the backend-first refactor phase. It exists so fast worker models can execute bounded extraction tasks without improvising architecture.
+This blueprint defines the next phase after proof-of-concept: consolidate architecture so future work lands in small, predictable modules instead of expanding existing "god files".
 
-## Target Module Map
+It is intentionally implementation-oriented so humans and coding agents can execute work in bounded slices with clear ownership.
 
-### Host / RPC
+## Goals
 
-- `src/copenet/host/ws_server.py`
-  - websocket transport
-  - connect challenge / auth gate
-  - task cleanup
-- `src/copenet/host/rpc_dispatch.py`
-  - method routing only
-- `src/copenet/host/rpc_chat.py`
-  - `chat.send`
-  - `chat.abort`
-  - `chat.history`
-- `src/copenet/host/rpc_catalog.py`
-  - `prompts.list`
-  - `providers.list`
-  - `models.list`
-  - `tools.list`
-- `src/copenet/host/rpc_sessions.py`
-  - `sessions.list`
-  - `sessions.create`
-  - `sessions.rename`
-  - `sessions.archive`
-  - `sessions.resolve`
+- Keep product behavior stable while improving maintainability.
+- Make responsibility boundaries obvious across core runtime, host transport, providers, and UI.
+- Preserve no-build frontend simplicity while splitting `app.js` into browser-native ES modules.
+- Codify validation discipline: strict at trust boundaries, minimal in normalized internal flows.
+- Add extraction thresholds so large files are split before they become bottlenecks.
 
-### Tools
+## Non-Goals
 
-- `src/copenet/tools/__init__.py`
-  - compatibility re-exports
-- `src/copenet/tools/contracts.py`
-  - tool types and parsing helpers
-- `src/copenet/tools/policy.py`
-  - `ToolPolicy`
-- `src/copenet/tools/registry.py`
-  - `ToolRegistry`
-- `src/copenet/tools/builtin_readonly.py`
-  - built-in read/search tool implementations
+- No framework migration for the web UI.
+- No bundler/build-step introduction in this phase.
+- No behavior redesign of session locking, transcript semantics, or RPC contract.
+- No broad provider contract rewrite.
 
-### Orchestrator
+## Current Pressure Points
 
-- `src/copenet/orchestrator.py`
-  - public facade
-  - construction
-  - stable public method surface
-- `src/copenet/orchestrator_runtime.py`
-  - `send_chat` run lifecycle
-- `src/copenet/orchestrator_catalog.py`
-  - provider/model/tool/session catalog helpers
-  - session payload shaping
-- `src/copenet/orchestrator_titles.py`
-  - async title generation helpers
+- `src/copenet/host/static/app.js` is currently >1,100 lines and mixes state, RPC, rendering, and controllers.
+- Runtime orchestration concerns remain spread across `orchestrator.py`, `orchestrator_runtime.py`, and adjacent modules with room for cleaner conceptual ownership.
+- Tool and capability code paths are functional but should become easier to reason about and extend.
+- Contributor standards describe intent, but need sharper enforcement language for data-flow-first coding.
 
-## Invariants
+## Target Package Shape
 
-These must not change during the extraction phase:
+Keep boundaries under `src/copenet/` to preserve package coherence and avoid root-level fragmentation.
 
-- WebSocket RPC method names and payload shapes
-- connect challenge flow
-- `GatewayClient` behavior
-- session lock semantics
-- transcript append-only behavior
-- tool descriptor shape from `tools.list`
-- provider contracts: `describe()`, `list_models()`, `run()`
-- current tool ids and safety behavior
-- tool trace UI event metadata shape
-- tracing event names and general ordering
+```text
+src/copenet/
+├── core/
+│   ├── orchestrator/
+│   ├── harness/
+│   ├── sessions/
+│   ├── tools/
+│   └── tracing/
+├── host/
+│   ├── api.py
+│   ├── ws_server.py
+│   ├── rpc_*.py
+│   └── static/
+├── providers/
+│   ├── base.py
+│   ├── codex_cli.py
+│   └── local_http.py
+├── prompts/
+├── client.py
+└── runner/
+```
 
-## Forbidden Cross-File Edits Per Task
+### Boundary Intent
 
-### Task 1: `ws_server` extraction
+- `core/`: business logic and run lifecycle (no transport/UI concerns).
+- `host/`: transport, RPC envelope parsing, websocket lifecycle, static hosting.
+- `providers/`: provider-specific translation and runtime interaction only.
+- `prompts/`: prompt composition and preset authoring.
+- `client.py`: stable remote interface for external callers.
 
-Allowed:
-- `src/copenet/host/*`
+## Frontend ES Module Strategy (No Build Step)
 
-Forbidden:
-- `src/copenet/orchestrator.py`
-- `src/copenet/orchestrator_*.py`
-- `src/copenet/tools*`
-- `src/copenet/host/static/*`
+### Target split
 
-### Task 2: tool extraction
+- `static/app.js` — bootstrap only
+- `static/js/state.js` — session/draft/catalog state container
+- `static/js/rpc.js` — websocket and request/response helpers
+- `static/js/render/messages.js` — markdown/math/tool-trace rendering
+- `static/js/render/sessions.js` — session list rendering
+- `static/js/render/header.js` — active session + draft header state
+- `static/js/controllers/chat.js` — send/receive/stream lifecycle
+- `static/js/controllers/sessions.js` — create/select/rename/archive flows
 
-Allowed:
-- `src/copenet/tools*`
+### Constraints
 
-Forbidden:
-- session store changes
-- provider behavior changes
-- UI changes
+- Preserve behavior and event semantics exactly during extraction.
+- Keep exports small and explicit (no global mutable singleton sprawl).
+- Keep DOM query ownership localized to rendering/controller modules.
+- Keep protocol types centralized near RPC helpers.
 
-### Task 3: orchestrator catalog extraction
+## Validation and Type Discipline
 
-Allowed:
-- `src/copenet/orchestrator.py`
-- `src/copenet/orchestrator_catalog.py`
+### Validate at trust boundaries
 
-Forbidden:
-- session-store semantic changes
-- RPC payload changes
+- WebSocket frame parsing and RPC envelopes.
+- Provider HTTP/CLI responses.
+- User-submitted payloads and CLI args.
+- Transcript/session payloads loaded from storage.
 
-### Task 4: orchestrator runtime extraction
+### Trust normalized internal contracts
 
-Allowed:
-- `src/copenet/orchestrator.py`
-- `src/copenet/orchestrator_runtime.py`
-- `src/copenet/orchestrator_titles.py`
+Once data is normalized at the boundary:
 
-Forbidden:
-- event payload changes
-- transcript schema changes
-- provider capability changes
+- avoid repeated `isinstance`/shape checks in internal hops;
+- avoid redundant `str()/int()/bool()` coercions downstream;
+- prefer typed DTO/dataclass contracts between modules.
 
-## Required Checks Per Slice
+### Guard rule
+
+Before adding a defensive guard, ask:
+
+1. What real external boundary can violate this value?
+2. Can we normalize earlier instead?
+3. If not, is this guard actionable and observable?
+
+If the answer to (1) is "none", do not add the guard in internal flow.
+
+## No-God-File Thresholds and Extraction Rules
+
+Use these thresholds as prompts for extraction (not hard failures):
+
+- JavaScript UI modules: ~350 lines soft threshold.
+- Python service modules: ~400 lines soft threshold.
+- More than 3 distinct responsibilities in one file => extract by concern.
+- Repeated condition clusters across call sites => extract normalization helper at boundary.
+
+Extraction principles:
+
+- preserve public behavior first;
+- avoid broad renames and call-site churn in a single pass;
+- use compatibility re-exports/shims when moving Python modules.
+
+## Execution Plan
+
+### Pass 1 — Architecture Blueprint Lock
+
+Deliverables:
+
+- this blueprint accepted as source of truth;
+- module ownership table for core/host/providers/ui boundaries;
+- extraction thresholds documented in contributor standards.
+
+### Pass 2 — Frontend Split (Behavior-Preserving)
+
+Deliverables:
+
+- `app.js` reduced to bootstrap wiring;
+- new `static/js/*` modules created per target split;
+- no RPC payload or event contract changes.
+
+Verification:
+
+- `node --check` on all touched JS modules.
+- manual smoke: connect, sessions list/create/select, first-send lock behavior, stream rendering, tool trace rendering.
+
+### Pass 3 — Core Package Consolidation
+
+Deliverables:
+
+- move orchestration/harness/sessions/tools/tracing under `core/` (or equivalent clear structure);
+- keep stable import surfaces via shims where needed;
+- no session semantic regressions.
+
+Verification:
 
 - `python3 -m py_compile $(rg --files src/copenet -g '*.py')`
-- `node --check src/copenet/host/static/app.js`
-- `uv run cope`
+- `uv run cope` smoke run.
 
-Manual smoke after the touched slice:
+### Pass 4 — Standards and Worker Guidance
 
-- connect handshake succeeds
-- `sessions.list` works
-- `providers.list` works
-- `models.list` works
-- `tools.list` works
-- draft session creation still works
-- first message still locks provider/model/profile/task mode
-- Codex tool trace still attaches when a tool-backed run happens
-- `COPNET_TRACE=1` still writes one run file
+Deliverables:
 
-## Future Frontend Seams
+- update `AGENTS.md`, `CLAUDE.md`, and `GEMINI.md` with:
+  - data-flow-before-code rule,
+  - boundary-validation rule,
+  - extraction-before-expansion rule.
 
-Frontend modularization is deferred, but the intended seams are:
+### Pass 5 — Post-Consolidation Feature Work
 
-- websocket client / RPC layer
-- session state store
-- session list renderer
-- message renderer
-- markdown + math + tool trace renderer
-- draft header controls
+Only after architecture passes are stable:
 
-Do not split `app.js` during the current backend-first phase unless explicitly requested.
+- local model tool reliability tuning;
+- tool mode/profile controls;
+- Subtext bridge design exploration.
+
+## Compatibility and Safety Invariants
+
+Must remain stable across all passes:
+
+- RPC method names and payload semantics.
+- session lock semantics after first send.
+- append-only transcript behavior.
+- in-flight run locking semantics.
+- tool descriptor and tool-trace payload shape consumed by UI.
+- provider interface behavior (`describe`, `list_models`, `run`).
+
+## Suggested Worker Slice Template
+
+For each extraction task, require workers to include:
+
+1. Scope and explicit non-scope.
+2. Files touched.
+3. Behavior invariants checked.
+4. Commands run.
+5. Follow-up extraction opportunities (optional, max 3).
+
+## Definition of Done for Consolidation Phase
+
+Consolidation is complete when:
+
+- frontend responsibilities are modularized with no build step;
+- backend package boundaries are clearer and navigable;
+- contributor standards consistently enforce boundary validation discipline;
+- adding a feature no longer implies touching a single oversized orchestration/UI file.
