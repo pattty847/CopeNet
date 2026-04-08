@@ -7,7 +7,7 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from copenet.host.rpc_schema import ChatEventPayload, ResponseFrame, RpcError, make_chat_event, make_response_frame
-from copenet.orchestrator import ChatSendRequest, SessionInFlightError
+from copenet.core.orchestrator import ChatSendRequest, SessionInFlightError
 from copenet.prompts import compose_prompt
 
 
