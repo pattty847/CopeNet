@@ -29,8 +29,10 @@ Claude should not act as the final integrator when parallel work is happening.
 ### What Claude Should Usually Avoid
 
 Do not casually edit these high-conflict files unless explicitly assigned:
-- `src/copenet/orchestrator.py`
-- `src/copenet/host/static/app.js`
+- `src/copenet/core/orchestrator/runtime.py` — run lifecycle, idempotency, abort, streaming
+- `src/copenet/core/orchestrator/__init__.py` — orchestrator facade and provider construction
+- `src/copenet/host/static/js/controllers/chat.js` — WebSocket connect, send, stream event loop
+- `src/copenet/host/static/js/controllers/sessions.js` — session load/select/create flows
 - `src/copenet/host/static/index.html`
 - `src/copenet/host/ws_server.py`
 
