@@ -227,12 +227,12 @@ Rules:
 - Validate only at trust boundaries; do not add internal defensive slop
 
 Required output:
-1. Scope and non-scope
-2. File list touched
-3. Patch
+1. Scope and explicit non-scope
+2. Files touched
+3. Behavior invariants verified
 4. Checks run
-5. Invariants verified
-6. Follow-up opportunities (max 3)
+5. Patch
+6. Follow-up extraction opportunities (max 3)
 ```
 
 If the worker cannot state invariants before editing, it must stop and ask for clarification.
