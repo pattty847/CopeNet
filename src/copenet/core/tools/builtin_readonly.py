@@ -221,7 +221,8 @@ class BuiltinReadonlyTools:
         path = self._resolve_relative_path(str(request.arguments.get("path") or ""), context)
         if not path.is_file():
             raise RuntimeError(f"file not found: {path}")
-        text = path.read_text(encoding="utf-8")[: context.policy.file_output_limit]
+        with path.open("r", encoding="utf-8", errors="replace") as f:
+            text = f.read(context.policy.file_output_limit)
         summary = f"Read file {path.relative_to(context.workdir)}."
         return ToolExecutionResult(
             tool_id=request.tool_id,
