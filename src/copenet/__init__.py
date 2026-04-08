@@ -1,21 +1,21 @@
 """CopeNet: local agent gateway (orchestrator, providers, WebSocket RPC, sessions)."""
 
-from copenet.orchestrator import (
+from copenet.core.orchestrator import (
     ChatSendRequest,
     Orchestrator,
     SessionInFlightError,
 )
-from copenet.harness import (
+from copenet.core.harness import (
     ChatHarness,
     HarnessResult,
     HarnessTurnPlan,
     ModelCapabilityProfile,
 )
-from copenet.sessions import SessionStore, TranscriptStore
+from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.ws_server import CopeNetWsServer
 from copenet.client import GatewayClient, GatewayConfig
-from copenet.tracing import RunTraceWriter
-from copenet.tools import (
+from copenet.core.tracing import RunTraceWriter
+from copenet.core.tools import (
     ContextPack,
     ToolCallRequest,
     ToolDescriptor,

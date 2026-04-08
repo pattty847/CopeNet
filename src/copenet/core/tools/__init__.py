@@ -1,5 +1,6 @@
-"""Compatibility shim — implementation moved to copenet.core.tools."""
-from copenet.core.tools import (  # noqa: F401
+"""CopeNet-native tool contracts, policy, and v1 safe tool runtime."""
+
+from .contracts import (
     ContextPack,
     ToolBlockedError,
     ToolCallRequest,
@@ -8,12 +9,12 @@ from copenet.core.tools import (  # noqa: F401
     ToolExecutionRequest,
     ToolExecutionResult,
     ToolInvocationEnvelope,
-    ToolPolicy,
-    ToolRegistry,
     ToolSpec,
     build_tool_prompt_section,
     extract_tool_invocation,
 )
+from .policy import ToolPolicy
+from .registry import ToolRegistry
 
 __all__ = [
     "ContextPack",

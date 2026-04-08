@@ -24,15 +24,21 @@ The current product direction is:
 | Subsystem | Location | Role |
 |---|---|---|
 | Host / RPC | `src/copenet/host/` | FastAPI app, WebSocket server, frame protocol, static UI |
-| Orchestrator | `src/copenet/orchestrator.py` | Coordinates sessions, transcripts, provider execution, run lifecycle |
-| Harness | `src/copenet/harness.py` | Normalizes model capabilities and turn execution |
+| Orchestrator | `src/copenet/core/orchestrator/` | Coordinates sessions, transcripts, provider execution, run lifecycle |
+| Harness | `src/copenet/core/harness/` | Normalizes model capabilities and turn execution |
+| Tracing | `src/copenet/core/tracing/` | Per-run JSONL trace writer |
+| Sessions | `src/copenet/core/sessions/` | Session index and transcript persistence |
+| Tools | `src/copenet/core/tools/` | Tool contracts, policy, registry, and built-in handlers |
 | Providers | `src/copenet/providers/` | Codex CLI and local HTTP provider adapters |
-| Sessions | `src/copenet/sessions/` | Session index and transcript persistence |
 | Prompts | `src/copenet/prompts/` | Profile and task-mode loaders plus prompt content |
 | Client | `src/copenet/client.py` | Programmatic gateway client |
-| Web UI | `src/copenet/host/static/` | Vanilla HTML/JS/CSS app with no build step |
+| Web UI | `src/copenet/host/static/` | Vanilla HTML/JS ES modules app with no build step |
 
-See [docs/architecture.md](/Users/copeharder/Programming/CopeNet/docs/architecture.md) for the current request flow.
+The `src/copenet/core/` package owns all business logic and run lifecycle. Transport, hosting, and provider adapters stay outside it.
+
+Old top-level shims (`orchestrator.py`, `harness.py`, `tracing.py`, `sessions/`, `tools/`) re-export from `core/` for backward compatibility.
+
+See [docs/architecture.md](docs/architecture.md) for the current request flow.
 
 ## Architectural Principles
 
@@ -55,6 +61,16 @@ See [docs/architecture.md](/Users/copeharder/Programming/CopeNet/docs/architectu
 - Keep helpers small and justified.
 - Make errors actionable.
 - Do not add speculative abstraction for features we have not chosen yet.
+
+## Extraction-Before-Expansion Rule
+
+Before adding new logic to an existing file, check whether the file is already over threshold:
+
+- Python modules: ~400 lines soft threshold
+- JavaScript modules: ~350 lines soft threshold
+- More than 3 distinct responsibilities in one file → extract by concern first
+
+If a file is over threshold, extract a focused sub-module before expanding it. Prefer small, single-responsibility files over growing an existing one.
 
 ## Data Flow and Validation Discipline
 
@@ -138,8 +154,10 @@ For current behavior, assume:
 
 ### Web UI
 
-- Keep `app.js` plain browser JavaScript.
-- Preserve the single-page, no-build workflow.
+- The frontend uses native ES modules with no build step. `app.js` is the bootstrap entry point only.
+- Logic lives in `static/js/` — `state.js`, `rpc.js`, `render/`, `controllers/`. Add new UI logic to the appropriate module.
+- Dependency flow is one-way: `state` ← `rpc` ← `render/*` ← `controllers/*` ← `app.js`. Do not create circular imports.
+- Shared mutable state lives on the exported `state` object in `state.js`. Do not introduce new top-level globals.
 - If a feature needs backend support, add and verify the RPC first.
 - Make session state obvious: active session, provider, model, profile, task mode, lock state.
 
@@ -159,7 +177,7 @@ There is not a deep automated suite yet, so manual and targeted verification mat
 Common checks:
 
 - `python3 -m py_compile $(rg --files src/copenet -g '*.py')`
-- `node --check src/copenet/host/static/app.js`
+- `node --check src/copenet/host/static/app.js && for f in src/copenet/host/static/js/**/*.js; do node --check "$f"; done`
 - `uv run cope`
 - browser validation of the affected session/runtime flow
 

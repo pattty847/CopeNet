@@ -1,45 +1,69 @@
 # CopeNet Architecture
 
-This is a concise map of the current system. For contributor rules and working norms, see [AGENTS.md](/Users/copeharder/Programming/CopeNet/AGENTS.md).
+This is a concise map of the current system. For contributor rules and working norms, see [AGENTS.md](../AGENTS.md).
 
 ## Subsystem Map
 
 ```text
 copenet/
-├── host/
+├── core/                        ← business logic and run lifecycle
+│   ├── orchestrator/
+│   │   ├── __init__.py          ← Orchestrator facade, ChatSendRequest
+│   │   ├── catalog.py           ← session and provider catalog helpers
+│   │   ├── runtime.py           ← send_chat run lifecycle
+│   │   └── titles.py            ← async title generation
+│   ├── harness/
+│   │   └── __init__.py          ← ChatHarness, capability planning, tool loop
+│   ├── sessions/
+│   │   ├── session_store.py     ← SessionStore, SessionIndexEntry
+│   │   └── transcript_store.py  ← TranscriptStore, TranscriptMessage
+│   ├── tools/
+│   │   ├── contracts.py         ← ToolDescriptor, ToolExecutionContext, etc.
+│   │   ├── policy.py            ← ToolPolicy
+│   │   ├── registry.py          ← ToolRegistry
+│   │   └── builtin_readonly.py  ← built-in safe tool handlers
+│   └── tracing/
+│       └── __init__.py          ← RunTraceWriter
+├── host/                        ← transport layer (no business logic)
 │   ├── api.py
-│   ├── rpc_catalog.py
-│   ├── rpc_chat.py
-│   ├── rpc_dispatch.py
-│   ├── rpc_sessions.py
 │   ├── ws_server.py
 │   ├── rpc_schema.py
+│   ├── rpc_dispatch.py
+│   ├── rpc_chat.py
+│   ├── rpc_sessions.py
+│   ├── rpc_catalog.py
 │   └── static/
-├── orchestrator.py
-├── orchestrator_catalog.py
-├── orchestrator_runtime.py
-├── orchestrator_titles.py
-├── harness.py
+│       ├── index.html
+│       ├── app.js               ← ES module entry point (event wiring + connect())
+│       └── js/
+│           ├── state.js         ← shared state, DOM refs, catalog helpers
+│           ├── rpc.js           ← sendReq WebSocket helper
+│           ├── render/
+│           │   ├── messages.js  ← markdown/math/tool-trace rendering
+│           │   ├── sessions.js  ← session list DOM
+│           │   └── header.js    ← badges + draft config selects
+│           └── controllers/
+│               ├── sessions.js  ← load/select/create/rename/archive
+│               └── chat.js      ← connect, send, stream, bootstrap
 ├── providers/
 │   ├── base.py
 │   ├── codex_cli.py
 │   └── local_http.py
 ├── runner/
-├── sessions/
-│   ├── session_store.py
-│   └── transcript_store.py
 ├── prompts/
 │   ├── loader.py
 │   └── presets/
-├── tools/
-│   ├── __init__.py
-│   ├── builtin_readonly.py
-│   ├── contracts.py
-│   ├── policy.py
-│   └── registry.py
+├── client.py                    ← stable external GatewayClient
+│
+│ — compatibility shims (re-export from core/) —
+├── orchestrator.py
+├── harness.py
 ├── tracing.py
-└── client.py
+├── sessions/
+└── tools/
 ```
+
+The `core/` boundary is strict: nothing under `core/` imports from `host/`. Transport concerns never leak into business logic.
 
 ## Request Flow
 
@@ -67,7 +91,7 @@ Orchestrator facade
   - provider construction
         |
         v
-orchestrator_runtime.send_chat
+core/orchestrator/runtime.send_chat
   - idempotency check
   - session resolve / binding check
   - in-flight lock
@@ -154,6 +178,6 @@ CopeNet is configured primarily through environment variables for host/runtime e
 
 ## Additional Reference
 
-- [EVENT-CONTRACT.md](/Users/copeharder/Programming/CopeNet/docs/EVENT-CONTRACT.md)
-- [SESSION-CONTINUITY.md](/Users/copeharder/Programming/CopeNet/docs/SESSION-CONTINUITY.md)
-- [CAPABILITY-MATRIX.md](/Users/copeharder/Programming/CopeNet/docs/CAPABILITY-MATRIX.md)
+- [EVENT-CONTRACT.md](EVENT-CONTRACT.md)
+- [SESSION-CONTINUITY.md](SESSION-CONTINUITY.md)
+- [CAPABILITY-MATRIX.md](CAPABILITY-MATRIX.md)

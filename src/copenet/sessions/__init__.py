@@ -1,6 +1,9 @@
-"""Session persistence primitives for CopeNet."""
-
-from .session_store import SessionIndexEntry, SessionStore
-from .transcript_store import TranscriptMessage, TranscriptStore
+"""Compatibility shim — implementation moved to copenet.core.sessions."""
+from copenet.core.sessions import (  # noqa: F401
+    SessionIndexEntry,
+    SessionStore,
+    TranscriptMessage,
+    TranscriptStore,
+)
 
 __all__ = ["SessionIndexEntry", "SessionStore", "TranscriptMessage", "TranscriptStore"]

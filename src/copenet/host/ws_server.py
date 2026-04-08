@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from fastapi import WebSocket, WebSocketDisconnect
 
-from copenet.orchestrator import Orchestrator
+from copenet.core.orchestrator import Orchestrator
 from copenet.host.rpc_dispatch import dispatch_rpc
 from copenet.host.rpc_schema import (
     EventFrame,
