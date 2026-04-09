@@ -131,6 +131,7 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 ## Docs
 
 - [Architecture](docs/architecture.md)
+- [STARTUP](docs/STARTUP.md)
 - [Event Contract](docs/EVENT-CONTRACT.md)
 - [Session Continuity](docs/SESSION-CONTINUITY.md)
 - [Capability Matrix](docs/CAPABILITY-MATRIX.md)
