@@ -68,21 +68,27 @@ class Orchestrator:
         self._workdir = Path(os.environ.get("COPNET_WORKDIR") or os.getcwd()).resolve()
         self._session_store = session_store or SessionStore(path=base / "index.json")
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
+
         self._providers: dict[str, Provider] = {}
         self._provider_init_errors: dict[str, str] = {}
+
         try:
             self._providers["codex-cli"] = CodexCliProvider()
         except Exception as exc:
             self._provider_init_errors["codex-cli"] = str(exc)
+
         self._providers["lm-studio"] = LmStudioProvider(
             base_url=os.environ.get("COPNET_LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
         )
         self._providers["ollama"] = OllamaProvider(
             base_url=os.environ.get("COPNET_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
         )
+
         self._harness = ChatHarness()
+
         self._tool_policy = ToolPolicy()
         self._tool_registry = ToolRegistry(policy=self._tool_policy)
+
         self._trace_enabled = os.environ.get("COPNET_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
         self._active_abort_by_run: dict[str, asyncio.Event] = {}
         self._active_run_by_session: dict[str, str] = {}

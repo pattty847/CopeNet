@@ -17,6 +17,7 @@ def create_app() -> FastAPI:
     app = FastAPI(title="CopeNet Gateway", version="0.1.0")
     ws_server = CopeNetWsServer()
 
+    # TODO: Add deeper health probes for providers, orchestrator, etc.
     @app.get("/health")
     def health() -> dict:
         return {"ok": True}
