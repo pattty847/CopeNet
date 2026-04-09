@@ -38,19 +38,34 @@ class TranscriptMessage:
     def to_json(self) -> dict[str, Any]:
         """Convert message into a JSON-serializable dictionary."""
         payload: dict[str, Any] = {
-            "runId": self.run_id,
+            "run_id": self.run_id,
             "role": self.role,
             "content": self.content,
             "provider": self.provider,
             "model": self.model,
-            "providerSessionId": self.provider_session_id,
+            "provider_session_id": self.provider_session_id,
             "timestamp": self.timestamp,
         }
         if self.state:
             payload["state"] = self.state
         if self.tool_execution:
-            payload["toolExecution"] = self.tool_execution
+            payload["tool_execution"] = self.tool_execution
         return payload
+
+
+def to_public_message(record: dict[str, Any]) -> dict[str, Any]:
+    """Convert one storage transcript record into the wire/public shape."""
+    return {
+        "runId": record.get("run_id"),
+        "role": record.get("role"),
+        "content": record.get("content"),
+        "provider": record.get("provider"),
+        "model": record.get("model"),
+        "providerSessionId": record.get("provider_session_id"),
+        "timestamp": record.get("timestamp"),
+        "state": record.get("state"),
+        "toolExecution": record.get("tool_execution"),
+    }
 
 
 class TranscriptStore:

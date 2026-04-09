@@ -26,7 +26,7 @@ class CopeNetWsServer:
 
     def __init__(self, orchestrator: Orchestrator | None = None) -> None:
         self._orchestrator = orchestrator or Orchestrator()
-        self._token = os.environ.get("COPNET_TOKEN", os.environ.get("PROMPT_ANYWHERE_TOKEN", "dev-token")).strip()
+        self._token = os.environ.get("COPNET_TOKEN", "dev-token").strip()
 
     async def handle(self, websocket: WebSocket) -> None:
         """Accept and serve one websocket session."""

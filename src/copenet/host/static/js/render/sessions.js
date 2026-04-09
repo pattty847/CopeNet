@@ -5,7 +5,6 @@
 import {
   state,
   sessionCatalog,
-  sessionsList,
   labelForProviderId,
   labelForModel,
   labelForProfile,
@@ -14,6 +13,7 @@ import {
   formatTimestamp,
   DEFAULT_TASK_MODE_ID,
 } from '../state.js';
+import { sessionsList } from '../dom.js';
 
 /**
  * Re-render the full session list sidebar.

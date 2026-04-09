@@ -10,21 +10,21 @@ from typing import Awaitable, Callable
 
 from copenet.core.harness import ChatHarness
 from copenet.core.orchestrator.catalog import (
-    archive_session as archive_session_impl,
-    create_session as create_session_impl,
-    create_session_with_profile as create_session_with_profile_impl,
-    label_for_provider_id as _label_for_provider_id,
-    list_models as list_models_impl,
-    list_providers_catalog as list_providers_catalog_impl,
-    list_sessions as list_sessions_impl,
-    list_tools as list_tools_impl,
-    rename_session as rename_session_impl,
-    resolve_session as resolve_session_impl,
+    archive_session as archive_session_record,
+    build_default_provider_registry,
+    create_session as create_catalog_session,
+    create_session_with_profile as create_profiled_session,
+    list_models as list_provider_models,
+    list_providers_catalog as list_provider_catalog,
+    list_sessions as list_session_catalog,
+    list_tools as list_tool_catalog,
+    rename_session as rename_session_record,
+    resolve_session as resolve_session_record,
 )
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
-from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, Provider
-from copenet.core.sessions import SessionStore, TranscriptStore
+from copenet.providers import Provider
+from copenet.core.sessions import SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
 from copenet._paths import default_sessions_dir
 
@@ -63,27 +63,17 @@ class Orchestrator:
         session_store: SessionStore | None = None,
         transcript_store: TranscriptStore | None = None,
         sessions_dir: Path | None = None,
+        providers: dict[str, Provider] | None = None,
     ) -> None:
         base = sessions_dir if sessions_dir is not None else default_sessions_dir()
         self._workdir = Path(os.environ.get("COPNET_WORKDIR") or os.getcwd()).resolve()
         self._session_store = session_store or SessionStore(path=base / "index.json")
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
-
-        self._providers: dict[str, Provider] = {}
-        self._provider_init_errors: dict[str, str] = {}
-
-        try:
-            self._providers["codex-cli"] = CodexCliProvider()
-        except Exception as exc:
-            self._provider_init_errors["codex-cli"] = str(exc)
-
-        self._providers["lm-studio"] = LmStudioProvider(
-            base_url=os.environ.get("COPNET_LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
-        )
-        self._providers["ollama"] = OllamaProvider(
-            base_url=os.environ.get("COPNET_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-        )
-
+        if providers is None:
+            self._providers, self._provider_init_errors = build_default_provider_registry()
+        else:
+            self._providers = dict(providers)
+            self._provider_init_errors = {}
         self._harness = ChatHarness()
 
         self._tool_policy = ToolPolicy()
@@ -118,11 +108,12 @@ class Orchestrator:
         entry = self._session_store.get(session_key.strip())
         if entry is None:
             return []
-        return self._transcript_store.read_history(session_id=entry.session_id, limit=limit)
+        history = self._transcript_store.read_history(session_id=entry.session_id, limit=limit)
+        return [to_public_message(message) for message in history]
 
     def create_session(self, provider: str, model: str | None = None, key: str | None = None, title: str | None = None) -> dict:
         """Create a new session with a locked provider/model binding."""
-        return create_session_impl(self, provider=provider, model=model, key=key, title=title)
+        return create_catalog_session(self, provider=provider, model=model, key=key, title=title)
 
     def create_session_with_profile(
         self,
@@ -134,7 +125,7 @@ class Orchestrator:
         task_prompt_id: str | None = None,
     ) -> dict:
         """Create a new session with a locked provider/model/profile/task binding."""
-        return create_session_with_profile_impl(
+        return create_profiled_session(
             self,
             provider=provider,
             model=model,
@@ -146,31 +137,31 @@ class Orchestrator:
 
     def rename_session(self, session_key: str, title: str | None) -> dict:
         """Rename a session title."""
-        return rename_session_impl(self, session_key=session_key, title=title)
+        return rename_session_record(self, session_key=session_key, title=title)
 
     def archive_session(self, session_key: str, archived: bool = True) -> dict:
         """Archive or restore a session."""
-        return archive_session_impl(self, session_key=session_key, archived=archived)
+        return archive_session_record(self, session_key=session_key, archived=archived)
 
     async def list_providers_catalog(self) -> list[dict]:
         """Registered provider ids and display labels for clients (includes init failures)."""
-        return await list_providers_catalog_impl(self)
+        return await list_provider_catalog(self)
 
     def list_tools(self) -> list[dict]:
         """List available CopeNet-native tool descriptors."""
-        return list_tools_impl(self)
+        return list_tool_catalog(self)
 
     async def list_models(self, provider_id: str | None = None, kind: str = "chat") -> list[dict]:
         """List models for one provider or all providers."""
-        return await list_models_impl(self, provider_id=provider_id, kind=kind)
+        return await list_provider_models(self, provider_id=provider_id, kind=kind)
 
     def list_sessions(self, include_archived: bool = False) -> list[dict]:
         """List known sessions."""
-        return list_sessions_impl(self, include_archived=include_archived)
+        return list_session_catalog(self, include_archived=include_archived)
 
     def resolve_session(self, session_key: str) -> dict | None:
         """Resolve one session by key."""
-        return resolve_session_impl(self, session_key)
+        return resolve_session_record(self, session_key)
 
     @staticmethod
     def _session_payload(entry) -> dict:

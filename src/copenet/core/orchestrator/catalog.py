@@ -2,15 +2,32 @@
 
 from __future__ import annotations
 
+import os
 from typing import TYPE_CHECKING
 
-from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider
+from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, Provider
 
 if TYPE_CHECKING:
     from . import Orchestrator
 
 
 _PROVIDER_CLASSES: tuple[type, ...] = (CodexCliProvider, LmStudioProvider, OllamaProvider)
+
+
+def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, str]]:
+    providers: dict[str, Provider] = {}
+    init_errors: dict[str, str] = {}
+    try:
+        providers["codex-cli"] = CodexCliProvider()
+    except Exception as exc:
+        init_errors["codex-cli"] = str(exc)
+    providers["lm-studio"] = LmStudioProvider(
+        base_url=os.environ.get("COPNET_LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
+    )
+    providers["ollama"] = OllamaProvider(
+        base_url=os.environ.get("COPNET_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
+    )
+    return providers, init_errors
 
 
 def label_for_provider_id(provider_id: str) -> str:
@@ -46,6 +63,7 @@ def create_session(orchestrator: "Orchestrator", provider: str, model: str | Non
         key=key,
         title=title,
         system_prompt_id=None,
+        task_prompt_id=None,
     )
 
 

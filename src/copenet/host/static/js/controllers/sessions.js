@@ -10,20 +10,22 @@ import {
   modelCatalog,
   profileCatalog,
   taskModeCatalog,
-  messagesEl,
-  emptyState,
-  draftProviderSelectEl,
-  draftModelSelectEl,
-  draftProfileSelectEl,
-  draftTaskSelectEl,
   activeSession,
   preferredProviderId,
   DEFAULT_CHAT_PROVIDER_ID,
   DEFAULT_PROFILE_ID,
   DEFAULT_TASK_MODE_ID,
 } from '../state.js';
+import {
+  draftModelSelectEl,
+  draftProfileSelectEl,
+  draftProviderSelectEl,
+  draftTaskSelectEl,
+  emptyState,
+  messagesEl,
+} from '../dom.js';
 import { sendReq } from '../rpc.js';
-import { addMessage, showError } from '../render/messages.js';
+import { addMessage, describeError, logClientError, showError } from '../render/messages.js';
 import { setHeaderChrome, syncProviderSelect, syncModelSelect, syncProfileSelect, syncTaskModeSelect } from '../render/header.js';
 import { renderSessions } from '../render/sessions.js';
 
@@ -50,7 +52,8 @@ export async function loadModels(providerId) {
   try {
     const res = await sendReq('models.list', { provider: providerId, kind: 'chat' });
     modelCatalog[providerId] = (res.models || []).filter((model) => model.provider === providerId);
-  } catch (_) {
+  } catch (err) {
+    logClientError(`models.list failed for ${providerId}`, err);
     modelCatalog[providerId] = [];
   }
 
@@ -119,7 +122,9 @@ export async function loadHistory() {
       addMessage(role, content, false, role === 'assistant' ? { provider: message.provider, model: message.model, toolExecution: message.toolExecution } : null);
     });
     messagesEl.scrollTop = messagesEl.scrollHeight;
-  } catch (_) {
+  } catch (err) {
+    logClientError('chat.history failed', err);
+    showError(describeError(err, 'Unable to load chat history.'));
     if (emptyState) emptyState.style.display = 'block';
   }
 }
@@ -221,7 +226,9 @@ export function scheduleSessionRefresh() {
       try {
         await loadSessions();
         if (sessionCatalog[key]) await selectSession(key);
-      } catch (_) {}
+      } catch (err) {
+        logClientError('session refresh failed', err);
+      }
     }, delayMs);
   });
 }

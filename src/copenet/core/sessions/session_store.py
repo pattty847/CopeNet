@@ -21,6 +21,19 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _required_str(raw: dict[str, Any], key: str) -> str:
+    value = raw.get(key)
+    return str(value).strip() if value is not None else ""
+
+
+def _optional_str(raw: dict[str, Any], key: str) -> str | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 @dataclass
 class SessionIndexEntry:
     """Persistent session metadata entry."""
@@ -42,25 +55,23 @@ class SessionIndexEntry:
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> SessionIndexEntry:
         """Create entry from storage dictionary."""
-        provider_session_id_raw = raw.get("provider_session_id") or raw.get("providerSessionId")
-        last_run_id_raw = raw.get("last_run_id") or raw.get("lastRunId")
-        in_flight_run_id_raw = raw.get("in_flight_run_id") or raw.get("inFlightRunId")
+        # Disk format is snake_case. Wire format is camelCase in RPC payloads.
+        session_key = _required_str(raw, "session_key")
 
         return cls(
-            session_id=str(raw.get("session_id") or raw.get("sessionId") or "").strip()
-            or str(raw.get("session_key") or raw.get("sessionKey") or "").strip(),
-            session_key=str(raw.get("session_key") or raw.get("sessionKey") or "").strip(),
-            title=(str(raw.get("title")).strip() if raw.get("title") else None),
-            provider=str(raw.get("provider") or "").strip(),
-            model=(str(raw.get("model")).strip() if raw.get("model") else None),
-            system_prompt_id=(str(raw.get("system_prompt_id") or raw.get("systemPromptId")).strip() if (raw.get("system_prompt_id") or raw.get("systemPromptId")) else None),
-            task_prompt_id=(str(raw.get("task_prompt_id") or raw.get("taskPromptId")).strip() if (raw.get("task_prompt_id") or raw.get("taskPromptId")) else None),
+            session_id=_required_str(raw, "session_id") or session_key,
+            session_key=session_key,
+            title=_optional_str(raw, "title"),
+            provider=_required_str(raw, "provider"),
+            model=_optional_str(raw, "model"),
+            system_prompt_id=_optional_str(raw, "system_prompt_id"),
+            task_prompt_id=_optional_str(raw, "task_prompt_id"),
             archived=bool(raw.get("archived", False)),
-            provider_session_id=(str(provider_session_id_raw).strip() if provider_session_id_raw else None),
-            created_at=str(raw.get("created_at") or raw.get("createdAt") or utc_now_iso()),
-            updated_at=str(raw.get("updated_at") or raw.get("updatedAt") or utc_now_iso()),
-            last_run_id=(str(last_run_id_raw).strip() if last_run_id_raw else None),
-            in_flight_run_id=(str(in_flight_run_id_raw).strip() if in_flight_run_id_raw else None),
+            provider_session_id=_optional_str(raw, "provider_session_id"),
+            created_at=_required_str(raw, "created_at") or utc_now_iso(),
+            updated_at=_required_str(raw, "updated_at") or utc_now_iso(),
+            last_run_id=_optional_str(raw, "last_run_id"),
+            in_flight_run_id=_optional_str(raw, "in_flight_run_id"),
         )
 
     def to_json(self) -> dict[str, Any]:

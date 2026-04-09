@@ -10,6 +10,19 @@ from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
 
 
+def _required_text(raw: dict[str, Any], key: str) -> str:
+    value = raw.get(key)
+    return str(value).strip() if value is not None else ""
+
+
+def _optional_text(raw: dict[str, Any], key: str) -> str | None:
+    value = raw.get(key)
+    if value is None:
+        return None
+    text = str(value).strip()
+    return text or None
+
+
 async def handle_sessions_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     include_archived = bool((params or {}).get("includeArchived", False))
     await send_json(
@@ -25,12 +38,12 @@ async def handle_sessions_list(request_id: str, params: dict[str, Any] | None, s
 
 async def handle_sessions_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
-    provider = str(raw.get("provider") or "").strip()
-    model = str(raw.get("model") or "").strip() or None
-    key = str(raw.get("key") or "").strip() or None
-    title = str(raw.get("title") or "").strip() or None
-    system_prompt_id = str(raw.get("systemPromptId") or "").strip() or None
-    task_prompt_id = str(raw.get("taskPromptId") or "").strip() or None
+    provider = _required_text(raw, "provider")
+    model = _optional_text(raw, "model")
+    key = _optional_text(raw, "key")
+    title = _optional_text(raw, "title")
+    system_prompt_id = _optional_text(raw, "systemPromptId")
+    task_prompt_id = _optional_text(raw, "taskPromptId")
     if not provider:
         await send_json(
             make_response_frame(
@@ -67,7 +80,7 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
 
 async def handle_sessions_rename(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
-    key = str(raw.get("key") or "").strip()
+    key = _required_text(raw, "key")
     if not key:
         await send_json(
             make_response_frame(
@@ -82,7 +95,7 @@ async def handle_sessions_rename(request_id: str, params: dict[str, Any] | None,
     try:
         session = orchestrator.rename_session(
             session_key=key,
-            title=str(raw.get("title") or "").strip() or None,
+            title=_optional_text(raw, "title"),
         )
     except Exception as exc:
         await send_json(
@@ -100,7 +113,7 @@ async def handle_sessions_rename(request_id: str, params: dict[str, Any] | None,
 
 async def handle_sessions_archive(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
-    key = str(raw.get("key") or "").strip()
+    key = _required_text(raw, "key")
     if not key:
         await send_json(
             make_response_frame(
@@ -132,7 +145,7 @@ async def handle_sessions_archive(request_id: str, params: dict[str, Any] | None
 
 
 async def handle_sessions_resolve(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
-    key = str((params or {}).get("key") or "").strip()
+    key = _required_text(params or {}, "key")
     if not key:
         await send_json(
             make_response_frame(

@@ -1,0 +1,141 @@
+import asyncio
+
+import pytest
+
+from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.sessions import SessionStore, TranscriptStore
+from copenet.providers import ProviderEvent
+
+
+class FakeProvider:
+    name = "fake"
+    display_name = "Fake"
+
+    def __init__(self, *, wait_for_abort: bool = False) -> None:
+        self.wait_for_abort = wait_for_abort
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        if self.wait_for_abort:
+            await abort_event.wait()
+            return
+        yield ProviderEvent(kind="delta", text="hello", provider_session_id=provider_session_id or "provider-session")
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False},
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
+async def _collect_events(orchestrator: Orchestrator, request: ChatSendRequest) -> tuple[dict, list[dict]]:
+    events: list[dict] = []
+
+    async def emit(payload: dict) -> None:
+        events.append(payload)
+
+    result = await orchestrator.send_chat(request, emit=emit)
+    return result, events
+
+
+@pytest.fixture
+def fake_orchestrator(tmp_path) -> Orchestrator:
+    return Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={"fake": FakeProvider(), "fake-alt": FakeProvider()},
+    )
+
+
+@pytest.mark.asyncio
+async def test_send_chat_streams_delta_and_final(fake_orchestrator: Orchestrator) -> None:
+    result, events = await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(session_key="alpha", message="Hello", provider="fake", model="model-a"),
+    )
+
+    assert result["status"] == "ok"
+    assert [event["state"] for event in events] == ["delta", "final"]
+
+
+@pytest.mark.asyncio
+async def test_provider_mismatch_raises_binding_error(fake_orchestrator: Orchestrator) -> None:
+    await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(session_key="alpha", message="Hello", provider="fake", model="model-a"),
+    )
+
+    with pytest.raises(RuntimeError, match="locked to provider"):
+        await _collect_events(
+            fake_orchestrator,
+            ChatSendRequest(session_key="alpha", message="Again", provider="fake-alt", model="model-a"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_abort_sets_abort_event_and_run_terminates(tmp_path) -> None:
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={"fake": FakeProvider(wait_for_abort=True)},
+    )
+    events: list[dict] = []
+
+    async def emit(payload: dict) -> None:
+        events.append(payload)
+
+    task = asyncio.create_task(
+        orchestrator.send_chat(
+            ChatSendRequest(session_key="alpha", message="Hello", provider="fake", model="model-a"),
+            emit=emit,
+        )
+    )
+    await asyncio.sleep(0.05)
+    abort_result = orchestrator.abort("alpha")
+    result = await asyncio.wait_for(task, timeout=1.0)
+
+    assert abort_result["aborted"] is True
+    assert result["status"] == "ok"
+    assert events[-1]["state"] == "final"
+
+
+@pytest.mark.asyncio
+async def test_history_returns_stored_messages(fake_orchestrator: Orchestrator) -> None:
+    await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(session_key="alpha", message="Hello", provider="fake", model="model-a"),
+    )
+
+    history = fake_orchestrator.history("alpha")
+    assert [item["role"] for item in history] == ["user", "assistant"]
+
+
+@pytest.mark.asyncio
+async def test_idempotency_key_returns_cached_status(fake_orchestrator: Orchestrator) -> None:
+    request = ChatSendRequest(
+        session_key="alpha",
+        message="Hello",
+        provider="fake",
+        model="model-a",
+        idempotency_key="same-run",
+    )
+    first, _ = await _collect_events(fake_orchestrator, request)
+    second, events = await _collect_events(fake_orchestrator, request)
+
+    assert first["status"] == "ok"
+    assert second["status"] == "cached"
+    assert events == []

@@ -8,15 +8,12 @@ import {
   sessionCatalog,
   chatSendAckTimers,
   chatSendAckHandlers,
-  WS_URL,
-  TOKEN,
   activeSession,
   providerForUi,
   modelForUi,
-  messagesEl,
-  inputEl,
-  sendBtn,
 } from '../state.js';
+import { inputEl, messagesEl, sendBtn } from '../dom.js';
+import { WS_URL, getAuthToken } from '../auth.js';
 import {
   setStatus,
   showError,
@@ -28,6 +25,8 @@ import {
   removePendingIndicator,
   setAssistantBodyContent,
   setToolTraceContent,
+  describeError,
+  logClientError,
 } from '../render/messages.js';
 import { setHeaderChrome } from '../render/header.js';
 import {
@@ -158,7 +157,11 @@ export async function bootstrap() {
 
 export function connect() {
   if (state.ws) {
-    try { state.ws.close(); } catch (_) {}
+    try {
+      state.ws.close();
+    } catch (err) {
+      logClientError('websocket close failed', err);
+    }
   }
   Object.keys(chatSendAckHandlers).forEach(clearChatSendAck);
   removePendingIndicator();
@@ -180,7 +183,7 @@ export function connect() {
         type: 'req',
         id: 'connect-' + Math.random().toString(36).slice(2, 10),
         method: 'connect',
-        params: { auth: { token: TOKEN } },
+        params: { auth: { token: getAuthToken() } },
       }));
       return;
     }
@@ -192,7 +195,8 @@ export function connect() {
         try {
           await bootstrap();
         } catch (err) {
-          showError(err.message || 'Bootstrap failed');
+          logClientError('bootstrap failed', err);
+          showError(describeError(err, 'Bootstrap failed'));
         }
       } else {
         state.connected = false;
@@ -251,7 +255,9 @@ export function connect() {
             await loadSessions();
             if (sessionCatalog[state.currentSessionKey]) await selectSession(state.currentSessionKey);
             scheduleSessionRefresh();
-          } catch (_) {}
+          } catch (err) {
+            logClientError('session reload after chat failed', err);
+          }
         }
       }
     }

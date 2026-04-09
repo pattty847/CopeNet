@@ -1,12 +1,10 @@
 /**
- * state.js — shared mutable state, DOM element references, and catalog helpers.
+ * state.js — shared mutable state, catalog data, and selector helpers.
  *
  * All modules import from here. Mutations to object/array exports are visible
  * everywhere because JS objects are shared by reference.
  */
 
-export const WS_URL = (location.protocol === 'https:' ? 'wss:' : 'ws:') + '//' + location.host + '/ws';
-export const TOKEN = 'dev-token';
 export const DEFAULT_CHAT_PROVIDER_ID = 'codex-cli';
 export const DEFAULT_PROFILE_ID = 'default';
 export const DEFAULT_TASK_MODE_ID = 'none';
@@ -48,38 +46,6 @@ export const modelCatalog = {};
 /** @type {Record<string, { id: string, name: string }>} */
 export const profileCatalog = {};
 export const taskModeCatalog = {};
-
-// ---------------------------------------------------------------------------
-// DOM element references — safe to resolve at module load time because
-// ES modules are always deferred, so the DOM is ready when this runs.
-// ---------------------------------------------------------------------------
-const $ = (id) => document.getElementById(id);
-
-export const statusEl = $('status');
-export const sessionsList = $('sessions-list');
-export const messagesEl = $('messages');
-export const emptyState = $('empty-state');
-export const errorBanner = $('error-banner');
-export const composerBannerEl = $('composer-banner');
-export const chatTitleEl = $('chat-title');
-export const chatSubtitleEl = $('chat-subtitle');
-export const chatProviderBadgeEl = $('chat-provider-badge');
-export const chatModelBadgeEl = $('chat-model-badge');
-export const chatProfileBadgeEl = $('chat-profile-badge');
-export const chatModeBadgeEl = $('chat-mode-badge');
-export const chatLockBadgeEl = $('chat-lock-badge');
-export const draftConfigEl = $('draft-config');
-export const draftProviderSelectEl = $('draft-provider-select');
-export const draftModelSelectEl = $('draft-model-select');
-export const draftProfileSelectEl = $('draft-profile-select');
-export const draftTaskSelectEl = $('draft-task-select');
-export const promptSettingsBtn = $('prompt-settings');
-export const renameSessionBtn = $('rename-session');
-export const archiveSessionBtn = $('archive-session');
-export const newChatBtn = $('new-chat');
-export const inputEl = $('input');
-export const sendBtn = $('send');
-export const providerPillEl = $('provider-pill');
 
 // ---------------------------------------------------------------------------
 // Derived state helpers

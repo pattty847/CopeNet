@@ -7,6 +7,16 @@
 
 import {
   draftState,
+  preferredProviderId,
+  providerForUi,
+  modelForUi,
+  profileForUi,
+  taskModeForUi,
+  DEFAULT_CHAT_PROVIDER_ID,
+  DEFAULT_PROFILE_ID,
+  DEFAULT_TASK_MODE_ID,
+} from './js/state.js';
+import {
   draftProviderSelectEl,
   draftModelSelectEl,
   draftProfileSelectEl,
@@ -18,15 +28,7 @@ import {
   archiveSessionBtn,
   inputEl,
   sessionsList,
-  preferredProviderId,
-  providerForUi,
-  modelForUi,
-  profileForUi,
-  taskModeForUi,
-  DEFAULT_CHAT_PROVIDER_ID,
-  DEFAULT_PROFILE_ID,
-  DEFAULT_TASK_MODE_ID,
-} from './js/state.js';
+} from './js/dom.js';
 
 import { setHeaderChrome } from './js/render/header.js';
 import { showError, hideError } from './js/render/messages.js';

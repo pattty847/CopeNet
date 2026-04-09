@@ -4,15 +4,18 @@
 
 import {
   state,
-  messagesEl,
-  emptyState,
-  errorBanner,
-  statusEl,
-  sendBtn,
-  inputEl,
   labelForProviderId,
   labelForModel,
 } from '../state.js';
+import { emptyState, errorBanner, inputEl, messagesEl, sendBtn, statusEl } from '../dom.js';
+
+export function describeError(err, fallback) {
+  return err instanceof Error && err.message ? err.message : fallback;
+}
+
+export function logClientError(context, err) {
+  console.error(`[CopeNet] ${context}`, err);
+}
 
 // ---------------------------------------------------------------------------
 // Status / error helpers
@@ -135,7 +138,8 @@ function renderMathInElement(root) {
         try {
           katexApi.render(expr, span, { throwOnError: false, displayMode });
           fragment.appendChild(span);
-        } catch (_) {
+        } catch (err) {
+          logClientError('katex render failed', err);
           fragment.appendChild(document.createTextNode(token));
         }
         lastIndex = match.index + token.length;
@@ -179,7 +183,9 @@ export function setAssistantBodyContent(body, content) {
       renderMathInElement(body);
       return;
     }
-  } catch (_) {}
+  } catch (err) {
+    logClientError('markdown render failed', err);
+  }
 
   body.innerHTML = '<p>' + escapeHtml(prepared).replace(/\n/g, '<br />') + '</p>';
 }
