@@ -8,13 +8,14 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from copenet.core.orchestrator import Orchestrator
 from copenet.host.ws_server import CopeNetWsServer
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
 
-def create_app() -> FastAPI:
+def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     app = FastAPI(title="CopeNet Gateway", version="0.1.0")
-    ws_server = CopeNetWsServer()
+    ws_server = CopeNetWsServer(orchestrator=orchestrator)
 
     # TODO: Add deeper health probes for providers, orchestrator, etc.
     @app.get("/health")
