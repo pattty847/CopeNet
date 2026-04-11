@@ -1,0 +1,140 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+@import "katex/dist/katex.min.css";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  
+  --color-operator-bg: #0f1115;
+  --color-operator-panel: #151619;
+  --color-operator-border: #2a2d35;
+  --color-operator-text: #e2e8f0;
+  --color-operator-muted: #8e9299;
+  --color-operator-accent: #f59e0b; /* Amber for technical feel */
+  --color-operator-error: #ef4444;
+  --color-operator-success: #10b981;
+}
+
+body {
+  background-color: var(--color-operator-bg);
+  color: var(--color-operator-text);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  overflow: hidden; /* Prevent body scroll, manage in app shell */
+}
+
+/* --- Markdown Styles --- */
+.markdown-body {
+  color: var(--color-operator-text);
+}
+.markdown-body strong {
+  color: white;
+  font-weight: 600;
+}
+.markdown-body em {
+  color: var(--color-operator-muted);
+}
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 1rem;
+}
+.markdown-body th, .markdown-body td {
+  border: 1px solid var(--color-operator-border);
+  padding: 0.5rem 0.75rem;
+}
+.markdown-body th {
+  background-color: var(--color-operator-panel);
+  font-weight: 600;
+}
+.markdown-body tr:nth-child(even) {
+  background-color: rgba(255, 255, 255, 0.02);
+}
+.markdown-body code {
+  background-color: var(--color-operator-panel);
+  border: 1px solid var(--color-operator-border);
+  padding: 0.125rem 0.375rem;
+  border-radius: 0.25rem;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--color-operator-accent);
+}
+.markdown-body pre code {
+  background-color: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+}
+
+@keyframes message-slide-up {
+  from {
+    opacity: 0;
+    transform: translateY(10px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-message {
+  animation: message-slide-up 0.2s ease-out forwards;
+}
+
+/* --- Spinners --- */
+
+/* Dot Grid */
+.loader-dot-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 3px;
+  width: 33px;
+  height: 33px;
+}
+.loader-dot-grid span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: loader-anim 1.4s ease-in-out infinite;
+  place-self: center;
+}
+.loader-dot-grid span:nth-child(1) { animation-delay: 0.00s; }
+.loader-dot-grid span:nth-child(2) { animation-delay: 0.10s; }
+.loader-dot-grid span:nth-child(3) { animation-delay: 0.20s; }
+.loader-dot-grid span:nth-child(4) { animation-delay: 0.30s; }
+.loader-dot-grid span:nth-child(5) { animation-delay: 0.40s; }
+.loader-dot-grid span:nth-child(6) { animation-delay: 0.50s; }
+.loader-dot-grid span:nth-child(7) { animation-delay: 0.60s; }
+.loader-dot-grid span:nth-child(8) { animation-delay: 0.70s; }
+.loader-dot-grid span:nth-child(9) { animation-delay: 0.80s; }
+
+@keyframes loader-anim {
+  0%, 60%, 100% { opacity: 0.12; transform: scale(0.8); }
+  30% { opacity: 1; transform: scale(1.1); }
+}
+
+/* Bar Wave */
+.loader-bars { display: flex; align-items: center; gap: 3px; height: 28px; }
+.loader-bars span { width: 3px; height: 8px; border-radius: 2px; background: currentColor; animation: loader-bars-w 1s ease-in-out infinite; }
+.loader-bars span:nth-child(1) { animation-delay: 0s; }
+.loader-bars span:nth-child(2) { animation-delay: 0.1s; }
+.loader-bars span:nth-child(3) { animation-delay: 0.2s; }
+.loader-bars span:nth-child(4) { animation-delay: 0.3s; }
+.loader-bars span:nth-child(5) { animation-delay: 0.4s; }
+@keyframes loader-bars-w { 0%, 100% { height: 8px; opacity: 0.3; } 50% { height: 24px; opacity: 1; } }
+
+/* Bouncing Dots */
+.loader-bounce { display: flex; align-items: center; gap: 5px; }
+.loader-bounce span { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: loader-bounce-a 1.2s ease-in-out infinite; }
+.loader-bounce span:nth-child(1) { animation-delay: 0s; }
+.loader-bounce span:nth-child(2) { animation-delay: 0.15s; }
+.loader-bounce span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes loader-bounce-a { 0%, 80%, 100% { transform: translateY(0); opacity: 0.3; } 40% { transform: translateY(-10px); opacity: 1; } }
+
+/* Breathing Circle */
+.loader-breathe { width: 22px; height: 22px; border-radius: 50%; background: currentColor; animation: loader-breathe-a 2s ease-in-out infinite; }
+@keyframes loader-breathe-a { 0%, 100% { transform: scale(0.6); opacity: 0.2; } 50% { transform: scale(1); opacity: 0.8; } }
+

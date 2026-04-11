@@ -12,6 +12,12 @@ from copenet.core.orchestrator import Orchestrator
 from copenet.host.ws_server import CopeNetWsServer
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
+_FRONTEND_DIST_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
+
+
+def _root_index_path() -> Path:
+    dist_index = _FRONTEND_DIST_DIR / "index.html"
+    return dist_index if dist_index.is_file() else (_STATIC_DIR / "index.html")
 
 def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     app = FastAPI(title="CopeNet Gateway", version="0.1.0")
@@ -27,9 +33,11 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
         await ws_server.handle(websocket)
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
+    if (_FRONTEND_DIST_DIR / "assets").is_dir():
+        app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST_DIR / "assets"), name="assets")
 
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(_STATIC_DIR / "index.html")
+        return FileResponse(_root_index_path())
 
     return app
