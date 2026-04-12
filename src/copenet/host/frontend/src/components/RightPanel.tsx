@@ -1,6 +1,7 @@
 import React from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
+import { DraftSettings } from '../types/backend';
 import { Activity, Info, Settings2, TerminalSquare } from 'lucide-react';
 
 function timeAgo(dateString?: string | null) {
@@ -39,6 +40,7 @@ export function RightPanel() {
   const currentProfile = isDraft ? draftSettings.systemPromptId : activeSession.systemPromptId || '';
   const currentTaskMode = isDraft ? draftSettings.taskPromptId : activeSession.taskPromptId || '';
   const availableModels = currentProvider ? modelsByProvider[currentProvider] || [] : [];
+  const providerHasModels = currentProvider ? loadedModelProviders[currentProvider] : false;
 
   let latestTool = null;
   for (let index = messages.length - 1; index >= 0; index -= 1) {
@@ -55,6 +57,8 @@ export function RightPanel() {
   }, [currentProvider, isDraft, loadedModelProviders]);
 
   const providerName = providers.find((provider) => provider.id === currentProvider)?.displayName || currentProvider || 'None';
+  const profileName = profiles.find((profile) => profile.id === currentProfile)?.name || currentProfile || 'Default';
+  const taskModeName = taskModes.find((mode) => mode.id === currentTaskMode)?.name || currentTaskMode || 'None';
 
   const updateDraftSetting = (key: 'provider' | 'model' | 'systemPromptId' | 'taskPromptId', value: string) => {
     if (key === 'provider') {
@@ -62,7 +66,7 @@ export function RightPanel() {
       void wsClient.loadModels(value);
       return;
     }
-    patchDraftSettings({ [key]: value } as never);
+    patchDraftSettings({ [key]: value } as Partial<DraftSettings>);
   };
 
   return (
@@ -83,6 +87,12 @@ export function RightPanel() {
               <span className="text-operator-muted">Status:</span>
               <span className={isDraft ? 'text-operator-accent' : 'text-operator-success'}>
                 {isDraft ? 'DRAFT' : 'LOCKED'}
+              </span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-operator-muted">Session:</span>
+              <span className="text-operator-text">
+                {activeSession?.archived ? 'Archived' : isDraft ? 'Pending Create' : 'Active'}
               </span>
             </div>
             <div className="flex justify-between">
@@ -112,6 +122,9 @@ export function RightPanel() {
 
             {isDraft ? (
               <>
+                <div className="rounded-sm border border-operator-accent/20 bg-operator-accent/8 px-2.5 py-2 text-[11px] leading-relaxed text-operator-muted">
+                  Draft settings are local until the first send. Your first message will create and lock the session.
+                </div>
                 <div className="flex flex-col gap-1.5 mt-2">
                   <span className="text-operator-muted text-[10px] uppercase tracking-wider">Provider</span>
                   <select
@@ -137,6 +150,17 @@ export function RightPanel() {
                       <option key={model.id} value={model.id}>{model.displayName}</option>
                     ))}
                   </select>
+                  {!currentProvider && (
+                    <div className="text-[10px] text-operator-muted">Pick a provider to load chat models.</div>
+                  )}
+                  {currentProvider && !providerHasModels && (
+                    <div className="text-[10px] text-operator-muted">Loading models for {providerName}…</div>
+                  )}
+                  {currentProvider && providerHasModels && availableModels.length === 0 && (
+                    <div className="text-[10px] text-operator-error">
+                      No chat models are available for this provider right now.
+                    </div>
+                  )}
                 </div>
                 <div className="flex flex-col gap-1.5">
                   <span className="text-operator-muted text-[10px] uppercase tracking-wider">Profile</span>
@@ -177,11 +201,11 @@ export function RightPanel() {
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Profile:</span>
-                  <span className="text-operator-text">{activeSession.systemPromptId || 'default'}</span>
+                  <span className="text-operator-text truncate max-w-[120px] text-right" title={profileName}>{profileName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Mode:</span>
-                  <span className="text-operator-text">{activeSession.taskPromptId || 'none'}</span>
+                  <span className="text-operator-text truncate max-w-[120px] text-right" title={taskModeName}>{taskModeName}</span>
                 </div>
               </div>
             )}
@@ -202,11 +226,18 @@ export function RightPanel() {
                     {latestTool.ok ? 'SUCCESS' : 'ERROR'}
                   </span>
                 </div>
-                <div className="text-xs text-operator-muted truncate">{latestTool.summary}</div>
+                <div className="text-xs text-operator-muted break-words leading-relaxed">
+                  {latestTool.summary || (latestTool.ok ? 'Tool completed successfully.' : 'Tool execution failed.')}
+                </div>
+                {latestTool.error && (
+                  <div className="text-[11px] text-operator-error break-words leading-relaxed border-t border-operator-error/20 pt-2">
+                    {latestTool.error}
+                  </div>
+                )}
               </div>
             ) : (
-              <div className="text-operator-muted text-xs text-center py-2">
-                No tools executed yet.
+              <div className="text-operator-muted text-xs text-center py-2 leading-relaxed">
+                {isDraft ? 'Tool activity will appear here after the first response uses a CopeNet tool.' : 'No tools executed in this session yet.'}
               </div>
             )}
           </div>

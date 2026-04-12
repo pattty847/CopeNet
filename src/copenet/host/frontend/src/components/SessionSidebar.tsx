@@ -19,6 +19,8 @@ export function SessionSidebar() {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const setActiveSessionKey = useAppStore((state) => state.setActiveSessionKey);
+  const draftOpen = useAppStore((state) => state.draftOpen);
+  const setDraftOpen = useAppStore((state) => state.setDraftOpen);
   const showArchived = useAppStore((state) => state.showArchived);
   const setShowArchived = useAppStore((state) => state.setShowArchived);
   const providers = useAppStore((state) => state.providers);
@@ -31,6 +33,11 @@ export function SessionSidebar() {
 
   const handleNewSession = () => {
     wsClient.beginDraft();
+  };
+
+  const handleSessionSelect = (sessionKey: string) => {
+    setDraftOpen(false);
+    setActiveSessionKey(sessionKey);
   };
 
   const handleArchiveToggle = (e: MouseEvent, sessionKey: string, archived: boolean) => {
@@ -68,6 +75,18 @@ export function SessionSidebar() {
       </div>
 
       <div className="flex-1 overflow-y-auto p-2 space-y-2">
+        {draftOpen && !showArchived && (
+          <div className="w-full flex flex-col p-3.5 text-sm font-mono rounded-md border border-operator-accent/40 bg-operator-accent/8 shadow-sm">
+            <div className="flex items-center justify-between gap-3 mb-2">
+              <span className="font-bold text-operator-text truncate">New Draft Session</span>
+              <span className="text-[10px] uppercase tracking-wider text-operator-accent">Draft</span>
+            </div>
+            <div className="text-xs text-operator-muted leading-relaxed">
+              Configure the runtime in the right panel, then send your first message to create and lock the session.
+            </div>
+          </div>
+        )}
+
         {filteredSessions.map((session) => {
           const isActive = activeSessionKey === session.key;
           const providerName = providers.find((provider) => provider.id === session.provider)?.displayName || session.provider;
@@ -75,13 +94,14 @@ export function SessionSidebar() {
           return (
             <div
               key={session.key}
-              onClick={() => setActiveSessionKey(session.key)}
+              onClick={() => handleSessionSelect(session.key)}
               className={`w-full flex flex-col p-3 text-sm font-mono rounded-md transition-colors cursor-pointer group relative ${
                 isActive
-                  ? 'bg-operator-panel border border-operator-border'
+                  ? 'bg-operator-panel border border-operator-accent/30 shadow-sm'
                   : 'hover:bg-operator-panel/50 border border-transparent'
               }`}
             >
+              {isActive && <div className="absolute left-0 top-3 bottom-3 w-0.5 rounded-full bg-operator-accent" />}
               <div className="flex justify-between items-start mb-1">
                 <span className={`font-bold truncate pr-6 ${isActive ? 'text-operator-text' : 'text-operator-muted group-hover:text-operator-text'}`}>
                   {session.title || session.key || 'New Chat'}
@@ -118,7 +138,9 @@ export function SessionSidebar() {
           );
         })}
         {filteredSessions.length === 0 && (
-          <div className="text-center text-operator-muted text-xs font-mono py-8">NO SESSIONS FOUND</div>
+          <div className="text-center text-operator-muted text-xs font-mono py-8 px-4 leading-relaxed">
+            {showArchived ? 'No archived sessions yet.' : 'No saved sessions yet. Start a draft and send your first message.'}
+          </div>
         )}
       </div>
     </aside>

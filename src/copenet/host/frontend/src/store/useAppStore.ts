@@ -28,6 +28,8 @@ interface AppState {
   upsertSession: (session: Session) => void;
   activeSessionKey: string | null;
   setActiveSessionKey: (key: string | null) => void;
+  draftOpen: boolean;
+  setDraftOpen: (open: boolean) => void;
   showArchived: boolean;
   setShowArchived: (show: boolean) => void;
   draftSettings: DraftSettings;
@@ -90,6 +92,8 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   activeSessionKey: null,
   setActiveSessionKey: (key) => set({ activeSessionKey: key }),
+  draftOpen: false,
+  setDraftOpen: (open) => set({ draftOpen: open }),
   showArchived: false,
   setShowArchived: (show) => set({ showArchived: show }),
   draftSettings: DEFAULT_DRAFT,

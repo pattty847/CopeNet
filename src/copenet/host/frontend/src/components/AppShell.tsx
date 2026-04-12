@@ -7,7 +7,7 @@ import { RightPanel } from './RightPanel';
 
 export function AppShell() {
   useEffect(() => {
-    wsClient.connect();
+    void wsClient.connect();
   }, []);
 
   return (

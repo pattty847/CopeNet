@@ -196,6 +196,20 @@ class WsClient {
         store.setWsStatus('disconnected');
       }
       this.rejectAllPending(new Error('connection closed'));
+      // Mark any in-flight assistant messages as aborted so the UI doesn't show a stuck spinner.
+      const pending = store.pendingAssistants;
+      for (const runId of Object.keys(pending)) {
+        const target = pending[runId];
+        store.updateMessage(target.sessionKey, target.localId, {
+          state: 'aborted',
+          errorMessage: 'Connection lost.',
+          optimistic: false,
+        });
+        store.clearPendingAssistant(runId);
+      }
+      if (store.activeRunId) {
+        store.setActiveRunId(null);
+      }
       this.connectPromise = null;
       this.connectResolve = null;
       this.connectReject = null;
@@ -288,6 +302,10 @@ class WsClient {
   private handleResponseFrame(frame: ResponseFrame) {
     if (frame.id === this.connectRequestId) {
       if (frame.ok) {
+        if (this.reconnectTimer !== null) {
+          window.clearTimeout(this.reconnectTimer);
+          this.reconnectTimer = null;
+        }
         useAppStore.getState().setWsStatus('connected');
         this.connectResolve?.();
         this.connectPromise = null;
@@ -366,9 +384,11 @@ class WsClient {
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;
-      const nextKey = currentKey && sessions.some((session) => session.key === currentKey) ? currentKey : sessions[0]?.key || null;
+      const hasCurrent = currentKey && sessions.some((session) => session.key === currentKey);
+      const nextKey = hasCurrent ? currentKey : store.draftOpen ? null : sessions[0]?.key || null;
       store.setActiveSessionKey(nextKey);
       if (nextKey) {
+        store.setDraftOpen(false);
         await this.loadHistory(nextKey);
       }
     } catch (error) {
@@ -429,6 +449,7 @@ class WsClient {
   beginDraft() {
     const store = useAppStore.getState();
     store.setActiveSessionKey(null);
+    store.setDraftOpen(true);
     store.clearAppError();
     this.ensureDraftDefaults();
   }
@@ -446,11 +467,14 @@ class WsClient {
       useAppStore.getState().upsertSession(normalizeSession(payload.session));
     }
     const store = useAppStore.getState();
-    if (store.activeSessionKey === key) {
-      const shouldClear = archived || (!archived && store.showArchived);
-      if (shouldClear) {
-        store.setActiveSessionKey(null);
-      }
+    if (!archived) {
+      // Restoring: switch to active view and re-select the session so it's immediately visible.
+      store.setShowArchived(false);
+      store.setActiveSessionKey(key);
+      store.setDraftOpen(false);
+    } else if (store.activeSessionKey === key) {
+      // Archiving the currently active session — deselect it.
+      store.setActiveSessionKey(null);
     }
     await this.refreshSessions();
   }
@@ -474,6 +498,7 @@ class WsClient {
       session = normalizeSession(createPayload.session);
       store.upsertSession(session);
       store.setActiveSessionKey(session.key);
+      store.setDraftOpen(false);
     }
 
     const userMessage: Message = {
@@ -642,6 +667,11 @@ class WsClient {
 
       if (runId && store.activeRunId === runId) {
         store.setActiveRunId(null);
+      }
+      // Only close the draft if the completed run belongs to the currently active session.
+      // Closing unconditionally would destroy a new draft the user opened while a prior run finished.
+      if (sessionKey && store.activeSessionKey === sessionKey) {
+        store.setDraftOpen(false);
       }
       void this.refreshSessions();
     }

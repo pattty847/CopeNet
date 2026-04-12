@@ -11,10 +11,13 @@ export function ChatWorkspace() {
   const activeRunId = useAppStore((state) => state.activeRunId);
   const appError = useAppStore((state) => state.appError);
   const clearAppError = useAppStore((state) => state.clearAppError);
+  const draftSettings = useAppStore((state) => state.draftSettings);
 
   const messages = (activeSessionKey ? messagesMap[activeSessionKey] : undefined) || [];
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const isDraft = !activeSession;
+  const isArchived = Boolean(activeSession?.archived);
+  const composerDisabled = isArchived || Boolean(activeRunId);
 
   const [input, setInput] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -77,7 +80,10 @@ export function ChatWorkspace() {
                 value={editTitleValue}
                 onChange={(e) => setEditTitleValue(e.target.value)}
                 onBlur={handleTitleSave}
-                onKeyDown={(e) => e.key === 'Enter' && handleTitleSave()}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleTitleSave();
+                  if (e.key === 'Escape') setIsEditingTitle(false);
+                }}
                 className="bg-operator-panel border border-operator-accent outline-none font-bold text-xl text-operator-text w-full max-w-md rounded px-2 py-1 -ml-2 font-sans"
               />
             ) : (
@@ -99,14 +105,28 @@ export function ChatWorkspace() {
                 {activeSession.key}
               </div>
             )}
+            <div className="flex flex-wrap items-center gap-2 mt-3 font-mono text-[10px] uppercase tracking-wider">
+              <span className={`px-2 py-1 rounded-sm border ${
+                isDraft
+                  ? 'border-operator-accent/40 bg-operator-accent/10 text-operator-accent'
+                  : 'border-operator-success/30 bg-operator-success/10 text-operator-success'
+              }`}>
+                {isDraft ? 'Draft Session' : 'Locked Session'}
+              </span>
+              {activeSession?.archived && (
+                <span className="px-2 py-1 rounded-sm border border-operator-error/30 bg-operator-error/10 text-operator-error">
+                  Archived
+                </span>
+              )}
+              {isDraft && draftSettings.provider && (
+                <span className="px-2 py-1 rounded-sm border border-operator-border text-operator-muted">
+                  {draftSettings.provider}
+                </span>
+              )}
+            </div>
           </div>
 
           <div className="flex items-center gap-2">
-            {activeSession?.archived && (
-              <span className="px-2 py-1 bg-operator-error/20 text-operator-error text-xs rounded-sm border border-operator-error/30 font-mono mr-2">
-                ARCHIVED
-              </span>
-            )}
             {activeSession && (
               <button
                 onClick={() => void wsClient.archiveSession(activeSession.key, !activeSession.archived)}
@@ -131,8 +151,20 @@ export function ChatWorkspace() {
 
       <div className="flex-1 overflow-y-auto p-6">
         {messages.length === 0 ? (
-          <div className="text-operator-muted font-mono text-xs text-center mt-10">
-            {isDraft ? 'Configure a draft session and send your first message.' : 'No history loaded for this session yet.'}
+          <div className="max-w-xl mx-auto mt-12 rounded-lg border border-operator-border bg-operator-panel/40 p-5 text-center">
+            <div className="font-mono text-xs uppercase tracking-wider text-operator-accent mb-3">
+              {isDraft ? 'Draft Ready' : isArchived ? 'Archived Session' : 'Session Ready'}
+            </div>
+            <div className="text-operator-text font-sans text-base mb-2">
+              {isDraft ? 'Set the runtime in the right panel, then send your first message.' : isArchived ? 'This session is archived. Restore it to continue chatting.' : 'No history loaded for this session yet.'}
+            </div>
+            <div className="text-operator-muted font-mono text-xs leading-relaxed">
+              {isDraft
+                ? 'The first send will create the session and lock provider, model, profile, and mode.'
+                : isArchived
+                  ? 'Archived sessions stay readable, but input stays disabled until you restore them.'
+                  : 'This conversation has not received any assistant output yet.'}
+            </div>
           </div>
         ) : (
           <div className="flex flex-col">
@@ -145,27 +177,41 @@ export function ChatWorkspace() {
       </div>
 
       <div className="p-4 border-t border-operator-border bg-operator-panel">
+        <div className="flex items-center justify-between px-1 pb-2 text-[10px] font-mono uppercase tracking-wider">
+          <span className={`${composerDisabled ? 'text-operator-muted/70' : 'text-operator-muted'}`}>
+            {isArchived
+              ? 'Composer disabled for archived sessions'
+              : activeRunId
+                ? 'Assistant response in progress'
+                : isDraft
+                  ? 'First send creates and locks this session'
+                  : 'Session is live and locked to its runtime'}
+          </span>
+          <span className={isDraft ? 'text-operator-accent' : 'text-operator-success'}>
+            {isDraft ? 'Draft' : 'Locked'}
+          </span>
+        </div>
         <div className="flex items-end gap-2 bg-operator-bg border border-operator-border rounded-md p-2 focus-within:border-operator-accent transition-colors">
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            disabled={activeSession?.archived || Boolean(activeRunId)}
-            placeholder={activeSession?.archived ? 'SESSION ARCHIVED' : 'Message the agent...'}
+            disabled={composerDisabled}
+            placeholder={isArchived ? 'SESSION ARCHIVED' : isDraft ? 'Send the first message to create this session...' : 'Message the agent...'}
             className="flex-1 bg-transparent px-2 py-2 text-sm font-sans text-operator-text focus:outline-none disabled:opacity-50 resize-none max-h-[200px] overflow-y-auto"
             rows={1}
           />
           <div className="flex items-center gap-1 pb-1 shrink-0">
             <button
-              disabled={activeSession?.archived || Boolean(activeRunId)}
+              disabled={composerDisabled}
               className="p-2 text-operator-muted hover:text-operator-text transition-colors disabled:opacity-50 rounded-md hover:bg-operator-panel"
               title="Attach file"
             >
               <Paperclip className="w-4 h-4" />
             </button>
             <button
-              disabled={activeSession?.archived || Boolean(activeRunId)}
+              disabled={composerDisabled}
               className="p-2 text-operator-muted hover:text-operator-text transition-colors disabled:opacity-50 rounded-md hover:bg-operator-panel"
               title="Voice input"
             >
@@ -173,7 +219,7 @@ export function ChatWorkspace() {
             </button>
             <button
               onClick={() => void handleSend()}
-              disabled={!input.trim() || activeSession?.archived || Boolean(activeRunId)}
+              disabled={!input.trim() || composerDisabled}
               className="px-4 py-2 ml-1 bg-operator-accent text-operator-bg font-sans font-bold text-sm hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed rounded-md"
             >
               Send

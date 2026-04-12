@@ -44,7 +44,7 @@ export function MessageBubble({ message }: { message: Message }) {
         </span>
       </div>
 
-      <div className={`group relative max-w-[85%] p-3.5 font-sans text-sm leading-relaxed border ${
+      <div className={`group relative max-w-[85%] p-3.5 font-sans text-sm leading-relaxed border overflow-hidden ${
         isUser
           ? 'bg-operator-panel border-operator-border text-operator-text rounded-l-md rounded-br-md'
           : 'bg-transparent border-operator-border text-operator-text rounded-md shadow-sm'
@@ -62,7 +62,7 @@ export function MessageBubble({ message }: { message: Message }) {
         ) : null}
 
         {message.content && (
-          <div className="markdown-body">
+          <div className="markdown-body break-words">
             <ReactMarkdown
               remarkPlugins={[remarkGfm, remarkMath]}
               rehypePlugins={[rehypeKatex]}
@@ -97,7 +97,7 @@ export function MessageBubble({ message }: { message: Message }) {
                     {children}
                   </code>
                 ),
-                p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed">{children}</p>,
+                p: ({ children }) => <p className="mb-3 last:mb-0 leading-relaxed break-words">{children}</p>,
                 ul: ({ children }) => <ul className="list-disc pl-5 mb-3 space-y-1">{children}</ul>,
                 ol: ({ children }) => <ol className="list-decimal pl-5 mb-3 space-y-1">{children}</ol>,
                 li: ({ children }) => <li>{children}</li>,
@@ -110,7 +110,7 @@ export function MessageBubble({ message }: { message: Message }) {
                 h2: ({ children }) => <h2 className="text-lg font-bold mb-3 mt-4 text-operator-text">{children}</h2>,
                 h3: ({ children }) => <h3 className="text-base font-bold mb-2 mt-3 text-operator-text">{children}</h3>,
                 blockquote: ({ children }) => (
-                  <blockquote className="border-l-2 border-operator-accent pl-3 italic text-operator-muted mb-3">
+                  <blockquote className="border-l-2 border-operator-accent pl-3 italic text-operator-muted mb-3 break-words">
                     {children}
                   </blockquote>
                 ),
