@@ -53,6 +53,21 @@ Check `toolRequested: false` — the model ran but did not emit a parseable JSON
 - Model ignored the tool-use prompt and answered directly in prose
 - Model output was not valid JSON — check if the response was close to the expected shape
 
+**Fast comparison workflow:**
+
+If you want to compare real provider/model behavior before digging through traces manually:
+
+```bash
+COPNET_TRACE=1 uv run copenet
+uv run python scripts/live_probe_matrix.py --lm-model <your-lm-studio-model>
+```
+
+Then use the JSON artifact in `tmp/live_probe_results/` plus the trace files named by `runId` to compare:
+- expected tool success
+- expected tool block
+- prose fallback / no tool requested
+- resumed-session drift
+
 ---
 
 ## Symptom: Tool was blocked

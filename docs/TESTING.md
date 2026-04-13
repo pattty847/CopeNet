@@ -39,3 +39,31 @@ Current RPC transport coverage:
 Known gap kept out of this runbook on purpose:
 
 - browser automation is not part of the default safety loop yet
+
+## Live Provider Probe Runner
+
+For real-model behavior, use the live probe runner instead of pytest:
+
+- start CopeNet with tracing enabled:
+  - `COPNET_TRACE=1 uv run copenet`
+- run the probe matrix:
+  - `uv run python scripts/live_probe_matrix.py --lm-model <your-lm-studio-model>`
+
+What it does:
+
+- probes `codex-cli` plus one LM Studio model by default
+- runs a compact tool-use matrix in mostly fresh sessions
+- includes one deliberate same-session follow-up pair to expose resume drift
+- writes a JSON artifact under `tmp/live_probe_results/`
+- prints a compact terminal summary for quick comparison
+
+What it is for:
+
+- real provider/model compliance testing
+- tool-use drift and prose-fallback diagnosis
+- comparing Codex behavior to one local model
+
+What it is not:
+
+- deterministic CI coverage
+- a replacement for the backend pytest suite
