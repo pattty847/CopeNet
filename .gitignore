@@ -5,3 +5,6 @@ __pycache__/
 
 # Local tool worktrees
 .claude/worktrees/
+
+# Local scratch outputs
+tmp/
