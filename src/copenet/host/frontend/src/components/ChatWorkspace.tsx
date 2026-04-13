@@ -73,6 +73,8 @@ export function ChatWorkspace() {
     <main className="flex-1 flex flex-col bg-operator-bg relative h-full overflow-hidden">
       <div className="border-b border-operator-border bg-operator-bg flex flex-col">
         <div className="flex items-center justify-between px-6 py-4">
+
+          {/* Session title container */}
           <div className="flex-1">
             {isEditingTitle ? (
               <input
@@ -105,6 +107,8 @@ export function ChatWorkspace() {
                 {activeSession.key}
               </div>
             )}
+
+            {/* Session metadata container */}
             <div className="flex flex-wrap items-center gap-2 mt-3 font-mono text-[10px] uppercase tracking-wider">
               <span className={`px-2 py-1 rounded-sm border ${
                 isDraft
@@ -113,11 +117,13 @@ export function ChatWorkspace() {
               }`}>
                 {isDraft ? 'Draft Session' : 'Locked Session'}
               </span>
+
               {activeSession?.archived && (
                 <span className="px-2 py-1 rounded-sm border border-operator-error/30 bg-operator-error/10 text-operator-error">
                   Archived
                 </span>
               )}
+
               {isDraft && draftSettings.provider && (
                 <span className="px-2 py-1 rounded-sm border border-operator-border text-operator-muted">
                   {draftSettings.provider}
@@ -126,6 +132,7 @@ export function ChatWorkspace() {
             </div>
           </div>
 
+          {/* Session actions container */}
           <div className="flex items-center gap-2">
             {activeSession && (
               <button
@@ -149,6 +156,8 @@ export function ChatWorkspace() {
         </div>
       )}
 
+
+      {/* Messages container */}
       <div className="flex-1 overflow-y-auto p-6">
         {messages.length === 0 ? (
           <div className="max-w-xl mx-auto mt-12 rounded-lg border border-operator-border bg-operator-panel/40 p-5 text-center">
@@ -176,6 +185,7 @@ export function ChatWorkspace() {
         )}
       </div>
 
+      {/* Composer container */}
       <div className="p-4 border-t border-operator-border bg-operator-panel">
         <div className="flex items-center justify-between px-1 pb-2 text-[10px] font-mono uppercase tracking-wider">
           <span className={`${composerDisabled ? 'text-operator-muted/70' : 'text-operator-muted'}`}>
@@ -191,6 +201,9 @@ export function ChatWorkspace() {
             {isDraft ? 'Draft' : 'Locked'}
           </span>
         </div>
+
+
+        {/* Composer input container */}
         <div className="flex items-end gap-2 bg-operator-bg border border-operator-border rounded-md p-2 focus-within:border-operator-accent transition-colors">
           <textarea
             ref={textareaRef}
@@ -202,7 +215,10 @@ export function ChatWorkspace() {
             className="flex-1 bg-transparent px-2 py-2 text-sm font-sans text-operator-text focus:outline-none disabled:opacity-50 resize-none max-h-[200px] overflow-y-auto"
             rows={1}
           />
+
+          {/* Composer input buttons container */}
           <div className="flex items-center gap-1 pb-1 shrink-0">
+            {/* Attach file button */}
             <button
               disabled={composerDisabled}
               className="p-2 text-operator-muted hover:text-operator-text transition-colors disabled:opacity-50 rounded-md hover:bg-operator-panel"
@@ -210,6 +226,8 @@ export function ChatWorkspace() {
             >
               <Paperclip className="w-4 h-4" />
             </button>
+
+            {/* Voice input button */}
             <button
               disabled={composerDisabled}
               className="p-2 text-operator-muted hover:text-operator-text transition-colors disabled:opacity-50 rounded-md hover:bg-operator-panel"
@@ -217,6 +235,8 @@ export function ChatWorkspace() {
             >
               <Mic className="w-4 h-4" />
             </button>
+
+            {/* Send button */}
             <button
               onClick={() => void handleSend()}
               disabled={!input.trim() || composerDisabled}

@@ -7,7 +7,7 @@ CopeNet writes one structured JSONL trace per run for debugging harness, tool, p
 Tracing is off by default.
 
 ```bash
-COPNET_TRACE=1 uv run cope
+COPNET_TRACE=1 uv run copenet
 ```
 
 ## Where Traces Live
@@ -19,7 +19,7 @@ COPNET_TRACE=1 uv run cope
 Override the base directory:
 
 ```bash
-COPNET_DATA_DIR=/custom/path uv run cope
+COPNET_DATA_DIR=/custom/path uv run copenet
 # traces go to /custom/path/logs/runs/
 ```
 

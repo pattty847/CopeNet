@@ -178,7 +178,7 @@ Common checks:
 
 - `python3 -m py_compile $(rg --files src/copenet -g '*.py')`
 - `node --check src/copenet/host/static/app.js && for f in src/copenet/host/static/js/**/*.js; do node --check "$f"; done`
-- `uv run cope`
+- `uv run copenet`
 - browser validation of the affected session/runtime flow
 
 ### Tracing

@@ -1,14 +1,10 @@
 """CopeNet host process entry.
 
-Run:
-  python -m copenet.host
-  # or: copenet-host
+From root directory run:
+  uv run copenet
 """
 
-from __future__ import annotations
-
 import os
-
 import uvicorn
 
 from copenet.host.api import create_app

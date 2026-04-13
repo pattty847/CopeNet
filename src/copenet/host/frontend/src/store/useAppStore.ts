@@ -12,6 +12,11 @@ interface AppState {
   clearAppError: () => void;
   setActiveRunId: (id: string | null) => void;
 
+  sidebarOpen: boolean;
+  setSidebarOpen: (open: boolean) => void;
+  rightPanelOpen: boolean;
+  setRightPanelOpen: (open: boolean) => void;
+
   providers: Provider[];
   modelsByProvider: Record<string, Model[]>;
   loadedModelProviders: Record<string, boolean>;
@@ -51,7 +56,7 @@ function sortSessions(sessions: Session[]) {
 
 const DEFAULT_DRAFT: DraftSettings = {
   provider: 'codex-cli',
-  model: '',
+  model: 'gpt-5.4',
   systemPromptId: 'default',
   taskPromptId: 'none',
 };
@@ -66,6 +71,11 @@ export const useAppStore = create<AppState>((set) => ({
   setAppError: (message) => set({ appError: message }),
   clearAppError: () => set({ appError: null }),
   setActiveRunId: (id) => set({ activeRunId: id }),
+
+  sidebarOpen: true,
+  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  rightPanelOpen: true,
+  setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
 
   providers: [],
   modelsByProvider: {},

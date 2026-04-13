@@ -34,7 +34,7 @@ export COPNET_LM_STUDIO_BASE_URL="http://127.0.0.1:1234"
 ## 4) Run CopeNet
 
 ```bash
-uv run cope
+uv run copenet
 ```
 
 Open:
@@ -56,7 +56,7 @@ After first send, runtime/model/profile/task mode are treated as locked for that
 export COPNET_HOST="127.0.0.1"
 export COPNET_PORT="17123"
 export COPNET_TOKEN="set-a-real-token"
-uv run cope
+uv run copenet
 ```
 
 ## Common gotchas
@@ -70,11 +70,11 @@ uv run cope
 
 ```bash
 # Full app
-uv run cope
+uv run copenet
 
 # Backend only
 uv run copenet-host
 
 # Run with custom port
-COPNET_PORT=17124 uv run cope
+COPNET_PORT=17124 uv run copenet
 ```

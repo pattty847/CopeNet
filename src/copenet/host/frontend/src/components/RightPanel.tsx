@@ -2,7 +2,7 @@ import React from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Settings2, TerminalSquare } from 'lucide-react';
+import { Activity, Info, Settings2, TerminalSquare, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function timeAgo(dateString?: string | null) {
   if (!dateString) return '--';
@@ -30,6 +30,8 @@ export function RightPanel() {
   const wsStatus = useAppStore((state) => state.wsStatus);
   const draftSettings = useAppStore((state) => state.draftSettings);
   const patchDraftSettings = useAppStore((state) => state.patchDraftSettings);
+  const rightPanelOpen = useAppStore((state) => state.rightPanelOpen);
+  const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
 
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const messages = activeSessionKey ? messagesMap[activeSessionKey] || [] : [];
@@ -69,12 +71,34 @@ export function RightPanel() {
     patchDraftSettings({ [key]: value } as Partial<DraftSettings>);
   };
 
+  if (!rightPanelOpen) {
+    return (
+      <aside className="w-10 border-l border-operator-border bg-operator-bg flex flex-col h-full items-center pt-2">
+        <button
+          onClick={() => setRightPanelOpen(true)}
+          className="p-2 text-operator-muted hover:text-operator-accent transition-colors"
+          title="Expand panel"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-80 border-l border-operator-border bg-operator-bg flex flex-col h-full overflow-y-auto">
       <div className="p-4 border-b border-operator-border flex items-center gap-2">
+        <button
+          onClick={() => setRightPanelOpen(false)}
+          className="p-1 text-operator-muted hover:text-operator-accent transition-colors"
+          title="Collapse panel"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
         <Activity className="w-4 h-4 text-operator-accent" />
         <h2 className="font-bold font-mono text-sm text-operator-text">TELEMETRY</h2>
       </div>
+ 
 
       <div className="p-4 flex flex-col gap-6 font-mono text-sm">
         <section>
@@ -115,7 +139,7 @@ export function RightPanel() {
             <div className="flex justify-between items-center">
               <span className="text-operator-muted">Connection:</span>
               <span className={`flex items-center gap-1 ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
-                <div className={`w-2 h-2 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
+                <div className={`w-2 h-2 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />     
                 {wsStatus.toUpperCase()}
               </span>
             </div>

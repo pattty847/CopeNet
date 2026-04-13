@@ -1,7 +1,7 @@
 import React, { useEffect, MouseEvent } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
-import { ArchiveRestore, Archive } from 'lucide-react';
+import { ArchiveRestore, Archive, ChevronLeft, ChevronRight } from 'lucide-react';
 
 function timeAgo(dateString?: string | null) {
   if (!dateString) return 'Just now';
@@ -24,6 +24,8 @@ export function SessionSidebar() {
   const showArchived = useAppStore((state) => state.showArchived);
   const setShowArchived = useAppStore((state) => state.setShowArchived);
   const providers = useAppStore((state) => state.providers);
+  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
+  const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
 
   const filteredSessions = sessions.filter((session) => session.archived === showArchived);
 
@@ -48,14 +50,35 @@ export function SessionSidebar() {
     }
   };
 
+  if (!sidebarOpen) {
+    return (
+      <aside className="w-10 border-r border-operator-border bg-operator-bg flex flex-col h-full items-center pt-2">
+        <button
+          onClick={() => setSidebarOpen(true)}
+          className="p-2 text-operator-muted hover:text-operator-accent transition-colors"
+          title="Expand sidebar"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </aside>
+    );
+  }
+
   return (
     <aside className="w-72 border-r border-operator-border bg-operator-bg flex flex-col h-full">
-      <div className="p-4 border-b border-operator-border">
+      <div className="p-4 border-b border-operator-border flex items-center gap-2">
         <button
           onClick={handleNewSession}
-          className="w-full py-2 bg-operator-accent text-operator-bg font-mono font-bold text-sm hover:opacity-90 transition-opacity rounded-sm"
+          className="flex-1 py-2 bg-operator-accent text-operator-bg font-mono font-bold text-sm hover:opacity-90 transition-opacity rounded-sm"
         >
           New Chat
+        </button>
+        <button
+          onClick={() => setSidebarOpen(false)}
+          className="p-2 text-operator-muted hover:text-operator-accent transition-colors"
+          title="Collapse sidebar"
+        >
+          <ChevronLeft className="w-4 h-4" />
         </button>
       </div>
 

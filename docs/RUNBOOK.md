@@ -6,7 +6,7 @@ This is the shortest path from “something feels off” to “I know what happe
 
 ```bash
 uv sync
-uv run cope
+uv run copenet
 ```
 
 Open:
@@ -26,7 +26,7 @@ Checklist:
 ## Enable Debug Mode
 
 ```bash
-COPNET_TRACE=1 uv run cope
+COPNET_TRACE=1 uv run copenet
 ```
 
 Then reproduce one run and inspect:
@@ -56,13 +56,13 @@ kill $(lsof -tiTCP:17123 -sTCP:LISTEN)
 Or run another port:
 
 ```bash
-COPNET_PORT=17124 uv run cope
+COPNET_PORT=17124 uv run copenet
 ```
 
 ### Fresh trace session
 
 ```bash
-COPNET_TRACE=1 uv run cope
+COPNET_TRACE=1 uv run copenet
 ls -lt ~/.copenet/logs/runs/ | head -10
 ```
 

@@ -29,7 +29,7 @@ This note archives the architecture cleanup work that moved CopeNet out of the l
 - Python compile pass
 - frontend JS syntax checks
 - pytest suite with unit and integration coverage
-- server startup smoke via `uv run cope`
+- server startup smoke via `uv run copenet`
 - live tool-call validation against Codex and LM Studio flows during manual use
 
 ## Remaining Work Moved Out Of Refactor

@@ -6,7 +6,7 @@ React + Vite frontend for the CopeNet WebSocket gateway.
 
 Prerequisites:
 - Node.js
-- running CopeNet backend (`uv run cope`)
+- running CopeNet backend (`uv run copenet`)
 
 Setup:
 1. `npm install`

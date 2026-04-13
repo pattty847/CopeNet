@@ -135,7 +135,17 @@ class CodexCliProvider:
 
     async def list_models(self) -> list[ProviderModel]:
         """Codex CLI does not expose model selection through this adapter."""
-        return []
+        return [
+            ProviderModel(
+                id="gpt-5.4", 
+                display_name="GPT-5.4", 
+                kind="chat", 
+                provider=self.name, 
+                capabilities={"chat": True, "streaming": True, "toolCalls": True, "resume": True}, 
+                recommended_for=["chat"],
+                metadata={"ownedBy": "OpenAI"},
+            )
+        ]
 
     async def run(
         self,

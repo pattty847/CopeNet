@@ -7,7 +7,7 @@ A quick-reference guide for diagnosing CopeNet run failures. Start here before p
 If you haven't already:
 
 ```bash
-COPNET_TRACE=1 uv run cope
+COPNET_TRACE=1 uv run copenet
 ```
 
 Traces go to `~/.copenet/logs/runs/<run-id>.jsonl`. See [TRACING.md](TRACING.md) for the full event reference.
@@ -19,7 +19,7 @@ Traces go to `~/.copenet/logs/runs/<run-id>.jsonl`. See [TRACING.md](TRACING.md)
 **Cause:** Provider failed to initialize before the run started. The `RunTraceWriter` is created after the provider is confirmed available, so init-time errors produce no file.
 
 **What to check:**
-1. Is the provider runtime actually running? (`uv run cope` startup logs will note init failures)
+1. Is the provider runtime actually running? (`uv run copenet` startup logs will note init failures)
 2. Check `providers.list` via the UI or client — are the expected providers listed as available?
 3. Check the WebSocket event stream in the browser dev tools for the error event that was sent to the client instead.
 
@@ -158,8 +158,8 @@ python3 -m py_compile $(rg --files src/copenet -g '*.py')
 node --check src/copenet/host/static/app.js
 
 # start server
-uv run cope
+uv run copenet
 
 # start with tracing
-COPNET_TRACE=1 uv run cope
+COPNET_TRACE=1 uv run copenet
 ```

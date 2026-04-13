@@ -54,7 +54,7 @@ uv sync
 ### 3) Run CopeNet
 
 ```bash
-uv run cope
+uv run copenet
 ```
 
 Then open:
@@ -66,12 +66,12 @@ That’s it.
 ## Startup Tips (new machine in ~2 minutes)
 
 1. Start your local model servers first (Ollama and/or LM Studio).
-2. Run `uv run cope`.
+2. Run `uv run copenet`.
 3. Open the UI and click **New Chat**.
 4. Pick runtime + model + profile/task mode.
 5. Send first message (session locks to that runtime/model pair).
 
-If you switch runtimes/models later, create a **new chat**.
+If you want to switch runtimes/models later, create a **new chat**.
 
 ## Configuration
 
@@ -91,7 +91,7 @@ Example:
 ```bash
 export COPNET_TOKEN="change-me"
 export COPNET_PORT=17123
-uv run cope
+uv run copenet
 ```
 
 ## Prompt Presets
@@ -113,7 +113,7 @@ Add your own by dropping `.md` files in those directories.
 - Full app (recommended):
 
 ```bash
-uv run cope
+uv run copenet
 ```
 
 - Backend host only:
@@ -153,7 +153,7 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 
 ### Debugging a weird tool run
 
-- Enable tracing: `COPNET_TRACE=1 uv run cope`
+- Enable tracing: `COPNET_TRACE=1 uv run copenet`
 - Reproduce the run once
 - Open the newest file under `~/.copenet/logs/runs/`
 - Inspect the event order:
@@ -174,7 +174,7 @@ See [`docs/TRACING.md`](docs/TRACING.md) for the trace schema and workflow.
 - Set another port:
 
 ```bash
-COPNET_PORT=17124 uv run cope
+COPNET_PORT=17124 uv run copenet
 ```
 
 ## Project Status

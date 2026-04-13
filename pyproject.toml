@@ -18,8 +18,7 @@ dev = [
 ]
 
 [project.scripts]
-cope = "copenet.host.main:main"
-copenet-host = "copenet.host.main:main"
+copenet = "copenet.host.main:main"
 
 [build-system]
 requires = ["hatchling"]
