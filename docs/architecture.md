@@ -4,16 +4,23 @@ This is a concise map of the current system. For contributor rules and working n
 
 ## Subsystem Map
 
+High-level layout of `src/copenet/` (main packages and feature boundaries). Many `__init__.py` files are thin re-exports; substantive code lives in the sibling modules shown below.
+
 ```text
 copenet/
-├── core/                        ← business logic and run lifecycle
+├── _paths.py                    ← install / data path helpers
+├── client.py                    ← stable external GatewayClient
+├── core/                        ← business logic and run lifecycle (no imports from host/)
 │   ├── orchestrator/
 │   │   ├── __init__.py          ← Orchestrator facade, ChatSendRequest
 │   │   ├── catalog.py           ← session and provider catalog helpers
 │   │   ├── runtime.py           ← send_chat run lifecycle
 │   │   └── titles.py            ← async title generation
 │   ├── harness/
-│   │   └── __init__.py          ← ChatHarness, capability planning, tool loop
+│   │   ├── __init__.py          ← ChatHarness entry
+│   │   ├── capabilities.py      ← capability profiles and routing
+│   │   ├── planning.py          ← turn planning ahead of provider execution
+│   │   └── tool_loop.py         ← tool invocation loop
 │   ├── sessions/
 │   │   ├── session_store.py     ← SessionStore, SessionIndexEntry
 │   │   └── transcript_store.py  ← TranscriptStore, TranscriptMessage
@@ -21,39 +28,41 @@ copenet/
 │   │   ├── contracts.py         ← ToolDescriptor, ToolExecutionContext, etc.
 │   │   ├── policy.py            ← ToolPolicy
 │   │   ├── registry.py          ← ToolRegistry
-│   │   └── builtin_readonly.py  ← built-in safe tool handlers
+│   │   ├── builtin_readonly.py  ← read-only built-ins
+│   │   └── handlers/            ← built-in tool implementations (files, git, shell, …)
+│   │       ├── context.py
+│   │       ├── files.py
+│   │       ├── git.py
+│   │       ├── shell.py
+│   │       └── _shared.py
 │   └── tracing/
 │       └── __init__.py          ← RunTraceWriter
-├── host/                        ← transport layer (no business logic)
-│   ├── api.py
-│   ├── ws_server.py
-│   ├── rpc_schema.py
-│   ├── rpc_dispatch.py
+├── host/                        ← HTTP/WebSocket transport (no business logic)
+│   ├── main.py                  ← uvicorn entry (`uv run copenet`)
+│   ├── api.py                   ← FastAPI app, `/`, `/ws`, static mounts
+│   ├── ws_server.py             ← WebSocket RPC server
+│   ├── rpc_schema.py            ← request/response shapes
+│   ├── rpc_dispatch.py          ← method routing
 │   ├── rpc_chat.py
 │   ├── rpc_sessions.py
 │   ├── rpc_catalog.py
-│   └── static/
+│   ├── frontend/                ← Vite + React/TypeScript UI
+│   │   ├── src/                 ← App shell, chat workspace, WebSocket client, store, types
+│   │   ├── vite.config.ts
+│   │   └── dist/                ← production build (served when present; see note below)
+│   └── static/                  ← legacy vanilla ES module UI + assets under `/static`
 │       ├── index.html
-│       ├── app.js               ← ES module entry point (event wiring + connect())
-│       └── js/
-│           ├── state.js         ← shared state, DOM refs, catalog helpers
-│           ├── rpc.js           ← sendReq WebSocket helper
-│           ├── render/
-│           │   ├── messages.js  ← markdown/math/tool-trace rendering
-│           │   ├── sessions.js  ← session list DOM
-│           │   └── header.js    ← badges + draft config selects
-│           └── controllers/
-│               ├── sessions.js  ← load/select/create/rename/archive
-│               └── chat.js      ← connect, send, stream, bootstrap
-├── providers/
+│       ├── app.js
+│       └── js/                  ← state, rpc, render/*, controllers/*
+├── providers/                   ← runtime adapters
 │   ├── base.py
 │   ├── codex_cli.py
-│   └── local_http.py
-├── runner/
+│   └── local_http.py            ← LM Studio, Ollama, etc.
 ├── prompts/
 │   ├── loader.py
-│   └── presets/
-├── client.py                    ← stable external GatewayClient
+│   └── presets/                 ← profiles/, task-modes/, shared markdown
+├── runner/
+│   └── cli_runner.py            ← non-gateway CLI helper
 │
 │ — compatibility shims (re-export from core/) —
 ├── orchestrator.py
@@ -62,6 +71,8 @@ copenet/
 ├── sessions/
 └── tools/
 ```
+
+**Web UI:** `host/api.py` serves the SPA from `host/frontend/dist/` at `/` (and `/assets` for hashed bundles) when `frontend/dist` exists; otherwise it falls back to `host/static/index.html`. The legacy tree under `host/static/` remains available at `/static/` for the vanilla client and shared assets.
 
 The `core/` boundary is strict: nothing under `core/` imports from `host/`. Transport concerns never leak into business logic.
 
@@ -137,7 +148,7 @@ Provider responsibilities include:
 - chat execution
 - emitting normalized provider events
 
-The UI consumes provider and model catalogs so the user can start a session with a specific runtime/model pair.
+The browser UI (built React app or legacy static client) consumes provider and model catalogs so the user can start a session with a specific runtime/model pair.
 
 ## Session Model
 

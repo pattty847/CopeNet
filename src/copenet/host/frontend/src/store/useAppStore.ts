@@ -1,6 +1,9 @@
 import { create } from 'zustand';
 import { DraftSettings, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
 
+export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
+export type ThemeMode = 'light' | 'dark';
+
 interface AppState {
   wsStatus: WsStatus;
   authError: string | null;
@@ -11,6 +14,11 @@ interface AppState {
   setAppError: (message: string | null) => void;
   clearAppError: () => void;
   setActiveRunId: (id: string | null) => void;
+  currentSection: AppSection;
+  setCurrentSection: (section: AppSection) => void;
+  themeMode: ThemeMode;
+  setThemeMode: (mode: ThemeMode) => void;
+  toggleThemeMode: () => void;
 
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -71,6 +79,14 @@ export const useAppStore = create<AppState>((set) => ({
   setAppError: (message) => set({ appError: message }),
   clearAppError: () => set({ appError: null }),
   setActiveRunId: (id) => set({ activeRunId: id }),
+  currentSection: 'home',
+  setCurrentSection: (section) => set({ currentSection: section }),
+  themeMode: 'light',
+  setThemeMode: (mode) => set({ themeMode: mode }),
+  toggleThemeMode: () =>
+    set((state) => ({
+      themeMode: state.themeMode === 'light' ? 'dark' : 'light',
+    })),
 
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),

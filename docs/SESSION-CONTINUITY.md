@@ -4,7 +4,7 @@ This page defines the continuity rules that matter most for product correctness.
 
 ## Core Model
 
-A CopeNet session is not just a UI tab. It is a durable conversation identity with:
+A CopeNet session contain durable conversation identity with:
 
 - `sessionKey`
 - locked provider binding

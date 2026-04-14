@@ -1,28 +1,111 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Cormorant Garamond", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
-  
-  --color-operator-bg: #0f1115;
-  --color-operator-panel: #151619;
+
+  --color-shell-bg: #f3f4f6;
+  --color-shell-canvas: #fbfbfa;
+  --color-shell-sidebar: #f7f7f5;
+  --color-shell-panel: #ffffff;
+  --color-shell-panel-strong: #ffffff;
+  --color-shell-border: rgba(17, 24, 39, 0.08);
+  --color-shell-border-strong: rgba(17, 24, 39, 0.14);
+  --color-shell-text: #17191d;
+  --color-shell-muted: #6b7280;
+  --color-shell-accent: #db8f4e;
+  --color-shell-accent-soft: rgba(219, 143, 78, 0.1);
+  --color-shell-success: #2f8f67;
+  --color-shell-success-soft: rgba(47, 143, 103, 0.12);
+  --color-shell-error: #bf5d52;
+  --color-shell-ink: #16181d;
+  --color-shell-operator-frame: #ffffff;
+
+  --shadow-shell: 0 18px 40px rgba(15, 23, 42, 0.08);
+  --shadow-shell-xl: 0 30px 70px rgba(15, 23, 42, 0.1);
+
+  --color-operator-bg: #f6f7f8;
+  --color-operator-panel: #ffffff;
+  --color-operator-border: rgba(17, 24, 39, 0.1);
+  --color-operator-text: #1b1e24;
+  --color-operator-muted: #6e7683;
+  --color-operator-accent: #db8f4e;
+  --color-operator-error: #c15d55;
+  --color-operator-success: #2f8f67;
+}
+
+html[data-theme='dark'] {
+  --color-shell-bg: #121417;
+  --color-shell-canvas: #171a1f;
+  --color-shell-sidebar: #15181c;
+  --color-shell-panel: #1e2228;
+  --color-shell-panel-strong: #282d34;
+  --color-shell-border: rgba(223, 228, 235, 0.08);
+  --color-shell-border-strong: rgba(223, 228, 235, 0.14);
+  --color-shell-text: #f3f4f6;
+  --color-shell-muted: #a5adb8;
+  --color-shell-accent: #d7dde5;
+  --color-shell-accent-soft: rgba(215, 221, 229, 0.1);
+  --color-shell-success: #36d399;
+  --color-shell-success-soft: rgba(54, 211, 153, 0.12);
+  --color-shell-error: #f87171;
+  --color-shell-ink: #090b16;
+  --color-shell-operator-frame: #171a1f;
+
+  --shadow-shell: 0 18px 44px rgba(3, 4, 6, 0.22);
+  --shadow-shell-xl: 0 28px 80px rgba(3, 4, 6, 0.36);
+
+  --color-operator-bg: #121418;
+  --color-operator-panel: #191d23;
   --color-operator-border: #2a2d35;
   --color-operator-text: #e2e8f0;
   --color-operator-muted: #8e9299;
-  --color-operator-accent: #f59e0b; /* Amber for technical feel */
+  --color-operator-accent: #d7dde5;
   --color-operator-error: #ef4444;
-  --color-operator-success: #10b981;
+  --color-operator-success: #36d399;
+}
+
+html, body, #root {
+  height: 100%;
 }
 
 body {
-  background-color: var(--color-operator-bg);
-  color: var(--color-operator-text);
+  background-color: var(--color-shell-bg);
+  color: var(--color-shell-text);
   font-family: var(--font-sans);
   margin: 0;
   padding: 0;
-  overflow: hidden; /* Prevent body scroll, manage in app shell */
+  overflow: hidden;
+}
+
+html[data-theme='dark'] body {
+  background-color: var(--color-shell-bg);
+}
+
+button,
+input,
+textarea,
+select {
+  font: inherit;
+}
+
+.shell-backdrop {
+  background: transparent;
+}
+
+html[data-theme='dark'] .shell-backdrop {
+  background: transparent;
+}
+
+.shadow-shell {
+  box-shadow: var(--shadow-shell);
+}
+
+.shadow-shell-xl {
+  box-shadow: var(--shadow-shell-xl);
 }
 
 /* --- Markdown Styles --- */
@@ -30,7 +113,7 @@ body {
   color: var(--color-operator-text);
 }
 .markdown-body strong {
-  color: white;
+  color: var(--color-operator-text);
   font-weight: 600;
 }
 .markdown-body em {
@@ -50,7 +133,7 @@ body {
   font-weight: 600;
 }
 .markdown-body tr:nth-child(even) {
-  background-color: rgba(255, 255, 255, 0.02);
+  background-color: color-mix(in srgb, var(--color-operator-panel) 72%, transparent);
 }
 .markdown-body code {
   background-color: var(--color-operator-panel);
@@ -137,4 +220,3 @@ body {
 /* Breathing Circle */
 .loader-breathe { width: 22px; height: 22px; border-radius: 50%; background: currentColor; animation: loader-breathe-a 2s ease-in-out infinite; }
 @keyframes loader-breathe-a { 0%, 100% { transform: scale(0.6); opacity: 0.2; } 50% { transform: scale(1); opacity: 0.8; } }
-

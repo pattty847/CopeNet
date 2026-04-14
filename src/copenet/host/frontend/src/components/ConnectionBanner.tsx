@@ -10,7 +10,7 @@ export function ConnectionBanner() {
 
   if (wsStatus === 'auth_failed') {
     return (
-      <div className="bg-operator-error/10 border-b border-operator-error/30 text-operator-text px-4 py-2 flex items-center gap-3 text-sm font-mono">
+      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-shell-error/30 bg-shell-error/8 px-4 py-3 text-sm text-shell-text">
         <AlertCircle className="w-4 h-4 text-operator-error" />
         <span className="text-operator-error">{authError || 'Authentication failed.'}</span>
       </div>
@@ -18,7 +18,7 @@ export function ConnectionBanner() {
   }
 
   return (
-    <div className="bg-operator-error/10 border-b border-operator-error/30 text-operator-text px-4 py-2 flex items-center gap-3 text-sm font-mono">
+    <div className="mb-4 flex items-center gap-3 rounded-2xl border border-shell-border bg-shell-panel px-4 py-3 text-sm text-shell-text shadow-shell">
       {wsStatus === 'connecting' ? (
         <>
           <div className="scale-50 origin-left">

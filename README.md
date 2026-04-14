@@ -132,14 +132,14 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 
 ## Docs
 
-- [Architecture](docs/architecture.md)
-- [STARTUP](docs/STARTUP.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Startup](docs/STARTUP.md)
 - [Event Contract](docs/EVENT-CONTRACT.md)
 - [Session Continuity](docs/SESSION-CONTINUITY.md)
 - [Capability Matrix](docs/CAPABILITY-MATRIX.md)
-- [TRACING](docs/TRACING.md)
-- [DEBUGGING](docs/DEBUGGING.md)
-- [RUNBOOK](docs/RUNBOOK.md)
+- [Tracing](docs/TRACING.md)
+- [Debugging](docs/DEBUGGING.md)
+- [Runbook](docs/RUNBOOK.md)
 
 ## Troubleshooting
 
