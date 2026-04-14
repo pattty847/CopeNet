@@ -24,15 +24,16 @@ Gemini is a strong fit for:
 - prompt experiments for structured tool use
 - evaluating how to expose search or grounding features through CopeNet
 - boundary validation design that keeps internal flows contract-trusting
+- live provider/model probe analysis and comparison
 
 ### What Gemini Should Usually Avoid
 
 Do not casually edit these high-conflict files unless explicitly assigned:
 - `src/copenet/core/orchestrator/runtime.py` — run lifecycle, idempotency, abort, streaming
 - `src/copenet/core/orchestrator/__init__.py` — orchestrator facade and provider construction
-- `src/copenet/host/static/js/controllers/chat.js` — WebSocket connect, send, stream event loop
-- `src/copenet/host/static/js/controllers/sessions.js` — session load/select/create flows
-- `src/copenet/host/static/index.html`
+- `src/copenet/host/frontend/src/lib/wsClient.ts` — WebSocket connect, send, stream event loop
+- `src/copenet/host/frontend/src/store/useAppStore.ts` — shared frontend session/app state
+- `src/copenet/host/frontend/src/components/AppShell.tsx` — product shell and section layout
 - `src/copenet/host/ws_server.py`
 
 Do not:
@@ -49,6 +50,8 @@ Do not:
 - build isolated provider experiments in a dedicated worktree
 - compare output shapes across providers
 - produce test prompts and debugging matrices for model behavior
+- run or extend `scripts/live_probe_matrix.py` for real provider/model behavior comparisons
+- inspect the React Home/Agents UX when specifically asked to test the frontend
 
 ### Parallel Work Rules
 

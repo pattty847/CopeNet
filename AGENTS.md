@@ -9,7 +9,7 @@ CopeNet is a local agent gateway. It provides:
 - a FastAPI + WebSocket host
 - pluggable provider adapters for Codex CLI, LM Studio, and Ollama
 - persisted session and transcript storage
-- a browser UI for locked chat sessions
+- a React operator workspace UI with a Home dashboard and agent console
 - a CopeNet-native harness layer that normalizes provider execution and future tool capability work
 
 The current product direction is:
@@ -32,7 +32,8 @@ The current product direction is:
 | Providers | `src/copenet/providers/` | Codex CLI and local HTTP provider adapters |
 | Prompts | `src/copenet/prompts/` | Profile and task-mode loaders plus prompt content |
 | Client | `src/copenet/client.py` | Programmatic gateway client |
-| Web UI | `src/copenet/host/static/` | Vanilla HTML/JS ES modules app with no build step |
+| Web UI | `src/copenet/host/frontend/` | React + Vite workspace app served by the host when built |
+| Legacy UI | `src/copenet/host/static/` | Old vanilla fallback UI kept for compatibility |
 
 The `src/copenet/core/` package owns all business logic and run lifecycle. Transport, hosting, and provider adapters stay outside it.
 
@@ -52,7 +53,7 @@ See [docs/architecture.md](docs/architecture.md) for the current request flow.
 
 **Session identity is sacred.** Once a session is used, do not silently mutate its provider/model/profile/task binding.
 
-**UI stays simple.** The frontend is intentionally framework-free. Avoid adding build steps, bundlers, or heavy abstractions unless there is a strong product reason.
+**UI stays honest.** The frontend now uses React + Vite, but should still stay straightforward, typed, and product-driven. Avoid unnecessary abstractions, state sprawl, or design churn without a clear product reason.
 
 ## Coding Style
 
@@ -154,12 +155,25 @@ For current behavior, assume:
 
 ### Web UI
 
-- The frontend uses native ES modules with no build step. `app.js` is the bootstrap entry point only.
-- Logic lives in `static/js/` — `state.js`, `rpc.js`, `render/`, `controllers/`. Add new UI logic to the appropriate module.
-- Dependency flow is one-way: `state` ← `rpc` ← `render/*` ← `controllers/*` ← `app.js`. Do not create circular imports.
-- Shared mutable state lives on the exported `state` object in `state.js`. Do not introduce new top-level globals.
+- The primary frontend lives in `src/copenet/host/frontend/`.
+- The app now has a product shell with sections:
+  - `Home`
+  - `Agents`
+  - `Workflows`
+  - `Data & Tools`
+  - `Observability`
+  - `Experiments`
+- `Agents` owns the live session console and must preserve:
+  - client-side draft sessions before first send
+  - first-send runtime lock
+  - inline `toolExecution` rendering
+  - archive/restore
+  - right-panel runtime + tool telemetry
+- Real backend wiring is still concentrated in `Agents`; the other sections are intentional direction-setting shells for now.
+- Global app state lives in `src/copenet/host/frontend/src/store/useAppStore.ts`. Keep it explicit and small.
 - If a feature needs backend support, add and verify the RPC first.
-- Make session state obvious: active session, provider, model, profile, task mode, lock state.
+- Make session state obvious: active section, active session, provider, model, profile, task mode, lock state, and connection state.
+- Treat the legacy UI in `src/copenet/host/static/` as fallback compatibility code, not the primary product surface.
 
 ## Safe Collaboration Rules
 
@@ -177,9 +191,16 @@ There is not a deep automated suite yet, so manual and targeted verification mat
 Common checks:
 
 - `python3 -m py_compile $(rg --files src/copenet -g '*.py')`
-- `node --check src/copenet/host/static/app.js && for f in src/copenet/host/static/js/**/*.js; do node --check "$f"; done`
+- `npm run lint` in `src/copenet/host/frontend`
+- `npm run build` in `src/copenet/host/frontend`
 - `uv run copenet`
 - browser validation of the affected session/runtime flow
+
+For current integration coverage, also know about:
+
+- `uv run --extra dev pytest -q`
+- `tests/integration/test_tool_prompt_matrix.py` — deterministic fake-provider prompt/tool-loop matrix
+- `scripts/live_probe_matrix.py` — nondeterministic live provider/model probe runner for real runtimes
 
 ### Tracing
 
@@ -202,6 +223,12 @@ Known gaps and past findings: [docs/TRACE-FINDINGS.md](docs/TRACE-FINDINGS.md)
 **Tool loop not triggering despite available tools?** Check `harness_planned.capabilityProfile.promptedToolUse`. This is the gate, not `availableToolIds`.
 
 Use traces to explain behavior differences, policy rejections, and provider/tool mismatches before proposing architectural changes.
+
+For live runtime flake triage:
+
+- use `scripts/live_probe_matrix.py --provider <provider> --model <model>` to probe one real provider/model pair at a time
+- prefer fresh sessions for baseline probes and one deliberate same-session repeat to expose resume drift
+- compare live probe outcomes against the deterministic fake-provider matrix before blaming the harness
 
 When adding tests:
 

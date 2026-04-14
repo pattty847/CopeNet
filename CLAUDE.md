@@ -15,6 +15,7 @@ Claude is best used for:
 - trace analysis and debugging notes
 - provider research summaries
 - bounded support modules with clearly assigned ownership
+- React shell and Home-page polish when the write scope is clearly assigned
 
 Claude should not act as the final integrator when parallel work is happening.
 
@@ -31,9 +32,9 @@ Claude should not act as the final integrator when parallel work is happening.
 Do not casually edit these high-conflict files unless explicitly assigned:
 - `src/copenet/core/orchestrator/runtime.py` — run lifecycle, idempotency, abort, streaming
 - `src/copenet/core/orchestrator/__init__.py` — orchestrator facade and provider construction
-- `src/copenet/host/static/js/controllers/chat.js` — WebSocket connect, send, stream event loop
-- `src/copenet/host/static/js/controllers/sessions.js` — session load/select/create flows
-- `src/copenet/host/static/index.html`
+- `src/copenet/host/frontend/src/lib/wsClient.ts` — WebSocket connect, send, stream event loop
+- `src/copenet/host/frontend/src/store/useAppStore.ts` — shared frontend session/app state
+- `src/copenet/host/frontend/src/components/AppShell.tsx` — app shell and section composition
 - `src/copenet/host/ws_server.py`
 
 Do not:
@@ -50,6 +51,8 @@ Do not:
 - improve `AGENTS.md` / `GEMINI.md` / task runbooks
 - draft trace logging schemas and debugging workflows
 - add tests around already-defined behavior
+- extend `tests/integration/test_tool_prompt_matrix.py` for already-chosen harness behavior
+- improve `scripts/live_probe_matrix.py` or related notes when the behavior is already specified
 - inspect logs and summarize failures
 - prototype isolated support code in a clearly owned file set
 
