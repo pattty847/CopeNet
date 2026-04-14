@@ -21,7 +21,7 @@ CopeNet runs a WebSocket gateway + browser UI over local and CLI-backed models (
 - FastAPI host + WebSocket RPC (`/ws`), app REST/SSE API (`/api/v1`), and web app (`/`)
 - Runtime catalog + model discovery for:
   - `codex-cli`
-  - `lm-studio` (OpenAI-compatible local endpoint)
+  - `lm-studio` (native lifecycle API + OpenAI-compatible chat endpoint)
   - `ollama`
 - Session management:
   - create/rename/archive
@@ -40,7 +40,7 @@ CopeNet runs a WebSocket gateway + browser UI over local and CLI-backed models (
 - [`uv`](https://docs.astral.sh/uv/)
 - Optional local runtimes:
   - Ollama running on `http://127.0.0.1:11434`
-  - LM Studio local server on `http://127.0.0.1:1234`
+  - LM Studio local server on `http://127.0.0.1:1234` (CopeNet can cold-load models through LM Studio's native REST API)
 - Optional CLI runtime:
   - Codex CLI installed and authenticated
 
@@ -150,6 +150,7 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 - Verify runtime server is running:
   - Ollama: `http://127.0.0.1:11434`
   - LM Studio: `http://127.0.0.1:1234`
+- LM Studio model listing now comes from `GET /api/v1/models`, and chat requests will auto-load the selected model if it is not already loaded.
 - Check your env var overrides.
 - Restart CopeNet after changing endpoints.
 

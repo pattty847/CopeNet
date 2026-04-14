@@ -20,6 +20,23 @@ def _http_json(url: str, timeout_sec: float = 5.0) -> Any:
         return json.loads(response.read().decode("utf-8"))
 
 
+def _http_json_request(
+    url: str,
+    *,
+    method: str = "GET",
+    payload: dict[str, Any] | None = None,
+    timeout_sec: float = 5.0,
+    accept: str = "application/json",
+) -> Any:
+    body = None if payload is None else json.dumps(payload).encode("utf-8")
+    headers = {"Accept": accept}
+    if body is not None:
+        headers["Content-Type"] = "application/json"
+    req = request.Request(url, data=body, headers=headers, method=method)
+    with request.urlopen(req, timeout=timeout_sec) as response:
+        return json.loads(response.read().decode("utf-8"))
+
+
 class _StreamingHttpProvider:
     """Common helpers for HTTP providers that stream text back."""
 
@@ -79,7 +96,7 @@ class _StreamingHttpProvider:
 
 
 class LmStudioProvider(_StreamingHttpProvider):
-    """LM Studio OpenAI-compatible local runtime provider."""
+    """LM Studio local runtime provider with native lifecycle support."""
 
     name = "lm-studio"
     display_name = "LM Studio"
@@ -87,26 +104,150 @@ class LmStudioProvider(_StreamingHttpProvider):
     def __init__(self, base_url: str = "http://127.0.0.1:1234") -> None:
         super().__init__(base_url=base_url, timeout_sec=60.0)
 
-    async def list_models(self) -> list[ProviderModel]:
-        data = await asyncio.to_thread(_http_json, f"{self._base_url}/v1/models")
-        rows = data.get("data") if isinstance(data, dict) else None
-        if not isinstance(rows, list):
-            return []
+    async def describe(self) -> dict[str, object]:
+        meta = await super().describe()
+        caps = dict(meta.get("capabilities") or {})
+        caps["nativeModelLifecycle"] = True
+        meta["capabilities"] = caps
+        return meta
 
+    async def _list_native_models(self) -> list[dict[str, Any]]:
+        data = await asyncio.to_thread(_http_json, f"{self._base_url}/api/v1/models")
+        rows = data.get("models") if isinstance(data, dict) else None
+        return rows if isinstance(rows, list) else []
+
+    async def list_loaded_instances(self) -> list[dict[str, Any]]:
+        rows = await self._list_native_models()
+        loaded: list[dict[str, Any]] = []
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            model_key = str(row.get("key") or "").strip()
+            model_type = str(row.get("type") or "").strip() or None
+            instances = row.get("loaded_instances")
+            if not isinstance(instances, list):
+                continue
+            for inst in instances:
+                if not isinstance(inst, dict):
+                    continue
+                instance_id = str(inst.get("id") or "").strip()
+                if not instance_id:
+                    continue
+                loaded.append(
+                    {
+                        "instanceId": instance_id,
+                        "modelKey": model_key,
+                        "type": model_type,
+                        "config": inst.get("config") if isinstance(inst.get("config"), dict) else {},
+                    }
+                )
+        return loaded
+
+    async def load_model(self, model_key: str) -> dict[str, Any]:
+        normalized = model_key.strip()
+        if not normalized:
+            raise ValueError("model_key is required")
+        data = await asyncio.to_thread(
+            _http_json_request,
+            f"{self._base_url}/api/v1/models/load",
+            method="POST",
+            payload={"model": normalized},
+            timeout_sec=self._timeout_sec,
+        )
+        if not isinstance(data, dict):
+            raise RuntimeError("LM Studio returned an invalid load response")
+        return data
+
+    async def unload_model(self, instance_id: str) -> dict[str, Any]:
+        normalized = instance_id.strip()
+        if not normalized:
+            raise ValueError("instance_id is required")
+        data = await asyncio.to_thread(
+            _http_json_request,
+            f"{self._base_url}/api/v1/models/unload",
+            method="POST",
+            payload={"instance_id": normalized},
+            timeout_sec=self._timeout_sec,
+        )
+        if not isinstance(data, dict):
+            raise RuntimeError("LM Studio returned an invalid unload response")
+        return data
+
+    async def ensure_model_loaded(self, explicit_model: str | None) -> str:
+        desired = (explicit_model or "").strip()
+        rows = await self._list_native_models()
+        chat_model_keys: list[str] = []
+        loaded_chat_instance_id: str | None = None
+        matched_loaded_instance_id: str | None = None
+        matched_model_key: str | None = None
+
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            model_key = str(row.get("key") or "").strip()
+            if not model_key:
+                continue
+            model_type = str(row.get("type") or "").strip().lower()
+            kind = "embedding" if model_type == "embedding" or "embed" in model_key.lower() else "chat"
+            if kind != "chat":
+                continue
+            chat_model_keys.append(model_key)
+            instances = row.get("loaded_instances") if isinstance(row.get("loaded_instances"), list) else []
+            for inst in instances:
+                if not isinstance(inst, dict):
+                    continue
+                instance_id = str(inst.get("id") or "").strip()
+                if not instance_id:
+                    continue
+                if loaded_chat_instance_id is None:
+                    loaded_chat_instance_id = instance_id
+                if desired and (instance_id == desired or model_key == desired):
+                    matched_loaded_instance_id = instance_id
+                    matched_model_key = model_key
+                    break
+            if desired and model_key == desired:
+                matched_model_key = model_key
+            if matched_loaded_instance_id is not None:
+                break
+
+        if matched_loaded_instance_id is not None:
+            return matched_loaded_instance_id
+
+        if desired:
+            target_model_key = matched_model_key or desired
+        else:
+            if loaded_chat_instance_id is not None:
+                return loaded_chat_instance_id
+            if not chat_model_keys:
+                raise RuntimeError("LM Studio has no available chat models.")
+            target_model_key = chat_model_keys[0]
+
+        loaded = await self.load_model(target_model_key)
+        instance_id = str(loaded.get("instance_id") or "").strip()
+        if not instance_id:
+            raise RuntimeError(f"LM Studio loaded {target_model_key} but did not return an instance_id")
+        return instance_id
+
+    async def list_models(self) -> list[ProviderModel]:
+        rows = await self._list_native_models()
         models: list[ProviderModel] = []
         for row in rows:
             if not isinstance(row, dict):
                 continue
-            model_id = str(row.get("id") or "").strip()
+            model_id = str(row.get("key") or row.get("id") or "").strip()
             if not model_id:
                 continue
+            model_type = str(row.get("type") or "").strip().lower()
             lowered = model_id.lower()
-            kind = "embedding" if "embed" in lowered or "embedding" in lowered else "chat"
+            kind = "embedding" if model_type == "embedding" or "embed" in lowered or "embedding" in lowered else "chat"
+            loaded_instances = row.get("loaded_instances") if isinstance(row.get("loaded_instances"), list) else []
+            capabilities = row.get("capabilities") if isinstance(row.get("capabilities"), dict) else {}
             models.append(
                 ProviderModel(
                     id=model_id,
-                    display_name=model_id,
+                    display_name=str(row.get("display_name") or model_id),
                     provider=self.name,
+                    description=str(row.get("description") or "").strip() or None,
                     kind=kind,
                     capabilities={
                         "chat": kind == "chat",
@@ -117,7 +258,28 @@ class LmStudioProvider(_StreamingHttpProvider):
                         "resume": False,
                     },
                     recommended_for=["chat"] if kind == "chat" else ["embeddings"],
-                    metadata={"ownedBy": row.get("owned_by")},
+                    metadata={
+                        "publisher": row.get("publisher"),
+                        "architecture": row.get("architecture"),
+                        "format": row.get("format"),
+                        "sizeBytes": row.get("size_bytes"),
+                        "maxContextLength": row.get("max_context_length"),
+                        "quantization": row.get("quantization"),
+                        "variants": row.get("variants") if isinstance(row.get("variants"), list) else [],
+                        "selectedVariant": row.get("selected_variant"),
+                        "loadedInstanceCount": len(loaded_instances),
+                        "loadedInstances": [
+                            {
+                                "instanceId": str(inst.get("id") or "").strip(),
+                                "config": inst.get("config") if isinstance(inst.get("config"), dict) else {},
+                            }
+                            for inst in loaded_instances
+                            if isinstance(inst, dict) and str(inst.get("id") or "").strip()
+                        ],
+                        "vision": capabilities.get("vision"),
+                        "trainedForToolUse": capabilities.get("trained_for_tool_use"),
+                        "reasoning": capabilities.get("reasoning") if isinstance(capabilities.get("reasoning"), dict) else None,
+                    },
                 )
             )
         return models
@@ -133,7 +295,7 @@ class LmStudioProvider(_StreamingHttpProvider):
         loop = asyncio.get_running_loop()
         queue: asyncio.Queue[ProviderEvent | Exception | object] = asyncio.Queue()
         done_marker = object()
-        model_name = await self._resolve_model(model)
+        model_name = await self.ensure_model_loaded(model)
         messages: list[dict[str, str]] = []
         if system_prompt and system_prompt.strip():
             messages.append({"role": "system", "content": system_prompt.strip()})
@@ -190,6 +352,9 @@ class LmStudioProvider(_StreamingHttpProvider):
                 if isinstance(item, Exception):
                     raise item
                 yield item
+        except error.HTTPError as exc:
+            reason = exc.read().decode("utf-8", errors="replace").strip() or exc.reason
+            raise RuntimeError(f"LM Studio request failed: {reason}") from exc
         except error.URLError as exc:
             raise RuntimeError(f"LM Studio request failed: {exc.reason}") from exc
         finally:

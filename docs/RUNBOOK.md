@@ -70,7 +70,8 @@ ls -lt ~/.copenet/logs/runs/ | head -10
 
 Use the UI provider list or inspect the local runtime directly:
 
-- LM Studio: `http://127.0.0.1:1234/v1/models`
+- LM Studio native catalog: `http://127.0.0.1:1234/api/v1/models`
+- LM Studio OpenAI chat endpoint: `http://127.0.0.1:1234/v1/chat/completions`
 - Ollama: `http://127.0.0.1:11434/api/tags`
 
 ## Best First Questions
