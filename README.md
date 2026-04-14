@@ -18,7 +18,7 @@ CopeNet runs a WebSocket gateway + browser UI over local and CLI-backed models (
 
 ## Features
 
-- FastAPI host + WebSocket RPC (`/ws`) and web app (`/`)
+- FastAPI host + WebSocket RPC (`/ws`), app REST/SSE API (`/api/v1`), and web app (`/`)
 - Runtime catalog + model discovery for:
   - `codex-cli`
   - `lm-studio` (OpenAI-compatible local endpoint)
@@ -134,6 +134,7 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 ## Docs
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [App API](docs/APP-API.md)
 - [Startup](docs/STARTUP.md)
 - [Event Contract](docs/EVENT-CONTRACT.md)
 - [Session Continuity](docs/SESSION-CONTINUITY.md)

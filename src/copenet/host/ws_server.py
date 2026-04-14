@@ -28,6 +28,10 @@ class CopeNetWsServer:
         self._orchestrator = orchestrator or Orchestrator()
         self._token = os.environ.get("COPNET_TOKEN", "dev-token").strip()
 
+    @property
+    def orchestrator(self) -> Orchestrator:
+        return self._orchestrator
+
     async def handle(self, websocket: WebSocket) -> None:
         """Accept and serve one websocket session."""
         await websocket.accept()

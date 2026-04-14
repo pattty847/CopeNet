@@ -114,7 +114,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             abort_event=abort_event,
             model=request.model,
             system_prompt=request.system_prompt,
-            available_tools=orchestrator._tool_registry.list_tools(),
+            available_tools=orchestrator._tool_registry.list_tools() if request.allow_tools else [],
             tool_executor=orchestrator._tool_registry.execute,
             tool_context=ToolExecutionContext(
                 workdir=orchestrator._workdir,

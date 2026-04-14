@@ -9,6 +9,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from copenet.core.orchestrator import Orchestrator
+from copenet.host.app_api import create_app_router
 from copenet.host.ws_server import CopeNetWsServer
 
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -31,6 +32,8 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     @app.websocket("/ws")
     async def websocket_rpc(websocket: WebSocket) -> None:
         await ws_server.handle(websocket)
+
+    app.include_router(create_app_router(ws_server.orchestrator))
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     if (_FRONTEND_DIST_DIR / "assets").is_dir():

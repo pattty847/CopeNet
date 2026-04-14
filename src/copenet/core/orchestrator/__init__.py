@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
 
+from copenet.core.apps import AppStore
 from copenet.core.harness import ChatHarness
 from copenet.core.orchestrator.catalog import (
     archive_session as archive_session_record,
@@ -45,6 +46,7 @@ class ChatSendRequest:
     task_prompt_id: str | None = None
     timeout_ms: int | None = None
     system_prompt: str | None = None
+    allow_tools: bool = True
 
 
 class SessionInFlightError(RuntimeError):
@@ -69,6 +71,7 @@ class Orchestrator:
         self._workdir = Path(os.environ.get("COPNET_WORKDIR") or os.getcwd()).resolve()
         self._session_store = session_store or SessionStore(path=base / "index.json")
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
+        self._app_store = AppStore(path=base / "apps.json")
         if providers is None:
             self._providers, self._provider_init_errors = build_default_provider_registry()
         else:
@@ -162,6 +165,35 @@ class Orchestrator:
     def resolve_session(self, session_key: str) -> dict | None:
         """Resolve one session by key."""
         return resolve_session_record(self, session_key)
+
+    def register_app(
+        self,
+        *,
+        app_id: str,
+        display_name: str | None = None,
+        token: str | None = None,
+        default_provider: str | None = None,
+        default_model: str | None = None,
+        allow_tools: bool = False,
+    ) -> tuple[dict, str]:
+        """Register an external app and return the stored metadata plus plain token."""
+        entry, plain_token = self._app_store.register_app(
+            app_id=app_id,
+            display_name=display_name,
+            token=token,
+            default_provider=default_provider,
+            default_model=default_model,
+            allow_tools=allow_tools,
+        )
+        return {
+            "appId": entry.app_id,
+            "displayName": entry.display_name,
+            "createdAt": entry.created_at,
+            "updatedAt": entry.updated_at,
+            "defaultProvider": entry.default_provider,
+            "defaultModel": entry.default_model,
+            "allowTools": entry.allow_tools,
+        }, plain_token
 
     @staticmethod
     def _session_payload(entry) -> dict:
