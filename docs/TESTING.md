@@ -67,3 +67,31 @@ What it is not:
 
 - deterministic CI coverage
 - a replacement for the backend pytest suite
+
+
+## LM Studio lifecycle smoke
+
+Use this when you want a real local-runtime check for cold-load, reuse, model switching, chat, and unload behavior.
+
+- gated by env var so it stays out of normal CI and regular pytest runs
+- requires LM Studio local server mode to be running
+- uses CopeNet's `LmStudioProvider`, not ad hoc HTTP calls, so it exercises the real integration path
+
+Run it with:
+
+- `COPNET_RUN_LM_STUDIO_SMOKE=1 uv run python scripts/lmstudio_smoke.py`
+- if second-model switching is too slow on the current machine, use `COPNET_RUN_LM_STUDIO_SMOKE=1 uv run python scripts/lmstudio_smoke.py --skip-switch`
+
+Useful overrides:
+
+- `COPNET_LM_STUDIO_BASE_URL=http://127.0.0.1:1234`
+- `COPNET_LM_STUDIO_SMOKE_MODEL=qwen/qwen3.5-9b`
+- `COPNET_LM_STUDIO_SMOKE_SECONDARY_MODEL=google/gemma-4-e2b`
+- `COPNET_LM_STUDIO_SMOKE_PROMPT='Say hello in one sentence.'`
+
+Suggested verification order at home:
+
+1. `python3 -m py_compile $(rg --files src/copenet tests scripts -g '*.py')`
+2. `uv run --extra dev pytest -q tests/unit/test_lm_studio_provider.py tests/integration/test_app_api.py tests/integration/test_app_api_lm_studio.py`
+3. `COPNET_RUN_LM_STUDIO_SMOKE=1 uv run python scripts/lmstudio_smoke.py`
+4. optional full suite, `uv run --extra dev pytest -q`

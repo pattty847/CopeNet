@@ -144,6 +144,46 @@ async def test_ensure_model_loaded_reuses_loaded_instance_or_loads_on_demand(lms
 
 
 @pytest.mark.asyncio
+async def test_ensure_model_loaded_defaults_to_existing_loaded_chat_instance(lmstudio_server) -> None:
+    state, base_url = lmstudio_server
+    provider = LmStudioProvider(base_url=base_url)
+
+    state.models[0]["loaded_instances"] = [{"id": "openai/gpt-oss-20b#loaded", "config": {"context_length": 4096}}]
+
+    instance_id = await provider.ensure_model_loaded(None)
+
+    assert instance_id == "openai/gpt-oss-20b#loaded"
+    assert state.load_calls == []
+
+
+@pytest.mark.asyncio
+async def test_ensure_model_loaded_switches_to_requested_model_even_if_another_chat_model_is_loaded(lmstudio_server) -> None:
+    state, base_url = lmstudio_server
+    provider = LmStudioProvider(base_url=base_url)
+
+    state.models[0]["loaded_instances"] = [{"id": "openai/gpt-oss-20b#loaded", "config": {"context_length": 4096}}]
+    state.models.append(
+        {
+            "type": "llm",
+            "publisher": "google",
+            "key": "google/gemma-4-e2b",
+            "display_name": "Gemma 4 E2B",
+            "architecture": "gemma",
+            "loaded_instances": [],
+            "max_context_length": 32768,
+            "format": "gguf",
+            "capabilities": {"vision": False, "trained_for_tool_use": False},
+            "description": None,
+        }
+    )
+
+    instance_id = await provider.ensure_model_loaded("google/gemma-4-e2b")
+
+    assert instance_id == "google/gemma-4-e2b#instance-1"
+    assert state.load_calls == [{"model": "google/gemma-4-e2b"}]
+
+
+@pytest.mark.asyncio
 async def test_run_cold_loads_model_before_chat(lmstudio_server) -> None:
     state, base_url = lmstudio_server
     provider = LmStudioProvider(base_url=base_url)
@@ -177,3 +217,15 @@ async def test_unload_model_posts_instance_id(lmstudio_server) -> None:
     await provider.unload_model("openai/gpt-oss-20b#instance-1")
 
     assert state.unload_calls == [{"instance_id": "openai/gpt-oss-20b#instance-1"}]
+
+
+@pytest.mark.asyncio
+async def test_describe_includes_native_model_lifecycle_capability(lmstudio_server) -> None:
+    _, base_url = lmstudio_server
+    provider = LmStudioProvider(base_url=base_url)
+
+    meta = await provider.describe()
+
+    assert meta["id"] == "lm-studio"
+    assert meta["available"] is True
+    assert meta["capabilities"]["nativeModelLifecycle"] is True
