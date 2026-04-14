@@ -4,7 +4,7 @@ Local-first agent harness for coding and research workflows.
 
 CopeNet runs a WebSocket gateway + browser UI over local and CLI-backed models (Codex CLI, LM Studio, Ollama), with persistent sessions, transcripts, prompt profiles, and streaming responses.
 
-<img width="1920" height="1080" alt="Screenshot 2026-04-11 at 2 51 05 AM" src="https://github.com/user-attachments/assets/61f55e59-bd18-4be5-928c-81bc4c71cb80" />
+<img width="1920" height="928" alt="Screenshot 2026-04-14 at 12 32 34 AM" src="https://github.com/user-attachments/assets/64146bd1-15f2-4357-acd5-3fa04f891f37" />
 
 ## Why CopeNet
 
