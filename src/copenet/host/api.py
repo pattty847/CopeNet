@@ -8,6 +8,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from copenet.core.media import MediaIngestionService
 from copenet.core.orchestrator import Orchestrator
 from copenet.host.app_api import create_app_router
 from copenet.host.ws_server import CopeNetWsServer
@@ -20,7 +21,7 @@ def _root_index_path() -> Path:
     dist_index = _FRONTEND_DIST_DIR / "index.html"
     return dist_index if dist_index.is_file() else (_STATIC_DIR / "index.html")
 
-def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
+def create_app(orchestrator: Orchestrator | None = None, media_service: MediaIngestionService | None = None) -> FastAPI:
     app = FastAPI(title="CopeNet Gateway", version="0.1.0")
     ws_server = CopeNetWsServer(orchestrator=orchestrator)
 
@@ -33,7 +34,7 @@ def create_app(orchestrator: Orchestrator | None = None) -> FastAPI:
     async def websocket_rpc(websocket: WebSocket) -> None:
         await ws_server.handle(websocket)
 
-    app.include_router(create_app_router(ws_server.orchestrator))
+    app.include_router(create_app_router(ws_server.orchestrator, media_service=media_service))
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     if (_FRONTEND_DIST_DIR / "assets").is_dir():

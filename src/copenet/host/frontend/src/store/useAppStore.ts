@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DraftSettings, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
+import { DataToolsRoute, DraftSettings, MediaAsset, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
@@ -19,6 +19,10 @@ interface AppState {
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
   toggleThemeMode: () => void;
+  dataToolsRoute: DataToolsRoute;
+  setDataToolsRoute: (route: DataToolsRoute) => void;
+  draftComposerSeed: string | null;
+  setDraftComposerSeed: (seed: string | null) => void;
 
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
@@ -31,10 +35,23 @@ interface AppState {
   tools: ToolDescriptor[];
   profiles: PromptOption[];
   taskModes: PromptOption[];
+  mediaAssets: MediaAsset[];
+  mediaAssetsLoaded: boolean;
+  mediaImporting: boolean;
+  mediaImportError: string | null;
+  mediaImportStatus: string | null;
+  mediaImportProgress: number | null;
   setProviders: (providers: Provider[]) => void;
   setModelsForProvider: (providerId: string, models: Model[]) => void;
   setTools: (tools: ToolDescriptor[]) => void;
   setPromptCatalog: (profiles: PromptOption[], taskModes: PromptOption[]) => void;
+  setMediaAssets: (assets: MediaAsset[]) => void;
+  prependMediaAsset: (asset: MediaAsset) => void;
+  setMediaAssetsLoaded: (loaded: boolean) => void;
+  setMediaImporting: (importing: boolean) => void;
+  setMediaImportError: (message: string | null) => void;
+  setMediaImportStatus: (status: string | null) => void;
+  setMediaImportProgress: (progress: number | null) => void;
 
   sessions: Session[];
   setSessions: (sessions: Session[]) => void;
@@ -87,6 +104,10 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       themeMode: state.themeMode === 'light' ? 'dark' : 'light',
     })),
+  dataToolsRoute: 'hub',
+  setDataToolsRoute: (route) => set({ dataToolsRoute: route }),
+  draftComposerSeed: null,
+  setDraftComposerSeed: (seed) => set({ draftComposerSeed: seed }),
 
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
@@ -99,6 +120,12 @@ export const useAppStore = create<AppState>((set) => ({
   tools: [],
   profiles: [],
   taskModes: [],
+  mediaAssets: [],
+  mediaAssetsLoaded: false,
+  mediaImporting: false,
+  mediaImportError: null,
+  mediaImportStatus: null,
+  mediaImportProgress: null,
   setProviders: (providers) => set({ providers }),
   setModelsForProvider: (providerId, models) =>
     set((state) => ({
@@ -107,6 +134,16 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   setTools: (tools) => set({ tools }),
   setPromptCatalog: (profiles, taskModes) => set({ profiles, taskModes }),
+  setMediaAssets: (assets) => set({ mediaAssets: assets }),
+  prependMediaAsset: (asset) =>
+    set((state) => ({
+      mediaAssets: [asset, ...state.mediaAssets.filter((item) => item.assetId !== asset.assetId)],
+    })),
+  setMediaAssetsLoaded: (loaded) => set({ mediaAssetsLoaded: loaded }),
+  setMediaImporting: (importing) => set({ mediaImporting: importing }),
+  setMediaImportError: (message) => set({ mediaImportError: message }),
+  setMediaImportStatus: (status) => set({ mediaImportStatus: status }),
+  setMediaImportProgress: (progress) => set({ mediaImportProgress: progress }),
 
   sessions: [],
   setSessions: (sessions) => set({ sessions: sortSessions(sessions) }),

@@ -4,6 +4,7 @@ import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
 import { AgentsPage } from './AgentsPage';
 import { ConnectionBanner } from './ConnectionBanner';
+import { DataToolsPage } from './DataToolsPage';
 import { HomePage } from './HomePage';
 import { SectionPage } from './SectionPage';
 import { SidebarNav } from './SidebarNav';
@@ -56,38 +57,7 @@ function AppSectionContent() {
   }
 
   if (currentSection === 'data-tools') {
-    return (
-      <SectionPage
-        title="Data & Tools"
-        subtitle="Ground the workspace in real sources, not floating context."
-        accent="text-shell-accent"
-        heroTitle="Connect knowledge, feeds, and tools into one living context."
-        heroBody="This is where files, datasets, knowledge bases, and operator tools become part of the workspace. The point is not just to store them. It is to make them useful."
-        icon={Wrench}
-        cards={[
-          {
-            title: 'Knowledge Bases',
-            body: 'Curated context that can refresh, evolve, and stay anchored to the workspace.',
-            eyebrow: 'Ground',
-          },
-          {
-            title: 'Data Sources',
-            body: 'Feed market streams, documents, APIs, and local files into the workbench.',
-            eyebrow: 'Ingest',
-          },
-          {
-            title: 'Tool Catalog',
-            body: 'Inspectable tool surfaces with safety rules and visible execution history.',
-            eyebrow: 'Operate',
-          },
-          {
-            title: 'Workspace Context',
-            body: 'Preset combinations of data, prompts, and runtimes for the jobs you repeat.',
-            eyebrow: 'Shape',
-          },
-        ]}
-      />
-    );
+    return <DataToolsPage />;
   }
 
   if (currentSection === 'observability') {

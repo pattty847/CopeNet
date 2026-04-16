@@ -75,6 +75,8 @@ export interface PromptOption {
   name: string;
 }
 
+export type DataToolsRoute = 'hub' | 'sources' | 'media';
+
 export interface DraftSettings {
   provider: string;
   model: string;
@@ -129,3 +131,25 @@ export interface EventFrame<TPayload = Record<string, unknown>> {
 }
 
 export type IncomingFrame = ResponseFrame | EventFrame;
+
+export interface MediaAsset {
+  assetId: string;
+  appId: string;
+  sourceType: string;
+  sourceUrl: string | null;
+  sourcePath: string | null;
+  title: string;
+  mediaPath: string | null;
+  transcriptPath: string | null;
+  transcriptSource: string | null;
+  transcriptExcerpt: string;
+  metadata: Record<string, unknown>;
+  durationSeconds: number | null;
+  latencyMs: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface MediaAssetDetail extends MediaAsset {
+  transcriptContent: string;
+}

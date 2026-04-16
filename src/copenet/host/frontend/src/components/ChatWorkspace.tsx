@@ -12,6 +12,8 @@ export function ChatWorkspace() {
   const appError = useAppStore((state) => state.appError);
   const clearAppError = useAppStore((state) => state.clearAppError);
   const draftSettings = useAppStore((state) => state.draftSettings);
+  const draftComposerSeed = useAppStore((state) => state.draftComposerSeed);
+  const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
 
   const messages = (activeSessionKey ? messagesMap[activeSessionKey] : undefined) || [];
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
@@ -41,6 +43,12 @@ export function ChatWorkspace() {
       textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
     }
   }, [input]);
+
+  useEffect(() => {
+    if (!draftComposerSeed) return;
+    setInput((current) => (current.trim() ? current : draftComposerSeed));
+    setDraftComposerSeed(null);
+  }, [draftComposerSeed, setDraftComposerSeed]);
 
   const handleSend = async () => {
     if (!input.trim() || activeRunId) return;

@@ -20,3 +20,11 @@ def default_run_logs_dir() -> Path:
     if base:
         return Path(base).expanduser() / "logs" / "runs"
     return Path.home() / ".copenet" / "logs" / "runs"
+
+
+def default_media_dir() -> Path:
+    """Return default media asset root: COPNET_DATA_DIR/media or ~/.copenet/media."""
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "media"
+    return Path.home() / ".copenet" / "media"

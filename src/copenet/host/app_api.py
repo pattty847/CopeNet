@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 from uuid import uuid4
@@ -12,6 +13,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from copenet.core.media import MediaDependencyError, MediaDownloadError, MediaIngestionService, MediaTranscriptionError
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 
 
@@ -47,9 +49,17 @@ class MessageSendRequest(BaseModel):
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
 
 
+class MediaImportRequest(BaseModel):
+    url: str
+    include_timestamps: bool = Field(default=True, alias="includeTimestamps")
+    prefer_captions: bool = Field(default=True, alias="preferCaptions")
+    whisper_model: str = Field(default="base", alias="whisperModel")
 
-def create_app_router(orchestrator: Orchestrator) -> APIRouter:
+
+def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionService | None = None) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["app-api"])
+    media = media_service or MediaIngestionService()
+    gateway_token = os.environ.get("COPNET_TOKEN", "dev-token").strip()
 
     def _bearer_token(authorization: str | None) -> str:
         if not authorization:
@@ -73,6 +83,20 @@ def create_app_router(orchestrator: Orchestrator) -> APIRouter:
             default_model=entry.default_model,
             allow_tools=entry.allow_tools,
         )
+
+    async def require_media_access(authorization: str | None = Header(default=None)) -> AuthenticatedApp:
+        token = _bearer_token(authorization)
+        if not token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
+        if gateway_token and token == gateway_token:
+            return AuthenticatedApp(
+                app_id="copenet-web",
+                display_name="CopeNet Web",
+                default_provider=None,
+                default_model=None,
+                allow_tools=True,
+            )
+        return await require_app(authorization)
 
     def _mapping_for(app: AuthenticatedApp, app_session_id: str):
         mapping = orchestrator._app_store.get_mapping(app.app_id, app_session_id)
@@ -99,6 +123,14 @@ def create_app_router(orchestrator: Orchestrator) -> APIRouter:
         event = dict(payload)
         event["sessionKey"] = app_session_id
         return event
+
+    def _media_error(exc: Exception) -> HTTPException:
+        detail = str(exc) or exc.__class__.__name__
+        if isinstance(exc, MediaDependencyError):
+            return HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=detail)
+        if isinstance(exc, (MediaDownloadError, MediaTranscriptionError, ValueError)):
+            return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
+        return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
 
     async def _run_chat(
         app: AuthenticatedApp,
@@ -288,5 +320,68 @@ def create_app_router(orchestrator: Orchestrator) -> APIRouter:
                 session_key = mapping.internal_session_key
                 break
         return orchestrator.abort(session_key=session_key, run_id=run_id)
+
+    @router.get("/media/assets")
+    async def list_media_assets(app: AuthenticatedApp = Depends(require_media_access), limit: int = 50) -> dict[str, Any]:
+        return {"assets": media.list_assets(app_id=app.app_id, limit=limit)}
+
+    @router.get("/media/assets/{asset_id}")
+    async def get_media_asset(asset_id: str, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
+        asset = media.get_asset_detail(app_id=app.app_id, asset_id=asset_id)
+        if asset is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown media asset")
+        return {"asset": asset}
+
+    @router.post("/media/import")
+    async def import_media(body: MediaImportRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
+        try:
+            asset = await media.import_url(
+                app_id=app.app_id,
+                url=body.url,
+                include_timestamps=body.include_timestamps,
+                prefer_captions=body.prefer_captions,
+                whisper_model=body.whisper_model,
+            )
+        except Exception as exc:
+            raise _media_error(exc) from exc
+        return {"asset": asset.to_public_dict()}
+
+    @router.get("/media/import/stream")
+    async def stream_import_media(
+        url: str,
+        app: AuthenticatedApp = Depends(require_media_access),
+        include_timestamps: bool = True,
+        prefer_captions: bool = True,
+        whisper_model: str = "base",
+    ) -> StreamingResponse:
+        queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
+
+        async def runner() -> None:
+            try:
+                async for event in media.stream_import_url(
+                    app_id=app.app_id,
+                    url=url,
+                    include_timestamps=include_timestamps,
+                    prefer_captions=prefer_captions,
+                    whisper_model=whisper_model,
+                ):
+                    await queue.put(event)
+            except Exception as exc:
+                await queue.put({"type": "error", "message": str(exc)})
+            finally:
+                await queue.put(None)
+
+        asyncio.create_task(runner())
+
+        async def event_stream() -> AsyncIterator[bytes]:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    yield b"event: done\ndata: {}\n\n"
+                    return
+                event_name = str(item.get("type") or "message")
+                yield f"event: {event_name}\ndata: {json.dumps(item, ensure_ascii=False)}\n\n".encode("utf-8")
+
+        return StreamingResponse(event_stream(), media_type="text/event-stream")
 
     return router

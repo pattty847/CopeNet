@@ -16,6 +16,11 @@ dev = [
     "pytest>=8",
     "pytest-asyncio>=0.24",
 ]
+media = [
+    "openai-whisper",
+    "python-multipart",
+    "yt-dlp",
+]
 
 [project.scripts]
 copenet = "copenet.host.main:main"
