@@ -9,11 +9,11 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleThemeMode}
-      className="inline-flex h-11 w-11 items-center justify-center rounded-full border border-shell-border bg-shell-panel-strong text-shell-text transition hover:border-shell-border-strong hover:bg-shell-panel"
+      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell"
       title={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
       aria-label={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     >
-      {themeMode === 'light' ? <Moon className="h-4 w-4" /> : <SunMedium className="h-4 w-4" />}
+      {themeMode === 'light' ? <Moon className="h-3.5 w-3.5" /> : <SunMedium className="h-3.5 w-3.5" />}
     </button>
   );
 }

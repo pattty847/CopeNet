@@ -3,6 +3,7 @@ import { Activity, FlaskConical, Layers3, Wrench } from 'lucide-react';
 import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
 import { AgentsPage } from './AgentsPage';
+import { CommandPalette } from './CommandPalette';
 import { ConnectionBanner } from './ConnectionBanner';
 import { DataToolsPage } from './DataToolsPage';
 import { HomePage } from './HomePage';
@@ -143,11 +144,12 @@ export function AppShell() {
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-shell-bg text-shell-text">
       <div className="absolute inset-0 shell-backdrop pointer-events-none" />
-      <div className="relative flex h-full w-full gap-4 p-4">
+      <CommandPalette />
+      <div className="relative flex h-full w-full gap-3 p-3">
         <SidebarNav />
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[32px] border border-shell-border bg-shell-canvas px-5 pb-5 pt-4 shadow-shell-xl backdrop-blur-sm">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden rounded-[24px] border border-shell-border bg-shell-canvas px-4 pb-4 pt-3 shadow-shell-xl">
           <ConnectionBanner />
-          <div className="flex items-center gap-4 pb-4">
+          <div className="flex items-center gap-3 pb-3">
             <TopCommandBar />
           </div>
           <div className="min-h-0 flex-1 overflow-auto">

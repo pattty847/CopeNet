@@ -24,21 +24,23 @@ export function SidebarNav() {
   const wsStatus = useAppStore((state) => state.wsStatus);
 
   const systemLabel =
-    wsStatus === 'connected' ? 'All systems nominal' : wsStatus === 'connecting' ? 'Connecting to backend' : 'Needs attention';
+    wsStatus === 'connected' ? 'All systems nominal' : wsStatus === 'connecting' ? 'Connecting…' : 'Needs attention';
 
   return (
-    <aside className="flex w-[228px] shrink-0 flex-col rounded-[28px] border border-shell-border bg-shell-sidebar px-4 py-5 shadow-shell">
-      <div className="flex items-center gap-3 px-2 pb-6">
-        <div className="flex h-10 w-10 items-center justify-center rounded-full border border-shell-accent/25 bg-shell-panel-strong text-shell-accent">
-          <Blocks className="h-5 w-5" />
+    <aside className="flex w-[216px] shrink-0 flex-col rounded-[24px] border border-shell-border bg-shell-sidebar px-3 py-4 shadow-shell">
+      {/* Brand */}
+      <div className="flex items-center gap-2.5 px-2 pb-5">
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
+          <Blocks className="h-4.5 w-4.5" />
         </div>
         <div>
-          <div className="text-lg font-semibold tracking-tight text-shell-text">CopeNet</div>
-          <div className="text-sm text-shell-muted">Agentic workspace</div>
+          <div className="text-[15px] font-semibold tracking-tight text-shell-text">CopeNet</div>
+          <div className="text-[11px] text-shell-muted">Agentic workspace</div>
         </div>
       </div>
 
-      <nav className="flex flex-col gap-1">
+      {/* Navigation */}
+      <nav className="flex flex-col gap-0.5">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = currentSection === item.id;
@@ -48,42 +50,51 @@ export function SidebarNav() {
               key={item.id}
               type="button"
               onClick={() => setCurrentSection(item.id)}
-              className={`flex items-center gap-3 rounded-2xl px-4 py-3 text-left text-sm font-medium transition ${
+              className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-medium transition-all duration-150 ${
                 active
-                  ? 'bg-shell-panel-strong text-shell-text shadow-sm'
+                  ? 'bg-shell-accent-soft text-shell-text'
                   : 'text-shell-muted hover:bg-shell-panel-strong hover:text-shell-text'
               }`}
             >
-              <Icon className={`h-4 w-4 ${active ? 'text-shell-accent' : ''}`} />
+              {active && (
+                <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-shell-accent" />
+              )}
+              <Icon className={`h-[15px] w-[15px] transition-colors duration-150 ${active ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
               <span>{item.label}</span>
             </button>
           );
         })}
       </nav>
 
-      <div className="mt-auto space-y-4">
-        <div className="rounded-3xl border border-shell-border bg-shell-panel-strong px-4 py-4">
-          <div className="mb-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">System Health</div>
-          <div className="text-sm text-shell-text">{systemLabel}</div>
-          <div className="mt-3 flex items-center gap-2">
-            <span
-              className={`h-2.5 w-2.5 rounded-full ${
-                wsStatus === 'connected'
-                  ? 'bg-shell-success'
-                  : wsStatus === 'connecting'
-                    ? 'bg-shell-accent'
-                    : 'bg-shell-error'
-              }`}
-            />
-            <span className="text-xs text-shell-muted">{wsStatus.replace('_', ' ')}</span>
+      {/* Footer */}
+      <div className="mt-auto space-y-3 pt-4">
+        <div className="rounded-2xl border border-shell-border bg-shell-panel px-3 py-3">
+          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">System Health</div>
+          <div className="text-[13px] text-shell-text">{systemLabel}</div>
+          <div className="mt-2 flex items-center gap-2">
+            <span className="relative flex h-2 w-2">
+              {wsStatus === 'connected' && (
+                <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-shell-success opacity-60" />
+              )}
+              <span
+                className={`relative inline-flex h-2 w-2 rounded-full ${
+                  wsStatus === 'connected'
+                    ? 'bg-shell-success'
+                    : wsStatus === 'connecting'
+                      ? 'bg-shell-accent'
+                      : 'bg-shell-error'
+                }`}
+              />
+            </span>
+            <span className="text-[11px] text-shell-muted">{wsStatus.replace('_', ' ')}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-3 rounded-3xl border border-shell-border bg-shell-panel-strong px-3 py-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-full bg-shell-ink text-white">CP</div>
+        <div className="flex items-center gap-2.5 rounded-2xl border border-shell-border bg-shell-panel px-3 py-2.5">
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-shell-ink text-[11px] font-semibold text-white">CP</div>
           <div className="min-w-0">
-            <div className="truncate text-sm font-medium text-shell-text">Patrick Cope</div>
-            <div className="truncate text-xs text-shell-muted">Owner</div>
+            <div className="truncate text-[13px] font-medium text-shell-text">Patrick Cope</div>
+            <div className="truncate text-[11px] text-shell-muted">Owner</div>
           </div>
         </div>
       </div>

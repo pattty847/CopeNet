@@ -26,40 +26,43 @@ export function SectionPage({
   cards,
 }: SectionPageProps) {
   return (
-    <div className="space-y-6">
-      <section className="rounded-[34px] border border-shell-border bg-shell-panel px-8 py-8 shadow-shell">
+    <div className="animate-fade-in-up space-y-3">
+      {/* Hero */}
+      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-7 py-6 shadow-shell">
         <div className="max-w-3xl">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-            <Icon className={`h-3.5 w-3.5 ${accent}`} />
+          <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-shell-accent/15 bg-shell-accent-soft px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">
+            <Icon className="h-3 w-3" />
             {title}
           </div>
-          <h1 className="font-display text-5xl leading-[1.02] tracking-tight text-shell-text">{heroTitle}</h1>
-          <p className="mt-4 max-w-2xl text-base leading-7 text-shell-muted">{heroBody}</p>
+          <h1 className="font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">{heroTitle}</h1>
+          <p className="mt-3 max-w-xl text-[14px] leading-6 text-shell-muted">{heroBody}</p>
         </div>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      {/* Cards */}
+      <section className="stagger-children grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
         {cards.map((card) => (
-          <div key={card.title} className="rounded-[28px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
+          <div key={card.title} className="lift-sm rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             {card.eyebrow && (
-              <div className="mb-4 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
+              <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">
                 {card.eyebrow}
               </div>
             )}
-            <h2 className="text-lg font-semibold text-shell-text">{card.title}</h2>
-            <p className="mt-3 text-sm leading-6 text-shell-muted">{card.body}</p>
-            <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-shell-text">
+            <h2 className="text-[15px] font-semibold text-shell-text">{card.title}</h2>
+            <p className="mt-2 text-[13px] leading-5 text-shell-muted">{card.body}</p>
+            <div className="mt-4 inline-flex items-center gap-1.5 text-[12px] font-medium text-shell-muted transition-colors duration-150 hover:text-shell-accent">
               <span>Coming into focus</span>
-              <ArrowRight className="h-4 w-4 text-shell-muted" />
+              <ArrowRight className="h-3 w-3" />
             </div>
           </div>
         ))}
       </section>
 
-      <section className="rounded-[34px] border border-dashed border-shell-border bg-shell-panel px-8 py-10 text-center shadow-shell">
-        <div className="mx-auto max-w-2xl">
-          <h2 className="text-2xl font-semibold tracking-tight text-shell-text">{subtitle}</h2>
-          <p className="mt-4 text-sm leading-7 text-shell-muted">
+      {/* Footer */}
+      <section className="rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-7 py-8 text-center">
+        <div className="mx-auto max-w-xl">
+          <h2 className="font-display text-2xl tracking-tight text-shell-text">{subtitle}</h2>
+          <p className="mt-3 text-[13px] leading-6 text-shell-muted">
             This section is intentionally presentable before it is fully wired. The design is here to set the product direction first, then we can layer real data and behavior into it.
           </p>
         </div>

@@ -14,18 +14,11 @@ import {
 import { useMemo } from 'react';
 import { useAppStore } from '../store/useAppStore';
 
-const QUICK_ACTIONS = [
-  'Create agent',
-  'Run workflow',
-  'Start experiment',
-  'Connect data',
-];
-
 const PINNED_AGENTS = [
-  { title: 'Research Scout', subtitle: 'Find patterns across notes, feeds, and docs', accent: 'bg-[#edf2ff] text-[#4c68d7]' },
-  { title: 'Signal Operator', subtitle: 'Watch live runs and summarize what changed', accent: 'bg-[#fff0e6] text-[#d17b43]' },
-  { title: 'Workflow Editor', subtitle: 'Turn repeated chats into reusable sequences', accent: 'bg-[#efe9ff] text-[#8a59db]' },
-  { title: 'Knowledge Curator', subtitle: 'Keep your workspace context fresh and grounded', accent: 'bg-[#fff4ea] text-[#cc8350]' },
+  { title: 'Research Scout', subtitle: 'Find patterns across notes, feeds, and docs', accent: 'bg-[#edf2ff] text-[#4c68d7]', darkAccent: 'dark:bg-[#1c2340] dark:text-[#7b93e8]' },
+  { title: 'Signal Operator', subtitle: 'Watch live runs and summarize what changed', accent: 'bg-[#fff0e6] text-[#d17b43]', darkAccent: 'dark:bg-[#2a1f14] dark:text-[#e0a070]' },
+  { title: 'Workflow Editor', subtitle: 'Turn repeated chats into reusable sequences', accent: 'bg-[#efe9ff] text-[#8a59db]', darkAccent: 'dark:bg-[#201a30] dark:text-[#b08ae8]' },
+  { title: 'Knowledge Curator', subtitle: 'Keep your workspace context fresh and grounded', accent: 'bg-[#fff4ea] text-[#cc8350]', darkAccent: 'dark:bg-[#2a1f14] dark:text-[#d4a070]' },
 ];
 
 const QUICK_STARTS = [
@@ -62,232 +55,235 @@ export function HomePage() {
   const activeSessions = sessions.filter((session) => !session.archived).length;
   const archivedSessions = sessions.filter((session) => session.archived).length;
   const connectedProviders = providers.filter((provider) => provider.available).length;
-  const latestSessions = sessions.slice(0, 5);
+  const latestSessions = sessions.slice(0, 4);
 
   const stats = [
     {
       label: 'Active Sessions',
       value: String(activeSessions || 0),
-      note: archivedSessions ? `${archivedSessions} archived for later` : 'Ready for new work',
+      note: archivedSessions ? `${archivedSessions} archived` : 'Ready for new work',
       icon: Bot,
     },
     {
       label: 'Messages Logged',
       value: String(totalMessages || 0),
-      note: 'Append-only conversation history',
+      note: 'Append-only history',
       icon: Activity,
     },
     {
       label: 'Providers Online',
       value: `${connectedProviders}/${providers.length || 1}`,
-      note: wsStatus === 'connected' ? 'Gateway connected' : 'Gateway reconnecting',
+      note: wsStatus === 'connected' ? 'Gateway connected' : 'Reconnecting',
       icon: Database,
     },
     {
       label: 'Tools Available',
       value: String(tools.length || 0),
-      note: 'Inspectable, traceable execution',
+      note: 'Inspectable execution',
       icon: WandSparkles,
     },
   ];
 
   return (
-    <div className="space-y-4">
-      <section className="grid gap-4 xl:grid-cols-[1.68fr_0.82fr]">
-        <div className="space-y-4">
-          <div className="rounded-[30px] border border-shell-border bg-shell-panel px-8 py-7 shadow-shell">
-          <div className="max-w-3xl">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-panel-strong px-4 py-1.5 text-[11px] font-semibold uppercase tracking-[0.22em] text-shell-muted">
-              <Sparkles className="h-3.5 w-3.5 text-shell-accent" />
-              Built to inspire what comes next
+    <div className="animate-fade-in-up space-y-3">
+      {/* ── Hero + Pinned Agents ── */}
+      <section className="grid gap-3 xl:grid-cols-[1.68fr_0.82fr]">
+        <div className="space-y-3">
+          {/* Hero */}
+          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-7 py-5 shadow-shell">
+            <div className="max-w-3xl">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-shell-accent/15 bg-shell-accent-soft px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">
+                <Sparkles className="h-3 w-3" />
+                Built to inspire what comes next
+              </div>
+              <h1 className="font-display text-[2.8rem] leading-[0.96] tracking-tight text-shell-text">
+                Welcome home to CopeNet.
+              </h1>
+              <p className="mt-2 max-w-xl text-[14px] leading-6 text-shell-muted">
+                Shape agentic workspaces, keep every tool call inspectable, and turn useful sessions
+                into repeatable workflows.
+              </p>
             </div>
-            <h1 className="font-display text-[3.6rem] leading-[0.94] tracking-tight text-shell-text">
-              Welcome home to CopeNet.
-            </h1>
-            <p className="mt-3 max-w-2xl text-[16px] leading-7 text-shell-muted">
-              Shape agentic workspaces, keep every tool call inspectable, and turn useful sessions
-              into repeatable workflows. The point is not just to chat. It is to build momentum.
-            </p>
+
+            <div className="mt-5 flex flex-wrap gap-2">
+              <button
+                type="button"
+                onClick={() => setCurrentSection('agents')}
+                className="glow-accent inline-flex items-center gap-2 rounded-xl bg-shell-ink px-4 py-2 text-[13px] font-semibold text-white"
+              >
+                <Bot className="h-3.5 w-3.5" />
+                Create agent session
+              </button>
+              {[
+                { label: 'Run playbook', icon: Play, section: 'workflows' as const },
+                { label: 'New experiment', icon: LineChart, section: 'experiments' as const },
+                { label: 'Upload data', icon: Database, section: 'data-tools' as const },
+              ].map((action) => (
+                <button
+                  key={action.label}
+                  type="button"
+                  onClick={() => setCurrentSection(action.section)}
+                  className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-panel-strong px-4 py-2 text-[13px] font-medium text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel"
+                >
+                  <action.icon className="h-3.5 w-3.5" />
+                  {action.label}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="mt-7 flex flex-wrap justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => setCurrentSection('agents')}
-              className="inline-flex items-center gap-2 rounded-full bg-shell-ink px-5 py-3 text-sm font-semibold text-white transition hover:opacity-92"
-            >
-              <Bot className="h-4 w-4" />
-              Create agent session
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentSection('workflows')}
-              className="inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-panel-strong px-5 py-3 text-sm font-medium text-shell-text transition hover:border-shell-border-strong hover:bg-shell-panel"
-            >
-              <Play className="h-4 w-4" />
-              Run playbook
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentSection('experiments')}
-              className="inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-panel-strong px-5 py-3 text-sm font-medium text-shell-text transition hover:border-shell-border-strong hover:bg-shell-panel"
-            >
-              <LineChart className="h-4 w-4" />
-              New experiment
-            </button>
-            <button
-              type="button"
-              onClick={() => setCurrentSection('data-tools')}
-              className="inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-panel-strong px-5 py-3 text-sm font-medium text-shell-text transition hover:border-shell-border-strong hover:bg-shell-panel"
-            >
-              <Database className="h-4 w-4" />
-              Upload data
-            </button>
-          </div>
-        </div>
+          {/* At a glance */}
           <section>
-            <div className="mb-3 flex items-center justify-between">
-              <h2 className="text-lg font-semibold tracking-tight text-shell-text">At a glance</h2>
+            <div className="mb-2 flex items-center justify-between px-1">
+              <h2 className="font-display text-xl tracking-tight text-shell-text">At a glance</h2>
               <button
                 type="button"
                 onClick={() => setCurrentSection('observability')}
-                className="inline-flex items-center gap-2 text-sm font-medium text-shell-muted transition hover:text-shell-text"
+                className="inline-flex items-center gap-1.5 text-[12px] font-medium text-shell-muted transition-colors duration-150 hover:text-shell-accent"
               >
                 View all
-                <ArrowRight className="h-4 w-4" />
+                <ArrowRight className="h-3 w-3" />
               </button>
             </div>
-            <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+            <div className="stagger-children grid gap-2 md:grid-cols-2 xl:grid-cols-4">
               {stats.map((stat) => {
                 const Icon = stat.icon;
                 return (
-                  <div key={stat.label} className="rounded-[24px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
-                    <div className="mb-3 flex items-center justify-between">
-                      <span className="text-sm text-shell-muted">{stat.label}</span>
-                      <div className="flex h-7 w-7 items-center justify-center rounded-full bg-shell-accent-soft text-shell-accent">
-                        <Icon className="h-3.5 w-3.5" />
+                  <div key={stat.label} className="lift-sm rounded-[18px] border border-shell-border bg-shell-panel px-4 py-3 shadow-shell">
+                    <div className="mb-2 flex items-center justify-between">
+                      <span className="text-[12px] text-shell-muted">{stat.label}</span>
+                      <div className="flex h-6 w-6 items-center justify-center rounded-lg bg-shell-accent-soft text-shell-accent">
+                        <Icon className="h-3 w-3" />
                       </div>
                     </div>
-                    <div className="text-[2.15rem] font-semibold tracking-tight text-shell-text">{stat.value}</div>
-                    <div className="mt-1.5 text-[13px] text-shell-muted">{stat.note}</div>
+                    <div className="text-[1.5rem] font-semibold tracking-tight text-shell-text">{stat.value}</div>
+                    <div className="mt-0.5 text-[11px] text-shell-muted">{stat.note}</div>
                   </div>
                 );
               })}
             </div>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[1.18fr_0.82fr]">
-            <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-shell-text">Recent Activity</h3>
-              <p className="text-sm text-shell-muted">The work CopeNet is helping you move forward</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCurrentSection('agents')}
-              className="text-sm font-medium text-shell-muted transition hover:text-shell-text"
-            >
-              Open Agents
-            </button>
-          </div>
-          <div className="space-y-2.5">
-            {latestSessions.length > 0 ? (
-              latestSessions.map((session) => (
+          {/* Recent Activity + Workspaces */}
+          <section className="grid gap-3 xl:grid-cols-[1.18fr_0.82fr]">
+            {/* Recent Activity */}
+            <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+              <div className="mb-2.5 flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-lg tracking-tight text-shell-text">Recent Activity</h3>
+                  <p className="text-[12px] text-shell-muted">The work CopeNet is helping you move forward</p>
+                </div>
                 <button
-                  key={session.key}
                   type="button"
                   onClick={() => setCurrentSection('agents')}
-                  className="flex w-full items-center gap-3 rounded-[22px] border border-shell-border bg-shell-panel-strong px-4 py-3 text-left transition hover:border-shell-border-strong hover:bg-shell-panel"
+                  className="text-[12px] font-medium text-shell-muted transition-colors duration-150 hover:text-shell-accent"
                 >
-                  <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-shell-accent-soft text-shell-accent">
-                    <Flame className="h-4 w-4" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-shell-text">
-                      {session.title || 'Untitled session'}
-                    </div>
-                    <div className="truncate text-xs text-shell-muted">
-                      {session.provider} · {session.model || 'default runtime'}
-                    </div>
-                  </div>
-                  <div className="rounded-full bg-shell-success-soft px-3 py-1 text-[11px] font-semibold text-shell-success">
-                    {session.archived ? 'Archived' : 'Active'}
-                  </div>
+                  Open Agents
                 </button>
-              ))
-            ) : (
-              <div className="rounded-3xl border border-dashed border-shell-border bg-shell-bg px-5 py-6 text-sm text-shell-muted">
-                No saved sessions yet. Your first draft in Agents will start shaping this workspace.
               </div>
-            )}
-          </div>
-        </div>
-
-            <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-          <div className="mb-3 flex items-center justify-between">
-            <div>
-              <h3 className="text-lg font-semibold text-shell-text">My Workspaces</h3>
-              <p className="text-sm text-shell-muted">Ground context around real work</p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setCurrentSection('data-tools')}
-              className="text-sm font-medium text-shell-muted transition hover:text-shell-text"
-            >
-              Manage
-            </button>
-          </div>
-          <div className="space-y-2.5">
-            {WORKSPACES.map((workspace) => (
-              <button
-                key={workspace.title}
-                type="button"
-                onClick={() => setCurrentSection('data-tools')}
-                className="flex w-full items-start gap-3 rounded-[22px] border border-shell-border bg-shell-panel-strong px-4 py-3 text-left transition hover:border-shell-border-strong hover:bg-shell-panel"
-              >
-                <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-shell-panel-strong text-shell-accent">
-                  <BriefcaseBusiness className="h-4 w-4" />
-                </div>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-shell-text">{workspace.title}</div>
-                  <div className="mt-1 text-xs leading-5 text-shell-muted">{workspace.subtitle}</div>
-                  <div className="mt-2 text-[11px] font-medium uppercase tracking-[0.18em] text-shell-muted">
-                    {workspace.meta}
+              <div className="space-y-1.5">
+                {latestSessions.length > 0 ? (
+                  latestSessions.map((session) => (
+                    <button
+                      key={session.key}
+                      type="button"
+                      onClick={() => setCurrentSection('agents')}
+                      className="flex w-full items-center gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5 text-left transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
+                    >
+                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
+                        <Flame className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-medium text-shell-text">
+                          {session.title || 'Untitled session'}
+                        </div>
+                        <div className="truncate text-[11px] text-shell-muted">
+                          {session.provider} · {session.model || 'default runtime'}
+                        </div>
+                      </div>
+                      <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                        session.archived
+                          ? 'bg-shell-panel-strong text-shell-muted'
+                          : 'bg-shell-success-soft text-shell-success'
+                      }`}>
+                        {session.archived ? 'Archived' : 'Active'}
+                      </div>
+                    </button>
+                  ))
+                ) : (
+                  <div className="rounded-2xl border border-dashed border-shell-border bg-shell-bg px-4 py-5 text-[13px] text-shell-muted">
+                    No saved sessions yet. Your first draft in Agents will start shaping this workspace.
                   </div>
+                )}
+              </div>
+            </div>
+
+            {/* Workspaces */}
+            <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+              <div className="mb-2.5 flex items-center justify-between">
+                <div>
+                  <h3 className="font-display text-lg tracking-tight text-shell-text">My Workspaces</h3>
+                  <p className="text-[12px] text-shell-muted">Ground context around real work</p>
                 </div>
-              </button>
-            ))}
-          </div>
-        </div>
+                <button
+                  type="button"
+                  onClick={() => setCurrentSection('data-tools')}
+                  className="text-[12px] font-medium text-shell-muted transition-colors duration-150 hover:text-shell-accent"
+                >
+                  Manage
+                </button>
+              </div>
+              <div className="space-y-1.5">
+                {WORKSPACES.map((workspace) => (
+                  <button
+                    key={workspace.title}
+                    type="button"
+                    onClick={() => setCurrentSection('data-tools')}
+                    className="flex w-full items-start gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5 text-left transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
+                  >
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-xl bg-shell-panel-strong text-shell-accent">
+                      <BriefcaseBusiness className="h-3.5 w-3.5" />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="truncate text-[13px] font-medium text-shell-text">{workspace.title}</div>
+                      <div className="mt-0.5 text-[11px] leading-4 text-shell-muted">{workspace.subtitle}</div>
+                      <div className="mt-1.5 text-[10px] font-medium uppercase tracking-[0.16em] text-shell-muted">
+                        {workspace.meta}
+                      </div>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            </div>
           </section>
 
-          <section className="grid gap-4 xl:grid-cols-[1.05fr_1.05fr_0.9fr]">
-            <div className="rounded-[30px] border border-shell-border bg-[linear-gradient(145deg,var(--color-shell-ink),#2d3340)] px-5 py-5 text-white shadow-shell">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/60">Agent Library</div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight">Build your own operating crew</div>
-              <p className="mt-2.5 max-w-xs text-sm leading-6 text-white/70">
+          {/* Bottom trio */}
+          <section className="grid gap-3 xl:grid-cols-[1.05fr_1.05fr_0.9fr]">
+            <div className="lift rounded-[24px] border border-shell-border bg-[linear-gradient(145deg,var(--color-shell-ink),#252a35)] px-4 py-4 text-white shadow-shell">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">Agent Library</div>
+              <div className="mt-2 font-display text-xl tracking-tight">Build your own operating crew</div>
+              <p className="mt-2 max-w-xs text-[13px] leading-5 text-white/60">
                 Pin your best sessions, shape specialist runtimes, and turn repeated tasks into intentional agents.
               </p>
             </div>
 
-            <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Playbook Library</div>
-              <div className="mt-3 text-2xl font-semibold tracking-tight text-shell-text">Replay what works</div>
-              <p className="mt-2.5 text-sm leading-6 text-shell-muted">
-                The next layer is turning useful prompts, tool traces, and session patterns into reusable workflows.
+            <div className="lift rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">Playbook Library</div>
+              <div className="mt-2 font-display text-xl tracking-tight text-shell-text">Replay what works</div>
+              <p className="mt-2 text-[13px] leading-5 text-shell-muted">
+                Turn useful prompts, tool traces, and session patterns into reusable workflows.
               </p>
-              <div className="mt-5 flex items-center gap-3 text-sm font-medium text-shell-text">
-                <Play className="h-4 w-4 text-shell-accent" />
+              <div className="mt-3 flex items-center gap-2 text-[13px] font-medium text-shell-text">
+                <Play className="h-3.5 w-3.5 text-shell-accent" />
                 Runbooks, experiments, and recurring analysis
               </div>
             </div>
 
-            <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What&apos;s New</div>
-              <div className="mt-3 space-y-3">
+            <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">What&apos;s New</div>
+              <div className="mt-2 space-y-1.5">
                 {NEWS_ITEMS.map((item) => (
-                  <div key={item} className="rounded-[22px] border border-shell-border bg-shell-panel-strong px-4 py-3 text-sm leading-6 text-shell-text">
+                  <div key={item} className="rounded-[12px] border border-shell-border bg-shell-panel-strong px-3 py-2 text-[12px] leading-5 text-shell-text">
                     {item}
                   </div>
                 ))}
@@ -296,96 +292,102 @@ export function HomePage() {
           </section>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-            <div className="mb-3 flex items-center justify-between">
+        {/* ── Right sidebar ── */}
+        <div className="space-y-3">
+          {/* Pinned Agents */}
+          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-2.5 flex items-center justify-between">
               <div>
-                <div className="text-sm font-semibold text-shell-text">Pinned Agents</div>
-                <div className="text-xs text-shell-muted">The agents worth returning to</div>
+                <div className="text-[13px] font-semibold text-shell-text">Pinned Agents</div>
+                <div className="text-[11px] text-shell-muted">The agents worth returning to</div>
               </div>
-              <button type="button" className="text-sm text-shell-muted transition hover:text-shell-text">+</button>
+              <button type="button" className="flex h-6 w-6 items-center justify-center rounded-lg border border-shell-border text-[13px] text-shell-muted transition-colors duration-150 hover:border-shell-accent/30 hover:text-shell-accent">+</button>
             </div>
-            <div className="space-y-2.5">
+            <div className="space-y-1.5">
               {PINNED_AGENTS.map((agent) => (
                 <button
                   key={agent.title}
                   type="button"
                   onClick={() => setCurrentSection('agents')}
-                  className="flex w-full items-center gap-3 rounded-[22px] border border-shell-border bg-shell-panel-strong px-3 py-3 text-left transition hover:border-shell-border-strong hover:bg-shell-panel"
+                  className="flex w-full items-center gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2 text-left transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
                 >
-                  <div className={`flex h-10 w-10 items-center justify-center rounded-2xl ${agent.accent}`}>
-                    <Bot className="h-4 w-4" />
+                  <div className={`flex h-8 w-8 items-center justify-center rounded-xl ${agent.accent} ${agent.darkAccent}`}>
+                    <Bot className="h-3.5 w-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
-                    <div className="truncate text-sm font-semibold text-shell-text">{agent.title}</div>
-                    <div className="truncate text-xs text-shell-muted">{agent.subtitle}</div>
+                    <div className="truncate text-[13px] font-medium text-shell-text">{agent.title}</div>
+                    <div className="truncate text-[11px] text-shell-muted">{agent.subtitle}</div>
                   </div>
-                  <ArrowRight className="h-4 w-4 text-shell-muted" />
+                  <ArrowRight className="h-3 w-3 text-shell-muted transition-transform duration-150 group-hover:translate-x-0.5" />
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-            <h3 className="text-lg font-semibold text-shell-text">Quick Starts</h3>
-            <div className="mt-3 space-y-2">
+          {/* Quick Starts */}
+          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <h3 className="font-display text-lg tracking-tight text-shell-text">Quick Starts</h3>
+            <div className="mt-2 space-y-1">
               {QUICK_STARTS.map((item) => (
                 <button
                   key={item}
                   type="button"
                   onClick={() => setCurrentSection('agents')}
-                  className="flex w-full items-center justify-between rounded-[22px] border border-shell-border bg-shell-panel-strong px-4 py-3 text-left text-sm text-shell-text transition hover:border-shell-border-strong hover:bg-shell-panel"
+                  className="flex w-full items-center justify-between rounded-[12px] border border-shell-border bg-shell-panel-strong px-3 py-2 text-left text-[13px] text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
                 >
                   <span>{item}</span>
-                  <ArrowRight className="h-4 w-4 text-shell-muted" />
+                  <ArrowRight className="h-3 w-3 text-shell-muted" />
                 </button>
               ))}
             </div>
           </div>
 
-          <div className="rounded-[30px] border border-shell-border bg-shell-panel px-5 py-5 shadow-shell">
-            <h3 className="text-lg font-semibold text-shell-text">System Health</h3>
-            <div className="mt-3 rounded-[22px] border border-shell-border bg-shell-panel-strong p-4">
-              <div className="flex items-center gap-2 text-sm font-medium text-shell-text">
-                <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    wsStatus === 'connected'
-                      ? 'bg-shell-success'
-                      : wsStatus === 'connecting'
-                        ? 'bg-shell-accent'
-                        : 'bg-shell-error'
-                  }`}
-                />
+          {/* System Health */}
+          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <h3 className="font-display text-lg tracking-tight text-shell-text">System Health</h3>
+            <div className="mt-2 rounded-[14px] border border-shell-border bg-shell-panel-strong p-3">
+              <div className="flex items-center gap-2 text-[13px] font-medium text-shell-text">
+                <span className="relative flex h-2 w-2">
+                  {wsStatus === 'connected' && (
+                    <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-shell-success opacity-60" />
+                  )}
+                  <span
+                    className={`relative inline-flex h-2 w-2 rounded-full ${
+                      wsStatus === 'connected'
+                        ? 'bg-shell-success'
+                        : wsStatus === 'connecting'
+                          ? 'bg-shell-accent'
+                          : 'bg-shell-error'
+                    }`}
+                  />
+                </span>
                 {wsStatus === 'connected' ? 'Gateway online' : wsStatus === 'connecting' ? 'Reconnecting' : 'Disconnected'}
               </div>
-              <div className="mt-3 space-y-2 text-sm text-shell-muted">
+              <div className="mt-2.5 space-y-1.5 text-[12px] text-shell-muted">
                 <div className="flex items-center justify-between">
                   <span>Connected providers</span>
-                  <span>{connectedProviders}</span>
+                  <span className="font-medium text-shell-text">{connectedProviders}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span>Known tools</span>
-                  <span>{tools.length}</span>
-                </div>
-                <div className="flex items-center justify-between">
-                  <span>Quick actions</span>
-                  <span>{QUICK_ACTIONS.length}</span>
+                  <span className="font-medium text-shell-text">{tools.length}</span>
                 </div>
               </div>
             </div>
           </div>
-          
-          <div className="rounded-[30px] border border-shell-border bg-[radial-gradient(circle_at_top_left,rgba(255,255,255,0.08),transparent_40%),var(--color-shell-ink)] px-5 py-5 text-white shadow-shell">
+
+          {/* Performance */}
+          <div className="rounded-[24px] border border-shell-border bg-[radial-gradient(circle_at_top_left,rgba(92,200,184,0.06),transparent_50%),var(--color-shell-ink)] px-4 py-4 text-white shadow-shell">
             <div className="flex items-center justify-between">
-              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-white/60">Performance</div>
-              <Clock3 className="h-4 w-4 text-white/70" />
+              <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">Performance</div>
+              <Clock3 className="h-3.5 w-3.5 text-white/40" />
             </div>
-            <div className="mt-5 space-y-3">
-              <div className="h-24 rounded-[24px] border border-white/10 bg-white/5 p-4">
-                <div className="mt-8 h-0.5 w-full bg-gradient-to-r from-white/20 via-shell-accent to-white/60" />
+            <div className="mt-3 space-y-2">
+              <div className="h-16 rounded-[14px] border border-white/8 bg-white/4 p-3">
+                <div className="mt-6 h-0.5 w-full bg-gradient-to-r from-white/15 via-shell-accent to-white/40 opacity-70" />
               </div>
-              <div className="text-sm leading-6 text-white/70">
-                Enough signal to keep pushing. Enough shape to inspire what the next version should become.
+              <div className="text-[12px] leading-5 text-white/50">
+                Enough signal to keep pushing. Enough shape to inspire what comes next.
               </div>
             </div>
           </div>

@@ -7,65 +7,90 @@
   --font-display: "Cormorant Garamond", Georgia, serif;
   --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
 
+  /* ── Light mode tokens (default) ── */
   --color-shell-bg: #f3f4f6;
   --color-shell-canvas: #fbfbfa;
   --color-shell-sidebar: #f7f7f5;
   --color-shell-panel: #ffffff;
-  --color-shell-panel-strong: #ffffff;
-  --color-shell-border: rgba(17, 24, 39, 0.08);
-  --color-shell-border-strong: rgba(17, 24, 39, 0.14);
+  --color-shell-panel-strong: #f4f4f2;
+  --color-shell-border: rgba(17, 24, 39, 0.07);
+  --color-shell-border-strong: rgba(17, 24, 39, 0.13);
   --color-shell-text: #17191d;
   --color-shell-muted: #6b7280;
-  --color-shell-accent: #db8f4e;
-  --color-shell-accent-soft: rgba(219, 143, 78, 0.1);
+  --color-shell-accent: #c27a3a;
+  --color-shell-accent-soft: rgba(194, 122, 58, 0.10);
+  --color-shell-accent-glow: rgba(194, 122, 58, 0.06);
   --color-shell-success: #2f8f67;
   --color-shell-success-soft: rgba(47, 143, 103, 0.12);
   --color-shell-error: #bf5d52;
   --color-shell-ink: #16181d;
   --color-shell-operator-frame: #ffffff;
 
-  --shadow-shell: 0 18px 40px rgba(15, 23, 42, 0.08);
-  --shadow-shell-xl: 0 30px 70px rgba(15, 23, 42, 0.1);
+  /* ── Elevation shadows ── */
+  --shadow-shell-0: none;
+  --shadow-shell: 0 1px 3px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
+  --shadow-shell-hover: 0 2px 8px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.07);
+  --shadow-shell-xl: 0 8px 24px rgba(15, 23, 42, 0.06), 0 24px 56px rgba(15, 23, 42, 0.08);
 
+  /* ── Operator (chat) tokens ── */
   --color-operator-bg: #f6f7f8;
   --color-operator-panel: #ffffff;
   --color-operator-border: rgba(17, 24, 39, 0.1);
   --color-operator-text: #1b1e24;
   --color-operator-muted: #6e7683;
-  --color-operator-accent: #db8f4e;
+  --color-operator-accent: #c27a3a;
   --color-operator-error: #c15d55;
   --color-operator-success: #2f8f67;
+
+  /* ── Code surface tokens ── */
+  --color-code-bg: #1c1f26;
+  --color-code-header: #252830;
+  --color-code-text: #e2e6ef;
+  --color-code-border: rgba(17, 24, 39, 0.15);
+  --color-code-inline-bg: rgba(194, 122, 58, 0.08);
+  --color-code-inline-text: #a85d20;
 }
 
+/* ── Dark mode overrides ── */
 html[data-theme='dark'] {
-  --color-shell-bg: #121417;
-  --color-shell-canvas: #171a1f;
-  --color-shell-sidebar: #15181c;
-  --color-shell-panel: #1e2228;
-  --color-shell-panel-strong: #282d34;
-  --color-shell-border: rgba(223, 228, 235, 0.08);
-  --color-shell-border-strong: rgba(223, 228, 235, 0.14);
-  --color-shell-text: #f3f4f6;
-  --color-shell-muted: #a5adb8;
-  --color-shell-accent: #d7dde5;
-  --color-shell-accent-soft: rgba(215, 221, 229, 0.1);
+  --color-shell-bg: #0e1015;
+  --color-shell-canvas: #141720;
+  --color-shell-sidebar: #111318;
+  --color-shell-panel: #1a1d25;
+  --color-shell-panel-strong: #22262f;
+  --color-shell-border: rgba(200, 210, 225, 0.07);
+  --color-shell-border-strong: rgba(200, 210, 225, 0.13);
+  --color-shell-text: #e8ecf2;
+  --color-shell-muted: #7e8a9a;
+  --color-shell-accent: #5cc8b8;
+  --color-shell-accent-soft: rgba(92, 200, 184, 0.10);
+  --color-shell-accent-glow: rgba(92, 200, 184, 0.04);
   --color-shell-success: #36d399;
   --color-shell-success-soft: rgba(54, 211, 153, 0.12);
   --color-shell-error: #f87171;
-  --color-shell-ink: #090b16;
-  --color-shell-operator-frame: #171a1f;
+  --color-shell-ink: #090b10;
+  --color-shell-operator-frame: #141720;
 
-  --shadow-shell: 0 18px 44px rgba(3, 4, 6, 0.22);
-  --shadow-shell-xl: 0 28px 80px rgba(3, 4, 6, 0.36);
+  --shadow-shell-0: none;
+  --shadow-shell: 0 1px 3px rgba(0, 0, 0, 0.12), 0 6px 16px rgba(0, 0, 0, 0.10);
+  --shadow-shell-hover: 0 2px 8px rgba(0, 0, 0, 0.16), 0 14px 32px rgba(0, 0, 0, 0.14);
+  --shadow-shell-xl: 0 8px 24px rgba(0, 0, 0, 0.14), 0 24px 64px rgba(0, 0, 0, 0.22);
 
-  --color-operator-bg: #121418;
-  --color-operator-panel: #191d23;
-  --color-operator-border: #2a2d35;
+  --color-operator-bg: #0f1218;
+  --color-operator-panel: #171b23;
+  --color-operator-border: #252932;
   --color-operator-text: #e2e8f0;
-  --color-operator-muted: #8e9299;
-  --color-operator-accent: #d7dde5;
+  --color-operator-muted: #7e8a9a;
+  --color-operator-accent: #5cc8b8;
   --color-operator-error: #ef4444;
   --color-operator-success: #36d399;
+
+  --color-code-bg: #0c0e14;
+  --color-code-header: #141720;
+  --color-code-text: #d4dae6;
+  --color-code-border: rgba(200, 210, 225, 0.08);
+  --color-code-inline-bg: rgba(92, 200, 184, 0.08);
+  --color-code-inline-text: #5cc8b8;
 }
 
 html, body, #root {
@@ -92,23 +117,211 @@ select {
   font: inherit;
 }
 
+/* ── Shell backdrop: subtle radial accent wash ── */
 .shell-backdrop {
-  background: transparent;
+  background: radial-gradient(
+    ellipse 80% 50% at 18% 8%,
+    var(--color-shell-accent-glow),
+    transparent 60%
+  );
 }
 
-html[data-theme='dark'] .shell-backdrop {
-  background: transparent;
-}
-
+/* ── Shadow utilities ── */
 .shadow-shell {
   box-shadow: var(--shadow-shell);
 }
-
+.shadow-shell-hover {
+  box-shadow: var(--shadow-shell-hover);
+}
 .shadow-shell-xl {
   box-shadow: var(--shadow-shell-xl);
 }
 
-/* --- Markdown Styles --- */
+/* ── Micro-motion utilities ── */
+.lift {
+  transition: transform 180ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.lift:hover {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-shell-hover);
+}
+.lift:active {
+  transform: translateY(0);
+  transition-duration: 80ms;
+}
+
+/* Subtler lift for smaller elements */
+.lift-sm {
+  transition: transform 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 150ms cubic-bezier(0.22, 1, 0.36, 1),
+              border-color 150ms ease;
+}
+.lift-sm:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-shell-hover);
+}
+.lift-sm:active {
+  transform: translateY(0);
+  transition-duration: 60ms;
+}
+
+/* ── Status dot pulse ── */
+@keyframes pulse-live {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.5; transform: scale(1.6); }
+}
+.pulse-live {
+  animation: pulse-live 2.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* ── Fade-in on mount ── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.35s ease-out both;
+}
+
+/* Staggered children: apply to parent, children get delays */
+.stagger-children > * {
+  animation: fade-in-up 0.3s ease-out both;
+}
+.stagger-children > *:nth-child(1) { animation-delay: 0ms; }
+.stagger-children > *:nth-child(2) { animation-delay: 50ms; }
+.stagger-children > *:nth-child(3) { animation-delay: 100ms; }
+.stagger-children > *:nth-child(4) { animation-delay: 150ms; }
+.stagger-children > *:nth-child(5) { animation-delay: 200ms; }
+.stagger-children > *:nth-child(6) { animation-delay: 250ms; }
+
+/* ── Accent glow on hover (for primary action buttons) ── */
+.glow-accent {
+  transition: box-shadow 200ms ease, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+.glow-accent:hover {
+  box-shadow: 0 0 20px var(--color-shell-accent-glow),
+              0 4px 12px rgba(0, 0, 0, 0.1);
+  transform: translateY(-1px);
+}
+.glow-accent:active {
+  transform: translateY(0);
+  transition-duration: 80ms;
+}
+
+/* ── Focus ring for keyboard navigation ── */
+.focus-ring:focus-visible {
+  outline: 2px solid var(--color-shell-accent);
+  outline-offset: 2px;
+  border-radius: inherit;
+}
+
+/* ── Smooth section transition ── */
+@keyframes section-enter {
+  from {
+    opacity: 0;
+    transform: translateX(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-section-enter {
+  animation: section-enter 0.25s ease-out both;
+}
+
+/* ── Slide in from right (for panels) ── */
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+.animate-slide-in-right {
+  animation: slide-in-right 0.2s ease-out both;
+}
+
+/* ── Scale pop (for status badges, notifications) ── */
+@keyframes scale-pop {
+  0% { transform: scale(0.8); opacity: 0; }
+  60% { transform: scale(1.05); }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-scale-pop {
+  animation: scale-pop 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Shimmer for loading states ── */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    var(--color-shell-panel) 25%,
+    var(--color-shell-panel-strong) 50%,
+    var(--color-shell-panel) 75%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.8s ease-in-out infinite;
+}
+
+/* ── Run-in-progress accent bar ── */
+@keyframes run-progress {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+.run-progress-bar {
+  position: relative;
+  overflow: hidden;
+}
+.run-progress-bar::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, transparent, var(--color-shell-accent), transparent);
+  opacity: 0.15;
+  animation: run-progress 2s ease-in-out infinite;
+}
+
+/* ── Interactive row: subtle background shift on hover ── */
+.interactive-row {
+  transition: background-color 120ms ease, border-color 120ms ease, box-shadow 150ms ease;
+}
+.interactive-row:hover {
+  background-color: var(--color-operator-panel);
+  box-shadow: var(--shadow-shell);
+}
+
+/* ── Accent underline for active nav ── */
+.nav-active-bar {
+  position: relative;
+}
+.nav-active-bar::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  right: 16px;
+  bottom: 6px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-shell-accent);
+  opacity: 0.5;
+}
+
+/* ── Markdown Styles ── */
 .markdown-body {
   color: var(--color-operator-text);
 }
@@ -136,13 +349,13 @@ html[data-theme='dark'] .shell-backdrop {
   background-color: color-mix(in srgb, var(--color-operator-panel) 72%, transparent);
 }
 .markdown-body code {
-  background-color: var(--color-operator-panel);
-  border: 1px solid var(--color-operator-border);
-  padding: 0.125rem 0.375rem;
-  border-radius: 0.25rem;
+  background-color: var(--color-code-inline-bg);
+  border: 1px solid var(--color-code-border);
+  padding: 0.125rem 0.4rem;
+  border-radius: 0.375rem;
   font-family: var(--font-mono);
-  font-size: 13px;
-  color: var(--color-operator-accent);
+  font-size: 12px;
+  color: var(--color-code-inline-text);
 }
 .markdown-body pre code {
   background-color: transparent;
@@ -151,6 +364,7 @@ html[data-theme='dark'] .shell-backdrop {
   color: inherit;
 }
 
+/* ── Message animation ── */
 @keyframes message-slide-up {
   from {
     opacity: 0;
@@ -166,7 +380,7 @@ html[data-theme='dark'] .shell-backdrop {
   animation: message-slide-up 0.2s ease-out forwards;
 }
 
-/* --- Spinners --- */
+/* ── Spinners ── */
 
 /* Dot Grid */
 .loader-dot-grid {

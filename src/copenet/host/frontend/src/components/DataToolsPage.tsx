@@ -52,18 +52,18 @@ function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: (
   };
 
   return (
-    <div className="mb-5 flex items-center gap-3 text-sm text-shell-muted">
+    <div className="mb-3 flex items-center gap-2.5 text-sm text-shell-muted">
       {route !== 'hub' && (
         <button
           type="button"
           onClick={onBack}
-          className="inline-flex h-10 items-center gap-2 rounded-full border border-shell-border bg-shell-panel px-4 font-medium text-shell-text transition hover:border-shell-border-strong"
+          className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-shell-border bg-shell-panel px-3 text-[13px] font-medium text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:shadow-shell"
         >
           <ArrowLeft className="h-4 w-4" />
           Back
         </button>
       )}
-      <div className="inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-panel px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em]">
+      <div className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-panel px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.2em]">
         {labels[route].map((label, index) => (
           <span key={label} className="inline-flex items-center gap-2">
             <span className={index === labels[route].length - 1 ? 'text-shell-text' : 'text-shell-muted'}>{label}</span>
@@ -92,19 +92,19 @@ function HubCard({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-[28px] border border-shell-border bg-shell-panel px-5 py-5 text-left shadow-shell transition hover:-translate-y-0.5 hover:border-shell-border-strong"
+      className="lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
     >
-      <div className="mb-4 text-xs font-semibold uppercase tracking-[0.24em] text-shell-muted">{eyebrow}</div>
-      <div className="flex items-start justify-between gap-4">
+      <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">{eyebrow}</div>
+      <div className="flex items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold text-shell-text">{title}</h2>
-          <p className="mt-3 text-sm leading-6 text-shell-muted">{body}</p>
+          <h2 className="text-[15px] font-semibold text-shell-text">{title}</h2>
+          <p className="mt-2 text-[13px] leading-5 text-shell-muted">{body}</p>
         </div>
-        <ArrowRight className={`mt-1 h-4 w-4 shrink-0 transition group-hover:translate-x-0.5 ${accent}`} />
+        <ArrowRight className={`mt-0.5 h-3.5 w-3.5 shrink-0 transition-transform duration-150 group-hover:translate-x-0.5 ${accent}`} />
       </div>
-      <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-shell-text">
+      <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-shell-muted transition-colors duration-150 group-hover:text-shell-accent">
         <span>Open section</span>
-        <ArrowRight className="h-4 w-4 text-shell-muted" />
+        <ArrowRight className="h-3 w-3" />
       </div>
     </button>
   );
@@ -112,13 +112,13 @@ function HubCard({
 
 function DataToolsHub({ openSources }: { openSources: () => void }) {
   return (
-    <div className="space-y-6">
-      <section className="rounded-[34px] border border-shell-border bg-shell-panel px-7 py-7 shadow-shell">
+    <div className="animate-fade-in-up space-y-3">
+      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
           <Wrench className="h-3.5 w-3.5 text-shell-accent" />
           Data &amp; Tools
         </div>
-        <h1 className="max-w-4xl font-display text-5xl leading-[0.98] tracking-tight text-shell-text">
+        <h1 className="max-w-4xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
           Connect knowledge, feeds, and tools into one living context.
         </h1>
         <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
@@ -126,16 +126,16 @@ function DataToolsHub({ openSources }: { openSources: () => void }) {
         </p>
       </section>
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
         <HubCard eyebrow="Ground" title="Knowledge Bases" body="Curated context that can refresh, evolve, and stay anchored to the workspace." accent="text-shell-accent" />
         <HubCard eyebrow="Ingest" title="Data Sources" body="Feed media, web pages, APIs, and local files into the workbench." accent="text-shell-accent" onClick={openSources} />
         <HubCard eyebrow="Operate" title="Tool Catalog" body="Inspectable tool surfaces with safety rules and visible execution history." accent="text-shell-accent" />
         <HubCard eyebrow="Shape" title="Workspace Context" body="Preset combinations of data, prompts, and runtimes for the jobs you repeat." accent="text-shell-accent" />
       </section>
 
-      <section className="rounded-[34px] border border-dashed border-shell-border bg-shell-panel px-8 py-10 text-center shadow-shell">
+      <section className="rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
         <div className="mx-auto max-w-3xl">
-          <h2 className="text-3xl font-semibold tracking-tight text-shell-text">Ground the workspace in real sources, not floating context.</h2>
+          <h2 className="font-display text-2xl tracking-tight text-shell-text">Ground the workspace in real sources, not floating context.</h2>
           <p className="mt-4 text-sm leading-7 text-shell-muted">
             Start with media imports today, then layer in web pages, documents, feeds, and knowledge destinations as CopeNet grows into a proper ingestion workspace.
           </p>
@@ -164,17 +164,17 @@ function SourceTypeCard({
     <button
       type="button"
       onClick={onClick}
-      className="group rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 text-left shadow-shell transition hover:-translate-y-0.5 hover:border-shell-border-strong"
+      className="lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
     >
-      <div className="mb-5 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-shell-accent-soft text-shell-accent">
-        <Icon className="h-5 w-5" />
+      <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
+        <Icon className="h-4 w-4" />
       </div>
-      <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">{eyebrow}</div>
-      <h2 className="mt-3 text-xl font-semibold text-shell-text">{title}</h2>
-      <p className="mt-3 text-sm leading-6 text-shell-muted">{body}</p>
-      <div className="mt-5 inline-flex items-center gap-2 text-sm font-medium text-shell-text">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">{eyebrow}</div>
+      <h2 className="mt-2 text-[15px] font-semibold text-shell-text">{title}</h2>
+      <p className="mt-2 text-[13px] leading-5 text-shell-muted">{body}</p>
+      <div className="mt-3 inline-flex items-center gap-1.5 text-[12px] font-medium text-shell-muted transition-colors duration-150 group-hover:text-shell-accent">
         <span>{action}</span>
-        <ArrowRight className="h-4 w-4 text-shell-muted transition group-hover:translate-x-0.5" />
+        <ArrowRight className="h-3 w-3 transition-transform duration-150 group-hover:translate-x-0.5" />
       </div>
     </button>
   );
@@ -182,13 +182,13 @@ function SourceTypeCard({
 
 function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
   return (
-    <div className="space-y-6">
-      <section className="rounded-[34px] border border-shell-border bg-shell-panel px-7 py-7 shadow-shell">
+    <div className="animate-fade-in-up space-y-3">
+      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
           <Database className="h-3.5 w-3.5 text-shell-accent" />
           Data Sources
         </div>
-        <h1 className="max-w-3xl font-display text-5xl leading-[0.98] tracking-tight text-shell-text">
+        <h1 className="max-w-3xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
           Bring raw outside material into CopeNet as working context.
         </h1>
         <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
@@ -196,7 +196,7 @@ function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
         </p>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
+      <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <div className="grid gap-4 md:grid-cols-2">
           <SourceTypeCard
             icon={Video}
@@ -229,15 +229,15 @@ function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
           />
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
+        <div className="space-y-2.5">
+          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Why this matters</div>
             <h2 className="text-xl font-semibold text-shell-text">CopeNet gets stronger when source material becomes reusable.</h2>
             <p className="mt-4 text-sm leading-6 text-shell-muted">
               Imported sources are the bridge between one-off chat and real work. Once something is ingested, it can be queried, summarized, filed into knowledge, or turned into a workflow.
             </p>
           </div>
-          <div className="rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
+          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Quick starts</div>
             <div className="space-y-3">
               {[
@@ -328,7 +328,7 @@ function MediaAssetDrawer({
   }
 
   return (
-    <div className="fixed inset-y-6 right-6 z-40 w-[min(560px,calc(100vw-2rem))] rounded-[30px] border border-shell-border bg-shell-panel shadow-shell-xl">
+    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] rounded-[20px] border border-shell-border bg-shell-panel shadow-shell-xl">
       <div className="flex h-full flex-col overflow-hidden">
         <div className="flex items-start justify-between gap-4 border-b border-shell-border px-6 py-5">
           <div>
@@ -489,14 +489,14 @@ function MediaImportsPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-        <div className="rounded-[34px] border border-shell-border bg-shell-panel px-7 py-7 shadow-shell">
+    <div className="animate-fade-in-up space-y-3">
+      <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+        <div className="rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
             <PlayCircle className="h-3.5 w-3.5 text-shell-accent" />
             Media Imports
           </div>
-          <h1 className="max-w-3xl font-display text-5xl leading-[0.98] tracking-tight text-shell-text">
+          <h1 className="max-w-3xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
             Paste a video link and turn it into a transcript-backed workspace asset.
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
@@ -531,8 +531,8 @@ function MediaImportsPage() {
           </form>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
+        <div className="space-y-2.5">
+          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Import status</div>
             <div className="flex items-start gap-3">
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-shell-accent-soft text-shell-accent">
@@ -553,7 +553,7 @@ function MediaImportsPage() {
             </div>
           </div>
 
-          <div className="rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
+          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What this unlocks</div>
             <div className="space-y-3">
               {[
@@ -571,7 +571,7 @@ function MediaImportsPage() {
         </div>
       </section>
 
-      <section className="grid gap-4 xl:grid-cols-[minmax(0,1.55fr)_320px]">
+      <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.55fr)_320px]">
         <div className="rounded-[34px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
           <div className="mb-5 flex items-center justify-between gap-4">
             <div>
@@ -597,8 +597,8 @@ function MediaImportsPage() {
           </div>
         </div>
 
-        <div className="space-y-4">
-          <div className="rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
+        <div className="space-y-2.5">
+          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Incoming transcript</div>
             {capturedChunks.length > 0 ? (
               <div className="space-y-3">
@@ -615,7 +615,7 @@ function MediaImportsPage() {
             )}
           </div>
 
-          <div className="rounded-[28px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
+          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next source</div>
             <h3 className="text-lg font-semibold text-shell-text">Web page ingest</h3>
             <p className="mt-3 text-sm leading-6 text-shell-muted">
@@ -654,7 +654,7 @@ export function DataToolsPage() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-3">
       <SectionBreadcrumb route={route} onBack={handleBack} />
       {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} />}
       {route === 'sources' && <DataSourcesPage openMedia={() => setRoute('media')} />}

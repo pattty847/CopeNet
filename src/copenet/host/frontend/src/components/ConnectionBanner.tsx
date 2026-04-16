@@ -10,26 +10,26 @@ export function ConnectionBanner() {
 
   if (wsStatus === 'auth_failed') {
     return (
-      <div className="mb-4 flex items-center gap-3 rounded-2xl border border-shell-error/30 bg-shell-error/8 px-4 py-3 text-sm text-shell-text">
-        <AlertCircle className="w-4 h-4 text-operator-error" />
+      <div className="animate-fade-in-up mb-3 flex items-center gap-2.5 rounded-xl border border-shell-error/25 bg-shell-error/6 px-3.5 py-2.5 text-[13px] text-shell-text">
+        <AlertCircle className="w-3.5 h-3.5 text-operator-error shrink-0" />
         <span className="text-operator-error">{authError || 'Authentication failed.'}</span>
       </div>
     );
   }
 
   return (
-    <div className="mb-4 flex items-center gap-3 rounded-2xl border border-shell-border bg-shell-panel px-4 py-3 text-sm text-shell-text shadow-shell">
+    <div className="animate-fade-in-up mb-3 flex items-center gap-2.5 rounded-xl border border-shell-border bg-shell-panel px-3.5 py-2.5 text-[13px] text-shell-text shadow-shell">
       {wsStatus === 'connecting' ? (
         <>
           <div className="scale-50 origin-left">
             <Spinner variant="bars" className="text-operator-accent" />
           </div>
-          <span className="text-operator-accent">Connecting to backend...</span>
+          <span className="text-operator-accent font-medium">Connecting to backend…</span>
         </>
       ) : (
         <>
-          <WifiOff className="w-4 h-4 text-operator-error" />
-          <span className="text-operator-error">Disconnected. Retrying…</span>
+          <WifiOff className="w-3.5 h-3.5 text-operator-error shrink-0" />
+          <span className="text-operator-error font-medium">Disconnected. Retrying…</span>
         </>
       )}
     </div>

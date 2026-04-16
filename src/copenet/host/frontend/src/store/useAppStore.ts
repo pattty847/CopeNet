@@ -28,6 +28,8 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void;
   rightPanelOpen: boolean;
   setRightPanelOpen: (open: boolean) => void;
+  commandPaletteOpen: boolean;
+  setCommandPaletteOpen: (open: boolean) => void;
 
   providers: Provider[];
   modelsByProvider: Record<string, Model[]>;
@@ -113,6 +115,8 @@ export const useAppStore = create<AppState>((set) => ({
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   rightPanelOpen: true,
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
+  commandPaletteOpen: false,
+  setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
 
   providers: [],
   modelsByProvider: {},

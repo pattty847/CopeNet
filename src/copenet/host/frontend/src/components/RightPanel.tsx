@@ -18,6 +18,9 @@ function timeAgo(dateString?: string | null) {
   return `${diffDays}d ago`;
 }
 
+const selectClass =
+  'bg-operator-bg border border-operator-border text-operator-text text-[12px] px-2 py-1.5 rounded-lg focus:outline-none focus:border-operator-accent/40 w-full transition-colors duration-150';
+
 export function RightPanel() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const sessions = useAppStore((state) => state.sessions);
@@ -73,43 +76,61 @@ export function RightPanel() {
 
   if (!rightPanelOpen) {
     return (
-      <aside className="w-10 border-l border-operator-border bg-operator-bg flex flex-col h-full items-center pt-2">
+      <aside className="w-11 bg-operator-bg flex flex-col h-full items-center py-3 gap-3">
         <button
           onClick={() => setRightPanelOpen(true)}
-          className="p-2 text-operator-muted hover:text-operator-accent transition-colors"
-          title="Expand panel"
+          className="flex h-8 w-8 items-center justify-center rounded-xl text-operator-muted hover:text-operator-accent hover:bg-operator-panel transition-all duration-150"
+          title="Expand telemetry panel"
         >
-          <ChevronLeft className="w-4 h-4" />
+          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-operator-accent/10 text-operator-accent">
+          <Activity className="w-3.5 h-3.5" />
+        </div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-operator-panel text-operator-muted">
+          <Settings2 className="w-3.5 h-3.5" />
+        </div>
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-operator-panel text-operator-muted">
+          <TerminalSquare className="w-3.5 h-3.5" />
+        </div>
+        <div className="mt-auto">
+          <span className="relative flex h-2 w-2">
+            {wsStatus === 'connected' && (
+              <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-60" />
+            )}
+            <span className={`relative inline-flex h-2 w-2 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
+          </span>
+        </div>
       </aside>
     );
   }
 
   return (
-    <aside className="w-80 border-l border-operator-border bg-operator-bg flex flex-col h-full overflow-y-auto">
-      <div className="p-4 border-b border-operator-border flex items-center gap-2">
+    <aside className="w-72 border-l border-operator-border bg-operator-bg flex flex-col h-full overflow-y-auto">
+      {/* Header */}
+      <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
         <button
           onClick={() => setRightPanelOpen(false)}
-          className="p-1 text-operator-muted hover:text-operator-accent transition-colors"
+          className="p-1 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg"
           title="Collapse panel"
         >
-          <ChevronRight className="w-4 h-4" />
+          <ChevronRight className="w-3.5 h-3.5" />
         </button>
-        <Activity className="w-4 h-4 text-operator-accent" />
-        <h2 className="font-bold font-mono text-sm text-operator-text">TELEMETRY</h2>
+        <Activity className="w-3.5 h-3.5 text-operator-accent" />
+        <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Telemetry</h2>
       </div>
- 
 
-      <div className="p-4 flex flex-col gap-6 font-mono text-sm">
+      <div className="p-3 flex flex-col gap-4 text-[12px]">
+        {/* Session Info */}
         <section>
-          <div className="flex items-center gap-2 mb-3 text-operator-muted">
-            <Info className="w-4 h-4" />
-            <h3 className="font-bold text-xs uppercase tracking-wider">Session Info</h3>
+          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+            <Info className="w-3.5 h-3.5" />
+            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Session Info</h3>
           </div>
-          <div className="space-y-2 bg-operator-panel/50 p-3 rounded border border-operator-border">
+          <div className="space-y-1.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
             <div className="flex justify-between">
               <span className="text-operator-muted">Status:</span>
-              <span className={isDraft ? 'text-operator-accent' : 'text-operator-success'}>
+              <span className={`font-semibold ${isDraft ? 'text-operator-accent' : 'text-operator-success'}`}>
                 {isDraft ? 'DRAFT' : 'LOCKED'}
               </span>
             </div>
@@ -130,31 +151,38 @@ export function RightPanel() {
           </div>
         </section>
 
+        {/* Runtime Info */}
         <section>
-          <div className="flex items-center gap-2 mb-3 text-operator-muted">
-            <Settings2 className="w-4 h-4" />
-            <h3 className="font-bold text-xs uppercase tracking-wider">Runtime Info</h3>
+          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+            <Settings2 className="w-3.5 h-3.5" />
+            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Runtime Info</h3>
           </div>
-          <div className="space-y-3 bg-operator-panel/50 p-3 rounded border border-operator-border">
+          <div className="space-y-2.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
+            {/* Connection status */}
             <div className="flex justify-between items-center">
               <span className="text-operator-muted">Connection:</span>
-              <span className={`flex items-center gap-1 ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
-                <div className={`w-2 h-2 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />     
+              <span className={`flex items-center gap-1.5 font-semibold ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
+                <span className="relative flex h-1.5 w-1.5">
+                  {wsStatus === 'connected' && (
+                    <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-60" />
+                  )}
+                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
+                </span>
                 {wsStatus.toUpperCase()}
               </span>
             </div>
 
             {isDraft ? (
               <>
-                <div className="rounded-sm border border-operator-accent/20 bg-operator-accent/8 px-2.5 py-2 text-[11px] leading-relaxed text-operator-muted">
+                <div className="rounded-lg border border-operator-accent/15 bg-operator-accent/5 px-2.5 py-2 text-[11px] leading-relaxed text-operator-muted">
                   Draft settings are local until the first send. Your first message will create and lock the session.
                 </div>
-                <div className="flex flex-col gap-1.5 mt-2">
-                  <span className="text-operator-muted text-[10px] uppercase tracking-wider">Provider</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Provider</span>
                   <select
                     value={currentProvider || ''}
                     onChange={(e) => updateDraftSetting('provider', e.target.value)}
-                    className="bg-operator-bg border border-operator-border text-operator-text text-xs font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-operator-accent w-full"
+                    className={selectClass}
                   >
                     <option value="" disabled>Select Provider</option>
                     {providers.map((provider) => (
@@ -162,12 +190,12 @@ export function RightPanel() {
                     ))}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-operator-muted text-[10px] uppercase tracking-wider">Model</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Model</span>
                   <select
                     value={currentModel || ''}
                     onChange={(e) => updateDraftSetting('model', e.target.value)}
-                    className="bg-operator-bg border border-operator-border text-operator-text text-xs font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-operator-accent w-full"
+                    className={selectClass}
                   >
                     <option value="" disabled>Select Model</option>
                     {availableModels.map((model) => (
@@ -182,28 +210,28 @@ export function RightPanel() {
                   )}
                   {currentProvider && providerHasModels && availableModels.length === 0 && (
                     <div className="text-[10px] text-operator-error">
-                      No chat models are available for this provider right now.
+                      No chat models available for this provider.
                     </div>
                   )}
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-operator-muted text-[10px] uppercase tracking-wider">Profile</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Profile</span>
                   <select
                     value={currentProfile || ''}
                     onChange={(e) => updateDraftSetting('systemPromptId', e.target.value)}
-                    className="bg-operator-bg border border-operator-border text-operator-text text-xs font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-operator-accent w-full"
+                    className={selectClass}
                   >
                     {profiles.map((profile) => (
                       <option key={profile.id} value={profile.id}>{profile.name}</option>
                     ))}
                   </select>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <span className="text-operator-muted text-[10px] uppercase tracking-wider">Mode</span>
+                <div className="flex flex-col gap-1">
+                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Mode</span>
                   <select
                     value={currentTaskMode || ''}
                     onChange={(e) => updateDraftSetting('taskPromptId', e.target.value)}
-                    className="bg-operator-bg border border-operator-border text-operator-text text-xs font-mono px-2 py-1.5 rounded-sm focus:outline-none focus:border-operator-accent w-full"
+                    className={selectClass}
                   >
                     {taskModes.map((mode) => (
                       <option key={mode.id} value={mode.id}>{mode.name}</option>
@@ -212,55 +240,56 @@ export function RightPanel() {
                 </div>
               </>
             ) : (
-              <div className="space-y-2 mt-2">
+              <div className="space-y-1.5 mt-1">
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Provider:</span>
-                  <span className="text-operator-text truncate max-w-[120px] text-right" title={providerName}>{providerName}</span>
+                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={providerName}>{providerName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Model:</span>
-                  <span className="text-operator-text truncate max-w-[120px] text-right" title={activeSession.model || ''}>
+                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={activeSession.model || ''}>
                     {activeSession.model || 'None'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Profile:</span>
-                  <span className="text-operator-text truncate max-w-[120px] text-right" title={profileName}>{profileName}</span>
+                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={profileName}>{profileName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Mode:</span>
-                  <span className="text-operator-text truncate max-w-[120px] text-right" title={taskModeName}>{taskModeName}</span>
+                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={taskModeName}>{taskModeName}</span>
                 </div>
               </div>
             )}
           </div>
         </section>
 
+        {/* Tool Activity */}
         <section>
-          <div className="flex items-center gap-2 mb-3 text-operator-muted">
-            <TerminalSquare className="w-4 h-4" />
-            <h3 className="font-bold text-xs uppercase tracking-wider">Latest Tool Activity</h3>
+          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+            <TerminalSquare className="w-3.5 h-3.5" />
+            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Latest Tool Activity</h3>
           </div>
-          <div className="bg-operator-panel/50 p-3 rounded border border-operator-border">
+          <div className="bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
             {latestTool ? (
-              <div className="space-y-2">
+              <div className="space-y-1.5">
                 <div className="flex justify-between items-center">
-                  <span className="text-operator-text font-bold truncate">{latestTool.toolId}</span>
-                  <span className={`text-xs ${latestTool.ok ? 'text-operator-success' : 'text-operator-error'}`}>
+                  <span className="text-operator-text font-semibold truncate">{latestTool.toolId}</span>
+                  <span className={`text-[10px] font-semibold ${latestTool.ok ? 'text-operator-success' : 'text-operator-error'}`}>
                     {latestTool.ok ? 'SUCCESS' : 'ERROR'}
                   </span>
                 </div>
-                <div className="text-xs text-operator-muted break-words leading-relaxed">
+                <div className="text-[11px] text-operator-muted break-words leading-relaxed">
                   {latestTool.summary || (latestTool.ok ? 'Tool completed successfully.' : 'Tool execution failed.')}
                 </div>
                 {latestTool.error && (
-                  <div className="text-[11px] text-operator-error break-words leading-relaxed border-t border-operator-error/20 pt-2">
+                  <div className="text-[11px] text-operator-error break-words leading-relaxed border-t border-operator-error/15 pt-1.5">
                     {latestTool.error}
                   </div>
                 )}
               </div>
             ) : (
-              <div className="text-operator-muted text-xs text-center py-2 leading-relaxed">
+              <div className="text-operator-muted text-[11px] text-center py-1.5 leading-relaxed">
                 {isDraft ? 'Tool activity will appear here after the first response uses a CopeNet tool.' : 'No tools executed in this session yet.'}
               </div>
             )}
