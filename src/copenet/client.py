@@ -214,6 +214,46 @@ class GatewayClient:
         payload = await self._rpc("sessions.list", {"includeArchived": include_archived})
         return self._payload_list(payload, "sessions")
 
+    async def resolve_session(self, session_key: str) -> dict[str, Any] | None:
+        """Fetch one session by key."""
+        payload = await self._rpc("sessions.resolve", {"key": session_key})
+        value = payload.get("session")
+        return value if isinstance(value, dict) else None
+
+    async def resolve_session_state(self, session_key: str) -> dict[str, Any] | None:
+        """Fetch one structured session state by key."""
+        payload = await self._rpc("sessions.state", {"key": session_key})
+        value = payload.get("state")
+        return value if isinstance(value, dict) else None
+
+    async def list_session_artifacts(self, session_key: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Fetch recent runtime artifacts for one session."""
+        payload = await self._rpc("sessions.artifacts", {"key": session_key, "limit": limit})
+        return self._payload_list(payload, "artifacts")
+
+    async def list_session_runs(self, session_key: str, limit: int = 50) -> list[dict[str, Any]]:
+        """Fetch recent durable run records for one session."""
+        payload = await self._rpc("sessions.runs", {"key": session_key, "limit": limit})
+        return self._payload_list(payload, "runs")
+
+    async def resolve_session_run(self, session_key: str, run_id: str) -> dict[str, Any] | None:
+        """Fetch one durable run record by session/run id."""
+        payload = await self._rpc("sessions.run", {"key": session_key, "runId": run_id})
+        value = payload.get("run")
+        return value if isinstance(value, dict) else None
+
+    async def debug_copy_session(self, session_key: str) -> dict[str, Any]:
+        """Create and return a debug copy of one session."""
+        payload = await self._rpc("sessions.debugCopy", {"key": session_key})
+        value = payload.get("session")
+        if not isinstance(value, dict):
+            raise RuntimeError("invalid debug copy payload")
+        return value
+
+    async def export_session(self, session_key: str) -> dict[str, Any]:
+        """Export one session transcript payload."""
+        return await self._rpc("sessions.export", {"key": session_key})
+
     async def history(self, session_key: str, limit: int = 200) -> list[dict[str, Any]]:
         """Fetch chat history for one session."""
         payload = await self._rpc("chat.history", {"sessionKey": session_key, "limit": limit})

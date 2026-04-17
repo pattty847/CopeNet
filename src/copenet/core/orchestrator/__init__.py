@@ -185,6 +185,10 @@ class Orchestrator:
         record = self._session_state_store.get(session_key.strip())
         return record.to_json() if record is not None else None
 
+    def list_session_artifacts(self, session_key: str, limit: int = 50) -> list[dict]:
+        """List recent durable artifacts for one session."""
+        return [record.to_public_dict() for record in self._artifact_store.list_for_session(session_key.strip(), limit=limit)]
+
     def list_session_runs(self, session_key: str, limit: int = 50) -> list[dict]:
         """List recent durable run records for one session."""
         return [record.to_public_dict() for record in self._run_store.list_for_session(session_key.strip(), limit=limit)]

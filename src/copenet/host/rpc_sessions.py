@@ -249,6 +249,36 @@ async def handle_sessions_state(request_id: str, params: dict[str, Any] | None, 
     )
 
 
+async def handle_sessions_artifacts(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    key = _required_text(raw, "key")
+    if not key:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                )
+            )
+        )
+        return
+    limit = raw.get("limit", 50)
+    try:
+        parsed_limit = max(1, int(limit))
+    except (TypeError, ValueError):
+        parsed_limit = 50
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"artifacts": orchestrator.list_session_artifacts(key, limit=parsed_limit)},
+            )
+        )
+    )
+
+
 async def handle_sessions_debug_copy(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     key = _required_text(params or {}, "key")
     if not key:

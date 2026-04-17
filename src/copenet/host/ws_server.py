@@ -147,6 +147,7 @@ class CopeNetWsServer:
                                 "sessions.create",
                                 "sessions.rename",
                                 "sessions.archive",
+                                "sessions.artifacts",
                                 "sessions.runs",
                                 "sessions.run",
                                 "sessions.state",

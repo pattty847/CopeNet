@@ -54,6 +54,22 @@ class ArtifactRecord:
         """Return a JSON-serializable payload."""
         return asdict(self)
 
+    def to_public_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly payload for RPC clients."""
+        return {
+            "artifactId": self.artifact_id,
+            "sessionKey": self.session_key,
+            "runId": self.run_id,
+            "type": self.type,
+            "title": self.title,
+            "body": self.body,
+            "sourceAssetIds": list(self.source_asset_ids),
+            "sourceArtifactIds": list(self.source_artifact_ids),
+            "createdAt": self.created_at,
+            "updatedAt": self.updated_at,
+            "metadata": dict(self.metadata),
+        }
+
 
 def _string_list(value: Any) -> list[str]:
     if not isinstance(value, list):

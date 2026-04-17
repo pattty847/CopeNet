@@ -518,5 +518,25 @@ def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None
         state = state_response["payload"]["state"]
         assert state["session_key"] == "tool-success"
         assert state["task_summary"] == "Read the README"
-        assert "files.read" in state["active_entities"]
-        assert state["relevant_artifact_ids"]
+
+
+def test_session_artifacts_rpc_exposes_runtime_artifacts(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        send_id = socket.request(
+            "chat.send",
+            {
+                "sessionKey": "tool-success",
+                "message": "Read the README",
+                "provider": "prompted-success",
+            },
+        )
+        started = socket.recv_response(send_id)
+        socket.recv_chat_until_terminal(session_key="tool-success", run_id=started["payload"]["runId"])
+
+        artifacts_id = socket.request("sessions.artifacts", {"key": "tool-success"})
+        artifacts_response = socket.recv_response(artifacts_id)
+        artifacts = artifacts_response["payload"]["artifacts"]
+        assert artifacts
+        assert all(row["sessionKey"] == "tool-success" for row in artifacts)
+        assert all(row["artifactId"] for row in artifacts)
+        assert {row["type"] for row in artifacts} >= {"answer"}

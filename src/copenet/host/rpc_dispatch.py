@@ -10,6 +10,7 @@ from .rpc_catalog import handle_models_list, handle_prompts_list, handle_provide
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
 from .rpc_sessions import (
     handle_sessions_archive,
+    handle_sessions_artifacts,
     handle_sessions_create,
     handle_sessions_debug_copy,
     handle_sessions_export,
@@ -49,6 +50,8 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_sessions_rename(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.archive":
         await handle_sessions_archive(req.id, req.params, send_json, orchestrator)
+    elif req.method == "sessions.artifacts":
+        await handle_sessions_artifacts(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.debugCopy":
         await handle_sessions_debug_copy(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.export":
