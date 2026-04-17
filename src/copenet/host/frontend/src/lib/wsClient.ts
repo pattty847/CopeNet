@@ -10,6 +10,7 @@ import {
   ResponseFrame,
   Session,
   SessionExportPayload,
+  SessionRunRecord,
   ToolDescriptor,
   ToolExecution,
 } from '../types/backend';
@@ -504,6 +505,16 @@ class WsClient {
       messages: (payload.messages || []).map((message) => message),
       markdown: String(payload.markdown || ''),
     };
+  }
+
+  async listSessionRuns(key: string, limit = 20): Promise<SessionRunRecord[]> {
+    const payload = await this.request<{ runs?: SessionRunRecord[] }>('sessions.runs', { key, limit });
+    return Array.isArray(payload.runs) ? payload.runs : [];
+  }
+
+  async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
+    const payload = await this.request<{ run?: SessionRunRecord | null }>('sessions.run', { key, runId });
+    return payload.run ?? null;
   }
 
   async sendMessage(message: string) {

@@ -27,7 +27,7 @@ from copenet.core.orchestrator.catalog import (
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
 from copenet.providers import Provider
-from copenet.core.runtime import ArtifactStore
+from copenet.core.runtime import ArtifactStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
 from copenet._paths import default_artifacts_dir, default_session_state_dir, default_sessions_dir
@@ -76,6 +76,7 @@ class Orchestrator:
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
         self._session_state_store = SessionStateStore(root_dir=default_session_state_dir() if sessions_dir is None else base / "state")
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
+        self._run_store = RunStore(root_dir=base / "runs")
         self._app_store = AppStore(path=base / "apps.json")
         if providers is None:
             self._providers, self._provider_init_errors = build_default_provider_registry()
@@ -178,6 +179,15 @@ class Orchestrator:
     def resolve_session(self, session_key: str) -> dict | None:
         """Resolve one session by key."""
         return resolve_session_record(self, session_key)
+
+    def list_session_runs(self, session_key: str, limit: int = 50) -> list[dict]:
+        """List recent durable run records for one session."""
+        return [record.to_public_dict() for record in self._run_store.list_for_session(session_key.strip(), limit=limit)]
+
+    def resolve_session_run(self, session_key: str, run_id: str) -> dict | None:
+        """Resolve one durable run record for a session."""
+        record = self._run_store.get(session_key.strip(), run_id.strip())
+        return record.to_public_dict() if record is not None else None
 
     def register_app(
         self,

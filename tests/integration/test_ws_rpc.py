@@ -233,6 +233,8 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         response = socket.connect()
         assert response["ok"] is True
         assert "chat.send" in response["payload"]["features"]["methods"]
+        assert "sessions.runs" in response["payload"]["features"]["methods"]
+        assert "sessions.run" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
 
     with rpc_client.websocket_connect("/ws") as websocket:
@@ -466,3 +468,32 @@ def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient) ->
         assert blocked_final["toolExecution"]["toolId"] == "files.list"
         assert blocked_final["toolExecution"]["ok"] is False
         assert "path escapes workdir" in blocked_final["toolExecution"]["error"]
+
+
+def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        send_id = socket.request(
+            "chat.send",
+            {
+                "sessionKey": "tool-success",
+                "message": "Read the README",
+                "provider": "prompted-success",
+            },
+        )
+        started = socket.recv_response(send_id)
+        run_id = started["payload"]["runId"]
+        socket.recv_chat_until_terminal(session_key="tool-success", run_id=run_id)
+
+        runs_id = socket.request("sessions.runs", {"key": "tool-success"})
+        runs_response = socket.recv_response(runs_id)
+        runs = runs_response["payload"]["runs"]
+        assert len(runs) == 1
+        assert runs[0]["runId"] == run_id
+        assert runs[0]["status"] == "ok"
+        assert runs[0]["artifactIds"]
+        assert runs[0]["toolSteps"][0]["toolId"] == "files.read"
+
+        run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})
+        run_detail = socket.recv_response(run_detail_id)
+        assert run_detail["payload"]["run"]["runId"] == run_id
+        assert run_detail["payload"]["run"]["toolSteps"][0]["summary"] == "Read file README.md."

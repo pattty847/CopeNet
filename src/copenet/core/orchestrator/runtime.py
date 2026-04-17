@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from copenet.core.orchestrator.working_set import assemble_working_set
-from copenet.core.runtime import RunRecord, RunStore
+from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
@@ -334,7 +333,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 }
             },
         )
-        _run_store(orchestrator).create(run_record)
+        orchestrator._run_store.create(run_record)
         trace.record(
             "run_record_created",
             {
@@ -407,7 +406,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             output_summary="",
             error=str(exc),
         )
-        _run_store(orchestrator).create(failed_run)
+        orchestrator._run_store.create(failed_run)
         trace.record(
             "run_record_created",
             {
@@ -503,13 +502,3 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
 
 def _summarize_output(text: str) -> str:
     return " ".join(text.split())[:240]
-
-
-def _run_store(orchestrator: "Orchestrator") -> RunStore:
-    store = getattr(orchestrator, "_run_store", None)
-    if isinstance(store, RunStore):
-        return store
-    base = Path(orchestrator._session_store._path).parent
-    store = RunStore(root_dir=base / "runs")
-    orchestrator._run_store = store
-    return store

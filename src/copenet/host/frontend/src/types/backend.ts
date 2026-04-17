@@ -159,3 +159,29 @@ export interface SessionExportPayload {
   messages: PublicMessagePayload[];
   markdown: string;
 }
+
+export interface RunStep {
+  toolId: string;
+  ok: boolean;
+  summary: string;
+  error?: string | null;
+}
+
+export interface SessionRunRecord {
+  runId: string;
+  sessionKey: string;
+  provider: string;
+  model: string | null;
+  status: string;
+  userMessage: string;
+  toolExecutionMode: string;
+  willAttemptToolLoop: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  workingSet: Record<string, unknown>;
+  toolSteps: RunStep[];
+  artifactIds: string[];
+  outputSummary: string;
+  error: string | null;
+  metadata: Record<string, unknown>;
+}

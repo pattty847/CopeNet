@@ -15,6 +15,8 @@ from .rpc_sessions import (
     handle_sessions_export,
     handle_sessions_list,
     handle_sessions_rename,
+    handle_sessions_run,
+    handle_sessions_runs,
     handle_sessions_resolve,
 )
 
@@ -50,6 +52,10 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_sessions_debug_copy(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.export":
         await handle_sessions_export(req.id, req.params, send_json, orchestrator)
+    elif req.method == "sessions.runs":
+        await handle_sessions_runs(req.id, req.params, send_json, orchestrator)
+    elif req.method == "sessions.run":
+        await handle_sessions_run(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.resolve":
         await handle_sessions_resolve(req.id, req.params, send_json, orchestrator)
     else:

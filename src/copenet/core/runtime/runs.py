@@ -84,6 +84,27 @@ class RunRecord:
         """Return a JSON-serializable payload."""
         return asdict(self)
 
+    def to_public_dict(self) -> dict[str, Any]:
+        """Return a JSON-friendly payload for RPC clients."""
+        return {
+            "runId": self.run_id,
+            "sessionKey": self.session_key,
+            "provider": self.provider,
+            "model": self.model,
+            "status": self.status,
+            "userMessage": self.user_message,
+            "toolExecutionMode": self.tool_execution_mode,
+            "willAttemptToolLoop": self.will_attempt_tool_loop,
+            "startedAt": self.started_at,
+            "completedAt": self.completed_at,
+            "workingSet": dict(self.working_set),
+            "toolSteps": [dict(step) for step in self.tool_steps],
+            "artifactIds": list(self.artifact_ids),
+            "outputSummary": self.output_summary,
+            "error": self.error,
+            "metadata": dict(self.metadata),
+        }
+
 
 class RunStore:
     """Append-only session-scoped run record store."""
