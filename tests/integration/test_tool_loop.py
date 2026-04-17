@@ -56,6 +56,46 @@ class PromptedBatchProvider(PromptedToolProvider):
     pass
 
 
+class SequencedPromptProvider:
+    name = "prompted"
+    display_name = "Prompted"
+
+    def __init__(self, outputs: list[str]) -> None:
+        self.outputs = outputs
+        self.prompts: list[str] = []
+        self._index = 0
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        self.prompts.append(prompt)
+        text = self.outputs[self._index]
+        self._index += 1
+        yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "provider-session")
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {
+                "chat": True,
+                "streaming": True,
+                "toolCalls": False,
+                "promptedToolUse": True,
+            },
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
 async def _collect(orchestrator: Orchestrator, request: ChatSendRequest) -> tuple[dict, list[dict]]:
     events: list[dict] = []
 
@@ -121,10 +161,14 @@ async def test_orchestrator_tool_loop_blocks_path_escape(monkeypatch, tmp_path: 
 
 
 @pytest.mark.asyncio
-async def test_harness_executes_at_most_one_tool(tmp_path: Path) -> None:
-    provider = PromptedToolProvider(
-        tool_json='{"tool_id":"files.list","arguments":{"path":"."}}',
-        follow_up='{"tool_id":"git.status","arguments":{}}',
+async def test_harness_continues_read_only_tool_loop_until_answer(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    provider = SequencedPromptProvider(
+        outputs=[
+            '{"tool_id":"files.list","arguments":{"path":"."}}',
+            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            "The repository contains a README and I inspected it successfully.",
+        ],
     )
     harness = ChatHarness()
     tool_calls: list[ToolExecutionRequest] = []
@@ -161,9 +205,11 @@ async def test_harness_executes_at_most_one_tool(tmp_path: Path) -> None:
     events = [event async for event in stream]
 
     assert plan.will_attempt_tool_loop is True
-    assert len(tool_calls) == 1
-    assert tool_calls[0].tool_id == "files.list"
-    assert any(event.kind == "meta" for event in events)
+    assert [call.tool_id for call in tool_calls] == ["files.list", "files.read"]
+    meta_events = [event for event in events if event.kind == "meta"]
+    assert len(meta_events) == 2
+    delta_text = "".join(event.text or "" for event in events if event.kind == "delta")
+    assert "inspected it successfully" in delta_text
 
 
 @pytest.mark.asyncio
