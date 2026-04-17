@@ -1,4 +1,4 @@
-"""Prompt composition and one-tool execution loop for the CopeNet harness."""
+"""Prompt composition and prompted tool execution loops for the CopeNet harness."""
 
 from __future__ import annotations
 
@@ -7,11 +7,13 @@ from typing import Any, AsyncIterator, Awaitable, Callable
 
 from copenet.providers import Provider, ProviderEvent
 from copenet.core.tools import (
+    ToolBatchEnvelope,
     ToolDescriptor,
     ToolExecutionContext,
     ToolExecutionRequest,
     ToolExecutionResult,
     build_tool_prompt_section,
+    extract_tool_batch_invocation,
     extract_tool_invocation,
 )
 
@@ -20,6 +22,7 @@ from .planning import HarnessTurnPlan
 
 ToolExecutor = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[ToolExecutionResult]]
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
+BATCHABLE_TOOL_IDS = {"files.list", "files.read", "files.search", "context.prepare"}
 
 
 async def collect_provider_turn(
@@ -81,7 +84,7 @@ async def run_with_one_tool(
     tool_context: ToolExecutionContext,
     trace: TraceRecorder | None,
 ) -> AsyncIterator[ProviderEvent]:
-    """Run the one-tool loop for models that need prompted tool use."""
+    """Run the prompted tool loop with single-tool fallback and safe read batches."""
     first_prompt = compose_tool_attempt_prompt(prompt=prompt, tools=plan.tools)
     first_system_prompt = compose_system_prompt(
         provider=provider,
@@ -103,6 +106,77 @@ async def run_with_one_tool(
             yield event
 
     first_text = "".join(event.text or "" for event in first_events if event.kind == "delta").strip()
+    batch_invocation = extract_tool_batch_invocation(first_text) if plan.batch_read_allowed else None
+    if batch_invocation is not None:
+        if _is_safe_batch(batch_invocation, plan.tools):
+            if trace is not None:
+                trace(
+                    "batch_planned",
+                    {
+                        "toolIds": [call.tool_id for call in batch_invocation.calls],
+                        "count": len(batch_invocation.calls),
+                    },
+                )
+            tool_result, artifact_draft = await _run_tool_batch(
+                batch_invocation=batch_invocation,
+                tool_executor=tool_executor,
+                tool_context=tool_context,
+                trace=trace,
+            )
+            meta_payload: dict[str, Any] = {"toolExecution": tool_result.to_event_payload()}
+            if artifact_draft is not None:
+                meta_payload["artifactDraft"] = artifact_draft
+            yield ProviderEvent(kind="meta", metadata=meta_payload)
+            second_events, _ = await collect_provider_turn(
+                provider=provider,
+                prompt=compose_tool_follow_up_prompt(user_prompt=prompt, tool_result=tool_result),
+                provider_session_id=discovered_provider_session_id,
+                abort_event=abort_event,
+                model=model,
+                system_prompt=compose_system_prompt(
+                    provider=provider,
+                    system_prompt=system_prompt,
+                    extra_instructions="Use the merged tool results to answer the user directly. Do not request another tool.",
+                ),
+                trace=trace,
+                phase="tool-follow-up",
+            )
+            for event in second_events:
+                yield event
+            return
+        blocked = ToolExecutionResult(
+            tool_id="tool.batch",
+            ok=False,
+            summary="Tool batch blocked.",
+            error="unsafe or unsupported batch request",
+        )
+        yield ProviderEvent(kind="meta", metadata={"toolExecution": blocked.to_event_payload()})
+        if trace is not None:
+            trace(
+                "tool_blocked",
+                {
+                    "toolId": "tool.batch",
+                    "reason": "unsafe or unsupported batch request",
+                },
+            )
+        second_events, _ = await collect_provider_turn(
+            provider=provider,
+            prompt=compose_tool_follow_up_prompt(user_prompt=prompt, tool_result=blocked),
+            provider_session_id=discovered_provider_session_id,
+            abort_event=abort_event,
+            model=model,
+            system_prompt=compose_system_prompt(
+                provider=provider,
+                system_prompt=system_prompt,
+                extra_instructions="Use the tool result to answer the user directly. Do not request another tool.",
+            ),
+            trace=trace,
+            phase="tool-follow-up",
+        )
+        for event in second_events:
+            yield event
+        return
+
     invocation = extract_tool_invocation(first_text)
     if invocation is None:
         if trace is not None:
@@ -146,6 +220,81 @@ async def run_with_one_tool(
     )
     for event in second_events:
         yield event
+
+
+def _is_safe_batch(batch: ToolBatchEnvelope, tools: list[ToolDescriptor]) -> bool:
+    descriptors = {tool.id: tool for tool in tools}
+    if len(batch.calls) < 2:
+        return False
+    for call in batch.calls:
+        descriptor = descriptors.get(call.tool_id)
+        if descriptor is None:
+            return False
+        if descriptor.id not in BATCHABLE_TOOL_IDS:
+            return False
+        if descriptor.category not in {"repo-read", "context"}:
+            return False
+    return True
+
+
+async def _run_tool_batch(
+    *,
+    batch_invocation: ToolBatchEnvelope,
+    tool_executor: ToolExecutor,
+    tool_context: ToolExecutionContext,
+    trace: TraceRecorder | None,
+) -> tuple[ToolExecutionResult, dict[str, Any] | None]:
+    requests = batch_invocation.to_requests()
+    results = await asyncio.gather(
+        *(tool_executor(request, tool_context) for request in requests)
+    )
+    if trace is not None:
+        trace(
+            "batch_executed",
+            {
+                "toolIds": [request.tool_id for request in requests],
+                "count": len(results),
+                "okCount": sum(1 for result in results if result.ok),
+            },
+        )
+    summary = "; ".join(result.summary for result in results)
+    merged_output = {
+        "results": [
+            {
+                "toolId": result.tool_id,
+                "ok": result.ok,
+                "summary": result.summary,
+                "output": result.output,
+                "error": result.error,
+            }
+            for result in results
+        ]
+    }
+    merged = ToolExecutionResult(
+        tool_id="tool.batch",
+        ok=all(result.ok for result in results),
+        summary=summary or f"Executed {len(results)} batched read tools.",
+        output=merged_output,
+        error=None if all(result.ok for result in results) else "one or more batched tools failed",
+    )
+    if trace is not None:
+        trace(
+            "batch_merged",
+            {
+                "artifactType": "tool_bundle",
+                "toolIds": [result.tool_id for result in results],
+            },
+        )
+    artifact_draft = {
+        "type": "tool_bundle",
+        "title": f"Tool bundle ({len(results)} reads)",
+        "body": merged.to_prompt_payload(),
+        "metadata": {
+            "toolIds": [result.tool_id for result in results],
+            "resultCount": len(results),
+        },
+    }
+    return merged, artifact_draft
 
 
 def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor]) -> str:

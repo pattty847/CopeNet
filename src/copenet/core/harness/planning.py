@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any, Callable, Literal
 
 from copenet.providers import Provider
 from copenet.core.tools import ToolDescriptor
@@ -23,6 +23,8 @@ class HarnessTurnPlan:
     capability_profile: ModelCapabilityProfile
     tools: list[ToolDescriptor] = field(default_factory=list)
     will_attempt_tool_loop: bool = False
+    tool_execution_mode: Literal["none", "single", "batch"] = "none"
+    batch_read_allowed: bool = False
 
 
 async def plan_turn(
@@ -53,6 +55,8 @@ async def plan_turn(
         capability_profile=profile,
         tools=tools,
         will_attempt_tool_loop=bool(tools and profile.prompted_tool_use),
+        tool_execution_mode="batch" if bool(tools and profile.prompted_tool_use) else "none",
+        batch_read_allowed=bool(tools and profile.prompted_tool_use),
     )
     if trace is not None:
         trace(
@@ -69,6 +73,8 @@ async def plan_turn(
                     "promptedToolUse": profile.prompted_tool_use,
                 },
                 "willAttemptToolLoop": plan.will_attempt_tool_loop,
+                "toolExecutionMode": plan.tool_execution_mode,
+                "batchReadAllowed": plan.batch_read_allowed,
                 "availableToolIds": [tool.id for tool in tools],
             },
         )

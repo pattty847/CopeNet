@@ -32,6 +32,10 @@ class ToolRegistry:
         """Return public tool descriptors for RPC clients."""
         return [descriptor.to_public_dict() for descriptor in self.list_tools()]
 
+    def get_descriptor(self, tool_id: str) -> ToolDescriptor | None:
+        """Return one registered tool descriptor by id."""
+        return self._descriptors.get(tool_id)
+
     async def execute(
         self,
         request: ToolExecutionRequest,

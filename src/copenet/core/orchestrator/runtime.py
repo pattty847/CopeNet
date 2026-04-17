@@ -6,6 +6,8 @@ import asyncio
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from copenet.core.orchestrator.working_set import assemble_working_set
+from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import ToolExecutionContext
@@ -34,6 +36,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
 
     dedupe_key = f"chat:{run_id}"
     prior_history = orchestrator.history(session_key=session_key, limit=2)
+    working_history = orchestrator.history(session_key=session_key, limit=12)
     is_first_turn = len(prior_history) == 0
     trace = RunTraceWriter(
         run_id=run_id,
@@ -101,15 +104,35 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             timestamp=transcript_now(),
         ),
     )
+    session_state = orchestrator._session_state_store.get_or_create(session_key)
+    trace.record(
+        "state_loaded",
+        {
+            "sessionKey": session_key,
+            "relevantArtifactCount": len(session_state.relevant_artifact_ids),
+            "relevantAssetCount": len(session_state.relevant_asset_ids),
+            "workingSetRefCount": len(session_state.working_set_refs),
+        },
+    )
+    working_set = assemble_working_set(
+        user_message=message,
+        session_state=session_state,
+        transcript_window=working_history,
+        artifact_store=orchestrator._artifact_store,
+        system_prompt=request.system_prompt,
+        session_key=session_key,
+    )
+    trace.record("working_set_assembled", working_set.metadata)
 
     provider = orchestrator._providers[provider_name]
     seq = 0
     assistant_parts: list[str] = []
     tool_execution_payload: dict | None = None
+    artifact_drafts: list[dict] = []
     try:
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
-            prompt=message,
+            prompt=working_set.prompt,
             provider_session_id=entry.provider_session_id,
             abort_event=abort_event,
             model=request.model,
@@ -154,6 +177,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool_payload = event.metadata.get("toolExecution")
                 if isinstance(tool_payload, dict):
                     tool_execution_payload = tool_payload
+                artifact_draft = event.metadata.get("artifactDraft")
+                if isinstance(artifact_draft, dict):
+                    artifact_drafts.append(artifact_draft)
 
             if event.kind == "delta" and event.text:
                 assistant_parts.append(event.text)
@@ -193,7 +219,46 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             )
 
         assistant_text = "".join(part for part in assistant_parts if part).strip()
+        created_artifact_ids: list[str] = []
+        for draft in artifact_drafts:
+            created = orchestrator._artifact_store.create(
+                session_key=session_key,
+                run_id=run_id,
+                artifact_type=str(draft.get("type") or "tool_bundle"),
+                title=str(draft.get("title") or "Runtime artifact"),
+                body=str(draft.get("body") or ""),
+                source_asset_ids=list(draft.get("source_asset_ids") or []),
+                source_artifact_ids=list(draft.get("source_artifact_ids") or []),
+                metadata=dict(draft.get("metadata") or {}),
+            )
+            created_artifact_ids.append(created.artifact_id)
+            trace.record(
+                "artifact_created",
+                {
+                    "artifactId": created.artifact_id,
+                    "type": created.type,
+                    "title": created.title,
+                },
+            )
         if assistant_text:
+            answer_artifact = orchestrator._artifact_store.create(
+                session_key=session_key,
+                run_id=run_id,
+                artifact_type="answer",
+                title=f"Answer for {session_key}",
+                body=assistant_text,
+                source_artifact_ids=created_artifact_ids,
+                metadata={"provider": provider_name, "model": request.model},
+            )
+            created_artifact_ids.append(answer_artifact.artifact_id)
+            trace.record(
+                "artifact_created",
+                {
+                    "artifactId": answer_artifact.artifact_id,
+                    "type": answer_artifact.type,
+                    "title": answer_artifact.title,
+                },
+            )
             orchestrator._transcript_store.append_message(
                 entry.session_id,
                 TranscriptMessage(
@@ -223,6 +288,25 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     first_user_message=message,
                     first_assistant_message=assistant_text,
                 )
+
+        updated_state = _evolve_session_state(
+            session_state=session_state,
+            message=message,
+            run_id=run_id,
+            plan=plan,
+            working_set=working_set.metadata,
+            tool_execution_payload=tool_execution_payload,
+            created_artifact_ids=created_artifact_ids,
+        )
+        orchestrator._session_state_store.save(updated_state)
+        trace.record(
+            "state_updated",
+            {
+                "sessionKey": session_key,
+                "relevantArtifactCount": len(updated_state.relevant_artifact_ids),
+                "activeEntityCount": len(updated_state.active_entities),
+            },
+        )
 
         seq += 1
         final_payload = {
@@ -285,3 +369,60 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             if orchestrator._active_run_by_session.get(session_key) == run_id:
                 orchestrator._active_run_by_session.pop(session_key, None)
         orchestrator._session_store.mark_run_finished(session_key=session_key, run_id=run_id)
+
+
+def _evolve_session_state(
+    *,
+    session_state: SessionStateRecord,
+    message: str,
+    run_id: str,
+    plan,
+    working_set: dict,
+    tool_execution_payload: dict | None,
+    created_artifact_ids: list[str],
+) -> SessionStateRecord:
+    relevant_artifact_ids = _append_unique(
+        session_state.relevant_artifact_ids,
+        created_artifact_ids,
+    )[-10:]
+    active_entities = list(session_state.active_entities)
+    tool_id = str((tool_execution_payload or {}).get("toolId") or "").strip()
+    if tool_id:
+        active_entities = _append_unique(active_entities, [tool_id])[-10:]
+    return SessionStateRecord(
+        session_key=session_state.session_key,
+        task_summary=message.strip(),
+        goals=list(session_state.goals),
+        active_entities=active_entities,
+        working_set_refs=_append_unique(
+            list(session_state.working_set_refs),
+            [
+                *list(working_set.get("artifactIds") or []),
+                *list(working_set.get("assetIds") or []),
+            ],
+        )[-10:],
+        constraints=list(session_state.constraints),
+        unresolved_questions=list(session_state.unresolved_questions),
+        prior_decisions=_append_unique(
+            list(session_state.prior_decisions),
+            [f"Run {run_id} completed with tool mode {plan.tool_execution_mode}"],
+        )[-10:],
+        plan_snapshot={
+            "runId": run_id,
+            "toolExecutionMode": plan.tool_execution_mode,
+            "willAttemptToolLoop": plan.will_attempt_tool_loop,
+        },
+        relevant_asset_ids=list(session_state.relevant_asset_ids),
+        relevant_artifact_ids=relevant_artifact_ids,
+        created_at=session_state.created_at,
+        updated_at=transcript_now(),
+    )
+
+
+def _append_unique(existing: list[str], incoming: list[str]) -> list[str]:
+    rows = list(existing)
+    for item in incoming:
+        text = str(item).strip()
+        if text and text not in rows:
+            rows.append(text)
+    return rows

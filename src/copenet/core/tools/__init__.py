@@ -2,6 +2,7 @@
 
 from .contracts import (
     ContextPack,
+    ToolBatchEnvelope,
     ToolBlockedError,
     ToolCallRequest,
     ToolDescriptor,
@@ -11,6 +12,7 @@ from .contracts import (
     ToolInvocationEnvelope,
     ToolSpec,
     build_tool_prompt_section,
+    extract_tool_batch_invocation,
     extract_tool_invocation,
 )
 from .policy import ToolPolicy
@@ -18,6 +20,7 @@ from .registry import ToolRegistry
 
 __all__ = [
     "ContextPack",
+    "ToolBatchEnvelope",
     "ToolBlockedError",
     "ToolCallRequest",
     "ToolDescriptor",
@@ -29,5 +32,6 @@ __all__ = [
     "ToolRegistry",
     "ToolSpec",
     "build_tool_prompt_section",
+    "extract_tool_batch_invocation",
     "extract_tool_invocation",
 ]

@@ -25,9 +25,10 @@ from copenet.core.orchestrator.catalog import (
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
 from copenet.providers import Provider
-from copenet.core.sessions import SessionStore, TranscriptStore, to_public_message
+from copenet.core.runtime import ArtifactStore
+from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
-from copenet._paths import default_sessions_dir
+from copenet._paths import default_artifacts_dir, default_session_state_dir, default_sessions_dir
 
 
 ChatEmit = Callable[[dict], Awaitable[None]]
@@ -71,6 +72,8 @@ class Orchestrator:
         self._workdir = Path(os.environ.get("COPNET_WORKDIR") or os.getcwd()).resolve()
         self._session_store = session_store or SessionStore(path=base / "index.json")
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
+        self._session_state_store = SessionStateStore(root_dir=default_session_state_dir() if sessions_dir is None else base / "state")
+        self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
         self._app_store = AppStore(path=base / "apps.json")
         if providers is None:
             self._providers, self._provider_init_errors = build_default_provider_registry()

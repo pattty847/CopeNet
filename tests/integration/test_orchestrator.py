@@ -139,3 +139,22 @@ async def test_idempotency_key_returns_cached_status(fake_orchestrator: Orchestr
     assert first["status"] == "ok"
     assert second["status"] == "cached"
     assert events == []
+
+
+@pytest.mark.asyncio
+async def test_send_chat_persists_state_and_answer_artifact(fake_orchestrator: Orchestrator) -> None:
+    await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect the runtime", provider="fake", model="model-a"),
+    )
+
+    state = fake_orchestrator._session_state_store.get("alpha")
+    assert state is not None
+    assert state.task_summary == "Inspect the runtime"
+    assert state.plan_snapshot["willAttemptToolLoop"] is False
+    assert state.relevant_artifact_ids
+
+    artifacts = fake_orchestrator._artifact_store.list_for_session("alpha")
+    assert len(artifacts) == 1
+    assert artifacts[0].type == "answer"
+    assert artifacts[0].body == "hello"

@@ -1,4 +1,9 @@
-from copenet.core.tools import ToolDescriptor, build_tool_prompt_section, extract_tool_invocation
+from copenet.core.tools import (
+    ToolDescriptor,
+    build_tool_prompt_section,
+    extract_tool_batch_invocation,
+    extract_tool_invocation,
+)
 
 
 def test_extract_tool_invocation_from_valid_json() -> None:
@@ -23,6 +28,22 @@ def test_extract_tool_invocation_from_fenced_json_block() -> None:
     assert envelope.arguments == {}
 
 
+def test_extract_tool_batch_invocation_from_valid_json() -> None:
+    envelope = extract_tool_batch_invocation(
+        '{"tool_calls":[{"tool_id":"files.list","arguments":{"path":"."}},{"tool_id":"files.read","arguments":{"path":"README.md"}}]}'
+    )
+    assert envelope is not None
+    requests = envelope.to_requests()
+    assert [request.tool_id for request in requests] == ["files.list", "files.read"]
+
+
+def test_extract_tool_batch_invocation_returns_none_for_single_call() -> None:
+    assert (
+        extract_tool_batch_invocation('{"tool_calls":[{"tool_id":"files.list","arguments":{"path":"."}}]}')
+        is None
+    )
+
+
 def test_build_tool_prompt_section_returns_empty_for_no_tools() -> None:
     assert build_tool_prompt_section([]) == ""
 
@@ -36,3 +57,4 @@ def test_build_tool_prompt_section_lists_all_tool_ids() -> None:
     section = build_tool_prompt_section(tools)
     assert "files.read" in section
     assert "git.status" in section
+    assert "tool_calls" in section

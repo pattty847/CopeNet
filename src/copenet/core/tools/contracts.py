@@ -101,6 +101,17 @@ class ToolInvocationEnvelope:
 
 
 @dataclass(frozen=True)
+class ToolBatchEnvelope:
+    """Structured model-produced batched tool invocation envelope."""
+
+    calls: list[ToolInvocationEnvelope] = field(default_factory=list)
+
+    def to_requests(self) -> list[ToolExecutionRequest]:
+        """Normalize into tool execution requests."""
+        return [call.to_request() for call in self.calls]
+
+
+@dataclass(frozen=True)
 class ContextPack:
     """Context payload prepared for safe repo inspection."""
 
@@ -177,14 +188,62 @@ def extract_tool_invocation(text: str) -> ToolInvocationEnvelope | None:
     return None
 
 
+def extract_tool_batch_invocation(text: str) -> ToolBatchEnvelope | None:
+    """Parse a batch tool invocation JSON object from model output."""
+    candidate = text.strip()
+    if not candidate:
+        return None
+    if candidate.startswith("```"):
+        lines = candidate.splitlines()
+        if len(lines) >= 3 and lines[-1].strip().startswith("```"):
+            candidate = "\n".join(lines[1:-1]).strip()
+
+    objects = [candidate]
+    for match in re.finditer(r"\{[\s\S]*\}", candidate):
+        objects.append(match.group(0))
+
+    for raw in objects:
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        calls_value = parsed.get("tool_calls") or parsed.get("toolCalls") or parsed.get("batch")
+        if not isinstance(calls_value, list) or len(calls_value) < 2:
+            continue
+        calls: list[ToolInvocationEnvelope] = []
+        for item in calls_value:
+            if not isinstance(item, dict):
+                calls = []
+                break
+            tool_id = str(
+                item.get("tool_id")
+                or item.get("toolId")
+                or item.get("tool_name")
+                or item.get("toolName")
+                or ""
+            ).strip()
+            arguments = item.get("arguments") or item.get("args") or {}
+            if not tool_id or not isinstance(arguments, dict):
+                calls = []
+                break
+            calls.append(ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments))
+        if len(calls) >= 2:
+            return ToolBatchEnvelope(calls=calls)
+    return None
+
+
 def build_tool_prompt_section(tools: list[ToolDescriptor]) -> str:
     """Return instructions for one-step prompted tool use."""
     if not tools:
         return ""
     lines = [
-        "You may use at most one tool before answering.",
-        "If a tool is needed, respond with only a JSON object in this shape:",
+        "You may use one tool or one safe read-only tool batch before answering.",
+        "If a single tool is needed, respond with only a JSON object in this shape:",
         '{"tool_id":"<tool id>","arguments":{}}',
+        "If multiple independent read-only tools are needed, respond with only a JSON object in this shape:",
+        '{"tool_calls":[{"tool_id":"<tool id>","arguments":{}},{"tool_id":"<tool id>","arguments":{}}]}',
         "Do not use markdown fences, prose, or extra keys around the JSON.",
         "If no tool is needed, answer normally.",
         "Available tools:",

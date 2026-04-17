@@ -28,3 +28,13 @@ def default_media_dir() -> Path:
     if base:
         return Path(base).expanduser() / "media"
     return Path.home() / ".copenet" / "media"
+
+
+def default_session_state_dir() -> Path:
+    """Return default session state root under the sessions data tree."""
+    return default_sessions_dir() / "state"
+
+
+def default_artifacts_dir() -> Path:
+    """Return default runtime artifact root under the sessions data tree."""
+    return default_sessions_dir() / "artifacts"
