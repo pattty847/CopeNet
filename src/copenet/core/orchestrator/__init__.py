@@ -15,6 +15,8 @@ from copenet.core.orchestrator.catalog import (
     build_default_provider_registry,
     create_session as create_catalog_session,
     create_session_with_profile as create_profiled_session,
+    debug_copy_session as debug_copy_session_record,
+    export_session as export_session_record,
     list_models as list_provider_models,
     list_providers_catalog as list_provider_catalog,
     list_sessions as list_session_catalog,
@@ -148,6 +150,14 @@ class Orchestrator:
     def archive_session(self, session_key: str, archived: bool = True) -> dict:
         """Archive or restore a session."""
         return archive_session_record(self, session_key=session_key, archived=archived)
+
+    def debug_copy_session(self, session_key: str) -> dict:
+        """Create a fresh debug copy of an existing conversation."""
+        return debug_copy_session_record(self, session_key=session_key)
+
+    def export_session(self, session_key: str) -> dict:
+        """Export a session conversation for debugging or sharing."""
+        return export_session_record(self, session_key=session_key)
 
     async def list_providers_catalog(self) -> list[dict]:
         """Registered provider ids and display labels for clients (includes init failures)."""

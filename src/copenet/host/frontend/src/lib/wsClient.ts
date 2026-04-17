@@ -9,6 +9,7 @@ import {
   PublicMessagePayload,
   ResponseFrame,
   Session,
+  SessionExportPayload,
   ToolDescriptor,
   ToolExecution,
 } from '../types/backend';
@@ -477,6 +478,32 @@ class WsClient {
       store.setActiveSessionKey(null);
     }
     await this.refreshSessions();
+  }
+
+  async debugCopySession(key: string): Promise<Session> {
+    const payload = await this.request<{ session: unknown }>('sessions.debugCopy', { key });
+    const session = normalizeSession(payload.session);
+    const store = useAppStore.getState();
+    store.upsertSession(session);
+    store.setShowArchived(false);
+    store.setActiveSessionKey(session.key);
+    store.setDraftOpen(false);
+    await this.refreshSessions();
+    await this.loadHistory(session.key);
+    return session;
+  }
+
+  async exportSession(key: string): Promise<SessionExportPayload> {
+    const payload = await this.request<{
+      session: unknown;
+      messages: PublicMessagePayload[];
+      markdown: string;
+    }>('sessions.export', { key });
+    return {
+      session: normalizeSession(payload.session),
+      messages: (payload.messages || []).map((message) => message),
+      markdown: String(payload.markdown || ''),
+    };
   }
 
   async sendMessage(message: string) {

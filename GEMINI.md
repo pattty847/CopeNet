@@ -4,6 +4,7 @@
 
 `AGENTS.md` is the primary repository guide. This file adds Gemini-specific operating rules for future provider and search-oriented work.
 Follow `AGENTS.md` sections on **Data Flow and Validation Discipline** as default behavior.
+Follow `AGENTS.md` section **Coding Standards For Searchability** when introducing names, payloads, or search-facing integration points.
 
 ### Role
 

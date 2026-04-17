@@ -166,3 +166,61 @@ async def handle_sessions_resolve(request_id: str, params: dict[str, Any] | None
             )
         )
     )
+
+
+async def handle_sessions_debug_copy(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    key = _required_text(params or {}, "key")
+    if not key:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                )
+            )
+        )
+        return
+    try:
+        session = orchestrator.debug_copy_session(key)
+    except Exception as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                )
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"session": session})))
+
+
+async def handle_sessions_export(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    key = _required_text(params or {}, "key")
+    if not key:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                )
+            )
+        )
+        return
+    try:
+        exported = orchestrator.export_session(key)
+    except Exception as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                )
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=exported)))

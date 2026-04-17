@@ -316,14 +316,27 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient) -
         archive_response = socket.recv_response(archive_id)
         assert archive_response["payload"]["session"]["archived"] is True
 
+        debug_copy_id = socket.request("sessions.debugCopy", {"key": "alpha"})
+        debug_copy_response = socket.recv_response(debug_copy_id)
+        copied_session = debug_copy_response["payload"]["session"]
+        assert copied_session["key"] != "alpha"
+        assert copied_session["debugCopy"]["sourceSessionKey"] == "alpha"
+
+        export_id = socket.request("sessions.export", {"key": "alpha"})
+        export_response = socket.recv_response(export_id)
+        assert export_response["payload"]["session"]["key"] == "alpha"
+        assert export_response["payload"]["messages"] == []
+        assert "# Conversation Export: Alpha Session" in export_response["payload"]["markdown"]
+
         active_list_id = socket.request("sessions.list")
         active_list = socket.recv_response(active_list_id)
-        assert active_list["payload"]["sessions"] == []
+        assert [row["key"] for row in active_list["payload"]["sessions"]] == [copied_session["key"]]
 
         archived_list_id = socket.request("sessions.list", {"includeArchived": True})
         archived_list = socket.recv_response(archived_list_id)
-        assert [row["key"] for row in archived_list["payload"]["sessions"]] == ["alpha"]
-        assert archived_list["payload"]["sessions"][0]["archived"] is True
+        assert {row["key"] for row in archived_list["payload"]["sessions"]} == {"alpha", copied_session["key"]}
+        alpha_row = next(row for row in archived_list["payload"]["sessions"] if row["key"] == "alpha")
+        assert alpha_row["archived"] is True
 
 
 def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestClient) -> None:

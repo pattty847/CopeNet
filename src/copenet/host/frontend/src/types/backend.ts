@@ -153,3 +153,9 @@ export interface MediaAsset {
 export interface MediaAssetDetail extends MediaAsset {
   transcriptContent: string;
 }
+
+export interface SessionExportPayload {
+  session: Session;
+  messages: PublicMessagePayload[];
+  markdown: string;
+}

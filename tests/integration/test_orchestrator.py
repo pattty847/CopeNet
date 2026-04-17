@@ -40,6 +40,46 @@ class FakeProvider:
         return []
 
 
+class ScriptedPromptedProvider:
+    name = "prompted"
+    display_name = "Prompted"
+
+    def __init__(self, outputs: list[str]) -> None:
+        self.outputs = outputs
+        self.prompts: list[str] = []
+        self._index = 0
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        self.prompts.append(prompt)
+        text = self.outputs[self._index]
+        self._index += 1
+        yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "provider-session")
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {
+                "chat": True,
+                "streaming": True,
+                "toolCalls": False,
+                "promptedToolUse": True,
+            },
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
 async def _collect_events(orchestrator: Orchestrator, request: ChatSendRequest) -> tuple[dict, list[dict]]:
     events: list[dict] = []
 
@@ -158,3 +198,79 @@ async def test_send_chat_persists_state_and_answer_artifact(fake_orchestrator: O
     assert len(artifacts) == 1
     assert artifacts[0].type == "answer"
     assert artifacts[0].body == "hello"
+
+
+@pytest.mark.asyncio
+async def test_send_chat_can_continue_repo_exploration_after_first_read(tmp_path) -> None:
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={
+            "prompted": ScriptedPromptedProvider(
+                outputs=[
+                    '{"tool_id":"files.list","arguments":{"path":"."}}',
+                    '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+                    "I inspected the repo and the README after listing files.",
+                ]
+            )
+        },
+    )
+
+    result, events = await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect the repository", provider="prompted"),
+    )
+
+    assert result["status"] == "ok"
+    final_event = events[-1]
+    assert final_event["state"] == "final"
+    assert final_event["toolExecution"]["toolId"] == "files.read"
+    assert "README" in final_event["message"]["content"]
+    history = orchestrator.history("alpha")
+    assert history[-1]["toolExecution"]["toolId"] == "files.read"
+
+
+@pytest.mark.asyncio
+async def test_debug_copy_session_clones_history_state_and_artifacts(fake_orchestrator: Orchestrator) -> None:
+    await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect the runtime", provider="fake", model="model-a"),
+    )
+
+    copied = fake_orchestrator.debug_copy_session("alpha")
+
+    assert copied["key"] != "alpha"
+    assert copied["provider"] == "fake"
+    assert copied["model"] == "model-a"
+    assert copied["providerSessionId"] is None
+    assert copied["debugCopy"]["sourceSessionKey"] == "alpha"
+
+    copied_history = fake_orchestrator.history(copied["key"])
+    assert [row["role"] for row in copied_history] == ["user", "assistant"]
+
+    copied_state = fake_orchestrator._session_state_store.get(copied["key"])
+    assert copied_state is not None
+    assert copied_state.task_summary == "Inspect the runtime"
+    assert copied_state.relevant_artifact_ids
+
+    copied_artifacts = fake_orchestrator._artifact_store.list_for_session(copied["key"])
+    assert copied_artifacts
+    assert copied_artifacts[0].metadata["clonedFromArtifactId"]
+
+
+@pytest.mark.asyncio
+async def test_export_session_returns_messages_and_markdown(fake_orchestrator: Orchestrator) -> None:
+    await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect the runtime", provider="fake", model="model-a"),
+    )
+
+    exported = fake_orchestrator.export_session("alpha")
+
+    assert exported["session"]["key"] == "alpha"
+    assert len(exported["messages"]) == 2
+    assert "# Conversation Export: alpha" in exported["markdown"]
+    assert "Inspect the runtime" in exported["markdown"]
+    assert "hello" in exported["markdown"]

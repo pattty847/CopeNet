@@ -18,3 +18,5 @@ docs/TODO.md
 docs/TRACE-FINDINGS.md
 docs/private/
 docs/blueprints/
+# Added by code-review-graph
+.code-review-graph/

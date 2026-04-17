@@ -63,6 +63,54 @@ See [docs/architecture.md](docs/architecture.md) for the current request flow.
 - Make errors actionable.
 - Do not add speculative abstraction for features we have not chosen yet.
 
+## Coding Standards For Searchability
+
+CopeNet code should be easy for humans and agents to navigate with `rg` before any heavier tooling is involved. Optimize for clear, stable, grepable code over clever indirection.
+
+### Naming
+
+- Use one canonical term per product concept and keep it consistent across layers.
+- Prefer explicit domain names like `session`, `provider`, `task_mode`, `tool_execution`, and `run_id` over local synonyms.
+- Name handlers and actions by domain plus verb, e.g. `handle_chat_send`, `archive_session`, `list_models`.
+- Prefer full words over abbreviations unless the abbreviation is already standard in the codebase.
+- Keep important RPC methods, event names, and tool identifiers stable and obvious.
+
+### Structure
+
+- Keep one subsystem concern per directory and one primary responsibility per file.
+- Put similar logic in predictable places every time so searches land in the expected layer.
+- Avoid generic dumping-ground modules like broad `utils` files when a domain-specific home exists.
+- Extract registration or mapping tables into obvious named modules when they are part of how the product is wired together.
+
+### Data Shapes And Interfaces
+
+- Preserve the same field names across boundaries unless there is a clear normalization reason to rename them.
+- Prefer small typed DTOs or named payload models over ad-hoc dicts with shifting keys.
+- Make important persisted and streamed fields easy to trace end-to-end through search.
+- Centralize canonical event and method names instead of rebuilding them dynamically.
+
+### Control Flow
+
+- Prefer explicit dispatch tables and named handlers over hidden registration magic.
+- Make entrypoints easy to locate by name in transport, orchestrator, and UI layers.
+- Keep side effects close to clearly named functions rather than burying them in generic helpers.
+- Use indirection only when it buys clear reuse or product clarity, not just abstraction for its own sake.
+
+### Comments, Docs, And Tests
+
+- Use the same domain vocabulary in comments, docs, and tests that the code uses.
+- Write test names so they describe product behavior in searchable language.
+- Keep architecture docs aligned with real code names so search results reinforce each other.
+- Add short intent comments only where they improve navigation or explain a non-obvious boundary.
+
+### Avoid
+
+- Renaming the same concept in each layer without a strong reason.
+- Overly generic helper names like `process`, `handle`, `manager`, or `data` without domain context.
+- Dynamic string construction for important identifiers when a stable constant or literal would be clearer.
+- Large files with unrelated responsibilities that make search results noisy and misleading.
+- Metaprogramming or registration patterns that make definitions and call paths hard to find.
+
 ## Extraction-Before-Expansion Rule
 
 Before adding new logic to an existing file, check whether the file is already over threshold:

@@ -4,6 +4,7 @@ import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { Archive, ArchiveRestore, Paperclip, Mic, Send } from 'lucide-react';
+import { ConversationDebugActions } from './ConversationDebugActions';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -21,6 +22,7 @@ export function ChatWorkspace() {
   const isDraft = !activeSession;
   const isArchived = Boolean(activeSession?.archived);
   const composerDisabled = isArchived || Boolean(activeRunId);
+  const canDebugConversation = Boolean(activeSession);
 
   const [input, setInput] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -78,6 +80,25 @@ export function ChatWorkspace() {
     setIsEditingTitle(false);
   };
 
+  const handleDebugCopy = async () => {
+    if (!activeSession) return;
+    await wsClient.debugCopySession(activeSession.key);
+  };
+
+  const handleExportConversation = async () => {
+    if (!activeSession) return;
+    const exported = await wsClient.exportSession(activeSession.key);
+    const blob = new Blob([exported.markdown], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `${activeSession.key}-conversation.md`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+  };
+
   return (
     <main className="flex-1 flex flex-col bg-operator-bg relative h-full overflow-hidden">
       {/* Run-in-progress accent bar */}
@@ -87,7 +108,7 @@ export function ChatWorkspace() {
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg flex flex-col">
-        <div className="flex items-center justify-between px-5 py-3">
+        <div className="flex items-center justify-between gap-4 px-5 py-3">
           <div className="flex-1 min-w-0">
             {/* Title */}
             {isEditingTitle ? (
@@ -148,6 +169,12 @@ export function ChatWorkspace() {
 
           {/* Actions */}
           <div className="flex items-center gap-1.5 shrink-0 ml-3">
+            <ConversationDebugActions
+              disabled={!canDebugConversation}
+              helperText={isArchived ? 'Read-only debugging' : 'Conversation debugging'}
+              onDebugCopy={handleDebugCopy}
+              onExportConversation={handleExportConversation}
+            />
             {activeSession && (
               <button
                 onClick={() => void wsClient.archiveSession(activeSession.key, !activeSession.archived)}
@@ -173,6 +200,14 @@ export function ChatWorkspace() {
 
       {/* Working Set — glanceable, pinned above the message stream */}
       <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />
+
+      {canDebugConversation && (
+        <div className="border-b border-operator-border bg-operator-panel/25 px-5 py-2 text-[11px] text-operator-muted">
+          <span className="font-semibold text-operator-text">Debug tools</span>
+          {' '}
+          copy a transcript with session metadata, tool activity, and loaded message content for quick triage or handoff.
+        </div>
+      )}
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-4">

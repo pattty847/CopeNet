@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import os
+import json
+from typing import Any
 from typing import TYPE_CHECKING
 
 from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, Provider
@@ -162,3 +164,109 @@ def resolve_session(orchestrator: "Orchestrator", session_key: str) -> dict | No
     if entry is None:
         return None
     return session_payload(entry)
+
+
+def debug_copy_session(orchestrator: "Orchestrator", session_key: str) -> dict:
+    source = orchestrator._session_store.get(session_key.strip())
+    if source is None:
+        raise KeyError(f"unknown session_key: {session_key.strip()}")
+
+    title_prefix = source.title or source.session_key
+    copied = orchestrator._session_store.create_session(
+        session_key=orchestrator._session_store.create_generated_session_key(source.provider, source.model),
+        provider=source.provider,
+        model=source.model,
+        title=f"Debug Copy — {title_prefix}",
+        system_prompt_id=source.system_prompt_id,
+        task_prompt_id=source.task_prompt_id,
+    )
+
+    copied_count = orchestrator._transcript_store.copy_history(source.session_id, copied.session_id)
+
+    source_state = orchestrator._session_state_store.get(source.session_key)
+    artifact_id_map: dict[str, str] = {}
+    source_artifacts = orchestrator._artifact_store.list_for_session(source.session_key, limit=500)
+    for artifact in source_artifacts:
+        cloned = orchestrator._artifact_store.create(
+            session_key=copied.session_key,
+            run_id=artifact.run_id,
+            artifact_type=artifact.type,
+            title=artifact.title,
+            body=artifact.body,
+            source_asset_ids=list(artifact.source_asset_ids),
+            source_artifact_ids=[artifact_id_map.get(value, value) for value in artifact.source_artifact_ids],
+            metadata={**artifact.metadata, "clonedFromArtifactId": artifact.artifact_id},
+        )
+        artifact_id_map[artifact.artifact_id] = cloned.artifact_id
+
+    if source_state is not None:
+        orchestrator._session_state_store.save(
+            source_state.__class__(
+                session_key=copied.session_key,
+                task_summary=source_state.task_summary,
+                goals=list(source_state.goals),
+                active_entities=list(source_state.active_entities),
+                working_set_refs=[
+                    artifact_id_map.get(value, value)
+                    for value in source_state.working_set_refs
+                ],
+                constraints=list(source_state.constraints),
+                unresolved_questions=list(source_state.unresolved_questions),
+                prior_decisions=list(source_state.prior_decisions),
+                plan_snapshot=dict(source_state.plan_snapshot),
+                relevant_asset_ids=list(source_state.relevant_asset_ids),
+                relevant_artifact_ids=[
+                    artifact_id_map.get(value, value)
+                    for value in source_state.relevant_artifact_ids
+                ],
+                created_at=source_state.created_at,
+                updated_at=source_state.updated_at,
+            )
+        )
+
+    payload = session_payload(copied)
+    payload["debugCopy"] = {
+        "sourceSessionKey": source.session_key,
+        "copiedMessages": copied_count,
+        "copiedArtifacts": len(source_artifacts),
+    }
+    return payload
+
+
+def export_session(orchestrator: "Orchestrator", session_key: str) -> dict[str, Any]:
+    entry = orchestrator._session_store.get(session_key.strip())
+    if entry is None:
+        raise KeyError(f"unknown session_key: {session_key.strip()}")
+
+    messages = orchestrator.history(entry.session_key, limit=100000)
+    markdown_lines = [
+        f"# Conversation Export: {entry.title or entry.session_key}",
+        "",
+        f"- Session key: `{entry.session_key}`",
+        f"- Provider: `{entry.provider}`",
+        f"- Model: `{entry.model or 'default'}`",
+        f"- Profile: `{entry.system_prompt_id or 'none'}`",
+        f"- Task mode: `{entry.task_prompt_id or 'none'}`",
+        "",
+    ]
+    for message in messages:
+        role = str(message.get("role") or "unknown").upper()
+        timestamp = str(message.get("timestamp") or "")
+        markdown_lines.append(f"## {role}")
+        if timestamp:
+            markdown_lines.append(f"_Timestamp: {timestamp}_")
+            markdown_lines.append("")
+        markdown_lines.append(str(message.get("content") or ""))
+        tool_execution = message.get("toolExecution")
+        if isinstance(tool_execution, dict) and tool_execution:
+            markdown_lines.append("")
+            markdown_lines.append("```json")
+            markdown_lines.append(json.dumps(tool_execution, ensure_ascii=False, indent=2))
+            markdown_lines.append("```")
+        markdown_lines.append("")
+
+    return {
+        "session": session_payload(entry),
+        "messages": messages,
+        "markdown": "\n".join(markdown_lines).strip() + "\n",
+    }

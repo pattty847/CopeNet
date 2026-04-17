@@ -116,3 +116,25 @@ class TranscriptStore:
             if isinstance(parsed, dict):
                 records.append(parsed)
         return records
+
+    def copy_history(self, source_session_id: str, target_session_id: str) -> int:
+        """Copy all transcript records from one session id to another."""
+        records = self.read_history(source_session_id, limit=100000)
+        count = 0
+        for record in records:
+            self.append_message(
+                target_session_id,
+                TranscriptMessage(
+                    run_id=str(record.get("run_id") or ""),
+                    role=str(record.get("role") or "assistant"),
+                    content=str(record.get("content") or ""),
+                    provider=str(record.get("provider") or ""),
+                    model=str(record.get("model")) if record.get("model") is not None else None,
+                    provider_session_id=str(record.get("provider_session_id")) if record.get("provider_session_id") is not None else None,
+                    timestamp=str(record.get("timestamp") or utc_now_iso()),
+                    state=str(record.get("state")) if record.get("state") is not None else None,
+                    tool_execution=dict(record.get("tool_execution")) if isinstance(record.get("tool_execution"), dict) else None,
+                ),
+            )
+            count += 1
+        return count

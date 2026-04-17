@@ -4,6 +4,7 @@
 
 `AGENTS.md` is the primary repository guide. This file only adds Claude-specific operating rules.
 Follow `AGENTS.md` sections on **Data Flow and Validation Discipline** as default behavior.
+Follow `AGENTS.md` section **Coding Standards For Searchability** when naming, extracting, or documenting code paths.
 
 ### Role
 
