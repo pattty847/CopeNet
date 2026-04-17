@@ -180,6 +180,11 @@ class Orchestrator:
         """Resolve one session by key."""
         return resolve_session_record(self, session_key)
 
+    def resolve_session_state(self, session_key: str) -> dict | None:
+        """Resolve one structured runtime state record for a session."""
+        record = self._session_state_store.get(session_key.strip())
+        return record.to_json() if record is not None else None
+
     def list_session_runs(self, session_key: str, limit: int = 50) -> list[dict]:
         """List recent durable run records for one session."""
         return [record.to_public_dict() for record in self._run_store.list_for_session(session_key.strip(), limit=limit)]

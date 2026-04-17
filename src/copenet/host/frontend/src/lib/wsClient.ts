@@ -10,6 +10,7 @@ import {
   ResponseFrame,
   Session,
   SessionExportPayload,
+  SessionStateRecord,
   SessionRunRecord,
   ToolDescriptor,
   ToolExecution,
@@ -515,6 +516,11 @@ class WsClient {
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     const payload = await this.request<{ run?: SessionRunRecord | null }>('sessions.run', { key, runId });
     return payload.run ?? null;
+  }
+
+  async resolveSessionState(key: string): Promise<SessionStateRecord | null> {
+    const payload = await this.request<{ state?: SessionStateRecord | null }>('sessions.state', { key });
+    return payload.state ?? null;
   }
 
   async sendMessage(message: string) {

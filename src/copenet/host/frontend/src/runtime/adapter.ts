@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { wsClient } from '../lib/wsClient';
-import type { SessionRunRecord } from '../types/backend';
+import { useAppStore } from '../store/useAppStore';
+import type { SessionRunRecord, SessionStateRecord } from '../types/backend';
 import {
   getArtifactById,
   getArtifacts,
@@ -47,14 +48,39 @@ function useSyncResource<T>(factory: () => AsyncResource<T>, deps: ReadonlyArray
 }
 
 export function useWorkingSet(sessionKey: string | null): AsyncResource<WorkingSet> {
-  return useSyncResource(() => {
-    if (!sessionKey) return empty();
-    try {
-      return ready(getWorkingSet(sessionKey));
-    } catch (error) {
-      return errored(String(error));
+  const activeRunId = useAppStore((state) => state.activeRunId);
+  const [resource, setResource] = useState<AsyncResource<WorkingSet>>(sessionKey ? loading() : empty());
+
+  useEffect(() => {
+    if (!sessionKey) {
+      setResource(empty());
+      return;
     }
-  }, [sessionKey]);
+
+    let cancelled = false;
+    setResource(loading());
+    void Promise.all([
+      wsClient.resolveSessionState(sessionKey),
+      wsClient.listSessionRuns(sessionKey, 1),
+    ])
+      .then(([state, runs]) => {
+        if (cancelled) return;
+        if (state) {
+          setResource(ready(mapSessionStateToWorkingSet(state, runs[0] ?? null, activeRunId)));
+          return;
+        }
+        setResource(ready(withRuntimeStatus(getWorkingSet(sessionKey), activeRunId)));
+      })
+      .catch((error) => {
+        if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, sessionKey]);
+
+  return resource;
 }
 
 export function useArtifacts(sessionKey: string | null): AsyncResource<Artifact[]> {
@@ -203,4 +229,46 @@ function compactLabel(text: string): string {
   const compact = text.trim();
   if (compact.length <= 56) return compact;
   return `${compact.slice(0, 53)}...`;
+}
+
+function mapSessionStateToWorkingSet(
+  state: SessionStateRecord,
+  run: SessionRunRecord | null,
+  activeRunId: string | null,
+): WorkingSet {
+  return {
+    taskSummary: state.task_summary?.trim() || run?.userMessage?.trim() || 'Session runtime state',
+    status: activeRunId && run?.runId === activeRunId ? 'thinking' : 'awaiting_input',
+    updatedAt: state.updated_at || run?.completedAt || run?.startedAt || new Date().toISOString(),
+    entities: state.active_entities.map((value, index) => ({
+      id: `entity-${index}`,
+      kind: inferEntityKind(value),
+      label: value,
+    })),
+    constraints: state.constraints.map((value, index) => ({
+      id: `constraint-${index}`,
+      text: value,
+      severity: 'block',
+    })),
+    questions: state.unresolved_questions.map((value, index) => ({
+      id: `question-${index}`,
+      text: value,
+    })),
+    referencedArtifactIds: state.relevant_artifact_ids,
+  };
+}
+
+function withRuntimeStatus(workingSet: WorkingSet, activeRunId: string | null): WorkingSet {
+  return {
+    ...workingSet,
+    status: activeRunId ? 'thinking' : 'awaiting_input',
+  };
+}
+
+function inferEntityKind(value: string): WorkingSet['entities'][number]['kind'] {
+  if (value.includes('/') || value.endsWith('.py') || value.endsWith('.ts') || value.endsWith('.tsx') || value.endsWith('.md')) {
+    return 'file';
+  }
+  if (value.includes('.')) return 'symbol';
+  return 'note';
 }

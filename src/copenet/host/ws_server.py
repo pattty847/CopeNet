@@ -149,6 +149,7 @@ class CopeNetWsServer:
                                 "sessions.archive",
                                 "sessions.runs",
                                 "sessions.run",
+                                "sessions.state",
                                 "sessions.resolve",
                             ],
                             "events": ["connect.challenge", "chat"],

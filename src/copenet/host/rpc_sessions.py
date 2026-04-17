@@ -224,6 +224,31 @@ async def handle_sessions_run(request_id: str, params: dict[str, Any] | None, se
     )
 
 
+async def handle_sessions_state(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    key = _required_text(raw, "key")
+    if not key:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                )
+            )
+        )
+        return
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"state": orchestrator.resolve_session_state(key)},
+            )
+        )
+    )
+
+
 async def handle_sessions_debug_copy(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     key = _required_text(params or {}, "key")
     if not key:

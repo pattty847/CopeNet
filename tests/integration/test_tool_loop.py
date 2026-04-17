@@ -210,6 +210,8 @@ async def test_harness_continues_read_only_tool_loop_until_answer(tmp_path: Path
     assert len(meta_events) == 2
     delta_text = "".join(event.text or "" for event in events if event.kind == "delta")
     assert "inspected it successfully" in delta_text
+    assert "directory listing alone is rarely enough" in provider.prompts[0]
+    assert "plain files.list result usually is not enough evidence to stop" in provider.prompts[1]
 
 
 @pytest.mark.asyncio

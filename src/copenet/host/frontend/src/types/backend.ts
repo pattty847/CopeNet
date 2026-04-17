@@ -185,3 +185,19 @@ export interface SessionRunRecord {
   error: string | null;
   metadata: Record<string, unknown>;
 }
+
+export interface SessionStateRecord {
+  session_key: string;
+  task_summary: string | null;
+  goals: string[];
+  active_entities: string[];
+  working_set_refs: string[];
+  constraints: string[];
+  unresolved_questions: string[];
+  prior_decisions: string[];
+  plan_snapshot: Record<string, unknown>;
+  relevant_asset_ids: string[];
+  relevant_artifact_ids: string[];
+  created_at: string;
+  updated_at: string;
+}

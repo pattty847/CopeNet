@@ -235,6 +235,7 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "chat.send" in response["payload"]["features"]["methods"]
         assert "sessions.runs" in response["payload"]["features"]["methods"]
         assert "sessions.run" in response["payload"]["features"]["methods"]
+        assert "sessions.state" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
 
     with rpc_client.websocket_connect("/ws") as websocket:
@@ -497,3 +498,25 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient) -> 
         run_detail = socket.recv_response(run_detail_id)
         assert run_detail["payload"]["run"]["runId"] == run_id
         assert run_detail["payload"]["run"]["toolSteps"][0]["summary"] == "Read file README.md."
+
+
+def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        send_id = socket.request(
+            "chat.send",
+            {
+                "sessionKey": "tool-success",
+                "message": "Read the README",
+                "provider": "prompted-success",
+            },
+        )
+        started = socket.recv_response(send_id)
+        socket.recv_chat_until_terminal(session_key="tool-success", run_id=started["payload"]["runId"])
+
+        state_id = socket.request("sessions.state", {"key": "tool-success"})
+        state_response = socket.recv_response(state_id)
+        state = state_response["payload"]["state"]
+        assert state["session_key"] == "tool-success"
+        assert state["task_summary"] == "Read the README"
+        assert "files.read" in state["active_entities"]
+        assert state["relevant_artifact_ids"]

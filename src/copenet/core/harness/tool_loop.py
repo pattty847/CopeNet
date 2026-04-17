@@ -357,7 +357,9 @@ def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor]) -> 
         "User request:\n"
         f"{prompt}\n\n"
         "Decide whether you need tools before answering. "
-        "If needed, respond only with the JSON tool invocation or a safe read-only batch."
+        "If needed, respond only with the JSON tool invocation or a safe read-only batch.\n"
+        "For repository inspection, directory listing alone is rarely enough. "
+        "Prefer at least one relevant files.read, files.search, or context.prepare step before summarizing."
         f"\n\n{build_tool_prompt_section(tools)}"
     )
 
@@ -370,7 +372,9 @@ def compose_tool_follow_up_prompt(*, user_prompt: str, tool_results: list[ToolEx
         f"{_tool_results_payload(tool_results)}\n\n"
         "Decide whether one more tool or one safe read-only batch is still needed. "
         "If another tool is needed, respond only with the JSON invocation shape. "
-        "If you already have enough information, answer the user directly."
+        "If you already have enough information, answer the user directly.\n"
+        "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
+        "Prefer a follow-up files.read, files.search, or context.prepare step unless the user asked only for a directory listing."
     )
 
 
