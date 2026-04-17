@@ -108,6 +108,10 @@ export function useArtifact(sessionKey: string | null, id: string | null): Async
 }
 
 export function useRunActivity(sessionKey: string | null): AsyncResource<RunActivity> {
+  const activeRunId = useAppStore((state) => state.activeRunId);
+  const sessionUpdatedAt = useAppStore(
+    (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
+  );
   const [resource, setResource] = useState<AsyncResource<RunActivity>>(sessionKey ? loading() : empty());
 
   useEffect(() => {
@@ -135,12 +139,16 @@ export function useRunActivity(sessionKey: string | null): AsyncResource<RunActi
     return () => {
       cancelled = true;
     };
-  }, [sessionKey]);
+  }, [activeRunId, sessionKey, sessionUpdatedAt]);
 
   return resource;
 }
 
 export function useBatch(sessionKey: string | null, id: string | null): AsyncResource<BatchResource> {
+  const activeRunId = useAppStore((state) => state.activeRunId);
+  const sessionUpdatedAt = useAppStore(
+    (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
+  );
   const [resource, setResource] = useState<AsyncResource<BatchResource>>(sessionKey && id ? loading() : empty());
 
   useEffect(() => {
@@ -174,7 +182,7 @@ export function useBatch(sessionKey: string | null, id: string | null): AsyncRes
     return () => {
       cancelled = true;
     };
-  }, [sessionKey, id]);
+  }, [activeRunId, sessionKey, sessionUpdatedAt, id]);
 
   return resource;
 }

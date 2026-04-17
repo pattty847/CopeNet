@@ -13,6 +13,7 @@ export function ChatWorkspace() {
   const activeRunId = useAppStore((state) => state.activeRunId);
   const appError = useAppStore((state) => state.appError);
   const clearAppError = useAppStore((state) => state.clearAppError);
+  const setAppError = useAppStore((state) => state.setAppError);
   const draftSettings = useAppStore((state) => state.draftSettings);
   const draftComposerSeed = useAppStore((state) => state.draftComposerSeed);
   const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
@@ -82,21 +83,31 @@ export function ChatWorkspace() {
 
   const handleDebugCopy = async () => {
     if (!activeSession) return;
-    await wsClient.debugCopySession(activeSession.key);
+    try {
+      clearAppError();
+      await wsClient.debugCopySession(activeSession.key);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to create debug copy.');
+    }
   };
 
   const handleExportConversation = async () => {
     if (!activeSession) return;
-    const exported = await wsClient.exportSession(activeSession.key);
-    const blob = new Blob([exported.markdown], { type: 'text/markdown;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `${activeSession.key}-conversation.md`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    try {
+      clearAppError();
+      const exported = await wsClient.exportSession(activeSession.key);
+      const blob = new Blob([exported.markdown], { type: 'text/markdown;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${activeSession.key}-conversation.md`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      window.setTimeout(() => URL.revokeObjectURL(url), 0);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to export conversation.');
+    }
   };
 
   return (
