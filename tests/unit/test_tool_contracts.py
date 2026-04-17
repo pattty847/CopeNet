@@ -44,6 +44,18 @@ def test_extract_tool_batch_invocation_returns_none_for_single_call() -> None:
     )
 
 
+def test_extract_tool_batch_invocation_from_adjacent_tool_objects() -> None:
+    envelope = extract_tool_batch_invocation(
+        '{"tool_id":"files.read","arguments":{"path":"README.md"}} '
+        '{"tool_id":"files.read","arguments":{"path":"TODO.md"}} '
+        '{"tool_id":"files.read","arguments":{"path":"AGENTS.md"}}'
+    )
+    assert envelope is not None
+    requests = envelope.to_requests()
+    assert [request.tool_id for request in requests] == ["files.read", "files.read", "files.read"]
+    assert [request.arguments["path"] for request in requests] == ["README.md", "TODO.md", "AGENTS.md"]
+
+
 def test_build_tool_prompt_section_returns_empty_for_no_tools() -> None:
     assert build_tool_prompt_section([]) == ""
 

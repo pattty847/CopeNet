@@ -182,6 +182,7 @@ def debug_copy_session(orchestrator: "Orchestrator", session_key: str) -> dict:
     )
 
     copied_count = orchestrator._transcript_store.copy_history(source.session_id, copied.session_id)
+    copied_runs = orchestrator._run_store.clone_session(source.session_key, copied.session_key)
 
     source_state = orchestrator._session_state_store.get(source.session_key)
     artifact_id_map: dict[str, str] = {}
@@ -229,6 +230,7 @@ def debug_copy_session(orchestrator: "Orchestrator", session_key: str) -> dict:
         "sourceSessionKey": source.session_key,
         "copiedMessages": copied_count,
         "copiedArtifacts": len(source_artifacts),
+        "copiedRuns": copied_runs,
     }
     return payload
 

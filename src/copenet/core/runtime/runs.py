@@ -129,6 +129,32 @@ class RunStore:
                 handle.write(line + "\n")
         return record
 
+    def clone_session(self, source_session_key: str, target_session_key: str) -> int:
+        """Copy all durable run records from one session into another."""
+        copied = 0
+        for record in self.list_for_session(source_session_key, limit=10_000):
+            cloned = RunRecord(
+                run_id=record.run_id,
+                session_key=target_session_key,
+                provider=record.provider,
+                model=record.model,
+                status=record.status,
+                user_message=record.user_message,
+                tool_execution_mode=record.tool_execution_mode,
+                will_attempt_tool_loop=record.will_attempt_tool_loop,
+                started_at=record.started_at,
+                completed_at=record.completed_at,
+                working_set=dict(record.working_set),
+                tool_steps=[dict(step) for step in record.tool_steps],
+                artifact_ids=list(record.artifact_ids),
+                output_summary=record.output_summary,
+                error=record.error,
+                metadata=dict(record.metadata),
+            )
+            self.create(cloned)
+            copied += 1
+        return copied
+
     def list_for_session(self, session_key: str, limit: int = 50) -> list[RunRecord]:
         """Return recent run records for one session."""
         path = self.runs_path_for(session_key)

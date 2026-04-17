@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
-import re
 from typing import Any, Awaitable, Callable, Literal
 
 from copenet.providers import Provider
@@ -154,21 +153,47 @@ class ToolBlockedError(RuntimeError):
     """Raised when a tool request is blocked by policy or path boundaries."""
 
 
-def extract_tool_invocation(text: str) -> ToolInvocationEnvelope | None:
-    """Parse a tool invocation JSON object from model output."""
+def _candidate_json_objects(text: str) -> list[str]:
     candidate = text.strip()
     if not candidate:
-        return None
+        return []
     if candidate.startswith("```"):
         lines = candidate.splitlines()
         if len(lines) >= 3 and lines[-1].strip().startswith("```"):
             candidate = "\n".join(lines[1:-1]).strip()
 
-    objects = [candidate]
-    for match in re.finditer(r"\{[\s\S]*\}", candidate):
-        objects.append(match.group(0))
+    objects: list[str] = []
+    seen: set[str] = set()
 
-    for raw in objects:
+    def add(raw: str) -> None:
+        value = raw.strip()
+        if value and value not in seen:
+            seen.add(value)
+            objects.append(value)
+
+    add(candidate)
+
+    decoder = json.JSONDecoder()
+    index = 0
+    length = len(candidate)
+    while index < length:
+        brace_index = candidate.find("{", index)
+        if brace_index < 0:
+            break
+        try:
+            parsed, end_index = decoder.raw_decode(candidate, brace_index)
+        except json.JSONDecodeError:
+            index = brace_index + 1
+            continue
+        if isinstance(parsed, dict):
+            add(candidate[brace_index:end_index])
+        index = end_index
+    return objects
+
+
+def extract_tool_invocation(text: str) -> ToolInvocationEnvelope | None:
+    """Parse a tool invocation JSON object from model output."""
+    for raw in _candidate_json_objects(text):
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
@@ -190,19 +215,8 @@ def extract_tool_invocation(text: str) -> ToolInvocationEnvelope | None:
 
 def extract_tool_batch_invocation(text: str) -> ToolBatchEnvelope | None:
     """Parse a batch tool invocation JSON object from model output."""
-    candidate = text.strip()
-    if not candidate:
-        return None
-    if candidate.startswith("```"):
-        lines = candidate.splitlines()
-        if len(lines) >= 3 and lines[-1].strip().startswith("```"):
-            candidate = "\n".join(lines[1:-1]).strip()
-
-    objects = [candidate]
-    for match in re.finditer(r"\{[\s\S]*\}", candidate):
-        objects.append(match.group(0))
-
-    for raw in objects:
+    adjacent_calls: list[ToolInvocationEnvelope] = []
+    for raw in _candidate_json_objects(text):
         try:
             parsed = json.loads(raw)
         except json.JSONDecodeError:
@@ -210,27 +224,38 @@ def extract_tool_batch_invocation(text: str) -> ToolBatchEnvelope | None:
         if not isinstance(parsed, dict):
             continue
         calls_value = parsed.get("tool_calls") or parsed.get("toolCalls") or parsed.get("batch")
-        if not isinstance(calls_value, list) or len(calls_value) < 2:
-            continue
-        calls: list[ToolInvocationEnvelope] = []
-        for item in calls_value:
-            if not isinstance(item, dict):
-                calls = []
-                break
-            tool_id = str(
-                item.get("tool_id")
-                or item.get("toolId")
-                or item.get("tool_name")
-                or item.get("toolName")
-                or ""
-            ).strip()
-            arguments = item.get("arguments") or item.get("args") or {}
-            if not tool_id or not isinstance(arguments, dict):
-                calls = []
-                break
-            calls.append(ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments))
-        if len(calls) >= 2:
-            return ToolBatchEnvelope(calls=calls)
+        if isinstance(calls_value, list) and len(calls_value) >= 2:
+            calls: list[ToolInvocationEnvelope] = []
+            for item in calls_value:
+                if not isinstance(item, dict):
+                    calls = []
+                    break
+                tool_id = str(
+                    item.get("tool_id")
+                    or item.get("toolId")
+                    or item.get("tool_name")
+                    or item.get("toolName")
+                    or ""
+                ).strip()
+                arguments = item.get("arguments") or item.get("args") or {}
+                if not tool_id or not isinstance(arguments, dict):
+                    calls = []
+                    break
+                calls.append(ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments))
+            if len(calls) >= 2:
+                return ToolBatchEnvelope(calls=calls)
+        tool_id = str(
+            parsed.get("tool_id")
+            or parsed.get("toolId")
+            or parsed.get("tool_name")
+            or parsed.get("toolName")
+            or ""
+        ).strip()
+        arguments = parsed.get("arguments") or parsed.get("args") or {}
+        if tool_id and isinstance(arguments, dict):
+            adjacent_calls.append(ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments))
+    if len(adjacent_calls) >= 2:
+        return ToolBatchEnvelope(calls=adjacent_calls)
     return None
 
 

@@ -258,6 +258,10 @@ async def test_debug_copy_session_clones_history_state_and_artifacts(fake_orches
     copied_artifacts = fake_orchestrator._artifact_store.list_for_session(copied["key"])
     assert copied_artifacts
     assert copied_artifacts[0].metadata["clonedFromArtifactId"]
+    copied_runs = fake_orchestrator.list_session_runs(copied["key"])
+    assert copied_runs
+    assert copied_runs[0]["userMessage"] == "Inspect the runtime"
+    assert copied["debugCopy"]["copiedRuns"] == 1
 
 
 @pytest.mark.asyncio
