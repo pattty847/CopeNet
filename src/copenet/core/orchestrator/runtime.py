@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
 from copenet.core.orchestrator.working_set import assemble_working_set
+from copenet.core.runtime import RunRecord, RunStore
 from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
@@ -38,6 +40,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     prior_history = orchestrator.history(session_key=session_key, limit=2)
     working_history = orchestrator.history(session_key=session_key, limit=12)
     is_first_turn = len(prior_history) == 0
+    run_started_at = transcript_now()
     trace = RunTraceWriter(
         run_id=run_id,
         session_key=session_key,
@@ -129,6 +132,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     assistant_parts: list[str] = []
     tool_execution_payload: dict | None = None
     artifact_drafts: list[dict] = []
+    tool_steps: list[dict] = []
     try:
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
@@ -177,6 +181,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool_payload = event.metadata.get("toolExecution")
                 if isinstance(tool_payload, dict):
                     tool_execution_payload = tool_payload
+                    tool_steps.append(_normalize_tool_step(tool_payload))
                 artifact_draft = event.metadata.get("artifactDraft")
                 if isinstance(artifact_draft, dict):
                     artifact_drafts.append(artifact_draft)
@@ -307,6 +312,38 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "activeEntityCount": len(updated_state.active_entities),
             },
         )
+        run_record = RunRecord(
+            run_id=run_id,
+            session_key=session_key,
+            provider=provider_name,
+            model=request.model,
+            status="ok",
+            user_message=message,
+            tool_execution_mode=plan.tool_execution_mode,
+            will_attempt_tool_loop=plan.will_attempt_tool_loop,
+            started_at=run_started_at,
+            completed_at=transcript_now(),
+            working_set=dict(working_set.metadata),
+            tool_steps=tool_steps,
+            artifact_ids=created_artifact_ids,
+            output_summary=_summarize_output(assistant_text),
+            metadata={
+                "capabilityProfile": {
+                    "toolCalls": plan.capability_profile.tool_calls,
+                    "promptedToolUse": plan.capability_profile.prompted_tool_use,
+                }
+            },
+        )
+        _run_store(orchestrator).create(run_record)
+        trace.record(
+            "run_record_created",
+            {
+                "runId": run_record.run_id,
+                "status": run_record.status,
+                "toolStepCount": len(run_record.tool_steps),
+                "artifactCount": len(run_record.artifact_ids),
+            },
+        )
 
         seq += 1
         final_payload = {
@@ -353,6 +390,33 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "model": request.model,
         }
         await emit(error_payload)
+        failed_run = RunRecord(
+            run_id=run_id,
+            session_key=session_key,
+            provider=provider_name,
+            model=request.model,
+            status="error",
+            user_message=message,
+            tool_execution_mode=plan.tool_execution_mode if "plan" in locals() else "none",
+            will_attempt_tool_loop=plan.will_attempt_tool_loop if "plan" in locals() else False,
+            started_at=run_started_at,
+            completed_at=transcript_now(),
+            working_set=dict(working_set.metadata) if "working_set" in locals() else {},
+            tool_steps=tool_steps,
+            artifact_ids=[],
+            output_summary="",
+            error=str(exc),
+        )
+        _run_store(orchestrator).create(failed_run)
+        trace.record(
+            "run_record_created",
+            {
+                "runId": failed_run.run_id,
+                "status": failed_run.status,
+                "toolStepCount": len(failed_run.tool_steps),
+                "artifactCount": 0,
+            },
+        )
         trace.record(
             "run_failed",
             {
@@ -426,3 +490,26 @@ def _append_unique(existing: list[str], incoming: list[str]) -> list[str]:
         if text and text not in rows:
             rows.append(text)
     return rows
+
+
+def _normalize_tool_step(tool_payload: dict) -> dict:
+    return {
+        "toolId": str(tool_payload.get("toolId") or "").strip(),
+        "ok": bool(tool_payload.get("ok")),
+        "summary": str(tool_payload.get("summary") or ""),
+        "error": str(tool_payload.get("error")).strip() if tool_payload.get("error") is not None else None,
+    }
+
+
+def _summarize_output(text: str) -> str:
+    return " ".join(text.split())[:240]
+
+
+def _run_store(orchestrator: "Orchestrator") -> RunStore:
+    store = getattr(orchestrator, "_run_store", None)
+    if isinstance(store, RunStore):
+        return store
+    base = Path(orchestrator._session_store._path).parent
+    store = RunStore(root_dir=base / "runs")
+    orchestrator._run_store = store
+    return store
