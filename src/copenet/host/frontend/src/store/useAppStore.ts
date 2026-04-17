@@ -1,8 +1,10 @@
 import { create } from 'zustand';
 import { DataToolsRoute, DraftSettings, MediaAsset, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
+import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
+export type RightPanelTab = 'runtime' | 'artifacts' | 'activity';
 
 interface AppState {
   wsStatus: WsStatus;
@@ -30,6 +32,10 @@ interface AppState {
   setRightPanelOpen: (open: boolean) => void;
   commandPaletteOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
+  rightPanelTab: RightPanelTab;
+  setRightPanelTab: (tab: RightPanelTab) => void;
+  inspectorTarget: InspectorTarget | null;
+  setInspectorTarget: (target: InspectorTarget | null) => void;
 
   providers: Provider[];
   modelsByProvider: Record<string, Model[]>;
@@ -117,6 +123,10 @@ export const useAppStore = create<AppState>((set) => ({
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
   commandPaletteOpen: false,
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
+  rightPanelTab: 'runtime',
+  setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+  inspectorTarget: null,
+  setInspectorTarget: (target) => set({ inspectorTarget: target }),
 
   providers: [],
   modelsByProvider: {},

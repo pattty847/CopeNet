@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState, KeyboardEvent } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
+import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { Archive, ArchiveRestore, Paperclip, Mic, Send } from 'lucide-react';
 
 export function ChatWorkspace() {
@@ -169,6 +170,9 @@ export function ChatWorkspace() {
           </button>
         </div>
       )}
+
+      {/* Working Set — glanceable, pinned above the message stream */}
+      <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />
 
       {/* Messages */}
       <div className="flex-1 overflow-y-auto px-5 py-4">
