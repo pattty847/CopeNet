@@ -60,19 +60,27 @@ class ToolExecutionResult:
     tool_id: str
     ok: bool
     summary: str
+    call_id: str | None = None
+    channel: Literal["tool", "batch", "policy", "search"] = "tool"
     output: dict[str, Any] = field(default_factory=dict)
+    body: Any = None
     error: str | None = None
+    artifact_id: str | None = None
 
     def to_prompt_payload(self) -> str:
         """Return a compact JSON payload suitable for feeding back to a model."""
         payload: dict[str, Any] = {
+            "callId": self.call_id,
             "toolId": self.tool_id,
+            "channel": self.channel,
             "ok": self.ok,
             "summary": self.summary,
-            "output": self.output,
+            "body": self.body if self.body is not None else self.output,
         }
         if self.error:
             payload["error"] = self.error
+        if self.artifact_id:
+            payload["artifactId"] = self.artifact_id
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
     def to_event_payload(self) -> dict[str, Any]:
@@ -84,6 +92,22 @@ class ToolExecutionResult:
         }
         if self.error:
             payload["error"] = self.error
+        return payload
+
+    def to_runtime_input(self) -> dict[str, Any]:
+        """Return the normalized follow-up payload consumed by the next loop pass."""
+        payload: dict[str, Any] = {
+            "callId": self.call_id,
+            "toolId": self.tool_id,
+            "channel": self.channel,
+            "success": self.ok,
+            "body": self.body if self.body is not None else self.output,
+            "summary": self.summary,
+        }
+        if self.error:
+            payload["error"] = self.error
+        if self.artifact_id:
+            payload["artifactId"] = self.artifact_id
         return payload
 
 
@@ -143,6 +167,7 @@ class ToolExecutionContext:
     transcript_store: TranscriptStore
     providers: dict[str, Provider]
     policy: Any
+    artifact_store: Any | None = None
     trace: Callable[[str, dict[str, Any] | None], None] | None = None
 
 
@@ -200,6 +225,9 @@ def extract_tool_invocation(text: str) -> ToolInvocationEnvelope | None:
             continue
         if not isinstance(parsed, dict):
             continue
+        calls_value = parsed.get("tool_calls") or parsed.get("toolCalls")
+        if isinstance(calls_value, list) and len(calls_value) == 1 and isinstance(calls_value[0], dict):
+            parsed = dict(calls_value[0])
         tool_id = str(
             parsed.get("tool_id")
             or parsed.get("toolId")

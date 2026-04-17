@@ -20,6 +20,11 @@ def test_run_store_create_list_and_get(tmp_dir) -> None:
             ],
             artifact_ids=["artifact-1"],
             output_summary="Inspected the repo.",
+            transition_reason="tool_followup",
+            terminal_reason="completed",
+            tool_results=[{"toolId": "files.read", "success": True, "summary": "Read README"}],
+            pending_input_count=0,
+            oversized_tool_artifact_ids=["artifact-1"],
         )
     )
 
@@ -28,7 +33,11 @@ def test_run_store_create_list_and_get(tmp_dir) -> None:
     assert listed[0].run_id == created.run_id
     assert listed[0].tool_steps[0]["toolId"] == "files.list"
     assert listed[0].working_set["artifactIds"] == ["artifact-1"]
+    assert listed[0].transition_reason == "tool_followup"
+    assert listed[0].terminal_reason == "completed"
+    assert listed[0].tool_results[0]["toolId"] == "files.read"
 
     loaded = store.get("alpha", "run-1")
     assert loaded is not None
     assert loaded.output_summary == "Inspected the repo."
+    assert loaded.oversized_tool_artifact_ids == ["artifact-1"]

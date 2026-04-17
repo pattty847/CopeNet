@@ -28,6 +28,15 @@ def test_extract_tool_invocation_from_fenced_json_block() -> None:
     assert envelope.arguments == {}
 
 
+def test_extract_tool_invocation_from_single_tool_calls_wrapper() -> None:
+    envelope = extract_tool_invocation(
+        '{"tool_calls":[{"tool_id":"files.read","arguments":{"path":"README.md"}}]}'
+    )
+    assert envelope is not None
+    assert envelope.tool_id == "files.read"
+    assert envelope.arguments == {"path": "README.md"}
+
+
 def test_extract_tool_batch_invocation_from_valid_json() -> None:
     envelope = extract_tool_batch_invocation(
         '{"tool_calls":[{"tool_id":"files.list","arguments":{"path":"."}},{"tool_id":"files.read","arguments":{"path":"README.md"}}]}'

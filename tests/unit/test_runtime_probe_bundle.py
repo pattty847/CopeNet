@@ -79,6 +79,23 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
     )
     assert drift["classification"] == "session_resume_drift"
 
+    corrected = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [{"toolId": "files.read", "status": "ok"}],
+            "outputSummary": "corrected",
+            "transitionReason": "tool_error_correction",
+            "terminalReason": "completed",
+            "oversizedToolArtifactIds": ["artifact-1"],
+        },
+        transcript=[],
+        artifacts=[],
+        trace_path=None,
+    )
+    assert corrected["classification"] == "tool_error_corrected"
+    assert corrected["oversized_tool_artifact_ids"] == ["artifact-1"]
+
 
 def test_write_probe_bundle_creates_expected_files(tmp_path: Path) -> None:
     trace_path = tmp_path / "original-trace.jsonl"
@@ -110,6 +127,9 @@ def test_write_probe_bundle_creates_expected_files(tmp_path: Path) -> None:
         trace_present=True,
         artifact_count=1,
         output_preview="preview",
+        transition_reason="tool_followup",
+        terminal_reason="completed",
+        oversized_tool_artifact_ids=["artifact-1"],
     )
 
     bundle_dir = write_probe_bundle(tmp_path / "suite", bundle)
@@ -126,6 +146,7 @@ def test_write_probe_bundle_creates_expected_files(tmp_path: Path) -> None:
     assert expected <= {path.name for path in bundle_dir.iterdir()}
     notes = json.loads((bundle_dir / "notes.json").read_text(encoding="utf-8"))
     assert notes["tool_step_count"] == 1
+    assert notes["transition_reason"] == "tool_followup"
     assert bundle.bundle_dir == str(bundle_dir)
 
 
@@ -170,3 +191,5 @@ def test_validate_debug_copy_bundle_and_report_handle_mismatch() -> None:
     assert "Runtime Probe Report" in report
     assert "Debug Copy Validation" in report
     assert "mismatch" in report
+    summary_json = summary.to_json()
+    assert summary_json["transition_reason_counts"] == {}

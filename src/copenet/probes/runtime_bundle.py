@@ -146,6 +146,9 @@ class ProbeBundle:
     trace_present: bool = False
     artifact_count: int = 0
     output_preview: str = ""
+    transition_reason: str = ""
+    terminal_reason: str = ""
+    oversized_tool_artifact_ids: list[str] = field(default_factory=list)
     bundle_dir: str | None = None
     debug_copy_validation: dict[str, Any] | None = None
 
@@ -174,6 +177,9 @@ class ProbeBundle:
             "trace_present": self.trace_present,
             "artifact_count": self.artifact_count,
             "output_preview": self.output_preview,
+            "transition_reason": self.transition_reason,
+            "terminal_reason": self.terminal_reason,
+            "oversized_tool_artifact_ids": list(self.oversized_tool_artifact_ids),
             "debug_copy_validation": dict(self.debug_copy_validation) if isinstance(self.debug_copy_validation, dict) else None,
         }
 
@@ -190,15 +196,28 @@ class ProbeSummary:
     def to_json(self) -> dict[str, Any]:
         rows = [result.to_summary_row() for result in self.results]
         classifications: dict[str, int] = {}
+        transition_reasons: dict[str, int] = {}
+        terminal_reasons: dict[str, int] = {}
+        persisted_tool_output_count = 0
         for row in rows:
             key = str(row.get("classification") or "unknown")
             classifications[key] = classifications.get(key, 0) + 1
+            transition = str(row.get("transition_reason") or "").strip()
+            if transition:
+                transition_reasons[transition] = transition_reasons.get(transition, 0) + 1
+            terminal = str(row.get("terminal_reason") or "").strip()
+            if terminal:
+                terminal_reasons[terminal] = terminal_reasons.get(terminal, 0) + 1
+            persisted_tool_output_count += len(list(row.get("oversized_tool_artifact_ids") or []))
         return {
             "generated_at": self.generated_at,
             "suite_dir": self.suite_dir,
             "targets": self.targets,
             "results": rows,
             "classification_counts": classifications,
+            "transition_reason_counts": transition_reasons,
+            "terminal_reason_counts": terminal_reasons,
+            "persisted_tool_output_count": persisted_tool_output_count,
         }
 
 
@@ -262,6 +281,13 @@ def classify_probe_bundle(
     artifact_count = len(artifacts)
     artifact_ids = _artifact_ids(artifacts)
     trace_present = bool(trace_path and Path(trace_path).exists())
+    transition_reason = str((run_record or {}).get("transitionReason") or "").strip()
+    terminal_reason = str((run_record or {}).get("terminalReason") or "").strip()
+    oversized_tool_artifact_ids = [
+        str(value).strip()
+        for value in list((run_record or {}).get("oversizedToolArtifactIds") or [])
+        if str(value).strip()
+    ]
     output_preview = str((run_record or {}).get("outputSummary") or _last_assistant_content(transcript)).strip()
     if len(output_preview) > 240:
         output_preview = output_preview[:237] + "..."
@@ -284,11 +310,27 @@ def classify_probe_bundle(
 
     if any(str(step.get("status") or "").strip() == "blocked" for step in tool_steps):
         classification = "tool_blocked"
+    elif transition_reason == "tool_error_correction":
+        classification = "tool_error_corrected"
+    elif terminal_reason == "tool_error_terminal":
+        classification = "tool_error_terminal"
+    elif transition_reason == "resume_followup":
+        classification = "resume_followup_success"
+    elif oversized_tool_artifact_ids:
+        classification = "oversized_output_persisted"
 
     if previous_bundle is not None and previous_bundle.tool_step_count > 0 and len(tool_ids) == 0:
         classification = "session_resume_drift"
 
-    if classification not in {"tool_blocked", "runtime_error", "session_resume_drift"}:
+    if classification not in {
+        "tool_blocked",
+        "runtime_error",
+        "session_resume_drift",
+        "tool_error_corrected",
+        "tool_error_terminal",
+        "resume_followup_success",
+        "oversized_output_persisted",
+    }:
         if probe.expects_tools and len(tool_ids) == 1 and not used_context_prepare and not used_batch:
             classification = "premature_stop_after_one_tool"
 
@@ -304,6 +346,9 @@ def classify_probe_bundle(
         "artifact_count": artifact_count,
         "artifact_ids": artifact_ids,
         "output_preview": output_preview,
+        "transition_reason": transition_reason,
+        "terminal_reason": terminal_reason,
+        "oversized_tool_artifact_ids": oversized_tool_artifact_ids,
     }
 
 
@@ -396,6 +441,9 @@ def write_probe_bundle(root_dir: Path, bundle: ProbeBundle) -> Path:
             "used_context_prepare": bundle.used_context_prepare,
             "trace_present": bundle.trace_present,
             "output_preview": bundle.output_preview,
+            "transition_reason": bundle.transition_reason,
+            "terminal_reason": bundle.terminal_reason,
+            "oversized_tool_artifact_ids": bundle.oversized_tool_artifact_ids,
         }
     )
     if bundle.debug_copy_validation is not None:

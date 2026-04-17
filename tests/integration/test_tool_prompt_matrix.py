@@ -20,6 +20,7 @@ class PromptMatrixCase:
     first_turn: str
     follow_up: str | None
     expect_tool_requested: bool
+    expect_correction: bool
     expected_tool_id: str | None
     expect_tool_ok: bool | None
     expect_trace_event: str | None
@@ -131,6 +132,7 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
             first_turn='{"tool_id":"files.list","arguments":{"path":"."}}',
             follow_up="Tool succeeded.",
             expect_tool_requested=True,
+            expect_correction=False,
             expected_tool_id="files.list",
             expect_tool_ok=True,
             expect_trace_event="tool_executed",
@@ -140,6 +142,7 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
             first_turn='\n  {"tool_id":"files.read","arguments":{"path":"README.md"}}  \n',
             follow_up="Read the README successfully.",
             expect_tool_requested=True,
+            expect_correction=False,
             expected_tool_id="files.read",
             expect_tool_ok=True,
             expect_trace_event="tool_executed",
@@ -149,24 +152,27 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
             first_turn="I cannot use files.list here because that tool is not available in this environment.",
             follow_up=None,
             expect_tool_requested=False,
+            expect_correction=False,
             expected_tool_id=None,
             expect_tool_ok=None,
             expect_trace_event=None,
         ),
         PromptMatrixCase(
-            name="malformed_json_no_tool_request",
+            name="malformed_json_correction_retry",
             first_turn='{"tool_id":"files.list","arguments":{"path":"."}',
-            follow_up=None,
+            follow_up="I repaired the tool request and can answer without another tool.",
             expect_tool_requested=False,
+            expect_correction=True,
             expected_tool_id=None,
             expect_tool_ok=None,
             expect_trace_event=None,
         ),
         PromptMatrixCase(
-            name="wrong_shape_json_no_tool_request",
+            name="wrong_shape_json_correction_retry",
             first_turn='{"tool":"files.list","arguments":{"path":"."}}',
-            follow_up=None,
+            follow_up="I repaired the tool request and can answer without another tool.",
             expect_tool_requested=False,
+            expect_correction=True,
             expected_tool_id=None,
             expect_tool_ok=None,
             expect_trace_event=None,
@@ -176,6 +182,7 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
             first_turn='{"tool_id":"files.list","arguments":{"path":".."}}',
             follow_up="The path was blocked by policy.",
             expect_tool_requested=True,
+            expect_correction=False,
             expected_tool_id="files.list",
             expect_tool_ok=False,
             expect_trace_event="tool_blocked",
@@ -185,6 +192,7 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
             first_turn='{"tool_id":"git.status","arguments":{}}',
             follow_up="Reported git status instead.",
             expect_tool_requested=True,
+            expect_correction=False,
             expected_tool_id="git.status",
             expect_tool_ok=False,
             expect_trace_event="tool_executed",
@@ -224,10 +232,17 @@ async def test_tool_prompt_matrix_behaviors(case: PromptMatrixCase, tmp_path: Pa
         assert tool_requested == []
         assert _find_trace_rows(traces, "tool_executed") == []
         assert _find_trace_rows(traces, "tool_blocked") == []
-        assert all(event.kind != "meta" for event in events)
+        if case.expect_correction:
+            correction_rows = _find_trace_rows(traces, "tool_correction_generated")
+            assert len(correction_rows) == 1
+            meta_events = [event for event in events if event.kind == "meta"]
+            assert len(meta_events) == 1
+            assert meta_events[0].metadata["toolExecution"]["toolId"] == "tool.parse"
+        else:
+            assert all(event.kind != "meta" for event in events)
         delta_events = [event for event in events if event.kind == "delta"]
         assert len(delta_events) == 1
-        assert delta_events[0].text == case.first_turn
+        assert delta_events[0].text == (case.follow_up or case.first_turn)
 
 
 @pytest.mark.asyncio

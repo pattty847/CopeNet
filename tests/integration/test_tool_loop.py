@@ -5,6 +5,7 @@ import pytest
 
 from copenet.core.harness import ChatHarness
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.runtime import ArtifactStore
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult, ToolPolicy, ToolRegistry
 from copenet.providers import ProviderEvent
@@ -310,3 +311,101 @@ async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is False
     assert any(event == "tool_blocked" for event, _ in traces)
+
+
+@pytest.mark.asyncio
+async def test_harness_generates_correction_result_for_malformed_tool_request(tmp_path: Path) -> None:
+    provider = PromptedBatchProvider(
+        tool_json='{"tool_id":"files.read","arguments":"README.md"}',
+        follow_up="I repaired the tool call and can answer now.",
+    )
+    traces: list[tuple[str, dict | None]] = []
+
+    def trace(event: str, payload: dict | None = None) -> None:
+        traces.append((event, payload))
+
+    harness = ChatHarness()
+    registry = ToolRegistry()
+    tool_context = ToolExecutionContext(
+        workdir=tmp_path,
+        session_key="alpha",
+        provider_name="prompted",
+        model=None,
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        providers={"prompted": provider},
+        policy=ToolPolicy(),
+        trace=trace,
+    )
+    _, stream = await harness.run_turn(
+        provider=provider,
+        prompt="Inspect the repo",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        available_tools=registry.list_tools(),
+        tool_executor=registry.execute,
+        tool_context=tool_context,
+        trace=trace,
+    )
+    events = [event async for event in stream]
+
+    meta_event = next(event for event in events if event.kind == "meta")
+    assert meta_event.metadata["toolExecution"]["toolId"] == "tool.parse"
+    assert meta_event.metadata["toolExecution"]["ok"] is False
+    assert meta_event.metadata["turnState"]["transitionReason"] == "tool_error_correction"
+    assert any(event == "tool_correction_generated" for event, _ in traces)
+
+
+@pytest.mark.asyncio
+async def test_harness_persists_oversized_tool_output_as_artifact(tmp_path: Path) -> None:
+    provider = PromptedToolProvider(
+        tool_json='{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+        follow_up="Used the persisted artifact preview to answer.",
+    )
+    traces: list[tuple[str, dict | None]] = []
+
+    def trace(event: str, payload: dict | None = None) -> None:
+        traces.append((event, payload))
+
+    harness = ChatHarness()
+
+    async def tool_executor(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+        return ToolExecutionResult(
+            tool_id=request.tool_id,
+            ok=True,
+            summary="Read README.md.",
+            output={"content": "X" * 5000},
+            body={"content": "X" * 5000},
+        )
+
+    artifact_store = ArtifactStore(root_dir=tmp_path / "artifacts")
+    tool_context = ToolExecutionContext(
+        workdir=tmp_path,
+        session_key="alpha",
+        provider_name="prompted",
+        model=None,
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        providers={"prompted": provider},
+        policy=ToolPolicy(),
+        artifact_store=artifact_store,
+        trace=trace,
+    )
+    _, stream = await harness.run_turn(
+        provider=provider,
+        prompt="Read the README",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        available_tools=ToolRegistry().list_tools(),
+        tool_executor=tool_executor,
+        tool_context=tool_context,
+        trace=trace,
+    )
+    events = [event async for event in stream]
+
+    meta_event = next(event for event in events if event.kind == "meta")
+    assert meta_event.metadata["toolResult"]["artifactId"]
+    artifacts = artifact_store.list_for_session("alpha")
+    assert artifacts
+    assert artifacts[0].type == "tool_output"
+    assert any(event == "tool_result_persisted" for event, _ in traces)

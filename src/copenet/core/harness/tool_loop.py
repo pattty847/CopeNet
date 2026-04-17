@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from typing import Any, AsyncIterator, Awaitable, Callable
+from uuid import uuid4
 
+from copenet.core.runtime import TurnState
 from copenet.providers import Provider, ProviderEvent
 from copenet.core.tools import (
     ToolBatchEnvelope,
@@ -12,6 +15,7 @@ from copenet.core.tools import (
     ToolExecutionContext,
     ToolExecutionRequest,
     ToolExecutionResult,
+    ToolInvocationEnvelope,
     build_tool_prompt_section,
     extract_tool_batch_invocation,
     extract_tool_invocation,
@@ -24,6 +28,7 @@ ToolExecutor = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
 BATCHABLE_TOOL_IDS = {"files.list", "files.read", "files.search", "context.prepare"}
 MAX_TOOL_STEPS = 3
+LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 
 
 async def collect_provider_turn(
@@ -88,12 +93,17 @@ async def run_with_one_tool(
     """Run the prompted tool loop with bounded continuation and safe read batches."""
     discovered_provider_session_id = provider_session_id
     executed_results: list[ToolExecutionResult] = []
+    turn_state = TurnState()
     current_prompt = compose_tool_attempt_prompt(prompt=prompt, tools=plan.tools)
     current_system_prompt = compose_tool_system_prompt(
         provider=provider,
         system_prompt=system_prompt,
         tools=plan.tools,
     )
+    correction_attempted = False
+    last_tool_result: ToolExecutionResult | None = None
+    if trace is not None:
+        trace("turn_started", turn_state.to_public_dict())
 
     for step_index in range(MAX_TOOL_STEPS):
         phase = "tool-attempt" if step_index == 0 else "tool-follow-up"
@@ -130,12 +140,26 @@ async def run_with_one_tool(
                     tool_context=tool_context,
                     trace=trace,
                 )
+                tool_result, persisted_draft = _materialize_tool_result_artifact(
+                    tool_result=tool_result,
+                    tool_context=tool_context,
+                    trace=trace,
+                )
+                artifact_draft = persisted_draft or artifact_draft
                 executed_results.append(tool_result)
-                meta_payload: dict[str, Any] = {"toolExecution": tool_result.to_event_payload()}
+                turn_state.tool_call_count += len(batch_invocation.calls)
+                turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
+                meta_payload: dict[str, Any] = {
+                    "toolExecution": tool_result.to_event_payload(),
+                    "toolResult": tool_result.to_runtime_input(),
+                    "turnState": turn_state.to_public_dict(),
+                }
                 if artifact_draft is not None:
                     meta_payload["artifactDraft"] = artifact_draft
                 yield ProviderEvent(kind="meta", metadata=meta_payload)
+                last_tool_result = tool_result
                 if step_index >= MAX_TOOL_STEPS - 1:
+                    turn_state.terminal_reason = "max_turns"
                     final_events, _ = await collect_provider_turn(
                         provider=provider,
                         prompt=compose_tool_terminal_prompt(
@@ -156,9 +180,11 @@ async def run_with_one_tool(
                     for event in final_events:
                         yield event
                     return
+                turn_state.drain_pending_input()
                 current_prompt = compose_tool_follow_up_prompt(
                     user_prompt=prompt,
                     tool_results=executed_results,
+                    turn_state=turn_state,
                 )
                 current_system_prompt = compose_tool_system_prompt(
                     provider=provider,
@@ -172,20 +198,37 @@ async def run_with_one_tool(
                     )
                 continue
 
-            blocked = ToolExecutionResult(
+            blocked = _build_correction_result(
                 tool_id="tool.batch",
-                ok=False,
                 summary="Tool batch blocked.",
                 error="unsafe or unsupported batch request",
+                channel="policy",
             )
             executed_results.append(blocked)
-            yield ProviderEvent(kind="meta", metadata={"toolExecution": blocked.to_event_payload()})
+            turn_state.tool_call_count += 1
+            turn_state.queue_input(blocked.to_runtime_input(), reason="tool_error_correction")
+            yield ProviderEvent(
+                kind="meta",
+                metadata={
+                    "toolExecution": blocked.to_event_payload(),
+                    "toolResult": blocked.to_runtime_input(),
+                    "turnState": turn_state.to_public_dict(),
+                },
+            )
             if trace is not None:
                 trace(
                     "tool_blocked",
                     {
                         "toolId": "tool.batch",
                         "reason": "unsafe or unsupported batch request",
+                    },
+                )
+                trace(
+                    "tool_correction_generated",
+                    {
+                        "toolId": "tool.batch",
+                        "reason": "unsafe or unsupported batch request",
+                        "transitionReason": "tool_error_correction",
                     },
                 )
             final_events, _ = await collect_provider_turn(
@@ -211,6 +254,41 @@ async def run_with_one_tool(
 
         invocation = extract_tool_invocation(current_text)
         if invocation is None:
+            if _looks_like_tool_attempt(current_text) and not correction_attempted:
+                correction_attempted = True
+                correction = _build_correction_result(
+                    tool_id="tool.parse",
+                    summary="Tool request malformed.",
+                    error="Malformed tool request. Emit only one valid JSON tool invocation or one valid tool_calls batch.",
+                    channel="policy",
+                )
+                executed_results.append(correction)
+                turn_state.queue_input(correction.to_runtime_input(), reason="tool_error_correction")
+                if trace is not None:
+                    trace(
+                        "tool_correction_generated",
+                        {
+                            "toolId": "tool.parse",
+                            "reason": "malformed tool request",
+                            "transitionReason": "tool_error_correction",
+                        },
+                    )
+                    trace("turn_transition", turn_state.to_public_dict())
+                yield ProviderEvent(
+                    kind="meta",
+                    metadata={
+                        "toolExecution": correction.to_event_payload(),
+                        "toolResult": correction.to_runtime_input(),
+                        "turnState": turn_state.to_public_dict(),
+                    },
+                )
+                turn_state.drain_pending_input()
+                current_prompt = compose_tool_follow_up_prompt(
+                    user_prompt=prompt,
+                    tool_results=executed_results,
+                    turn_state=turn_state,
+                )
+                continue
             if trace is not None:
                 trace(
                     "provider_turn_completed",
@@ -220,6 +298,8 @@ async def run_with_one_tool(
                         "toolStepCount": len(executed_results),
                     },
                 )
+                turn_state.terminal_reason = "completed"
+                trace("turn_completed", turn_state.to_public_dict())
             for event in current_events:
                 if event.kind != "meta":
                     yield event
@@ -236,10 +316,40 @@ async def run_with_one_tool(
             )
 
         tool_result = await tool_executor(invocation.to_request(), tool_context)
+        tool_result = _with_call_id(tool_result, invocation)
+        tool_result, artifact_draft = _materialize_tool_result_artifact(
+            tool_result=tool_result,
+            tool_context=tool_context,
+            trace=trace,
+        )
         executed_results.append(tool_result)
-        yield ProviderEvent(kind="meta", metadata={"toolExecution": tool_result.to_event_payload()})
+        turn_state.tool_call_count += 1
+        transition_reason = "tool_followup" if tool_result.ok else "tool_error_correction"
+        turn_state.queue_input(tool_result.to_runtime_input(), reason=transition_reason)
+        meta_payload: dict[str, Any] = {
+            "toolExecution": tool_result.to_event_payload(),
+            "toolResult": tool_result.to_runtime_input(),
+            "turnState": turn_state.to_public_dict(),
+        }
+        if artifact_draft is not None:
+            meta_payload["artifactDraft"] = artifact_draft
+        yield ProviderEvent(kind="meta", metadata=meta_payload)
+        if trace is not None:
+            trace(
+                "tool_result_normalized",
+                {
+                    "toolId": tool_result.tool_id,
+                    "callId": tool_result.call_id,
+                    "channel": tool_result.channel,
+                    "success": tool_result.ok,
+                    "artifactId": tool_result.artifact_id,
+                },
+            )
+            trace("turn_transition", turn_state.to_public_dict())
+        last_tool_result = tool_result
 
         if step_index >= MAX_TOOL_STEPS - 1:
+            turn_state.terminal_reason = "max_turns"
             final_events, _ = await collect_provider_turn(
                 provider=provider,
                 prompt=compose_tool_terminal_prompt(
@@ -261,9 +371,11 @@ async def run_with_one_tool(
                 yield event
             return
 
+        turn_state.drain_pending_input()
         current_prompt = compose_tool_follow_up_prompt(
             user_prompt=prompt,
             tool_results=executed_results,
+            turn_state=turn_state,
         )
         current_system_prompt = compose_tool_system_prompt(
             provider=provider,
@@ -273,8 +385,15 @@ async def run_with_one_tool(
         if trace is not None:
             trace(
                 "tool_loop_continued",
-                {"step": step_index + 1, "lastToolId": tool_result.tool_id},
+                {
+                    "step": step_index + 1,
+                    "lastToolId": tool_result.tool_id,
+                    "transitionReason": turn_state.transition_reason,
+                },
             )
+    if last_tool_result is not None and trace is not None:
+        turn_state.terminal_reason = "tool_error_terminal" if not last_tool_result.ok else "max_turns"
+        trace("turn_completed", turn_state.to_public_dict())
 
 
 def _is_safe_batch(batch: ToolBatchEnvelope, tools: list[ToolDescriptor]) -> bool:
@@ -327,8 +446,11 @@ async def _run_tool_batch(
     }
     merged = ToolExecutionResult(
         tool_id="tool.batch",
+        call_id=f"batch-{uuid4().hex[:10]}",
+        channel="batch",
         ok=all(result.ok for result in results),
         summary=summary or f"Executed {len(results)} batched read tools.",
+        body=merged_output,
         output=merged_output,
         error=None if all(result.ok for result in results) else "one or more batched tools failed",
     )
@@ -364,17 +486,31 @@ def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor]) -> 
     )
 
 
-def compose_tool_follow_up_prompt(*, user_prompt: str, tool_results: list[ToolExecutionResult]) -> str:
+def compose_tool_follow_up_prompt(
+    *,
+    user_prompt: str,
+    tool_results: list[ToolExecutionResult],
+    turn_state: TurnState,
+) -> str:
+    corrective_line = ""
+    if turn_state.transition_reason == "tool_error_correction":
+        corrective_line = (
+            "\nThe previous tool request failed validation, policy, or execution. "
+            "Repair the tool call directly if another tool is still needed.\n"
+        )
     return (
         "Original user request:\n"
         f"{user_prompt}\n\n"
         "Tool results gathered so far:\n"
         f"{_tool_results_payload(tool_results)}\n\n"
+        f"Current transition reason: {turn_state.transition_reason}\n"
+        f"Pending follow-up inputs: {len(turn_state.pending_input)}\n"
         "Decide whether one more tool or one safe read-only batch is still needed. "
         "If another tool is needed, respond only with the JSON invocation shape. "
         "If you already have enough information, answer the user directly.\n"
         "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
         "Prefer a follow-up files.read, files.search, or context.prepare step unless the user asked only for a directory listing."
+        f"{corrective_line}"
     )
 
 
@@ -404,6 +540,131 @@ def compose_tool_system_prompt(
 
 def _tool_results_payload(tool_results: list[ToolExecutionResult]) -> str:
     return "\n\n".join(result.to_prompt_payload() for result in tool_results)
+
+
+def _looks_like_tool_attempt(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if "tool_id" in stripped or "tool_calls" in stripped or "toolCalls" in stripped:
+        return True
+    return stripped.startswith("{") and stripped.endswith("}")
+
+
+def _build_correction_result(
+    *,
+    tool_id: str,
+    summary: str,
+    error: str,
+    channel: str,
+) -> ToolExecutionResult:
+    return ToolExecutionResult(
+        tool_id=tool_id,
+        call_id=f"correction-{uuid4().hex[:10]}",
+        channel=channel,
+        ok=False,
+        summary=summary,
+        body={"error": error},
+        output={"error": error},
+        error=error,
+    )
+
+
+def _with_call_id(
+    result: ToolExecutionResult,
+    invocation: ToolInvocationEnvelope,
+) -> ToolExecutionResult:
+    if result.call_id:
+        return result
+    return ToolExecutionResult(
+        tool_id=result.tool_id,
+        call_id=f"{invocation.tool_id}-{uuid4().hex[:10]}",
+        channel=result.channel,
+        ok=result.ok,
+        summary=result.summary,
+        body=result.body,
+        output=dict(result.output),
+        error=result.error,
+        artifact_id=result.artifact_id,
+    )
+
+
+def _materialize_tool_result_artifact(
+    *,
+    tool_result: ToolExecutionResult,
+    tool_context: ToolExecutionContext,
+    trace: TraceRecorder | None,
+) -> tuple[ToolExecutionResult, dict[str, Any] | None]:
+    body = tool_result.body if tool_result.body is not None else tool_result.output
+    payload_text = json.dumps(body, ensure_ascii=False, indent=2) if not isinstance(body, str) else body
+    if not payload_text.strip():
+        normalized = ToolExecutionResult(
+            tool_id=tool_result.tool_id,
+            call_id=tool_result.call_id,
+            channel=tool_result.channel,
+            ok=tool_result.ok,
+            summary=tool_result.summary,
+            body=f"({tool_result.tool_id} completed with no output)",
+            output=dict(tool_result.output),
+            error=tool_result.error,
+            artifact_id=tool_result.artifact_id,
+        )
+        return normalized, None
+    if len(payload_text) <= LARGE_TOOL_RESULT_CHAR_LIMIT or tool_context.artifact_store is None or not tool_context.session_key:
+        if trace is not None and tool_result.call_id:
+            trace(
+                "tool_result_normalized",
+                {
+                    "toolId": tool_result.tool_id,
+                    "callId": tool_result.call_id,
+                    "channel": tool_result.channel,
+                    "success": tool_result.ok,
+                },
+            )
+        return tool_result, None
+
+    artifact = tool_context.artifact_store.create(
+        session_key=tool_context.session_key,
+        run_id=tool_result.call_id or f"tool-{uuid4().hex[:8]}",
+        artifact_type="tool_output",
+        title=f"{tool_result.tool_id} output",
+        body=payload_text,
+        metadata={
+            "toolId": tool_result.tool_id,
+            "callId": tool_result.call_id,
+            "channel": tool_result.channel,
+            "persistedOutput": True,
+        },
+    )
+    preview = payload_text[:280].strip()
+    if len(payload_text) > 280:
+        preview += "..."
+    persisted_body = {
+        "artifactId": artifact.artifact_id,
+        "preview": preview,
+        "persistedOutput": True,
+    }
+    persisted = ToolExecutionResult(
+        tool_id=tool_result.tool_id,
+        call_id=tool_result.call_id,
+        channel=tool_result.channel,
+        ok=tool_result.ok,
+        summary=tool_result.summary,
+        body=persisted_body,
+        output=dict(tool_result.output),
+        error=tool_result.error,
+        artifact_id=artifact.artifact_id,
+    )
+    if trace is not None:
+        trace(
+            "tool_result_persisted",
+            {
+                "toolId": tool_result.tool_id,
+                "callId": tool_result.call_id,
+                "artifactId": artifact.artifact_id,
+            },
+        )
+    return persisted, None
 
 
 def compose_system_prompt(

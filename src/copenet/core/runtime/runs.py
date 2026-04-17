@@ -56,6 +56,11 @@ class RunRecord:
     artifact_ids: list[str] = field(default_factory=list)
     output_summary: str = ""
     error: str | None = None
+    transition_reason: str = "start_turn"
+    terminal_reason: str | None = None
+    tool_results: list[dict[str, Any]] = field(default_factory=list)
+    pending_input_count: int = 0
+    oversized_tool_artifact_ids: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
 
     @classmethod
@@ -77,6 +82,11 @@ class RunRecord:
             artifact_ids=_string_list(raw.get("artifact_ids")),
             output_summary=str(raw.get("output_summary") or ""),
             error=str(raw.get("error")).strip() if raw.get("error") is not None else None,
+            transition_reason=str(raw.get("transition_reason") or "start_turn").strip(),
+            terminal_reason=str(raw.get("terminal_reason")).strip() if raw.get("terminal_reason") is not None else None,
+            tool_results=_step_list(raw.get("tool_results")),
+            pending_input_count=int(raw.get("pending_input_count") or 0),
+            oversized_tool_artifact_ids=_string_list(raw.get("oversized_tool_artifact_ids")),
             metadata=_dict_value(raw.get("metadata")),
         )
 
@@ -102,6 +112,11 @@ class RunRecord:
             "artifactIds": list(self.artifact_ids),
             "outputSummary": self.output_summary,
             "error": self.error,
+            "transitionReason": self.transition_reason,
+            "terminalReason": self.terminal_reason,
+            "toolResults": [dict(item) for item in self.tool_results],
+            "pendingInputCount": self.pending_input_count,
+            "oversizedToolArtifactIds": list(self.oversized_tool_artifact_ids),
             "metadata": dict(self.metadata),
         }
 
@@ -149,6 +164,11 @@ class RunStore:
                 artifact_ids=list(record.artifact_ids),
                 output_summary=record.output_summary,
                 error=record.error,
+                transition_reason=record.transition_reason,
+                terminal_reason=record.terminal_reason,
+                tool_results=[dict(item) for item in record.tool_results],
+                pending_input_count=record.pending_input_count,
+                oversized_tool_artifact_ids=list(record.oversized_tool_artifact_ids),
                 metadata=dict(record.metadata),
             )
             self.create(cloned)

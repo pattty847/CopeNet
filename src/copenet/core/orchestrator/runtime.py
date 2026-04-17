@@ -130,8 +130,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     seq = 0
     assistant_parts: list[str] = []
     tool_execution_payload: dict | None = None
+    latest_turn_state: dict = {}
+    normalized_tool_results: list[dict] = []
     artifact_drafts: list[dict] = []
     tool_steps: list[dict] = []
+    persisted_tool_artifact_ids: list[str] = []
     try:
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
@@ -151,6 +154,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 transcript_store=orchestrator._transcript_store,
                 providers=orchestrator._providers,
                 policy=orchestrator._tool_policy,
+                artifact_store=orchestrator._artifact_store,
                 trace=trace.record,
             ),
             trace=trace.record,
@@ -181,6 +185,16 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 if isinstance(tool_payload, dict):
                     tool_execution_payload = tool_payload
                     tool_steps.append(_normalize_tool_step(tool_payload))
+                    artifact_id = str(tool_payload.get("artifactId") or "").strip()
+                    if artifact_id and artifact_id not in persisted_tool_artifact_ids:
+                        persisted_tool_artifact_ids.append(artifact_id)
+                tool_result_payload = event.metadata.get("toolResult")
+                if isinstance(tool_result_payload, dict):
+                    normalized_tool_results.append(dict(tool_result_payload))
+                    trace.record("tool_result_normalized", dict(tool_result_payload))
+                turn_state_payload = event.metadata.get("turnState")
+                if isinstance(turn_state_payload, dict):
+                    latest_turn_state = dict(turn_state_payload)
                 artifact_draft = event.metadata.get("artifactDraft")
                 if isinstance(artifact_draft, dict):
                     artifact_drafts.append(artifact_draft)
@@ -223,7 +237,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             )
 
         assistant_text = "".join(part for part in assistant_parts if part).strip()
-        created_artifact_ids: list[str] = []
+        created_artifact_ids: list[str] = list(persisted_tool_artifact_ids)
         for draft in artifact_drafts:
             created = orchestrator._artifact_store.create(
                 session_key=session_key,
@@ -326,11 +340,17 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             tool_steps=tool_steps,
             artifact_ids=created_artifact_ids,
             output_summary=_summarize_output(assistant_text),
+            transition_reason=str(latest_turn_state.get("transitionReason") or "completed"),
+            terminal_reason=str(latest_turn_state.get("terminalReason") or "completed"),
+            tool_results=normalized_tool_results,
+            pending_input_count=int(latest_turn_state.get("pendingInputCount") or 0),
+            oversized_tool_artifact_ids=list(persisted_tool_artifact_ids),
             metadata={
                 "capabilityProfile": {
                     "toolCalls": plan.capability_profile.tool_calls,
                     "promptedToolUse": plan.capability_profile.prompted_tool_use,
-                }
+                },
+                "turnState": dict(latest_turn_state),
             },
         )
         orchestrator._run_store.create(run_record)
@@ -365,6 +385,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "promptedToolUse": plan.capability_profile.prompted_tool_use,
             },
             "toolExecution": tool_execution_payload,
+            "turnState": latest_turn_state or None,
         }
         await emit(final_payload)
         trace.record(
@@ -402,9 +423,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             completed_at=transcript_now(),
             working_set=dict(working_set.metadata) if "working_set" in locals() else {},
             tool_steps=tool_steps,
-            artifact_ids=[],
+            artifact_ids=list(persisted_tool_artifact_ids),
             output_summary="",
             error=str(exc),
+            transition_reason=str(latest_turn_state.get("transitionReason") or "model_error"),
+            terminal_reason="model_error",
+            tool_results=normalized_tool_results,
+            pending_input_count=int(latest_turn_state.get("pendingInputCount") or 0),
+            oversized_tool_artifact_ids=list(persisted_tool_artifact_ids),
         )
         orchestrator._run_store.create(failed_run)
         trace.record(
@@ -493,10 +519,15 @@ def _append_unique(existing: list[str], incoming: list[str]) -> list[str]:
 
 def _normalize_tool_step(tool_payload: dict) -> dict:
     return {
+        "callId": str(tool_payload.get("callId") or "").strip() or None,
         "toolId": str(tool_payload.get("toolId") or "").strip(),
+        "channel": str(tool_payload.get("channel") or "tool").strip(),
         "ok": bool(tool_payload.get("ok")),
         "summary": str(tool_payload.get("summary") or ""),
         "error": str(tool_payload.get("error")).strip() if tool_payload.get("error") is not None else None,
+        "artifactId": str(tool_payload.get("artifactId") or "").strip() or None,
+        "status": "blocked" if tool_payload.get("ok") is False else "ok",
+        "batched": str(tool_payload.get("channel") or "") == "batch" or str(tool_payload.get("toolId") or "") == "tool.batch",
     }
 
 
