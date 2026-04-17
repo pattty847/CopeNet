@@ -1,10 +1,24 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, FileText, Package, MessageSquareQuote, FileDiff, Layers, CheckCircle2, XCircle, Terminal } from 'lucide-react';
+import {
+  AlertTriangle,
+  Box,
+  CheckCircle2,
+  FileDiff,
+  FileText,
+  Layers,
+  MessageSquareQuote,
+  Package,
+  Terminal,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { getArtifactById, getBatchById } from '../../runtime/mocks';
+import { useArtifact, useBatch } from '../../runtime/adapter';
+import type { AsyncResource, BatchResource } from '../../runtime/adapter';
 import type { Artifact } from '../../runtime/types';
 import { DiffArtifactView } from './DiffArtifactView';
+import { LoadingState } from './ResourceStates';
 
 function ArtifactBody({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'patch_plan' || artifact.kind === 'diff') {
@@ -70,13 +84,7 @@ function ArtifactBody({ artifact }: { artifact: Artifact }) {
   );
 }
 
-function BatchBody({ sessionKey, batchId }: { sessionKey: string | null; batchId: string }) {
-  const batch = useMemo(() => getBatchById(sessionKey, batchId), [sessionKey, batchId]);
-  if (!batch) {
-    return (
-      <div className="text-[12px] text-operator-muted italic">Batch not found.</div>
-    );
-  }
+function BatchBody({ batch }: { batch: BatchResource }) {
   return (
     <div className="space-y-3">
       <div className="rounded-xl border border-operator-border bg-operator-panel/40 px-3 py-2.5">
@@ -124,18 +132,92 @@ function BatchBody({ sessionKey, batchId }: { sessionKey: string | null; batchId
   );
 }
 
+// Inline state views for the drawer body — scoped to this component so we
+// can include a little contextual copy (what was being inspected) without
+// making the shared ResourceStates component juggle drawer-specific props.
+function DrawerState({
+  icon: Icon,
+  title,
+  body,
+  tone = 'muted',
+}: {
+  icon: typeof Box;
+  title: string;
+  body: string;
+  tone?: 'muted' | 'error';
+}) {
+  const iconTone = tone === 'error' ? 'text-operator-error' : 'text-operator-muted';
+  const bgTone = tone === 'error' ? 'bg-operator-error/10' : 'bg-operator-panel';
+  return (
+    <div className="flex flex-col items-center justify-center py-10 text-center">
+      <div className={`mb-3 flex h-10 w-10 items-center justify-center rounded-xl ${bgTone} ${iconTone}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      <div className="text-[13px] text-operator-text font-medium mb-1">{title}</div>
+      <div className="text-[11px] text-operator-muted leading-relaxed max-w-[300px]">{body}</div>
+    </div>
+  );
+}
+
+function renderArtifactResource(resource: AsyncResource<Artifact>) {
+  if (resource.status === 'loading') return <LoadingState label="Loading artifact…" />;
+  if (resource.status === 'error') {
+    return (
+      <DrawerState
+        icon={AlertTriangle}
+        title="Could not load artifact"
+        body={resource.error ?? 'Unknown error'}
+        tone="error"
+      />
+    );
+  }
+  if (resource.status === 'empty' || !resource.data) {
+    return (
+      <DrawerState
+        icon={Box}
+        title="Artifact not found"
+        body="This artifact may have been trimmed from the session state or never existed."
+      />
+    );
+  }
+  return <ArtifactBody artifact={resource.data} />;
+}
+
+function renderBatchResource(resource: AsyncResource<BatchResource>) {
+  if (resource.status === 'loading') return <LoadingState label="Loading batch…" />;
+  if (resource.status === 'error') {
+    return (
+      <DrawerState
+        icon={AlertTriangle}
+        title="Could not load batch"
+        body={resource.error ?? 'Unknown error'}
+        tone="error"
+      />
+    );
+  }
+  if (resource.status === 'empty' || !resource.data) {
+    return (
+      <DrawerState
+        icon={Layers}
+        title="Batch not found"
+        body="This batch may have been trimmed from the session state or never existed."
+      />
+    );
+  }
+  return <BatchBody batch={resource.data} />;
+}
+
 export function InspectorDrawer() {
   const activeSessionKey = useAppStore((s) => s.activeSessionKey);
   const target = useAppStore((s) => s.inspectorTarget);
   const close = useAppStore((s) => s.setInspectorTarget);
 
-  const artifact = useMemo(() => {
-    if (!target) return null;
-    if (target.kind === 'artifact' || target.kind === 'diff') {
-      return getArtifactById(activeSessionKey, target.artifactId);
-    }
-    return null;
-  }, [target, activeSessionKey]);
+  // Hooks always run — pass null when not the active target kind so the
+  // adapter returns an empty resource cheaply. Avoids conditional hook calls.
+  const artifactId = target && (target.kind === 'artifact' || target.kind === 'diff') ? target.artifactId : null;
+  const batchId = target && target.kind === 'batch' ? target.batchId : null;
+  const artifactResource = useArtifact(activeSessionKey, artifactId);
+  const batchResource = useBatch(activeSessionKey, batchId);
 
   useEffect(() => {
     if (!target) return;
@@ -159,15 +241,12 @@ export function InspectorDrawer() {
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
-      {/* Backdrop */}
       <div
         className="absolute inset-0 bg-black/50 backdrop-blur-sm animate-fade-in-up"
         onClick={() => close(null)}
       />
 
-      {/* Drawer */}
       <div className="relative ml-auto h-full w-full max-w-[640px] bg-operator-bg border-l border-operator-border shadow-shell-xl flex flex-col animate-slide-in-right">
-        {/* Header */}
         <div className="flex items-center gap-2 px-4 py-3 border-b border-operator-border">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-operator-accent/10 text-operator-accent">
             <HeaderIcon className="w-3.5 h-3.5" />
@@ -189,20 +268,10 @@ export function InspectorDrawer() {
           </button>
         </div>
 
-        {/* Body */}
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {target.kind === 'batch' ? (
-            <BatchBody sessionKey={activeSessionKey} batchId={target.batchId} />
-          ) : artifact ? (
-            <ArtifactBody artifact={artifact} />
-          ) : (
-            <div className="text-[12px] text-operator-muted italic">
-              Artifact not found.
-            </div>
-          )}
+          {target.kind === 'batch' ? renderBatchResource(batchResource) : renderArtifactResource(artifactResource)}
         </div>
 
-        {/* Footer */}
         <div className="px-4 py-2.5 border-t border-operator-border flex items-center justify-between bg-operator-panel/30">
           <span className="text-[10px] text-operator-muted">
             Inspector shell · future home for causal trace, diff apply, and governance actions

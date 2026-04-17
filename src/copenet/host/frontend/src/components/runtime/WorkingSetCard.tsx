@@ -1,20 +1,20 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
+  AlertTriangle,
   Brain,
   ChevronDown,
   ChevronUp,
-  FileCode2,
   Code2,
-  Link2,
+  FileCode2,
   FileVideo,
-  StickyNote,
-  AlertTriangle,
-  ShieldAlert,
-  Info,
   HelpCircle,
+  Info,
+  Link2,
+  ShieldAlert,
   Sparkles,
+  StickyNote,
 } from 'lucide-react';
-import { getWorkingSet } from '../../runtime/mocks';
+import { useWorkingSet } from '../../runtime/adapter';
 import type { RuntimeStatus, WorkingSetEntity } from '../../runtime/types';
 
 interface WorkingSetCardProps {
@@ -68,27 +68,74 @@ function freshness(iso: string) {
   return `${h}h ago`;
 }
 
+// Inline strip variants — compact because this card sits above the chat.
+function InlineStrip({ icon: Icon, tone, children }: {
+  icon: typeof Brain;
+  tone: 'muted' | 'accent' | 'error';
+  children: React.ReactNode;
+}) {
+  const toneCls =
+    tone === 'accent'
+      ? 'text-operator-accent border-operator-accent/20 bg-operator-accent/5'
+      : tone === 'error'
+      ? 'text-operator-error border-operator-error/25 bg-operator-error/5'
+      : 'text-operator-muted border-operator-border bg-operator-panel/20';
+  return (
+    <div className={`mx-4 mt-3 rounded-xl border px-3 py-2 flex items-center gap-2 ${toneCls} ${tone === 'muted' ? 'border-dashed' : ''}`}>
+      <Icon className="w-3.5 h-3.5 shrink-0" />
+      <div className="text-[11px] leading-relaxed">{children}</div>
+    </div>
+  );
+}
+
 export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
   const [expanded, setExpanded] = useState(true);
-  const workingSet = useMemo(() => getWorkingSet(sessionKey), [sessionKey]);
-  const status = STATUS_META[workingSet.status];
+  // Drafts bypass the adapter entirely — draft is a UI state, not runtime data.
+  const resource = useWorkingSet(isDraft ? null : sessionKey);
 
-  // Draft sessions don't have a working set yet — show a slim placeholder so
-  // the shell is visible but not noisy.
   if (isDraft) {
     return (
-      <div className="mx-4 mt-3 rounded-xl border border-dashed border-operator-border bg-operator-panel/20 px-3 py-2 flex items-center gap-2">
-        <Sparkles className="w-3.5 h-3.5 text-operator-muted shrink-0" />
-        <span className="text-[11px] text-operator-muted leading-relaxed">
-          Working Set will populate after the first turn — live task summary, entities, constraints, and open questions.
-        </span>
+      <InlineStrip icon={Sparkles} tone="muted">
+        Working Set will populate after the first turn — live task summary, entities, constraints, and open questions.
+      </InlineStrip>
+    );
+  }
+
+  if (resource.status === 'loading') {
+    return (
+      <div className="mx-4 mt-3 rounded-xl border border-operator-border bg-operator-panel/40 overflow-hidden">
+        <div className="px-3 py-2.5 flex items-center gap-2.5">
+          <div className="shimmer h-7 w-7 rounded-lg bg-operator-panel" />
+          <div className="flex-1 space-y-1.5">
+            <div className="shimmer h-2 w-28 rounded bg-operator-panel" />
+            <div className="shimmer h-3 w-full rounded bg-operator-panel" />
+          </div>
+        </div>
       </div>
     );
   }
 
+  if (resource.status === 'error') {
+    return (
+      <InlineStrip icon={AlertTriangle} tone="error">
+        Working Set failed to load: {resource.error}
+      </InlineStrip>
+    );
+  }
+
+  if (resource.status === 'empty' || !resource.data) {
+    return (
+      <InlineStrip icon={Brain} tone="muted">
+        No Working Set for this session yet. It will appear once the agent begins planning.
+      </InlineStrip>
+    );
+  }
+
+  const workingSet = resource.data;
+  const status = STATUS_META[workingSet.status];
+
   return (
     <div className="mx-4 mt-3 rounded-xl border border-operator-border bg-operator-panel/40 overflow-hidden">
-      {/* Header row — always visible */}
       <button
         onClick={() => setExpanded((v) => !v)}
         className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-operator-panel/60 transition-colors duration-150"
@@ -123,7 +170,6 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
 
       {expanded && (
         <div className="border-t border-operator-border/60 px-3 py-2.5 grid grid-cols-1 md:grid-cols-3 gap-3 animate-fade-in-up">
-          {/* Active entities */}
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5">
               Active Entities · {workingSet.entities.length}
@@ -146,7 +192,6 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
             </ul>
           </div>
 
-          {/* Constraints */}
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5">
               Constraints · {workingSet.constraints.length}
@@ -165,7 +210,6 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
             </ul>
           </div>
 
-          {/* Open questions */}
           <div>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5">
               Open Questions · {workingSet.questions.length}

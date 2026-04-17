@@ -1,18 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useState } from 'react';
 import {
+  ArrowRight,
+  CheckCircle2,
   ChevronDown,
   ChevronRight,
+  Clock,
   Layers,
   Package,
+  Sparkles,
   StickyNote,
   Terminal,
-  CheckCircle2,
   XCircle,
-  Clock,
-  ArrowRight,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { getRunActivity } from '../../runtime/mocks';
+import { useRunActivity } from '../../runtime/adapter';
 import type {
   ActivityBundle,
   ActivityItem,
@@ -20,6 +21,7 @@ import type {
   ActivityReadBatch,
   ActivityToolCall,
 } from '../../runtime/types';
+import { EmptyState, ErrorState, LoadingState } from './ResourceStates';
 
 interface RunActivityPanelProps {
   sessionKey: string | null;
@@ -224,21 +226,33 @@ function renderItem(item: ActivityItem) {
 }
 
 export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps) {
-  const activity = useMemo(() => getRunActivity(sessionKey), [sessionKey]);
+  const resource = useRunActivity(isDraft ? null : sessionKey);
 
   if (isDraft) {
     return (
-      <div className="px-3 py-6 text-center">
-        <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-panel text-operator-muted">
-          <Clock className="w-4 h-4" />
-        </div>
-        <div className="text-[12px] text-operator-text font-medium mb-1">No run activity yet</div>
-        <div className="text-[11px] text-operator-muted leading-relaxed">
-          Read batches, bundles, and single tool calls will appear here grouped by what the agent actually did.
-        </div>
-      </div>
+      <EmptyState
+        icon={Sparkles}
+        title="No run activity yet"
+        body="Read batches, bundles, and single tool calls will appear here grouped by what the agent actually did."
+      />
     );
   }
+
+  if (resource.status === 'loading') return <LoadingState label="Loading run activity…" />;
+  if (resource.status === 'error') {
+    return <ErrorState title="Could not load run activity" message={resource.error ?? 'Unknown error'} />;
+  }
+  if (resource.status === 'empty' || !resource.data) {
+    return (
+      <EmptyState
+        icon={Clock}
+        title="No activity recorded"
+        body="This session has not produced any tool activity yet. It will stream in here in real time."
+      />
+    );
+  }
+
+  const activity = resource.data;
 
   return (
     <div className="px-3 py-2.5 space-y-2">
@@ -249,7 +263,6 @@ export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps)
         <span className="text-[10px] text-operator-muted/70 font-mono">{activity.runId}</span>
       </div>
 
-      {/* Vertical spine with grouped items */}
       <div className="relative pl-3 space-y-2 stagger-children">
         <div className="absolute left-[5px] top-1 bottom-1 w-px bg-operator-border" />
         {activity.items.map((item) => (

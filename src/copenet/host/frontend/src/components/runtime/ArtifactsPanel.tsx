@@ -1,17 +1,18 @@
-import { useMemo } from 'react';
 import {
+  Box,
+  ExternalLink,
   FileDiff,
   FileText,
+  GitCompareArrows,
   MessageSquareQuote,
   Package,
-  GitCompareArrows,
+  Sparkles,
   Star,
-  ExternalLink,
-  Box,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { getArtifacts } from '../../runtime/mocks';
+import { useArtifacts } from '../../runtime/adapter';
 import type { Artifact, ArtifactKind } from '../../runtime/types';
+import { EmptyState, ErrorState, LoadingState } from './ResourceStates';
 
 interface ArtifactsPanelProps {
   sessionKey: string | null;
@@ -119,7 +120,6 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
         </div>
       </div>
 
-      {/* Action row */}
       <div className="flex items-center gap-1 px-3 py-1.5 border-t border-operator-border/60 bg-operator-bg/40 opacity-80 group-hover:opacity-100 transition-opacity duration-150">
         <button
           onClick={openInspect}
@@ -147,21 +147,34 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
 }
 
 export function ArtifactsPanel({ sessionKey, isDraft }: ArtifactsPanelProps) {
-  const artifacts = useMemo(() => getArtifacts(sessionKey), [sessionKey]);
+  // Draft sessions bypass the adapter — they never produce artifacts.
+  const resource = useArtifacts(isDraft ? null : sessionKey);
 
   if (isDraft) {
     return (
-      <div className="px-3 py-6 text-center">
-        <div className="mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-panel text-operator-muted">
-          <Box className="w-4 h-4" />
-        </div>
-        <div className="text-[12px] text-operator-text font-medium mb-1">No artifacts yet</div>
-        <div className="text-[11px] text-operator-muted leading-relaxed">
-          The agent will produce patch plans, summaries, answers, and tool bundles here as the run unfolds.
-        </div>
-      </div>
+      <EmptyState
+        icon={Sparkles}
+        title="No artifacts yet"
+        body="The agent will produce patch plans, summaries, answers, and tool bundles here as the run unfolds."
+      />
     );
   }
+
+  if (resource.status === 'loading') return <LoadingState label="Loading artifacts…" />;
+  if (resource.status === 'error') {
+    return <ErrorState title="Could not load artifacts" message={resource.error ?? 'Unknown error'} />;
+  }
+  if (resource.status === 'empty' || !resource.data) {
+    return (
+      <EmptyState
+        icon={Box}
+        title="No artifacts produced"
+        body="This session has not produced any runtime artifacts. They will stream in here as the agent works."
+      />
+    );
+  }
+
+  const artifacts = resource.data;
 
   return (
     <div className="px-3 py-2.5 space-y-2">
