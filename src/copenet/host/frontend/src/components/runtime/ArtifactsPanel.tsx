@@ -94,10 +94,13 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
               {timeAgo(artifact.producedAt)}
             </span>
           </div>
-          <div className="text-[13px] text-operator-text font-medium leading-snug mb-0.5 truncate" title={artifact.title}>
+          <div
+            className="text-[13px] text-operator-text font-medium leading-snug mb-0.5 line-clamp-2 break-words"
+            title={artifact.title}
+          >
             {artifact.title}
           </div>
-          <div className="text-[11px] text-operator-muted leading-relaxed">
+          <div className="text-[11px] text-operator-muted leading-relaxed break-words">
             {artifact.oneLine}
           </div>
           {artifact.files && artifact.files.length > 0 && (
@@ -107,7 +110,7 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
                   key={f.path}
                   className="inline-flex items-center gap-1 rounded-md bg-operator-bg border border-operator-border px-1.5 py-0.5 text-[10px] font-mono text-operator-muted"
                 >
-                  <span className="truncate max-w-[140px]">{f.path.split('/').pop()}</span>
+                  <span className="truncate max-w-[200px]">{f.path.split('/').pop()}</span>
                   <span className="text-operator-success">+{f.additions}</span>
                   <span className="text-operator-error">−{f.deletions}</span>
                 </span>

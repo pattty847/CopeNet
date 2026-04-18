@@ -133,7 +133,7 @@ export function RightPanel() {
   ];
 
   return (
-    <aside className="w-80 min-w-[20rem] border-l border-operator-border bg-operator-bg flex flex-col h-full overflow-hidden">
+    <aside className="w-[22rem] xl:w-[26rem] 2xl:w-[30rem] min-w-[20rem] border-l border-operator-border bg-operator-bg flex flex-col h-full overflow-hidden">
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
         <button
@@ -148,20 +148,22 @@ export function RightPanel() {
       </div>
 
       {/* Tab strip */}
-      <div className="grid grid-cols-3 border-b border-operator-border bg-operator-panel/20 shrink-0">
+      <div className="flex border-b border-operator-border bg-operator-panel/20 shrink-0">
         {tabs.map((tab) => {
           const active = rightPanelTab === tab.id;
+          const Icon = tab.icon;
           return (
             <button
               key={tab.id}
               onClick={() => setRightPanelTab(tab.id)}
-              className={`min-w-0 flex items-center justify-center px-1.5 py-2 text-[9px] font-semibold uppercase tracking-[0.14em] transition-all duration-150 border-b-2 ${
+              className={`min-w-0 flex-1 flex items-center justify-center gap-1.5 px-2 py-2.5 text-[10px] font-semibold uppercase tracking-[0.12em] transition-all duration-150 border-b-2 ${
                 active
                   ? 'text-operator-accent border-operator-accent bg-operator-accent/5'
                   : 'text-operator-muted border-transparent hover:text-operator-text hover:bg-operator-panel/40'
               }`}
               title={tab.label}
             >
+              <Icon className="w-3 h-3 shrink-0" />
               <span className="truncate">{tab.label}</span>
             </button>
           );
@@ -300,21 +302,21 @@ export function RightPanel() {
               <div className="space-y-1.5 mt-1">
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Provider:</span>
-                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={providerName}>{providerName}</span>
+                  <span className="text-operator-text truncate max-w-[180px] text-right font-medium" title={providerName}>{providerName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Model:</span>
-                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={activeSession.model || ''}>
+                  <span className="text-operator-text truncate max-w-[180px] text-right font-medium" title={activeSession.model || ''}>
                     {activeSession.model || 'None'}
                   </span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Profile:</span>
-                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={profileName}>{profileName}</span>
+                  <span className="text-operator-text truncate max-w-[180px] text-right font-medium" title={profileName}>{profileName}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-operator-muted">Mode:</span>
-                  <span className="text-operator-text truncate max-w-[110px] text-right font-medium" title={taskModeName}>{taskModeName}</span>
+                  <span className="text-operator-text truncate max-w-[180px] text-right font-medium" title={taskModeName}>{taskModeName}</span>
                 </div>
               </div>
             )}
