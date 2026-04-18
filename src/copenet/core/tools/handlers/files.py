@@ -56,6 +56,10 @@ async def list_files(request: ToolExecutionRequest, context: ToolExecutionContex
 
 async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
+    if path.exists() and path.is_dir():
+        raise RuntimeError(
+            f"path is a directory: {path.relative_to(context.workdir)}; use files.list to inspect directories or files.search to search inside them"
+        )
     if not path.is_file():
         raise RuntimeError(f"file not found: {path}")
     with path.open("r", encoding="utf-8", errors="replace") as handle:

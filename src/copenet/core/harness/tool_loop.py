@@ -26,7 +26,6 @@ from .planning import HarnessTurnPlan
 
 ToolExecutor = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[ToolExecutionResult]]
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
-BATCHABLE_TOOL_IDS = {"files.list", "files.read", "files.search", "context.prepare"}
 MAX_TOOL_STEPS = 3
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 
@@ -221,6 +220,8 @@ async def run_with_one_tool(
                     {
                         "toolId": "tool.batch",
                         "reason": "unsafe or unsupported batch request",
+                        "step": step_index + 1,
+                        "rawText": current_text[:400],
                     },
                 )
                 trace(
@@ -404,8 +405,6 @@ def _is_safe_batch(batch: ToolBatchEnvelope, tools: list[ToolDescriptor]) -> boo
         descriptor = descriptors.get(call.tool_id)
         if descriptor is None:
             return False
-        if descriptor.id not in BATCHABLE_TOOL_IDS:
-            return False
         if descriptor.category not in {"repo-read", "context"}:
             return False
     return True
@@ -482,6 +481,8 @@ def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor]) -> 
         "If needed, respond only with the JSON tool invocation or a safe read-only batch.\n"
         "For repository inspection, directory listing alone is rarely enough. "
         "Prefer at least one relevant files.read, files.search, or context.prepare step before summarizing."
+        "\nDo not call files.read on directories; use files.list for directories and files.search for broader exploration."
+        "\nAvoid shell pipelines or command chaining in shell.exec. Prefer files.search, context.prepare, or simple single commands."
         f"\n\n{build_tool_prompt_section(tools)}"
     )
 
@@ -510,6 +511,7 @@ def compose_tool_follow_up_prompt(
         "If you already have enough information, answer the user directly.\n"
         "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
         "Prefer a follow-up files.read, files.search, or context.prepare step unless the user asked only for a directory listing."
+        "\nDo not use files.read on directories. Avoid shell.exec pipelines or chained shell commands."
         f"{corrective_line}"
     )
 

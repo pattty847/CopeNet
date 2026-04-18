@@ -308,8 +308,15 @@ def classify_probe_bundle(
     if classification == "no_tool_when_expected" and _looks_like_adjacent_tool_json(assistant_content):
         classification = "malformed_multi_tool_output"
 
-    if any(str(step.get("status") or "").strip() == "blocked" for step in tool_steps):
-        classification = "tool_blocked"
+    blocked_steps = [step for step in tool_steps if str(step.get("status") or "").strip() == "blocked"]
+    ok_steps = [step for step in tool_steps if bool(step.get("ok"))]
+    if blocked_steps:
+        if ok_steps:
+            classification = "partial_tool_success_with_block"
+        elif terminal_reason == "completed":
+            classification = "blocked_but_recovered"
+        else:
+            classification = "tool_blocked_terminal"
     elif transition_reason == "tool_error_correction":
         classification = "tool_error_corrected"
     elif terminal_reason == "tool_error_terminal":
@@ -323,7 +330,9 @@ def classify_probe_bundle(
         classification = "session_resume_drift"
 
     if classification not in {
-        "tool_blocked",
+        "partial_tool_success_with_block",
+        "blocked_but_recovered",
+        "tool_blocked_terminal",
         "runtime_error",
         "session_resume_drift",
         "tool_error_corrected",
@@ -484,11 +493,31 @@ def render_probe_report(summary: ProbeSummary) -> str:
         )
 
     failures: dict[str, list[dict[str, Any]]] = {}
+    recoveries: dict[str, list[dict[str, Any]]] = {}
     for row in rows:
         classification = str(row["classification"])
         if classification.endswith("success"):
             continue
+        if classification in {
+            "partial_tool_success_with_block",
+            "blocked_but_recovered",
+            "tool_error_corrected",
+            "resume_followup_success",
+            "oversized_output_persisted",
+        }:
+            recoveries.setdefault(classification, []).append(row)
+            continue
         failures.setdefault(classification, []).append(row)
+    if recoveries:
+        lines.extend(["", "## Recoveries", ""])
+        for classification, items in sorted(recoveries.items()):
+            lines.append(f"### {classification}")
+            lines.append("")
+            for item in items:
+                lines.append(
+                    f"- `{item['provider']}` / `{item.get('model') or '(default)'}` / `{item['probe_name']}`"
+                )
+            lines.append("")
     if failures:
         lines.extend(["", "## Failures", ""])
         for classification, items in sorted(failures.items()):

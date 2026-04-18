@@ -28,6 +28,10 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
     command = str(request.arguments.get("command") or "").strip()
     if not command:
         raise ValueError("command is required")
+    if any(token in command for token in ("|", "&&", "||", ";", ">")):
+        raise ToolBlockedError(
+            "shell.exec accepts one allowlisted command only; do not use pipes, chaining, or redirection"
+        )
     argv = expand_shell_argv(shlex.split(command))
     if not argv:
         raise ValueError("command is required")

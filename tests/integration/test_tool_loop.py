@@ -272,7 +272,7 @@ async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
         tool_json=(
             '{"tool_calls":['
             '{"tool_id":"files.list","arguments":{"path":"."}},'
-            '{"tool_id":"git.status","arguments":{}}'
+            '{"tool_id":"shell.exec","arguments":{"command":"pwd"}}'
             ']}'
         ),
         follow_up="The batch request was blocked.",
@@ -310,7 +310,52 @@ async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
     meta_event = next(event for event in events if event.kind == "meta")
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is False
-    assert any(event == "tool_blocked" for event, _ in traces)
+    blocked_trace = next(payload for event, payload in traces if event == "tool_blocked")
+    assert blocked_trace is not None
+    assert blocked_trace["toolId"] == "tool.batch"
+    assert blocked_trace["step"] == 1
+    assert "shell.exec" in blocked_trace["rawText"]
+
+
+@pytest.mark.asyncio
+async def test_harness_allows_safe_batch_with_context_prepare(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    provider = PromptedBatchProvider(
+        tool_json=(
+            '{"tool_calls":['
+            '{"tool_id":"files.list","arguments":{"path":"."}},'
+            '{"tool_id":"context.prepare","arguments":{"query":"inspect runtime"}}'
+            ']}'
+        ),
+        follow_up="Used the list plus prepared context to answer.",
+    )
+    harness = ChatHarness()
+    registry = ToolRegistry()
+    tool_context = ToolExecutionContext(
+        workdir=tmp_path,
+        session_key="alpha",
+        provider_name="prompted",
+        model=None,
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        providers={"prompted": provider},
+        policy=ToolPolicy(),
+        trace=None,
+    )
+    _, stream = await harness.run_turn(
+        provider=provider,
+        prompt="Inspect the repo",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        available_tools=registry.list_tools(),
+        tool_executor=registry.execute,
+        tool_context=tool_context,
+    )
+    events = [event async for event in stream]
+
+    meta_event = next(event for event in events if event.kind == "meta")
+    assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
+    assert meta_event.metadata["toolExecution"]["ok"] is True
 
 
 @pytest.mark.asyncio
@@ -409,3 +454,55 @@ async def test_harness_persists_oversized_tool_output_as_artifact(tmp_path: Path
     assert artifacts
     assert artifacts[0].type == "tool_output"
     assert any(event == "tool_result_persisted" for event, _ in traces)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_tool_loop_surfaces_directory_guidance_for_files_read(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    (tmp_path / "src").mkdir()
+    provider = PromptedToolProvider(
+        tool_json='{"tool_id":"files.read","arguments":{"path":"src"}}',
+        follow_up="That path is a directory, so I should use files.list instead.",
+    )
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={"prompted": provider},
+    )
+
+    _, events = await _collect(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect src", provider="prompted"),
+    )
+
+    final_event = events[-1]
+    assert final_event["toolExecution"]["toolId"] == "files.read"
+    assert final_event["toolExecution"]["ok"] is False
+    assert "path is a directory" in final_event["toolExecution"]["error"]
+    assert "use files.list to inspect directories" in final_event["toolExecution"]["error"]
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_tool_loop_blocks_shell_pipelines_with_actionable_error(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    provider = PromptedToolProvider(
+        tool_json='{"tool_id":"shell.exec","arguments":{"command":"rg session | head"}}',
+        follow_up="The shell command was blocked, so I should use files.search or a simpler command.",
+    )
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={"prompted": provider},
+    )
+
+    _, events = await _collect(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Search for session references", provider="prompted"),
+    )
+
+    final_event = events[-1]
+    assert final_event["toolExecution"]["toolId"] == "shell.exec"
+    assert final_event["toolExecution"]["ok"] is False
+    assert "do not use pipes, chaining, or redirection" in final_event["toolExecution"]["error"]

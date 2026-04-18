@@ -22,13 +22,14 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
         run_record={
             "status": "ok",
             "toolSteps": [{"toolId": "files.list", "status": "blocked"}],
+            "terminalReason": "tool_error_terminal",
             "outputSummary": "blocked",
         },
         transcript=[],
         artifacts=[],
         trace_path=None,
     )
-    assert blocked["classification"] == "tool_blocked"
+    assert blocked["classification"] == "tool_blocked_terminal"
 
     batch = classify_probe_bundle(
         probe=spec,
@@ -95,6 +96,37 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
     )
     assert corrected["classification"] == "tool_error_corrected"
     assert corrected["oversized_tool_artifact_ids"] == ["artifact-1"]
+
+    partial = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "files.read", "status": "blocked", "ok": False},
+            ],
+            "outputSummary": "partial success",
+            "terminalReason": "completed",
+        },
+        transcript=[],
+        artifacts=[],
+        trace_path=None,
+    )
+    assert partial["classification"] == "partial_tool_success_with_block"
+
+    recovered = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [{"toolId": "tool.batch", "status": "blocked", "ok": False}],
+            "outputSummary": "answered after block",
+            "terminalReason": "completed",
+        },
+        transcript=[],
+        artifacts=[],
+        trace_path=None,
+    )
+    assert recovered["classification"] == "blocked_but_recovered"
 
 
 def test_write_probe_bundle_creates_expected_files(tmp_path: Path) -> None:
@@ -193,3 +225,52 @@ def test_validate_debug_copy_bundle_and_report_handle_mismatch() -> None:
     assert "mismatch" in report
     summary_json = summary.to_json()
     assert summary_json["transition_reason_counts"] == {}
+
+
+def test_render_probe_report_separates_recoveries_from_failures() -> None:
+    recovered = ProbeBundle(
+        provider="lm-studio",
+        model="gemma-2b",
+        probe_name="repo_tools_emphasis",
+        prompt="Inspect",
+        session_key="alpha",
+        run_id="run-1",
+        started_at="2026-01-01T00:00:00+00:00",
+        finished_at="2026-01-01T00:00:01+00:00",
+        duration_ms=1000,
+        classification="partial_tool_success_with_block",
+        final_state="ok",
+        tool_step_count=3,
+        tool_ids=["files.list", "files.read", "tool.batch"],
+    )
+    failed = ProbeBundle(
+        provider="codex-cli",
+        model="gpt-5.4",
+        probe_name="same_session_repeat_probe",
+        prompt="Inspect again",
+        session_key="beta",
+        run_id="run-2",
+        started_at="2026-01-01T00:00:02+00:00",
+        finished_at="2026-01-01T00:00:03+00:00",
+        duration_ms=1000,
+        classification="tool_blocked_terminal",
+        final_state="ok",
+        tool_step_count=1,
+        tool_ids=["tool.batch"],
+    )
+    summary = ProbeSummary(
+        generated_at="2026-01-01T00:00:04+00:00",
+        suite_dir="/tmp/probe_runs/demo",
+        targets=[
+            {"provider": "lm-studio", "model": "gemma-2b"},
+            {"provider": "codex-cli", "model": "gpt-5.4"},
+        ],
+        results=[recovered, failed],
+    )
+
+    report = render_probe_report(summary)
+
+    assert "## Recoveries" in report
+    assert "### partial_tool_success_with_block" in report
+    assert "## Failures" in report
+    assert "### tool_blocked_terminal" in report
