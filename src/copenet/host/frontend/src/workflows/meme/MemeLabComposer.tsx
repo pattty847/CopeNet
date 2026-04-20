@@ -76,7 +76,7 @@ export function MemeLabComposer({
   return (
     <form
       onSubmit={handleSubmit}
-      className="relative flex h-full flex-col overflow-hidden rounded-[22px] border border-shell-border bg-shell-panel shadow-shell"
+      className="relative flex flex-col overflow-hidden rounded-[22px] border border-shell-border bg-shell-panel shadow-shell lg:h-full"
     >
       {/* Title rail */}
       <header className="flex items-center justify-between gap-2 border-b border-shell-border px-4 py-3">

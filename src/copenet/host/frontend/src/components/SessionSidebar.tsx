@@ -15,7 +15,7 @@ function timeAgo(dateString?: string | null) {
   return `${diffDays}d ago`;
 }
 
-export function SessionSidebar() {
+export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const setActiveSessionKey = useAppStore((state) => state.setActiveSessionKey);
@@ -53,7 +53,7 @@ export function SessionSidebar() {
 
   if (!sidebarOpen) {
     return (
-      <aside className="w-11 bg-operator-bg flex flex-col h-full items-center py-3 gap-3">
+      <aside className={`${mobile ? 'hidden' : 'w-11'} bg-operator-bg flex flex-col h-full items-center py-3 gap-3`}>
         <button
           onClick={() => setSidebarOpen(true)}
           className="flex h-8 w-8 items-center justify-center rounded-xl text-operator-muted hover:text-operator-accent hover:bg-operator-panel transition-all duration-150"
@@ -78,7 +78,7 @@ export function SessionSidebar() {
   }
 
   return (
-    <aside className="w-64 border-r border-operator-border bg-operator-bg flex flex-col h-full">
+    <aside className={`${mobile ? 'w-full border-r-0' : 'w-64 border-r'} border-operator-border bg-operator-bg flex h-full flex-col`}>
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-1.5">
         <button

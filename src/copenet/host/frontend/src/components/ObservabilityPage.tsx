@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react';
 import { Activity, RefreshCw, ShieldAlert, Wrench, Zap } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
+import { useIsMobile } from '../lib/responsive';
+import { clampResponsiveText } from '../lib/mobileCopy';
 import type { SessionRunRecord } from '../types/backend';
 import { RunPulseStrip } from './runtime/RunPulseStrip';
 import { TraceList } from './runtime/TraceList';
@@ -35,6 +37,7 @@ function runIsCompleted(run: SessionRunRecord): boolean {
 export function ObservabilityPage() {
   const sessions = useAppStore((s) => s.sessions);
   const providers = useAppStore((s) => s.providers);
+  const isMobile = useIsMobile();
   const [runs, setRuns] = useState<SessionRunRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [lastFetch, setLastFetch] = useState<number | null>(null);
@@ -183,13 +186,13 @@ export function ObservabilityPage() {
   return (
     <div className="animate-fade-in-up space-y-3">
       {/* Condensed hero */}
-      <section className="flex flex-wrap items-end justify-between gap-4 rounded-[20px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
-        <div className="max-w-2xl">
+      <section className="flex flex-col gap-4 overflow-hidden rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+        <div className="max-w-2xl min-w-0">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-shell-accent/20 bg-shell-accent-soft px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
             <Activity className="h-3 w-3" />
             Observability
           </div>
-          <h1 className="font-display text-[2rem] leading-[1.05] tracking-tight text-shell-text">
+          <h1 className="font-display text-[1.7rem] leading-[1.05] tracking-tight text-shell-text sm:text-[2rem]">
             Trace the work, not just the answer.
           </h1>
           <p className="mt-2 max-w-xl text-[13px] leading-6 text-shell-muted">
@@ -197,7 +200,7 @@ export function ObservabilityPage() {
             surfaced so the operator can understand what really happened.
           </p>
         </div>
-        <div className="flex items-center gap-3 font-mono text-[11px] tabular-nums text-shell-muted">
+        <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] tabular-nums text-shell-muted">
           <span>
             last refresh{' '}
             <span className="text-shell-text">
@@ -263,9 +266,11 @@ export function ObservabilityPage() {
                   const errPct = row.total > 0 ? (row.errors / row.total) * 100 : 0;
                   return (
                     <li key={row.provider} className="font-mono text-[11px] tabular-nums">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="text-shell-text">{row.provider}</span>
-                        <span className="text-shell-muted">
+                      <div className="mb-1 flex min-w-0 items-center justify-between gap-2 overflow-hidden">
+                        <span className="block min-w-0 flex-1 truncate text-shell-text" title={row.provider}>
+                          {clampResponsiveText(row.provider, { isMobile, mobileLimit: 16, desktopLimit: 36 })}
+                        </span>
+                        <span className="shrink-0 text-shell-muted">
                           {row.total}
                           {row.errors > 0 && <span className="text-shell-error"> · {row.errors} err</span>}
                         </span>
@@ -307,9 +312,11 @@ export function ObservabilityPage() {
                   const pct = Math.max(4, (row.total / toolDistribution.max) * 100);
                   return (
                     <li key={row.tool} className="font-mono text-[11px] tabular-nums">
-                      <div className="mb-1 flex items-center justify-between">
-                        <span className="truncate text-shell-text">{row.tool}</span>
-                        <span className="text-shell-muted">
+                      <div className="mb-1 flex min-w-0 items-center justify-between gap-2 overflow-hidden">
+                        <span className="block min-w-0 flex-1 truncate text-shell-text" title={row.tool}>
+                          {clampResponsiveText(row.tool, { isMobile, mobileLimit: 20, desktopLimit: 40 })}
+                        </span>
+                        <span className="shrink-0 text-shell-muted">
                           {row.total}
                           {row.errors > 0 && <span className="text-shell-error"> · {row.errors}</span>}
                         </span>

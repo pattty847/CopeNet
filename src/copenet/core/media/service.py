@@ -60,6 +60,14 @@ class MediaIngestionService:
             whisper_model=whisper_model,
         )
 
+    async def download_url(
+        self,
+        *,
+        url: str,
+    ) -> tuple[Path, dict[str, Any]]:
+        """Download one remote media URL without persisting a CopeNet asset."""
+        return await self.downloader.download_best_video(url)
+
     async def stream_import_url(
         self,
         *,

@@ -3,8 +3,10 @@ import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
-import { Archive, ArchiveRestore, Paperclip, Mic, Send } from 'lucide-react';
+import { Paperclip, Mic, Send } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
+import { useIsMobile } from '../lib/responsive';
+import { getConversationDebugHelperText } from '../lib/agentMobile';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -24,6 +26,7 @@ export function ChatWorkspace() {
   const isArchived = Boolean(activeSession?.archived);
   const composerDisabled = isArchived || Boolean(activeRunId);
   const canDebugConversation = Boolean(activeSession);
+  const isMobile = useIsMobile();
 
   const [input, setInput] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -119,7 +122,7 @@ export function ChatWorkspace() {
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg flex flex-col">
-        <div className="flex items-center justify-between gap-4 px-5 py-3">
+        <div className={`flex gap-3 px-4 py-2.5 sm:px-5 sm:py-3 ${isMobile ? 'flex-col items-stretch' : 'items-center justify-between'}`}>
           <div className="flex-1 min-w-0">
             {/* Title */}
             {isEditingTitle ? (
@@ -148,14 +151,14 @@ export function ChatWorkspace() {
               </h1>
             )}
 
-            {!isDraft && activeSession && (
+            {!isDraft && activeSession && !isMobile && (
               <div className="text-[11px] text-operator-muted font-mono mt-0.5 opacity-60 truncate">
                 {activeSession.key}
               </div>
             )}
 
             {/* Metadata badges */}
-            <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px] font-semibold uppercase tracking-wider">
+            <div className={`mt-2 flex flex-wrap items-center gap-1.5 font-semibold uppercase tracking-wider ${isMobile ? 'text-[9px]' : 'text-[10px]'}`}>
               <span className={`animate-scale-pop px-2 py-0.5 rounded-md border ${
                 isDraft
                   ? 'border-operator-accent/30 bg-operator-accent/8 text-operator-accent'
@@ -179,22 +182,15 @@ export function ChatWorkspace() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-1.5 shrink-0 ml-3">
+          <div className={`flex shrink-0 items-center gap-1.5 ${isMobile ? 'w-full flex-wrap pt-1' : 'ml-3'}`}>
             <ConversationDebugActions
               disabled={!canDebugConversation}
-              helperText={isArchived ? 'Read-only debugging' : 'Conversation debugging'}
+              helperText={getConversationDebugHelperText(isMobile, isArchived)}
+              compact={isMobile}
               onDebugCopy={handleDebugCopy}
               onExportConversation={handleExportConversation}
+              onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
             />
-            {activeSession && (
-              <button
-                onClick={() => void wsClient.archiveSession(activeSession.key, !activeSession.archived)}
-                className="px-3 py-1.5 border border-operator-border text-operator-muted hover:text-operator-text hover:border-operator-border rounded-lg text-[12px] font-medium flex items-center gap-1.5 transition-all duration-150"
-              >
-                {activeSession.archived ? <ArchiveRestore className="w-3.5 h-3.5" /> : <Archive className="w-3.5 h-3.5" />}
-                {activeSession.archived ? 'Restore' : 'Archive'}
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -212,7 +208,7 @@ export function ChatWorkspace() {
       {/* Working Set — glanceable, pinned above the message stream */}
       <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />
 
-      {canDebugConversation && (
+      {canDebugConversation && !isMobile && (
         <div className="border-b border-operator-border bg-operator-panel/25 px-5 py-2 text-[11px] text-operator-muted">
           <span className="font-semibold text-operator-text">Debug tools</span>
           {' '}

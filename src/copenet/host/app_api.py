@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import mimetypes
 import os
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
 from fastapi import APIRouter, Depends, Header, HTTPException, status
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
 from copenet.core.meme_ideation import MemeIdeationRequest, ideate_memes
@@ -67,6 +68,10 @@ class MediaImportRequest(BaseModel):
     include_timestamps: bool = Field(default=True, alias="includeTimestamps")
     prefer_captions: bool = Field(default=True, alias="preferCaptions")
     whisper_model: str = Field(default="base", alias="whisperModel")
+
+
+class MediaDownloadRequest(BaseModel):
+    url: str
 
 
 def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionService | None = None) -> APIRouter:
@@ -415,6 +420,16 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         except Exception as exc:
             raise _media_error(exc) from exc
         return {"asset": asset.to_public_dict()}
+
+    @router.post("/media/download")
+    async def download_media(body: MediaDownloadRequest, app: AuthenticatedApp = Depends(require_media_access)) -> FileResponse:
+        try:
+            media_path, metadata = await media.download_url(url=body.url)
+        except Exception as exc:
+            raise _media_error(exc) from exc
+        media_type = mimetypes.guess_type(media_path.name)[0] or "application/octet-stream"
+        filename = str(metadata.get("filename") or media_path.name)
+        return FileResponse(path=media_path, media_type=media_type, filename=filename)
 
     @router.get("/media/import/stream")
     async def stream_import_media(

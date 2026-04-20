@@ -24,7 +24,7 @@ function timeAgo(dateString?: string | null) {
 const selectClass =
   'bg-operator-bg border border-operator-border text-operator-text text-[12px] px-2 py-1.5 rounded-lg focus:outline-none focus:border-operator-accent/40 w-full transition-colors duration-150';
 
-export function RightPanel() {
+export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const sessions = useAppStore((state) => state.sessions);
   const messagesMap = useAppStore((state) => state.messages);
@@ -101,7 +101,7 @@ export function RightPanel() {
     );
   };
 
-  if (!rightPanelOpen) {
+  if (!rightPanelOpen && !mobile) {
     return (
       <aside className="w-11 bg-operator-bg flex flex-col h-full items-center py-3 gap-3">
         <button
@@ -133,16 +133,20 @@ export function RightPanel() {
   ];
 
   return (
-    <aside className="w-[22rem] xl:w-[26rem] 2xl:w-[30rem] min-w-[20rem] border-l border-operator-border bg-operator-bg flex flex-col h-full overflow-hidden">
+    <aside
+      className={`${mobile ? 'w-full min-w-0 border-l-0' : 'w-[22rem] min-w-[20rem] border-l xl:w-[26rem] 2xl:w-[30rem]'} border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden`}
+    >
       {/* Header */}
       <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
-        <button
-          onClick={() => setRightPanelOpen(false)}
-          className="p-1 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg"
-          title="Collapse panel"
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
+        {!mobile && (
+          <button
+            onClick={() => setRightPanelOpen(false)}
+            className="p-1 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg"
+            title="Collapse panel"
+          >
+            <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        )}
         <Activity className="w-3.5 h-3.5 text-operator-accent" />
         <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Inspector</h2>
       </div>

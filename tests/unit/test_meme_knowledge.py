@@ -2,7 +2,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from copenet.core.meme_knowledge import build_meme_knowledge_index, build_meme_knowledge_pack
+from copenet.core.meme_knowledge import (
+    build_meme_knowledge_index,
+    build_meme_knowledge_pack,
+    resolve_meme_library_root,
+)
 
 
 def _write(path: Path, content: str) -> None:
@@ -47,6 +51,14 @@ def _seed_library(root: Path) -> None:
         root / "Case Studies" / "2026-04-19-sports-talk-gibberish-parody.md",
         """# Sports talk gibberish parody\n\n## Why it works\nCadence-first gibberish parody with fake stat rhythm and overconfident analysis.\n""",
     )
+
+
+def test_resolve_meme_library_root_defaults_to_generic_copenet_path(monkeypatch) -> None:
+    monkeypatch.delenv("COPNET_MEME_KB_ROOT", raising=False)
+
+    resolved = resolve_meme_library_root()
+
+    assert resolved == Path.home() / ".copenet" / "knowledge" / "meme-style-library"
 
 
 def test_build_meme_knowledge_index_normalizes_docs_and_writes_cache(tmp_path: Path) -> None:

@@ -15,6 +15,8 @@ import {
   StickyNote,
 } from 'lucide-react';
 import { useWorkingSet } from '../../runtime/adapter';
+import { useIsMobile } from '../../lib/responsive';
+import { getWorkingSetSectionLabel, shouldUseWorkingSetCompactGrid } from '../../lib/agentMobile';
 import type { RuntimeStatus, WorkingSetEntity } from '../../runtime/types';
 
 interface WorkingSetCardProps {
@@ -90,6 +92,7 @@ function InlineStrip({ icon: Icon, tone, children }: {
 
 export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
   const [expanded, setExpanded] = useState(true);
+  const isMobile = useIsMobile();
   // Drafts bypass the adapter entirely — draft is a UI state, not runtime data.
   const resource = useWorkingSet(isDraft ? null : sessionKey);
 
@@ -144,7 +147,7 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
           <Brain className="w-3.5 h-3.5" />
         </div>
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2 mb-0.5">
+          <div className={`mb-0.5 flex items-center gap-2 ${isMobile ? 'flex-wrap' : ''}`}>
             <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted">Working Set</span>
             <span className={`flex items-center gap-1 text-[10px] font-semibold uppercase tracking-wider ${status.text}`}>
               <span className="relative flex h-1.5 w-1.5">
@@ -169,21 +172,21 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
       </button>
 
       {expanded && (
-        <div className="border-t border-operator-border/60 px-3 py-2.5 grid grid-cols-1 md:grid-cols-3 gap-3 animate-fade-in-up">
+        <div className={`border-t border-operator-border/60 px-3 py-2.5 grid gap-3 animate-fade-in-up ${shouldUseWorkingSetCompactGrid(isMobile) ? 'grid-cols-3 gap-2' : 'grid-cols-1 md:grid-cols-3'}`}>
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5">
-              Active Entities · {workingSet.entities.length}
+            <div className="mb-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
+              {getWorkingSetSectionLabel('entities', isMobile)} · {workingSet.entities.length}
             </div>
             <ul className="space-y-1">
               {workingSet.entities.slice(0, 5).map((e) => {
                 const Icon = entityIcon(e.kind);
                 return (
-                  <li key={e.id} className="flex items-start gap-1.5 text-[12px] leading-snug">
+                  <li key={e.id} className={`flex items-start gap-1.5 leading-snug ${isMobile ? 'text-[11px]' : 'text-[12px]'}`}>
                     <Icon className="w-3 h-3 text-operator-muted mt-0.5 shrink-0" />
                     <div className="min-w-0">
-                      <div className="text-operator-text truncate font-mono text-[11px]">{e.label}</div>
+                      <div className={`truncate font-mono text-operator-text ${isMobile ? 'text-[10px]' : 'text-[11px]'}`} title={e.label}>{e.label}</div>
                       {e.detail && (
-                        <div className="text-operator-muted/80 text-[10px] truncate">{e.detail}</div>
+                        <div className={`truncate text-operator-muted/80 ${isMobile ? 'text-[9px]' : 'text-[10px]'}`} title={e.detail}>{e.detail}</div>
                       )}
                     </div>
                   </li>
@@ -193,17 +196,17 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
           </div>
 
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5">
-              Constraints · {workingSet.constraints.length}
+            <div className="mb-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
+              {getWorkingSetSectionLabel('constraints', isMobile)} · {workingSet.constraints.length}
             </div>
             <ul className="space-y-1">
               {workingSet.constraints.map((c) => {
                 const Icon = constraintIcon(c.severity);
                 const tone = constraintTone(c.severity);
                 return (
-                  <li key={c.id} className="flex items-start gap-1.5 text-[12px] leading-snug">
+                  <li key={c.id} className={`flex items-start gap-1.5 leading-snug ${isMobile ? 'text-[11px]' : 'text-[12px]'}`}>
                     <Icon className={`w-3 h-3 mt-0.5 shrink-0 ${tone}`} />
-                    <span className="text-operator-text/90">{c.text}</span>
+                    <span className={`text-operator-text/90 ${isMobile ? 'line-clamp-2 text-[10px]' : ''}`} title={c.text}>{c.text}</span>
                   </li>
                 );
               })}
@@ -211,18 +214,18 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
           </div>
 
           <div>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5">
-              Open Questions · {workingSet.questions.length}
+            <div className="mb-1.5 truncate text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
+              {getWorkingSetSectionLabel('questions', isMobile)} · {workingSet.questions.length}
             </div>
             <ul className="space-y-1">
               {workingSet.questions.map((q) => (
-                <li key={q.id} className="flex items-start gap-1.5 text-[12px] leading-snug">
+                <li key={q.id} className={`flex items-start gap-1.5 leading-snug ${isMobile ? 'text-[11px]' : 'text-[12px]'}`}>
                   <HelpCircle className="w-3 h-3 text-operator-accent mt-0.5 shrink-0" />
-                  <span className="text-operator-text/90">{q.text}</span>
+                  <span className={`text-operator-text/90 ${isMobile ? 'line-clamp-2 text-[10px]' : ''}`} title={q.text}>{q.text}</span>
                 </li>
               ))}
               {workingSet.questions.length === 0 && (
-                <li className="text-[11px] text-operator-muted italic">No open questions</li>
+                <li className={`text-operator-muted italic ${isMobile ? 'text-[10px]' : 'text-[11px]'}`}>No open questions</li>
               )}
             </ul>
           </div>

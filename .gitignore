@@ -20,3 +20,6 @@ docs/private/
 docs/blueprints/
 # Added by code-review-graph
 .code-review-graph/
+knowledge-cache/
+config/knowledge-sources.local.toml
+config/*.local.toml

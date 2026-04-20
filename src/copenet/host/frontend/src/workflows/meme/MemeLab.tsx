@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { Spinner } from '../../components/Spinner';
+import { useIsMobile } from '../../lib/responsive';
+import { MobileSheet } from '../../components/mobile/MobileSheet';
 import { MemeArena } from './MemeArena';
 import { MemeCandidateCard } from './MemeCandidateCard';
 import { MemeGallery } from './MemeGallery';
@@ -27,7 +29,12 @@ interface MemeLabProps {
 
 export function MemeLab({ onExit }: MemeLabProps) {
   const state = useMemeLab();
+  const isMobile = useIsMobile();
   const setCommandPaletteOpen = useAppStore((s) => s.setCommandPaletteOpen);
+  const mobileMemeHistoryOpen = useAppStore((s) => s.mobileMemeHistoryOpen);
+  const setMobileMemeHistoryOpen = useAppStore((s) => s.setMobileMemeHistoryOpen);
+  const mobileMemeKeepersOpen = useAppStore((s) => s.mobileMemeKeepersOpen);
+  const setMobileMemeKeepersOpen = useAppStore((s) => s.setMobileMemeKeepersOpen);
 
   const {
     brief,
@@ -81,6 +88,111 @@ export function MemeLab({ onExit }: MemeLabProps) {
     });
     setViewMode('arena');
   };
+
+  if (isMobile) {
+    return (
+      <div className="relative flex h-full min-h-0 animate-fade-in-up flex-col gap-3">
+        <section className="flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-[22px] border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-4 py-3 shadow-shell">
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onExit}
+              className="focus-ring inline-flex items-center gap-1 rounded-lg border border-shell-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-shell-muted transition-colors hover:border-shell-accent/40 hover:text-shell-accent"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              workflows
+            </button>
+            <div>
+              <h1 className="font-display text-[1.6rem] leading-none tracking-tight text-shell-text">Meme Lab</h1>
+              <div className="mt-0.5 font-mono text-[11px] tabular-nums text-shell-muted">
+                phone workbench · meme + arena
+              </div>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setMobileMemeHistoryOpen(true)}
+              className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
+            >
+              History
+            </button>
+            <button
+              type="button"
+              onClick={() => setMobileMemeKeepersOpen(true)}
+              className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
+            >
+              Keepers
+            </button>
+          </div>
+        </section>
+
+        <div className="min-h-0 flex-1 space-y-3 overflow-y-auto pb-2">
+          <MemeLabComposer
+            brief={brief}
+            patchBrief={patchBrief}
+            onGenerate={generate}
+            onCancel={cancelGenerate}
+            isGenerating={isGenerating}
+            error={generationError}
+          />
+          <ModeTabs viewMode={viewMode} setViewMode={setViewMode} activeGeneration={activeGeneration} />
+          <div className="min-h-[45svh]">
+            {activeGeneration ? (
+              viewMode === 'arena' ? (
+                <MemeArena
+                  generation={activeGeneration}
+                  rankings={rankings}
+                  arena={arena}
+                  ensurePair={ensureArenaPair}
+                  rotate={rotateArenaRight}
+                  onBumpScore={bumpScore}
+                  onTogglePin={togglePin}
+                  onSelectLeft={(id) => setArena((prev) => ({ ...prev, leftId: id }))}
+                  onSelectRight={(id) => setArena((prev) => ({ ...prev, rightId: id }))}
+                />
+              ) : viewMode === 'gallery' ? (
+                <MemeGallery
+                  generation={activeGeneration}
+                  rankings={rankings}
+                  onBumpScore={bumpScore}
+                  onTogglePin={togglePin}
+                  onSendToArena={sendToArena}
+                />
+              ) : (
+                <StreamView
+                  generation={activeGeneration}
+                  rankings={rankings}
+                  onBumpScore={bumpScore}
+                  onTogglePin={togglePin}
+                  onSendToArena={sendToArena}
+                />
+              )
+            ) : (
+              <EmptyCenter isGenerating={isGenerating} />
+            )}
+          </div>
+        </div>
+
+        <MobileSheet open={mobileMemeHistoryOpen} onClose={() => setMobileMemeHistoryOpen(false)} title="History" fullHeight>
+          <HistoryPanel
+            generations={generations}
+            activeId={activeGeneration?.id ?? null}
+            onSelect={(id) => {
+              setActive(id);
+              setMobileMemeHistoryOpen(false);
+            }}
+            onDelete={deleteGeneration}
+            onClear={clearAll}
+          />
+        </MobileSheet>
+
+        <MobileSheet open={mobileMemeKeepersOpen} onClose={() => setMobileMemeKeepersOpen(false)} title="Keepers" fullHeight>
+          <KeeperRail rankings={rankings} generations={generations} />
+        </MobileSheet>
+      </div>
+    );
+  }
 
   return (
     <div className="relative flex h-full min-h-0 animate-fade-in-up flex-col gap-3">

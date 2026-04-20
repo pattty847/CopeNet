@@ -147,3 +147,32 @@ export async function importMediaFromUrl(
   }
   return finalAsset;
 }
+
+export async function downloadMediaFromUrl(url: string): Promise<void> {
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/media/download`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url }),
+  });
+  if (!response.ok) {
+    const payload = await readJson<{ detail?: string }>(response);
+    throw new Error(String(payload.detail || 'Media download failed.'));
+  }
+
+  const blob = await response.blob();
+  const downloadUrl = URL.createObjectURL(blob);
+  const contentDisposition = response.headers.get('content-disposition') || '';
+  const filenameMatch = contentDisposition.match(/filename="?([^"]+)"?/i);
+  const filename = filenameMatch?.[1] || 'copenet-media.mp4';
+  const anchor = document.createElement('a');
+  anchor.href = downloadUrl;
+  anchor.download = filename;
+  anchor.rel = 'noopener';
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+}

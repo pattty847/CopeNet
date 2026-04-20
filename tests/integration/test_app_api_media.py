@@ -43,11 +43,15 @@ class FakeMediaAsset:
 
 
 class FakeMediaService:
-    def __init__(self) -> None:
+    def __init__(self, tmp_path: Path) -> None:
         self.assets = [
             FakeMediaAsset("media-1", "Clip One", "First imported transcript excerpt."),
         ]
         self.last_import: dict[str, object] | None = None
+        self.last_download: dict[str, object] | None = None
+        self.download_path = tmp_path / "downloads" / "funny-clip.mp4"
+        self.download_path.parent.mkdir(parents=True, exist_ok=True)
+        self.download_path.write_bytes(b"fake-video")
 
     async def import_url(
         self,
@@ -82,6 +86,20 @@ class FakeMediaService:
         yield {"type": "chunk", "text": "first chunk"}
         yield {"type": "done", "asset": self.assets[0].to_public_dict()}
 
+    async def download_url(
+        self,
+        *,
+        url: str,
+    ) -> tuple[Path, dict[str, object]]:
+        self.last_download = {
+            "url": url,
+        }
+        return self.download_path, {
+            "title": "Funny Clip",
+            "filename": self.download_path.name,
+            "source": "yt-dlp",
+        }
+
     def list_assets(self, *, app_id: str, limit: int = 50) -> list[dict[str, object]]:
         return [asset.to_public_dict() for asset in self.assets[:limit]]
 
@@ -93,6 +111,9 @@ class FakeMediaService:
 
 
 class BrokenMediaService(FakeMediaService):
+    def __init__(self, tmp_path: Path) -> None:
+        super().__init__(tmp_path)
+
     async def import_url(self, **kwargs):  # type: ignore[override]
         raise MediaDependencyError("yt-dlp is not installed.")
 
@@ -108,7 +129,7 @@ def media_app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         providers={},
     )
     _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext")
-    media_service = FakeMediaService()
+    media_service = FakeMediaService(tmp_path)
     app = create_app(orchestrator, media_service=media_service)
     with TestClient(app) as client:
         yield client, token, media_service
@@ -195,7 +216,7 @@ def test_media_import_dependency_error_maps_to_service_unavailable(monkeypatch: 
         providers={},
     )
     _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext")
-    app = create_app(orchestrator, media_service=BrokenMediaService())
+    app = create_app(orchestrator, media_service=BrokenMediaService(tmp_path))
     with TestClient(app) as client:
         response = client.post(
             "/api/v1/media/import",
@@ -218,3 +239,34 @@ def test_media_routes_accept_gateway_token(media_app_client) -> None:
     assert response.json()["asset"]["assetId"] == "media-2"
     assert media_service.last_import is not None
     assert media_service.last_import["app_id"] == "copenet-web"
+
+
+def test_media_download_returns_attachment_without_persisting_asset(media_app_client) -> None:
+    client, token, media_service = media_app_client
+
+    response = client.post(
+        "/api/v1/media/download",
+        headers=_auth(token),
+        json={"url": "https://example.com/funny-video"},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"fake-video"
+    assert response.headers["content-type"] == "video/mp4"
+    assert 'attachment; filename="funny-clip.mp4"' in response.headers["content-disposition"]
+    assert media_service.last_download == {"url": "https://example.com/funny-video"}
+    assert [asset.asset_id for asset in media_service.assets] == ["media-1"]
+
+
+def test_media_download_accepts_gateway_token(media_app_client) -> None:
+    client, _, media_service = media_app_client
+
+    response = client.post(
+        "/api/v1/media/download",
+        headers=_auth("dev-token"),
+        json={"url": "https://example.com/clip"},
+    )
+
+    assert response.status_code == 200
+    assert response.content == b"fake-video"
+    assert media_service.last_download == {"url": "https://example.com/clip"}

@@ -1,4 +1,6 @@
 import { useMemo } from 'react';
+import { useIsMobile } from '../../lib/responsive';
+import { clampResponsiveText } from '../../lib/mobileCopy';
 import { CheckCircle2, CircleDashed, XCircle, Wrench } from 'lucide-react';
 import type { SessionRunRecord } from '../../types/backend';
 
@@ -37,6 +39,8 @@ function StatusIcon({ run }: { run: SessionRunRecord }) {
 }
 
 export function TraceList({ runs, limit = 12, onSelect }: TraceListProps) {
+  const isMobile = useIsMobile();
+
   const recent = useMemo(
     () =>
       [...runs]
@@ -71,13 +75,20 @@ export function TraceList({ runs, limit = 12, onSelect }: TraceListProps) {
                   className="interactive-row group flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left"
                 >
                   <StatusIcon run={run} />
-                  <span className="font-mono text-[11px] tabular-nums text-shell-accent">
+                  <span className="shrink-0 font-mono text-[11px] tabular-nums text-shell-accent">
                     {run.runId.slice(0, 10)}
                   </span>
-                  <span className="truncate text-[12px] text-shell-text">
-                    {run.userMessage || run.outputSummary || '(no message)'}
+                  <span
+                    className="block min-w-0 flex-1 truncate text-[12px] text-shell-text"
+                    title={run.userMessage || run.outputSummary || '(no message)'}
+                  >
+                    {clampResponsiveText(run.userMessage || run.outputSummary || '(no message)', {
+                      isMobile,
+                      mobileLimit: 42,
+                      desktopLimit: 110,
+                    })}
                   </span>
-                  <span className="ml-auto flex shrink-0 items-center gap-3 font-mono text-[11px] tabular-nums text-shell-muted">
+                  <span className="ml-auto hidden shrink-0 items-center gap-3 font-mono text-[11px] tabular-nums text-shell-muted sm:flex">
                     {run.toolSteps.length > 0 && (
                       <span className="inline-flex items-center gap-1">
                         <Wrench className="h-3 w-3" />
@@ -93,6 +104,9 @@ export function TraceList({ runs, limit = 12, onSelect }: TraceListProps) {
                     >
                       {failed ? 'err' : running ? 'live' : 'ok'}
                     </span>
+                  </span>
+                  <span className="shrink-0 font-mono text-[10px] uppercase tracking-wider text-shell-muted sm:hidden">
+                    {failed ? 'err' : running ? 'live' : 'ok'}
                   </span>
                 </button>
               </li>

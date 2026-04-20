@@ -16,7 +16,7 @@ from copenet.core.knowledge_runtime import (
     write_document_index,
 )
 
-DEFAULT_MEME_LIBRARY_ROOT = Path("/Users/copeharder/Documents/Obsidian/Sable Brain/05 Research/Meme Style Library")
+DEFAULT_MEME_LIBRARY_ROOT = Path.home() / ".copenet" / "knowledge" / "meme-style-library"
 MEME_KNOWLEDGE_PACK_VERSION = "meme-kb-v1"
 MEME_INDEX_FILENAME = "meme_style_library_index.json"
 

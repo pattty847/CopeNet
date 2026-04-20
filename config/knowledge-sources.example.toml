@@ -1,0 +1,18 @@
+# Copy this file to `config/knowledge-sources.local.toml` and customize it locally.
+# This example is documentation-first: it shows the intended shape for personal
+# knowledge roots without committing machine-specific paths.
+
+[knowledge_sources.research_vault]
+kind = "markdown"
+root = "~/Documents/Knowledge/Research Vault"
+description = "Long-form notes, reports, references, and source material."
+
+[knowledge_sources.creative_library]
+kind = "markdown"
+root = "~/Documents/Knowledge/Creative Library"
+description = "Curated prompts, examples, humor theory, and reusable creative patterns."
+
+[runtime.meme_lab]
+# Optional env var that CopeNet can use today.
+memekb_root_env = "COPNET_MEME_KB_ROOT"
+cache_dir_env = "COPNET_MEME_KB_CACHE_DIR"

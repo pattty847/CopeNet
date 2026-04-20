@@ -33,6 +33,16 @@ interface AppState {
   setPrimaryNavCollapsed: (collapsed: boolean) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
+  mobileOverflowOpen: boolean;
+  setMobileOverflowOpen: (open: boolean) => void;
+  mobileSessionsOpen: boolean;
+  setMobileSessionsOpen: (open: boolean) => void;
+  mobileInspectorOpen: boolean;
+  setMobileInspectorOpen: (open: boolean) => void;
+  mobileMemeHistoryOpen: boolean;
+  setMobileMemeHistoryOpen: (open: boolean) => void;
+  mobileMemeKeepersOpen: boolean;
+  setMobileMemeKeepersOpen: (open: boolean) => void;
   rightPanelOpen: boolean;
   setRightPanelOpen: (open: boolean) => void;
   commandPaletteOpen: boolean;
@@ -128,6 +138,16 @@ export const useAppStore = create<AppState>((set) => ({
   setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  mobileOverflowOpen: false,
+  setMobileOverflowOpen: (open) => set({ mobileOverflowOpen: open }),
+  mobileSessionsOpen: false,
+  setMobileSessionsOpen: (open) => set({ mobileSessionsOpen: open }),
+  mobileInspectorOpen: false,
+  setMobileInspectorOpen: (open) => set({ mobileInspectorOpen: open }),
+  mobileMemeHistoryOpen: false,
+  setMobileMemeHistoryOpen: (open) => set({ mobileMemeHistoryOpen: open }),
+  mobileMemeKeepersOpen: false,
+  setMobileMemeKeepersOpen: (open) => set({ mobileMemeKeepersOpen: open }),
   rightPanelOpen: true,
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
   commandPaletteOpen: false,

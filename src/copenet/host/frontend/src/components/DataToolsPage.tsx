@@ -18,9 +18,11 @@ import {
   Video,
   Wrench,
 } from 'lucide-react';
-import { getMediaAssetDetail, importMediaFromUrl, listMediaAssets } from '../lib/appApi';
+import { downloadMediaFromUrl, getMediaAssetDetail, importMediaFromUrl, listMediaAssets } from '../lib/appApi';
+import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail } from '../types/backend';
+import { MobileSheet } from './mobile/MobileSheet';
 
 function formatRelative(timestamp: string): string {
   const then = new Date(timestamp).getTime();
@@ -309,12 +311,14 @@ function MediaAssetDrawer({
   error,
   onClose,
   onUseInAgents,
+  mobile = false,
 }: {
   detail: MediaAssetDetail | null;
   loading: boolean;
   error: string | null;
   onClose: () => void;
   onUseInAgents: (detail: MediaAssetDetail) => void;
+  mobile?: boolean;
 }) {
   if (!detail && !loading && !error) return null;
 
@@ -327,20 +331,20 @@ function MediaAssetDrawer({
     }
   }
 
-  return (
-    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] rounded-[20px] border border-shell-border bg-shell-panel shadow-shell-xl">
-      <div className="flex h-full flex-col overflow-hidden">
-        <div className="flex items-start justify-between gap-4 border-b border-shell-border px-6 py-5">
-          <div>
-            <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Media Asset</div>
-            <h2 className="mt-2 text-2xl font-semibold tracking-tight text-shell-text">{detail?.title || 'Loading transcript…'}</h2>
-            {detail?.sourceUrl && (
-              <a href={detail.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-shell-text hover:text-shell-accent">
-                <ExternalLink className="h-4 w-4" />
-                Open source
-              </a>
-            )}
-          </div>
+  const body = (
+    <div className={`${mobile ? 'flex h-full flex-col overflow-hidden' : 'flex h-full flex-col overflow-hidden'}`}>
+      <div className="flex items-start justify-between gap-4 border-b border-shell-border px-6 py-5">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Media Asset</div>
+          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-shell-text">{detail?.title || 'Loading transcript…'}</h2>
+          {detail?.sourceUrl && (
+            <a href={detail.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-shell-text hover:text-shell-accent">
+              <ExternalLink className="h-4 w-4" />
+              Open source
+            </a>
+          )}
+        </div>
+        {!mobile && (
           <button
             type="button"
             onClick={onClose}
@@ -348,55 +352,70 @@ function MediaAssetDrawer({
           >
             <X className="h-5 w-5" />
           </button>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-3 border-b border-shell-border px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
-          {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{detail.transcriptSource || 'Transcript'}</div>}
-          {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatDuration(detail.durationSeconds)}</div>}
-          {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatRelative(detail.createdAt)}</div>}
-        </div>
-
-        <div className="flex items-center gap-3 border-b border-shell-border px-6 py-4">
-          <button
-            type="button"
-            onClick={() => detail && onUseInAgents(detail)}
-            disabled={!detail}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-5 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <PanelRightOpen className="h-4 w-4" />
-            Use in Agents
-          </button>
-          <button
-            type="button"
-            onClick={() => void copyTranscript()}
-            disabled={!detail?.transcriptContent}
-            className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50"
-          >
-            <Copy className="h-4 w-4" />
-            Copy transcript
-          </button>
-        </div>
-
-        <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
-          {loading ? (
-            <div className="flex items-center gap-3 rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-shell-muted">
-              <LoaderCircle className="h-5 w-5 animate-spin text-shell-accent" />
-              Loading transcript…
-            </div>
-          ) : error ? (
-            <div className="rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-sm leading-6 text-shell-muted">{error}</div>
-          ) : (
-            <pre className="whitespace-pre-wrap rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 font-sans text-sm leading-7 text-shell-text">
-              {detail?.transcriptContent || 'No transcript text was saved for this asset.'}
-            </pre>
-          )}
-        </div>
+        )}
       </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-b border-shell-border px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
+        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{detail.transcriptSource || 'Transcript'}</div>}
+        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatDuration(detail.durationSeconds)}</div>}
+        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatRelative(detail.createdAt)}</div>}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 border-b border-shell-border px-6 py-4">
+        <button
+          type="button"
+          onClick={() => detail && onUseInAgents(detail)}
+          disabled={!detail}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-5 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <PanelRightOpen className="h-4 w-4" />
+          Use in Agents
+        </button>
+        <button
+          type="button"
+          onClick={() => void copyTranscript()}
+          disabled={!detail?.transcriptContent}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Copy className="h-4 w-4" />
+          Copy transcript
+        </button>
+      </div>
+
+      <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+        {loading ? (
+          <div className="flex items-center gap-3 rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-shell-muted">
+            <LoaderCircle className="h-5 w-5 animate-spin text-shell-accent" />
+            Loading transcript…
+          </div>
+        ) : error ? (
+          <div className="rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-sm leading-6 text-shell-muted">{error}</div>
+        ) : (
+          <pre className="whitespace-pre-wrap rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 font-sans text-sm leading-7 text-shell-text">
+            {detail?.transcriptContent || 'No transcript text was saved for this asset.'}
+          </pre>
+        )}
+      </div>
+    </div>
+  );
+
+  if (mobile) {
+    return (
+      <MobileSheet open={Boolean(detail || loading || error)} onClose={onClose} title="Media Asset" fullHeight>
+        {body}
+      </MobileSheet>
+    );
+  }
+
+  return (
+    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] rounded-[20px] border border-shell-border bg-shell-panel shadow-shell-xl">
+      {body}
     </div>
   );
 }
 
 function MediaImportsPage() {
+  const isMobile = useIsMobile();
   const mediaAssets = useAppStore((state) => state.mediaAssets);
   const mediaAssetsLoaded = useAppStore((state) => state.mediaAssetsLoaded);
   const mediaImporting = useAppStore((state) => state.mediaImporting);
@@ -419,6 +438,7 @@ function MediaImportsPage() {
   const [selectedDetail, setSelectedDetail] = useState<MediaAssetDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
+  const [mediaAction, setMediaAction] = useState<'transcribe' | 'download' | null>(null);
 
   useEffect(() => {
     if (mediaAssetsLoaded) return;
@@ -455,19 +475,20 @@ function MediaImportsPage() {
     setCurrentSection('agents');
   }
 
-  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleTranscribe(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const nextUrl = url.trim();
     if (!nextUrl || mediaImporting) return;
     setCapturedChunks([]);
+    setMediaAction('transcribe');
     setMediaImporting(true);
     setMediaImportError(null);
-    setMediaImportStatus('Preparing media import…');
+    setMediaImportStatus('Preparing transcription…');
     setMediaImportProgress(2);
     try {
       const asset = await importMediaFromUrl(nextUrl, {
         onProgress: (message, percent) => {
-          setMediaImportStatus(message || 'Importing media…');
+          setMediaImportStatus(message || 'Transcribing media…');
           setMediaImportProgress(percent);
         },
         onChunk: (text) => {
@@ -476,15 +497,39 @@ function MediaImportsPage() {
       });
       prependMediaAsset(asset);
       setMediaAssetsLoaded(true);
-      setMediaImportStatus('Media imported into CopeNet.');
+      setMediaImportStatus('Transcript added to CopeNet.');
       setMediaImportProgress(100);
       setUrl('');
     } catch (error) {
-      setMediaImportError(error instanceof Error ? error.message : 'Media import failed.');
+      setMediaImportError(error instanceof Error ? error.message : 'Media transcription failed.');
       setMediaImportStatus(null);
       setMediaImportProgress(null);
     } finally {
       setMediaImporting(false);
+      setMediaAction(null);
+    }
+  }
+
+  async function handleDownload() {
+    const nextUrl = url.trim();
+    if (!nextUrl || mediaImporting) return;
+    setCapturedChunks([]);
+    setMediaAction('download');
+    setMediaImporting(true);
+    setMediaImportError(null);
+    setMediaImportStatus('Preparing download…');
+    setMediaImportProgress(15);
+    try {
+      await downloadMediaFromUrl(nextUrl);
+      setMediaImportStatus('Download sent to your browser.');
+      setMediaImportProgress(100);
+    } catch (error) {
+      setMediaImportError(error instanceof Error ? error.message : 'Media download failed.');
+      setMediaImportStatus(null);
+      setMediaImportProgress(null);
+    } finally {
+      setMediaImporting(false);
+      setMediaAction(null);
     }
   }
 
@@ -497,36 +542,48 @@ function MediaImportsPage() {
             Media Imports
           </div>
           <h1 className="max-w-3xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
-            Paste a video link and turn it into a transcript-backed workspace asset.
+            Paste a video link to transcribe it into CopeNet or download it straight to your device.
           </h1>
           <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
-            CopeNet can pull captions when they exist, fall back to Whisper when they do not, and keep the result as a reusable source for later chat, knowledge, and workflow use.
+            Transcribe keeps a reusable transcript-backed asset inside CopeNet. Download skips the workspace asset and hands the video straight back to Safari or your desktop browser.
           </p>
 
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <form onSubmit={handleTranscribe} className="mt-8 space-y-4">
             <div className="rounded-[28px] border border-shell-border bg-shell-bg p-3 shadow-shell">
               <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <input
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
-                  placeholder="Paste a YouTube or media URL to import into CopeNet…"
+                  placeholder="Paste a YouTube or media URL for transcription or download…"
                   className="h-14 flex-1 rounded-2xl border border-shell-border bg-shell-panel px-5 text-sm text-shell-text outline-none transition placeholder:text-shell-muted hover:border-shell-border-strong focus:border-shell-border-strong"
                 />
-                <button
-                  type="submit"
-                  disabled={!url.trim() || mediaImporting}
-                  className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-6 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-55"
-                >
-                  {mediaImporting ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-                  Import media
-                </button>
+                <div className={`flex ${isMobile ? 'flex-col' : 'gap-3'}`}>
+                  <button
+                    type="submit"
+                    disabled={!url.trim() || mediaImporting}
+                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-6 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {mediaImporting && mediaAction === 'transcribe' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
+                    Transcribe
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownload()}
+                    disabled={!url.trim() || mediaImporting}
+                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-6 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {mediaImporting && mediaAction === 'download' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
+                    Download
+                  </button>
+                </div>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-3 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
               <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Captions first when available</div>
               <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Whisper fallback when needed</div>
-              <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Saved as workspace asset</div>
+              <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Transcribe saves a workspace asset</div>
+              <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Download skips CopeNet storage</div>
             </div>
           </form>
         </div>
@@ -539,9 +596,11 @@ function MediaImportsPage() {
                 {mediaImporting ? <LoaderCircle className="h-5 w-5 animate-spin" /> : <Cable className="h-5 w-5" />}
               </div>
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-shell-text">{mediaImporting ? 'Import running' : 'Ready for a new source'}</h2>
+                <h2 className="text-lg font-semibold text-shell-text">
+                  {mediaImporting ? (mediaAction === 'download' ? 'Download running' : 'Transcription running') : 'Ready for a new source'}
+                </h2>
                 <p className="mt-2 text-sm leading-6 text-shell-muted">
-                  {mediaImportError || mediaImportStatus || 'Paste a link to bring a transcript-backed asset into CopeNet.'}
+                  {mediaImportError || mediaImportStatus || 'Paste a link to either add a transcript-backed asset to CopeNet or download the source video.'}
                 </p>
               </div>
             </div>
@@ -557,9 +616,9 @@ function MediaImportsPage() {
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What this unlocks</div>
             <div className="space-y-3">
               {[
-                'Chat with a transcript after import.',
-                'Attach clips to future knowledge bases.',
-                'Turn repeated imports into a workflow.',
+                'Transcribe a video into a reusable workspace asset.',
+                'Download raw clips straight to Safari or your desktop browser.',
+                'Turn repeated media pulls into a meme-friendly workflow later.',
               ].map((item) => (
                 <div key={item} className="flex items-start gap-3 rounded-2xl border border-shell-border bg-shell-bg px-4 py-3 text-sm text-shell-text">
                   <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-shell-accent" />
@@ -610,7 +669,7 @@ function MediaImportsPage() {
               </div>
             ) : (
               <p className="text-sm leading-6 text-shell-muted">
-                When a transcription is running, recent transcript chunks will appear here so the import feels alive instead of opaque.
+                When a transcription is running, recent transcript chunks will appear here so the ingest feels alive instead of opaque.
               </p>
             )}
           </div>
@@ -629,6 +688,7 @@ function MediaImportsPage() {
         detail={selectedDetail}
         loading={detailLoading}
         error={detailError}
+        mobile={isMobile}
         onClose={() => {
           setSelectedAsset(null);
           setSelectedDetail(null);

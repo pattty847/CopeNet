@@ -12,6 +12,7 @@ import {
   WandSparkles,
 } from 'lucide-react';
 import { useMemo } from 'react';
+import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 
 const PINNED_AGENTS = [
@@ -44,6 +45,11 @@ const NEWS_ITEMS = [
   'The new Home page is meant to inspire what to build, not just what to click.',
 ];
 
+function truncateCopy(value: string | undefined, limit: number): string {
+  if (!value) return '';
+  return value.length > limit ? `${value.slice(0, Math.max(0, limit - 1)).trimEnd()}…` : value;
+}
+
 export function HomePage() {
   const sessions = useAppStore((state) => state.sessions);
   const messages = useAppStore((state) => state.messages);
@@ -52,6 +58,7 @@ export function HomePage() {
   const wsStatus = useAppStore((state) => state.wsStatus);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
   const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
+  const isMobile = useIsMobile();
 
   const totalMessages = useMemo(
     () => Object.values(messages).reduce((count, sessionMessages) => count + sessionMessages.length, 0),
@@ -95,29 +102,29 @@ export function HomePage() {
       <section className="grid gap-3 xl:grid-cols-[1.68fr_0.82fr]">
         <div className="space-y-3">
           {/* Hero */}
-          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-7 py-5 shadow-shell">
-            <div className="max-w-3xl">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-shell-accent/15 bg-shell-accent-soft px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">
+          <div className="overflow-hidden rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-7 sm:py-5">
+            <div className="max-w-3xl min-w-0">
+              <div className="mb-3 inline-flex max-w-full items-center gap-2 rounded-full border border-shell-accent/15 bg-shell-accent-soft px-3 py-1 text-[9px] font-semibold uppercase tracking-[0.18em] text-shell-accent sm:text-[10px] sm:tracking-[0.2em]">
                 <Sparkles className="h-3 w-3" />
                 Built to inspire what comes next
               </div>
-              <h1 className="font-display text-[2.8rem] leading-[0.96] tracking-tight text-shell-text">
+              <h1 className="max-w-full text-balance font-display text-[2.05rem] leading-[0.98] tracking-tight text-shell-text sm:text-[2.8rem] sm:leading-[0.96]">
                 Welcome home to CopeNet.
               </h1>
-              <p className="mt-2 max-w-xl text-[14px] leading-6 text-shell-muted">
+              <p className="mt-2 max-w-xl text-[13px] leading-6 text-shell-muted sm:text-[14px]">
                 Shape agentic workspaces, keep every tool call inspectable, and turn useful sessions
                 into repeatable workflows.
               </p>
             </div>
 
-            <div className="mt-5 flex flex-wrap gap-2">
+            <div className="mt-5 flex max-w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
               <button
                 type="button"
                 onClick={() => setCurrentSection('agents')}
-                className="glow-accent inline-flex items-center gap-2 rounded-xl bg-shell-ink px-4 py-2 text-[13px] font-semibold text-white"
+                className="glow-accent grid w-full max-w-full min-w-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-xl bg-shell-ink px-4 py-2.5 text-[13px] font-semibold text-white sm:inline-flex sm:w-auto sm:py-2"
               >
-                <Bot className="h-3.5 w-3.5" />
-                Create agent session
+                <Bot className="h-3.5 w-3.5 shrink-0" />
+                <span className="block min-w-0 truncate text-left">Create agent session</span>
               </button>
               {[
                 { label: 'Open Meme Lab', icon: Play, section: 'workflows' as const, openMeme: true },
@@ -131,10 +138,10 @@ export function HomePage() {
                     if (action.openMeme) setWorkflowsRoute('meme-lab');
                     setCurrentSection(action.section);
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-panel-strong px-4 py-2 text-[13px] font-medium text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel"
+                  className="grid w-full max-w-full min-w-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-xl border border-shell-border bg-shell-panel-strong px-4 py-2.5 text-[13px] font-medium text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel sm:inline-flex sm:w-auto sm:py-2"
                 >
-                  <action.icon className="h-3.5 w-3.5" />
-                  {action.label}
+                  <action.icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="block min-w-0 truncate text-left">{action.label}</span>
                 </button>
               ))}
             </div>
@@ -196,20 +203,26 @@ export function HomePage() {
                       key={session.key}
                       type="button"
                       onClick={() => setCurrentSection('agents')}
-                      className="flex w-full items-center gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5 text-left transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
+                      className="flex w-full items-center gap-2.5 overflow-hidden rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5 text-left transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
                     >
-                      <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
                         <Flame className="h-3.5 w-3.5" />
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-medium text-shell-text">
-                          {session.title || 'Untitled session'}
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div
+                          className="truncate text-[13px] font-medium text-shell-text"
+                          title={session.title || 'Untitled session'}
+                        >
+                          {truncateCopy(session.title || 'Untitled session', isMobile ? 34 : 64)}
                         </div>
-                        <div className="truncate text-[11px] text-shell-muted">
-                          {session.provider} · {session.model || 'default runtime'}
+                        <div
+                          className="truncate text-[11px] text-shell-muted"
+                          title={`${session.provider} · ${session.model || 'default runtime'}`}
+                        >
+                          {truncateCopy(`${session.provider} · ${session.model || 'default runtime'}`, isMobile ? 42 : 72)}
                         </div>
                       </div>
-                      <div className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                      <div className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${
                         session.archived
                           ? 'bg-shell-panel-strong text-shell-muted'
                           : 'bg-shell-success-soft text-shell-success'
