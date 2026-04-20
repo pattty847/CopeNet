@@ -2,8 +2,37 @@
 
 CopeNet is a local-first agent operator studio for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
 
-<img width="1920" height="928" alt="CopeNet Home dashboard" src="https://github.com/user-attachments/assets/64146bd1-15f2-4357-acd5-3fa04f891f37" />
-<img width="1920" height="929" alt="CopeNet agent console" src="https://github.com/user-attachments/assets/97683804-f2df-4265-93be-b1ed917e9501" />
+## Product Tour
+
+### Home Dashboard — workspace overview and operator launchpad
+The Home dashboard is the front door to CopeNet: active sessions, provider health, pinned agents, quick-start actions, and the workspaces you keep returning to.
+
+![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
+
+### Agents Console — persistent sessions with inspectable runtime context
+The Agents view keeps the live conversation, session list, working set, debug actions, and runtime inspector together so a run stays understandable instead of turning into opaque chat history.
+
+![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+
+### Meme Lab — structured local ideation as a real workflow surface
+Meme Lab shows how CopeNet can host opinionated workflows on top of local models: a focused brief on the left, generated variants in the center, and ranking/history surfaces on the right.
+
+![CopeNet Meme Lab Workflow](docs/imgs/copenet-meme-lab-workflow.png)
+
+### Media Imports — transcribe or download source material into your workspace
+Media Imports turns raw links into reusable workflow inputs. You can transcribe a video into a workspace asset or download the source directly without forcing it into CopeNet storage.
+
+![CopeNet Media Imports](docs/imgs/copenet-media-imports.png)
+
+### Observability — trace the work, not just the answer
+The Observability surface exposes run pulse, recent traces, provider distribution, and top tool activity so you can inspect what the system actually did across sessions.
+
+![CopeNet Observability](docs/imgs/copenet-observability.png)
+
+### Experiments Matrix — compare behavior across providers and models
+Experiments makes evaluation legible by surfacing provider × model runs in one place, making it easier to compare speed, tool behavior, and prompt-following drift.
+
+![CopeNet Experiments Matrix](docs/imgs/copenet-experiments-matrix.png)
 
 ## Why CopeNet
 
