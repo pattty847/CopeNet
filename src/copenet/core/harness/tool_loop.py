@@ -481,6 +481,7 @@ def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor]) -> 
         "If needed, respond only with the JSON tool invocation or a safe read-only batch.\n"
         "For repository inspection, directory listing alone is rarely enough. "
         "Prefer at least one relevant files.read, files.search, or context.prepare step before summarizing."
+        "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and be ready to cite the specific files you inspected."
         "\nDo not call files.read on directories; use files.list for directories and files.search for broader exploration."
         "\nAvoid shell pipelines or command chaining in shell.exec. Prefer files.search, context.prepare, or simple single commands."
         f"\n\n{build_tool_prompt_section(tools)}"
@@ -511,6 +512,7 @@ def compose_tool_follow_up_prompt(
         "If you already have enough information, answer the user directly.\n"
         "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
         "Prefer a follow-up files.read, files.search, or context.prepare step unless the user asked only for a directory listing."
+        "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and cite the specific files you inspected."
         "\nDo not use files.read on directories. Avoid shell.exec pipelines or chained shell commands."
         f"{corrective_line}"
     )

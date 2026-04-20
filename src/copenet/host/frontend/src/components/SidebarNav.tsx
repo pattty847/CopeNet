@@ -2,6 +2,8 @@ import {
   Activity,
   Blocks,
   Bot,
+  ChevronLeft,
+  ChevronRight,
   FlaskConical,
   Home,
   Layers3,
@@ -22,20 +24,41 @@ export function SidebarNav() {
   const currentSection = useAppStore((state) => state.currentSection);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
   const wsStatus = useAppStore((state) => state.wsStatus);
+  const primaryNavCollapsed = useAppStore((state) => state.primaryNavCollapsed);
+  const setPrimaryNavCollapsed = useAppStore((state) => state.setPrimaryNavCollapsed);
 
   const systemLabel =
     wsStatus === 'connected' ? 'All systems nominal' : wsStatus === 'connecting' ? 'Connecting…' : 'Needs attention';
 
   return (
-    <aside className="flex w-[216px] shrink-0 flex-col rounded-[24px] border border-shell-border bg-shell-sidebar px-3 py-4 shadow-shell">
+    <aside
+      className={`flex shrink-0 flex-col rounded-[24px] border border-shell-border bg-shell-sidebar py-4 shadow-shell transition-[width,padding] duration-200 ${
+        primaryNavCollapsed ? 'w-[78px] px-2.5' : 'w-[216px] px-3'
+      }`}
+    >
       {/* Brand */}
-      <div className="flex items-center gap-2.5 px-2 pb-5">
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
-          <Blocks className="h-4.5 w-4.5" />
+      <div className={`flex items-center px-2 pb-5 ${primaryNavCollapsed ? 'justify-center' : 'justify-between gap-2.5'}`}>
+        <div className={`flex items-center ${primaryNavCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
+            <Blocks className="h-4.5 w-4.5" />
+          </div>
+          {!primaryNavCollapsed && (
+            <div>
+              <div className="text-[15px] font-semibold tracking-tight text-shell-text">CopeNet</div>
+              <div className="text-[11px] text-shell-muted">Agentic workspace</div>
+            </div>
+          )}
         </div>
-        <div>
-          <div className="text-[15px] font-semibold tracking-tight text-shell-text">CopeNet</div>
-          <div className="text-[11px] text-shell-muted">Agentic workspace</div>
+        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
+          <button
+            type="button"
+            onClick={() => setPrimaryNavCollapsed(!primaryNavCollapsed)}
+            className="flex h-full w-full items-center justify-center rounded-xl transition-colors hover:bg-shell-accent/10"
+            title={primaryNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+            aria-label={primaryNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}
+          >
+            {primaryNavCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
+          </button>
         </div>
       </div>
 
@@ -50,17 +73,23 @@ export function SidebarNav() {
               key={item.id}
               type="button"
               onClick={() => setCurrentSection(item.id)}
-              className={`group relative flex items-center gap-2.5 rounded-xl px-3 py-2 text-left text-[13px] font-medium transition-all duration-150 ${
+              title={primaryNavCollapsed ? item.label : undefined}
+              className={`group relative flex rounded-xl py-2 text-left text-[13px] font-medium transition-all duration-150 ${
+                primaryNavCollapsed ? 'justify-center px-2.5' : 'items-center gap-2.5 px-3'
+              } ${
                 active
                   ? 'bg-shell-accent-soft text-shell-text'
                   : 'text-shell-muted hover:bg-shell-panel-strong hover:text-shell-text'
               }`}
             >
               {active && (
-                <span className="absolute left-0 top-1/2 h-4 w-[3px] -translate-y-1/2 rounded-r-full bg-shell-accent" />
+                <>
+                  <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-shell-accent shadow-[0_0_10px_var(--color-shell-accent)]" />
+                  <span className="pointer-events-none absolute inset-y-1 right-2 w-1/3 rounded-xl bg-shell-accent-glow blur-md" />
+                </>
               )}
               <Icon className={`h-[15px] w-[15px] transition-colors duration-150 ${active ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
-              <span>{item.label}</span>
+              {!primaryNavCollapsed && <span>{item.label}</span>}
             </button>
           );
         })}
@@ -68,9 +97,13 @@ export function SidebarNav() {
 
       {/* Footer */}
       <div className="mt-auto space-y-3 pt-4">
-        <div className="rounded-2xl border border-shell-border bg-shell-panel px-3 py-3">
-          <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">System Health</div>
-          <div className="text-[13px] text-shell-text">{systemLabel}</div>
+        <div className={`rounded-2xl border border-shell-border bg-shell-panel ${primaryNavCollapsed ? 'px-2 py-2.5' : 'px-3 py-3'}`}>
+          {!primaryNavCollapsed && (
+            <>
+              <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">System Health</div>
+              <div className="text-[13px] text-shell-text">{systemLabel}</div>
+            </>
+          )}
           <div className="mt-2 flex items-center gap-2">
             <span className="relative flex h-2 w-2">
               {wsStatus === 'connected' && (
@@ -82,20 +115,25 @@ export function SidebarNav() {
                     ? 'bg-shell-success'
                     : wsStatus === 'connecting'
                       ? 'bg-shell-accent'
-                      : 'bg-shell-error'
+                    : 'bg-shell-error'
                 }`}
               />
             </span>
-            <span className="text-[11px] text-shell-muted">{wsStatus.replace('_', ' ')}</span>
+            {!primaryNavCollapsed && <span className="text-[11px] text-shell-muted">{wsStatus.replace('_', ' ')}</span>}
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 rounded-2xl border border-shell-border bg-shell-panel px-3 py-2.5">
+        <div
+          className={`flex rounded-2xl border border-shell-border bg-shell-panel ${primaryNavCollapsed ? 'justify-center px-2 py-2.5' : 'items-center gap-2.5 px-3 py-2.5'}`}
+          title={primaryNavCollapsed ? 'Patrick Cope · Owner' : undefined}
+        >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-shell-ink text-[11px] font-semibold text-white">CP</div>
-          <div className="min-w-0">
-            <div className="truncate text-[13px] font-medium text-shell-text">Patrick Cope</div>
-            <div className="truncate text-[11px] text-shell-muted">Owner</div>
-          </div>
+          {!primaryNavCollapsed && (
+            <div className="min-w-0">
+              <div className="truncate text-[13px] font-medium text-shell-text">Patrick Cope</div>
+              <div className="truncate text-[11px] text-shell-muted">Owner</div>
+            </div>
+          )}
         </div>
       </div>
     </aside>

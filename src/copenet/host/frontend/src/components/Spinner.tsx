@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../lib/utils';
 
 export interface SpinnerProps {
-  variant?: 'dot-grid' | 'bars' | 'breathe' | 'bounce';
+  variant?: 'dot-grid' | 'bars' | 'breathe' | 'bounce' | 'flip';
   className?: string;
 }
 
@@ -35,6 +35,10 @@ export function Spinner({ variant = 'bars', className }: SpinnerProps) {
         <span></span><span></span><span></span>
       </div>
     );
+  }
+
+  if (variant === 'flip') {
+    return <div className={cn("loader-flip", className)}></div>;
   }
 
   return null;

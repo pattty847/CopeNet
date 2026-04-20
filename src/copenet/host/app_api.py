@@ -13,6 +13,7 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 
+from copenet.core.meme_ideation import MemeIdeationRequest, ideate_memes
 from copenet.core.media import MediaDependencyError, MediaDownloadError, MediaIngestionService, MediaTranscriptionError
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 
@@ -47,6 +48,18 @@ class MessageSendRequest(BaseModel):
     system_prompt_id: str | None = Field(default=None, alias="systemPromptId")
     task_prompt_id: str | None = Field(default=None, alias="taskPromptId")
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
+
+
+class MemeIdeationApiRequest(BaseModel):
+    topic: str | None = None
+    trend_summary: str | None = Field(default=None, alias="trendSummary")
+    image_springboard: str | None = Field(default=None, alias="imageSpringboard")
+    tone_hints: str | list[str] | None = Field(default=None, alias="toneHints")
+    requested_count: int = Field(alias="requestedCount")
+    provider: str | None = None
+    model: str | None = None
+    preset: str | None = None
+    debug: bool = False
 
 
 class MediaImportRequest(BaseModel):
@@ -260,6 +273,63 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
             "event": final_event,
             "events": events,
         }
+
+    @router.post("/memes/ideate")
+    async def ideate_memes_endpoint(body: MemeIdeationApiRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
+        provider_name = (body.provider or app.default_provider or "lm-studio").strip()
+        provider = orchestrator._providers.get(provider_name)
+        if provider is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unsupported provider: {provider_name}")
+        try:
+            ideation_request = MemeIdeationRequest(
+                topic=body.topic,
+                trend_summary=body.trend_summary,
+                image_springboard=body.image_springboard,
+                tone_hints=body.tone_hints,
+                requested_count=body.requested_count,
+                provider=provider_name,
+                model=body.model,
+                preset=body.preset or None,
+                debug=body.debug,
+            )
+            result = await ideate_memes(
+                provider_name=provider_name,
+                provider=provider,
+                request=ideation_request,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+        payload: dict[str, Any] = {
+            "candidates": [
+                {
+                    "direction": candidate.direction,
+                    "format": candidate.format,
+                    "text": candidate.text,
+                    "optional_caption": candidate.optional_caption,
+                    "needs_visual_context": candidate.needs_visual_context,
+                    "notes": candidate.notes,
+                }
+                for candidate in result.candidates
+            ],
+            "provider": result.provider,
+            "model": result.model,
+            "preset": result.preset,
+            "schemaVersion": result.schema_version,
+            "promptVersion": result.prompt_version,
+        }
+        if result.warnings:
+            payload["warnings"] = result.warnings
+        if result.knowledge_pack_version is not None:
+            payload["knowledgePackVersion"] = result.knowledge_pack_version
+        if result.judge_warnings:
+            payload["judgeWarnings"] = result.judge_warnings
+        if result.artifact_shell is not None:
+            payload["artifactShell"] = result.artifact_shell
+        if result.mutation_notes:
+            payload["mutationNotes"] = result.mutation_notes
+        if body.debug and result.raw_text is not None:
+            payload["raw_text"] = result.raw_text
+        return payload
 
     @router.get("/sessions/{session_id}/messages/stream")
     async def stream_message(

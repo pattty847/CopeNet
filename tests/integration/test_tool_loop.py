@@ -216,6 +216,46 @@ async def test_harness_continues_read_only_tool_loop_until_answer(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_harness_follow_up_prompt_demands_grounding_before_repo_summary(tmp_path: Path) -> None:
+    provider = SequencedPromptProvider(
+        outputs=[
+            '{"tool_id":"files.list","arguments":{"path":"."}}',
+            "Grounded answer.",
+        ],
+    )
+    harness = ChatHarness()
+
+    async def tool_executor(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+        return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary="ok", output={"entries": []})
+
+    tool_context = ToolExecutionContext(
+        workdir=tmp_path,
+        session_key=None,
+        provider_name="prompted",
+        model=None,
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        providers={"prompted": provider},
+        policy=ToolPolicy(),
+        trace=None,
+    )
+    _, stream = await harness.run_turn(
+        provider=provider,
+        prompt="Use tools to explain the architecture and setup path for CopeNet.",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        available_tools=ToolRegistry().list_tools(),
+        tool_executor=tool_executor,
+        tool_context=tool_context,
+    )
+
+    [event async for event in stream]
+
+    assert "Before answering a repository-architecture or setup question" in provider.prompts[1]
+    assert "cite the specific files you inspected" in provider.prompts[1]
+
+
+@pytest.mark.asyncio
 async def test_harness_executes_safe_read_batch_and_emits_meta(tmp_path: Path) -> None:
     (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
     provider = PromptedBatchProvider(

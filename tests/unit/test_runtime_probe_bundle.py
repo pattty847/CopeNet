@@ -129,6 +129,100 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
     assert recovered["classification"] == "blocked_but_recovered"
 
 
+def test_classify_probe_bundle_flags_ungrounded_repo_answer() -> None:
+    spec = ProbeSpec(name="architecture_setup_probe", prompt="Explain architecture")
+
+    listing_only = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "tool.batch", "status": "ok", "ok": True, "batched": True},
+            ],
+            "outputSummary": "The repo probably keeps the main logic in src/copenet and uses docs for setup.",
+            "terminalReason": "completed",
+        },
+        transcript=[
+            {
+                "role": "assistant",
+                "content": "The repo probably keeps the main logic in src/copenet and uses docs for setup.",
+            }
+        ],
+        artifacts=[],
+        trace_path=None,
+    )
+
+    assert listing_only["classification"] == "ungrounded_repo_answer"
+
+
+def test_classify_probe_bundle_requires_file_grounding_for_architecture_probe() -> None:
+    spec = ProbeSpec(name="architecture_setup_probe", prompt="Explain architecture and setup")
+
+    context_only = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "context.prepare", "status": "ok", "ok": True},
+                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "tool.batch", "status": "ok", "ok": True, "batched": True},
+            ],
+            "outputSummary": "CopeNet looks like a modular Python app with code under src/copenet.",
+            "terminalReason": "completed",
+        },
+        transcript=[
+            {
+                "role": "assistant",
+                "content": "CopeNet looks like a modular Python app with code under src/copenet.",
+            }
+        ],
+        artifacts=[
+            {
+                "artifactId": "bundle-1",
+                "metadata": {"toolIds": ["files.list", "git.status"]},
+            }
+        ],
+        trace_path=None,
+    )
+
+    assert context_only["classification"] == "ungrounded_repo_answer"
+
+
+def test_classify_probe_bundle_does_not_treat_listed_filenames_as_file_grounding() -> None:
+    spec = ProbeSpec(name="patch_plan_probe", prompt="Produce a patch plan for runtime exploration")
+
+    listing_backed = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "context.prepare", "status": "ok", "ok": True},
+                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "tool.batch", "status": "ok", "ok": True, "batched": True},
+            ],
+            "outputSummary": "Read README.md and pyproject.toml for a patch plan.",
+            "terminalReason": "completed",
+        },
+        transcript=[
+            {
+                "role": "assistant",
+                "content": "Read README.md and pyproject.toml for a patch plan.",
+            }
+        ],
+        artifacts=[
+            {
+                "artifactId": "bundle-1",
+                "metadata": {"toolIds": ["files.list", "git.status"]},
+            }
+        ],
+        trace_path=None,
+    )
+
+    assert listing_backed["classification"] == "ungrounded_repo_answer"
+
+
 def test_write_probe_bundle_creates_expected_files(tmp_path: Path) -> None:
     trace_path = tmp_path / "original-trace.jsonl"
     trace_path.write_text('{"event":"tool"}\n', encoding="utf-8")
@@ -274,3 +368,32 @@ def test_render_probe_report_separates_recoveries_from_failures() -> None:
     assert "### partial_tool_success_with_block" in report
     assert "## Failures" in report
     assert "### tool_blocked_terminal" in report
+
+
+def test_render_probe_report_lists_ungrounded_answers_as_failures() -> None:
+    bundle = ProbeBundle(
+        provider="lm-studio",
+        model="gemma-4",
+        probe_name="architecture_setup_probe",
+        prompt="Explain architecture",
+        session_key="alpha",
+        run_id="run-1",
+        started_at="2026-01-01T00:00:00+00:00",
+        finished_at="2026-01-01T00:00:01+00:00",
+        duration_ms=1000,
+        classification="ungrounded_repo_answer",
+        final_state="ok",
+        tool_step_count=3,
+        tool_ids=["files.list", "files.list", "tool.batch"],
+    )
+    summary = ProbeSummary(
+        generated_at="2026-01-01T00:00:02+00:00",
+        suite_dir="/tmp/probe_runs/demo",
+        targets=[{"provider": "lm-studio", "model": "gemma-4"}],
+        results=[bundle],
+    )
+
+    report = render_probe_report(summary)
+
+    assert "## Failures" in report
+    assert "### ungrounded_repo_answer" in report

@@ -21,11 +21,15 @@ const PINNED_AGENTS = [
   { title: 'Knowledge Curator', subtitle: 'Keep your workspace context fresh and grounded', accent: 'bg-[#fff4ea] text-[#cc8350]', darkAccent: 'dark:bg-[#2a1f14] dark:text-[#d4a070]' },
 ];
 
-const QUICK_STARTS = [
-  'Build a new agent',
-  'Run a playbook',
-  'Connect a knowledge base',
-  'Compare two runtimes',
+type QuickStartTarget =
+  | { kind: 'section'; section: 'agents' | 'data-tools' | 'experiments' }
+  | { kind: 'meme-lab' };
+
+const QUICK_STARTS: { label: string; target: QuickStartTarget }[] = [
+  { label: 'Build a new agent', target: { kind: 'section', section: 'agents' } },
+  { label: 'Open Meme Lab', target: { kind: 'meme-lab' } },
+  { label: 'Connect a knowledge base', target: { kind: 'section', section: 'data-tools' } },
+  { label: 'Compare two runtimes', target: { kind: 'section', section: 'experiments' } },
 ];
 
 const WORKSPACES = [
@@ -47,6 +51,7 @@ export function HomePage() {
   const tools = useAppStore((state) => state.tools);
   const wsStatus = useAppStore((state) => state.wsStatus);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
+  const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
 
   const totalMessages = useMemo(
     () => Object.values(messages).reduce((count, sessionMessages) => count + sessionMessages.length, 0),
@@ -115,14 +120,17 @@ export function HomePage() {
                 Create agent session
               </button>
               {[
-                { label: 'Run playbook', icon: Play, section: 'workflows' as const },
-                { label: 'New experiment', icon: LineChart, section: 'experiments' as const },
-                { label: 'Upload data', icon: Database, section: 'data-tools' as const },
+                { label: 'Open Meme Lab', icon: Play, section: 'workflows' as const, openMeme: true },
+                { label: 'New experiment', icon: LineChart, section: 'experiments' as const, openMeme: false },
+                { label: 'Upload data', icon: Database, section: 'data-tools' as const, openMeme: false },
               ].map((action) => (
                 <button
                   key={action.label}
                   type="button"
-                  onClick={() => setCurrentSection(action.section)}
+                  onClick={() => {
+                    if (action.openMeme) setWorkflowsRoute('meme-lab');
+                    setCurrentSection(action.section);
+                  }}
                   className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-panel-strong px-4 py-2 text-[13px] font-medium text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel"
                 >
                   <action.icon className="h-3.5 w-3.5" />
@@ -330,12 +338,19 @@ export function HomePage() {
             <div className="mt-2 space-y-1">
               {QUICK_STARTS.map((item) => (
                 <button
-                  key={item}
+                  key={item.label}
                   type="button"
-                  onClick={() => setCurrentSection('agents')}
+                  onClick={() => {
+                    if (item.target.kind === 'meme-lab') {
+                      setWorkflowsRoute('meme-lab');
+                      setCurrentSection('workflows');
+                    } else {
+                      setCurrentSection(item.target.section);
+                    }
+                  }}
                   className="flex w-full items-center justify-between rounded-[12px] border border-shell-border bg-shell-panel-strong px-3 py-2 text-left text-[13px] text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
                 >
-                  <span>{item}</span>
+                  <span>{item.label}</span>
                   <ArrowRight className="h-3 w-3 text-shell-muted" />
                 </button>
               ))}

@@ -52,6 +52,23 @@ def _artifact_ids(artifacts: list[dict[str, Any]]) -> list[str]:
     return rows
 
 
+def _artifact_tool_ids(artifacts: list[dict[str, Any]]) -> set[str]:
+    tool_ids: set[str] = set()
+    for artifact in artifacts:
+        metadata = artifact.get("metadata")
+        if isinstance(metadata, dict):
+            raw_tool_ids = metadata.get("toolIds")
+            if isinstance(raw_tool_ids, list):
+                for tool_id in raw_tool_ids:
+                    text = str(tool_id or "").strip()
+                    if text:
+                        tool_ids.add(text)
+            single_tool = str(metadata.get("toolId") or "").strip()
+            if single_tool:
+                tool_ids.add(single_tool)
+    return tool_ids
+
+
 def _last_assistant_content(transcript: list[dict[str, Any]]) -> str:
     for message in reversed(transcript):
         if str(message.get("role") or "").strip() == "assistant":
@@ -64,6 +81,48 @@ def _looks_like_adjacent_tool_json(text: str) -> bool:
     if not stripped:
         return False
     return bool(re.search(r'\}\s*\{\s*"tool_id"', stripped))
+
+
+def _is_repo_understanding_probe(probe: ProbeSpec) -> bool:
+    name = probe.name.lower()
+    prompt = probe.prompt.lower()
+    return any(
+        needle in name or needle in prompt
+        for needle in {"repo", "repository", "architecture", "setup", "inspect", "patch", "bug", "relevant files"}
+    )
+
+
+def _requires_file_grounding(probe: ProbeSpec) -> bool:
+    name = probe.name.lower()
+    prompt = probe.prompt.lower()
+    return any(
+        needle in name or needle in prompt
+        for needle in {"architecture", "setup", "patch", "bug", "relevant files"}
+    )
+
+
+def _has_file_grounding_tool(tool_ids: list[str], artifacts: list[dict[str, Any]]) -> bool:
+    grounding_tools = {"files.read", "files.search"}
+    if grounding_tools.intersection(tool_ids):
+        return True
+    return bool(grounding_tools.intersection(_artifact_tool_ids(artifacts)))
+
+
+def _has_any_grounding_tool(tool_ids: list[str], artifacts: list[dict[str, Any]]) -> bool:
+    if "context.prepare" in tool_ids or "context.prepare" in _artifact_tool_ids(artifacts):
+        return True
+    return _has_file_grounding_tool(tool_ids, artifacts)
+
+
+def _cites_specific_file(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if re.search(r"\b(?:README|AGENTS|CLAUDE|GEMINI|TODO)\.md\b", stripped):
+        return True
+    if re.search(r"\b[\w./-]+\.(?:py|md|ts|tsx|toml|json|yml|yaml)\b", stripped):
+        return True
+    return False
 
 
 def render_transcript_markdown(session: dict[str, Any] | None, messages: list[dict[str, Any]]) -> str:
@@ -342,6 +401,16 @@ def classify_probe_bundle(
     }:
         if probe.expects_tools and len(tool_ids) == 1 and not used_context_prepare and not used_batch:
             classification = "premature_stop_after_one_tool"
+        elif (
+            _is_repo_understanding_probe(probe)
+            and tool_ids
+            and (
+                (_requires_file_grounding(probe) and not _has_file_grounding_tool(tool_ids, artifacts))
+                or (not _requires_file_grounding(probe) and not _has_any_grounding_tool(tool_ids, artifacts))
+            )
+            and (_requires_file_grounding(probe) or not _cites_specific_file(assistant_content))
+        ):
+            classification = "ungrounded_repo_answer"
 
     return {
         "status": status,

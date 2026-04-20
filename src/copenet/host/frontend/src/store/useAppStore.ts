@@ -5,6 +5,7 @@ import type { InspectorTarget } from '../runtime/types';
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
 export type RightPanelTab = 'runtime' | 'artifacts' | 'activity';
+export type WorkflowsRoute = 'hub' | 'meme-lab';
 
 interface AppState {
   wsStatus: WsStatus;
@@ -23,9 +24,13 @@ interface AppState {
   toggleThemeMode: () => void;
   dataToolsRoute: DataToolsRoute;
   setDataToolsRoute: (route: DataToolsRoute) => void;
+  workflowsRoute: WorkflowsRoute;
+  setWorkflowsRoute: (route: WorkflowsRoute) => void;
   draftComposerSeed: string | null;
   setDraftComposerSeed: (seed: string | null) => void;
 
+  primaryNavCollapsed: boolean;
+  setPrimaryNavCollapsed: (collapsed: boolean) => void;
   sidebarOpen: boolean;
   setSidebarOpen: (open: boolean) => void;
   rightPanelOpen: boolean;
@@ -114,9 +119,13 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   dataToolsRoute: 'hub',
   setDataToolsRoute: (route) => set({ dataToolsRoute: route }),
+  workflowsRoute: 'hub',
+  setWorkflowsRoute: (route) => set({ workflowsRoute: route }),
   draftComposerSeed: null,
   setDraftComposerSeed: (seed) => set({ draftComposerSeed: seed }),
 
+  primaryNavCollapsed: false,
+  setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),
   sidebarOpen: true,
   setSidebarOpen: (open) => set({ sidebarOpen: open }),
   rightPanelOpen: true,
