@@ -164,6 +164,34 @@ class MemeIdeationParseResult:
 
 
 @dataclass(frozen=True)
+class MediaTranscriptPack:
+    summary: str | None = None
+    key_lines: tuple[str, ...] = ()
+    notable_quotes: tuple[str, ...] = ()
+    transcript_source: str | None = None
+    transcript_excerpt: str | None = None
+    tone_cues: tuple[str, ...] = ()
+
+    def __post_init__(self) -> None:
+        summary = _clean_optional_text(self.summary)
+        key_lines = tuple(_normalize_text_items(self.key_lines))
+        notable_quotes = tuple(_normalize_text_items(self.notable_quotes))
+        transcript_source = _clean_optional_text(self.transcript_source)
+        transcript_excerpt = _clean_optional_text(self.transcript_excerpt)
+        tone_cues = tuple(_normalize_text_items(self.tone_cues))
+        object.__setattr__(self, "summary", summary)
+        object.__setattr__(self, "key_lines", key_lines)
+        object.__setattr__(self, "notable_quotes", notable_quotes)
+        object.__setattr__(self, "transcript_source", transcript_source)
+        object.__setattr__(self, "transcript_excerpt", transcript_excerpt)
+        object.__setattr__(self, "tone_cues", tone_cues)
+
+    @property
+    def has_content(self) -> bool:
+        return bool(self.summary or self.key_lines or self.notable_quotes or self.transcript_excerpt)
+
+
+@dataclass(frozen=True)
 class MutationPlan:
     style_mode: str
     artifact_shell_candidates: tuple[str, ...]
@@ -189,8 +217,47 @@ class JudgeScorecard:
 
 
 @dataclass(frozen=True)
+class MemeRefinementMessage:
+    role: str
+    content: str
+
+    def __post_init__(self) -> None:
+        role = _clean_optional_text(self.role) or "user"
+        content = _clean_optional_text(self.content)
+        if content is None:
+            raise ValueError("refinement message content is required")
+        object.__setattr__(self, "role", role)
+        object.__setattr__(self, "content", content)
+
+
+@dataclass(frozen=True)
+class MemeRefinementParseResult:
+    assistant_reply: str
+    suggested_candidates: list[MemeIdeationCandidate]
+    warnings: list[str] = field(default_factory=list)
+    raw_text: str | None = None
+
+
+@dataclass(frozen=True)
 class MemeIdeationResponse:
     candidates: list[MemeIdeationCandidate]
+    provider: str
+    model: str
+    preset: str
+    schema_version: str
+    prompt_version: str
+    warnings: list[str] = field(default_factory=list)
+    raw_text: str | None = None
+    knowledge_pack_version: str | None = None
+    judge_warnings: list[str] = field(default_factory=list)
+    artifact_shell: str | None = None
+    mutation_notes: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
+class MemeRefinementResponse:
+    assistant_reply: str
+    suggested_candidates: list[MemeIdeationCandidate]
     provider: str
     model: str
     preset: str
@@ -214,6 +281,10 @@ class MemeIdeationRequest:
     provider: str | None = None
     model: str | None = None
     preset: str = MEME_IDEATION_PRESET_ID
+    media_asset_id: str | None = None
+    media_title: str | None = None
+    media_source_url: str | None = None
+    media_transcript_pack: MediaTranscriptPack | None = None
     debug: bool = False
 
     def __post_init__(self) -> None:
@@ -223,11 +294,15 @@ class MemeIdeationRequest:
         preset = _clean_optional_text(self.preset) or MEME_IDEATION_PRESET_ID
         provider = _clean_optional_text(self.provider)
         model = _clean_optional_text(self.model)
+        media_asset_id = _clean_optional_text(self.media_asset_id)
+        media_title = _clean_optional_text(self.media_title)
+        media_source_url = _clean_optional_text(self.media_source_url)
+        media_transcript_pack = _normalize_media_transcript_pack(self.media_transcript_pack)
         tone_hints = _normalize_tone_hints(self.tone_hints)
         requested_count = int(self.requested_count)
 
-        if not any((topic, trend_summary, image_springboard)):
-            raise ValueError("at least one of topic, trend_summary, or image_springboard is required")
+        if not any((topic, trend_summary, image_springboard, media_title, media_source_url, media_transcript_pack and media_transcript_pack.has_content)):
+            raise ValueError("at least one of topic, trend_summary, image_springboard, or media context is required")
         if requested_count < 1 or requested_count > _MAX_REQUESTED_COUNT:
             raise ValueError(f"requested_count must be between 1 and {_MAX_REQUESTED_COUNT}")
 
@@ -239,6 +314,32 @@ class MemeIdeationRequest:
         object.__setattr__(self, "provider", provider)
         object.__setattr__(self, "model", model)
         object.__setattr__(self, "preset", preset)
+        object.__setattr__(self, "media_asset_id", media_asset_id)
+        object.__setattr__(self, "media_title", media_title)
+        object.__setattr__(self, "media_source_url", media_source_url)
+        object.__setattr__(self, "media_transcript_pack", media_transcript_pack)
+
+
+@dataclass(frozen=True)
+class MemeRefinementRequest:
+    ideation_request: MemeIdeationRequest
+    current_generation_summary: str | None = None
+    current_candidates: tuple[MemeIdeationCandidate, ...] = ()
+    chat_history: tuple[MemeRefinementMessage, ...] = ()
+    latest_user_message: str = ""
+    debug: bool = False
+
+    def __post_init__(self) -> None:
+        current_generation_summary = _clean_optional_text(self.current_generation_summary)
+        latest_user_message = _clean_optional_text(self.latest_user_message)
+        if latest_user_message is None:
+            raise ValueError("latest refinement message is required")
+        current_candidates = tuple(self.current_candidates)
+        chat_history = tuple(self.chat_history)
+        object.__setattr__(self, "current_generation_summary", current_generation_summary)
+        object.__setattr__(self, "latest_user_message", latest_user_message)
+        object.__setattr__(self, "current_candidates", current_candidates)
+        object.__setattr__(self, "chat_history", chat_history)
 
 
 def _clean_optional_text(value: object | None) -> str | None:
@@ -262,6 +363,37 @@ def _normalize_tone_hints(value: str | list[str] | None) -> list[str]:
     return normalized
 
 
+def _normalize_text_items(values: object) -> list[str]:
+    if values is None:
+        return []
+    if isinstance(values, str):
+        text = values.strip()
+        return [text] if text else []
+    normalized: list[str] = []
+    for item in values:
+        text = _clean_optional_text(item)
+        if text:
+            normalized.append(text)
+    return normalized
+
+
+def _normalize_media_transcript_pack(value: object | None) -> MediaTranscriptPack | None:
+    if value is None:
+        return None
+    if isinstance(value, MediaTranscriptPack):
+        return value
+    if isinstance(value, dict):
+        return MediaTranscriptPack(
+            summary=value.get("summary"),
+            key_lines=tuple(_normalize_text_items(value.get("key_lines") or value.get("keyLines"))),
+            notable_quotes=tuple(_normalize_text_items(value.get("notable_quotes") or value.get("notableQuotes"))),
+            transcript_source=value.get("transcript_source") or value.get("transcriptSource"),
+            transcript_excerpt=value.get("transcript_excerpt") or value.get("transcriptExcerpt"),
+            tone_cues=tuple(_normalize_text_items(value.get("tone_cues") or value.get("toneCues"))),
+        )
+    raise ValueError("media_transcript_pack must be an object if provided")
+
+
 def _resolve_prompt_preset_id(preset: str) -> str:
     return _PRESET_ALIASES.get(preset, preset)
 
@@ -274,9 +406,73 @@ def load_meme_system_prompt(preset: str = MEME_IDEATION_PRESET_ID) -> str:
     return text
 
 
+def build_media_transcript_pack(
+    *,
+    title: str | None,
+    transcript: str | None,
+    transcript_source: str | None,
+    transcript_excerpt: str | None,
+) -> MediaTranscriptPack:
+    clean_title = _clean_optional_text(title)
+    clean_transcript = _clean_optional_text(transcript) or ""
+    clean_excerpt = _clean_optional_text(transcript_excerpt)
+    lines = [line.strip(" -\t") for line in clean_transcript.splitlines() if line.strip()]
+    if not lines:
+        sentences = [part.strip() for part in clean_transcript.replace("\r", "\n").split(".") if part.strip()]
+        lines = sentences
+    unique_lines: list[str] = []
+    seen: set[str] = set()
+    for line in lines:
+        normalized = line.strip()
+        if not normalized:
+            continue
+        lowered = normalized.lower()
+        if lowered in seen:
+            continue
+        seen.add(lowered)
+        unique_lines.append(normalized)
+    key_lines = tuple(unique_lines[:3])
+    notable_quotes = tuple(line for line in key_lines if len(line.split()) >= 2)[:2]
+    if unique_lines:
+        base_summary = " ".join(unique_lines[:2]).strip()
+    else:
+        base_summary = clean_excerpt or clean_title or "Imported media clip"
+    if clean_title and clean_title.lower() not in base_summary.lower():
+        summary = f"{clean_title}: {base_summary}"
+    else:
+        summary = base_summary
+    tone_cues: list[str] = []
+    lowered_blob = " ".join(unique_lines[:5]).lower()
+    if "?" in clean_transcript:
+        tone_cues.append("interrogative")
+    if any(term in lowered_blob for term in ("bro", "dude", "man", "listen")):
+        tone_cues.append("spoken")
+    if any(term in lowered_blob for term in ("lock in", "discipline", "routine", "mindset")):
+        tone_cues.append("motivational")
+    return MediaTranscriptPack(
+        summary=summary,
+        key_lines=key_lines or tuple(filter(None, [clean_excerpt])),
+        notable_quotes=notable_quotes or key_lines[:1],
+        transcript_source=_clean_optional_text(transcript_source),
+        transcript_excerpt=clean_excerpt,
+        tone_cues=tuple(tone_cues),
+    )
+
+
 def _classify_style_mode(request: MemeIdeationRequest, knowledge_pack: MemeKnowledgePack) -> str:
     topic = " ".join(
-        part for part in (request.topic or "", request.trend_summary or "", request.image_springboard or "", " ".join(request.tone_hints)) if part
+        part
+        for part in (
+            request.topic or "",
+            request.trend_summary or "",
+            request.image_springboard or "",
+            request.media_title or "",
+            request.media_source_url or "",
+            request.media_transcript_pack.summary if request.media_transcript_pack else "",
+            " ".join(request.media_transcript_pack.key_lines) if request.media_transcript_pack else "",
+            " ".join(request.tone_hints),
+        )
+        if part
     ).lower()
     if any(term in topic for term in ("sports", "commentary", "analyst", "ticker", "gibberish")):
         return "cadence-parody"
@@ -343,6 +539,23 @@ def build_meme_user_prompt(request: MemeIdeationRequest, knowledge_pack: MemeKno
         "Generate structured meme ideas for the Instagram page copeharderpls.",
         f"Return exactly {request.requested_count} candidates as JSON using the required schema.",
     ]
+    if request.media_asset_id:
+        lines.append(f"mediaAssetId: {request.media_asset_id}")
+    if request.media_title:
+        lines.append(f"mediaTitle: {request.media_title}")
+    if request.media_source_url:
+        lines.append(f"mediaSourceUrl: {request.media_source_url}")
+    if request.media_transcript_pack and request.media_transcript_pack.has_content:
+        if request.media_transcript_pack.summary:
+            lines.append(f"mediaTranscriptSummary: {request.media_transcript_pack.summary}")
+        if request.media_transcript_pack.key_lines:
+            lines.append(f"mediaKeyLines: {' | '.join(request.media_transcript_pack.key_lines)}")
+        if request.media_transcript_pack.notable_quotes:
+            lines.append(f"mediaNotableQuotes: {' | '.join(request.media_transcript_pack.notable_quotes)}")
+        if request.media_transcript_pack.transcript_source:
+            lines.append(f"mediaTranscriptSource: {request.media_transcript_pack.transcript_source}")
+        if request.media_transcript_pack.tone_cues:
+            lines.append(f"mediaToneCues: {', '.join(request.media_transcript_pack.tone_cues)}")
     if request.topic:
         lines.append(f"topic: {request.topic}")
     if request.trend_summary:
@@ -369,6 +582,7 @@ def build_meme_user_prompt(request: MemeIdeationRequest, knowledge_pack: MemeKno
         if knowledge_pack.lexicon_pack:
             lines.append(_render_excerpt_block("lexiconPack", knowledge_pack.lexicon_pack))
     lines.append("Require at least one hyper-specific detail, at least one domain shift, and an escalation from legible to unreasonable in each candidate.")
+    lines.append("When media transcript context is present, tie at least one candidate directly to the clip's narration, tone, or timing.")
     lines.append("Favor artifact-first outputs: receipt, sticky note, product label, quote card, screenshot annotation, internal memo, protest sign, or image overlay.")
     lines.append("Avoid neat consultant prose, fully grammatical corporate parody, and explanatory direction labels that tell the joke instead of embodying it.")
     lines.append("For subculture mode, prefer ugly interpretable compounds and faux-diagnostic wording over generic manosphere parody.")
@@ -502,6 +716,55 @@ def parse_meme_ideation_output(raw_text: str, *, debug: bool) -> MemeIdeationPar
 
     return MemeIdeationParseResult(
         candidates=candidates,
+        warnings=warnings,
+        raw_text=raw_text if debug else None,
+    )
+
+
+def parse_meme_refinement_output(raw_text: str, *, debug: bool) -> MemeRefinementParseResult:
+    warnings: list[str] = []
+    payload = None
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError:
+        try:
+            payload = json.loads(_strip_markdown_fences(raw_text))
+        except json.JSONDecodeError:
+            try:
+                payload = json.loads(_extract_json_candidate(raw_text))
+                warnings.append("model output required light JSON cleanup before parsing")
+            except json.JSONDecodeError:
+                return MemeRefinementParseResult(
+                    assistant_reply="I couldn't turn that refinement pass into structured output, but the model did respond.",
+                    suggested_candidates=[],
+                    warnings=["model output was not valid JSON"],
+                    raw_text=raw_text if debug else None,
+                )
+    if not isinstance(payload, dict):
+        return MemeRefinementParseResult(
+            assistant_reply="I couldn't recover a structured refinement response.",
+            suggested_candidates=[],
+            warnings=["parsed JSON did not contain an object response"],
+            raw_text=raw_text if debug else None,
+        )
+    assistant_reply = _clean_optional_text(payload.get("assistantReply") or payload.get("assistant_reply")) or "Refinement suggestions ready."
+    candidate_rows = payload.get("suggestedCandidates") or payload.get("suggested_candidates") or []
+    suggested_candidates: list[MemeIdeationCandidate] = []
+    invalid_count = 0
+    if isinstance(candidate_rows, list):
+        for item in candidate_rows:
+            candidate = _candidate_from_obj(item)
+            if candidate is None:
+                invalid_count += 1
+                continue
+            suggested_candidates.append(candidate)
+    elif candidate_rows:
+        warnings.append("suggestedCandidates was not a list")
+    if invalid_count:
+        warnings.append(f"ignored {invalid_count} malformed suggested candidate entries")
+    return MemeRefinementParseResult(
+        assistant_reply=assistant_reply,
+        suggested_candidates=suggested_candidates,
         warnings=warnings,
         raw_text=raw_text if debug else None,
     )
@@ -707,6 +970,48 @@ def _judge_candidates(
     return survivors, scorecards, warnings
 
 
+def build_meme_refinement_system_prompt(
+    request: MemeRefinementRequest,
+    *,
+    knowledge_pack: MemeKnowledgePack,
+    mutation_plan: MutationPlan,
+) -> str:
+    base_prompt = build_meme_system_prompt(request.ideation_request, knowledge_pack=knowledge_pack, mutation_plan=mutation_plan)
+    extra = [
+        "You are refining an existing meme post direction, not starting a generic chat.",
+        "Respond as JSON with keys: assistantReply (string) and suggestedCandidates (array).",
+        "assistantReply should be brief, concrete, and oriented around improving the post.",
+        "suggestedCandidates should only include materially better rewrites or new directions, and may be empty.",
+        "If media transcript context exists, tie the refinement directly to the clip's narration, tone, or timing.",
+    ]
+    return "\n\n".join([base_prompt, "Refinement directives:\n- " + "\n- ".join(extra)])
+
+
+def build_meme_refinement_user_prompt(
+    request: MemeRefinementRequest,
+    *,
+    knowledge_pack: MemeKnowledgePack,
+    mutation_plan: MutationPlan,
+) -> str:
+    lines = [build_meme_user_prompt(request.ideation_request, knowledge_pack=knowledge_pack, mutation_plan=mutation_plan)]
+    if request.current_generation_summary:
+        lines.append(f"currentGenerationSummary: {request.current_generation_summary}")
+    if request.current_candidates:
+        lines.append("currentCandidates:")
+        for index, candidate in enumerate(request.current_candidates, start=1):
+            lines.append(
+                f"- {index}. direction={candidate.direction}; format={candidate.format}; text={candidate.text}; "
+                f"optionalCaption={candidate.optional_caption or 'none'}; notes={candidate.notes or 'none'}"
+            )
+    if request.chat_history:
+        lines.append("refinementHistory:")
+        for message in request.chat_history[-6:]:
+            lines.append(f"- {message.role}: {message.content}")
+    lines.append(f"latestUserMessage: {request.latest_user_message}")
+    lines.append("Return a concise assistantReply plus only the strongest suggestedCandidates.")
+    return "\n".join(lines)
+
+
 async def ideate_memes(
     *,
     provider_name: str,
@@ -749,6 +1054,61 @@ async def ideate_memes(
         provider=provider_name,
         model=resolved_model,
         preset=request.preset,
+        schema_version=MEME_IDEATION_SCHEMA_VERSION,
+        prompt_version=MEME_IDEATION_PROMPT_VERSION,
+        warnings=warnings,
+        raw_text=parsed.raw_text,
+        knowledge_pack_version=knowledge_pack.version,
+        judge_warnings=judge_warnings,
+        artifact_shell=mutation_plan.artifact_shell_candidates[0] if mutation_plan.artifact_shell_candidates else None,
+        mutation_notes=list(mutation_plan.mutation_notes),
+    )
+
+
+async def refine_memes(
+    *,
+    provider_name: str,
+    provider: Provider,
+    request: MemeRefinementRequest,
+) -> MemeRefinementResponse:
+    if provider_name not in _LOCAL_PROVIDER_IDS:
+        raise ValueError(f"provider {provider_name} is not a supported local meme ideation provider")
+
+    ideation_request = request.ideation_request
+    knowledge_context = build_meme_knowledge_index()
+    knowledge_pack = build_meme_knowledge_pack(
+        knowledge_context,
+        topic=ideation_request.topic,
+        trend_summary=ideation_request.trend_summary,
+        image_springboard=ideation_request.image_springboard,
+        tone_hints=ideation_request.tone_hints,
+    )
+    mutation_plan = build_mutation_plan(ideation_request, knowledge_pack)
+    system_prompt = build_meme_refinement_system_prompt(request, knowledge_pack=knowledge_pack, mutation_plan=mutation_plan)
+    user_prompt = build_meme_refinement_user_prompt(request, knowledge_pack=knowledge_pack, mutation_plan=mutation_plan)
+    resolved_model = await _resolve_model(provider, ideation_request.model)
+
+    raw_text = await _run_provider_text(provider=provider, prompt=user_prompt, model=resolved_model, system_prompt=system_prompt)
+    parsed = parse_meme_refinement_output(raw_text, debug=request.debug)
+    survivors, scorecards, judge_warnings = _judge_candidates(
+        parsed.suggested_candidates,
+        mutation_plan=mutation_plan,
+        requested_count=min(max(1, len(request.current_candidates) or 1), _MAX_REQUESTED_COUNT),
+    )
+    warnings = list(knowledge_pack.warnings) + parsed.warnings
+    if parsed.suggested_candidates and not survivors:
+        warnings.append("refinement produced candidates, but every rewrite was rejected as too mid")
+    if request.debug and scorecards:
+        judge_warnings.extend(
+            f"candidate {scorecard.candidate_index}: total={scorecard.total_score:.2f}, normieRisk={scorecard.normie_contamination_risk:.2f}, accepted={scorecard.accepted}"
+            for scorecard in scorecards[: max(1, len(request.current_candidates))]
+        )
+    return MemeRefinementResponse(
+        assistant_reply=parsed.assistant_reply,
+        suggested_candidates=survivors,
+        provider=provider_name,
+        model=resolved_model,
+        preset=ideation_request.preset,
         schema_version=MEME_IDEATION_SCHEMA_VERSION,
         prompt_version=MEME_IDEATION_PROMPT_VERSION,
         warnings=warnings,

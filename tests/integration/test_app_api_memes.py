@@ -6,6 +6,7 @@ from pathlib import Path
 import pytest
 from fastapi.testclient import TestClient
 
+from copenet.core.media.store import MediaAssetRecord
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.api import create_app
@@ -17,6 +18,21 @@ class FakeLocalProvider:
         self.name = name
         self.display_name = name.title()
         self.response_text = response_text
+        self.refine_response_text = """
+        {
+          "assistantReply": "Push the juxtaposition harder and let the narration contaminate the overlay text.",
+          "suggestedCandidates": [
+            {
+              "direction": "voiceover contamination",
+              "format": "screenshot annotation",
+              "text": "HE SAID LOCK IN LIKE THIS WAS A TEMPORARY OPERATIONS MEMO",
+              "optional_caption": "smug pause detected",
+              "needs_visual_context": true,
+              "notes": "overlay on the first serious pause"
+            }
+          ]
+        }
+        """.strip()
         self.calls: list[dict[str, str | None]] = []
 
     async def run(
@@ -28,7 +44,8 @@ class FakeLocalProvider:
         system_prompt: str | None = None,
     ):
         self.calls.append({"prompt": prompt, "model": model, "system_prompt": system_prompt})
-        yield ProviderEvent(kind="delta", text=self.response_text, provider_session_id=provider_session_id)
+        response_text = self.refine_response_text if (system_prompt and "assistantReply" in system_prompt) else self.response_text
+        yield ProviderEvent(kind="delta", text=response_text, provider_session_id=provider_session_id)
         yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
 
     async def describe(self) -> dict:
@@ -66,6 +83,40 @@ def _seed_library(root: Path) -> None:
     _write(root / "Feedback" / "2026-04-18-post-bank-feedback.md", "# Feedback\n\n## Updated rules\nLess abstract, more artifact. Avoid quirky slogan energy.\n")
     _write(root / "Case Studies" / "2026-04-18-clavicular-mugshot-meme.md", "# Case Study\n\n## Why it works\nDense diagnostic chain.\n")
     _write(root / "Case Studies" / "2026-04-19-sports-talk-gibberish-parody.md", "# Sports talk gibberish parody\n\n## Why it works\nCadence-first jargon parody.\n")
+
+
+class FakeMediaService:
+    def __init__(self) -> None:
+        self.record = MediaAssetRecord(
+            asset_id="media-1",
+            app_id="subtext",
+            source_type="url",
+            source_url="https://example.com/video",
+            source_path=None,
+            title="Gym authority clip",
+            media_path="/tmp/example.mp4",
+            transcript_path="/tmp/example.md",
+            transcript_source="youtube-captions",
+            transcript_excerpt="After three weeks of discipline he is talking like a human worth auditor.",
+            metadata={"source": "youtube-captions"},
+            duration_seconds=12.5,
+            latency_ms=42,
+        )
+
+    def list_assets(self, *, app_id: str, limit: int = 50) -> list[dict[str, object]]:
+        return [self.record.to_public_dict()]
+
+    def get_asset_detail(self, *, app_id: str, asset_id: str) -> dict[str, object] | None:
+        if app_id != self.record.app_id or asset_id != self.record.asset_id:
+            return None
+        payload = self.record.to_public_dict()
+        payload["transcriptContent"] = (
+            "After three weeks of discipline he is talking like a human worth auditor.\n"
+            "You need routines.\n"
+            "People are spiritually unemployed.\n"
+            "I became the standard."
+        )
+        return payload
 
 
 @pytest.fixture
@@ -120,7 +171,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         providers={"lm-studio": lm_studio, "ollama": ollama},
     )
     _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext", default_provider="lm-studio")
-    app = create_app(orchestrator)
+    app = create_app(orchestrator, media_service=FakeMediaService())
     with TestClient(app) as client:
         yield client, token, lm_studio, ollama
 
@@ -250,3 +301,59 @@ def test_meme_ideation_endpoint_rejects_invalid_requests(app_client) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_meme_ideation_endpoint_accepts_media_asset_context(app_client) -> None:
+    client, token, lm_studio, _ = app_client
+
+    response = client.post(
+        "/api/v1/memes/ideate",
+        headers=_auth(token),
+        json={
+            "requestedCount": 2,
+            "mediaAssetId": "media-1",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["candidates"]
+    prompt = lm_studio.calls[-1]["prompt"] or ""
+    assert "mediaTitle: Gym authority clip" in prompt
+    assert "mediaTranscriptSummary" in prompt
+    assert "People are spiritually unemployed." in prompt
+
+
+def test_meme_refine_endpoint_returns_stateless_reply_and_candidates(app_client) -> None:
+    client, token, lm_studio, _ = app_client
+
+    response = client.post(
+        "/api/v1/memes/refine",
+        headers=_auth(token),
+        json={
+            "topic": "male self-improvement moral superiority",
+            "requestedCount": 2,
+            "mediaAssetId": "media-1",
+            "currentGenerationSummary": "Current ideas are too clean and not tied tightly enough to the narration.",
+            "currentCandidates": [
+                    {
+                        "direction": "self-help caption",
+                        "format": "image overlay",
+                        "text": "WHEN DISCIPLINE BECOMES A PERSONALITY",
+                        "optionalCaption": None,
+                        "needsVisualContext": True,
+                        "notes": "too smooth",
+                    }
+            ],
+            "history": [
+                {"role": "user", "content": "make it meaner"},
+                {"role": "assistant", "content": "Push the fake authority harder."},
+            ],
+            "message": "Tie it more directly to the clip's narration cadence.",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["assistantReply"].startswith("Push the juxtaposition harder")
+    assert payload["suggestedCandidates"][0]["format"] == "screenshot annotation"
+    assert "currentGenerationSummary" in (lm_studio.calls[-1]["prompt"] or "")

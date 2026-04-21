@@ -4,12 +4,15 @@
 // for an RPC / REST call.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ideateMemes, MemeIdeationError } from './memeClient';
+import { useAppStore } from '../../store/useAppStore';
+import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../../lib/mediaMemeBridge';
+import { ideateMemes, MemeIdeationError, refineMemes } from './memeClient';
 import type {
   ArenaState,
   MemeBrief,
   MemeGeneration,
   MemeRanking,
+  MemeRefinementMessage,
   MemeVerdict,
   MemeViewMode,
 } from './types';
@@ -54,9 +57,15 @@ export const DEFAULT_BRIEF: MemeBrief = {
   provider: 'lm-studio',
   model: null,
   preset: 'shotgun',
+  attachedMedia: null,
 };
 
 export function useMemeLab() {
+  const memeLabSeedAsset = useAppStore((state) => state.memeLabSeedAsset);
+  const setMemeLabSeedAsset = useAppStore((state) => state.setMemeLabSeedAsset);
+  const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
+  const setDraftOpen = useAppStore((state) => state.setDraftOpen);
+  const setCurrentSection = useAppStore((state) => state.setCurrentSection);
   const bootstrap = useRef<PersistShape | null>(null);
   if (bootstrap.current === null) {
     bootstrap.current = loadState();
@@ -73,6 +82,10 @@ export function useMemeLab() {
 
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationError, setGenerationError] = useState<string | null>(null);
+  const [isRefining, setIsRefining] = useState(false);
+  const [refinementError, setRefinementError] = useState<string | null>(null);
+  const [refinementInput, setRefinementInput] = useState('');
+  const [refinementMessages, setRefinementMessages] = useState<MemeRefinementMessage[]>([]);
   const abortRef = useRef<AbortController | null>(null);
 
   // Persist whenever meaningful state changes.
@@ -85,9 +98,35 @@ export function useMemeLab() {
     [generations, activeGenerationId],
   );
 
+  useEffect(() => {
+    setRefinementMessages([]);
+    setRefinementInput('');
+    setRefinementError(null);
+  }, [activeGenerationId]);
+
   const patchBrief = useCallback((updates: Partial<MemeBrief>) => {
     setBrief((prev) => ({ ...prev, ...updates }));
   }, []);
+
+  const attachSourceAsset = useCallback((detail: Parameters<typeof buildAttachedMedia>[0]) => {
+    setBrief((prev) => ({ ...prev, attachedMedia: buildAttachedMedia(detail) }));
+    setRefinementMessages([]);
+    setRefinementInput('');
+    setRefinementError(null);
+  }, []);
+
+  const clearSourceAsset = useCallback(() => {
+    setBrief((prev) => ({ ...prev, attachedMedia: null }));
+    setRefinementMessages([]);
+    setRefinementInput('');
+    setRefinementError(null);
+  }, []);
+
+  useEffect(() => {
+    if (!memeLabSeedAsset) return;
+    attachSourceAsset(memeLabSeedAsset);
+    setMemeLabSeedAsset(null);
+  }, [attachSourceAsset, memeLabSeedAsset, setMemeLabSeedAsset]);
 
   const generate = useCallback(async () => {
     if (isGenerating) return;
@@ -116,6 +155,18 @@ export function useMemeLab() {
   const cancelGenerate = useCallback(() => {
     abortRef.current?.abort();
   }, []);
+
+  const openInAgents = useCallback(() => {
+    if (!brief.attachedMedia) return;
+    const seed = buildMemeAgentsDraftSeed({
+      attachedMedia: brief.attachedMedia,
+      brief,
+      generation: activeGeneration,
+    });
+    setDraftComposerSeed(seed);
+    setDraftOpen(true);
+    setCurrentSection('agents');
+  }, [activeGeneration, brief, setCurrentSection, setDraftComposerSeed, setDraftOpen]);
 
   const setActive = useCallback((id: string | null) => {
     setActiveGenerationId(id);
@@ -232,22 +283,93 @@ export function useMemeLab() {
     setRankings({});
     setActiveGenerationId(null);
     setArena({ leftId: null, rightId: null, lastVerdict: null });
+    setRefinementMessages([]);
+    setRefinementInput('');
+    setRefinementError(null);
   }, []);
+
+  const submitRefinement = useCallback(async () => {
+    const message = refinementInput.trim();
+    if (!message) return;
+    if (!activeGeneration) {
+      setRefinementError('Generate at least one meme set before refining it.');
+      return;
+    }
+    setIsRefining(true);
+    setRefinementError(null);
+    const userMessage: MemeRefinementMessage = {
+      id: `refine-user-${Date.now()}`,
+      role: 'user',
+      content: message,
+      createdAt: new Date().toISOString(),
+    };
+    const nextHistory = [...refinementMessages, userMessage];
+    setRefinementMessages(nextHistory);
+    setRefinementInput('');
+    try {
+      const result = await refineMemes({
+        brief,
+        generation: activeGeneration,
+        history: nextHistory,
+        message,
+      });
+      const assistantMessage: MemeRefinementMessage = {
+        id: `refine-assistant-${Date.now()}`,
+        role: 'assistant',
+        content: result.assistantReply,
+        createdAt: new Date().toISOString(),
+      };
+      setRefinementMessages((current) => [...current, assistantMessage]);
+      if (result.suggestedCandidates.length) {
+        setGenerations((current) =>
+          current.map((generation) =>
+            generation.id === activeGeneration.id
+              ? {
+                  ...generation,
+                  candidates: result.suggestedCandidates,
+                  judgeWarnings: result.judgeWarnings,
+                  mutationNotes: result.mutationNotes,
+                  artifactShell: result.artifactShell,
+                  warnings: result.warnings,
+                }
+              : generation,
+          ),
+        );
+      }
+    } catch (err) {
+      if (err instanceof MemeIdeationError) {
+        setRefinementError(`${err.message} (status ${err.status})`);
+      } else {
+        setRefinementError(String((err as Error).message || err));
+      }
+    } finally {
+      setIsRefining(false);
+    }
+  }, [activeGeneration, brief, refinementInput, refinementMessages]);
 
   return {
     // brief / action
     brief,
     patchBrief,
+    attachSourceAsset,
+    clearSourceAsset,
     generate,
     cancelGenerate,
     isGenerating,
     generationError,
+    openInAgents,
     // history
     generations,
     activeGeneration,
     setActive,
     deleteGeneration,
     clearAll,
+    isRefining,
+    refinementError,
+    refinementInput,
+    setRefinementInput,
+    refinementMessages,
+    submitRefinement,
     // view mode
     viewMode,
     setViewMode,

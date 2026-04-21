@@ -33,6 +33,7 @@ export interface MemeBrief {
   provider: string | null;            // provider override or inherit app default
   model: string | null;               // override or inherit app default
   preset: string | null;              // named ideation preset if server supports
+  attachedMedia: MemeAttachedMedia | null;
 }
 
 export interface MemeGeneration {
@@ -51,6 +52,41 @@ export interface MemeGeneration {
   warnings: string[];                 // envelope-level warnings
   latencyMs: number | null;
   source: 'server' | 'mock';          // fallback when endpoint is unavailable
+  sourceAsset: MemeAttachedMedia | null;
+}
+
+export interface MediaTranscriptPack {
+  summary: string | null;
+  keyLines: string[];
+  notableQuotes: string[];
+  transcriptSource: string | null;
+  transcriptExcerpt: string | null;
+  toneCues: string[];
+}
+
+export interface MemeAttachedMedia {
+  assetId: string;
+  title: string;
+  sourceUrl: string | null;
+  transcriptSource: string | null;
+  transcriptExcerpt: string;
+  transcriptPack: MediaTranscriptPack;
+}
+
+export interface MemeRefinementMessage {
+  id: string;
+  role: 'user' | 'assistant';
+  content: string;
+  createdAt: string;
+}
+
+export interface MemeRefinementResult {
+  assistantReply: string;
+  suggestedCandidates: MemeCandidate[];
+  warnings: string[];
+  judgeWarnings: string[];
+  mutationNotes: string[];
+  artifactShell: string | null;
 }
 
 export type MemeVerdict = 'winner' | 'loser' | 'tie' | null;

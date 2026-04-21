@@ -14,7 +14,15 @@ from fastapi import APIRouter, Depends, Header, HTTPException, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
-from copenet.core.meme_ideation import MemeIdeationRequest, ideate_memes
+from copenet.core.meme_ideation import (
+    MemeIdeationCandidate,
+    MemeIdeationRequest,
+    MemeRefinementMessage,
+    MemeRefinementRequest,
+    build_media_transcript_pack,
+    ideate_memes,
+    refine_memes,
+)
 from copenet.core.media import MediaDependencyError, MediaDownloadError, MediaIngestionService, MediaTranscriptionError
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 
@@ -60,7 +68,32 @@ class MemeIdeationApiRequest(BaseModel):
     provider: str | None = None
     model: str | None = None
     preset: str | None = None
+    media_asset_id: str | None = Field(default=None, alias="mediaAssetId")
+    media_title: str | None = Field(default=None, alias="mediaTitle")
+    media_source_url: str | None = Field(default=None, alias="mediaSourceUrl")
+    media_transcript_pack: dict[str, Any] | None = Field(default=None, alias="mediaTranscriptPack")
     debug: bool = False
+
+
+class MemeCandidateApiModel(BaseModel):
+    direction: str
+    format: str
+    text: str
+    optional_caption: str | None = Field(default=None, alias="optionalCaption")
+    needs_visual_context: bool = Field(default=False, alias="needsVisualContext")
+    notes: str | None = None
+
+
+class MemeRefinementMessageApiModel(BaseModel):
+    role: str
+    content: str
+
+
+class MemeRefinementApiRequest(MemeIdeationApiRequest):
+    current_generation_summary: str | None = Field(default=None, alias="currentGenerationSummary")
+    current_candidates: list[MemeCandidateApiModel] = Field(default_factory=list, alias="currentCandidates")
+    history: list[MemeRefinementMessageApiModel] = Field(default_factory=list)
+    message: str
 
 
 class MediaImportRequest(BaseModel):
@@ -149,6 +182,45 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         if isinstance(exc, (MediaDownloadError, MediaTranscriptionError, ValueError)):
             return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=detail)
         return HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail)
+
+    def _serialize_meme_candidate(candidate: MemeIdeationCandidate) -> dict[str, Any]:
+        return {
+            "direction": candidate.direction,
+            "format": candidate.format,
+            "text": candidate.text,
+            "optional_caption": candidate.optional_caption,
+            "needs_visual_context": candidate.needs_visual_context,
+            "notes": candidate.notes,
+        }
+
+    def _resolve_media_context(
+        *,
+        app: AuthenticatedApp,
+        media_asset_id: str | None,
+        media_title: str | None,
+        media_source_url: str | None,
+        media_transcript_pack: dict[str, Any] | None,
+    ) -> tuple[str | None, str | None, dict[str, Any] | None]:
+        if media_asset_id and media_transcript_pack is None:
+            asset = media.get_asset_detail(app_id=app.app_id, asset_id=media_asset_id)
+            if asset is not None:
+                media_title = media_title or str(asset.get("title") or "") or None
+                media_source_url = media_source_url or str(asset.get("sourceUrl") or "") or None
+                transcript_pack = build_media_transcript_pack(
+                    title=media_title,
+                    transcript=str(asset.get("transcriptContent") or ""),
+                    transcript_source=str(asset.get("transcriptSource") or ""),
+                    transcript_excerpt=str(asset.get("transcriptExcerpt") or ""),
+                )
+                media_transcript_pack = {
+                    "summary": transcript_pack.summary,
+                    "keyLines": list(transcript_pack.key_lines),
+                    "notableQuotes": list(transcript_pack.notable_quotes),
+                    "transcriptSource": asset.get("transcriptSource"),
+                    "transcriptExcerpt": asset.get("transcriptExcerpt"),
+                    "toneCues": list(transcript_pack.tone_cues),
+                }
+        return media_title, media_source_url, media_transcript_pack
 
     async def _run_chat(
         app: AuthenticatedApp,
@@ -286,6 +358,13 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         if provider is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unsupported provider: {provider_name}")
         try:
+            media_title, media_source_url, media_transcript_pack = _resolve_media_context(
+                app=app,
+                media_asset_id=body.media_asset_id,
+                media_title=body.media_title,
+                media_source_url=body.media_source_url,
+                media_transcript_pack=body.media_transcript_pack,
+            )
             ideation_request = MemeIdeationRequest(
                 topic=body.topic,
                 trend_summary=body.trend_summary,
@@ -295,6 +374,10 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
                 provider=provider_name,
                 model=body.model,
                 preset=body.preset or None,
+                media_asset_id=body.media_asset_id,
+                media_title=media_title,
+                media_source_url=media_source_url,
+                media_transcript_pack=media_transcript_pack,
                 debug=body.debug,
             )
             result = await ideate_memes(
@@ -305,17 +388,84 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         except ValueError as exc:
             raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
         payload: dict[str, Any] = {
-            "candidates": [
-                {
-                    "direction": candidate.direction,
-                    "format": candidate.format,
-                    "text": candidate.text,
-                    "optional_caption": candidate.optional_caption,
-                    "needs_visual_context": candidate.needs_visual_context,
-                    "notes": candidate.notes,
-                }
-                for candidate in result.candidates
-            ],
+            "candidates": [_serialize_meme_candidate(candidate) for candidate in result.candidates],
+            "provider": result.provider,
+            "model": result.model,
+            "preset": result.preset,
+            "schemaVersion": result.schema_version,
+            "promptVersion": result.prompt_version,
+        }
+        if result.warnings:
+            payload["warnings"] = result.warnings
+        if result.knowledge_pack_version is not None:
+            payload["knowledgePackVersion"] = result.knowledge_pack_version
+        if result.judge_warnings:
+            payload["judgeWarnings"] = result.judge_warnings
+        if result.artifact_shell is not None:
+            payload["artifactShell"] = result.artifact_shell
+        if result.mutation_notes:
+            payload["mutationNotes"] = result.mutation_notes
+        if body.debug and result.raw_text is not None:
+            payload["raw_text"] = result.raw_text
+        return payload
+
+    @router.post("/memes/refine")
+    async def refine_memes_endpoint(body: MemeRefinementApiRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
+        provider_name = (body.provider or app.default_provider or "lm-studio").strip()
+        provider = orchestrator._providers.get(provider_name)
+        if provider is None:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unsupported provider: {provider_name}")
+        try:
+            media_title, media_source_url, media_transcript_pack = _resolve_media_context(
+                app=app,
+                media_asset_id=body.media_asset_id,
+                media_title=body.media_title,
+                media_source_url=body.media_source_url,
+                media_transcript_pack=body.media_transcript_pack,
+            )
+            ideation_request = MemeIdeationRequest(
+                topic=body.topic,
+                trend_summary=body.trend_summary,
+                image_springboard=body.image_springboard,
+                tone_hints=body.tone_hints,
+                requested_count=body.requested_count,
+                provider=provider_name,
+                model=body.model,
+                preset=body.preset or None,
+                media_asset_id=body.media_asset_id,
+                media_title=media_title,
+                media_source_url=media_source_url,
+                media_transcript_pack=media_transcript_pack,
+                debug=body.debug,
+            )
+            refinement_request = MemeRefinementRequest(
+                ideation_request=ideation_request,
+                current_generation_summary=body.current_generation_summary,
+                current_candidates=tuple(
+                    MemeIdeationCandidate(
+                        direction=item.direction,
+                        format=item.format,
+                        text=item.text,
+                        optional_caption=item.optional_caption,
+                        needs_visual_context=item.needs_visual_context,
+                        notes=item.notes,
+                    )
+                    for item in body.current_candidates
+                ),
+                chat_history=tuple(MemeRefinementMessage(role=item.role, content=item.content) for item in body.history),
+                latest_user_message=body.message,
+                debug=body.debug,
+            )
+            result = await refine_memes(
+                provider_name=provider_name,
+                provider=provider,
+                request=refinement_request,
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_CONTENT, detail=str(exc)) from exc
+        payload: dict[str, Any] = {
+            "assistantReply": result.assistant_reply,
+            "suggestedCandidates": [_serialize_meme_candidate(candidate) for candidate in result.suggested_candidates],
             "provider": result.provider,
             "model": result.model,
             "preset": result.preset,

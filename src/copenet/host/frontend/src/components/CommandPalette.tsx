@@ -11,6 +11,10 @@ import {
   Video,
   Wrench,
 } from 'lucide-react';
+import {
+  shouldAutoScrollCommandPalette,
+  type CommandPaletteInteraction,
+} from '../lib/commandPalette';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 
@@ -33,6 +37,7 @@ export function CommandPalette() {
 
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
+  const [interaction, setInteraction] = useState<CommandPaletteInteraction>('idle');
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -57,7 +62,11 @@ export function CommandPalette() {
     if (open) {
       setQuery('');
       setSelectedIndex(0);
-      requestAnimationFrame(() => inputRef.current?.focus());
+      setInteraction('idle');
+      requestAnimationFrame(() => {
+        inputRef.current?.focus();
+        if (listRef.current) listRef.current.scrollTop = 0;
+      });
     }
   }, [open]);
 
@@ -115,9 +124,11 @@ export function CommandPalette() {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
+      setInteraction('keyboard');
       setSelectedIndex((i) => Math.min(i + 1, filtered.length - 1));
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
+      setInteraction('keyboard');
       setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' && filtered[selectedIndex]) {
       e.preventDefault();
@@ -131,9 +142,12 @@ export function CommandPalette() {
   }, [query]);
 
   useEffect(() => {
+    if (!shouldAutoScrollCommandPalette({ query, interaction })) {
+      return;
+    }
     const el = listRef.current?.children[selectedIndex] as HTMLElement | undefined;
     el?.scrollIntoView({ block: 'nearest' });
-  }, [selectedIndex]);
+  }, [interaction, query, selectedIndex]);
 
   if (!open) return null;
 
@@ -162,7 +176,10 @@ export function CommandPalette() {
             ref={inputRef}
             type="text"
             value={query}
-            onChange={(e) => setQuery(e.target.value)}
+            onChange={(e) => {
+              setInteraction('query');
+              setQuery(e.target.value);
+            }}
             onKeyDown={handleKeyDown}
             placeholder="Search commands, sessions, or navigate…"
             className="flex-1 bg-transparent text-[14px] text-shell-text outline-none placeholder:text-shell-muted/60"
@@ -194,7 +211,6 @@ export function CommandPalette() {
                       key={item.id}
                       type="button"
                       onClick={item.action}
-                      onMouseEnter={() => setSelectedIndex(thisIndex)}
                       className={`flex w-full items-center gap-3 px-4 py-2 text-left transition-colors duration-75 ${
                         isSelected
                           ? 'bg-shell-accent-soft text-shell-text'

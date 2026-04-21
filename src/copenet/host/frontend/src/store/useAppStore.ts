@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DataToolsRoute, DraftSettings, MediaAsset, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
+import { DataToolsRoute, DraftSettings, MediaAsset, MediaAssetDetail, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
@@ -28,6 +28,8 @@ interface AppState {
   setWorkflowsRoute: (route: WorkflowsRoute) => void;
   draftComposerSeed: string | null;
   setDraftComposerSeed: (seed: string | null) => void;
+  memeLabSeedAsset: MediaAssetDetail | null;
+  setMemeLabSeedAsset: (asset: MediaAssetDetail | null) => void;
 
   primaryNavCollapsed: boolean;
   setPrimaryNavCollapsed: (collapsed: boolean) => void;
@@ -133,6 +135,8 @@ export const useAppStore = create<AppState>((set) => ({
   setWorkflowsRoute: (route) => set({ workflowsRoute: route }),
   draftComposerSeed: null,
   setDraftComposerSeed: (seed) => set({ draftComposerSeed: seed }),
+  memeLabSeedAsset: null,
+  setMemeLabSeedAsset: (asset) => set({ memeLabSeedAsset: asset }),
 
   primaryNavCollapsed: false,
   setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),

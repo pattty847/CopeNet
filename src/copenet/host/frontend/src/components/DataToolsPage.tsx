@@ -19,6 +19,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { downloadMediaFromUrl, getMediaAssetDetail, importMediaFromUrl, listMediaAssets } from '../lib/appApi';
+import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../lib/mediaMemeBridge';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail } from '../types/backend';
@@ -311,6 +312,7 @@ function MediaAssetDrawer({
   error,
   onClose,
   onUseInAgents,
+  onOpenInMemeLab,
   mobile = false,
 }: {
   detail: MediaAssetDetail | null;
@@ -318,6 +320,7 @@ function MediaAssetDrawer({
   error: string | null;
   onClose: () => void;
   onUseInAgents: (detail: MediaAssetDetail) => void;
+  onOpenInMemeLab: (detail: MediaAssetDetail) => void;
   mobile?: boolean;
 }) {
   if (!detail && !loading && !error) return null;
@@ -364,9 +367,18 @@ function MediaAssetDrawer({
       <div className="flex flex-wrap items-center gap-3 border-b border-shell-border px-6 py-4">
         <button
           type="button"
-          onClick={() => detail && onUseInAgents(detail)}
+          onClick={() => detail && onOpenInMemeLab(detail)}
           disabled={!detail}
           className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-5 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50"
+        >
+          <Sparkles className="h-4 w-4" />
+          Open in Meme Lab
+        </button>
+        <button
+          type="button"
+          onClick={() => detail && onUseInAgents(detail)}
+          disabled={!detail}
+          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50"
         >
           <PanelRightOpen className="h-4 w-4" />
           Use in Agents
@@ -430,15 +442,17 @@ function MediaImportsPage() {
   const setMediaImportStatus = useAppStore((state) => state.setMediaImportStatus);
   const setMediaImportProgress = useAppStore((state) => state.setMediaImportProgress);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
+  const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
   const setDraftOpen = useAppStore((state) => state.setDraftOpen);
   const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
+  const setMemeLabSeedAsset = useAppStore((state) => state.setMemeLabSeedAsset);
   const [url, setUrl] = useState('');
   const [capturedChunks, setCapturedChunks] = useState<string[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
   const [selectedDetail, setSelectedDetail] = useState<MediaAssetDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [mediaAction, setMediaAction] = useState<'transcribe' | 'download' | null>(null);
+  const [mediaAction, setMediaAction] = useState<'transcribe' | 'download' | 'both' | null>(null);
 
   useEffect(() => {
     if (mediaAssetsLoaded) return;
@@ -469,10 +483,16 @@ function MediaImportsPage() {
   }
 
   function useInAgents(detail: MediaAssetDetail) {
-    const seed = `Use the imported media asset "${detail.title}" as context.\n\nSource URL: ${detail.sourceUrl || 'Unknown'}\nTranscript source: ${detail.transcriptSource || 'transcript'}\n\nPlease summarize the main points, extract the strongest claims, and note anything worth fact-checking.\n\nTranscript:\n${detail.transcriptContent}`;
+    const seed = buildMemeAgentsDraftSeed({ attachedMedia: buildAttachedMedia(detail) });
     setDraftComposerSeed(seed);
     setDraftOpen(true);
     setCurrentSection('agents');
+  }
+
+  function openInMemeLab(detail: MediaAssetDetail) {
+    setMemeLabSeedAsset(detail);
+    setCurrentSection('workflows');
+    setWorkflowsRoute('meme-lab');
   }
 
   async function handleTranscribe(event: React.FormEvent<HTMLFormElement>) {
@@ -499,6 +519,7 @@ function MediaImportsPage() {
       setMediaAssetsLoaded(true);
       setMediaImportStatus('Transcript added to CopeNet.');
       setMediaImportProgress(100);
+      await openAsset(asset);
       setUrl('');
     } catch (error) {
       setMediaImportError(error instanceof Error ? error.message : 'Media transcription failed.');
@@ -525,6 +546,44 @@ function MediaImportsPage() {
       setMediaImportProgress(100);
     } catch (error) {
       setMediaImportError(error instanceof Error ? error.message : 'Media download failed.');
+      setMediaImportStatus(null);
+      setMediaImportProgress(null);
+    } finally {
+      setMediaImporting(false);
+      setMediaAction(null);
+    }
+  }
+
+  async function handleDoBoth() {
+    const nextUrl = url.trim();
+    if (!nextUrl || mediaImporting) return;
+    setCapturedChunks([]);
+    setMediaAction('both');
+    setMediaImporting(true);
+    setMediaImportError(null);
+    setMediaImportStatus('Preparing download…');
+    setMediaImportProgress(5);
+    try {
+      await downloadMediaFromUrl(nextUrl);
+      setMediaImportStatus('Download sent to your browser. Transcribing into CopeNet…');
+      setMediaImportProgress(24);
+      const asset = await importMediaFromUrl(nextUrl, {
+        onProgress: (message, percent) => {
+          setMediaImportStatus(message || 'Transcribing media…');
+          setMediaImportProgress(percent != null ? Math.max(percent, 24) : percent);
+        },
+        onChunk: (text) => {
+          setCapturedChunks((current) => [...current.slice(-5), text]);
+        },
+      });
+      prependMediaAsset(asset);
+      setMediaAssetsLoaded(true);
+      setMediaImportStatus('Downloaded and added to Meme-ready assets.');
+      setMediaImportProgress(100);
+      await openAsset(asset);
+      setUrl('');
+    } catch (error) {
+      setMediaImportError(error instanceof Error ? error.message : 'Media download/transcription failed.');
       setMediaImportStatus(null);
       setMediaImportProgress(null);
     } finally {
@@ -575,6 +634,15 @@ function MediaImportsPage() {
                     {mediaImporting && mediaAction === 'download' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
                     Download
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDoBoth()}
+                    disabled={!url.trim() || mediaImporting}
+                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-accent-soft px-6 text-sm font-semibold text-shell-accent transition hover:border-shell-accent/40 disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {mediaImporting && mediaAction === 'both' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
+                    Do Both
+                  </button>
                 </div>
               </div>
             </div>
@@ -597,7 +665,13 @@ function MediaImportsPage() {
               </div>
               <div className="min-w-0">
                 <h2 className="text-lg font-semibold text-shell-text">
-                  {mediaImporting ? (mediaAction === 'download' ? 'Download running' : 'Transcription running') : 'Ready for a new source'}
+                  {mediaImporting
+                    ? mediaAction === 'download'
+                      ? 'Download running'
+                      : mediaAction === 'both'
+                        ? 'Download + transcription running'
+                        : 'Transcription running'
+                    : 'Ready for a new source'}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-shell-muted">
                   {mediaImportError || mediaImportStatus || 'Paste a link to either add a transcript-backed asset to CopeNet or download the source video.'}
@@ -696,6 +770,7 @@ function MediaImportsPage() {
           setDetailLoading(false);
         }}
         onUseInAgents={useInAgents}
+        onOpenInMemeLab={openInMemeLab}
       />
     </div>
   );

@@ -3,7 +3,13 @@
 // Falls back to local mock ideation when the endpoint is absent (404 / network fail)
 // so the UI is fully exercisable before the backend ships.
 
-import type { MemeBrief, MemeCandidate, MemeGeneration } from './types';
+import type {
+  MemeBrief,
+  MemeCandidate,
+  MemeGeneration,
+  MemeRefinementMessage,
+  MemeRefinementResult,
+} from './types';
 
 const DEFAULT_DEV_TOKEN = 'dev-token';
 
@@ -91,6 +97,15 @@ interface IdeateWireEnvelope {
   latencyMs?: unknown;
 }
 
+interface RefineWireEnvelope {
+  assistantReply?: unknown;
+  suggestedCandidates?: unknown;
+  warnings?: unknown;
+  judgeWarnings?: unknown;
+  mutationNotes?: unknown;
+  artifactShell?: unknown;
+}
+
 function extractCandidateList(raw: unknown): unknown[] {
   if (Array.isArray(raw)) return raw;
   const env = (raw ?? {}) as IdeateWireEnvelope;
@@ -125,6 +140,20 @@ function normalizeGeneration(raw: unknown, brief: MemeBrief, source: 'server' | 
       return null;
     })(),
     source,
+    sourceAsset: brief.attachedMedia,
+  };
+}
+
+function normalizeRefinementResult(raw: unknown): MemeRefinementResult {
+  const env = (raw ?? {}) as RefineWireEnvelope;
+  const list = Array.isArray(env.suggestedCandidates) ? env.suggestedCandidates : [];
+  return {
+    assistantReply: coerceString(env.assistantReply, 'Refinement ready.'),
+    suggestedCandidates: list.map((candidate, idx) => normalizeCandidate(candidate, idx)),
+    warnings: coerceStringArray(env.warnings),
+    judgeWarnings: coerceStringArray(env.judgeWarnings),
+    mutationNotes: coerceStringArray(env.mutationNotes),
+    artifactShell: coerceString(env.artifactShell, '') || null,
   };
 }
 
@@ -193,6 +222,7 @@ function mockGeneration(brief: MemeBrief): MemeGeneration {
     warnings: ['server endpoint unavailable — using local mock generator'],
     latencyMs: 180 + Math.floor(Math.random() * 240),
     source: 'mock',
+    sourceAsset: brief.attachedMedia,
   };
 }
 
@@ -223,6 +253,10 @@ export async function ideateMemes(brief: MemeBrief, options: IdeateOptions = {})
     provider: brief.provider || null,
     model: brief.model || null,
     preset: brief.preset || null,
+    mediaAssetId: brief.attachedMedia?.assetId || null,
+    mediaTitle: brief.attachedMedia?.title || null,
+    mediaSourceUrl: brief.attachedMedia?.sourceUrl || null,
+    mediaTranscriptPack: brief.attachedMedia?.transcriptPack || null,
   };
 
   const t0 = performance.now();
@@ -275,4 +309,70 @@ export async function ideateMemes(brief: MemeBrief, options: IdeateOptions = {})
     ...gen,
     latencyMs: gen.latencyMs ?? Math.round(performance.now() - t0),
   };
+}
+
+export async function refineMemes(
+  args: {
+    brief: MemeBrief;
+    generation: MemeGeneration;
+    history: MemeRefinementMessage[];
+    message: string;
+  },
+  options: IdeateOptions = {},
+): Promise<MemeRefinementResult> {
+  const body = {
+    topic: args.brief.topic,
+    trendSummary: args.brief.trendSummary,
+    imageSpringboard: args.brief.imageSpringboard,
+    toneHints: args.brief.toneHints,
+    requestedCount: args.generation.candidates.length || args.brief.count,
+    provider: args.brief.provider || null,
+    model: args.brief.model || null,
+    preset: args.brief.preset || null,
+    mediaAssetId: args.brief.attachedMedia?.assetId || null,
+    mediaTitle: args.brief.attachedMedia?.title || null,
+    mediaSourceUrl: args.brief.attachedMedia?.sourceUrl || null,
+    mediaTranscriptPack: args.brief.attachedMedia?.transcriptPack || null,
+    currentGenerationSummary: args.generation.candidates
+      .slice(0, 4)
+      .map((candidate) => `${candidate.direction}: ${candidate.text}`)
+      .join(' | '),
+    currentCandidates: args.generation.candidates.map((candidate) => ({
+      direction: candidate.direction,
+      format: candidate.format,
+      text: candidate.text,
+      optionalCaption: candidate.optionalCaption,
+      needsVisualContext: candidate.needsVisualContext,
+      notes: candidate.notes,
+    })),
+    history: args.history.map((message) => ({ role: message.role, content: message.content })),
+    message: args.message,
+  };
+
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/memes/refine`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+    body: JSON.stringify(body),
+    signal: options.signal,
+  });
+
+  const text = await response.text();
+  let payload: unknown = {};
+  if (text) {
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      throw new MemeIdeationError(`invalid json from /memes/refine`, response.status);
+    }
+  }
+  if (!response.ok) {
+    const detail = (payload as { detail?: string; message?: string }).detail ||
+      (payload as { detail?: string; message?: string }).message ||
+      `Request failed (${response.status})`;
+    throw new MemeIdeationError(detail, response.status);
+  }
+  return normalizeRefinementResult(payload);
 }
