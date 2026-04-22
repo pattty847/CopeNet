@@ -1,0 +1,75 @@
+
+<h2>Mobile Polish Direction</h2>
+<p class="subtitle">Quick audit board for the iPhone pass. I’m focusing on where the current UI still feels desktop-shaped and where a small frontend pass can add the most product polish.</p>
+
+<div class="cards">
+  <div class="card" data-choice="shell" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Shell + Navigation</div>
+        <div class="mockup-body">
+          <div class="mock-nav">Top bar / status / search / more</div>
+          <div class="mock-content" style="min-height:180px">Tighter safe-area spacing, stronger bottom-nav ergonomics, less floating chrome, more page-level rhythm.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>1. Shell Tightening</h3>
+      <p>Reduce cramped mobile chrome, make the app frame feel intentional, and improve tap confidence around top and bottom nav.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="agents" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Agents + Data &amp; Tools</div>
+        <div class="mockup-body">
+          <div class="mock-content" style="min-height:180px">Quicker session/inspector access, calmer composer spacing, and clearer media import CTAs + asset actions on narrow screens.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>2. Workflow Utility</h3>
+      <p>Keep navigation obvious while making the most-used mobile workflows feel less like squeezed desktop panels.</p>
+    </div>
+  </div>
+
+  <div class="card" data-choice="meme" onclick="toggleSelect(this)">
+    <div class="card-image">
+      <div class="mockup">
+        <div class="mockup-header">Meme Lab</div>
+        <div class="mockup-body">
+          <div class="mock-content" style="min-height:180px">Cleaner mobile header, stronger “history / keepers / generate” hierarchy, and better card/view breathing room.</div>
+        </div>
+      </div>
+    </div>
+    <div class="card-body">
+      <h3>3. Meme Lab Polish</h3>
+      <p>The best candidate for a noticeable iPhone upgrade without changing the desktop workbench model.</p>
+    </div>
+  </div>
+</div>
+
+<div class="section">
+  <h3>What I’m planning to ship</h3>
+  <div class="pros-cons">
+    <div class="pros">
+      <h4>Included</h4>
+      <ul>
+        <li>Safer mobile spacing and sticky-area behavior</li>
+        <li>Clearer section intros and action rows on phone</li>
+        <li>Stronger sheet ergonomics and CTA hierarchy</li>
+        <li>A few targeted tests for mobile nav / layout behavior</li>
+      </ul>
+    </div>
+    <div class="cons">
+      <h4>Not Included</h4>
+      <ul>
+        <li>No backend changes</li>
+        <li>No broad desktop redesign</li>
+        <li>No heavy refactor or abstraction sweep</li>
+        <li>No visual language reset</li>
+      </ul>
+    </div>
+  </div>
+</div>

@@ -13,6 +13,7 @@ import { SidebarNav } from './SidebarNav';
 import { TopCommandBar } from './TopCommandBar';
 import { WorkflowsPage } from './WorkflowsPage';
 import { useIsMobile } from '../lib/responsive';
+import { shouldShowMobileSectionHeader } from '../lib/mobileCopy';
 
 function AppSectionContent() {
   const currentSection = useAppStore((state) => state.currentSection);
@@ -42,7 +43,9 @@ function AppSectionContent() {
 
 export function AppShell() {
   const themeMode = useAppStore((state) => state.themeMode);
+  const currentSection = useAppStore((state) => state.currentSection);
   const isMobile = useIsMobile();
+  const showMobileTopBar = isMobile && shouldShowMobileSectionHeader(currentSection);
 
   useEffect(() => {
     void wsClient.connect();
@@ -60,17 +63,17 @@ export function AppShell() {
         {!isMobile && <SidebarNav />}
         <div
           className={`flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden border border-shell-border bg-shell-canvas shadow-shell-xl ${
-            isMobile ? 'rounded-none border-x-0 border-t-0 pb-[calc(env(safe-area-inset-bottom)+5.25rem)]' : 'rounded-[24px] px-4 pb-4 pt-3'
+            isMobile ? 'rounded-none border-x-0 border-t-0 pb-[calc(env(safe-area-inset-bottom)+6rem)]' : 'rounded-[24px] px-4 pb-4 pt-3'
           }`}
         >
-          {isMobile && <MobileTopBar />}
+          {showMobileTopBar && <MobileTopBar />}
           <ConnectionBanner />
           {!isMobile && (
             <div className="flex items-center gap-3 pb-3">
               <TopCommandBar />
             </div>
           )}
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto">
+          <div className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${isMobile && !showMobileTopBar ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : ''}`}>
             <AppSectionContent />
           </div>
         </div>

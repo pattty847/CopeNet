@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { MobileBottomNav } from '../src/components/mobile/MobileNav';
@@ -18,4 +19,8 @@ test('mobile bottom nav renders the primary phone sections', () => {
   assert.match(html, /aria-label=\"Workflows\"/);
   assert.match(html, /aria-label=\"Media\"/);
   assert.match(html, /aria-label=\"More\"/);
+  assert.match(html, />Home</);
+  assert.match(html, />Agents</);
+  assert.match(html, />Workflows</);
+  assert.match(html, />Media</);
 });

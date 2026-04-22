@@ -16,7 +16,11 @@ import {
 } from 'lucide-react';
 import { useWorkingSet } from '../../runtime/adapter';
 import { useIsMobile } from '../../lib/responsive';
-import { getWorkingSetSectionLabel, shouldUseWorkingSetCompactGrid } from '../../lib/agentMobile';
+import {
+  getWorkingSetSectionLabel,
+  shouldCollapseWorkingSetByDefault,
+  shouldUseWorkingSetCompactGrid,
+} from '../../lib/agentMobile';
 import type { RuntimeStatus, WorkingSetEntity } from '../../runtime/types';
 
 interface WorkingSetCardProps {
@@ -91,8 +95,8 @@ function InlineStrip({ icon: Icon, tone, children }: {
 }
 
 export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
-  const [expanded, setExpanded] = useState(true);
   const isMobile = useIsMobile();
+  const [expanded, setExpanded] = useState(() => !shouldCollapseWorkingSetByDefault(isMobile));
   // Drafts bypass the adapter entirely — draft is a UI state, not runtime data.
   const resource = useWorkingSet(isDraft ? null : sessionKey);
 
@@ -138,10 +142,12 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
   const status = STATUS_META[workingSet.status];
 
   return (
-    <div className="mx-4 mt-3 rounded-xl border border-operator-border bg-operator-panel/40 overflow-hidden">
+    <div className={`${isMobile ? 'mx-3 mt-2.5' : 'mx-4 mt-3'} rounded-xl border border-operator-border bg-operator-panel/40 overflow-hidden`}>
       <button
         onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-start gap-2.5 px-3 py-2.5 text-left hover:bg-operator-panel/60 transition-colors duration-150"
+        className={`w-full flex items-start gap-2.5 text-left hover:bg-operator-panel/60 transition-colors duration-150 ${
+          isMobile ? 'px-3 py-2' : 'px-3 py-2.5'
+        }`}
       >
         <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-operator-accent/10 text-operator-accent shrink-0 mt-0.5">
           <Brain className="w-3.5 h-3.5" />
@@ -158,7 +164,7 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
             </span>
             <span className="text-[10px] text-operator-muted/70 font-mono">{freshness(workingSet.updatedAt)}</span>
           </div>
-          <div className="text-[13px] text-operator-text leading-snug line-clamp-2">
+          <div className={`${isMobile ? 'text-[12px]' : 'text-[13px]'} text-operator-text leading-snug ${expanded ? 'line-clamp-2' : 'line-clamp-1'}`}>
             {workingSet.taskSummary}
           </div>
         </div>

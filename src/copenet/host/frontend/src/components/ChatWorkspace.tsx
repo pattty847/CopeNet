@@ -122,7 +122,7 @@ export function ChatWorkspace() {
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg flex flex-col">
-        <div className={`flex gap-3 px-4 py-2.5 sm:px-5 sm:py-3 ${isMobile ? 'flex-col items-stretch' : 'items-center justify-between'}`}>
+        <div className={`flex gap-3 sm:px-5 sm:py-3 ${isMobile ? 'items-start justify-between px-3 py-2.5' : 'px-4 py-3 items-center justify-between'}`}>
           <div className="flex-1 min-w-0">
             {/* Title */}
             {isEditingTitle ? (
@@ -139,7 +139,7 @@ export function ChatWorkspace() {
               />
             ) : (
               <h1
-                className={`font-semibold text-[17px] text-operator-text font-sans truncate ${activeSession ? 'cursor-pointer hover:text-operator-accent transition-colors duration-150' : ''}`}
+                className={`font-semibold ${isMobile ? 'text-[15px]' : 'text-[17px]'} text-operator-text font-sans truncate ${activeSession ? 'cursor-pointer hover:text-operator-accent transition-colors duration-150' : ''}`}
                 onClick={() => {
                   if (!activeSession) return;
                   setEditTitleValue(activeSession.title || '');
@@ -158,7 +158,7 @@ export function ChatWorkspace() {
             )}
 
             {/* Metadata badges */}
-            <div className={`mt-2 flex flex-wrap items-center gap-1.5 font-semibold uppercase tracking-wider ${isMobile ? 'text-[9px]' : 'text-[10px]'}`}>
+            <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 font-semibold uppercase tracking-wider ${isMobile ? 'text-[9px]' : 'text-[10px]'}`}>
               <span className={`animate-scale-pop px-2 py-0.5 rounded-md border ${
                 isDraft
                   ? 'border-operator-accent/30 bg-operator-accent/8 text-operator-accent'
@@ -182,7 +182,7 @@ export function ChatWorkspace() {
           </div>
 
           {/* Actions */}
-          <div className={`flex shrink-0 items-center gap-1.5 ${isMobile ? 'w-full flex-wrap pt-1' : 'ml-3'}`}>
+          <div className={`flex shrink-0 items-center gap-1.5 ${isMobile ? 'pt-0' : 'ml-3'}`}>
             <ConversationDebugActions
               disabled={!canDebugConversation}
               helperText={getConversationDebugHelperText(isMobile, isArchived)}
@@ -197,7 +197,7 @@ export function ChatWorkspace() {
 
       {/* Error banner */}
       {appError && (
-        <div className="px-5 py-1.5 text-[12px] text-operator-error bg-operator-error/8 border-b border-operator-error/20">
+        <div className={`${isMobile ? 'px-4' : 'px-5'} py-1.5 text-[12px] text-operator-error bg-operator-error/8 border-b border-operator-error/20`}>
           {appError}
           <button onClick={clearAppError} className="ml-3 underline text-operator-muted hover:text-operator-text transition-colors duration-150">
             dismiss
@@ -217,9 +217,9 @@ export function ChatWorkspace() {
       )}
 
       {/* Messages */}
-      <div className="flex-1 overflow-y-auto px-5 py-4">
+      <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-2.5' : 'px-5 py-4'}`}>
         {messages.length === 0 ? (
-          <div className="max-w-lg mx-auto mt-10 rounded-2xl border border-operator-border bg-operator-panel/30 p-5 text-center">
+          <div className={`max-w-lg mx-auto ${isMobile ? 'mt-5' : 'mt-10'} rounded-2xl border border-operator-border bg-operator-panel/30 p-5 text-center`}>
             <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent mb-2">
               {isDraft ? 'Draft Ready' : isArchived ? 'Archived Session' : 'Session Ready'}
             </div>
@@ -245,7 +245,7 @@ export function ChatWorkspace() {
       </div>
 
       {/* Composer */}
-      <div className="px-4 py-3 border-t border-operator-border bg-operator-panel/50">
+      <div className={`border-t border-operator-border bg-operator-panel/50 ${isMobile ? 'px-3 pb-3 pt-2.5' : 'px-4 py-3'}`}>
         <div className="flex items-center justify-between px-1 pb-1.5 text-[10px] font-semibold uppercase tracking-wider">
           <span className={`${composerDisabled ? 'text-operator-muted/50' : 'text-operator-muted'}`}>
             {isArchived
@@ -261,7 +261,7 @@ export function ChatWorkspace() {
           </span>
         </div>
 
-        <div className="flex items-end gap-1.5 bg-operator-bg border border-operator-border rounded-xl p-2 focus-within:border-operator-accent/40 transition-colors duration-150">
+        <div className={`flex gap-1.5 bg-operator-bg border border-operator-border rounded-xl p-2 focus-within:border-operator-accent/40 transition-colors duration-150 ${isMobile ? 'items-end' : 'items-end'}`}>
           <textarea
             ref={textareaRef}
             value={input}
@@ -273,17 +273,17 @@ export function ChatWorkspace() {
             rows={1}
           />
 
-          <div className="flex items-center gap-0.5 pb-0.5 shrink-0">
+          <div className={`flex items-center gap-0.5 shrink-0 ${isMobile ? 'pb-0' : 'pb-0.5'}`}>
             <button
               disabled={composerDisabled}
-              className="p-1.5 text-operator-muted hover:text-operator-text transition-colors duration-150 disabled:opacity-40 rounded-lg hover:bg-operator-panel"
+              className="p-2 text-operator-muted hover:text-operator-text transition-colors duration-150 disabled:opacity-40 rounded-lg hover:bg-operator-panel"
               title="Attach file"
             >
               <Paperclip className="w-3.5 h-3.5" />
             </button>
             <button
               disabled={composerDisabled}
-              className="p-1.5 text-operator-muted hover:text-operator-text transition-colors duration-150 disabled:opacity-40 rounded-lg hover:bg-operator-panel"
+              className="p-2 text-operator-muted hover:text-operator-text transition-colors duration-150 disabled:opacity-40 rounded-lg hover:bg-operator-panel"
               title="Voice input"
             >
               <Mic className="w-3.5 h-3.5" />
@@ -291,7 +291,7 @@ export function ChatWorkspace() {
             <button
               onClick={() => void handleSend()}
               disabled={!input.trim() || composerDisabled}
-              className="glow-accent flex items-center justify-center h-8 w-8 ml-0.5 bg-operator-accent text-operator-bg rounded-lg disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
+              className="glow-accent flex items-center justify-center h-10 w-10 ml-0.5 bg-operator-accent text-operator-bg rounded-xl disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
             >
               <Send className="w-3.5 h-3.5" />
             </button>

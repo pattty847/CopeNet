@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
-import { CopyPlus, Download, Check, Archive } from 'lucide-react';
-import { getDebugActionLabel } from '../lib/agentMobile';
+import { CopyPlus, Download, Check, Archive, Ellipsis } from 'lucide-react';
+import { getConversationActionTriggerLabel, getDebugActionLabel } from '../lib/agentMobile';
+import { MobileSheet } from './mobile/MobileSheet';
 
 type Props = {
   disabled?: boolean;
@@ -21,6 +22,7 @@ export function ConversationDebugActions({
 }: Props) {
   const [busyAction, setBusyAction] = useState<'copy' | 'export' | null>(null);
   const [copied, setCopied] = useState(false);
+  const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   const handleDebugCopy = async () => {
     if (disabled || busyAction) return;
@@ -44,8 +46,74 @@ export function ConversationDebugActions({
     }
   };
 
+  if (compact) {
+    return (
+      <>
+        <div className="flex items-center">
+          <button
+            type="button"
+            onClick={() => setMobileActionsOpen(true)}
+            disabled={disabled}
+            className="inline-flex items-center gap-2 rounded-xl border border-operator-border px-3 py-2 text-[12px] font-medium text-operator-muted transition-all duration-150 hover:border-operator-accent/30 hover:text-operator-text disabled:cursor-not-allowed disabled:opacity-40"
+            title="Conversation actions"
+          >
+            <Ellipsis className="h-4 w-4" />
+            <span>{getConversationActionTriggerLabel(true)}</span>
+          </button>
+        </div>
+
+        <MobileSheet
+          open={mobileActionsOpen}
+          onClose={() => setMobileActionsOpen(false)}
+          title="Conversation Actions"
+        >
+          <div className="space-y-2 px-3 py-3">
+            <button
+              type="button"
+              onClick={() => {
+                void handleDebugCopy();
+                setMobileActionsOpen(false);
+              }}
+              disabled={disabled || busyAction !== null}
+              className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
+            >
+              {copied ? <Check className="h-4 w-4 shrink-0" /> : <CopyPlus className="h-4 w-4 shrink-0" />}
+              <span>{busyAction === 'copy' ? 'Copying…' : getDebugActionLabel('copy', true)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleExport();
+                setMobileActionsOpen(false);
+              }}
+              disabled={disabled || busyAction !== null}
+              className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
+            >
+              <Download className="h-4 w-4 shrink-0" />
+              <span>{busyAction === 'export' ? 'Exporting…' : getDebugActionLabel('export', true)}</span>
+            </button>
+            {onArchiveConversation ? (
+              <button
+                type="button"
+                onClick={() => {
+                  onArchiveConversation();
+                  setMobileActionsOpen(false);
+                }}
+                disabled={disabled || busyAction !== null}
+                className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
+              >
+                <Archive className="h-4 w-4 shrink-0" />
+                <span>{getDebugActionLabel('archive', true)}</span>
+              </button>
+            ) : null}
+          </div>
+        </MobileSheet>
+      </>
+    );
+  }
+
   return (
-    <div className={`flex items-center gap-1.5 ${compact ? 'w-full flex-nowrap' : ''}`}>
+    <div className="flex items-center gap-1.5">
       <button
         onClick={() => void handleDebugCopy()}
         disabled={disabled || busyAction !== null}

@@ -29,6 +29,14 @@ export function getDebugActionLabel(action: 'copy' | 'export' | 'archive', isMob
   return action === 'copy' ? 'Copy' : action === 'export' ? 'Export' : 'Archive';
 }
 
+export function getConversationActionTriggerLabel(_isMobile: boolean): string {
+  return 'Actions';
+}
+
 export function shouldUseWorkingSetCompactGrid(isMobile: boolean): boolean {
+  return isMobile;
+}
+
+export function shouldCollapseWorkingSetByDefault(isMobile: boolean): boolean {
   return isMobile;
 }

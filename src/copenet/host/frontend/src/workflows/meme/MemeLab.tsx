@@ -103,35 +103,45 @@ export function MemeLab({ onExit }: MemeLabProps) {
   if (isMobile) {
     return (
       <div className="relative flex h-full min-h-0 animate-fade-in-up flex-col gap-3">
-        <section className="flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-[22px] border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-4 py-3 shadow-shell">
-          <div className="flex items-center gap-3">
-            <button
-              type="button"
-              onClick={onExit}
-              className="focus-ring inline-flex items-center gap-1 rounded-lg border border-shell-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-shell-muted transition-colors hover:border-shell-accent/40 hover:text-shell-accent"
-            >
-              <ArrowLeft className="h-3 w-3" />
-              workflows
-            </button>
-            <div>
-              <h1 className="font-display text-[1.6rem] leading-none tracking-tight text-shell-text">Meme Lab</h1>
-              <div className="mt-0.5 font-mono text-[11px] tabular-nums text-shell-muted">
+        <section className="overflow-hidden rounded-[22px] border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-4 py-3 shadow-shell">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <button
+                type="button"
+                onClick={onExit}
+                className="focus-ring inline-flex items-center gap-1 rounded-lg border border-shell-border px-2 py-1 font-mono text-[10px] uppercase tracking-wider text-shell-muted transition-colors hover:border-shell-accent/40 hover:text-shell-accent"
+              >
+                <ArrowLeft className="h-3 w-3" />
+                workflows
+              </button>
+              <h1 className="mt-2 font-display text-[1.55rem] leading-none tracking-tight text-shell-text">Meme Lab</h1>
+              <div className="mt-1 font-mono text-[11px] leading-5 tabular-nums text-shell-muted">
                 phone workbench · meme + arena
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-[0.18em] text-shell-muted">
+                <span className="inline-flex items-center gap-1 rounded-full border border-shell-border bg-shell-panel px-2 py-1">
+                  <Pin className="h-3 w-3 text-shell-accent" />
+                  {pinnedCount} pinned
+                </span>
+                <span className="inline-flex items-center gap-1 rounded-full border border-shell-border bg-shell-panel px-2 py-1">
+                  <Trophy className="h-3 w-3 text-shell-success" />
+                  {winnerCount} crowned
+                </span>
               </div>
             </div>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="mt-3 flex items-center gap-2">
             <button
               type="button"
               onClick={() => setMobileMemeHistoryOpen(true)}
-              className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
+              className="flex-1 rounded-xl border border-shell-border bg-shell-panel px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
             >
               History
             </button>
             <button
               type="button"
               onClick={() => setMobileMemeKeepersOpen(true)}
-              className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
+              className="flex-1 rounded-xl border border-shell-border bg-shell-panel px-3 py-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
             >
               Keepers
             </button>
@@ -386,7 +396,7 @@ function ModeTabs({
   ];
   return (
     <div className="flex flex-wrap items-center justify-between gap-2 rounded-[16px] border border-shell-border bg-shell-panel px-3 py-2 shadow-shell">
-      <div className="flex gap-1">
+      <div className="flex w-full gap-1 sm:w-auto">
         {tabs.map((t) => {
           const Icon = t.icon;
           const active = viewMode === t.id;
@@ -395,7 +405,7 @@ function ModeTabs({
               key={t.id}
               type="button"
               onClick={() => setViewMode(t.id)}
-              className={`inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] transition-all ${
+              className={`inline-flex flex-1 items-center justify-center gap-1.5 rounded-md px-2.5 py-1.5 font-mono text-[11px] uppercase tracking-[0.2em] transition-all sm:flex-none ${
                 active
                   ? 'bg-shell-accent-soft text-shell-accent shadow-[0_0_0_1px_var(--color-shell-accent-soft)_inset]'
                   : 'text-shell-muted hover:bg-shell-panel-strong hover:text-shell-text'
@@ -403,7 +413,7 @@ function ModeTabs({
             >
               <Icon className="h-3.5 w-3.5" />
               {t.label}
-              <kbd className="ml-1 rounded border border-shell-border bg-shell-panel-strong px-1 py-0 text-[9px] text-shell-muted">
+              <kbd className="ml-1 hidden rounded border border-shell-border bg-shell-panel-strong px-1 py-0 text-[9px] text-shell-muted sm:inline">
                 {t.key}
               </kbd>
             </button>
@@ -521,7 +531,7 @@ function SourceAssetCard({
           <button
             type="button"
             onClick={onOpenInAgents}
-            className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-bg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
+            className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-shell-border bg-shell-bg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
           >
             <MessageSquareText className="h-3.5 w-3.5" />
             Open in Agents
@@ -531,7 +541,7 @@ function SourceAssetCard({
               href={asset.sourceUrl}
               target="_blank"
               rel="noreferrer"
-              className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-bg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
+              className="inline-flex min-h-[42px] items-center gap-2 rounded-xl border border-shell-border bg-shell-bg px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.16em] text-shell-text"
             >
               <Link2 className="h-3.5 w-3.5" />
               Source
@@ -614,7 +624,7 @@ function RefinementPanel({
         )}
       </div>
       <div className="border-t border-shell-border px-4 py-3">
-        <div className="flex gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row">
           <input
             value={input}
             onChange={(event) => onInputChange(event.target.value)}
@@ -626,7 +636,7 @@ function RefinementPanel({
             type="button"
             onClick={onSubmit}
             disabled={!canSubmit || isRefining}
-            className="inline-flex items-center gap-2 rounded-xl bg-shell-ink px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60"
+            className="inline-flex items-center justify-center gap-2 rounded-xl bg-shell-ink px-3 py-2 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-60 sm:justify-start"
           >
             {isRefining ? <Spinner variant="flip" className="text-white" /> : <SendHorizontal className="h-4 w-4" />}
             Refine

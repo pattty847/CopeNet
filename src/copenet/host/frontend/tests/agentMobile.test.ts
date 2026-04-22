@@ -2,9 +2,11 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  getConversationActionTriggerLabel,
   getConversationDebugHelperText,
   getDebugActionLabel,
   getWorkingSetSectionLabel,
+  shouldCollapseWorkingSetByDefault,
   shouldUseWorkingSetCompactGrid,
 } from '../src/lib/agentMobile';
 
@@ -26,9 +28,16 @@ test('mobile action labels shorten to fit one row', () => {
   assert.equal(getDebugActionLabel('export', true), 'Export');
   assert.equal(getDebugActionLabel('archive', true), 'Archive');
   assert.equal(getDebugActionLabel('copy', false), 'Debug Copy');
+  assert.equal(getConversationActionTriggerLabel(true), 'Actions');
+  assert.equal(getConversationActionTriggerLabel(false), 'Actions');
 });
 
 test('working set uses compact three-up grid on mobile', () => {
   assert.equal(shouldUseWorkingSetCompactGrid(true), true);
   assert.equal(shouldUseWorkingSetCompactGrid(false), false);
+});
+
+test('working set starts collapsed on mobile and expanded on desktop', () => {
+  assert.equal(shouldCollapseWorkingSetByDefault(true), true);
+  assert.equal(shouldCollapseWorkingSetByDefault(false), false);
 });

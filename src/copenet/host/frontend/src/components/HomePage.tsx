@@ -97,7 +97,7 @@ export function HomePage() {
   ];
 
   return (
-    <div className="animate-fade-in-up space-y-3">
+    <div className="animate-fade-in-up space-y-3 px-0.5 sm:px-0">
       {/* ── Hero + Pinned Agents ── */}
       <section className="grid gap-3 xl:grid-cols-[1.68fr_0.82fr]">
         <div className="space-y-3">
@@ -108,7 +108,7 @@ export function HomePage() {
                 <Sparkles className="h-3 w-3" />
                 Built to inspire what comes next
               </div>
-              <h1 className="max-w-full text-balance font-display text-[2.05rem] leading-[0.98] tracking-tight text-shell-text sm:text-[2.8rem] sm:leading-[0.96]">
+              <h1 className="max-w-full text-balance font-display text-[1.85rem] leading-[0.98] tracking-tight text-shell-text sm:text-[2.8rem] sm:leading-[0.96]">
                 Welcome home to CopeNet.
               </h1>
               <p className="mt-2 max-w-xl text-[13px] leading-6 text-shell-muted sm:text-[14px]">
@@ -146,6 +146,37 @@ export function HomePage() {
               ))}
             </div>
           </div>
+
+          {isMobile && (
+            <section className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+              <div className="mb-2 flex items-center justify-between">
+                <div>
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">Start Here</div>
+                  <div className="text-[12px] text-shell-muted">The quickest useful moves on iPhone.</div>
+                </div>
+              </div>
+              <div className="space-y-2">
+                {QUICK_STARTS.map((item) => (
+                  <button
+                    key={item.label}
+                    type="button"
+                    onClick={() => {
+                      if (item.target.kind === 'meme-lab') {
+                        setWorkflowsRoute('meme-lab');
+                        setCurrentSection('workflows');
+                      } else {
+                        setCurrentSection(item.target.section);
+                      }
+                    }}
+                    className="flex w-full items-center justify-between rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-3 text-left text-[13px] text-shell-text transition-all duration-150 hover:border-shell-border-strong hover:bg-shell-panel hover:shadow-shell"
+                  >
+                    <span>{item.label}</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-shell-muted" />
+                  </button>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* At a glance */}
           <section>
@@ -316,7 +347,7 @@ export function HomePage() {
         {/* ── Right sidebar ── */}
         <div className="space-y-3">
           {/* Pinned Agents */}
-          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className={`rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell ${isMobile ? 'order-2' : ''}`}>
             <div className="mb-2.5 flex items-center justify-between">
               <div>
                 <div className="text-[13px] font-semibold text-shell-text">Pinned Agents</div>
@@ -346,7 +377,7 @@ export function HomePage() {
           </div>
 
           {/* Quick Starts */}
-          <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          {!isMobile && <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <h3 className="font-display text-lg tracking-tight text-shell-text">Quick Starts</h3>
             <div className="mt-2 space-y-1">
               {QUICK_STARTS.map((item) => (
@@ -368,7 +399,7 @@ export function HomePage() {
                 </button>
               ))}
             </div>
-          </div>
+          </div>}
 
           {/* System Health */}
           <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">

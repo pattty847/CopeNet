@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { downloadMediaFromUrl, getMediaAssetDetail, importMediaFromUrl, listMediaAssets } from '../lib/appApi';
 import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../lib/mediaMemeBridge';
+import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobileCopy';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail } from '../types/backend';
@@ -55,7 +56,7 @@ function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: (
   };
 
   return (
-    <div className="mb-3 flex items-center gap-2.5 text-sm text-shell-muted">
+    <div className="mb-3 flex flex-wrap items-center gap-2.5 text-sm text-shell-muted">
       {route !== 'hub' && (
         <button
           type="button"
@@ -116,15 +117,15 @@ function HubCard({
 function DataToolsHub({ openSources }: { openSources: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
+      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
           <Wrench className="h-3.5 w-3.5 text-shell-accent" />
           Data &amp; Tools
         </div>
-        <h1 className="max-w-4xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
+        <h1 className="max-w-4xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
           Connect knowledge, feeds, and tools into one living context.
         </h1>
-        <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
+        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
           This is where files, datasets, knowledge bases, and operator tools become part of the workspace. The point is not just to store them. It is to make them useful.
         </p>
       </section>
@@ -186,15 +187,15 @@ function SourceTypeCard({
 function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
+      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
           <Database className="h-3.5 w-3.5 text-shell-accent" />
           Data Sources
         </div>
-        <h1 className="max-w-3xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
+        <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
           Bring raw outside material into CopeNet as working context.
         </h1>
-        <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
+        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
           Source types become workspace assets first. Then agents, workflows, and knowledge features can actually build on something real.
         </p>
       </section>
@@ -262,20 +263,37 @@ function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
 }
 
 function MediaAssetRow({ asset, onOpen }: { asset: MediaAsset; onOpen: (asset: MediaAsset) => void }) {
+  const isMobile = useIsMobile();
+  const openLabel = getMediaAssetCardBadgeLabel(isMobile);
+
   return (
     <button
       type="button"
       onClick={() => onOpen(asset)}
-      className="w-full rounded-[24px] border border-shell-border bg-shell-bg px-5 py-4 text-left transition hover:-translate-y-0.5 hover:border-shell-border-strong"
+      className="w-full rounded-[24px] border border-shell-border bg-shell-bg px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-shell-border-strong sm:px-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="flex items-center gap-3">
             <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-shell-accent-soft text-shell-accent">
               <Video className="h-4 w-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="truncate text-base font-semibold text-shell-text">{asset.title}</h3>
+              <h3
+                className="overflow-hidden text-base font-semibold text-shell-text"
+                style={
+                  isMobile
+                    ? {
+                        display: '-webkit-box',
+                        WebkitLineClamp: 2,
+                        WebkitBoxOrient: 'vertical',
+                      }
+                    : undefined
+                }
+                title={asset.title}
+              >
+                {clampMediaAssetTitle(asset.title, isMobile)}
+              </h3>
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-shell-muted">
                 <span>{asset.transcriptSource || 'Transcript'}</span>
                 <span>•</span>
@@ -298,9 +316,11 @@ function MediaAssetRow({ asset, onOpen }: { asset: MediaAsset; onOpen: (asset: M
             </a>
           )}
         </div>
-        <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
-          Open
-        </div>
+        {openLabel ? (
+          <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
+            {openLabel}
+          </div>
+        ) : null}
       </div>
     </button>
   );
@@ -336,10 +356,10 @@ function MediaAssetDrawer({
 
   const body = (
     <div className={`${mobile ? 'flex h-full flex-col overflow-hidden' : 'flex h-full flex-col overflow-hidden'}`}>
-      <div className="flex items-start justify-between gap-4 border-b border-shell-border px-6 py-5">
+      <div className={`flex items-start justify-between gap-4 border-b border-shell-border ${mobile ? 'px-4 py-4' : 'px-6 py-5'}`}>
         <div>
           <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Media Asset</div>
-          <h2 className="mt-2 text-2xl font-semibold tracking-tight text-shell-text">{detail?.title || 'Loading transcript…'}</h2>
+          <h2 className={`mt-2 font-semibold tracking-tight text-shell-text ${mobile ? 'text-xl' : 'text-2xl'}`}>{detail?.title || 'Loading transcript…'}</h2>
           {detail?.sourceUrl && (
             <a href={detail.sourceUrl} target="_blank" rel="noreferrer" className="mt-3 inline-flex items-center gap-2 text-sm font-medium text-shell-text hover:text-shell-accent">
               <ExternalLink className="h-4 w-4" />
@@ -358,18 +378,18 @@ function MediaAssetDrawer({
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-shell-border px-6 py-4 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
+      <div className={`flex flex-wrap items-center gap-2 border-b border-shell-border text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted ${mobile ? 'px-4 py-3' : 'px-6 py-4'}`}>
         {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{detail.transcriptSource || 'Transcript'}</div>}
         {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatDuration(detail.durationSeconds)}</div>}
         {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatRelative(detail.createdAt)}</div>}
       </div>
 
-      <div className="flex flex-wrap items-center gap-3 border-b border-shell-border px-6 py-4">
+      <div className={`flex flex-wrap items-center gap-3 border-b border-shell-border ${mobile ? 'px-4 py-3' : 'px-6 py-4'}`}>
         <button
           type="button"
           onClick={() => detail && onOpenInMemeLab(detail)}
           disabled={!detail}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-5 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-5 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-50 ${mobile ? 'w-full' : ''}`}
         >
           <Sparkles className="h-4 w-4" />
           Open in Meme Lab
@@ -378,7 +398,7 @@ function MediaAssetDrawer({
           type="button"
           onClick={() => detail && onUseInAgents(detail)}
           disabled={!detail}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50 ${mobile ? 'w-full' : ''}`}
         >
           <PanelRightOpen className="h-4 w-4" />
           Use in Agents
@@ -387,14 +407,14 @@ function MediaAssetDrawer({
           type="button"
           onClick={() => void copyTranscript()}
           disabled={!detail?.transcriptContent}
-          className="inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50"
+          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50 ${mobile ? 'w-full' : ''}`}
         >
           <Copy className="h-4 w-4" />
           Copy transcript
         </button>
       </div>
 
-      <div className="min-h-0 flex-1 overflow-auto px-6 py-5">
+      <div className={`min-h-0 flex-1 overflow-auto ${mobile ? 'px-4 py-4' : 'px-6 py-5'}`}>
         {loading ? (
           <div className="flex items-center gap-3 rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-shell-muted">
             <LoaderCircle className="h-5 w-5 animate-spin text-shell-accent" />
@@ -595,19 +615,19 @@ function MediaImportsPage() {
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-        <div className="rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
+        <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
             <PlayCircle className="h-3.5 w-3.5 text-shell-accent" />
             Media Imports
           </div>
-          <h1 className="max-w-3xl font-display text-[2.6rem] leading-[1.02] tracking-tight text-shell-text">
+          <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
             Paste a video link to transcribe it into CopeNet or download it straight to your device.
           </h1>
-          <p className="mt-5 max-w-3xl text-base leading-7 text-shell-muted">
+          <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
             Transcribe keeps a reusable transcript-backed asset inside CopeNet. Download skips the workspace asset and hands the video straight back to Safari or your desktop browser.
           </p>
 
-          <form onSubmit={handleTranscribe} className="mt-8 space-y-4">
+          <form onSubmit={handleTranscribe} className="mt-6 space-y-4 sm:mt-8">
             <div className="rounded-[28px] border border-shell-border bg-shell-bg p-3 shadow-shell">
               <div className="flex flex-col gap-3 md:flex-row md:items-center">
                 <input
@@ -616,14 +636,14 @@ function MediaImportsPage() {
                   placeholder="Paste a YouTube or media URL for transcription or download…"
                   className="h-14 flex-1 rounded-2xl border border-shell-border bg-shell-panel px-5 text-sm text-shell-text outline-none transition placeholder:text-shell-muted hover:border-shell-border-strong focus:border-shell-border-strong"
                 />
-                <div className={`flex ${isMobile ? 'flex-col' : 'gap-3'}`}>
+                <div className={`flex ${isMobile ? 'flex-col gap-2' : 'gap-3'}`}>
                   <button
                     type="submit"
                     disabled={!url.trim() || mediaImporting}
                     className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-6 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     {mediaImporting && mediaAction === 'transcribe' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-                    Transcribe
+                    {isMobile ? 'Transcribe into CopeNet' : 'Transcribe'}
                   </button>
                   <button
                     type="button"
@@ -632,7 +652,7 @@ function MediaImportsPage() {
                     className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-6 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     {mediaImporting && mediaAction === 'download' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                    Download
+                    {isMobile ? 'Download only' : 'Download'}
                   </button>
                   <button
                     type="button"
@@ -641,7 +661,7 @@ function MediaImportsPage() {
                     className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-accent-soft px-6 text-sm font-semibold text-shell-accent transition hover:border-shell-accent/40 disabled:cursor-not-allowed disabled:opacity-55"
                   >
                     {mediaImporting && mediaAction === 'both' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    Do Both
+                    {isMobile ? 'Download + transcribe' : 'Do Both'}
                   </button>
                 </div>
               </div>
@@ -705,11 +725,11 @@ function MediaImportsPage() {
       </section>
 
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.55fr)_320px]">
-        <div className="rounded-[34px] border border-shell-border bg-shell-panel px-6 py-6 shadow-shell">
-          <div className="mb-5 flex items-center justify-between gap-4">
+        <div className="rounded-[34px] border border-shell-border bg-shell-panel px-4 py-5 shadow-shell sm:px-6 sm:py-6">
+          <div className={`mb-5 flex gap-4 ${isMobile ? 'flex-col items-start' : 'items-center justify-between'}`}>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Imported Assets</div>
-              <h2 className="mt-2 text-2xl font-semibold tracking-tight text-shell-text">Recent media ready for the workspace</h2>
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-shell-text sm:text-2xl">Recent media ready for the workspace</h2>
             </div>
             <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
               {mediaAssets.length} assets
