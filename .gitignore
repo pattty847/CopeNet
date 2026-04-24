@@ -9,6 +9,7 @@ __pycache__/
 
 # Local tool worktrees
 .claude/
+.superpowers/
 
 # Local scratch outputs
 tmp/
