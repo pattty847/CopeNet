@@ -62,7 +62,7 @@ export function AppShell() {
       <div className={`relative flex h-full w-full max-w-full overflow-x-hidden ${isMobile ? 'p-0' : 'gap-3 p-3'}`}>
         {!isMobile && <SidebarNav />}
         <div
-          className={`flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden border border-shell-border bg-shell-canvas shadow-shell-xl ${
+          className={`shell-app-frame flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden border border-shell-border bg-shell-canvas shadow-shell-xl ${
             isMobile ? 'rounded-none border-x-0 border-t-0 pb-[calc(env(safe-area-inset-bottom)+6rem)]' : 'rounded-[24px] px-4 pb-4 pt-3'
           }`}
         >

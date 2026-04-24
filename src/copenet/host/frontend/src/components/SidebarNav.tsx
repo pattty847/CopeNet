@@ -3,7 +3,6 @@ import {
   Blocks,
   Bot,
   ChevronLeft,
-  ChevronRight,
   FlaskConical,
   Home,
   Layers3,
@@ -32,16 +31,27 @@ export function SidebarNav() {
 
   return (
     <aside
-      className={`flex shrink-0 flex-col rounded-[24px] border border-shell-border bg-shell-sidebar py-4 shadow-shell transition-[width,padding] duration-200 ${
+      className={`shell-sidebar flex shrink-0 flex-col rounded-[24px] border border-shell-border bg-shell-sidebar py-4 shadow-shell transition-[width,padding] duration-200 ${
         primaryNavCollapsed ? 'w-[78px] px-2.5' : 'w-[216px] px-3'
       }`}
     >
       {/* Brand */}
       <div className={`flex items-center px-2 pb-5 ${primaryNavCollapsed ? 'justify-center' : 'justify-between gap-2.5'}`}>
         <div className={`flex items-center ${primaryNavCollapsed ? 'justify-center' : 'gap-2.5'}`}>
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
+          <button
+            type="button"
+            onClick={() => {
+              if (primaryNavCollapsed) setPrimaryNavCollapsed(false);
+            }}
+            disabled={!primaryNavCollapsed}
+            className={`flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent ${
+              primaryNavCollapsed ? 'transition-colors hover:bg-shell-accent/10' : ''
+            }`}
+            title={primaryNavCollapsed ? 'Expand navigation' : undefined}
+            aria-label={primaryNavCollapsed ? 'Expand navigation' : undefined}
+          >
             <Blocks className="h-4.5 w-4.5" />
-          </div>
+          </button>
           {!primaryNavCollapsed && (
             <div>
               <div className="text-[15px] font-semibold tracking-tight text-shell-text">CopeNet</div>
@@ -49,17 +59,19 @@ export function SidebarNav() {
             </div>
           )}
         </div>
-        <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
-          <button
-            type="button"
-            onClick={() => setPrimaryNavCollapsed(!primaryNavCollapsed)}
-            className="flex h-full w-full items-center justify-center rounded-xl transition-colors hover:bg-shell-accent/10"
-            title={primaryNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-            aria-label={primaryNavCollapsed ? 'Expand navigation' : 'Collapse navigation'}
-          >
-            {primaryNavCollapsed ? <ChevronRight className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
-          </button>
-        </div>
+        {!primaryNavCollapsed && (
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
+            <button
+              type="button"
+              onClick={() => setPrimaryNavCollapsed(true)}
+              className="flex h-full w-full items-center justify-center rounded-xl transition-colors hover:bg-shell-accent/10"
+              title="Collapse navigation"
+              aria-label="Collapse navigation"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </button>
+          </div>
+        )}
       </div>
 
       {/* Navigation */}

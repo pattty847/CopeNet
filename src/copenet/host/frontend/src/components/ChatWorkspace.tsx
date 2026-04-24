@@ -27,6 +27,9 @@ export function ChatWorkspace() {
   const composerDisabled = isArchived || Boolean(activeRunId);
   const canDebugConversation = Boolean(activeSession);
   const isMobile = useIsMobile();
+  const activeSessions = sessions.filter((session) => !session.archived).length;
+  const archivedSessions = sessions.filter((session) => session.archived).length;
+  const connectedProviders = new Set(sessions.filter((session) => !session.archived).map((session) => session.provider).filter(Boolean)).size;
 
   const [input, setInput] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
@@ -111,6 +114,11 @@ export function ChatWorkspace() {
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to export conversation.');
     }
+  };
+
+  const applyPromptSeed = (seed: string) => {
+    setInput(seed);
+    window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   return (
@@ -219,21 +227,105 @@ export function ChatWorkspace() {
       {/* Messages */}
       <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-2.5' : 'px-5 py-4'}`}>
         {messages.length === 0 ? (
-          <div className={`max-w-lg mx-auto ${isMobile ? 'mt-5' : 'mt-10'} rounded-2xl border border-operator-border bg-operator-panel/30 p-5 text-center`}>
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent mb-2">
-              {isDraft ? 'Draft Ready' : isArchived ? 'Archived Session' : 'Session Ready'}
+          isDraft ? (
+            <div className={`mx-auto w-full max-w-3xl ${isMobile ? 'mt-3' : 'mt-6'} rounded-[28px] border border-operator-accent/15 bg-[linear-gradient(180deg,rgba(251,148,35,0.08),rgba(8,8,9,0.78)_34%,rgba(8,8,9,0.96))] p-5 shadow-[0_24px_80px_rgba(0,0,0,0.28)]`}>
+              <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-[minmax(0,1.6fr)_minmax(15rem,1fr)]'}`}>
+                <div>
+                  <div className="mb-2 inline-flex items-center rounded-full border border-operator-accent/20 bg-operator-accent/8 px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">
+                    Operator Launchpad
+                  </div>
+                  <h2 className={`font-serif text-operator-text ${isMobile ? 'text-[24px] leading-8' : 'text-[32px] leading-[1.05]'}`}>
+                    Stand up a fresh agent run with a little more intention.
+                  </h2>
+                  <p className="mt-3 max-w-2xl text-[13px] leading-6 text-operator-muted">
+                    Pick a runtime in the inspector, seed the composer with a proven opening move, and let the first send lock the session around a real job instead of a blank box.
+                  </p>
+
+                  <div className={`mt-5 grid gap-2.5 ${isMobile ? 'grid-cols-1' : 'grid-cols-3'}`}>
+                    {[
+                      { label: 'Active sessions', value: String(activeSessions), hint: 'Live operator runs' },
+                      { label: 'Archived', value: String(archivedSessions), hint: 'Readable handoffs' },
+                      { label: 'Connected runtimes', value: String(connectedProviders || 0), hint: 'Providers in rotation' },
+                    ].map((item) => (
+                      <div key={item.label} className="rounded-2xl border border-operator-border bg-operator-panel/45 px-3.5 py-3">
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
+                          {item.label}
+                        </div>
+                        <div className="mt-2 text-[28px] font-semibold leading-none text-operator-text">
+                          {item.value}
+                        </div>
+                        <div className="mt-2 text-[11px] text-operator-muted">
+                          {item.hint}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="mt-5">
+                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
+                      Opening Moves
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      {[
+                        {
+                          label: 'Research Scout',
+                          seed: 'Inspect the repository with tools, then summarize the architecture, the sharp edges, and the next best moves.',
+                        },
+                        {
+                          label: 'Signal Sweep',
+                          seed: 'Review the latest runs, artifacts, and failures, then call out anything anomalous or worth operator attention.',
+                        },
+                        {
+                          label: 'Workflow Draft',
+                          seed: 'Turn this objective into a repeatable workflow with checkpoints, dependencies, and clear handoff notes.',
+                        },
+                      ].map((option) => (
+                        <button
+                          key={option.label}
+                          type="button"
+                          onClick={() => applyPromptSeed(option.seed)}
+                          className="rounded-full border border-operator-border bg-operator-panel px-3.5 py-2 text-[12px] font-medium text-operator-text transition-colors duration-150 hover:border-operator-accent/35 hover:text-operator-accent"
+                        >
+                          {option.label}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="rounded-[24px] border border-operator-accent/18 bg-operator-panel/40 p-4">
+                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-operator-accent">
+                    Session Doctrine
+                  </div>
+                  <div className="mt-3 space-y-3 text-[12px] leading-6 text-operator-muted">
+                    <p>
+                      First send creates and locks the session around its provider, model, profile, and mode.
+                    </p>
+                    <p>
+                      Keep the opener concrete. The cleanest sessions start with a bounded objective, a preferred tool posture, and an explicit output shape.
+                    </p>
+                    <p className="text-operator-text">
+                      Tonight’s setup is ready whenever you are: choose the runtime, seed the ask, and let the console do the rest.
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
-            <div className="text-operator-text font-sans text-[14px] mb-1.5">
-              {isDraft ? 'Set the runtime in the right panel, then send your first message.' : isArchived ? 'This session is archived. Restore it to continue chatting.' : 'No history loaded for this session yet.'}
-            </div>
-            <div className="text-operator-muted text-[12px] leading-relaxed">
-              {isDraft
-                ? 'The first send will create the session and lock provider, model, profile, and mode.'
-                : isArchived
+          ) : (
+            <div className={`max-w-lg mx-auto ${isMobile ? 'mt-5' : 'mt-10'} rounded-2xl border border-operator-border bg-operator-panel/30 p-5 text-center`}>
+              <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent mb-2">
+                {isArchived ? 'Archived Session' : 'Session Ready'}
+              </div>
+              <div className="text-operator-text font-sans text-[14px] mb-1.5">
+                {isArchived ? 'This session is archived. Restore it to continue chatting.' : 'No history loaded for this session yet.'}
+              </div>
+              <div className="text-operator-muted text-[12px] leading-relaxed">
+                {isArchived
                   ? 'Archived sessions stay readable, but input stays disabled until you restore them.'
                   : 'This conversation has not received any assistant output yet.'}
+              </div>
             </div>
-          </div>
+          )
         ) : (
           <div className="flex flex-col">
             {messages.map((message) => (

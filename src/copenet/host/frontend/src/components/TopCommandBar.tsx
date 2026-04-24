@@ -12,7 +12,7 @@ const SECTION_HINTS = {
 } as const;
 
 const iconBtn =
-  'inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell';
+  'shell-icon-btn inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell';
 
 export function TopCommandBar() {
   const currentSection = useAppStore((state) => state.currentSection);
@@ -24,7 +24,7 @@ export function TopCommandBar() {
       <button
         type="button"
         onClick={() => setCommandPaletteOpen(true)}
-        className="relative w-full max-w-[720px] text-left"
+        className="shell-command-field relative w-full max-w-[720px] text-left"
       >
           <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-shell-muted" />
           <div
@@ -32,7 +32,7 @@ export function TopCommandBar() {
           >
             {SECTION_HINTS[currentSection]}
           </div>
-          <div className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 rounded-lg border border-shell-border bg-shell-panel-strong px-2 py-0.5 text-[10px] font-semibold text-shell-muted">
+          <div className="shell-command-key pointer-events-none absolute right-3 top-1/2 flex -translate-y-1/2 items-center gap-1.5 rounded-lg border border-shell-border bg-shell-panel-strong px-2 py-0.5 text-[10px] font-semibold text-shell-muted">
             <Command className="h-2.5 w-2.5" />
             <span>K</span>
           </div>

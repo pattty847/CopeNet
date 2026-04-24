@@ -186,7 +186,7 @@ export function ObservabilityPage() {
   return (
     <div className="animate-fade-in-up space-y-3">
       {/* Condensed hero */}
-      <section className="flex flex-col gap-4 overflow-hidden rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
+      <section className="shell-page-utility-hero flex flex-col gap-4 overflow-hidden rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
         <div className="max-w-2xl min-w-0">
           <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-shell-accent/20 bg-shell-accent-soft px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
             <Activity className="h-3 w-3" />
@@ -226,7 +226,7 @@ export function ObservabilityPage() {
           return (
             <div
               key={t.label}
-              className="lift-sm rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell"
+              className="lift-sm shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell"
             >
               <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">
                 <span>{t.label}</span>
@@ -250,7 +250,7 @@ export function ObservabilityPage() {
 
         <div className="space-y-3">
           {/* Provider distribution */}
-          <section className="rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
+          <section className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
             <header className="mb-3 flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
                 By provider
@@ -295,7 +295,7 @@ export function ObservabilityPage() {
           </section>
 
           {/* Tool distribution */}
-          <section className="rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
+          <section className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
             <header className="mb-3 flex items-center justify-between">
               <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
                 Top tools

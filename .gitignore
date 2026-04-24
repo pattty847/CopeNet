@@ -1,15 +1,22 @@
 .DS_Store
+**/.DS_Store
 .venv/
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # Local tool worktrees
-.claude/worktrees/
+.claude/
 
 # Local scratch outputs
 tmp/
 
 # Local documentation
+TODO.md
+CLAUDE.md
+GEMINI.md
 docs/codex/CLI_COMMANDS.md
 docs/archive/
 docs/frontend/
@@ -18,6 +25,7 @@ docs/TODO.md
 docs/TRACE-FINDINGS.md
 docs/private/
 docs/blueprints/
+docs/superpowers/
 # Added by code-review-graph
 .code-review-graph/
 knowledge-cache/

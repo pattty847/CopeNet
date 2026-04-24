@@ -163,7 +163,7 @@ export function ExperimentsPage() {
   return (
     <div className="flex min-h-0 flex-col gap-5">
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
+      <div className="shell-page-utility-hero relative overflow-hidden rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
         <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-shell-accent/15 blur-3xl" />
         <div className="relative flex flex-wrap items-start justify-between gap-4">
           <div className="max-w-2xl">
@@ -226,7 +226,7 @@ export function ExperimentsPage() {
       </div>
 
       {/* Matrix */}
-      <div className="rounded-[20px] border border-shell-border bg-shell-panel shadow-shell">
+      <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel shadow-shell">
         <div className="flex items-center justify-between border-b border-shell-border px-4 py-3">
           <div>
             <div className="font-display text-lg tracking-tight text-shell-text">
@@ -376,7 +376,7 @@ function Kpi({
   mono?: boolean;
 }) {
   return (
-    <div className="lift-sm rounded-[18px] border border-shell-border bg-shell-panel px-4 py-3 shadow-shell">
+    <div className="shell-page-utility-tile lift-sm rounded-[18px] border border-shell-border bg-shell-panel px-4 py-3 shadow-shell">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-shell-muted">
           {label}

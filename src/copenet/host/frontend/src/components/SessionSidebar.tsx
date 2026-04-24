@@ -78,22 +78,31 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   }
 
   return (
-    <aside className={`${mobile ? 'w-full border-r-0' : 'w-64 border-r'} border-operator-border bg-operator-bg flex h-full flex-col`}>
+    <aside className={`${mobile ? 'w-full border-r-0' : 'w-full border-r'} border-operator-border bg-operator-bg flex h-full flex-col`}>
       {/* Header */}
-      <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-1.5">
+      <div className="border-b border-operator-border px-3 py-3">
+        <div className="mb-2 flex items-start justify-between gap-2">
+          <div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">Session Fleet</div>
+            <div className="mt-1 text-[12px] leading-5 text-operator-muted">
+              {filteredSessions.length} {showArchived ? 'archived' : 'active'} conversations in reach.
+            </div>
+          </div>
+          <button
+            onClick={() => setSidebarOpen(false)}
+            className="p-1.5 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg hover:bg-operator-panel"
+            title="Collapse sidebar"
+          >
+            <ChevronLeft className="w-3.5 h-3.5" />
+          </button>
+        </div>
+
         <button
           onClick={handleNewSession}
-          className="glow-accent flex-1 flex items-center justify-center gap-1.5 py-1.5 bg-operator-accent text-operator-bg font-sans font-semibold text-[13px] rounded-lg"
+          className="glow-accent flex w-full items-center justify-center gap-1.5 rounded-lg bg-operator-accent py-2 text-[13px] font-semibold text-operator-bg"
         >
           <Plus className="w-3.5 h-3.5" />
           New Chat
-        </button>
-        <button
-          onClick={() => setSidebarOpen(false)}
-          className="p-1.5 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg hover:bg-operator-panel"
-          title="Collapse sidebar"
-        >
-          <ChevronLeft className="w-3.5 h-3.5" />
         </button>
       </div>
 
@@ -114,7 +123,7 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
       </div>
 
       {/* Session list */}
-      <div className="flex-1 overflow-y-auto p-1.5 space-y-1">
+      <div className="flex-1 space-y-1 overflow-y-auto p-1.5">
         {activeSession && (
           <div className="mx-1 rounded-xl border border-operator-accent/15 bg-operator-accent/6 px-3 py-2.5">
             <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-accent">
@@ -154,7 +163,7 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
               className={`w-full flex flex-col p-2.5 text-[13px] rounded-xl transition-all duration-150 cursor-pointer group relative ${
                 isActive
                   ? 'bg-operator-panel border border-operator-accent/20 shadow-sm'
-                  : 'hover:bg-operator-panel/50 border border-transparent'
+                  : 'hover:bg-operator-panel/50 border border-operator-border/0'
               }`}
             >
               {isActive && <div className="absolute left-0 top-2.5 bottom-2.5 w-[2.5px] rounded-full bg-operator-accent" />}

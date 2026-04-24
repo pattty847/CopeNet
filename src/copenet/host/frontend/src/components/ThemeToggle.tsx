@@ -9,7 +9,7 @@ export function ThemeToggle() {
     <button
       type="button"
       onClick={toggleThemeMode}
-      className="inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell"
+      className="shell-icon-btn inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell"
       title={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
       aria-label={themeMode === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
     >

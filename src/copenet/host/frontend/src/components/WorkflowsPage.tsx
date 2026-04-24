@@ -17,61 +17,88 @@ function WorkflowsHub({ onOpen }: { onOpen: (route: 'meme-lab') => void }) {
   return (
     <div className="flex min-h-0 flex-col gap-5">
       {/* Hero */}
-      <div className="relative overflow-hidden rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-shell-accent/15 blur-3xl" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
+      <div className="shell-workbench-hero rounded-[24px] border border-shell-border px-6 py-5 shadow-shell">
+        <div className="shell-workbench-grid relative">
           <div className="max-w-2xl">
             <div className="mb-2 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-shell-accent">
               <Layers3 className="h-3 w-3" />
-              workflows · v1
+              workflows · workbench
             </div>
             <h1 className="font-display text-4xl leading-tight text-shell-text">
               Turn repeatable effort into living playbooks.
             </h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-shell-muted">
-              Workflows are dedicated surfaces for the work you do over and over. Each one is a purpose-built
-              operator cockpit — not a chat window pretending to be a tool.
+            <p className="mt-2 max-w-xl text-[13px] leading-relaxed text-shell-muted">
+              Workflows are dedicated surfaces for the work you do over and over. Each one should feel like a
+              purpose-built bench with a clear loop, not a chat window pretending to be a tool.
             </p>
           </div>
-          <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-wider text-shell-muted">
-            <span className="inline-flex items-center gap-1 rounded-md border border-shell-accent/30 bg-shell-accent-soft px-2 py-1 text-shell-accent">
-              <Sparkles className="h-3 w-3" />
-              1 live
-            </span>
-            <span className="inline-flex items-center gap-1 rounded-md border border-shell-border bg-shell-panel-strong/60 px-2 py-1">
-              3 drafting
-            </span>
+
+          <div className="shell-workbench-card self-end rounded-[20px] border border-shell-border px-4 py-4 shadow-shell">
+            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Workbench State</div>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              {[
+                { label: 'Live', value: '1' },
+                { label: 'Drafting', value: '2' },
+                { label: 'Direction', value: 'Bench-first' },
+                { label: 'Focus', value: 'Meme Lab' },
+              ].map((item) => (
+                <div key={item.label} className="rounded-[16px] border border-shell-border bg-shell-panel-strong/60 px-3 py-3">
+                  <div className="text-[10px] uppercase tracking-[0.16em] text-shell-muted">{item.label}</div>
+                  <div className="mt-1 text-[1.1rem] font-semibold tracking-tight text-shell-text">{item.value}</div>
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
 
-      {/* Playbook grid */}
-      <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.34fr)_minmax(320px,0.66fr)]">
         <PlaybookCard
+          featured
           live
-          eyebrow="creative · copeharderpls"
+          eyebrow="featured live · creative loop"
           title="Meme Lab"
-          blurb="Ideate, rank, and arena-battle meme candidates for the Instagram pipeline. Topic in, survivors out."
+          blurb="Ideate, rank, and arena-battle meme candidates for the Instagram pipeline. Topic in, survivors out, and keepers stay close enough to ship."
           icon={FlaskConical}
           stats={[
             { label: 'endpoint', value: '/memes/ideate' },
             { label: 'modes', value: 'stream · gallery · arena' },
             { label: 'loop', value: 'self-learning' },
+            { label: 'outcome', value: 'keepers ready' },
           ]}
           onOpen={() => onOpen('meme-lab')}
         />
 
-        <PlaybookCard
-          eyebrow="upcoming · synthesis"
-          title="Prompt Forge"
-          blurb="Turn a good chat session into a reusable prompt preset with grounded tool policy."
-          icon={ScrollText}
-          stats={[
-            { label: 'status', value: 'drafting' },
-            { label: 'source', value: 'agents session' },
-          ]}
-        />
+        <div className="space-y-3">
+          <div className="shell-workbench-card rounded-[20px] border border-shell-border px-5 py-4 shadow-shell">
+            <div className="flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.22em] text-shell-accent">
+              <Sparkles className="h-3 w-3" />
+              Launchpad
+            </div>
+            <p className="mt-3 text-[13px] leading-6 text-shell-muted">
+              Workflows should feel like dedicated production surfaces. One live bench gets the spotlight;
+              the rest stay clear about whether they are real, drafting, or directional.
+            </p>
+            <div className="mt-4 inline-flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-shell-accent">
+              active workbench
+              <ArrowRight className="h-3.5 w-3.5" />
+            </div>
+          </div>
 
+          <PlaybookCard
+            eyebrow="upcoming · synthesis"
+            title="Prompt Forge"
+            blurb="Turn a good chat session into a reusable prompt preset with grounded tool policy."
+            icon={ScrollText}
+            stats={[
+              { label: 'status', value: 'drafting' },
+              { label: 'source', value: 'agents session' },
+            ]}
+          />
+        </div>
+      </div>
+
+      <div className="grid items-start grid-cols-1 gap-3 md:grid-cols-2">
         <PlaybookCard
           eyebrow="upcoming · scheduling"
           title="Recurring Runs"
@@ -82,6 +109,24 @@ function WorkflowsHub({ onOpen }: { onOpen: (route: 'meme-lab') => void }) {
             { label: 'storage', value: 'transcripts' },
           ]}
         />
+
+        <div className="shell-workbench-card rounded-[20px] border border-dashed border-shell-border px-5 py-5 shadow-shell">
+          <div className="font-mono text-[10px] uppercase tracking-[0.22em] text-shell-accent">Bench philosophy</div>
+          <div className="mt-2 font-display text-2xl text-shell-text">One live surface should feel inevitable.</div>
+          <p className="mt-2 text-[13px] leading-6 text-shell-muted">
+            The hub is here to route you into the real workbench quickly. Featured workflows earn space.
+            Drafts stay visible, but calmer, until they deserve promotion.
+          </p>
+          <div className="mt-4 flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-shell-muted">
+            <span className="inline-flex items-center gap-1 rounded-md border border-shell-accent/30 bg-shell-accent-soft px-2 py-1 text-shell-accent">
+              <Sparkles className="h-3 w-3" />
+              1 live
+            </span>
+            <span className="inline-flex items-center gap-1 rounded-md border border-shell-border bg-shell-panel-strong/60 px-2 py-1">
+              2 drafting
+            </span>
+          </div>
+        </div>
       </div>
 
       {/* Footer strip */}
@@ -95,6 +140,7 @@ function WorkflowsHub({ onOpen }: { onOpen: (route: 'meme-lab') => void }) {
 }
 
 function PlaybookCard({
+  featured,
   live,
   eyebrow,
   title,
@@ -103,6 +149,7 @@ function PlaybookCard({
   stats,
   onOpen,
 }: {
+  featured?: boolean;
   live?: boolean;
   eyebrow: string;
   title: string;
@@ -117,7 +164,9 @@ function PlaybookCard({
       type="button"
       onClick={onOpen}
       disabled={!interactive}
-      className={`group relative flex h-full flex-col overflow-hidden rounded-[20px] border bg-shell-panel p-5 text-left shadow-shell transition-all duration-200 ${
+      className={`shell-workbench-card group relative flex h-full flex-col overflow-hidden rounded-[20px] border bg-shell-panel p-5 text-left shadow-shell transition-all duration-200 ${
+        featured ? 'shell-workbench-feature' : ''
+      } ${
         interactive
           ? 'border-shell-border hover:-translate-y-0.5 hover:border-shell-accent/40 hover:shadow-shell-hover'
           : 'border-shell-border/70 opacity-75'

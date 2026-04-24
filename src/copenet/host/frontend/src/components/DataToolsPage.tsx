@@ -96,7 +96,7 @@ function HubCard({
     <button
       type="button"
       onClick={onClick}
-      className="lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
+      className="shell-page-utility-tile lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
     >
       <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">{eyebrow}</div>
       <div className="flex items-start justify-between gap-3">
@@ -117,7 +117,7 @@ function HubCard({
 function DataToolsHub({ openSources }: { openSources: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
           <Wrench className="h-3.5 w-3.5 text-shell-accent" />
           Data &amp; Tools
@@ -137,7 +137,7 @@ function DataToolsHub({ openSources }: { openSources: () => void }) {
         <HubCard eyebrow="Shape" title="Workspace Context" body="Preset combinations of data, prompts, and runtimes for the jobs you repeat." accent="text-shell-accent" />
       </section>
 
-      <section className="rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
+      <section className="shell-page-utility-tile rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
         <div className="mx-auto max-w-3xl">
           <h2 className="font-display text-2xl tracking-tight text-shell-text">Ground the workspace in real sources, not floating context.</h2>
           <p className="mt-4 text-sm leading-7 text-shell-muted">
@@ -168,7 +168,7 @@ function SourceTypeCard({
     <button
       type="button"
       onClick={onClick}
-      className="lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
+      className="shell-page-utility-tile lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
     >
       <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
         <Icon className="h-4 w-4" />
@@ -187,7 +187,7 @@ function SourceTypeCard({
 function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
         <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
           <Database className="h-3.5 w-3.5 text-shell-accent" />
           Data Sources
@@ -234,14 +234,14 @@ function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
         </div>
 
         <div className="space-y-2.5">
-          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Why this matters</div>
             <h2 className="text-xl font-semibold text-shell-text">CopeNet gets stronger when source material becomes reusable.</h2>
             <p className="mt-4 text-sm leading-6 text-shell-muted">
               Imported sources are the bridge between one-off chat and real work. Once something is ingested, it can be queried, summarized, filed into knowledge, or turned into a workflow.
             </p>
           </div>
-          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Quick starts</div>
             <div className="space-y-3">
               {[
@@ -440,7 +440,7 @@ function MediaAssetDrawer({
   }
 
   return (
-    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] rounded-[20px] border border-shell-border bg-shell-panel shadow-shell-xl">
+    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel shadow-shell-xl">
       {body}
     </div>
   );
@@ -615,7 +615,7 @@ function MediaImportsPage() {
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-        <div className="rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+        <div className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
           <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
             <PlayCircle className="h-3.5 w-3.5 text-shell-accent" />
             Media Imports
@@ -677,7 +677,7 @@ function MediaImportsPage() {
         </div>
 
         <div className="space-y-2.5">
-          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Import status</div>
             <div className="flex items-start gap-3">
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-shell-accent-soft text-shell-accent">
@@ -706,7 +706,7 @@ function MediaImportsPage() {
             </div>
           </div>
 
-          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What this unlocks</div>
             <div className="space-y-3">
               {[
@@ -751,7 +751,7 @@ function MediaImportsPage() {
         </div>
 
         <div className="space-y-2.5">
-          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Incoming transcript</div>
             {capturedChunks.length > 0 ? (
               <div className="space-y-3">
@@ -768,7 +768,7 @@ function MediaImportsPage() {
             )}
           </div>
 
-          <div className="rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next source</div>
             <h3 className="text-lg font-semibold text-shell-text">Web page ingest</h3>
             <p className="mt-3 text-sm leading-6 text-shell-muted">
