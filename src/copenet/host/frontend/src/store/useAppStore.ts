@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, MediaAsset, MediaAssetDetail, Message, MessageDestination, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagingConfig, Model, PromptOption, Provider, RunTimeline, Session, ToolDescriptor, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
-export type RightPanelTab = 'runtime' | 'artifacts' | 'activity' | 'approvals';
+export type RightPanelTab = 'inbox' | 'runtime' | 'artifacts' | 'activity' | 'approvals';
 export type WorkflowsRoute = 'hub' | 'meme-lab';
 
 interface AppState {
@@ -112,6 +112,14 @@ interface AppState {
   // Messaging destinations
   destinations: MessageDestination[];
   setDestinations: (destinations: MessageDestination[]) => void;
+
+  // Messaging platform config
+  messagingConfig: MessagingConfig | null;
+  setMessagingConfig: (config: MessagingConfig) => void;
+
+  // Run timeline (paused-run lifecycle view)
+  runTimeline: RunTimeline | null;
+  setRunTimeline: (timeline: RunTimeline | null) => void;
 
   // Send-message composer
   composerOpen: boolean;
@@ -322,6 +330,12 @@ export const useAppStore = create<AppState>((set) => ({
 
   destinations: [],
   setDestinations: (destinations) => set({ destinations }),
+
+  messagingConfig: null,
+  setMessagingConfig: (config) => set({ messagingConfig: config }),
+
+  runTimeline: null,
+  setRunTimeline: (timeline) => set({ runTimeline: timeline }),
 
   composerOpen: false,
   composerTarget: null,

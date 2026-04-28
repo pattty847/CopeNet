@@ -5,7 +5,7 @@
 // data once the runtime endpoints land — the UI already reads these through
 // the helpers below, so only the helpers need rewiring.
 
-import type { MessageDestination } from '../types/backend';
+import type { InboxItem, MessageDestination, MessagingConfig, OrchestrationRun, RunTimeline } from '../types/backend';
 import type {
   Artifact,
   ApprovalRequest,
@@ -165,6 +165,38 @@ const artifactsByKey: Record<string, Artifact[]> = {
         failureReason: null,
         createdAt: new Date(Date.now() - 1000 * 60 * 31).toISOString(),
       },
+    },
+    {
+      id: 'a-orch-1',
+      kind: 'orchestration_run',
+      title: 'Probe analysis: grounding distribution',
+      oneLine: 'Completed · 8 tool calls · 4.2s',
+      producedAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+      runId: 'run_2b1a9e4f',
+      orchestrationData: {
+        orchestrationId: 'orch_e7a1b2c3',
+        runId: 'run_2b1a9e4f',
+        sessionKey: '__fallback__',
+        status: 'completed',
+        goal: 'Scan all probe outputs, count grounded successes, and summarize the distribution across repo-explain and patch-plan tasks.',
+        scriptSummary: 'Search for probe output files, read each, tally grounded vs listing-only outcomes.',
+        toolsUsed: [
+          { toolId: 'files.search', count: 3, summary: 'probe output paths → 12 files found' },
+          { toolId: 'files.read', count: 4, summary: 'probe run data → 412 lines scanned' },
+          { toolId: 'context.prepare', count: 1, summary: 'session/repo overview' },
+        ],
+        toolBudget: 10,
+        toolCallsUsed: 8,
+        timeoutSeconds: 30,
+        durationMs: 4212,
+        outputSummary: '3 of 8 repo-explain probes are now grounded via files.read. 5 others remain listing-only. patch-plan probes: 2/4 grounded, 2/4 shallow. Improvement vs baseline confirmed.',
+        relatedArtifactIds: ['a-summary-1'],
+        approvalRequired: false,
+        approvalId: null,
+        startedAt: new Date(Date.now() - 1000 * 60 * 18).toISOString(),
+        completedAt: new Date(Date.now() - 1000 * 60 * 18 + 4212).toISOString(),
+        error: null,
+      } as OrchestrationRun,
     },
   ],
 };
@@ -408,4 +440,204 @@ export function getMockDestinations(): MessageDestination[] {
 
 export function getMockApprovalHistory(): ApprovalRequest[] {
   return MOCK_APPROVAL_HISTORY;
+}
+
+// ---------------------------------------------------------------------------
+// Messaging config (operator platform settings)
+// ---------------------------------------------------------------------------
+
+export const MOCK_MESSAGING_CONFIG: MessagingConfig = {
+  telegram: {
+    botUsername: '@CopeNetBot',
+    tokenMasked: 'tg:7321...xxxx',
+    connectionStatus: 'connected',
+    lastVerifiedAt: new Date(Date.now() - 1000 * 60 * 5).toISOString(),
+    errorMessage: null,
+  },
+  destinations: MOCK_DESTINATIONS,
+  approvalPolicy: {
+    requireApprovalByDefault: true,
+    hardlineBlocklist: [],
+  },
+};
+
+export function getMockMessagingConfig(): MessagingConfig {
+  return MOCK_MESSAGING_CONFIG;
+}
+
+// ---------------------------------------------------------------------------
+// Run timeline (paused-run lifecycle)
+// ---------------------------------------------------------------------------
+
+export const MOCK_RUN_TIMELINE: RunTimeline = {
+  runId: 'run_2b1a9e4f',
+  sessionKey: '__fallback__',
+  pausedAt: new Date(Date.now() - 1000 * 45).toISOString(),
+  resumedAt: null,
+  events: [
+    {
+      id: 'tl-1',
+      kind: 'run_started',
+      at: new Date(Date.now() - 1000 * 60 * 25).toISOString(),
+      label: 'Run started',
+      detail: 'Investigate provider init race in harness',
+      status: 'ok',
+    },
+    {
+      id: 'tl-2',
+      kind: 'tool_called',
+      at: new Date(Date.now() - 1000 * 60 * 22).toISOString(),
+      label: 'files.read_file',
+      detail: 'src/copenet/core/orchestrator/runtime.py (420 lines)',
+      status: 'ok',
+      toolId: 'files.read_file',
+      durationMs: 14,
+    },
+    {
+      id: 'tl-3',
+      kind: 'tool_called',
+      at: new Date(Date.now() - 1000 * 60 * 22).toISOString(),
+      label: 'files.grep',
+      detail: 'plan_turn usages → 7 hits',
+      status: 'ok',
+      toolId: 'files.grep',
+      durationMs: 23,
+    },
+    {
+      id: 'tl-4',
+      kind: 'tool_called',
+      at: new Date(Date.now() - 1000 * 60 * 21).toISOString(),
+      label: 'files.read_file',
+      detail: 'src/copenet/core/harness/planner.py (192 lines)',
+      status: 'ok',
+      toolId: 'files.read_file',
+      durationMs: 9,
+    },
+    {
+      id: 'tl-5',
+      kind: 'tool_called',
+      at: new Date(Date.now() - 1000 * 60 * 15).toISOString(),
+      label: 'trace.read',
+      detail: 'run 2b1a-9e4f harness events (31ms)',
+      status: 'ok',
+      toolId: 'trace.read',
+      durationMs: 31,
+    },
+    {
+      id: 'tl-6',
+      kind: 'tool_called',
+      at: new Date(Date.now() - 1000 * 60 * 14).toISOString(),
+      label: 'trace.read',
+      detail: 'run 4f91-cc01 harness events (28ms)',
+      status: 'ok',
+      toolId: 'trace.read',
+      durationMs: 28,
+    },
+    {
+      id: 'tl-7',
+      kind: 'tool_called',
+      at: new Date(Date.now() - 1000 * 60 * 4).toISOString(),
+      label: 'code.edit',
+      detail: 'Drafted 3-file patch plan (runtime.py, planner.py, tests)',
+      status: 'ok',
+      toolId: 'code.edit',
+      durationMs: 182,
+    },
+    {
+      id: 'tl-8',
+      kind: 'approval_requested',
+      at: new Date(Date.now() - 1000 * 45).toISOString(),
+      label: 'send_message → approval required',
+      detail: 'Agent wants to send run summary to telegram:@copenet_ops',
+      status: 'paused',
+      toolId: 'send_message',
+      linkedApprovalId: 'appr_c3d9f1a2',
+    },
+  ],
+};
+
+export function getMockRunTimeline(): RunTimeline {
+  return MOCK_RUN_TIMELINE;
+}
+
+// ---------------------------------------------------------------------------
+// Operator inbox items (derived from approval history + outbound messages)
+// ---------------------------------------------------------------------------
+
+export function buildInboxItems(
+  approvals: ApprovalRequest[],
+  runPausedReason: 'awaiting_approval' | null,
+): InboxItem[] {
+  const items: InboxItem[] = [];
+
+  // Paused-run urgent item (most priority)
+  if (runPausedReason === 'awaiting_approval') {
+    const pending = approvals.find((a) => a.status === 'pending');
+    if (pending) {
+      items.push({
+        id: `inbox-paused-${pending.approvalId}`,
+        priority: 'urgent',
+        kind: 'paused_run',
+        title: 'Run paused — action required',
+        subtitle: `${pending.toolId} → ${pending.proposedAction.target ?? 'unknown target'}`,
+        createdAt: pending.createdAt,
+        sessionKey: pending.sessionKey,
+        runId: pending.runId,
+        approvalData: pending,
+      });
+    }
+  }
+
+  // Pending approvals not yet shown as paused-run
+  for (const approval of approvals) {
+    if (approval.status !== 'pending') continue;
+    const alreadyShown = items.some((i) => i.approvalData?.approvalId === approval.approvalId);
+    if (!alreadyShown) {
+      items.push({
+        id: `inbox-approval-${approval.approvalId}`,
+        priority: 'attention',
+        kind: 'pending_approval',
+        title: `Pending: ${approval.toolId}`,
+        subtitle: approval.proposedAction.description,
+        createdAt: approval.createdAt,
+        sessionKey: approval.sessionKey,
+        runId: approval.runId,
+        approvalData: approval,
+      });
+    }
+  }
+
+  // Recently resolved — show last 5
+  const resolved = approvals
+    .filter((a) => a.status !== 'pending')
+    .slice(0, 5);
+
+  for (const approval of resolved) {
+    const decisionLabel =
+      approval.status === 'approved' ? 'Approved'
+      : approval.status === 'modified' ? 'Modified'
+      : approval.status === 'rejected' ? 'Rejected'
+      : 'Expired';
+    items.push({
+      id: `inbox-resolved-${approval.approvalId}`,
+      priority: 'info',
+      kind: 'resolved_approval',
+      title: `${decisionLabel}: ${approval.toolId}`,
+      subtitle: approval.proposedAction.description,
+      createdAt: approval.resolvedAt ?? approval.createdAt,
+      sessionKey: approval.sessionKey,
+      runId: approval.runId,
+      approvalData: approval,
+    });
+  }
+
+  // Sort: urgent first, then attention, then info; within same priority by newest first
+  const PRIORITY_ORDER: Record<string, number> = { urgent: 0, attention: 1, info: 2 };
+  items.sort((a, b) => {
+    const pDiff = PRIORITY_ORDER[a.priority] - PRIORITY_ORDER[b.priority];
+    if (pDiff !== 0) return pDiff;
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+  });
+
+  return items;
 }

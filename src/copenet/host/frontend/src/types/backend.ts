@@ -277,3 +277,131 @@ export interface MessageDestination {
   requiresApproval: boolean;    // whether sends to this destination need operator approval
   status: DestinationStatus;
 }
+
+// ---------------------------------------------------------------------------
+// Messaging platform configuration (operator settings)
+// ---------------------------------------------------------------------------
+
+export type MessagingPlatform = 'telegram' | 'slack' | 'discord';
+export type PlatformConnectionStatus = 'connected' | 'disconnected' | 'error' | 'unconfigured';
+
+export interface TelegramBotConfig {
+  botUsername: string | null;           // e.g. "@CopeNetBot" — resolved on connect
+  tokenMasked: string | null;           // e.g. "tg:7321...xxxx" — never full token
+  connectionStatus: PlatformConnectionStatus;
+  lastVerifiedAt: string | null;        // ISO timestamp
+  errorMessage: string | null;
+}
+
+export interface MessagingApprovalPolicy {
+  requireApprovalByDefault: boolean;    // global default; per-destination overrides apply
+  hardlineBlocklist: string[];          // destination targets that can NEVER be sent to by the agent
+}
+
+export interface MessagingConfig {
+  telegram: TelegramBotConfig | null;
+  destinations: MessageDestination[];
+  approvalPolicy: MessagingApprovalPolicy;
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration runs (future execute_code-style tool)
+// ---------------------------------------------------------------------------
+
+export type OrchestrationRunStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'approval_required'
+  | 'cancelled';
+
+export interface OrchestrationToolInvocation {
+  toolId: string;
+  count: number;
+  summary: string;              // e.g. "probe output paths → 12 files"
+}
+
+export interface OrchestrationRun {
+  orchestrationId: string;
+  runId: string;
+  sessionKey: string;
+  status: OrchestrationRunStatus;
+  goal: string;                 // operator-readable description of what the script does
+  scriptSummary: string | null; // one-sentence description of the script logic
+  toolsUsed: OrchestrationToolInvocation[];
+  toolBudget: number;           // max tool calls allowed
+  toolCallsUsed: number;
+  timeoutSeconds: number;
+  durationMs: number | null;    // null if not yet completed
+  outputSummary: string | null;
+  relatedArtifactIds: string[];
+  approvalRequired: boolean;    // whether any step required approval
+  approvalId: string | null;    // linked approval if approvalRequired
+  startedAt: string;
+  completedAt: string | null;
+  error: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Operator inbox / action center
+// ---------------------------------------------------------------------------
+
+export type InboxItemPriority = 'urgent' | 'attention' | 'info';
+export type InboxItemKind =
+  | 'paused_run'
+  | 'pending_approval'
+  | 'failed_send'
+  | 'resolved_approval'
+  | 'sent_message';
+
+export interface InboxItem {
+  id: string;
+  priority: InboxItemPriority;
+  kind: InboxItemKind;
+  title: string;
+  subtitle: string;
+  createdAt: string;
+  sessionKey: string;
+  runId: string | null;
+  // Linked data — at most one will be set
+  approvalData?: ApprovalRequest;
+  outboundData?: OutboundMessageRecord;
+}
+
+// ---------------------------------------------------------------------------
+// Run timeline (paused-run lifecycle view)
+// ---------------------------------------------------------------------------
+
+export type RunTimelineEventKind =
+  | 'run_started'
+  | 'tool_called'
+  | 'tool_result'
+  | 'approval_requested'
+  | 'decision_made'
+  | 'run_resumed'
+  | 'run_completed'
+  | 'run_failed'
+  | 'note';
+
+export type RunTimelineEventStatus = 'ok' | 'pending' | 'paused' | 'error' | 'skipped';
+
+export interface RunTimelineEvent {
+  id: string;
+  kind: RunTimelineEventKind;
+  at: string;                        // ISO timestamp
+  label: string;                     // short label for the event
+  detail?: string | null;            // one-line contextual detail
+  status: RunTimelineEventStatus;
+  toolId?: string | null;            // for tool_called / tool_result
+  linkedApprovalId?: string | null;  // for approval_requested / decision_made
+  durationMs?: number | null;
+}
+
+export interface RunTimeline {
+  runId: string;
+  sessionKey: string;
+  pausedAt: string | null;           // ISO — when/if the run paused; null if not paused
+  resumedAt: string | null;
+  events: RunTimelineEvent[];
+}

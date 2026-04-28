@@ -3,15 +3,18 @@ import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
 import type { SessionRunRecord, SessionStateRecord } from '../types/backend';
 import {
+  buildInboxItems,
   getArtifactById,
   getArtifacts,
   getBatchById as getMockBatchById,
   getMockApprovalHistory,
   getMockDestinations,
+  getMockMessagingConfig,
   getMockPendingApproval,
+  getMockRunTimeline,
   getWorkingSet,
 } from './mocks';
-import type { MessageDestination, OutboundMessageRecord } from '../types/backend';
+import type { InboxItem, MessageDestination, MessagingConfig, OutboundMessageRecord, RunTimeline } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -423,6 +426,53 @@ export function useMockTransitions() {
     simulateRunResumed,
     simulateSendMessageComposed,
   };
+}
+
+// Returns a priority-ordered list of inbox items for the operator action center.
+// Aggregates: paused run, pending approvals, recently resolved approvals.
+// When the backend ships, replace buildInboxItems() with a real RPC call.
+export function useInboxItems(sessionKey: string | null): InboxItem[] {
+  const runPausedReason = useAppStore((s) => s.runPausedReason);
+  const approvalHistory = useApprovalHistory(sessionKey);
+  return useMemo(
+    () => buildInboxItems(approvalHistory, runPausedReason),
+    [approvalHistory, runPausedReason],
+  );
+}
+
+// Returns the operator's messaging platform configuration.
+// Store-first; falls back to mock for demo mode.
+export function useMessagingConfig(): MessagingConfig {
+  const storeConfig = useAppStore((s) => s.messagingConfig);
+  const setMessagingConfig = useAppStore((s) => s.setMessagingConfig);
+
+  useEffect(() => {
+    if (!storeConfig) {
+      setMessagingConfig(getMockMessagingConfig());
+    }
+  }, [storeConfig, setMessagingConfig]);
+
+  return storeConfig ?? getMockMessagingConfig();
+}
+
+// Returns the paused-run timeline for the current session.
+// Store-first; seeds with mock data when a run is paused.
+export function useRunTimeline(sessionKey: string | null): RunTimeline | null {
+  const storeTimeline = useAppStore((s) => s.runTimeline);
+  const runPausedReason = useAppStore((s) => s.runPausedReason);
+  const setRunTimeline = useAppStore((s) => s.setRunTimeline);
+
+  useEffect(() => {
+    if (runPausedReason === 'awaiting_approval' && !storeTimeline && sessionKey) {
+      setRunTimeline(getMockRunTimeline());
+    }
+    if (!runPausedReason) {
+      // Clear timeline when run resumes so stale data doesn't persist
+      setRunTimeline(null);
+    }
+  }, [runPausedReason, storeTimeline, sessionKey, setRunTimeline]);
+
+  return storeTimeline;
 }
 
 function inferEntityKind(value: string): WorkingSet['entities'][number]['kind'] {

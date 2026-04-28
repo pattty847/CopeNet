@@ -2,14 +2,16 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
+import { Activity, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { ApprovalQueuePanel } from './ApprovalQueuePanel';
-import { DestinationDirectory } from './DestinationDirectory';
+import { MessagingSettingsPanel } from './MessagingSettingsPanel';
+import { OperatorActionCenter } from './OperatorActionCenter';
+import { RunTimeline } from './RunTimeline';
 import { SendMessageComposer } from './SendMessageComposer';
-import { usePendingApproval, useApprovalHistory } from '../runtime/adapter';
+import { usePendingApproval, useApprovalHistory, useInboxItems } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
 function timeAgo(dateString?: string | null) {
@@ -50,6 +52,8 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const pendingApproval = usePendingApproval(activeSessionKey);
   const approvalHistory = useApprovalHistory(activeSessionKey);
   const pendingCount = approvalHistory.filter((r) => r.status === 'pending').length;
+  const inboxItems = useInboxItems(activeSessionKey);
+  const urgentCount = inboxItems.filter((i) => i.priority === 'urgent' || i.priority === 'attention').length;
 
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const messages = activeSessionKey ? messagesMap[activeSessionKey] || [] : [];
@@ -123,6 +127,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   };
 
   const tabs: { id: RightPanelTab; label: string; icon: typeof Activity; badge?: number }[] = [
+    { id: 'inbox', label: 'Inbox', icon: Inbox, badge: urgentCount || undefined },
     { id: 'runtime', label: 'Runtime', icon: Settings2 },
     { id: 'artifacts', label: 'Artifacts', icon: Package },
     { id: 'activity', label: 'Activity', icon: Layers },
@@ -131,13 +136,13 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const activeTab = tabs.find((tab) => tab.id === rightPanelTab) || tabs[0];
 
   const tabLabels = useMemo(() => {
-    if (panelWidth > 400) {
-      return { runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
+    if (panelWidth > 450) {
+      return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
     }
-    if (panelWidth > 315) {
-      return { runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
+    if (panelWidth > 340) {
+      return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
     }
-    return { runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
+    return { inbox: 'Inbox', runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
   const ActiveTabIcon = activeTab.icon;
@@ -152,6 +157,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
+        {railBtn('inbox', Inbox, 'Inbox')}
         {railBtn('runtime', Settings2, 'Runtime')}
         {railBtn('artifacts', Package, 'Artifacts')}
         {railBtn('activity', Layers, 'Activity')}
@@ -250,6 +256,9 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
       {/* Body — scrollable per tab */}
       <div className="flex-1 overflow-y-auto">
+        {rightPanelTab === 'inbox' && (
+          <OperatorActionCenter sessionKey={activeSessionKey} />
+        )}
         {rightPanelTab === 'artifacts' && (
           <ArtifactsPanel sessionKey={activeSessionKey} isDraft={isDraft} />
         )}
@@ -412,13 +421,26 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           </div>
         </section>
 
-        {/* Messaging */}
+        {/* Run Timeline — visible when a run is paused */}
+        {pendingApproval && (
+          <section>
+            <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+              <Activity className="w-3.5 h-3.5" />
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Run Timeline</h3>
+            </div>
+            <div className="bg-operator-panel/30 rounded-xl border border-operator-border overflow-hidden">
+              <RunTimeline sessionKey={activeSessionKey} />
+            </div>
+          </section>
+        )}
+
+        {/* Messaging Settings */}
         <section>
           <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
             <Activity className="w-3.5 h-3.5" />
             <h3 className="font-semibold text-[10px] uppercase tracking-wider">Messaging</h3>
           </div>
-          <DestinationDirectory />
+          <MessagingSettingsPanel />
         </section>
 
         {/* Tool Activity */}
