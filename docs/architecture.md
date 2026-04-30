@@ -21,6 +21,10 @@ copenet/
 │   │   ├── capabilities.py      ← capability profiles and routing
 │   │   ├── planning.py          ← turn planning ahead of provider execution
 │   │   └── tool_loop.py         ← tool invocation loop
+│   ├── profile/
+│   │   ├── __init__.py          ← Pat Profile public exports
+│   │   ├── service.py           ← layered profile loader, changelog, briefing builder
+│   │   └── templates/           ← repo-visible generic profile templates
 │   ├── sessions/
 │   │   ├── session_store.py     ← SessionStore, SessionIndexEntry
 │   │   └── transcript_store.py  ← TranscriptStore, TranscriptMessage
@@ -100,6 +104,7 @@ RPC dispatch + handlers
 Orchestrator facade
   - public API
   - provider construction
+  - profile / briefing access
         |
         v
 core/orchestrator/runtime.send_chat
@@ -107,6 +112,7 @@ core/orchestrator/runtime.send_chat
   - session resolve / binding check
   - in-flight lock
   - transcript append (user)
+  - Pat Profile context injection
         |
         v
 ChatHarness.run_turn
@@ -129,6 +135,8 @@ Provider events
 Orchestrator
   - transcript append (assistant)
   - session metadata update
+  - post-run Pat Profile maintenance
+  - return briefing generation
   - final event emission
   - async title generation when appropriate
 ```
@@ -137,6 +145,7 @@ Orchestrator
 
 CopeNet currently supports:
 
+- `openai-codex`
 - `codex-cli`
 - `lm-studio`
 - `ollama`
@@ -178,6 +187,37 @@ Prompt behavior is split into:
 - task-mode overlays
 
 `prompts/loader.py` composes them into the final system prompt that is sent with a turn. Prompt authoring stays in markdown files under `prompts/presets/`.
+
+## Identity Layer
+
+CopeNet now has a separate **Pat Profile** layer that models the operator independently from any one session.
+
+V1 is intentionally narrow:
+
+- active priorities
+- current goals
+- tone preferences
+- noise filters
+- schedule basics
+- recurring constraints
+- observed tendencies
+- guidance rules
+
+The storage model is layered:
+
+- repo-visible generic templates under `core/profile/templates/`
+- private local overlay under `~/.copenet/profile/` or `COPNET_DATA_DIR/profile`
+
+Important rule:
+
+- repo templates and examples are safe to commit
+- real overlay data is local-only and should stay out of git
+
+Runtime usage today:
+
+- normal agent sessions can receive Pat Profile context in the system prompt
+- post-run maintenance may append conservative profile updates
+- Home / briefing surfaces consume normalized profile and changelog payloads
 
 ## Harness Direction
 
