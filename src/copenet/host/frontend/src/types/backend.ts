@@ -405,3 +405,64 @@ export interface RunTimeline {
   resumedAt: string | null;
   events: RunTimelineEvent[];
 }
+
+// ---------------------------------------------------------------------------
+// Provider auth (openai-codex OAuth flow + future providers)
+// Mirrors openai_codex.py OpenAICodexAuthService.status() return shape.
+// ---------------------------------------------------------------------------
+
+export type ProviderAuthType = 'oauth' | 'api_key' | 'none';
+
+export interface ProviderAuthStatus {
+  provider: string;                   // e.g. "openai-codex"
+  profileId: string;                  // e.g. "openai-codex:default"
+  requiresAuth: boolean;
+  authType: ProviderAuthType;
+  authenticated: boolean;
+  expired: boolean;
+  accountId: string | null;           // user account identifier if known
+  expiresAt: number | null;           // unix ms — when the token expires
+  scopes: string[];                   // OAuth scopes granted
+  // storePath is backend-only, not surfaced in UI
+}
+
+export interface ProviderAuthLoginInfo {
+  loginId: string;                    // correlates begin → complete
+  authorizeUrl: string;               // open in browser to authenticate
+  redirectUri: string;
+  state: string;
+}
+
+// ---------------------------------------------------------------------------
+// Live tool execution (frontend-only, for in-flight run visibility)
+// Populated from toolExecution payloads on streaming delta/final events.
+// ---------------------------------------------------------------------------
+
+// The five states the operator can observe for a tool call during a run.
+// 'queued' is a frontend-only state (pre-first-call in a run).
+// 'blocked' matches tool_loop policy rejections (channel: "policy").
+export type ToolExecutionState = 'queued' | 'running' | 'success' | 'blocked' | 'failed';
+
+export interface LiveToolCall {
+  id: string;                         // locally generated (runId + index)
+  toolId: string;
+  state: ToolExecutionState;
+  summary: string;
+  error?: string | null;
+  startedAt: string;                  // ISO — when we first saw this tool
+  completedAt?: string | null;        // ISO — when toolExecution arrived
+}
+
+// Turn-level summary snapshot: extracted from turnState on final events.
+// Mirrors the subset of TurnState.to_public_dict() we care about in the UI.
+export interface TurnStateSnapshot {
+  toolCallCount: number;
+  visitedTools: string[];
+  visitedPaths: string[];
+  groundingActions: string[];
+  failedActions: Array<{ toolId: string; summary: string; error: string | null }>;
+  openQuestions: string[];
+  lastToolResultSummary: string;
+  terminalReason: string | null;
+  transitionReason: string;
+}

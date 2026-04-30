@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagingConfig, Model, PromptOption, Provider, RunTimeline, Session, ToolDescriptor, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagingConfig, Model, PromptOption, Provider, ProviderAuthStatus, RunTimeline, Session, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
@@ -129,6 +129,21 @@ interface AppState {
   setComposerTarget: (target: string | null) => void;
   setComposerMessage: (message: string) => void;
   resetComposer: () => void;
+
+  // Live tool execution (in-flight run streaming)
+  // Populated from toolExecution payloads on delta events; cleared on run start/finish.
+  liveToolCalls: LiveToolCall[];
+  pushLiveToolCall: (call: LiveToolCall) => void;
+  clearLiveToolCalls: () => void;
+
+  // Last turn-state snapshot (populated from the final event's turnState payload)
+  lastTurnState: TurnStateSnapshot | null;
+  setLastTurnState: (snapshot: TurnStateSnapshot | null) => void;
+
+  // Provider auth statuses (keyed by provider id, e.g. "openai-codex")
+  providerAuthStatuses: Record<string, ProviderAuthStatus>;
+  setProviderAuthStatus: (providerId: string, status: ProviderAuthStatus) => void;
+  clearProviderAuthStatus: (providerId: string) => void;
 }
 
 function sortSessions(sessions: Session[]) {
@@ -344,4 +359,28 @@ export const useAppStore = create<AppState>((set) => ({
   setComposerTarget: (target) => set({ composerTarget: target }),
   setComposerMessage: (message) => set({ composerMessage: message }),
   resetComposer: () => set({ composerOpen: false, composerTarget: null, composerMessage: '' }),
+
+  liveToolCalls: [],
+  pushLiveToolCall: (call) =>
+    set((state) => {
+      // Dedupe: if a call with the same id already exists, replace it
+      const next = state.liveToolCalls.filter((c) => c.id !== call.id);
+      return { liveToolCalls: [...next, call] };
+    }),
+  clearLiveToolCalls: () => set({ liveToolCalls: [] }),
+
+  lastTurnState: null,
+  setLastTurnState: (snapshot) => set({ lastTurnState: snapshot }),
+
+  providerAuthStatuses: {},
+  setProviderAuthStatus: (providerId, status) =>
+    set((state) => ({
+      providerAuthStatuses: { ...state.providerAuthStatuses, [providerId]: status },
+    })),
+  clearProviderAuthStatus: (providerId) =>
+    set((state) => {
+      const next = { ...state.providerAuthStatuses };
+      delete next[providerId];
+      return { providerAuthStatuses: next };
+    }),
 }));

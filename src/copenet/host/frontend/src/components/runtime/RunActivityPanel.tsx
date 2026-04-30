@@ -7,13 +7,14 @@ import {
   Clock,
   Layers,
   Package,
+  Shield,
   Sparkles,
   StickyNote,
   Terminal,
   XCircle,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
-import { useRunActivity } from '../../runtime/adapter';
+import { useLastTurnState, useRunActivity } from '../../runtime/adapter';
 import type {
   ActivityBundle,
   ActivityItem,
@@ -22,6 +23,7 @@ import type {
   ActivityToolCall,
 } from '../../runtime/types';
 import { EmptyState, ErrorState, LoadingState } from './ResourceStates';
+import { TurnSummaryStrip } from './LiveToolFeed';
 
 interface RunActivityPanelProps {
   sessionKey: string | null;
@@ -41,7 +43,18 @@ function formatDuration(ms: number) {
 }
 
 function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: boolean }) {
-  const StatusIcon = call.ok ? CheckCircle2 : XCircle;
+  // Detect blocked state: ok=false + summary mentions 'blocked' or 'policy'
+  const isBlocked = !call.ok && (
+    call.summary?.toLowerCase().includes('blocked') ||
+    call.summary?.toLowerCase().includes('policy')
+  );
+  const StatusIcon = call.ok ? CheckCircle2 : isBlocked ? Shield : XCircle;
+  const statusColor = call.ok
+    ? 'text-operator-success'
+    : isBlocked
+      ? 'text-amber-400'
+      : 'text-operator-error';
+
   return (
     <div className={`flex items-start gap-1.5 text-[11px] leading-snug ${compact ? 'py-0.5' : 'py-1'}`}>
       <Terminal className="w-3 h-3 text-operator-muted/70 shrink-0 mt-0.5" />
@@ -52,9 +65,7 @@ function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: bool
       <span className="text-operator-muted/60 font-mono text-[10px] shrink-0">
         {formatDuration(call.durationMs)}
       </span>
-      <StatusIcon
-        className={`w-3 h-3 shrink-0 ${call.ok ? 'text-operator-success' : 'text-operator-error'}`}
-      />
+      <StatusIcon className={`w-3 h-3 shrink-0 ${statusColor}`} />
     </div>
   );
 }
@@ -227,6 +238,7 @@ function renderItem(item: ActivityItem) {
 
 export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps) {
   const resource = useRunActivity(isDraft ? null : sessionKey);
+  const turnState = useLastTurnState();
 
   if (isDraft) {
     return (
@@ -272,6 +284,30 @@ export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps)
           </div>
         ))}
       </div>
+
+      {/* Turn state summary — shown when we have a completed turn snapshot */}
+      {turnState && turnState.toolCallCount > 0 && (
+        <div className="border-t border-operator-border/40 pt-2 mt-1">
+          <TurnSummaryStrip
+            callCount={turnState.toolCallCount}
+            failedCount={turnState.failedActions.length}
+          />
+          {turnState.terminalReason && turnState.terminalReason !== 'completed' && (
+            <div className="text-[10px] text-operator-muted font-mono mt-1">
+              terminal: {turnState.terminalReason}
+            </div>
+          )}
+          {turnState.openQuestions.length > 0 && (
+            <div className="mt-1.5 space-y-0.5">
+              {turnState.openQuestions.map((q, i) => (
+                <div key={i} className="text-[10px] text-amber-400/80 italic">
+                  ? {q}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

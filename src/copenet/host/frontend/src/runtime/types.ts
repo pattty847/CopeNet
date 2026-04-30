@@ -30,6 +30,12 @@ export type {
   MessagingApprovalPolicy,
   MessagingPlatform,
   PlatformConnectionStatus,
+  ProviderAuthStatus,
+  ProviderAuthType,
+  ProviderAuthLoginInfo,
+  LiveToolCall,
+  ToolExecutionState,
+  TurnStateSnapshot,
 } from '../types/backend';
 
 export type RuntimeStatus = 'thinking' | 'executing' | 'awaiting_input' | 'idle';

@@ -14,7 +14,7 @@ import {
   getMockRunTimeline,
   getWorkingSet,
 } from './mocks';
-import type { InboxItem, MessageDestination, MessagingConfig, OutboundMessageRecord, RunTimeline } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, ProviderAuthStatus, RunTimeline, TurnStateSnapshot } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -481,4 +481,59 @@ function inferEntityKind(value: string): WorkingSet['entities'][number]['kind'] 
   }
   if (value.includes('.')) return 'symbol';
   return 'note';
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 hooks — live tool activity, turn state, provider auth
+// ---------------------------------------------------------------------------
+
+// Returns live tool calls streaming in during the active run.
+// Populated by wsClient from toolExecution payloads on delta/final events.
+// Empty when no run is active (components should switch to RunActivityPanel).
+export function useLiveToolCalls(): LiveToolCall[] {
+  return useAppStore((s) => s.liveToolCalls);
+}
+
+// Returns the most recent completed turn's state snapshot.
+// Available after the final event; null while a run is in progress.
+export function useLastTurnState(): TurnStateSnapshot | null {
+  return useAppStore((s) => s.lastTurnState);
+}
+
+// Returns the auth status for a provider, fetching from the backend on mount.
+// Backend required: provider.auth.status RPC.
+// Falls back to a typed null when RPC is unavailable.
+export function useProviderAuth(providerId: string | null): {
+  status: ProviderAuthStatus | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+} {
+  const stored = useAppStore((s) => (providerId ? s.providerAuthStatuses[providerId] ?? null : null));
+  const setStatus = useAppStore((s) => s.setProviderAuthStatus);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = () => {
+    if (!providerId) return;
+    setLoading(true);
+    setError(null);
+    wsClient
+      .providerAuthStatus(providerId)
+      .then((s) => {
+        setStatus(providerId, s);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (providerId && !stored) fetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
+
+  return { status: stored, loading, error, refresh: fetch };
 }
