@@ -6,7 +6,16 @@ from typing import Any, Awaitable, Callable
 
 from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
-from .rpc_catalog import handle_models_list, handle_prompts_list, handle_providers_list, handle_tools_list
+from .rpc_catalog import (
+    handle_models_list,
+    handle_prompts_list,
+    handle_provider_auth_begin_login,
+    handle_provider_auth_complete_login,
+    handle_provider_auth_logout,
+    handle_provider_auth_status,
+    handle_providers_list,
+    handle_tools_list,
+)
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
 from .rpc_sessions import (
     handle_sessions_archive,
@@ -44,6 +53,14 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_models_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "tools.list":
         await handle_tools_list(req.id, send_json, orchestrator)
+    elif req.method == "providerAuth.status":
+        await handle_provider_auth_status(req.id, req.params, send_json, orchestrator)
+    elif req.method == "providerAuth.beginLogin":
+        await handle_provider_auth_begin_login(req.id, req.params, send_json, orchestrator)
+    elif req.method == "providerAuth.completeLogin":
+        await handle_provider_auth_complete_login(req.id, req.params, send_json, orchestrator)
+    elif req.method == "providerAuth.logout":
+        await handle_provider_auth_logout(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.rename":

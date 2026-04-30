@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from .builtin_readonly import BuiltinReadonlyTools
@@ -63,6 +64,7 @@ class ToolRegistry:
                 summary=f"Tool blocked: {descriptor.id}",
                 error=f"category not allowed: {descriptor.category}",
             )
+        _track_tool_repetition(context, request=request)
         try:
             result = await self._builtin.run(request, context)
         except ToolBlockedError as exc:
@@ -105,3 +107,31 @@ class ToolRegistry:
     ) -> None:
         if context.trace is not None:
             context.trace(event, payload)
+
+
+def _track_tool_repetition(
+    context: ToolExecutionContext,
+    *,
+    request: ToolExecutionRequest,
+) -> None:
+    state = context.ephemeral.setdefault("tool_repetition_state", {})
+    signature = json.dumps(
+        {
+            "toolId": request.tool_id,
+            "arguments": request.arguments,
+        },
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    last_signature = state.get("last_signature")
+    if last_signature == signature:
+        count = int(state.get("count") or 0) + 1
+    else:
+        count = 1
+    state["last_signature"] = signature
+    state["count"] = count
+    state["current"] = {
+        "toolId": request.tool_id,
+        "signature": signature,
+        "count": count,
+    }

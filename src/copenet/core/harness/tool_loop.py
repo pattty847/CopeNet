@@ -4,30 +4,48 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import Any, AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable, Protocol
 from uuid import uuid4
 
 from copenet.core.runtime import TurnState
 from copenet.providers import Provider, ProviderEvent
 from copenet.core.tools import (
+    FinalCandidateEnvelope,
     ToolBatchEnvelope,
     ToolDescriptor,
     ToolExecutionContext,
     ToolExecutionRequest,
     ToolExecutionResult,
     ToolInvocationEnvelope,
+    build_openai_tool_schemas,
     build_tool_prompt_section,
+    extract_final_candidate,
     extract_tool_batch_invocation,
     extract_tool_invocation,
 )
 
 from .planning import HarnessTurnPlan
+from .final_gate import FinalGateDecision, final_gate_evaluate
 
 
 ToolExecutor = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[ToolExecutionResult]]
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
-MAX_TOOL_STEPS = 3
+MAX_TOOL_STEPS = 4
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
+
+
+class NativeToolProvider(Protocol):
+    name: str
+
+    async def chat_completion(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str | None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Run one non-streaming native tool-capable chat completion."""
 
 
 async def collect_provider_turn(
@@ -76,6 +94,276 @@ async def collect_provider_turn(
     return events, discovered
 
 
+async def run_with_native_tools(
+    *,
+    provider: NativeToolProvider,
+    prompt: str,
+    provider_session_id: str | None,
+    abort_event: asyncio.Event,
+    model: str | None,
+    system_prompt: str | None,
+    plan: HarnessTurnPlan,
+    tool_executor: ToolExecutor,
+    tool_context: ToolExecutionContext,
+    trace: TraceRecorder | None,
+) -> AsyncIterator[ProviderEvent]:
+    """Run a provider-native tool loop using OpenAI-compatible tool calls."""
+    del abort_event  # Native tool turns are non-streaming in v1; keep the signature aligned.
+    turn_state = TurnState()
+    executed_results: list[ToolExecutionResult] = []
+    tool_schemas = build_openai_tool_schemas(plan.tools)
+    current_system_prompt = compose_native_tool_system_prompt(
+        provider=provider,
+        system_prompt=system_prompt,
+        contract=plan.task_contract,
+    )
+    messages: list[dict[str, Any]] = []
+    if current_system_prompt:
+        messages.append({"role": "system", "content": current_system_prompt})
+    messages.append({"role": "user", "content": prompt})
+    if trace is not None:
+        trace("turn_started", turn_state.to_public_dict())
+
+    for step_index in range(MAX_TOOL_STEPS):
+        response = await provider.chat_completion(
+            messages=messages,
+            model=model,
+            tools=tool_schemas or None,
+        )
+        message, finish_reason = _extract_native_choice(response)
+        content = _coerce_native_message_content(message.get("content"))
+        native_tool_calls = _extract_native_tool_calls(message.get("tool_calls"))
+        if trace is not None:
+            trace(
+                "provider_response_interpreted",
+                {
+                    "phase": "native",
+                    "responseKind": "native_tool_call" if native_tool_calls else "native_final_candidate",
+                    "toolCallCount": len(native_tool_calls),
+                    "contentLength": len(content),
+                    "finishReason": finish_reason,
+                },
+            )
+        if trace is not None:
+            trace(
+                "provider_turn_completed",
+                {
+                    "phase": "native-tool-call" if native_tool_calls else "native-final-candidate",
+                    "providerSessionId": provider_session_id,
+                    "toolCallCount": len(native_tool_calls),
+                    "finishReason": finish_reason,
+                },
+            )
+
+        if native_tool_calls:
+            assistant_message: dict[str, Any] = {"role": "assistant", "tool_calls": native_tool_calls}
+            if content:
+                assistant_message["content"] = content
+            messages.append(assistant_message)
+            for native_call in native_tool_calls:
+                invocation = ToolInvocationEnvelope(
+                    tool_id=native_call["function"]["name"],
+                    arguments=_parse_native_tool_arguments(native_call["function"].get("arguments")),
+                )
+                if trace is not None:
+                    trace(
+                        "tool_requested",
+                        {
+                            "toolId": invocation.tool_id,
+                            "arguments": invocation.arguments,
+                            "step": step_index + 1,
+                            "native": True,
+                        },
+                    )
+                tool_result = await tool_executor(invocation.to_request(), tool_context)
+                tool_result = _with_call_id(tool_result, invocation)
+                tool_result = ToolExecutionResult(
+                    tool_id=tool_result.tool_id,
+                    call_id=native_call.get("id") or tool_result.call_id,
+                    channel=tool_result.channel,
+                    ok=tool_result.ok,
+                    summary=tool_result.summary,
+                    body=tool_result.body,
+                    output=dict(tool_result.output),
+                    error=tool_result.error,
+                    artifact_id=tool_result.artifact_id,
+                )
+                tool_result, artifact_draft = _materialize_tool_result_artifact(
+                    tool_result=tool_result,
+                    tool_context=tool_context,
+                    trace=trace,
+                )
+                executed_results.append(tool_result)
+                turn_state.tool_call_count += 1
+                turn_state.record_tool_step(
+                    tool_id=tool_result.tool_id,
+                    arguments=invocation.arguments,
+                    result=tool_result,
+                )
+                transition_reason = "tool_followup" if tool_result.ok else "tool_error_correction"
+                turn_state.queue_input(tool_result.to_runtime_input(), reason=transition_reason)
+                meta_payload: dict[str, Any] = {
+                    "toolExecution": tool_result.to_event_payload(),
+                    "toolResult": tool_result.to_runtime_input(),
+                    "turnState": turn_state.to_public_dict(),
+                }
+                if artifact_draft is not None:
+                    meta_payload["artifactDraft"] = artifact_draft
+                yield ProviderEvent(kind="meta", metadata=meta_payload)
+                if trace is not None:
+                    trace(
+                        "tool_result_normalized",
+                        {
+                            "toolId": tool_result.tool_id,
+                            "callId": tool_result.call_id,
+                            "channel": tool_result.channel,
+                            "success": tool_result.ok,
+                            "artifactId": tool_result.artifact_id,
+                            "native": True,
+                        },
+                    )
+                    trace("turn_transition", turn_state.to_public_dict())
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": native_call["id"],
+                        "content": _native_tool_message_content(tool_result),
+                    }
+                )
+                turn_state.drain_pending_input()
+            if trace is not None:
+                trace(
+                    "tool_loop_continued",
+                    {
+                        "step": step_index + 1,
+                        "native": True,
+                        "lastToolId": executed_results[-1].tool_id if executed_results else None,
+                    },
+                )
+            if step_index >= MAX_TOOL_STEPS - 1:
+                turn_state.terminal_reason = "max_turns"
+                final_answer = await _run_native_terminal_answer(
+                    provider=provider,
+                    messages=messages,
+                    model=model,
+                    prompt=prompt,
+                    executed_results=executed_results,
+                    system_prompt=system_prompt,
+                    contract=plan.task_contract,
+                )
+                if trace is not None:
+                    trace(
+                        "terminal_answer_forced_after_max_turns",
+                        {
+                            "path": "native_tool_call",
+                            "step": step_index + 1,
+                            "toolCount": len(executed_results),
+                            "contentLength": len(final_answer),
+                        },
+                    )
+                    trace("turn_completed", turn_state.to_public_dict())
+                if final_answer:
+                    yield ProviderEvent(kind="delta", text=final_answer)
+                yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+                return
+            continue
+
+        candidate = _native_final_candidate(
+            answer=content,
+            turn_state=turn_state,
+            contract=plan.task_contract,
+        )
+        decision = _evaluate_final_candidate(
+            plan=plan,
+            turn_state=turn_state,
+            candidate=candidate,
+        )
+        if trace is not None:
+            trace(
+                "final_gate_decision",
+                {
+                    "ok": True if decision is None else decision.ok,
+                    "reasonCode": None if decision is None else decision.reason_code,
+                    "missingRequirements": [] if decision is None else list(decision.missing_requirements),
+                    "recommendedNextActionType": None if decision is None else decision.recommended_next_action_type,
+                    "step": step_index + 1,
+                    "native": True,
+                },
+            )
+        if decision is not None and not decision.ok:
+            turn_state.register_final_rejection(
+                reason_code=decision.reason_code,
+                missing_requirements=decision.missing_requirements,
+            )
+            if trace is not None:
+                trace(
+                    "final_gate_rejected",
+                    {
+                        "reasonCode": decision.reason_code,
+                        "missingRequirements": decision.missing_requirements,
+                        "recommendedNextActionType": decision.recommended_next_action_type,
+                        "step": step_index + 1,
+                        "native": True,
+                    },
+                )
+                trace("turn_transition", turn_state.to_public_dict())
+            if content:
+                messages.append({"role": "assistant", "content": content})
+            if step_index >= MAX_TOOL_STEPS - 1:
+                turn_state.terminal_reason = "max_turns"
+                final_answer = await _run_native_terminal_answer(
+                    provider=provider,
+                    messages=messages,
+                    model=model,
+                    prompt=prompt,
+                    executed_results=executed_results,
+                    system_prompt=system_prompt,
+                    contract=plan.task_contract,
+                )
+                if trace is not None:
+                    trace(
+                        "terminal_answer_forced_after_max_turns",
+                        {
+                            "path": "native_final_rejection",
+                            "step": step_index + 1,
+                            "toolCount": len(executed_results),
+                            "contentLength": len(final_answer),
+                            "reasonCode": decision.reason_code,
+                        },
+                    )
+                    trace("turn_completed", turn_state.to_public_dict())
+                if final_answer:
+                    yield ProviderEvent(kind="delta", text=final_answer)
+                yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+                return
+            messages.append(
+                {
+                    "role": "user",
+                    "content": compose_native_tool_follow_up_prompt(
+                        user_prompt=prompt,
+                        tool_results=executed_results,
+                        turn_state=turn_state,
+                        contract=plan.task_contract,
+                        final_gate_decision=decision,
+                    ),
+                }
+            )
+            continue
+
+        turn_state.terminal_reason = "completed"
+        if trace is not None:
+            trace("turn_completed", turn_state.to_public_dict())
+        if content:
+            yield ProviderEvent(kind="delta", text=content)
+        yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+        return
+
+    if trace is not None:
+        turn_state.terminal_reason = "max_turns"
+        trace("turn_completed", turn_state.to_public_dict())
+    yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+
+
 async def run_with_one_tool(
     *,
     provider: Provider,
@@ -93,7 +381,7 @@ async def run_with_one_tool(
     discovered_provider_session_id = provider_session_id
     executed_results: list[ToolExecutionResult] = []
     turn_state = TurnState()
-    current_prompt = compose_tool_attempt_prompt(prompt=prompt, tools=plan.tools)
+    current_prompt = compose_tool_attempt_prompt(prompt=prompt, tools=plan.tools, contract=plan.task_contract)
     current_system_prompt = compose_tool_system_prompt(
         provider=provider,
         system_prompt=system_prompt,
@@ -123,6 +411,16 @@ async def run_with_one_tool(
         current_text = "".join(event.text or "" for event in current_events if event.kind == "delta").strip()
         batch_invocation = extract_tool_batch_invocation(current_text) if plan.batch_read_allowed else None
         if batch_invocation is not None:
+            if trace is not None:
+                trace(
+                    "provider_response_interpreted",
+                    {
+                        "phase": phase,
+                        "responseKind": "tool_batch",
+                        "toolCallCount": len(batch_invocation.calls),
+                        "contentLength": len(current_text),
+                    },
+                )
             if _is_safe_batch(batch_invocation, plan.tools):
                 if trace is not None:
                     trace(
@@ -139,6 +437,7 @@ async def run_with_one_tool(
                     tool_context=tool_context,
                     trace=trace,
                 )
+                batch_members = artifact_draft.pop("batchMembers", []) if artifact_draft is not None else []
                 tool_result, persisted_draft = _materialize_tool_result_artifact(
                     tool_result=tool_result,
                     tool_context=tool_context,
@@ -147,6 +446,22 @@ async def run_with_one_tool(
                 artifact_draft = persisted_draft or artifact_draft
                 executed_results.append(tool_result)
                 turn_state.tool_call_count += len(batch_invocation.calls)
+                for member in batch_members:
+                    turn_state.record_tool_step(
+                        tool_id=str(member.get("toolId") or "tool.batch"),
+                        arguments=dict(member.get("arguments") or {}),
+                        result=ToolExecutionResult(
+                            tool_id=str(member.get("toolId") or "tool.batch"),
+                            call_id=str(member.get("callId") or ""),
+                            channel="batch",
+                            ok=bool(member.get("ok")),
+                            summary=str(member.get("summary") or ""),
+                            body=member.get("body"),
+                            output=dict(member.get("output") or {}),
+                            error=member.get("error"),
+                            artifact_id=member.get("artifactId"),
+                        ),
+                    )
                 turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
                 meta_payload: dict[str, Any] = {
                     "toolExecution": tool_result.to_event_payload(),
@@ -184,6 +499,7 @@ async def run_with_one_tool(
                     user_prompt=prompt,
                     tool_results=executed_results,
                     turn_state=turn_state,
+                    contract=plan.task_contract,
                 )
                 current_system_prompt = compose_tool_system_prompt(
                     provider=provider,
@@ -205,6 +521,7 @@ async def run_with_one_tool(
             )
             executed_results.append(blocked)
             turn_state.tool_call_count += 1
+            turn_state.record_tool_step(tool_id=blocked.tool_id, arguments={}, result=blocked)
             turn_state.queue_input(blocked.to_runtime_input(), reason="tool_error_correction")
             yield ProviderEvent(
                 kind="meta",
@@ -254,42 +571,91 @@ async def run_with_one_tool(
             return
 
         invocation = extract_tool_invocation(current_text)
-        if invocation is None:
-            if _looks_like_tool_attempt(current_text) and not correction_attempted:
-                correction_attempted = True
-                correction = _build_correction_result(
-                    tool_id="tool.parse",
-                    summary="Tool request malformed.",
-                    error="Malformed tool request. Emit only one valid JSON tool invocation or one valid tool_calls batch.",
-                    channel="policy",
-                )
-                executed_results.append(correction)
-                turn_state.queue_input(correction.to_runtime_input(), reason="tool_error_correction")
-                if trace is not None:
-                    trace(
-                        "tool_correction_generated",
-                        {
-                            "toolId": "tool.parse",
-                            "reason": "malformed tool request",
-                            "transitionReason": "tool_error_correction",
-                        },
-                    )
-                    trace("turn_transition", turn_state.to_public_dict())
-                yield ProviderEvent(
-                    kind="meta",
-                    metadata={
-                        "toolExecution": correction.to_event_payload(),
-                        "toolResult": correction.to_runtime_input(),
-                        "turnState": turn_state.to_public_dict(),
+        final_candidate = extract_final_candidate(current_text)
+        if invocation is None and final_candidate is None:
+            if trace is not None:
+                trace(
+                    "provider_response_interpreted",
+                    {
+                        "phase": phase,
+                        "responseKind": "malformed_or_plain_text",
+                        "toolCallCount": 0,
+                        "contentLength": len(current_text),
                     },
                 )
-                turn_state.drain_pending_input()
-                current_prompt = compose_tool_follow_up_prompt(
-                    user_prompt=prompt,
-                    tool_results=executed_results,
+            if current_text and plan.task_contract is None and not _looks_like_jsonish_action(current_text):
+                final_candidate = _native_final_candidate(
+                    answer=current_text,
                     turn_state=turn_state,
+                    contract=plan.task_contract,
                 )
-                continue
+            else:
+                if not correction_attempted:
+                    correction_attempted = True
+                    correction = _build_correction_result(
+                        tool_id="tool.parse",
+                        summary="Model action malformed.",
+                        error=(
+                            "Malformed model action. Emit exactly one legal JSON action: "
+                            "TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE."
+                        ),
+                        channel="policy",
+                    )
+                    executed_results.append(correction)
+                    turn_state.queue_input(correction.to_runtime_input(), reason="tool_error_correction")
+                    if trace is not None:
+                        trace(
+                            "tool_correction_generated",
+                            {
+                                "toolId": "tool.parse",
+                                "reason": "malformed model action",
+                                "transitionReason": "tool_error_correction",
+                            },
+                        )
+                        trace("turn_transition", turn_state.to_public_dict())
+                    yield ProviderEvent(
+                        kind="meta",
+                        metadata={
+                            "toolExecution": correction.to_event_payload(),
+                            "toolResult": correction.to_runtime_input(),
+                            "turnState": turn_state.to_public_dict(),
+                        },
+                    )
+                    turn_state.drain_pending_input()
+                    current_prompt = compose_tool_follow_up_prompt(
+                        user_prompt=prompt,
+                        tool_results=executed_results,
+                        turn_state=turn_state,
+                        contract=plan.task_contract,
+                    )
+                    continue
+                if trace is not None:
+                    trace(
+                        "provider_turn_completed",
+                        {
+                            "phase": phase,
+                            "toolRequested": False,
+                            "toolStepCount": len(executed_results),
+                        },
+                    )
+                final_candidate = FinalCandidateEnvelope(
+                    answer="Malformed model action after correction.",
+                    evidence=[],
+                    done_conditions_met=[],
+                    remaining_uncertainty=["Model did not emit a legal JSON action."],
+                )
+
+        if invocation is None and final_candidate is not None:
+            if trace is not None:
+                trace(
+                    "provider_response_interpreted",
+                    {
+                        "phase": phase,
+                        "responseKind": "final_candidate",
+                        "toolCallCount": 0,
+                        "contentLength": len(final_candidate.answer),
+                    },
+                )
             if trace is not None:
                 trace(
                     "provider_turn_completed",
@@ -297,16 +663,126 @@ async def run_with_one_tool(
                         "phase": phase,
                         "toolRequested": False,
                         "toolStepCount": len(executed_results),
+                        "finalCandidate": True,
                     },
                 )
+            decision = _evaluate_final_candidate(
+                plan=plan,
+                turn_state=turn_state,
+                candidate=final_candidate,
+            )
+            if trace is not None:
+                trace(
+                    "final_gate_decision",
+                    {
+                        "ok": True if decision is None else decision.ok,
+                        "reasonCode": None if decision is None else decision.reason_code,
+                        "missingRequirements": [] if decision is None else list(decision.missing_requirements),
+                        "recommendedNextActionType": None if decision is None else decision.recommended_next_action_type,
+                        "step": step_index + 1,
+                        "native": False,
+                    },
+                )
+            if decision is not None and not decision.ok:
+                turn_state.register_final_rejection(
+                    reason_code=decision.reason_code,
+                    missing_requirements=decision.missing_requirements,
+                )
+                if trace is not None:
+                    trace(
+                        "final_gate_rejected",
+                        {
+                            "reasonCode": decision.reason_code,
+                            "missingRequirements": decision.missing_requirements,
+                            "recommendedNextActionType": decision.recommended_next_action_type,
+                            "step": step_index + 1,
+                        },
+                    )
+                    trace("turn_transition", turn_state.to_public_dict())
+                turn_state.queue_input(
+                    {
+                        "type": "final_gate_rejection",
+                        "reasonCode": decision.reason_code,
+                        "missingRequirements": list(decision.missing_requirements),
+                        "recommendedNextAction": decision.recommended_next_action_type,
+                    },
+                    reason="final_gate_rejected",
+                )
+                if step_index >= MAX_TOOL_STEPS - 1:
+                    turn_state.terminal_reason = "max_turns"
+                    final_events, _ = await collect_provider_turn(
+                        provider=provider,
+                        prompt=compose_tool_terminal_prompt(
+                            user_prompt=prompt,
+                            tool_results=executed_results,
+                        ),
+                        provider_session_id=discovered_provider_session_id,
+                        abort_event=abort_event,
+                        model=model,
+                        system_prompt=compose_system_prompt(
+                            provider=provider,
+                            system_prompt=system_prompt,
+                            extra_instructions="Use only the gathered tool results to answer directly. Do not request another tool.",
+                        ),
+                        trace=trace,
+                        phase="tool-final-answer",
+                    )
+                    if trace is not None:
+                        final_text = "".join(event.text or "" for event in final_events if event.kind == "delta").strip()
+                        trace(
+                            "terminal_answer_forced_after_max_turns",
+                            {
+                                "path": "prompted_final_rejection",
+                                "step": step_index + 1,
+                                "toolCount": len(executed_results),
+                                "contentLength": len(final_text),
+                                "reasonCode": decision.reason_code,
+                            },
+                        )
+                    for event in final_events:
+                        yield event
+                    return
+                turn_state.drain_pending_input()
+                current_prompt = compose_tool_follow_up_prompt(
+                    user_prompt=prompt,
+                    tool_results=executed_results,
+                    turn_state=turn_state,
+                    contract=plan.task_contract,
+                    final_gate_decision=decision,
+                )
+                current_system_prompt = compose_tool_system_prompt(
+                    provider=provider,
+                    system_prompt=system_prompt,
+                    tools=plan.tools,
+                )
+                if trace is not None:
+                    trace(
+                        "tool_loop_continued",
+                        {
+                            "step": step_index + 1,
+                            "lastToolId": "final_gate",
+                            "transitionReason": turn_state.transition_reason,
+                        },
+                    )
+                continue
+            if trace is not None:
                 turn_state.terminal_reason = "completed"
                 trace("turn_completed", turn_state.to_public_dict())
-            for event in current_events:
-                if event.kind != "meta":
-                    yield event
+            yield ProviderEvent(kind="delta", text=final_candidate.answer)
+            yield ProviderEvent(kind="final", provider_session_id=discovered_provider_session_id)
             return
 
         if trace is not None:
+            trace(
+                "provider_response_interpreted",
+                {
+                    "phase": phase,
+                    "responseKind": "tool_call",
+                    "toolCallCount": 1,
+                    "contentLength": len(current_text),
+                    "toolId": invocation.tool_id,
+                },
+            )
             trace(
                 "tool_requested",
                 {
@@ -325,6 +801,7 @@ async def run_with_one_tool(
         )
         executed_results.append(tool_result)
         turn_state.tool_call_count += 1
+        turn_state.record_tool_step(tool_id=tool_result.tool_id, arguments=invocation.arguments, result=tool_result)
         transition_reason = "tool_followup" if tool_result.ok else "tool_error_correction"
         turn_state.queue_input(tool_result.to_runtime_input(), reason=transition_reason)
         meta_payload: dict[str, Any] = {
@@ -368,6 +845,17 @@ async def run_with_one_tool(
                 trace=trace,
                 phase="tool-final-answer",
             )
+            if trace is not None:
+                final_text = "".join(event.text or "" for event in final_events if event.kind == "delta").strip()
+                trace(
+                    "terminal_answer_forced_after_max_turns",
+                    {
+                        "path": "prompted_tool_call",
+                        "step": step_index + 1,
+                        "toolCount": len(executed_results),
+                        "contentLength": len(final_text),
+                    },
+                )
             for event in final_events:
                 yield event
             return
@@ -377,6 +865,7 @@ async def run_with_one_tool(
             user_prompt=prompt,
             tool_results=executed_results,
             turn_state=turn_state,
+            contract=plan.task_contract,
         )
         current_system_prompt = compose_tool_system_prompt(
             provider=provider,
@@ -469,22 +958,246 @@ async def _run_tool_batch(
             "toolIds": [result.tool_id for result in results],
             "resultCount": len(results),
         },
+        "batchMembers": [
+            {
+                "toolId": result.tool_id,
+                "callId": result.call_id,
+                "summary": result.summary,
+                "body": result.body,
+                "output": result.output,
+                "error": result.error,
+                "artifactId": result.artifact_id,
+                "ok": result.ok,
+                "arguments": request.arguments,
+            }
+            for request, result in zip(requests, results, strict=False)
+        ],
     }
     return merged, artifact_draft
 
 
-def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor]) -> str:
+def _extract_native_choice(response: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
+    choices = response.get("choices")
+    if not isinstance(choices, list) or not choices:
+        raise RuntimeError("LM Studio returned no choices for native tool completion.")
+    choice = choices[0]
+    if not isinstance(choice, dict):
+        raise RuntimeError("LM Studio returned an invalid native tool choice payload.")
+    message = choice.get("message")
+    if not isinstance(message, dict):
+        raise RuntimeError("LM Studio returned no assistant message for native tool completion.")
+    finish_reason = choice.get("finish_reason")
+    return message, str(finish_reason).strip() if finish_reason is not None else None
+
+
+def _coerce_native_message_content(value: Any) -> str:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list):
+        parts: list[str] = []
+        for item in value:
+            if isinstance(item, dict):
+                text = item.get("text")
+                if isinstance(text, str) and text.strip():
+                    parts.append(text.strip())
+        return "\n".join(parts).strip()
+    return ""
+
+
+def _extract_native_tool_calls(value: Any) -> list[dict[str, Any]]:
+    if not isinstance(value, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in value:
+        if not isinstance(item, dict):
+            continue
+        function = item.get("function")
+        if not isinstance(function, dict):
+            continue
+        call_id = str(item.get("id") or "").strip() or f"call-{uuid4().hex[:10]}"
+        name = str(function.get("name") or "").strip()
+        if not name:
+            continue
+        rows.append(
+            {
+                "id": call_id,
+                "type": "function",
+                "function": {
+                    "name": name,
+                    "arguments": function.get("arguments"),
+                },
+            }
+        )
+    return rows
+
+
+def _parse_native_tool_arguments(value: Any) -> dict[str, Any]:
+    if isinstance(value, dict):
+        return dict(value)
+    if not isinstance(value, str) or not value.strip():
+        return {}
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return {}
+    return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+def _native_tool_message_content(tool_result: ToolExecutionResult) -> str:
+    body = tool_result.body if tool_result.body is not None else tool_result.output
+    if isinstance(body, str):
+        return body
+    return json.dumps(body, ensure_ascii=False, indent=2)
+
+
+def _looks_like_jsonish_action(text: str) -> bool:
+    stripped = text.strip()
+    if not stripped:
+        return False
+    if stripped.startswith("{") or stripped.startswith("[") or stripped.startswith("```"):
+        return True
+    return any(token in stripped for token in ['"tool', '"state"', "tool_calls", "tool_id"])
+
+
+def _extract_cited_evidence(answer: str, visited_paths: list[str]) -> list[str]:
+    lowered_answer = answer.lower()
+    basename_map: dict[str, list[str]] = {}
+    cited: list[str] = []
+    for path in visited_paths:
+        normalized = str(path).strip()
+        if not normalized:
+            continue
+        basename = normalized.rsplit("/", 1)[-1].lower()
+        basename_map.setdefault(basename, []).append(normalized)
+        if normalized.lower() in lowered_answer and normalized not in cited:
+            cited.append(normalized)
+    for basename, paths in basename_map.items():
+        if len(paths) == 1 and basename in lowered_answer and paths[0] not in cited:
+            cited.append(paths[0])
+    return cited
+
+
+def _native_final_candidate(
+    *,
+    answer: str,
+    turn_state: TurnState,
+    contract: Any | None,
+) -> FinalCandidateEnvelope:
+    ledger = turn_state.evidence_ledger
+    visited_paths = list(ledger.get("visitedPaths") or [])
+    cited_paths = _extract_cited_evidence(answer, visited_paths)
+    done_conditions = list(getattr(contract, "done_conditions", []) or []) if contract is not None else []
+    return FinalCandidateEnvelope(
+        answer=answer.strip() or "No grounded final answer was produced.",
+        evidence=cited_paths,
+        done_conditions_met=cited_paths and done_conditions or [],
+        remaining_uncertainty=[],
+    )
+
+
+async def _run_native_terminal_answer(
+    *,
+    provider: NativeToolProvider,
+    messages: list[dict[str, Any]],
+    model: str | None,
+    prompt: str,
+    executed_results: list[ToolExecutionResult],
+    system_prompt: str | None,
+    contract: Any | None,
+) -> str:
+    final_messages = list(messages)
+    final_messages.append(
+        {
+            "role": "user",
+            "content": compose_native_terminal_prompt(
+                user_prompt=prompt,
+                tool_results=executed_results,
+                contract=contract,
+            ),
+        }
+    )
+    response = await provider.chat_completion(
+        messages=final_messages,
+        model=model,
+        tools=None,
+    )
+    message, _ = _extract_native_choice(response)
+    content = _coerce_native_message_content(message.get("content"))
+    if content:
+        return content
+    if executed_results:
+        return executed_results[-1].summary
+    return ""
+
+
+def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor], contract: Any | None = None) -> str:
+    contract_block = ""
+    if contract is not None:
+        contract_block = (
+            "Current contract:\n"
+            f"- Goal: {getattr(contract, 'goal', '')}\n"
+            f"- Task kind: {getattr(contract, 'task_kind', '')}\n"
+            f"- Required evidence: {', '.join(getattr(contract, 'required_evidence', []) or []) or '(none)'}\n"
+            f"- Done conditions: {', '.join(getattr(contract, 'done_conditions', []) or []) or '(none)'}\n\n"
+        )
     return (
         "User request:\n"
         f"{prompt}\n\n"
+        f"{contract_block}"
         "Decide whether you need tools before answering. "
-        "If needed, respond only with the JSON tool invocation or a safe read-only batch.\n"
+        "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.\n"
         "For repository inspection, directory listing alone is rarely enough. "
-        "Prefer at least one relevant files.read, files.search, or context.prepare step before summarizing."
+        "Prefer direct evidence from files.read or directional discovery from files.search before summarizing. "
+        "Use context.prepare only for orientation, not as a substitute for inspecting files."
         "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and be ready to cite the specific files you inspected."
         "\nDo not call files.read on directories; use files.list for directories and files.search for broader exploration."
-        "\nAvoid shell pipelines or command chaining in shell.exec. Prefer files.search, context.prepare, or simple single commands."
+        "\nAvoid shell pipelines or command chaining in shell.exec. Prefer files.search, files.read, or simple single commands."
         f"\n\n{build_tool_prompt_section(tools)}"
+    )
+
+
+def compose_native_tool_follow_up_prompt(
+    *,
+    user_prompt: str,
+    tool_results: list[ToolExecutionResult],
+    turn_state: TurnState,
+    contract: Any | None = None,
+    final_gate_decision: FinalGateDecision | None = None,
+) -> str:
+    contract_block = ""
+    if contract is not None:
+        contract_block = (
+            "Current contract:\n"
+            f"- Goal: {getattr(contract, 'goal', '')}\n"
+            f"- Task kind: {getattr(contract, 'task_kind', '')}\n"
+            f"- Allowed tools: {', '.join(getattr(contract, 'allowed_tools', []) or []) or '(none)'}\n"
+            f"- Required evidence: {', '.join(getattr(contract, 'required_evidence', []) or []) or '(none)'}\n"
+            f"- Done conditions: {', '.join(getattr(contract, 'done_conditions', []) or []) or '(none)'}\n\n"
+        )
+    ledger = turn_state.evidence_ledger
+    rejection_block = ""
+    if final_gate_decision is not None and not final_gate_decision.ok:
+        rejection_block = (
+            "You are not done yet. Missing requirements:\n"
+            + "\n".join(f"- {item}" for item in final_gate_decision.missing_requirements)
+            + "\n"
+            + f"Recommended next action type: {final_gate_decision.recommended_next_action_type or 'tool'}\n\n"
+        )
+    return (
+        "Original user request:\n"
+        f"{user_prompt}\n\n"
+        f"{contract_block}"
+        f"{rejection_block}"
+        "Tool results gathered so far:\n"
+        f"{_tool_results_payload(tool_results)}\n\n"
+        "Ledger snapshot:\n"
+        f"- Visited tools: {', '.join(ledger.get('visitedTools') or []) or '(none)'}\n"
+        f"- Visited paths: {', '.join(ledger.get('visitedPaths') or []) or '(none)'}\n"
+        f"- Grounding actions: {', '.join(ledger.get('groundingActions') or []) or '(none)'}\n"
+        f"- Last tool summary: {ledger.get('lastToolResultSummary') or '(none)'}\n\n"
+        "Continue by using the available native tools if evidence is still missing. "
+        "Do not finalize until your answer cites the grounded files you inspected. "
+        "Use context.prepare only for overview; repository claims need direct file evidence."
     )
 
 
@@ -493,6 +1206,8 @@ def compose_tool_follow_up_prompt(
     user_prompt: str,
     tool_results: list[ToolExecutionResult],
     turn_state: TurnState,
+    contract: Any | None = None,
+    final_gate_decision: FinalGateDecision | None = None,
 ) -> str:
     corrective_line = ""
     if turn_state.transition_reason == "tool_error_correction":
@@ -500,21 +1215,72 @@ def compose_tool_follow_up_prompt(
             "\nThe previous tool request failed validation, policy, or execution. "
             "Repair the tool call directly if another tool is still needed.\n"
         )
+    contract_block = ""
+    if contract is not None:
+        contract_block = (
+            f"Current contract:\n"
+            f"- Goal: {getattr(contract, 'goal', '')}\n"
+            f"- Task kind: {getattr(contract, 'task_kind', '')}\n"
+            f"- Allowed tools: {', '.join(getattr(contract, 'allowed_tools', []) or []) or '(none)'}\n"
+            f"- Required evidence: {', '.join(getattr(contract, 'required_evidence', []) or []) or '(none)'}\n"
+            f"- Done conditions: {', '.join(getattr(contract, 'done_conditions', []) or []) or '(none)'}\n\n"
+        )
+    ledger = turn_state.evidence_ledger
+    ledger_block = (
+        "Ledger snapshot:\n"
+        f"- Visited tools: {', '.join(ledger.get('visitedTools') or []) or '(none)'}\n"
+        f"- Visited paths: {', '.join(ledger.get('visitedPaths') or []) or '(none)'}\n"
+        f"- Grounding actions: {', '.join(ledger.get('groundingActions') or []) or '(none)'}\n"
+        f"- Last tool summary: {ledger.get('lastToolResultSummary') or '(none)'}\n"
+    )
+    rejection_block = ""
+    if final_gate_decision is not None and not final_gate_decision.ok:
+        rejection_block = (
+            "Missing requirements:\n"
+            + "\n".join(f"- {item}" for item in final_gate_decision.missing_requirements)
+            + "\n"
+        )
     return (
         "Original user request:\n"
         f"{user_prompt}\n\n"
+        f"{contract_block}"
         "Tool results gathered so far:\n"
         f"{_tool_results_payload(tool_results)}\n\n"
+        f"{ledger_block}\n"
+        f"{rejection_block}"
         f"Current transition reason: {turn_state.transition_reason}\n"
         f"Pending follow-up inputs: {len(turn_state.pending_input)}\n"
-        "Decide whether one more tool or one safe read-only batch is still needed. "
-        "If another tool is needed, respond only with the JSON invocation shape. "
-        "If you already have enough information, answer the user directly.\n"
+        "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.\n"
         "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
-        "Prefer a follow-up files.read, files.search, or context.prepare step unless the user asked only for a directory listing."
+        "Prefer a follow-up files.read or files.search step unless the user asked only for a directory listing. "
+        "Use context.prepare for orientation only."
         "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and cite the specific files you inspected."
         "\nDo not use files.read on directories. Avoid shell.exec pipelines or chained shell commands."
         f"{corrective_line}"
+    )
+
+
+def compose_native_terminal_prompt(
+    *,
+    user_prompt: str,
+    tool_results: list[ToolExecutionResult],
+    contract: Any | None = None,
+) -> str:
+    contract_rules = ""
+    if contract is not None:
+        contract_rules = (
+            "Answer rules:\n"
+            + "\n".join(f"- {rule}" for rule in getattr(contract, "final_answer_rules", []) or [])
+            + "\n\n"
+        )
+    return (
+        "Original user request:\n"
+        f"{user_prompt}\n\n"
+        f"{contract_rules}"
+        "Tool results gathered:\n"
+        f"{_tool_results_payload(tool_results)}\n\n"
+        "Answer directly using only the gathered evidence. Cite the files you inspected in the answer. "
+        "Do not request more tools."
     )
 
 
@@ -524,8 +1290,8 @@ def compose_tool_terminal_prompt(*, user_prompt: str, tool_results: list[ToolExe
         f"{user_prompt}\n\n"
         "Tool results gathered:\n"
         f"{_tool_results_payload(tool_results)}\n\n"
-        "Answer the user directly using these results. "
-        "Do not request another tool."
+        "Return exactly one FINAL_CANDIDATE JSON object using these results. "
+        "Do not request another tool and do not emit prose outside JSON."
     )
 
 
@@ -542,17 +1308,58 @@ def compose_tool_system_prompt(
     )
 
 
+def compose_native_tool_system_prompt(
+    *,
+    provider: Provider,
+    system_prompt: str | None,
+    contract: Any | None = None,
+) -> str | None:
+    contract_lines: list[str] = []
+    if contract is not None:
+        contract_lines.extend(
+            [
+                f"Current goal: {getattr(contract, 'goal', '')}",
+                f"Task kind: {getattr(contract, 'task_kind', '')}",
+            ]
+        )
+        required = getattr(contract, "required_evidence", []) or []
+        done = getattr(contract, "done_conditions", []) or []
+        if required:
+            contract_lines.append(f"Required evidence: {', '.join(required)}")
+        if done:
+            contract_lines.append(f"Done conditions: {', '.join(done)}")
+    extra = (
+        "Use the provider-native tools when evidence is missing. "
+        "For repository and coding questions, directory names and conventions are not enough proof. "
+        "Inspect relevant files, then cite the specific files you used in the final answer. "
+        "If you are missing evidence, continue with another tool call instead of guessing."
+    )
+    if contract_lines:
+        extra = extra + "\n\n" + "\n".join(contract_lines)
+    return compose_system_prompt(
+        provider=provider,
+        system_prompt=system_prompt,
+        extra_instructions=extra,
+    )
+
+
 def _tool_results_payload(tool_results: list[ToolExecutionResult]) -> str:
     return "\n\n".join(result.to_prompt_payload() for result in tool_results)
 
 
-def _looks_like_tool_attempt(text: str) -> bool:
-    stripped = text.strip()
-    if not stripped:
-        return False
-    if "tool_id" in stripped or "tool_calls" in stripped or "toolCalls" in stripped:
-        return True
-    return stripped.startswith("{") and stripped.endswith("}")
+def _evaluate_final_candidate(
+    *,
+    plan: HarnessTurnPlan,
+    turn_state: TurnState,
+    candidate: FinalCandidateEnvelope,
+) -> FinalGateDecision | None:
+    if plan.task_contract is None:
+        return None
+    return final_gate_evaluate(
+        contract=plan.task_contract,
+        turn_state=turn_state,
+        candidate=candidate,
+    )
 
 
 def _build_correction_result(

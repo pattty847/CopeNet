@@ -38,3 +38,11 @@ def default_session_state_dir() -> Path:
 def default_artifacts_dir() -> Path:
     """Return default runtime artifact root under the sessions data tree."""
     return default_sessions_dir() / "artifacts"
+
+
+def default_provider_auth_dir() -> Path:
+    """Return default provider auth root: COPNET_DATA_DIR/providers/auth or ~/.copenet/providers/auth."""
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "providers" / "auth"
+    return Path.home() / ".copenet" / "providers" / "auth"

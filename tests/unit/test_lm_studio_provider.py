@@ -4,6 +4,7 @@ import asyncio
 import json
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+from urllib import error
 
 import pytest
 
@@ -78,6 +79,46 @@ def lmstudio_server():
                 return self._json(200, {"instance_id": target})
             if self.path == "/v1/chat/completions":
                 state.chat_calls.append(payload)
+                if payload.get("stream") is False:
+                    if payload.get("tools"):
+                        return self._json(
+                            200,
+                            {
+                                "choices": [
+                                    {
+                                        "finish_reason": "tool_calls",
+                                        "message": {
+                                            "role": "assistant",
+                                            "content": "",
+                                            "tool_calls": [
+                                                {
+                                                    "id": "call-1",
+                                                    "type": "function",
+                                                    "function": {
+                                                        "name": "files.read",
+                                                        "arguments": json.dumps({"path": "README.md"}),
+                                                    },
+                                                }
+                                            ],
+                                        },
+                                    }
+                                ]
+                            },
+                        )
+                    return self._json(
+                        200,
+                        {
+                            "choices": [
+                                {
+                                    "finish_reason": "stop",
+                                    "message": {
+                                        "role": "assistant",
+                                        "content": "plain final answer",
+                                    },
+                                }
+                            ]
+                        },
+                    )
                 body = (
                     'data: {"choices":[{"delta":{"content":"hello"}}]}\n\n'
                     'data: {"choices":[{"delta":{"content":" world"}}]}\n\n'
@@ -114,6 +155,7 @@ async def test_list_models_uses_native_catalog_and_surfaces_loaded_instances(lms
     loaded = await provider.list_loaded_instances()
 
     assert [model.id for model in models] == ["openai/gpt-oss-20b", "nomic-embed-text-v1.5"]
+    assert models[0].capabilities["toolCalls"] is True
     assert models[0].metadata["loadedInstanceCount"] == 1
     assert models[0].metadata["loadedInstances"][0]["instanceId"] == "openai/gpt-oss-20b"
     assert loaded == [
@@ -210,6 +252,57 @@ async def test_run_cold_loads_model_before_chat(lmstudio_server) -> None:
 
 
 @pytest.mark.asyncio
+async def test_chat_completion_sends_tools_when_requested(lmstudio_server) -> None:
+    state, base_url = lmstudio_server
+    provider = LmStudioProvider(base_url=base_url)
+
+    response = await provider.chat_completion(
+        messages=[{"role": "user", "content": "Inspect README.md"}],
+        model="openai/gpt-oss-20b",
+        tools=[
+            {
+                "type": "function",
+                "function": {
+                    "name": "files.read",
+                    "description": "Read a file.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {"path": {"type": "string"}},
+                        "required": ["path"],
+                    },
+                },
+            }
+        ],
+    )
+
+    assert state.chat_calls[-1]["stream"] is False
+    assert state.chat_calls[-1]["tools"][0]["function"]["name"] == "files.read"
+    assert response["choices"][0]["message"]["tool_calls"][0]["function"]["name"] == "files.read"
+
+
+@pytest.mark.asyncio
+async def test_chat_completion_surfaces_timeout_context(monkeypatch: pytest.MonkeyPatch) -> None:
+    provider = LmStudioProvider(base_url="http://127.0.0.1:1234")
+
+    async def fake_ensure_model_loaded(explicit_model: str | None) -> str:
+        assert explicit_model == "google/gemma-4-e4b"
+        return "google/gemma-4-e4b#instance-1"
+
+    def fake_request(*args, **kwargs):
+        raise error.URLError("timed out")
+
+    monkeypatch.setattr(provider, "ensure_model_loaded", fake_ensure_model_loaded)
+    monkeypatch.setattr("copenet.providers.local_http._http_json_request", fake_request)
+
+    with pytest.raises(RuntimeError, match="LM Studio chat completion timed out or failed: timed out"):
+        await provider.chat_completion(
+            messages=[{"role": "user", "content": "Summarize the repo"}],
+            model="google/gemma-4-e4b",
+            tools=None,
+        )
+
+
+@pytest.mark.asyncio
 async def test_unload_model_posts_instance_id(lmstudio_server) -> None:
     state, base_url = lmstudio_server
     provider = LmStudioProvider(base_url=base_url)
@@ -229,3 +322,4 @@ async def test_describe_includes_native_model_lifecycle_capability(lmstudio_serv
     assert meta["id"] == "lm-studio"
     assert meta["available"] is True
     assert meta["capabilities"]["nativeModelLifecycle"] is True
+    assert meta["capabilities"]["toolCalls"] is True

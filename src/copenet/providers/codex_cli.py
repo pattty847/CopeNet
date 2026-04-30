@@ -11,6 +11,9 @@ from typing import AsyncIterator, Callable
 from copenet.providers.base import ProviderEvent, ProviderModel
 from copenet.runner.cli_runner import CliRunner, RunnerEvent, RunnerResult
 
+SUPPORTED_CODEX_MODELS = ("gpt-5.4", "gpt-5.5")
+DEFAULT_CODEX_MODEL = SUPPORTED_CODEX_MODELS[0]
+
 
 def _default_config_get(key: str, default: str | None = None) -> str | None:
     """Read execution_mode from env only (no app config)."""
@@ -72,13 +75,25 @@ class CodexCliProvider:
             "--skip-git-repo-check",
         ]
 
-    def _build_args(self, prompt: str, provider_session_id: str | None) -> list[str]:
+    def _resolve_model(self, model: str | None) -> str:
+        normalized = str(model or "").strip()
+        if not normalized:
+            return DEFAULT_CODEX_MODEL
+        if normalized not in SUPPORTED_CODEX_MODELS:
+            supported = ", ".join(SUPPORTED_CODEX_MODELS)
+            raise ValueError(f"unsupported codex model: {normalized}. Supported models: {supported}")
+        return normalized
+
+    def _build_args(self, prompt: str, provider_session_id: str | None, model: str | None) -> list[str]:
+        resolved_model = self._resolve_model(model)
         if provider_session_id:
             return [
                 self._cli,
                 "exec",
                 "resume",
                 *self._mode_flags(resume=True),
+                "-m",
+                resolved_model,
                 provider_session_id,
                 prompt,
             ]
@@ -86,6 +101,8 @@ class CodexCliProvider:
             self._cli,
             "exec",
             *self._mode_flags(resume=False),
+            "-m",
+            resolved_model,
             prompt,
         ]
 
@@ -122,30 +139,40 @@ class CodexCliProvider:
             "id": self.name,
             "displayName": self.display_name,
             "available": True,
-            "supportsModelSelection": False,
-            "modelCount": 0,
+            "supportsModelSelection": True,
+            "modelCount": len(SUPPORTED_CODEX_MODELS),
             "capabilities": {
                 "chat": True,
                 "embeddings": False,
-                "toolCalls": True,
+                "toolCalls": False,
+                "promptedToolUse": False,
                 "streaming": True,
                 "resume": True,
             },
         }
 
     async def list_models(self) -> list[ProviderModel]:
-        """Codex CLI does not expose model selection through this adapter."""
-        return [
-            ProviderModel(
-                id="gpt-5.4", 
-                display_name="GPT-5.4", 
-                kind="chat", 
-                provider=self.name, 
-                capabilities={"chat": True, "streaming": True, "toolCalls": True, "resume": True}, 
-                recommended_for=["chat"],
-                metadata={"ownedBy": "OpenAI"},
+        """Return the supported Codex CLI chat models."""
+        rows: list[ProviderModel] = []
+        for model_id in SUPPORTED_CODEX_MODELS:
+            rows.append(
+                ProviderModel(
+                    id=model_id,
+                    display_name=model_id.upper().replace("GPT-", "GPT-"),
+                    kind="chat",
+                    provider=self.name,
+                    capabilities={
+                        "chat": True,
+                        "streaming": True,
+                        "toolCalls": False,
+                        "promptedToolUse": False,
+                        "resume": True,
+                    },
+                    recommended_for=["chat"],
+                    metadata={"ownedBy": "OpenAI"},
+                )
             )
-        ]
+        return rows
 
     async def run(
         self,
@@ -156,7 +183,7 @@ class CodexCliProvider:
         system_prompt: str | None = None,
     ) -> AsyncIterator[ProviderEvent]:
         """Run a single Codex turn and stream provider events."""
-        args = self._build_args(prompt=prompt, provider_session_id=provider_session_id)
+        args = self._build_args(prompt=prompt, provider_session_id=provider_session_id, model=model)
         discovered_session_id: str | None = provider_session_id
 
         async for event in self._runner.run(args, timeout_sec=120, abort_event=abort_event):

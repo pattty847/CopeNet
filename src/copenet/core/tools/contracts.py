@@ -38,6 +38,18 @@ class ToolDescriptor:
             "capabilities": list(self.capabilities),
         }
 
+    def to_openai_tool(self) -> dict[str, Any]:
+        """Return an OpenAI-compatible function tool schema."""
+        schema = dict(self.input_schema) if isinstance(self.input_schema, dict) else {}
+        return {
+            "type": "function",
+            "function": {
+                "name": self.id,
+                "description": self.description,
+                "parameters": schema,
+            },
+        }
+
 
 ToolSpec = ToolDescriptor
 
@@ -135,6 +147,17 @@ class ToolBatchEnvelope:
 
 
 @dataclass(frozen=True)
+class FinalCandidateEnvelope:
+    """Structured model-produced final answer candidate envelope."""
+
+    state: Literal["FINAL_CANDIDATE"] = "FINAL_CANDIDATE"
+    answer: str = ""
+    evidence: list[str] = field(default_factory=list)
+    done_conditions_met: list[str] = field(default_factory=list)
+    remaining_uncertainty: list[str] = field(default_factory=list)
+
+
+@dataclass(frozen=True)
 class ContextPack:
     """Context payload prepared for safe repo inspection."""
 
@@ -169,6 +192,7 @@ class ToolExecutionContext:
     policy: Any
     artifact_store: Any | None = None
     trace: Callable[[str, dict[str, Any] | None], None] | None = None
+    ephemeral: dict[str, Any] = field(default_factory=dict)
 
 
 ToolHandler = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[ToolExecutionResult]]
@@ -287,18 +311,62 @@ def extract_tool_batch_invocation(text: str) -> ToolBatchEnvelope | None:
     return None
 
 
+def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
+    """Parse a structured final answer candidate JSON object from model output."""
+    for raw in _candidate_json_objects(text):
+        try:
+            parsed = json.loads(raw)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(parsed, dict):
+            continue
+        if parsed.get("state") != "FINAL_CANDIDATE":
+            continue
+        answer = parsed.get("answer")
+        if not isinstance(answer, str) or not answer.strip():
+            continue
+
+        def _normalize_str_list(value: Any) -> list[str] | None:
+            if value is None:
+                return []
+            if not isinstance(value, list):
+                return None
+            normalized: list[str] = []
+            for item in value:
+                if not isinstance(item, str):
+                    return None
+                stripped = item.strip()
+                if stripped:
+                    normalized.append(stripped)
+            return normalized
+
+        evidence = _normalize_str_list(parsed.get("evidence"))
+        done_conditions_met = _normalize_str_list(parsed.get("done_conditions_met"))
+        remaining_uncertainty = _normalize_str_list(parsed.get("remaining_uncertainty"))
+        if evidence is None or done_conditions_met is None or remaining_uncertainty is None:
+            continue
+        return FinalCandidateEnvelope(
+            answer=answer.strip(),
+            evidence=evidence,
+            done_conditions_met=done_conditions_met,
+            remaining_uncertainty=remaining_uncertainty,
+        )
+    return None
+
+
 def build_tool_prompt_section(tools: list[ToolDescriptor]) -> str:
     """Return instructions for one-step prompted tool use."""
     if not tools:
         return ""
     lines = [
-        "You may use one tool or one safe read-only tool batch before answering.",
+        "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.",
         "If a single tool is needed, respond with only a JSON object in this shape:",
         '{"tool_id":"<tool id>","arguments":{}}',
         "If multiple independent read-only tools are needed, respond with only a JSON object in this shape:",
         '{"tool_calls":[{"tool_id":"<tool id>","arguments":{}},{"tool_id":"<tool id>","arguments":{}}]}',
-        "Do not use markdown fences, prose, or extra keys around the JSON.",
-        "If no tool is needed, answer normally.",
+        "If you are ready to finalize, respond with only a JSON object in this shape:",
+        '{"state":"FINAL_CANDIDATE","answer":"...","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
+        "No markdown fences. No prose outside JSON. No extra wrapper keys.",
         "Available tools:",
     ]
     for tool in tools:
@@ -306,3 +374,8 @@ def build_tool_prompt_section(tools: list[ToolDescriptor]) -> str:
             f"- {tool.id}: {tool.description} | category={tool.category} | input={json.dumps(tool.input_schema, ensure_ascii=False)}"
         )
     return "\n".join(lines)
+
+
+def build_openai_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:
+    """Return OpenAI-compatible function tool schemas for provider-native tool calling."""
+    return [tool.to_openai_tool() for tool in tools]

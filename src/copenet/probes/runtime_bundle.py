@@ -76,6 +76,16 @@ def _last_assistant_content(transcript: list[dict[str, Any]]) -> str:
     return ""
 
 
+def _turn_state_metadata(run_record: dict[str, Any] | None) -> dict[str, Any]:
+    if not isinstance(run_record, dict):
+        return {}
+    metadata = run_record.get("metadata")
+    if not isinstance(metadata, dict):
+        return {}
+    turn_state = metadata.get("turnState")
+    return dict(turn_state) if isinstance(turn_state, dict) else {}
+
+
 def _looks_like_adjacent_tool_json(text: str) -> bool:
     stripped = text.strip()
     if not stripped:
@@ -109,8 +119,6 @@ def _has_file_grounding_tool(tool_ids: list[str], artifacts: list[dict[str, Any]
 
 
 def _has_any_grounding_tool(tool_ids: list[str], artifacts: list[dict[str, Any]]) -> bool:
-    if "context.prepare" in tool_ids or "context.prepare" in _artifact_tool_ids(artifacts):
-        return True
     return _has_file_grounding_tool(tool_ids, artifacts)
 
 
@@ -207,7 +215,12 @@ class ProbeBundle:
     output_preview: str = ""
     transition_reason: str = ""
     terminal_reason: str = ""
+    tool_execution_mode: str = "none"
+    tool_protocol: str = "plain_chat"
     oversized_tool_artifact_ids: list[str] = field(default_factory=list)
+    final_rejection_count: int = 0
+    final_gate_reason: str = ""
+    evidence_ledger: dict[str, Any] = field(default_factory=dict)
     bundle_dir: str | None = None
     debug_copy_validation: dict[str, Any] | None = None
 
@@ -238,7 +251,12 @@ class ProbeBundle:
             "output_preview": self.output_preview,
             "transition_reason": self.transition_reason,
             "terminal_reason": self.terminal_reason,
+            "tool_execution_mode": self.tool_execution_mode,
+            "tool_protocol": self.tool_protocol,
             "oversized_tool_artifact_ids": list(self.oversized_tool_artifact_ids),
+            "final_rejection_count": self.final_rejection_count,
+            "final_gate_reason": self.final_gate_reason,
+            "evidence_ledger": dict(self.evidence_ledger),
             "debug_copy_validation": dict(self.debug_copy_validation) if isinstance(self.debug_copy_validation, dict) else None,
         }
 
@@ -304,6 +322,26 @@ def build_runtime_probe_specs() -> list[ProbeSpec]:
             prompt="Use tools to inspect the runtime code and produce a small patch plan for improving repository exploration behavior with smaller models.",
         ),
         ProbeSpec(
+            name="sequential_grounding_probe",
+            prompt="Use tools to inspect the repository and explain the setup path, but do not answer until you have at least two meaningful grounded tool steps.",
+        ),
+        ProbeSpec(
+            name="final_gate_rejection_probe",
+            prompt="Give a compact answer quickly if you can, but only after using enough grounded tool evidence to explain the repository architecture and setup path.",
+        ),
+        ProbeSpec(
+            name="tool_error_recovery_probe",
+            prompt="Use tools to inspect the repository and recover if a tool request fails or is malformed before you explain the relevant runtime files.",
+        ),
+        ProbeSpec(
+            name="patch_verify_probe",
+            prompt="Use tools to inspect the repository, propose a small patch path, and verify what evidence or verification step would be required before claiming the patch is done.",
+        ),
+        ProbeSpec(
+            name="artifact_dependency_probe",
+            prompt="Use tools to inspect the repository. Your second step should depend on what the first tool reveals, then explain the runtime-related files you inspected.",
+        ),
+        ProbeSpec(
             name="same_session_seed_probe",
             prompt="Inspect the repository using tools and summarize the runtime-related files that look most important.",
             session_group="repeat-stability",
@@ -335,13 +373,23 @@ def classify_probe_bundle(
     final_state = "ok" if status == "ok" else status
     tool_steps = _tool_steps(run_record)
     tool_ids = _tool_ids(tool_steps)
-    used_batch = any(bool(step.get("batched")) for step in tool_steps) or len(tool_steps) > 1
+    used_batch = any(bool(step.get("batched")) for step in tool_steps)
     used_context_prepare = "context.prepare" in tool_ids
     artifact_count = len(artifacts)
     artifact_ids = _artifact_ids(artifacts)
     trace_present = bool(trace_path and Path(trace_path).exists())
     transition_reason = str((run_record or {}).get("transitionReason") or "").strip()
     terminal_reason = str((run_record or {}).get("terminalReason") or "").strip()
+    tool_execution_mode = str((run_record or {}).get("toolExecutionMode") or "none").strip() or "none"
+    tool_protocol = (
+        "native_tool_calls"
+        if tool_execution_mode == "native"
+        else ("prompted_tool_use" if tool_execution_mode in {"single", "batch"} else "plain_chat")
+    )
+    turn_state = _turn_state_metadata(run_record)
+    final_rejection_count = int(turn_state.get("finalRejectionCount") or 0)
+    final_gate_reason = str(turn_state.get("lastFinalGateReasonCode") or "").strip()
+    evidence_ledger = dict(turn_state.get("evidenceLedger") or {}) if isinstance(turn_state.get("evidenceLedger"), dict) else {}
     oversized_tool_artifact_ids = [
         str(value).strip()
         for value in list((run_record or {}).get("oversizedToolArtifactIds") or [])
@@ -354,6 +402,12 @@ def classify_probe_bundle(
     classification = "plain_chat_success"
     if status != "ok":
         classification = "runtime_error"
+    elif final_rejection_count > 0 and status == "ok":
+        classification = "rejected_final_then_recovered"
+    elif final_gate_reason == "missing_verification":
+        classification = "missing_verification"
+    elif final_gate_reason in {"missing_grounding", "missing_file_evidence", "missing_patch_evidence", "finalized_before_threshold", "reconnaissance_saturation"}:
+        classification = final_gate_reason
     elif used_batch:
         classification = "batch_success"
     elif len(tool_ids) > 1:
@@ -398,7 +452,16 @@ def classify_probe_bundle(
         "tool_error_terminal",
         "resume_followup_success",
         "oversized_output_persisted",
+        "missing_grounding",
+        "missing_file_evidence",
+        "missing_patch_evidence",
+        "missing_verification",
+        "finalized_before_threshold",
+        "reconnaissance_saturation",
+        "rejected_final_then_recovered",
     }:
+        if terminal_reason == "max_turns" and not assistant_content.strip() and _is_repo_understanding_probe(probe):
+            classification = "finalized_before_threshold"
         if probe.expects_tools and len(tool_ids) == 1 and not used_context_prepare and not used_batch:
             classification = "premature_stop_after_one_tool"
         elif (
@@ -426,7 +489,12 @@ def classify_probe_bundle(
         "output_preview": output_preview,
         "transition_reason": transition_reason,
         "terminal_reason": terminal_reason,
+        "tool_execution_mode": tool_execution_mode,
+        "tool_protocol": tool_protocol,
         "oversized_tool_artifact_ids": oversized_tool_artifact_ids,
+        "final_rejection_count": final_rejection_count,
+        "final_gate_reason": final_gate_reason,
+        "evidence_ledger": evidence_ledger,
     }
 
 
@@ -522,6 +590,9 @@ def write_probe_bundle(root_dir: Path, bundle: ProbeBundle) -> Path:
             "transition_reason": bundle.transition_reason,
             "terminal_reason": bundle.terminal_reason,
             "oversized_tool_artifact_ids": bundle.oversized_tool_artifact_ids,
+            "final_rejection_count": bundle.final_rejection_count,
+            "final_gate_reason": bundle.final_gate_reason,
+            "evidence_ledger": bundle.evidence_ledger,
         }
     )
     if bundle.debug_copy_validation is not None:
@@ -573,6 +644,7 @@ def render_probe_report(summary: ProbeSummary) -> str:
             "tool_error_corrected",
             "resume_followup_success",
             "oversized_output_persisted",
+            "rejected_final_then_recovered",
         }:
             recoveries.setdefault(classification, []).append(row)
             continue

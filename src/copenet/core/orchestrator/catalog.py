@@ -7,13 +7,13 @@ import json
 from typing import Any
 from typing import TYPE_CHECKING
 
-from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, Provider
+from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 
 if TYPE_CHECKING:
     from . import Orchestrator
 
 
-_PROVIDER_CLASSES: tuple[type, ...] = (CodexCliProvider, LmStudioProvider, OllamaProvider)
+_PROVIDER_CLASSES: tuple[type, ...] = (CodexCliProvider, OpenAICodexProvider, LmStudioProvider, OllamaProvider)
 
 
 def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, str]]:
@@ -23,6 +23,7 @@ def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, st
         providers["codex-cli"] = CodexCliProvider()
     except Exception as exc:
         init_errors["codex-cli"] = str(exc)
+    providers["openai-codex"] = OpenAICodexProvider()
     providers["lm-studio"] = LmStudioProvider(
         base_url=os.environ.get("COPNET_LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
     )

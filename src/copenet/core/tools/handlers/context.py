@@ -11,7 +11,10 @@ DESCRIPTORS = [
     ToolDescriptor(
         id="context.prepare",
         name="Prepare Context",
-        description="Prepare compact repo/session context for answering a question.",
+        description=(
+            "Prepare a compact repo/session overview for orientation. Use this for quick context and prior-session "
+            "guidance, not as a replacement for direct file inspection when making repo/code claims."
+        ),
         category="context",
         input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
         capabilities=["session", "guidance", "transcript"],

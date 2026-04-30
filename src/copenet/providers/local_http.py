@@ -37,6 +37,15 @@ def _http_json_request(
         return json.loads(response.read().decode("utf-8"))
 
 
+def _lmstudio_tool_support(kind: str, capabilities: dict[str, Any]) -> bool:
+    if kind != "chat":
+        return False
+    trained = capabilities.get("trained_for_tool_use")
+    if trained is None:
+        return True
+    return bool(trained)
+
+
 class _StreamingHttpProvider:
     """Common helpers for HTTP providers that stream text back."""
 
@@ -62,7 +71,7 @@ class _StreamingHttpProvider:
                 "capabilities": {
                     "chat": True,
                     "embeddings": any(model.kind == "embedding" for model in models),
-                    "toolCalls": False,
+                    "toolCalls": True,
                     "promptedToolUse": True,
                     "streaming": True,
                     "resume": False,
@@ -78,7 +87,7 @@ class _StreamingHttpProvider:
                 "capabilities": {
                     "chat": True,
                     "embeddings": False,
-                    "toolCalls": False,
+                    "toolCalls": True,
                     "promptedToolUse": True,
                     "streaming": True,
                     "resume": False,
@@ -102,7 +111,7 @@ class LmStudioProvider(_StreamingHttpProvider):
     display_name = "LM Studio"
 
     def __init__(self, base_url: str = "http://127.0.0.1:1234") -> None:
-        super().__init__(base_url=base_url, timeout_sec=60.0)
+        super().__init__(base_url=base_url, timeout_sec=120.0)
 
     async def describe(self) -> dict[str, object]:
         meta = await super().describe()
@@ -252,7 +261,7 @@ class LmStudioProvider(_StreamingHttpProvider):
                     capabilities={
                         "chat": kind == "chat",
                         "embeddings": kind == "embedding",
-                        "toolCalls": False,
+                        "toolCalls": _lmstudio_tool_support(kind, capabilities),
                         "promptedToolUse": kind == "chat",
                         "streaming": kind == "chat",
                         "resume": False,
@@ -283,6 +292,41 @@ class LmStudioProvider(_StreamingHttpProvider):
                 )
             )
         return models
+
+    async def chat_completion(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        model: str | None,
+        tools: list[dict[str, Any]] | None = None,
+        tool_choice: str | dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        model_name = await self.ensure_model_loaded(model)
+        payload: dict[str, Any] = {
+            "model": model_name,
+            "messages": messages,
+            "stream": False,
+        }
+        if tools:
+            payload["tools"] = tools
+        if tool_choice is not None:
+            payload["tool_choice"] = tool_choice
+        try:
+            data = await asyncio.to_thread(
+                _http_json_request,
+                f"{self._base_url}/v1/chat/completions",
+                method="POST",
+                payload=payload,
+                timeout_sec=self._timeout_sec,
+                accept="application/json",
+            )
+        except error.URLError as exc:
+            reason = getattr(exc, "reason", None)
+            detail = str(reason or exc).strip() or "unknown network failure"
+            raise RuntimeError(f"LM Studio chat completion timed out or failed: {detail}") from exc
+        if not isinstance(data, dict):
+            raise RuntimeError("LM Studio returned an invalid chat completion response")
+        return data
 
     async def run(
         self,
@@ -339,6 +383,10 @@ class LmStudioProvider(_StreamingHttpProvider):
                             if isinstance(text, str) and text:
                                 loop.call_soon_threadsafe(queue.put_nowait, ProviderEvent(kind="delta", text=text))
             except Exception as exc:
+                if isinstance(exc, error.URLError):
+                    reason = getattr(exc, "reason", None)
+                    detail = str(reason or exc).strip() or "unknown network failure"
+                    exc = RuntimeError(f"LM Studio streaming request timed out or failed: {detail}")
                 loop.call_soon_threadsafe(queue.put_nowait, exc)
             finally:
                 loop.call_soon_threadsafe(queue.put_nowait, done_marker)

@@ -209,6 +209,48 @@ class GatewayClient:
         payload = await self._rpc("models.list", params)
         return self._payload_list(payload, "models")
 
+    async def provider_auth_status(self, provider: str) -> dict[str, Any]:
+        """Fetch auth status for a provider-managed credential source."""
+        payload = await self._rpc("providerAuth.status", {"provider": provider})
+        value = payload.get("status")
+        return value if isinstance(value, dict) else {}
+
+    async def provider_auth_begin_login(self, provider: str, redirect_uri: str | None = None) -> dict[str, Any]:
+        """Begin a provider auth login flow."""
+        params: dict[str, Any] = {"provider": provider}
+        if redirect_uri:
+            params["redirectUri"] = redirect_uri
+        payload = await self._rpc("providerAuth.beginLogin", params)
+        value = payload.get("login")
+        return value if isinstance(value, dict) else {}
+
+    async def provider_auth_complete_login(
+        self,
+        provider: str,
+        *,
+        login_token: str,
+        redirect_url: str | None = None,
+        code: str | None = None,
+        state: str | None = None,
+    ) -> dict[str, Any]:
+        """Complete a provider auth login flow."""
+        params: dict[str, Any] = {"provider": provider, "loginToken": login_token}
+        if redirect_url:
+            params["redirectUrl"] = redirect_url
+        if code:
+            params["code"] = code
+        if state:
+            params["state"] = state
+        payload = await self._rpc("providerAuth.completeLogin", params)
+        value = payload.get("status")
+        return value if isinstance(value, dict) else {}
+
+    async def provider_auth_logout(self, provider: str) -> dict[str, Any]:
+        """Clear provider-managed local auth state."""
+        payload = await self._rpc("providerAuth.logout", {"provider": provider})
+        value = payload.get("status")
+        return value if isinstance(value, dict) else {}
+
     async def list_sessions(self, include_archived: bool = False) -> list[dict[str, Any]]:
         """Fetch known sessions."""
         payload = await self._rpc("sessions.list", {"includeArchived": include_archived})

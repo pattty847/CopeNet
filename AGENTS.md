@@ -232,6 +232,16 @@ For current behavior, assume:
 5. Verify protocol changes against both UI and client expectations.
 6. If you touch session semantics, check the whole flow: create, send, list, resolve, archive, history.
 
+## Parallel Review
+
+CopeNet contributors should actively use parallel review capacity when it helps de-risk a change or speed up investigation.
+
+- Assume the team has access to two additional AI reviewers beyond the current coding agent.
+- Use those extra reviewers for fresh eyes on traces, provider behavior, UI/UX flows, or patch plans when the problem feels ambiguous or suspicious.
+- Treat outside-model reviews as advisory, not authoritative. Always verify claims against CopeNet code, traces, and runtime behavior before acting.
+- Prefer giving parallel reviewers tightly scoped questions, concrete file paths, and exact run bundle directories instead of broad “figure it out” prompts.
+- Record useful findings from outside reviewers in repo docs or investigation notes so the team can build on them rather than re-discovering them.
+
 ## Verification Expectations
 
 There is not a deep automated suite yet, so manual and targeted verification matter.

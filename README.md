@@ -14,15 +14,15 @@ The Agents view keeps the live conversation, session list, working set, debug ac
 
 ![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
 
-### Meme Lab — structured local ideation as a real workflow surface
-Meme Lab shows how CopeNet can host opinionated workflows on top of local models: a focused brief on the left, generated variants in the center, and ranking/history surfaces on the right.
+### Workflows — purpose-built operator surfaces beyond a single chat
+The Workflows section is where CopeNet starts feeling like an operator studio instead of a prompt box: focused workflow entrypoints, scoped task surfaces, and room for productized agent behaviors that deserve more than one conversation pane.
 
-![CopeNet Meme Lab Workflow](docs/imgs/copenet-meme-lab-workflow.png)
+![CopeNet Workflows](docs/imgs/copenet-workflows.png)
 
-### Media Imports — transcribe or download source material into your workspace
-Media Imports turns raw links into reusable workflow inputs. You can transcribe a video into a workspace asset or download the source directly without forcing it into CopeNet storage.
+### Data & Tools — the workspace plumbing that keeps runs useful
+Data & Tools gathers the practical substrate around the agent: imported assets, source material, tool surfaces, and the structured inputs that make later runs more reusable and less ad hoc.
 
-![CopeNet Media Imports](docs/imgs/copenet-media-imports.png)
+![CopeNet Data & Tools](docs/imgs/copenet-data-tools.png)
 
 ### Observability — trace the work, not just the answer
 The Observability surface exposes run pulse, recent traces, provider distribution, and top tool activity so you can inspect what the system actually did across sessions.
@@ -57,8 +57,9 @@ CopeNet is evolving into an operator workspace, not just a chat client. Today it
 
 ## Providers
 
-CopeNet currently supports local and CLI-backed runtimes through a shared harness:
+CopeNet currently supports local, CLI-backed, and subscription-backed runtimes through a shared harness:
 
+- `openai-codex`
 - `codex-cli`
 - `lm-studio`
 - `ollama`
@@ -76,6 +77,8 @@ The goal is provider-agnostic operator tooling: one workspace, multiple runtimes
   - LM Studio local server on `http://127.0.0.1:1234`
 - Optional CLI runtime:
   - Codex CLI installed and authenticated
+- Optional subscription-backed runtime:
+  - OpenAI Codex OAuth via `uv run copenet auth login --provider openai-codex`
 
 ### 2) Install dependencies
 

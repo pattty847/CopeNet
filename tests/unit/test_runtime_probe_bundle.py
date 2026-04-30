@@ -35,6 +35,7 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
         probe=spec,
         run_record={
             "status": "ok",
+            "toolExecutionMode": "native",
             "toolSteps": [
                 {"toolId": "files.list", "status": "ok"},
                 {"toolId": "files.read", "status": "ok"},
@@ -45,7 +46,25 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
         artifacts=[],
         trace_path=str(tmp_path / "missing.jsonl"),
     )
-    assert batch["classification"] == "batch_success"
+    assert batch["classification"] == "multi_tool_success"
+    assert batch["tool_protocol"] == "native_tool_calls"
+
+    true_batch = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolExecutionMode": "batch",
+            "toolSteps": [
+                {"toolId": "files.list", "status": "ok", "batched": True},
+                {"toolId": "files.read", "status": "ok", "batched": True},
+            ],
+            "outputSummary": "batched reads",
+        },
+        transcript=[],
+        artifacts=[],
+        trace_path=str(tmp_path / "missing-2.jsonl"),
+    )
+    assert true_batch["classification"] == "batch_success"
 
     malformed = classify_probe_bundle(
         probe=spec,
@@ -397,3 +416,71 @@ def test_render_probe_report_lists_ungrounded_answers_as_failures() -> None:
 
     assert "## Failures" in report
     assert "### ungrounded_repo_answer" in report
+
+
+def test_classify_probe_bundle_flags_rejected_final_then_recovered() -> None:
+    spec = ProbeSpec(name="architecture_setup_probe", prompt="Explain architecture")
+
+    recovered = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "files.read", "status": "ok", "ok": True},
+            ],
+            "outputSummary": "README.md explains the architecture.",
+            "terminalReason": "completed",
+            "metadata": {
+                "turnState": {
+                    "finalRejectionCount": 1,
+                    "lastFinalGateReasonCode": "missing_file_evidence",
+                    "evidenceLedger": {
+                        "groundingActions": ["files.read"],
+                    },
+                }
+            },
+        },
+        transcript=[
+            {
+                "role": "assistant",
+                "content": "README.md explains the architecture.",
+            }
+        ],
+        artifacts=[],
+        trace_path=None,
+    )
+
+    assert recovered["classification"] == "rejected_final_then_recovered"
+
+
+def test_classify_probe_bundle_flags_missing_verification() -> None:
+    spec = ProbeSpec(name="patch_verify_probe", prompt="Patch and verify the harness behavior")
+
+    missing_verification = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "files.read", "status": "ok", "ok": True},
+                {"toolId": "patch.apply", "status": "ok", "ok": True},
+            ],
+            "outputSummary": "Applied the patch.",
+            "terminalReason": "completed",
+            "metadata": {
+                "turnState": {
+                    "finalRejectionCount": 0,
+                    "lastFinalGateReasonCode": "missing_verification",
+                    "evidenceLedger": {
+                        "groundingActions": ["files.read"],
+                        "visitedTools": ["files.read", "patch.apply"],
+                    },
+                }
+            },
+        },
+        transcript=[{"role": "assistant", "content": "Applied the patch."}],
+        artifacts=[],
+        trace_path=None,
+    )
+
+    assert missing_verification["classification"] == "missing_verification"
