@@ -447,6 +447,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             {
                 "phase": "send_chat",
                 "error": str(exc),
+                "errorType": exc.__class__.__name__,
             },
         )
         async with orchestrator._lock:

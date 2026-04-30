@@ -6,6 +6,9 @@
 // when the backend lands. Keep this file small and focused — it is not a
 // backend contract.
 
+import type { ApprovalRequest, OutboundMessageRecord } from '../types/backend';
+export type { ApprovalRequest, ApprovalOutcome, ApprovalStatus, ApprovalActionClass, OutboundMessageRecord, OutboundMessageStatus } from '../types/backend';
+
 export type RuntimeStatus = 'thinking' | 'executing' | 'awaiting_input' | 'idle';
 
 export interface WorkingSetEntity {
@@ -37,7 +40,7 @@ export interface WorkingSet {
   referencedArtifactIds: string[];
 }
 
-export type ArtifactKind = 'summary' | 'patch_plan' | 'answer' | 'tool_bundle' | 'diff';
+export type ArtifactKind = 'summary' | 'patch_plan' | 'answer' | 'tool_bundle' | 'diff' | 'approval_request' | 'outbound_message';
 
 export interface ArtifactFile {
   path: string;
@@ -64,6 +67,10 @@ export interface Artifact {
   diffBlocks?: ArtifactDiffBlock[];
   toolIds?: string[];
   promoted?: boolean;
+  // approval_request kind
+  approvalData?: ApprovalRequest;
+  // outbound_message kind
+  outboundData?: OutboundMessageRecord;
 }
 
 export type ActivityItemKind = 'tool_call' | 'read_batch' | 'bundle' | 'note';

@@ -1,10 +1,10 @@
 import { create } from 'zustand';
-import { DataToolsRoute, DraftSettings, MediaAsset, MediaAssetDetail, Message, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, MediaAsset, MediaAssetDetail, Message, MessageDestination, Model, PromptOption, Provider, Session, ToolDescriptor, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
-export type RightPanelTab = 'runtime' | 'artifacts' | 'activity';
+export type RightPanelTab = 'runtime' | 'artifacts' | 'activity' | 'approvals';
 export type WorkflowsRoute = 'hub' | 'meme-lab';
 
 interface AppState {
@@ -98,10 +98,43 @@ interface AppState {
   pendingAssistants: Record<string, { sessionKey: string; localId: string }>;
   registerPendingAssistant: (runId: string, sessionKey: string, localId: string) => void;
   clearPendingAssistant: (runId: string) => void;
+
+  // Approval subsystem
+  pendingApproval: ApprovalRequest | null;
+  runPausedReason: 'awaiting_approval' | null;
+  approvalHistory: ApprovalRequest[];
+  setPendingApproval: (req: ApprovalRequest | null) => void;
+  resolveApproval: (approvalId: string, outcome: ApprovalOutcome) => void;
+  setRunPausedReason: (reason: 'awaiting_approval' | null) => void;
+  upsertApprovalInHistory: (req: ApprovalRequest) => void;
+  loadApprovalHistory: (history: ApprovalRequest[]) => void;
+
+  // Messaging destinations
+  destinations: MessageDestination[];
+  setDestinations: (destinations: MessageDestination[]) => void;
+
+  // Send-message composer
+  composerOpen: boolean;
+  composerTarget: string | null;
+  composerMessage: string;
+  setComposerOpen: (open: boolean) => void;
+  setComposerTarget: (target: string | null) => void;
+  setComposerMessage: (message: string) => void;
+  resetComposer: () => void;
 }
 
 function sortSessions(sessions: Session[]) {
   return [...sessions].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
+}
+
+function upsertInHistory(history: ApprovalRequest[], req: ApprovalRequest): ApprovalRequest[] {
+  const idx = history.findIndex((r) => r.approvalId === req.approvalId);
+  if (idx >= 0) {
+    const next = [...history];
+    next[idx] = req;
+    return next;
+  }
+  return [req, ...history];
 }
 
 const DEFAULT_DRAFT: DraftSettings = {
@@ -255,4 +288,46 @@ export const useAppStore = create<AppState>((set) => ({
       delete next[runId];
       return { pendingAssistants: next };
     }),
+
+  pendingApproval: null,
+  runPausedReason: null,
+  approvalHistory: [],
+  setPendingApproval: (req) =>
+    set((state) => ({
+      pendingApproval: req,
+      runPausedReason: req ? 'awaiting_approval' : null,
+      approvalHistory: req
+        ? upsertInHistory(state.approvalHistory, req)
+        : state.approvalHistory,
+    })),
+  resolveApproval: (approvalId, outcome) =>
+    set((state) => {
+      if (!state.pendingApproval || state.pendingApproval.approvalId !== approvalId) return state;
+      const resolved: ApprovalRequest = {
+        ...state.pendingApproval,
+        status: outcome.decision === 'modified' ? 'modified' : outcome.decision === 'approved' ? 'approved' : 'rejected',
+        outcome,
+        resolvedAt: outcome.decidedAt,
+      };
+      return {
+        pendingApproval: resolved,
+        runPausedReason: null,
+        approvalHistory: upsertInHistory(state.approvalHistory, resolved),
+      };
+    }),
+  setRunPausedReason: (reason) => set({ runPausedReason: reason }),
+  upsertApprovalInHistory: (req) =>
+    set((state) => ({ approvalHistory: upsertInHistory(state.approvalHistory, req) })),
+  loadApprovalHistory: (history) => set({ approvalHistory: history }),
+
+  destinations: [],
+  setDestinations: (destinations) => set({ destinations }),
+
+  composerOpen: false,
+  composerTarget: null,
+  composerMessage: '',
+  setComposerOpen: (open) => set({ composerOpen: open }),
+  setComposerTarget: (target) => set({ composerTarget: target }),
+  setComposerMessage: (message) => set({ composerMessage: message }),
+  resetComposer: () => set({ composerOpen: false, composerTarget: null, composerMessage: '' }),
 }));

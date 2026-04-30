@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ArrowLeft,
   ArrowRight,
@@ -14,11 +14,12 @@ import {
   PlayCircle,
   RadioTower,
   Sparkles,
+  Upload,
   X,
   Video,
   Wrench,
 } from 'lucide-react';
-import { downloadMediaFromUrl, getMediaAssetDetail, importMediaFromUrl, listMediaAssets } from '../lib/appApi';
+import { downloadMediaFromUrl, getMediaAssetDetail, importMediaFromUrl, listMediaAssets, uploadMediaFile } from '../lib/appApi';
 import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../lib/mediaMemeBridge';
 import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobileCopy';
 import { useIsMobile } from '../lib/responsive';
@@ -472,7 +473,8 @@ function MediaImportsPage() {
   const [selectedDetail, setSelectedDetail] = useState<MediaAssetDetail | null>(null);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
-  const [mediaAction, setMediaAction] = useState<'transcribe' | 'download' | 'both' | null>(null);
+  const [mediaAction, setMediaAction] = useState<'transcribe' | 'download' | 'both' | 'upload' | null>(null);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
 
   useEffect(() => {
     if (mediaAssetsLoaded) return;
@@ -612,6 +614,33 @@ function MediaImportsPage() {
     }
   }
 
+  async function handleFileSelected(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    event.target.value = '';
+    if (!file || mediaImporting) return;
+    setCapturedChunks([]);
+    setMediaAction('upload');
+    setMediaImporting(true);
+    setMediaImportError(null);
+    setMediaImportStatus(`Uploading ${file.name}…`);
+    setMediaImportProgress(12);
+    try {
+      const asset = await uploadMediaFile(file);
+      prependMediaAsset(asset);
+      setMediaAssetsLoaded(true);
+      setMediaImportStatus('Upload complete. Transcript added to CopeNet.');
+      setMediaImportProgress(100);
+      await openAsset(asset);
+    } catch (error) {
+      setMediaImportError(error instanceof Error ? error.message : 'Media upload failed.');
+      setMediaImportStatus(null);
+      setMediaImportProgress(null);
+    } finally {
+      setMediaImporting(false);
+      setMediaAction(null);
+    }
+  }
+
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
@@ -636,7 +665,7 @@ function MediaImportsPage() {
                   placeholder="Paste a YouTube or media URL for transcription or download…"
                   className="h-14 flex-1 rounded-2xl border border-shell-border bg-shell-panel px-5 text-sm text-shell-text outline-none transition placeholder:text-shell-muted hover:border-shell-border-strong focus:border-shell-border-strong"
                 />
-                <div className={`flex ${isMobile ? 'flex-col gap-2' : 'gap-3'}`}>
+                <div className={`flex ${isMobile ? 'flex-col gap-2' : 'flex-wrap gap-3'}`}>
                   <button
                     type="submit"
                     disabled={!url.trim() || mediaImporting}
@@ -663,6 +692,23 @@ function MediaImportsPage() {
                     {mediaImporting && mediaAction === 'both' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
                     {isMobile ? 'Download + transcribe' : 'Do Both'}
                   </button>
+                  <button
+                    type="button"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={mediaImporting}
+                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-6 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {mediaImporting && mediaAction === 'upload' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                    {isMobile ? 'Upload video / media' : 'Upload Media'}
+                  </button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="video/*,audio/*"
+                    capture="environment"
+                    className="hidden"
+                    onChange={(event) => void handleFileSelected(event)}
+                  />
                 </div>
               </div>
             </div>
@@ -672,6 +718,7 @@ function MediaImportsPage() {
               <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Whisper fallback when needed</div>
               <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Transcribe saves a workspace asset</div>
               <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Download skips CopeNet storage</div>
+              <div className="rounded-full border border-shell-border bg-shell-panel px-3 py-1">Upload from phone camera roll or files</div>
             </div>
           </form>
         </div>
@@ -690,7 +737,9 @@ function MediaImportsPage() {
                       ? 'Download running'
                       : mediaAction === 'both'
                         ? 'Download + transcription running'
-                        : 'Transcription running'
+                        : mediaAction === 'upload'
+                          ? 'Upload + transcription running'
+                          : 'Transcription running'
                     : 'Ready for a new source'}
                 </h2>
                 <p className="mt-2 text-sm leading-6 text-shell-muted">
@@ -712,6 +761,7 @@ function MediaImportsPage() {
               {[
                 'Transcribe a video into a reusable workspace asset.',
                 'Download raw clips straight to Safari or your desktop browser.',
+                'Upload videos from your phone into transcript-backed workspace assets.',
                 'Turn repeated media pulls into a meme-friendly workflow later.',
               ].map((item) => (
                 <div key={item} className="flex items-start gap-3 rounded-2xl border border-shell-border bg-shell-bg px-4 py-3 text-sm text-shell-text">

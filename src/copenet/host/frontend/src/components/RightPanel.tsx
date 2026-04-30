@@ -2,9 +2,14 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers } from 'lucide-react';
+import { Activity, Info, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
+import { ApprovalRequestCard } from './ApprovalRequestCard';
+import { ApprovalQueuePanel } from './ApprovalQueuePanel';
+import { DestinationDirectory } from './DestinationDirectory';
+import { SendMessageComposer } from './SendMessageComposer';
+import { usePendingApproval, useApprovalHistory } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
 function timeAgo(dateString?: string | null) {
@@ -41,6 +46,10 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
   const rightPanelTab = useAppStore((state) => state.rightPanelTab);
   const setRightPanelTab = useAppStore((state) => state.setRightPanelTab);
+
+  const pendingApproval = usePendingApproval(activeSessionKey);
+  const approvalHistory = useApprovalHistory(activeSessionKey);
+  const pendingCount = approvalHistory.filter((r) => r.status === 'pending').length;
 
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const messages = activeSessionKey ? messagesMap[activeSessionKey] || [] : [];
@@ -113,21 +122,22 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
     );
   };
 
-  const tabs: { id: RightPanelTab; label: string; icon: typeof Activity }[] = [
+  const tabs: { id: RightPanelTab; label: string; icon: typeof Activity; badge?: number }[] = [
     { id: 'runtime', label: 'Runtime', icon: Settings2 },
     { id: 'artifacts', label: 'Artifacts', icon: Package },
     { id: 'activity', label: 'Activity', icon: Layers },
+    { id: 'approvals', label: 'Approvals', icon: ShieldAlert, badge: pendingCount || undefined },
   ];
   const activeTab = tabs.find((tab) => tab.id === rightPanelTab) || tabs[0];
 
   const tabLabels = useMemo(() => {
-    if (panelWidth > 360) {
-      return { runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity' } as const;
+    if (panelWidth > 400) {
+      return { runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
     }
     if (panelWidth > 315) {
-      return { runtime: 'Runtime', artifacts: 'Files', activity: 'Runs' } as const;
+      return { runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
     }
-    return { runtime: 'Run', artifacts: 'Files', activity: 'Run log' } as const;
+    return { runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
   const ActiveTabIcon = activeTab.icon;
@@ -145,6 +155,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
         {railBtn('runtime', Settings2, 'Runtime')}
         {railBtn('artifacts', Package, 'Artifacts')}
         {railBtn('activity', Layers, 'Activity')}
+        {railBtn('approvals', ShieldAlert, 'Approvals')}
         <div className="mt-auto">
           <span className="relative flex h-2 w-2">
             {wsStatus === 'connected' && (
@@ -158,6 +169,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   }
 
   return (
+    <>
     <aside
       ref={panelRef}
       className={`${mobile ? 'w-full min-w-0 border-l-0' : 'w-full min-w-0 border-l'} border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden`}
@@ -216,7 +228,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               <button
                 key={tab.id}
                 onClick={() => setRightPanelTab(tab.id)}
-                className={`min-w-0 flex-1 overflow-hidden flex items-center justify-center gap-1 rounded-t-xl px-1.5 py-2.5 text-[9px] font-semibold uppercase tracking-[0.08em] transition-all duration-150 border-b-2 sm:px-2 sm:text-[10px] sm:tracking-[0.12em] ${
+                className={`relative min-w-0 flex-1 overflow-hidden flex items-center justify-center gap-1 rounded-t-xl px-1.5 py-2.5 text-[9px] font-semibold uppercase tracking-[0.08em] transition-all duration-150 border-b-2 sm:px-2 sm:text-[10px] sm:tracking-[0.12em] ${
                   active
                     ? 'text-operator-accent border-operator-accent bg-operator-accent/5'
                     : 'text-operator-muted border-transparent hover:text-operator-text hover:bg-operator-panel/40'
@@ -225,6 +237,11 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               >
                 <Icon className="w-3 h-3 shrink-0" />
                 <span className="min-w-0 truncate">{tabLabels[tab.id]}</span>
+                {tab.badge && tab.badge > 0 && (
+                  <span className="absolute top-1 right-1 h-3.5 w-3.5 flex items-center justify-center rounded-full bg-operator-accent text-[8px] font-bold text-white leading-none">
+                    {tab.badge > 9 ? '9+' : tab.badge}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -239,8 +256,19 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
         {rightPanelTab === 'activity' && (
           <RunActivityPanel sessionKey={activeSessionKey} isDraft={isDraft} />
         )}
+        {rightPanelTab === 'approvals' && (
+          <ApprovalQueuePanel sessionKey={activeSessionKey} />
+        )}
         {rightPanelTab === 'runtime' && (
       <div className="p-3 flex flex-col gap-4 text-[12px]">
+
+        {/* Pending approval — shown first so operator can't miss it */}
+        {pendingApproval && (
+          <section>
+            <ApprovalRequestCard approval={pendingApproval} />
+          </section>
+        )}
+
         {/* Session Info */}
         <section>
           <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
@@ -384,6 +412,15 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           </div>
         </section>
 
+        {/* Messaging */}
+        <section>
+          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+            <Activity className="w-3.5 h-3.5" />
+            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Messaging</h3>
+          </div>
+          <DestinationDirectory />
+        </section>
+
         {/* Tool Activity */}
         <section>
           <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
@@ -419,5 +456,8 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
         )}
       </div>
     </aside>
+    {/* Composer portal — always mounted, renders when composerOpen */}
+    <SendMessageComposer />
+    </>
   );
 }

@@ -66,7 +66,12 @@ def _default_trace_path(run_id: str | None) -> Path | None:
     return path if path.exists() else None
 
 
-async def _resolve_targets(client: GatewayClient, providers_csv: str, lm_model: str | None) -> list[Target]:
+async def _resolve_targets(
+    client: GatewayClient,
+    providers_csv: str,
+    lm_model: str | None,
+    codex_model: str | None,
+) -> list[Target]:
     requested = [item.strip() for item in providers_csv.split(",") if item.strip()]
     provider_rows = await client.list_providers()
     available = {row["id"]: row for row in provider_rows if row.get("available", True)}
@@ -82,6 +87,13 @@ async def _resolve_targets(client: GatewayClient, providers_csv: str, lm_model: 
                 models = await client.list_models(provider="lm-studio")
                 chosen_model = models[0]["id"] if models else None
             targets.append(Target(provider="lm-studio", model=chosen_model))
+            continue
+        if provider_id == "codex-cli":
+            chosen_model = codex_model
+            if not chosen_model:
+                models = await client.list_models(provider="codex-cli")
+                chosen_model = models[0]["id"] if models else None
+            targets.append(Target(provider="codex-cli", model=chosen_model))
             continue
         targets.append(Target(provider=provider_id, model=None))
     return targets
@@ -310,6 +322,7 @@ async def main() -> None:
     parser.add_argument("--token", default=os.environ.get("COPNET_TOKEN", DEFAULT_TOKEN))
     parser.add_argument("--providers", default="codex-cli,lm-studio")
     parser.add_argument("--lm-model", default=os.environ.get("COPNET_LM_MODEL"))
+    parser.add_argument("--codex-model", default=os.environ.get("COPNET_CODEX_MODEL"))
     parser.add_argument("--output-dir", default=str(REPO_ROOT / "tmp" / "probe_runs"))
     parser.add_argument("--probes", default=None, help="Comma-separated subset of probe names to run.")
     parser.add_argument("--repeats", type=int, default=1)
@@ -317,9 +330,9 @@ async def main() -> None:
     args = parser.parse_args()
 
     client = GatewayClient(GatewayConfig(url=args.ws_url, token=args.token))
-    targets = await _resolve_targets(client, args.providers, args.lm_model)
+    targets = await _resolve_targets(client, args.providers, args.lm_model, args.codex_model)
     if not targets:
-        raise SystemExit("No runnable targets found. Check provider availability and --providers/--lm-model options.")
+        raise SystemExit("No runnable targets found. Check provider availability and --providers/--lm-model/--codex-model options.")
 
     suite_dir = _suite_dir(args.output_dir)
     selected_names = _selected_probe_names(args.probes)

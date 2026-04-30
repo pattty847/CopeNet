@@ -27,6 +27,8 @@ docs/TRACE-FINDINGS.md
 docs/private/
 docs/blueprints/
 docs/superpowers/
+docs/investigations/**/scratch/
+docs/investigations/**/raw/
 # Added by code-review-graph
 .code-review-graph/
 knowledge-cache/

@@ -201,3 +201,79 @@ export interface SessionStateRecord {
   created_at: string;
   updated_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Approval subsystem
+// ---------------------------------------------------------------------------
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'modified' | 'expired';
+
+export type ApprovalActionClass =
+  | 'external_communication'
+  | 'filesystem_write'
+  | 'process_execution'
+  | 'network_side_effect'
+  | 'credential_or_sensitive_target';
+
+export interface ApprovalOutcome {
+  decision: 'approved' | 'rejected' | 'modified';
+  modifiedPayload?: Record<string, unknown>;
+  note?: string | null;
+  decidedAt: string;
+}
+
+export interface ApprovalRequest {
+  approvalId: string;
+  runId: string;
+  sessionKey: string;
+  status: ApprovalStatus;
+  actionClass: ApprovalActionClass;
+  toolId: string;
+  proposedAction: {
+    description: string;
+    target?: string | null;
+    payload?: Record<string, unknown>;
+  };
+  rationale: string | null;
+  createdAt: string;
+  resolvedAt: string | null;
+  outcome: ApprovalOutcome | null;
+}
+
+// ---------------------------------------------------------------------------
+// Outbound messaging
+// ---------------------------------------------------------------------------
+
+export type OutboundMessageStatus = 'drafted' | 'pending_approval' | 'approved' | 'sent' | 'failed';
+
+export interface OutboundMessageRecord {
+  messageId: string;
+  runId: string;
+  sessionKey: string;
+  platform: string;
+  target: string;
+  targetDisplayName: string | null;
+  messageText: string;
+  status: OutboundMessageStatus;
+  approvalId: string | null;
+  sentAt: string | null;
+  failureReason: string | null;
+  createdAt: string;
+}
+
+// ---------------------------------------------------------------------------
+// Messaging destinations (operator-configured address book)
+// ---------------------------------------------------------------------------
+
+export type DestinationStatus = 'configured' | 'unconfigured' | 'error';
+
+export interface MessageDestination {
+  id: string;
+  platform: string;             // 'telegram', 'slack', etc.
+  target: string;               // canonical target, e.g. "telegram:@copenet_ops"
+  displayName: string;          // human-readable label
+  threadLabel?: string | null;  // optional topic/thread label
+  isDefault: boolean;           // home/default destination for this platform
+  requiresApproval: boolean;    // whether sends to this destination need operator approval
+  status: DestinationStatus;
+}

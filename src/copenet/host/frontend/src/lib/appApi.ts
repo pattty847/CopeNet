@@ -176,3 +176,18 @@ export async function downloadMediaFromUrl(url: string): Promise<void> {
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
 }
+
+export async function uploadMediaFile(file: File): Promise<MediaAsset> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/media/upload`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+    body: form,
+  });
+  const payload = await readJson<{ asset?: unknown }>(response);
+  return normalizeMediaAsset(payload.asset);
+}

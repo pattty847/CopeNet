@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
+import { PausedRunBanner } from './PausedRunBanner';
 import { Paperclip, Mic, Send } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
 import { useIsMobile } from '../lib/responsive';
@@ -127,6 +128,9 @@ export function ChatWorkspace() {
       {activeRunId && (
         <div className="run-progress-bar h-[2px] w-full bg-operator-accent/10" />
       )}
+
+      {/* Paused-run approval banner */}
+      <PausedRunBanner />
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg flex flex-col">

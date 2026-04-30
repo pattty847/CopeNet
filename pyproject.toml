@@ -6,6 +6,8 @@ readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [
     "fastapi>=0.110.0",
+    "playwright>=1.52.0",
+    "python-multipart",
     "uvicorn>=0.27.0",
     "websockets>=12.0",
 ]
@@ -24,6 +26,7 @@ media = [
 
 [project.scripts]
 copenet = "copenet.host.main:main"
+copenet-browser-demo = "copenet.browser_agent.cli:main"
 
 [build-system]
 requires = ["hatchling"]

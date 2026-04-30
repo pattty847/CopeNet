@@ -1,6 +1,8 @@
 from copenet.core.tools import (
     ToolDescriptor,
+    build_openai_tool_schemas,
     build_tool_prompt_section,
+    extract_final_candidate,
     extract_tool_batch_invocation,
     extract_tool_invocation,
 )
@@ -69,6 +71,27 @@ def test_build_tool_prompt_section_returns_empty_for_no_tools() -> None:
     assert build_tool_prompt_section([]) == ""
 
 
+def test_extract_final_candidate_from_valid_json() -> None:
+    envelope = extract_final_candidate(
+        '{"state":"FINAL_CANDIDATE","answer":"Done.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}'
+    )
+    assert envelope is not None
+    assert envelope.answer == "Done."
+    assert envelope.evidence == ["README.md"]
+
+
+def test_extract_final_candidate_normalizes_missing_list_fields() -> None:
+    envelope = extract_final_candidate('{"state":"FINAL_CANDIDATE","answer":"Done."}')
+    assert envelope is not None
+    assert envelope.evidence == []
+    assert envelope.done_conditions_met == []
+    assert envelope.remaining_uncertainty == []
+
+
+def test_extract_final_candidate_rejects_empty_answer() -> None:
+    assert extract_final_candidate('{"state":"FINAL_CANDIDATE","answer":"   "}') is None
+
+
 def test_build_tool_prompt_section_lists_all_tool_ids() -> None:
     tools = [
         ToolDescriptor(id="files.read", name="Read File", description="Read one file.", category="repo-read"),
@@ -79,3 +102,37 @@ def test_build_tool_prompt_section_lists_all_tool_ids() -> None:
     assert "files.read" in section
     assert "git.status" in section
     assert "tool_calls" in section
+    assert "FINAL_CANDIDATE" in section
+
+
+def test_build_openai_tool_schemas_uses_tool_ids_as_function_names() -> None:
+    tools = [
+        ToolDescriptor(
+            id="files.read",
+            name="Read File",
+            description="Read one file.",
+            category="repo-read",
+            input_schema={
+                "type": "object",
+                "properties": {"path": {"type": "string"}},
+                "required": ["path"],
+            },
+        )
+    ]
+
+    schemas = build_openai_tool_schemas(tools)
+
+    assert schemas == [
+        {
+            "type": "function",
+            "function": {
+                "name": "files.read",
+                "description": "Read one file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                    "required": ["path"],
+                },
+            },
+        }
+    ]

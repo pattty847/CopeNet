@@ -6,12 +6,16 @@ import {
   GitCompareArrows,
   MessageSquareQuote,
   Package,
+  Send,
+  ShieldAlert,
   Sparkles,
   Star,
 } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { useArtifacts } from '../../runtime/adapter';
 import type { Artifact, ArtifactKind } from '../../runtime/types';
+import { ApprovalRequestCard } from '../ApprovalRequestCard';
+import { OutboundMessageCard } from '../OutboundMessageCard';
 import { EmptyState, ErrorState, LoadingState } from './ResourceStates';
 
 interface ArtifactsPanelProps {
@@ -53,6 +57,18 @@ const KIND_META: Record<
     tone: 'text-operator-accent',
     bg: 'bg-operator-accent/10',
   },
+  approval_request: {
+    label: 'Approval Request',
+    icon: ShieldAlert,
+    tone: 'text-operator-accent',
+    bg: 'bg-operator-accent/10',
+  },
+  outbound_message: {
+    label: 'Outbound Message',
+    icon: Send,
+    tone: 'text-operator-success',
+    bg: 'bg-operator-success/10',
+  },
 };
 
 function timeAgo(iso: string) {
@@ -66,6 +82,15 @@ function timeAgo(iso: string) {
 
 function ArtifactCard({ artifact }: { artifact: Artifact }) {
   const setInspectorTarget = useAppStore((s) => s.setInspectorTarget);
+
+  // Delegate to specialized renderers for approval and outbound kinds.
+  if (artifact.kind === 'approval_request' && artifact.approvalData) {
+    return <ApprovalRequestCard approval={artifact.approvalData} />;
+  }
+  if (artifact.kind === 'outbound_message' && artifact.outboundData) {
+    return <OutboundMessageCard outbound={artifact.outboundData} />;
+  }
+
   const meta = KIND_META[artifact.kind];
   const Icon = meta.icon;
 

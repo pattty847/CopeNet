@@ -5,8 +5,10 @@
 // data once the runtime endpoints land — the UI already reads these through
 // the helpers below, so only the helpers need rewiring.
 
+import type { MessageDestination } from '../types/backend';
 import type {
   Artifact,
+  ApprovalRequest,
   RunActivity,
   WorkingSet,
 } from './types';
@@ -113,6 +115,57 @@ const artifactsByKey: Record<string, Artifact[]> = {
       runId: 'run_2b1a9e4f',
       toolIds: ['fs.read_file', 'fs.grep', 'fs.read_file', 'fs.grep', 'fs.read_file', 'fs.read_file'],
     },
+    {
+      id: 'a-approval-1',
+      kind: 'approval_request',
+      title: 'Approval required: send message to Telegram',
+      oneLine: 'Agent wants to send a summary to @copenet_ops · awaiting your decision',
+      producedAt: new Date(Date.now() - 1000 * 45).toISOString(),
+      runId: 'run_2b1a9e4f',
+      approvalData: {
+        approvalId: 'appr_c3d9f1a2',
+        runId: 'run_2b1a9e4f',
+        sessionKey: '__fallback__',
+        status: 'pending',
+        actionClass: 'external_communication',
+        toolId: 'send_message',
+        proposedAction: {
+          description: 'Send a run summary to the configured Telegram destination.',
+          target: 'telegram:@copenet_ops',
+          payload: {
+            message:
+              'Run complete: provider init race fixed.\n\nPatch plan drafted (3 files, +42/−18). Gated on capability probe. Ready for operator review.',
+          },
+        },
+        rationale:
+          'User asked to send results to Telegram when the investigation finishes. Run has produced a patch plan and summary artifact.',
+        createdAt: new Date(Date.now() - 1000 * 45).toISOString(),
+        resolvedAt: null,
+        outcome: null,
+      },
+    },
+    {
+      id: 'a-outbound-1',
+      kind: 'outbound_message',
+      title: 'Message sent → Telegram @copenet_ops',
+      oneLine: 'Delivered · 47 chars · approved by operator',
+      producedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+      runId: 'run_prev_4f91cc01',
+      outboundData: {
+        messageId: 'msg_8a2e19f0',
+        runId: 'run_prev_4f91cc01',
+        sessionKey: '__fallback__',
+        platform: 'telegram',
+        target: 'telegram:@copenet_ops',
+        targetDisplayName: '@copenet_ops',
+        messageText: 'Harness investigation complete. No regressions found in the tool-loop probe suite.',
+        status: 'sent',
+        approvalId: 'appr_prev_aa11bb22',
+        sentAt: new Date(Date.now() - 1000 * 60 * 29).toISOString(),
+        failureReason: null,
+        createdAt: new Date(Date.now() - 1000 * 60 * 31).toISOString(),
+      },
+    },
   ],
 };
 
@@ -161,6 +214,15 @@ const runActivityByKey: Record<string, RunActivity> = {
         at: new Date(Date.now() - 1000 * 60 * 1).toISOString(),
         text: 'Awaiting operator review on the patch plan before applying.',
       },
+      {
+        id: 'act-5',
+        kind: 'tool_call',
+        toolId: 'send_message',
+        summary: 'Requested to send run summary to telegram:@copenet_ops — awaiting approval',
+        ok: true,
+        durationMs: 8,
+        at: new Date(Date.now() - 1000 * 45).toISOString(),
+      },
     ],
   },
 };
@@ -194,4 +256,156 @@ export function getBatchById(sessionKey: string | null, id: string) {
     }
   }
   return null;
+}
+
+export function getMockPendingApproval(sessionKey: string | null): ApprovalRequest | null {
+  const artifacts = resolveKey(artifactsByKey, sessionKey);
+  const artifact = artifacts.find((a) => a.kind === 'approval_request' && a.approvalData?.status === 'pending');
+  return artifact?.approvalData ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Approval history — resolved entries from previous runs/sessions
+// ---------------------------------------------------------------------------
+
+export const MOCK_APPROVAL_HISTORY: ApprovalRequest[] = [
+  // Current pending (will be overridden by the pending entry in artifactsByKey for the live session)
+  {
+    approvalId: 'appr_c3d9f1a2',
+    runId: 'run_2b1a9e4f',
+    sessionKey: '__fallback__',
+    status: 'pending',
+    actionClass: 'external_communication',
+    toolId: 'send_message',
+    proposedAction: {
+      description: 'Send a run summary to the configured Telegram destination.',
+      target: 'telegram:@copenet_ops',
+      payload: {
+        message:
+          'Run complete: provider init race fixed.\n\nPatch plan drafted (3 files, +42/−18). Gated on capability probe. Ready for operator review.',
+      },
+    },
+    rationale: 'User asked to send results to Telegram when the investigation finishes.',
+    createdAt: new Date(Date.now() - 1000 * 45).toISOString(),
+    resolvedAt: null,
+    outcome: null,
+  },
+  // Modified — operator rewrote the message before sending
+  {
+    approvalId: 'appr_bb77ee11',
+    runId: 'run_4a3c8d12',
+    sessionKey: '__fallback__',
+    status: 'modified',
+    actionClass: 'external_communication',
+    toolId: 'send_message',
+    proposedAction: {
+      description: 'Send probe results to Telegram after tool-loop regression run.',
+      target: 'telegram:@copenet_ops',
+      payload: {
+        message:
+          'Regression probe complete. 3 of 8 repo-explain probes now use files.read as primary grounding. Previous: 1 of 8.',
+      },
+    },
+    rationale: 'Probe run completed; user asked for a summary to be sent.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 73).toISOString(),
+    resolvedAt: new Date(Date.now() - 1000 * 60 * 72).toISOString(),
+    outcome: {
+      decision: 'modified',
+      modifiedPayload: {
+        message: 'Probe done. 3/8 repo-explain probes now grounded. Improvement vs baseline.',
+      },
+      note: 'Shortened message before sending',
+      decidedAt: new Date(Date.now() - 1000 * 60 * 72).toISOString(),
+    },
+  },
+  // Approved — no changes
+  {
+    approvalId: 'appr_aa55cc99',
+    runId: 'run_prev_4f91cc01',
+    sessionKey: '__fallback__',
+    status: 'approved',
+    actionClass: 'external_communication',
+    toolId: 'send_message',
+    proposedAction: {
+      description: 'Send harness investigation summary to Telegram.',
+      target: 'telegram:@copenet_ops',
+      payload: {
+        message: 'Harness investigation complete. No regressions found in the tool-loop probe suite.',
+      },
+    },
+    rationale: 'Investigation session finished. User requested notification on completion.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 31).toISOString(),
+    resolvedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    outcome: {
+      decision: 'approved',
+      note: null,
+      decidedAt: new Date(Date.now() - 1000 * 60 * 30).toISOString(),
+    },
+  },
+  // Rejected — operator decided not to send
+  {
+    approvalId: 'appr_dd22ff88',
+    runId: 'run_8c5a1b3e',
+    sessionKey: '__fallback__',
+    status: 'rejected',
+    actionClass: 'external_communication',
+    toolId: 'send_message',
+    proposedAction: {
+      description: 'Send intermediate progress update to Telegram mid-investigation.',
+      target: 'telegram:@copenet_ops',
+      payload: { message: 'Still investigating. Provider init race confirmed. Working on fix.' },
+    },
+    rationale: 'Agent decided to proactively update the operator mid-run.',
+    createdAt: new Date(Date.now() - 1000 * 60 * 60 * 5).toISOString(),
+    resolvedAt: new Date(Date.now() - 1000 * 60 * 60 * 5 + 1000 * 90).toISOString(),
+    outcome: {
+      decision: 'rejected',
+      note: 'Not yet — wait until investigation is done',
+      decidedAt: new Date(Date.now() - 1000 * 60 * 60 * 5 + 1000 * 90).toISOString(),
+    },
+  },
+];
+
+// ---------------------------------------------------------------------------
+// Messaging destinations
+// ---------------------------------------------------------------------------
+
+export const MOCK_DESTINATIONS: MessageDestination[] = [
+  {
+    id: 'tg-ops',
+    platform: 'telegram',
+    target: 'telegram:@copenet_ops',
+    displayName: '@copenet_ops',
+    isDefault: true,
+    requiresApproval: true,
+    status: 'configured',
+  },
+  {
+    id: 'tg-private-test',
+    platform: 'telegram',
+    target: 'telegram:987654321',
+    displayName: 'Private Test Chat',
+    threadLabel: null,
+    isDefault: false,
+    requiresApproval: false,
+    status: 'configured',
+  },
+  {
+    id: 'tg-engineering',
+    platform: 'telegram',
+    target: 'telegram:-1001234567890:42',
+    displayName: 'Engineering Group',
+    threadLabel: 'Alerts thread',
+    isDefault: false,
+    requiresApproval: true,
+    status: 'configured',
+  },
+];
+
+export function getMockDestinations(): MessageDestination[] {
+  return MOCK_DESTINATIONS;
+}
+
+export function getMockApprovalHistory(): ApprovalRequest[] {
+  return MOCK_APPROVAL_HISTORY;
 }

@@ -6,12 +6,18 @@ import {
   getArtifactById,
   getArtifacts,
   getBatchById as getMockBatchById,
+  getMockApprovalHistory,
+  getMockDestinations,
+  getMockPendingApproval,
   getWorkingSet,
 } from './mocks';
+import type { MessageDestination, OutboundMessageRecord } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
   ActivityToolCall,
+  ApprovalRequest,
+  ApprovalOutcome,
   Artifact,
   RunActivity,
   WorkingSet,
@@ -270,6 +276,152 @@ function withRuntimeStatus(workingSet: WorkingSet, activeRunId: string | null): 
   return {
     ...workingSet,
     status: activeRunId ? 'thinking' : 'awaiting_input',
+  };
+}
+
+// Returns the live pending approval from the store, falling back to mock data
+// when no real backend approval has been pushed yet.
+export function usePendingApproval(sessionKey: string | null): ApprovalRequest | null {
+  const storePending = useAppStore((state) => state.pendingApproval);
+  if (storePending) return storePending;
+  return getMockPendingApproval(sessionKey);
+}
+
+// Returns the full approval history (store-first, then mock seed).
+export function useApprovalHistory(sessionKey: string | null): ApprovalRequest[] {
+  const storeHistory = useAppStore((state) => state.approvalHistory);
+  const loadApprovalHistory = useAppStore((state) => state.loadApprovalHistory);
+
+  useEffect(() => {
+    if (storeHistory.length === 0 && sessionKey) {
+      loadApprovalHistory(getMockApprovalHistory());
+    }
+  }, [sessionKey, storeHistory.length, loadApprovalHistory]);
+
+  return storeHistory.length > 0 ? storeHistory : getMockApprovalHistory();
+}
+
+// Returns the configured messaging destinations (store-first, then mock seed).
+export function useDestinations(): MessageDestination[] {
+  const storeDestinations = useAppStore((state) => state.destinations);
+  const setDestinations = useAppStore((state) => state.setDestinations);
+
+  useEffect(() => {
+    if (storeDestinations.length === 0) {
+      setDestinations(getMockDestinations());
+    }
+  }, [storeDestinations.length, setDestinations]);
+
+  return storeDestinations.length > 0 ? storeDestinations : getMockDestinations();
+}
+
+// ---------------------------------------------------------------------------
+// Mock event/state transitions
+// Lets UI demo components drive realistic state progressions without a backend.
+// ---------------------------------------------------------------------------
+export function useMockTransitions() {
+  const setPendingApproval = useAppStore((s) => s.setPendingApproval);
+  const resolveApproval = useAppStore((s) => s.resolveApproval);
+  const upsertApprovalInHistory = useAppStore((s) => s.upsertApprovalInHistory);
+  const setRunPausedReason = useAppStore((s) => s.setRunPausedReason);
+  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab);
+  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
+  const resetComposer = useAppStore((s) => s.resetComposer);
+
+  const simulateApprovalRequested = (partial?: Partial<ApprovalRequest>) => {
+    const req: ApprovalRequest = {
+      approvalId: `appr_sim_${Date.now()}`,
+      runId: `run_sim_${Date.now()}`,
+      sessionKey: '__fallback__',
+      status: 'pending',
+      actionClass: 'external_communication',
+      toolId: 'send_message',
+      proposedAction: {
+        description: 'Send a message to the configured Telegram destination.',
+        target: 'telegram:@copenet_ops',
+        payload: { message: 'Simulated outbound message from demo transition.' },
+      },
+      rationale: 'Simulated approval request for demo purposes.',
+      createdAt: new Date().toISOString(),
+      resolvedAt: null,
+      outcome: null,
+      ...partial,
+    };
+    setPendingApproval(req);
+    setRightPanelTab('approvals');
+    setRightPanelOpen(true);
+  };
+
+  const simulateApprove = (approvalId: string, note?: string) => {
+    const outcome: ApprovalOutcome = {
+      decision: 'approved',
+      note: note ?? null,
+      decidedAt: new Date().toISOString(),
+    };
+    resolveApproval(approvalId, outcome);
+  };
+
+  const simulateReject = (approvalId: string, note?: string) => {
+    const outcome: ApprovalOutcome = {
+      decision: 'rejected',
+      note: note ?? 'Rejected by operator',
+      decidedAt: new Date().toISOString(),
+    };
+    resolveApproval(approvalId, outcome);
+  };
+
+  const simulateModify = (approvalId: string, newMessage: string, note?: string) => {
+    const outcome: ApprovalOutcome = {
+      decision: 'modified',
+      modifiedPayload: { message: newMessage },
+      note: note ?? 'Operator modified message',
+      decidedAt: new Date().toISOString(),
+    };
+    resolveApproval(approvalId, outcome);
+  };
+
+  const simulateRunResumed = () => {
+    setRunPausedReason(null);
+  };
+
+  const simulateSendMessageComposed = (target: string, message: string): OutboundMessageRecord => {
+    const dest = getMockDestinations().find((d) => d.target === target);
+    const needsApproval = dest?.requiresApproval ?? true;
+    const record: OutboundMessageRecord = {
+      messageId: `msg_sim_${Date.now()}`,
+      runId: `run_sim_${Date.now()}`,
+      sessionKey: '__fallback__',
+      platform: target.split(':')[0],
+      target,
+      targetDisplayName: dest?.displayName ?? null,
+      messageText: message,
+      status: needsApproval ? 'pending_approval' : 'sent',
+      approvalId: needsApproval ? `appr_sim_${Date.now()}` : null,
+      sentAt: needsApproval ? null : new Date().toISOString(),
+      failureReason: null,
+      createdAt: new Date().toISOString(),
+    };
+    if (needsApproval) {
+      simulateApprovalRequested({
+        proposedAction: {
+          description: `Send message to ${dest?.displayName ?? target}`,
+          target,
+          payload: { message },
+        },
+        approvalId: record.approvalId!,
+      });
+    }
+    resetComposer();
+    return record;
+  };
+
+  return {
+    simulateApprovalRequested,
+    simulateApprove,
+    simulateReject,
+    simulateModify,
+    simulateRunResumed,
+    simulateSendMessageComposed,
   };
 }
 

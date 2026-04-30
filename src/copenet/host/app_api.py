@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from typing import Any, AsyncIterator
 from uuid import uuid4
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel, Field
 
@@ -580,6 +580,34 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         media_type = mimetypes.guess_type(media_path.name)[0] or "application/octet-stream"
         filename = str(metadata.get("filename") or media_path.name)
         return FileResponse(path=media_path, media_type=media_type, filename=filename)
+
+    @router.post("/media/upload")
+    async def upload_media(
+        file: UploadFile = File(...),
+        app: AuthenticatedApp = Depends(require_media_access),
+        whisper_model: str = Query(default="base", alias="whisperModel"),
+    ) -> dict[str, Any]:
+        safe_name = (file.filename or "uploaded-media").strip() or "uploaded-media"
+        tmp_dir = media.store.downloads_dir / "uploads"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = tmp_dir / f"upload-{uuid4().hex[:12]}-{safe_name}"
+        try:
+            content = await file.read()
+            tmp_path.write_bytes(content)
+            asset = await media.import_local_file(
+                app_id=app.app_id,
+                source_path=tmp_path,
+                whisper_model=whisper_model,
+            )
+        except Exception as exc:
+            raise _media_error(exc) from exc
+        finally:
+            await file.close()
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return {"asset": asset.to_public_dict()}
 
     @router.get("/media/import/stream")
     async def stream_import_media(

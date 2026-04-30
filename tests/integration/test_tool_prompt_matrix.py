@@ -209,7 +209,7 @@ async def test_tool_prompt_matrix_behaviors(case: PromptMatrixCase, tmp_path: Pa
 
     events, traces, _ = await _run_harness_turn(
         provider=provider,
-        prompt="Please inspect the repo workspace.",
+        prompt="Please use a tool if needed and then answer briefly.",
         tmp_path=tmp_path,
     )
 
@@ -258,12 +258,12 @@ async def test_tool_prompt_matrix_resume_drift_is_visible_in_traces(tmp_path: Pa
 
     first_events, first_traces, provider_session_id = await _run_harness_turn(
         provider=provider,
-        prompt="Please read the README with a tool.",
+        prompt="Please use a tool to read the README.",
         tmp_path=tmp_path,
     )
     second_events, second_traces, resumed_session_id = await _run_harness_turn(
         provider=provider,
-        prompt="Please read the README with a tool again.",
+        prompt="Please use a tool to read the README again.",
         tmp_path=tmp_path,
         provider_session_id=provider_session_id,
     )
