@@ -1,127 +1,106 @@
-# Pat Profile v1 — Frontend Contract
+# Pat Profile v1 — Current Contract
 
-**Status:** Frontend shell built. Backend RPC not yet shipped.  
+**Status:** Shipped and wired end-to-end.  
 **Frontend lane lead:** Claude  
-**Backend owner:** Codex
+**Backend / runtime owner:** Codex
 
----
+This doc is now a compact reality check, not a speculative handoff.
 
-## What the frontend has built
+## What exists today
 
-All surfaces are typed, honest, and operational. They render correct empty states until the backend pushes real data. Nothing is faked in the production operator flow — only the dev-mode skeleton trigger (clearly labeled, easily stripped).
+Pat Profile v1 is live across three layers:
 
-### Files created (frontend lane)
+- **Backend identity substrate**
+  - layered profile loading
+  - conservative post-run maintenance
+  - append-only changelog
+  - return briefing generation
+- **RPC / event layer**
+  - bootstrap RPCs for profile, changelog, and briefing
+  - push events for profile changes and ready briefings
+- **Frontend shell**
+  - Home profile card
+  - Home return briefing shell
+  - profile changelog surface
+  - subtle Agents runtime indicator
 
-| File | Purpose |
+## File map
+
+| File | Role |
 |---|---|
-| `src/components/profile/ProfileStatusCard.tsx` | Compact operator surface — profile active, top priority, recent changes, changelog count |
-| `src/components/profile/ReturnBriefing.tsx` | 4-section "I'm back" re-entry shell |
-| `src/components/profile/ProfileChangelog.tsx` | Receipt-style timeline of profile mutations |
-| `src/components/HomePage.tsx` | Integrated ProfileStatusCard (right rail) + ReturnBriefing (above hero) |
-| `src/components/RightPanel.tsx` | Section 7 in Runtime tab: subtle profile indicator |
-| `src/runtime/types.ts` | Re-exports all Pat Profile + briefing types |
-| `src/types/backend.ts` | Source of truth for wire types (see below) |
-| `src/store/useAppStore.ts` | `patProfile`, `returnBriefing`, `profileChangelog` slices |
-| `src/runtime/adapter.ts` | `usePatProfile`, `useReturnBriefing`, `useProfileChangelog` hooks |
+| `src/copenet/core/profile/service.py` | loader, merge logic, changelog append, return briefing builder |
+| `src/copenet/core/profile/templates/` | generic repo-visible templates |
+| `src/copenet/host/rpc_catalog.py` | `profile.get`, `profile.changelog`, `briefing.get` |
+| `src/copenet/host/rpc_chat.py` | forwards side events alongside chat events |
+| `src/copenet/host/ws_server.py` | advertises profile / briefing methods and events |
+| `src/copenet/host/frontend/src/lib/wsClient.ts` | bootstrap + push-event wiring |
+| `src/copenet/host/frontend/src/components/profile/` | operator-facing profile / briefing surfaces |
 
----
+## Current wire contract
 
-## Wire types — what the backend must provide
+### RPCs
 
-All source types in `src/copenet/host/frontend/src/types/backend.ts`.
+| Method | Payload |
+|---|---|
+| `profile.get` | `{ profile: PatProfile | null }` |
+| `profile.changelog` | `{ changelog: ProfileChangelogItem[] }` |
+| `briefing.get` | `{ briefing: ReturnBriefingPayload | null }` |
 
-### `PatProfile`
+### Push events
 
-```typescript
-interface PatProfile {
-  profileId: string;
-  displayName: string;         // e.g. "Patrick Cope"
-  active: boolean;
-  source: PatProfileSource;    // 'explicit' | 'inferred' | 'session_observation'
-  priorities: PatProfilePriority[];
-  goals: PatProfileGoal[];
-  tonePreference: PatProfileTonePreference;
-  noiseFilters: string[];
-  lastUpdatedAt: string;       // ISO
-  changelogCount: number;      // total entries ever written to changelog
-}
-```
+| Event | Payload |
+|---|---|
+| `profile.changed` | `{ profile: PatProfile | null, change: ProfileChangelogItem }` |
+| `briefing.ready` | `{ briefing: ReturnBriefingPayload }` |
 
-### `ProfileChangelogItem`
+## Product behavior
 
-```typescript
-interface ProfileChangelogItem {
-  id: string;
-  kind: ProfileChangelogChangeKind;
-  summary: string;
-  detail?: string | null;
-  source: PatProfileSource;
-  rationale?: string | null;
-  triggeredBySessionKey?: string | null;
-  changedAt: string;           // ISO
-}
-```
+### Home
 
-### `ReturnBriefingPayload`
+- shows a compact Pat Profile status card
+- can render the return briefing above the hero area
+- includes a **dev-only** preview trigger for the briefing shell until real briefing flows become the primary path
 
-```typescript
-interface ReturnBriefingPayload {
-  briefingId: string;
-  generatedAt: string;
-  attentionItems: BriefingAttentionItem[];
-  activityItems: BriefingActivityItem[];
-  watchItems: BriefingWatchItem[];
-  noticeText: string | null;
-  noticeSource?: string | null;
-}
-```
+### Agents
 
-See `backend.ts` for the full sub-type definitions.
+- shows a subtle profile-active indicator in the runtime rail
+- does **not** turn the runtime rail into a profile-management surface
 
----
+### Empty states
 
-## Expected backend RPCs / push events
+Current empty states are intentional and useful:
 
-| Event / RPC | Payload | Triggers |
-|---|---|---|
-| `profile:loaded` push event | `PatProfile` | Store: `setPatProfile(profile)` |
-| `profile:changed` push event | `ProfileChangelogItem` | Store: `prependProfileChangelogItem(item)` |
-| `profile:changelog:loaded` push event | `ProfileChangelogItem[]` | Store: `setProfileChangelog(changelog)` |
-| `briefing:ready` push event | `ReturnBriefingPayload` | Store: `setReturnBriefing(payload)` |
-| `briefing:dismissed` (optional RPC) | `{ briefingId }` | Backend acknowledges dismiss |
+- `No profile overlay yet`
+- `No profile changes yet`
+- no briefing shown unless one is present or the dev preview is enabled
 
-**Note:** The frontend does not yet wire any of these events in `wsClient.ts`. That is the backend integration step — Codex should add the event handlers in `wsClient.ts` when the backend pushes these events.
+## Privacy boundary
 
----
+This is the important line:
 
-## Dev trigger (remove when backend ships)
+- **safe to commit:** generic templates, example docs, UI shells, loader/service code
+- **do not commit:** real local overlay data from `~/.copenet/profile/` or `COPNET_DATA_DIR/profile`
 
-`HomePage.tsx` includes a clearly labeled "Dev — Preview briefing" trigger that seeds `DEV_SKELETON_FOR_TEST` into the return briefing store. This:
-- Is only visible on desktop
-- Disappears once a real briefing is in the store
-- Uses a const exported from `ReturnBriefing.tsx` for the skeleton data
-- Has zero effect on production operator flow
+The public repo should explain the shape of the system, not contain the operator's real life data.
 
-**Strip list when backend ships:**
-1. Remove `DEV_SKELETON_FOR_TEST` export from `ReturnBriefing.tsx`
-2. Remove the dev trigger block in `HomePage.tsx`
-3. Remove `devMode` prop from `ReturnBriefing` if unused
+## Remaining debt
 
----
+These are the still-real follow-ups, in plain English:
 
-## Taste constraints (per Codex spec)
+1. tighten the actual profile update heuristics beyond the first conservative rules
+2. decide when the Home dev briefing trigger should be removed
+3. add explicit dismissal / acknowledgement semantics for briefings if the product starts relying on them more heavily
+4. keep frontend copy honest as the profile layer grows beyond v1
 
-- Profile surfaces: sparse, high-signal, operator system surface — not consumer settings
-- Briefing: re-entry ritual feel, not dashboard widget dump
-- Agents right-rail profile indicator: tiny and honest — single line, no card explosion
-- Empty states are explicit: "No profile overlay yet" / "No profile changes yet"
-- No phantom data — hooks return real store state only
+## Keep / remove guidance
 
----
+Good to keep:
 
-## Merge notes
+- this doc as a current contract snapshot
+- the generic templates
+- the privacy boundary note
 
-- `useAppStore.ts` — new slices appended at the end; no existing slices reorganized
-- `RightPanel.tsx` — section 7 appended after section 6 in runtime tab; no other layout changes
-- `HomePage.tsx` — profile surfaces added in right rail and above hero; existing layout untouched
-- `adapter.ts` — new hooks added before `useInboxItems`; no existing hooks modified
+Good to remove later:
+
+- any temporary dev-preview notes once the briefing is fully normal-flow
+- any comments that claim the backend is “not shipped”

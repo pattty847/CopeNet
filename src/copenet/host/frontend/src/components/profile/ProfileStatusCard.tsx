@@ -3,8 +3,8 @@
 // Lives in the Home right rail. Shows profile active state, last updated,
 // top priority summary, and recent changelog count.
 //
-// Backend contract: profile populated by profile:loaded RPC push.
-// Until then, renders an honest "No profile overlay yet" empty state.
+// Backend contract: profile is loaded from bootstrap RPCs and updated by push events.
+// Empty state stays honest when no local profile overlay exists yet.
 
 import { ArrowRight, Brain, Clock } from 'lucide-react';
 import { usePatProfile, useProfileChangelog } from '../../runtime/adapter';
@@ -37,13 +37,13 @@ export function ProfileStatusCard({ onViewChangelog }: ProfileStatusCardProps) {
               Pat Profile
             </div>
             <p className="mt-1 text-[12px] leading-5 text-shell-muted">
-              No profile overlay yet. Wires up when the backend profile RPC ships.
+              No profile overlay yet. Add a local profile to activate personalized briefings and nudges.
             </p>
           </div>
           <Brain className="mt-0.5 h-3.5 w-3.5 shrink-0 text-shell-muted/40" />
         </div>
         <div className="mt-3 rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[11px] text-shell-muted">
-          Profile · not yet wired
+          Profile · local overlay missing
         </div>
       </div>
     );

@@ -1,6 +1,6 @@
 # CopeNet
 
-CopeNet is a local-first agent operator studio for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
+CopeNet is a local-first agent operator studio for people who want more than a chat box. It gives you a persistent workspace for running local and subscription-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
 
 ## Product Tour
 
@@ -49,6 +49,7 @@ Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built f
 CopeNet is evolving into an operator workspace, not just a chat client. Today it already supports:
 
 - **Agent sessions** with persistent transcripts, first-send runtime locking, archive/restore, and inline tool execution
+- **Pat Profile v1** with a layered identity substrate, return briefing shell, and conservative post-run profile updates
 - **Observability** with run pulse views, recent traces, provider/tool distributions, and session activity inspection
 - **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured local-model generation
 - **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
@@ -65,6 +66,32 @@ CopeNet currently supports local, CLI-backed, and subscription-backed runtimes t
 - `ollama`
 
 The goal is provider-agnostic operator tooling: one workspace, multiple runtimes, consistent session semantics.
+
+## Pat Profile And Privacy
+
+CopeNet now has a first-pass identity layer called **Pat Profile**. It is designed as a split system:
+
+- **Repo-visible templates** live in:
+  - `src/copenet/core/profile/templates/`
+- **Real private profile data** should live locally in:
+  - `~/.copenet/profile/`
+  - or `COPNET_DATA_DIR/profile`
+
+The repo should contain:
+
+- generic profile templates
+- example docs
+- loader/service code
+- UI shells
+
+The repo should **not** contain:
+
+- your real profile overlay
+- private notes
+- personal schedule details
+- personal changelog history
+
+If you want a sharable example, keep it generic and illustrative rather than autobiographical.
 
 ## Quickstart
 
@@ -123,7 +150,7 @@ Environment variables:
 - `COPNET_HOST` (default: `127.0.0.1`)
 - `COPNET_PORT` (default: `17123`)
 - `COPNET_TOKEN` (default: `dev-token`)
-- `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
+- `COPNET_DATA_DIR` (default base: `~/.copenet`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
 - `COPNET_TRACE` (`1` to enable per-run JSONL traces)
 - `COPNET_LM_STUDIO_BASE_URL` (default: `http://127.0.0.1:1234`)
@@ -204,6 +231,7 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 - [Event Contract](docs/EVENT-CONTRACT.md)
 - [Session Continuity](docs/SESSION-CONTINUITY.md)
 - [Capability Matrix](docs/CAPABILITY-MATRIX.md)
+- [Pat Profile Frontend Contract](docs/investigations/pat-profile/frontend-contract.md)
 
 ### Runtime Debugging
 
@@ -249,4 +277,4 @@ COPNET_PORT=17124 uv run copenet
 
 CopeNet is actively evolving, but it is already a real operator workspace: persistent sessions, local-provider support, workflow surfaces, observability, and mobile-friendly remote access are all in place.
 
-The direction is simple: make local agent systems inspectable, composable, and actually useful for real workflows.
+The direction is simple: make local agent systems inspectable, composable, and actually useful for real workflows, then layer in identity, return briefings, and more ambient operator behavior on top.
