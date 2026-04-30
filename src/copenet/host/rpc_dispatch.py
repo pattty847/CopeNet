@@ -7,7 +7,10 @@ from typing import Any, Awaitable, Callable
 from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
 from .rpc_catalog import (
+    handle_briefing_get,
     handle_models_list,
+    handle_profile_changelog,
+    handle_profile_get,
     handle_prompts_list,
     handle_provider_auth_begin_login,
     handle_provider_auth_complete_login,
@@ -53,6 +56,12 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_models_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "tools.list":
         await handle_tools_list(req.id, send_json, orchestrator)
+    elif req.method == "profile.get":
+        await handle_profile_get(req.id, send_json, orchestrator)
+    elif req.method == "profile.changelog":
+        await handle_profile_changelog(req.id, req.params, send_json, orchestrator)
+    elif req.method == "briefing.get":
+        await handle_briefing_get(req.id, send_json, orchestrator)
     elif req.method == "providerAuth.status":
         await handle_provider_auth_status(req.id, req.params, send_json, orchestrator)
     elif req.method == "providerAuth.beginLogin":

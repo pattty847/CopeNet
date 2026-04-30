@@ -7,7 +7,7 @@ from dataclasses import dataclass
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
-from copenet.host.rpc_schema import ChatEventPayload, ResponseFrame, RpcError, make_chat_event, make_response_frame
+from copenet.host.rpc_schema import ChatEventPayload, EventFrame, ResponseFrame, RpcError, make_chat_event, make_event_frame, make_response_frame
 from copenet.core.orchestrator import ChatSendRequest, SessionInFlightError
 from copenet.prompts import compose_prompt
 
@@ -114,6 +114,9 @@ async def handle_chat_send(
     async def emit_chat(payload: dict[str, Any]) -> None:
         await send_json(make_chat_event(_chat_event_payload(payload, request.run_id, request.session_key)))
 
+    async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
+        await send_json(make_event_frame(EventFrame(event=event, payload=payload)))
+
     async def run() -> None:
         try:
             await orchestrator.send_chat(
@@ -129,6 +132,7 @@ async def handle_chat_send(
                     system_prompt=request.system_prompt,
                 ),
                 emit=emit_chat,
+                emit_event=emit_side_event,
             )
         except SessionInFlightError as exc:
             await send_json(

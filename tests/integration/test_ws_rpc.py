@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import contextmanager
+import json
 from pathlib import Path
 from typing import Any
 
@@ -544,3 +545,69 @@ def test_session_artifacts_rpc_exposes_runtime_artifacts(rpc_client: TestClient)
         assert all(row["sessionKey"] == "tool-success" for row in artifacts)
         assert all(row["artifactId"] for row in artifacts)
         assert {row["type"] for row in artifacts} >= {"answer"}
+
+
+def test_profile_rpcs_return_profile_changelog_and_briefing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COPNET_TOKEN", "test-token")
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    monkeypatch.setenv("COPNET_DATA_DIR", str(tmp_path / "data"))
+
+    profile_dir = tmp_path / "data" / "profile"
+    profile_dir.mkdir(parents=True, exist_ok=True)
+    (profile_dir / "identity.json").write_text(
+        json.dumps(
+            {
+                "profileId": "pat-profile:patrick",
+                "displayName": "Patrick Cope",
+                "configured": True,
+                "priorities": [{"id": "school", "label": "School", "weight": 1.0}],
+                "goals": [{"id": "ship", "text": "Ship CopeNet", "source": "explicit", "updatedAt": "2026-04-30T00:00:00Z"}],
+                "tonePreference": {"directness": "terse", "formality": "casual", "preferBullets": True},
+                "noiseFilters": ["ignore china crypto bans unless price moves materially"],
+                "scheduleBasics": ["Homework due tonight"],
+                "recurringConstraints": ["School first when deadlines are imminent"],
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    (profile_dir / "observed_tendencies.json").write_text("[]\n", encoding="utf-8")
+    (profile_dir / "guidance_rules.json").write_text("[]\n", encoding="utf-8")
+    (profile_dir / "notes.md").write_text("# Notes\n\nReal overlay.\n", encoding="utf-8")
+    (profile_dir / "changelog.jsonl").write_text(
+        json.dumps(
+            {
+                "id": "chg-1",
+                "kind": "tone_updated",
+                "summary": "Updated tone preference to lead with the punchline.",
+                "source": "explicit",
+                "changedAt": "2026-04-30T00:00:00Z",
+            }
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"fake": FakeProvider()},
+    )
+    app = create_app(orchestrator=orchestrator)
+
+    with TestClient(app) as client, _open_rpc(client) as socket:
+        profile_id = socket.request("profile.get")
+        profile_res = socket.recv_response(profile_id)
+        assert profile_res["ok"] is True
+        assert profile_res["payload"]["profile"]["displayName"] == "Patrick Cope"
+
+        changelog_id = socket.request("profile.changelog")
+        changelog_res = socket.recv_response(changelog_id)
+        assert changelog_res["ok"] is True
+        assert changelog_res["payload"]["changelog"][0]["summary"].startswith("Updated tone preference")
+
+        briefing_id = socket.request("briefing.get")
+        briefing_res = socket.recv_response(briefing_id)
+        assert briefing_res["ok"] is True
+        assert briefing_res["payload"]["briefing"] is not None

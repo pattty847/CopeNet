@@ -18,7 +18,7 @@ if TYPE_CHECKING:
     from . import ChatSendRequest, Orchestrator
 
 
-async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", emit) -> dict:
+async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", emit, *, emit_event=None) -> dict:
     """Start one chat run and stream events through `emit` callback."""
     session_key = request.session_key.strip()
     message = request.message.strip()
@@ -116,12 +116,16 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "workingSetRefCount": len(session_state.working_set_refs),
         },
     )
+    profile_context = orchestrator._profile_service.render_session_context()
+    effective_system_prompt = request.system_prompt
+    if profile_context:
+        effective_system_prompt = f"{request.system_prompt}\n\n{profile_context}".strip() if request.system_prompt else profile_context
     working_set = assemble_working_set(
         user_message=message,
         session_state=session_state,
         transcript_window=working_history,
         artifact_store=orchestrator._artifact_store,
-        system_prompt=request.system_prompt,
+        system_prompt=effective_system_prompt,
         session_key=session_key,
     )
     trace.record("working_set_assembled", working_set.metadata)
@@ -142,7 +146,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             provider_session_id=entry.provider_session_id,
             abort_event=abort_event,
             model=request.model,
-            system_prompt=request.system_prompt,
+            system_prompt=effective_system_prompt,
             available_tools=orchestrator._tool_registry.list_tools() if request.allow_tools else [],
             tool_executor=orchestrator._tool_registry.execute,
             tool_context=ToolExecutionContext(
@@ -391,6 +395,23 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "artifactCount": len(run_record.artifact_ids),
             },
         )
+        profile_changes = orchestrator._profile_service.apply_post_run_updates(
+            user_message=message,
+            run_record=run_record,
+        )
+        if emit_event is not None and profile_changes:
+            profile_payload = orchestrator.get_pat_profile()
+            for item in profile_changes:
+                await emit_event(
+                    "profile.changed",
+                    {
+                        "profile": profile_payload,
+                        "change": item.to_json(),
+                    },
+                )
+        briefing_payload = orchestrator.get_return_briefing()
+        if emit_event is not None and briefing_payload is not None:
+            await emit_event("briefing.ready", {"briefing": briefing_payload})
 
         seq += 1
         final_payload = {

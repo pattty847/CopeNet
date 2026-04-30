@@ -26,14 +26,16 @@ from copenet.core.orchestrator.catalog import (
 )
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
+from copenet.core.profile import PatProfileService
 from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
-from copenet._paths import default_artifacts_dir, default_session_state_dir, default_sessions_dir
+from copenet._paths import default_artifacts_dir, default_pat_profile_dir, default_session_state_dir, default_sessions_dir
 
 
 ChatEmit = Callable[[dict], Awaitable[None]]
+SideEventEmit = Callable[[str, dict], Awaitable[None]]
 
 
 @dataclass(frozen=True)
@@ -71,12 +73,15 @@ class Orchestrator:
         providers: dict[str, Provider] | None = None,
     ) -> None:
         base = sessions_dir if sessions_dir is not None else default_sessions_dir()
-        self._workdir = Path(os.environ.get("COPNET_WORKDIR") or os.getcwd()).resolve()
+        workdir_env = os.environ.get("COPNET_WORKDIR", "").strip()
+        self._workdir = Path(workdir_env or (str(base) if sessions_dir is not None else os.getcwd())).resolve()
         self._session_store = session_store or SessionStore(path=base / "index.json")
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
         self._session_state_store = SessionStateStore(root_dir=default_session_state_dir() if sessions_dir is None else base / "state")
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
         self._run_store = RunStore(root_dir=base / "runs")
+        profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
+        self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         self._app_store = AppStore(path=base / "apps.json")
         if providers is None:
             self._providers, self._provider_init_errors = build_default_provider_registry()
@@ -95,9 +100,9 @@ class Orchestrator:
         self._background_tasks: set[asyncio.Task] = set()
         self._lock = asyncio.Lock()
 
-    async def send_chat(self, request: ChatSendRequest, emit: ChatEmit) -> dict:
+    async def send_chat(self, request: ChatSendRequest, emit: ChatEmit, emit_event: SideEventEmit | None = None) -> dict:
         """Start one chat run and stream events through `emit` callback."""
-        return await send_chat_impl(self, request, emit)
+        return await send_chat_impl(self, request, emit, emit_event=emit_event)
 
     def abort(self, session_key: str, run_id: str | None = None) -> dict:
         """Abort active run by run_id or session key."""
@@ -224,6 +229,20 @@ class Orchestrator:
     def resolve_session(self, session_key: str) -> dict | None:
         """Resolve one session by key."""
         return resolve_session_record(self, session_key)
+
+    def get_pat_profile(self) -> dict | None:
+        """Return the current public Pat Profile payload, if configured."""
+        profile = self._profile_service.load_profile()
+        return profile.to_public_dict() if profile is not None else None
+
+    def list_profile_changelog(self, limit: int = 20) -> list[dict]:
+        """Return recent Pat Profile changelog entries."""
+        return [item.to_json() for item in self._profile_service.list_changelog(limit=limit)]
+
+    def get_return_briefing(self) -> dict | None:
+        """Return the latest return briefing payload, if any."""
+        briefing = self._profile_service.build_return_briefing()
+        return briefing.to_public_dict() if briefing is not None else None
 
     def resolve_session_state(self, session_key: str) -> dict | None:
         """Resolve one structured runtime state record for a session."""

@@ -10,7 +10,7 @@ import {
   getMockDestinations,
   getWorkingSet,
 } from './mocks';
-import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, ProviderAuthStatus, RunTimeline, TurnStateSnapshot } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, TurnStateSnapshot } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -406,6 +406,29 @@ export function useMockTransitions() {
   };
 }
 
+// ---------------------------------------------------------------------------
+// Pat Profile hooks — real store state only; null until backend ships
+// ---------------------------------------------------------------------------
+
+// Returns the active Pat Profile from the store.
+// Null until the backend profile:loaded RPC fires.
+export function usePatProfile(): PatProfile | null {
+  return useAppStore((s) => s.patProfile);
+}
+
+// Returns the pending return briefing from the store.
+// Null until the backend briefing:ready RPC fires (or dev trigger seeds it).
+export function useReturnBriefing(): ReturnBriefingPayload | null {
+  return useAppStore((s) => s.returnBriefing);
+}
+
+// Returns the profile changelog from the store.
+// Empty until the backend pushes profile mutation events.
+export function useProfileChangelog(): ProfileChangelogItem[] {
+  return useAppStore((s) => s.profileChangelog);
+}
+
+// ---------------------------------------------------------------------------
 // Returns a priority-ordered list of inbox items for the operator action center.
 // Aggregates: paused run, pending approvals, recently resolved approvals.
 // When the backend ships, replace buildInboxItems() with a real RPC call.
@@ -467,7 +490,7 @@ export function useLastTurnState(): TurnStateSnapshot | null {
 }
 
 // Returns the auth status for a provider, fetching from the backend on mount.
-// Backend required: providerAuth.status RPC.
+// Backend required: provider.auth.status RPC.
 // Falls back to a typed null when RPC is unavailable.
 export function useProviderAuth(providerId: string | null): {
   status: ProviderAuthStatus | null;

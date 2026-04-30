@@ -46,3 +46,11 @@ def default_provider_auth_dir() -> Path:
     if base:
         return Path(base).expanduser() / "providers" / "auth"
     return Path.home() / ".copenet" / "providers" / "auth"
+
+
+def default_pat_profile_dir() -> Path:
+    """Return default Pat Profile root: COPNET_DATA_DIR/profile or ~/.copenet/profile."""
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "profile"
+    return Path.home() / ".copenet" / "profile"

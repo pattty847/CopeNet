@@ -65,6 +65,43 @@ async def handle_tools_list(request_id: str, send_json: SendJson, orchestrator) 
     )
 
 
+async def handle_profile_get(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"profile": orchestrator.get_pat_profile()},
+            )
+        )
+    )
+
+
+async def handle_profile_changelog(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    limit = int((params or {}).get("limit") or 20)
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"changelog": orchestrator.list_profile_changelog(limit=limit)},
+            )
+        )
+    )
+
+
+async def handle_briefing_get(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"briefing": orchestrator.get_return_briefing()},
+            )
+        )
+    )
+
+
 async def handle_provider_auth_status(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     provider_id = str((params or {}).get("provider") or "").strip()
     if not provider_id:

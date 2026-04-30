@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Inbox, Settings2, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
+import { Activity, Brain, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -12,7 +12,7 @@ import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
 import { RunTimeline } from './RunTimeline';
 import { SendMessageComposer } from './SendMessageComposer';
-import { usePendingApproval, useApprovalHistory, useInboxItems } from '../runtime/adapter';
+import { usePendingApproval, useApprovalHistory, useInboxItems, usePatProfile } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
 function timeAgo(dateString?: string | null) {
@@ -53,6 +53,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
   const pendingApproval = usePendingApproval(activeSessionKey);
   const approvalHistory = useApprovalHistory(activeSessionKey);
+  const patProfile = usePatProfile();
   const pendingCount = approvalHistory.filter((r) => r.status === 'pending').length;
   const inboxItems = useInboxItems(activeSessionKey);
   const urgentCount = inboxItems.filter((i) => i.priority === 'urgent' || i.priority === 'attention').length;
@@ -147,6 +148,8 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
     return { inbox: 'Inbox', runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
+  const ActiveTabIcon = activeTab.icon;
+
   if (!rightPanelOpen && !mobile) {
     return (
       <aside className="w-11 bg-operator-bg flex flex-col h-full items-center py-3 gap-3">
@@ -201,6 +204,13 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
       {/* Tab strip */}
       {compactTabs ? (
         <div className="flex items-center gap-2 border-b border-operator-border bg-operator-panel/20 px-2 py-2 shrink-0">
+          <div
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-operator-accent/20 bg-operator-accent/6 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-accent"
+            title={activeTab.label}
+          >
+            <ActiveTabIcon className="h-3.5 w-3.5 shrink-0" />
+            <span className="min-w-0 truncate">{activeTab.label}</span>
+          </div>
           <label htmlFor="inspector-tab-select" className="sr-only">
             Select inspector panel
           </label>
@@ -208,7 +218,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
             id="inspector-tab-select"
             value={rightPanelTab}
             onChange={(event) => setRightPanelTab(event.target.value as RightPanelTab)}
-            className="w-full rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
+            className="max-w-[8.25rem] rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
             title="Select inspector panel"
           >
             {tabs.map((tab) => (
@@ -271,12 +281,24 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           </section>
         )}
 
-        {/* 2. Live tool feed — only while a run is active */}
-        {activeRunId && (
-          <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
-            <LiveToolFeed />
-          </section>
-        )}
+        {/* 2. Live tool feed — only when a run is in progress */}
+        <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
+          <LiveToolFeed />
+          {/* Fallback: show hint when no run is active and no live calls */}
+          {!activeRunId && (
+            <div className="px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <TerminalSquare className="w-3 h-3 text-operator-muted/60" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/60">
+                  Tool Activity
+                </span>
+              </div>
+              <div className="text-[11px] text-operator-muted/60 italic leading-snug">
+                Live tool calls appear here while a run is in progress.
+              </div>
+            </div>
+          )}
+        </section>
 
         <div className="px-3 pb-3 flex flex-col gap-4">
           {/* 3. Session Info */}
@@ -447,6 +469,26 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
             </section>
           )}
+
+          {/* 7. Profile indicator — subtle, single line, honest about wiring state */}
+          <section>
+            <div className="flex items-center gap-1.5 mb-1 text-operator-muted">
+              <Brain className="w-3 h-3" />
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Profile</h3>
+            </div>
+            {patProfile?.active ? (
+              <div className="flex items-center justify-between rounded-lg border border-operator-border bg-operator-panel/30 px-2.5 py-2">
+                <span className="text-[11px] text-operator-text">{patProfile.displayName}</span>
+                <span className="rounded-full bg-operator-success/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-success">
+                  active
+                </span>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-operator-border bg-operator-panel/30 px-2.5 py-2 text-[11px] italic text-operator-muted/60">
+                No profile overlay yet
+              </div>
+            )}
+          </section>
 
         </div>
       </div>

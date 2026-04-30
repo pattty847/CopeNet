@@ -141,6 +141,9 @@ class CopeNetWsServer:
                                 "chat.history",
                                 "prompts.list",
                                 "providers.list",
+                                "profile.get",
+                                "profile.changelog",
+                                "briefing.get",
                                 "providerAuth.status",
                                 "providerAuth.beginLogin",
                                 "providerAuth.completeLogin",
@@ -157,7 +160,7 @@ class CopeNetWsServer:
                                 "sessions.state",
                                 "sessions.resolve",
                             ],
-                            "events": ["connect.challenge", "chat"],
+                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready"],
                         },
                     },
                 )

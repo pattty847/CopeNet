@@ -633,7 +633,9 @@ async def run_with_one_tool(
                         "contentLength": len(current_text),
                     },
                 )
-            if current_text and plan.task_contract is None and not _looks_like_jsonish_action(current_text):
+            if current_text and not _looks_like_jsonish_action(current_text) and (
+                plan.task_contract is None or bool(turn_state.grounding_actions)
+            ):
                 final_candidate = _native_final_candidate(
                     answer=current_text,
                     turn_state=turn_state,

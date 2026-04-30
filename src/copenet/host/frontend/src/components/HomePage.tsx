@@ -11,9 +11,13 @@ import {
   Sparkles,
   WandSparkles,
 } from 'lucide-react';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
+import { ProfileStatusCard } from './profile/ProfileStatusCard';
+import { ReturnBriefing, DEV_SKELETON_FOR_TEST } from './profile/ReturnBriefing';
+import { ProfileChangelog } from './profile/ProfileChangelog';
+import { useReturnBriefing } from '../runtime/adapter';
 
 const HOME_HERO_DARK_URL = new URL('../../../../../../docs/imgs/wallpaper.png', import.meta.url).href;
 
@@ -61,7 +65,10 @@ export function HomePage() {
   const wsStatus = useAppStore((state) => state.wsStatus);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
   const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
+  const setReturnBriefing = useAppStore((state) => state.setReturnBriefing);
   const isMobile = useIsMobile();
+  const returnBriefing = useReturnBriefing();
+  const [showChangelog, setShowChangelog] = useState(false);
   const resolvedThemeMode = typeof window === 'undefined' ? useAppStore.getState().themeMode : themeMode;
   const isDark = resolvedThemeMode === 'dark';
 
@@ -103,6 +110,31 @@ export function HomePage() {
 
   return (
     <div className="animate-fade-in-up space-y-3 px-0.5 sm:px-0">
+
+      {/* ── Return Briefing — "I'm back" re-entry surface ── */}
+      {/* Shown when returnBriefing is populated OR dev trigger was used. */}
+      {/* devMode prop enables the dev skeleton trigger below. Strip both when backend ships. */}
+      {returnBriefing ? (
+        <ReturnBriefing />
+      ) : null}
+
+      {/* ── DEV TRIGGER: seed skeleton briefing — remove when backend ships ── */}
+      {!returnBriefing && !isMobile && (
+        <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2 text-[11px] text-shell-muted/60">
+          <span className="rounded-full border border-shell-border bg-shell-panel px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-shell-muted">
+            Dev
+          </span>
+          <span>Return Briefing not yet wired to backend.</span>
+          <button
+            type="button"
+            onClick={() => setReturnBriefing(DEV_SKELETON_FOR_TEST)}
+            className="ml-auto rounded-[8px] border border-shell-border bg-shell-panel px-2.5 py-1 text-[10px] font-medium text-shell-text transition-colors duration-150 hover:border-shell-accent/30 hover:text-shell-accent"
+          >
+            Preview briefing
+          </button>
+        </div>
+      )}
+
       {/* ── Hero + Pinned Agents ── */}
       <section className="grid items-start gap-3 xl:grid-cols-[1.68fr_0.82fr]">
         <div className="space-y-3">
@@ -435,6 +467,31 @@ export function HomePage() {
 
         {/* ── Right sidebar ── */}
         <div className="shell-home-rail space-y-3">
+
+          {/* Pat Profile — compact operator surface */}
+          {!isMobile && (
+            <>
+              <ProfileStatusCard onViewChangelog={() => setShowChangelog((v) => !v)} />
+              {showChangelog && (
+                <div className="shell-home-panel rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+                  <div className="mb-3 flex items-center justify-between">
+                    <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
+                      Profile History
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowChangelog(false)}
+                      className="text-[11px] text-shell-muted transition-colors duration-150 hover:text-shell-text"
+                    >
+                      Close
+                    </button>
+                  </div>
+                  <ProfileChangelog limit={8} />
+                </div>
+              )}
+            </>
+          )}
+
           {/* Pinned Agents */}
           <div className={`shell-home-panel rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell ${isMobile ? 'order-2' : ''}`}>
             <div className="mb-2.5 flex items-center justify-between">

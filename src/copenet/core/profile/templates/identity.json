@@ -1,0 +1,15 @@
+{
+  "profileId": "pat-profile:template",
+  "displayName": "Operator",
+  "configured": false,
+  "priorities": [],
+  "goals": [],
+  "tonePreference": {
+    "directness": "balanced",
+    "formality": "casual",
+    "preferBullets": true
+  },
+  "noiseFilters": [],
+  "scheduleBasics": [],
+  "recurringConstraints": []
+}

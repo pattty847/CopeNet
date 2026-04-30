@@ -6,10 +6,13 @@ import {
   LiveToolCall,
   Message,
   Model,
+  PatProfile,
+  ProfileChangelogItem,
   Provider,
   ProviderAuthStatus,
   PublicMessagePayload,
   ResponseFrame,
+  ReturnBriefingPayload,
   Session,
   SessionExportPayload,
   SessionStateRecord,
@@ -311,6 +314,25 @@ class WsClient {
 
     if (frame.event === 'chat') {
       this.handleChatEvent(frame.payload as unknown as ChatEventPayload);
+      return;
+    }
+
+    if (frame.event === 'profile.changed') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      if (payload.profile && typeof payload.profile === 'object') {
+        useAppStore.getState().setPatProfile(payload.profile as PatProfile);
+      }
+      if (payload.change && typeof payload.change === 'object') {
+        useAppStore.getState().prependProfileChangelogItem(payload.change as ProfileChangelogItem);
+      }
+      return;
+    }
+
+    if (frame.event === 'briefing.ready') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      if (payload.briefing && typeof payload.briefing === 'object') {
+        useAppStore.getState().setReturnBriefing(payload.briefing as ReturnBriefingPayload);
+      }
     }
   }
 
@@ -379,11 +401,14 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
         this.request<{ sessions: unknown[] }>('sessions.list', { includeArchived: useAppStore.getState().showArchived }),
+        this.request<{ profile?: PatProfile | null }>('profile.get', {}),
+        this.request<{ changelog?: ProfileChangelogItem[] }>('profile.changelog', { limit: 20 }),
+        this.request<{ briefing?: ReturnBriefingPayload | null }>('briefing.get', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -396,6 +421,9 @@ class WsClient {
         (promptsPayload.taskModes || []).map(normalizePrompt),
       );
       store.setSessions(sessions);
+      store.setPatProfile(profilePayload.profile || null);
+      store.setProfileChangelog(Array.isArray(changelogPayload.changelog) ? changelogPayload.changelog : []);
+      store.setReturnBriefing(briefingPayload.briefing || null);
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;
@@ -671,15 +699,16 @@ class WsClient {
     const runId = payload.runId ? String(payload.runId) : null;
     const sessionKey = payload.sessionKey;
     const toolExecution = normalizeToolExecution(payload.toolExecution);
-    const toolCall = payload.toolCall && typeof payload.toolCall === 'object' ? payload.toolCall : null;
+    const toolCall = payload.toolCall && typeof payload.toolCall === 'object' ? (payload.toolCall as Record<string, unknown>) : null;
 
     if (payload.state === 'tool_called' && runId && toolCall) {
-      const liveId = toolExecution?.callId || `${runId}:${toolCall.step ?? store.liveToolCalls.length}:${toolCall.toolId}`;
+      const toolId = typeof toolCall.toolId === 'string' ? toolCall.toolId : 'tool';
+      const liveId = toolExecution?.callId || `${runId}:${toolCall.step ?? store.liveToolCalls.length}:${toolId}`;
       store.pushLiveToolCall({
         id: liveId,
-        toolId: toolCall.toolId,
+        toolId,
         state: 'running',
-        summary: `Calling ${toolCall.toolId}`,
+        summary: `Calling ${toolId}`,
         error: null,
         startedAt: new Date().toISOString(),
         completedAt: null,
