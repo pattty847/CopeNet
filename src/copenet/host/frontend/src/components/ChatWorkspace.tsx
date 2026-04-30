@@ -4,10 +4,9 @@ import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { PausedRunBanner } from './PausedRunBanner';
-import { Paperclip, Mic, Send } from 'lucide-react';
+import { Archive, CopyPlus, Download, Ellipsis, Mic, Paperclip, Send } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
 import { useIsMobile } from '../lib/responsive';
-import { getConversationDebugHelperText } from '../lib/agentMobile';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -35,8 +34,10 @@ export function ChatWorkspace() {
   const [input, setInput] = useState('');
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
+  const [actionsOpen, setActionsOpen] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     if (activeSessionKey && messagesMap[activeSessionKey] === undefined) {
@@ -60,6 +61,17 @@ export function ChatWorkspace() {
     setInput((current) => (current.trim() ? current : draftComposerSeed));
     setDraftComposerSeed(null);
   }, [draftComposerSeed, setDraftComposerSeed]);
+
+  useEffect(() => {
+    if (!actionsOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (actionsMenuRef.current && !actionsMenuRef.current.contains(e.target as Node)) {
+        setActionsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [actionsOpen]);
 
   const handleSend = async () => {
     if (!input.trim() || activeRunId) return;
@@ -163,46 +175,68 @@ export function ChatWorkspace() {
               </h1>
             )}
 
-            {!isDraft && activeSession && !isMobile && (
-              <div className="text-[11px] text-operator-muted font-mono mt-0.5 opacity-60 truncate">
-                {activeSession.key}
-              </div>
-            )}
-
-            {/* Metadata badges */}
-            <div className={`mt-1.5 flex flex-wrap items-center gap-1.5 font-semibold uppercase tracking-wider ${isMobile ? 'text-[9px]' : 'text-[10px]'}`}>
-              <span className={`animate-scale-pop px-2 py-0.5 rounded-md border ${
-                isDraft
-                  ? 'border-operator-accent/30 bg-operator-accent/8 text-operator-accent'
-                  : 'border-operator-success/25 bg-operator-success/8 text-operator-success'
-              }`}>
-                {isDraft ? 'Draft Session' : 'Locked Session'}
-              </span>
-
-              {activeSession?.archived && (
-                <span className="px-2 py-0.5 rounded-md border border-operator-error/25 bg-operator-error/8 text-operator-error">
+            {activeSession?.archived && (
+              <div className="mt-1.5">
+                <span className="px-2 py-0.5 rounded-md border border-operator-error/25 bg-operator-error/8 text-[10px] font-semibold uppercase tracking-wider text-operator-error">
                   Archived
                 </span>
-              )}
-
-              {isDraft && draftSettings.provider && (
-                <span className="px-2 py-0.5 rounded-md border border-operator-border text-operator-muted">
-                  {draftSettings.provider}
-                </span>
-              )}
-            </div>
+              </div>
+            )}
           </div>
 
           {/* Actions */}
-          <div className={`flex shrink-0 items-center gap-1.5 ${isMobile ? 'pt-0' : 'ml-3'}`}>
-            <ConversationDebugActions
-              disabled={!canDebugConversation}
-              helperText={getConversationDebugHelperText(isMobile, isArchived)}
-              compact={isMobile}
-              onDebugCopy={handleDebugCopy}
-              onExportConversation={handleExportConversation}
-              onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
-            />
+          <div className={`flex shrink-0 items-center ${isMobile ? 'pt-0' : 'ml-3'}`}>
+            {isMobile ? (
+              <ConversationDebugActions
+                disabled={!canDebugConversation}
+                compact={true}
+                onDebugCopy={handleDebugCopy}
+                onExportConversation={handleExportConversation}
+                onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
+              />
+            ) : (
+              <div className="relative" ref={actionsMenuRef}>
+                <button
+                  type="button"
+                  onClick={() => setActionsOpen((v) => !v)}
+                  disabled={!canDebugConversation}
+                  className="flex h-7 w-7 items-center justify-center rounded-lg border border-operator-border text-operator-muted hover:text-operator-accent hover:border-operator-accent/30 transition-all duration-150 disabled:opacity-30"
+                  title="Session actions"
+                >
+                  <Ellipsis className="w-3.5 h-3.5" />
+                </button>
+                {actionsOpen && (
+                  <div className="absolute right-0 top-full mt-1.5 w-44 z-20 rounded-xl border border-operator-border bg-operator-panel shadow-lg overflow-hidden py-1">
+                    <button
+                      type="button"
+                      onClick={() => { void handleDebugCopy(); setActionsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
+                    >
+                      <CopyPlus className="w-3.5 h-3.5 shrink-0" />
+                      Debug Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void handleExportConversation(); setActionsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
+                    >
+                      <Download className="w-3.5 h-3.5 shrink-0" />
+                      Export
+                    </button>
+                    {activeSession && (
+                      <button
+                        type="button"
+                        onClick={() => { void wsClient.archiveSession(activeSession.key, !activeSession.archived); setActionsOpen(false); }}
+                        className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
+                      >
+                        <Archive className="w-3.5 h-3.5 shrink-0" />
+                        {activeSession.archived ? 'Restore' : 'Archive'}
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -219,14 +253,6 @@ export function ChatWorkspace() {
 
       {/* Working Set — glanceable, pinned above the message stream */}
       <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />
-
-      {canDebugConversation && !isMobile && (
-        <div className="border-b border-operator-border bg-operator-panel/25 px-5 py-2 text-[11px] text-operator-muted">
-          <span className="font-semibold text-operator-text">Debug tools</span>
-          {' '}
-          copy a transcript with session metadata, tool activity, and loaded message content for quick triage or handoff.
-        </div>
-      )}
 
       {/* Messages */}
       <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-2.5' : 'px-5 py-4'}`}>

@@ -9,6 +9,7 @@ import {
   Wrench,
 } from 'lucide-react';
 import { AppSection, useAppStore } from '../store/useAppStore';
+import { ThemeToggle } from './ThemeToggle';
 
 const NAV_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
@@ -141,11 +142,12 @@ export function SidebarNav() {
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-shell-ink text-[11px] font-semibold text-white">CP</div>
           {!primaryNavCollapsed && (
-            <div className="min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="truncate text-[13px] font-medium text-shell-text">Patrick Cope</div>
               <div className="truncate text-[11px] text-shell-muted">Owner</div>
             </div>
           )}
+          <ThemeToggle />
         </div>
       </div>
     </aside>
