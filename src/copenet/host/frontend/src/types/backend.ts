@@ -1,5 +1,13 @@
 export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'auth_failed';
-export type ChatState = 'delta' | 'final' | 'error' | 'aborted';
+export type ChatState = 'delta' | 'final' | 'error' | 'aborted' | 'tool_called' | 'tool_result';
+
+export interface ToolCallEventPayload {
+  toolId: string;
+  arguments: Record<string, unknown>;
+  step?: number | null;
+  channel?: string | null;
+  native?: boolean | null;
+}
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface Session {
@@ -22,7 +30,10 @@ export interface ToolExecution {
   toolId: string;
   ok: boolean;
   summary: string;
+  callId?: string | null;
+  channel?: string | null;
   error?: string | null;
+  artifactId?: string | null;
 }
 
 export interface Message {
@@ -107,6 +118,8 @@ export interface ChatEventPayload {
   model?: string | null;
   capabilities?: Record<string, unknown> | null;
   toolExecution?: ToolExecution | null;
+  toolCall?: ToolCallEventPayload | null;
+  turnState?: Record<string, unknown> | null;
 }
 
 export interface RpcErrorPayload {

@@ -233,6 +233,36 @@ async def test_send_chat_can_continue_repo_exploration_after_first_read(tmp_path
 
 
 @pytest.mark.asyncio
+async def test_send_chat_emits_live_tool_lifecycle_events(tmp_path) -> None:
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={
+            "prompted": ScriptedPromptedProvider(
+                outputs=[
+                    '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+                    "I used the README.",
+                ]
+            )
+        },
+    )
+
+    result, events = await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Read the README", provider="prompted"),
+    )
+
+    assert result["status"] == "ok"
+    assert [event["state"] for event in events] == ["tool_called", "tool_result", "delta", "final"]
+    assert events[0]["toolCall"]["toolId"] == "files.read"
+    assert events[0]["toolCall"]["arguments"] == {"path": "README.md"}
+    assert events[1]["toolExecution"]["toolId"] == "files.read"
+    assert events[1]["toolExecution"]["ok"] is True
+
+
+@pytest.mark.asyncio
 async def test_debug_copy_session_clones_history_state_and_artifacts(fake_orchestrator: Orchestrator) -> None:
     await _collect_events(
         fake_orchestrator,

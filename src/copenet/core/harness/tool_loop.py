@@ -34,6 +34,23 @@ MAX_TOOL_STEPS = 4
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 
 
+def _tool_call_event_payload(
+    *,
+    tool_id: str,
+    arguments: dict[str, Any],
+    step: int,
+    channel: str = "tool",
+    native: bool = False,
+) -> dict[str, Any]:
+    return {
+        "toolId": tool_id,
+        "arguments": dict(arguments),
+        "step": step,
+        "channel": channel,
+        "native": native,
+    }
+
+
 class NativeToolProvider(Protocol):
     name: str
 
@@ -175,6 +192,18 @@ async def run_with_native_tools(
                             "native": True,
                         },
                     )
+                yield ProviderEvent(
+                    kind="meta",
+                    metadata={
+                        "toolCall": _tool_call_event_payload(
+                            tool_id=invocation.tool_id,
+                            arguments=invocation.arguments,
+                            step=step_index + 1,
+                            native=True,
+                        ),
+                        "turnState": turn_state.to_public_dict(),
+                    },
+                )
                 tool_result = await tool_executor(invocation.to_request(), tool_context)
                 tool_result = _with_call_id(tool_result, invocation)
                 tool_result = ToolExecutionResult(
@@ -431,6 +460,27 @@ async def run_with_one_tool(
                             "step": step_index + 1,
                         },
                     )
+                yield ProviderEvent(
+                    kind="meta",
+                    metadata={
+                        "toolCall": {
+                            "toolId": "tool.batch",
+                            "arguments": {
+                                "calls": [
+                                    {
+                                        "toolId": call.tool_id,
+                                        "arguments": dict(call.arguments),
+                                    }
+                                    for call in batch_invocation.calls
+                                ]
+                            },
+                            "step": step_index + 1,
+                            "channel": "batch",
+                            "native": False,
+                        },
+                        "turnState": turn_state.to_public_dict(),
+                    },
+                )
                 tool_result, artifact_draft = await _run_tool_batch(
                     batch_invocation=batch_invocation,
                     tool_executor=tool_executor,
@@ -792,6 +842,17 @@ async def run_with_one_tool(
                 },
             )
 
+        yield ProviderEvent(
+            kind="meta",
+            metadata={
+                "toolCall": _tool_call_event_payload(
+                    tool_id=invocation.tool_id,
+                    arguments=invocation.arguments,
+                    step=step_index + 1,
+                ),
+                "turnState": turn_state.to_public_dict(),
+            },
+        )
         tool_result = await tool_executor(invocation.to_request(), tool_context)
         tool_result = _with_call_id(tool_result, invocation)
         tool_result, artifact_draft = _materialize_tool_result_artifact(

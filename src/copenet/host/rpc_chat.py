@@ -79,6 +79,8 @@ def _chat_event_payload(payload: dict[str, Any], default_run_id: str, default_se
         model=_optional_text(payload, "model"),
         capabilities=payload.get("capabilities") if isinstance(payload.get("capabilities"), dict) else None,
         tool_execution=payload.get("toolExecution") if isinstance(payload.get("toolExecution"), dict) else None,
+        tool_call=payload.get("toolCall") if isinstance(payload.get("toolCall"), dict) else None,
+        turn_state=payload.get("turnState") if isinstance(payload.get("turnState"), dict) else None,
     )
 
 

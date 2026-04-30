@@ -260,7 +260,7 @@ async def test_harness_continues_read_only_tool_loop_until_answer(tmp_path: Path
 
     assert plan.will_attempt_tool_loop is True
     assert [call.tool_id for call in tool_calls] == ["files.list", "files.read"]
-    meta_events = [event for event in events if event.kind == "meta"]
+    meta_events = [event for event in events if event.kind == "meta" and "toolExecution" in (event.metadata or {})]
     assert len(meta_events) == 2
     delta_text = "".join(event.text or "" for event in events if event.kind == "delta")
     assert "inspected it successfully" in delta_text
@@ -396,7 +396,7 @@ async def test_harness_native_tool_loop_executes_provider_tool_calls(tmp_path: P
     assert plan.tool_execution_mode == "native"
     assert provider.tool_payloads[0]
     assert any(tool["function"]["name"] == "files.read" for tool in provider.tool_payloads[0])
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolExecution" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "files.read"
     final_text = "".join(event.text or "" for event in events if event.kind == "delta")
     assert "README.md" in final_text
@@ -621,7 +621,7 @@ async def test_harness_executes_safe_read_batch_and_emits_meta(tmp_path: Path) -
     )
     events = [event async for event in stream]
 
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolExecution" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is True
     assert meta_event.metadata["artifactDraft"]["type"] == "tool_bundle"
@@ -671,7 +671,7 @@ async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
     )
     events = [event async for event in stream]
 
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolExecution" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is False
     blocked_trace = next(payload for event, payload in traces if event == "tool_blocked")
@@ -717,7 +717,7 @@ async def test_harness_allows_safe_batch_with_context_prepare(tmp_path: Path) ->
     )
     events = [event async for event in stream]
 
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolResult" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is True
 
@@ -758,7 +758,7 @@ async def test_harness_generates_correction_result_for_malformed_tool_request(tm
     )
     events = [event async for event in stream]
 
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolResult" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.parse"
     assert meta_event.metadata["toolExecution"]["ok"] is False
     assert meta_event.metadata["turnState"]["transitionReason"] == "tool_error_correction"
@@ -810,7 +810,7 @@ async def test_harness_rejects_freeform_final_and_requests_structured_action(tmp
     )
     events = [event async for event in stream]
 
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolResult" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.parse"
     assert meta_event.metadata["toolExecution"]["ok"] is False
     assert "FINAL_CANDIDATE" in meta_event.metadata["toolExecution"]["error"]
@@ -864,7 +864,7 @@ async def test_harness_persists_oversized_tool_output_as_artifact(tmp_path: Path
     )
     events = [event async for event in stream]
 
-    meta_event = next(event for event in events if event.kind == "meta")
+    meta_event = next(event for event in events if event.kind == "meta" and "toolResult" in (event.metadata or {}))
     assert meta_event.metadata["toolResult"]["artifactId"]
     artifacts = artifact_store.list_for_session("alpha")
     assert artifacts

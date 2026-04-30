@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Any, Literal
 
 FrameType = Literal["req", "res", "event"]
-ChatState = Literal["delta", "final", "error", "aborted"]
+ChatState = Literal["delta", "final", "error", "aborted", "tool_called", "tool_result"]
 
 
 @dataclass(frozen=True)
@@ -32,6 +32,8 @@ class ChatEventPayload:
     model: str | None = None
     capabilities: dict[str, Any] | None = None
     tool_execution: dict[str, Any] | None = None
+    tool_call: dict[str, Any] | None = None
+    turn_state: dict[str, Any] | None = None
 
 
 @dataclass(frozen=True)
@@ -128,6 +130,8 @@ def make_chat_event(payload: ChatEventPayload) -> dict[str, Any]:
                 "model": payload.model,
                 "capabilities": payload.capabilities,
                 "toolExecution": payload.tool_execution,
+                "toolCall": payload.tool_call,
+                "turnState": payload.turn_state,
             },
             seq=payload.seq,
         )

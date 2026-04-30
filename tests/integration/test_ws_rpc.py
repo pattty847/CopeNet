@@ -437,11 +437,13 @@ def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient) ->
             run_id=success_started["payload"]["runId"],
         )
         success_final = success_events[-1]["payload"]
-        assert success_final["toolExecution"] == {
-            "toolId": "files.read",
-            "ok": True,
-            "summary": "Read file README.md.",
-        }
+        assert [event["payload"]["state"] for event in success_events] == ["tool_called", "tool_result", "delta", "final"]
+        assert success_events[0]["payload"]["toolCall"]["toolId"] == "files.read"
+        assert success_events[0]["payload"]["toolCall"]["arguments"] == {"path": "README.md"}
+        assert success_events[1]["payload"]["toolExecution"]["toolId"] == "files.read"
+        assert success_final["toolExecution"]["toolId"] == "files.read"
+        assert success_final["toolExecution"]["ok"] is True
+        assert success_final["toolExecution"]["summary"] == "Read file README.md."
         assert {
             event["payload"]["toolExecution"]["toolId"]
             for event in success_events
@@ -466,6 +468,8 @@ def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient) ->
             run_id=blocked_started["payload"]["runId"],
         )
         blocked_final = blocked_events[-1]["payload"]
+        assert blocked_events[0]["payload"]["state"] == "tool_called"
+        assert blocked_events[1]["payload"]["state"] == "tool_result"
         assert blocked_final["toolExecution"]["toolId"] == "files.list"
         assert blocked_final["toolExecution"]["ok"] is False
         assert "path escapes workdir" in blocked_final["toolExecution"]["error"]

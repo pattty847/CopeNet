@@ -97,13 +97,19 @@ class ToolExecutionResult:
 
     def to_event_payload(self) -> dict[str, Any]:
         """Return chat-event metadata for observability."""
-        payload = {
+        payload: dict[str, Any] = {
             "toolId": self.tool_id,
             "ok": self.ok,
             "summary": self.summary,
         }
+        if self.call_id:
+            payload["callId"] = self.call_id
+        if self.channel:
+            payload["channel"] = self.channel
         if self.error:
             payload["error"] = self.error
+        if self.artifact_id:
+            payload["artifactId"] = self.artifact_id
         return payload
 
     def to_runtime_input(self) -> dict[str, Any]:

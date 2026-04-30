@@ -181,6 +181,21 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 )
 
             if event.kind == "meta" and isinstance(event.metadata, dict):
+                tool_call_payload = event.metadata.get("toolCall")
+                if isinstance(tool_call_payload, dict):
+                    seq += 1
+                    await emit(
+                        {
+                            "runId": run_id,
+                            "sessionKey": session_key,
+                            "seq": seq,
+                            "state": "tool_called",
+                            "provider": provider_name,
+                            "model": request.model,
+                            "toolCall": dict(tool_call_payload),
+                            "turnState": event.metadata.get("turnState") if isinstance(event.metadata.get("turnState"), dict) else None,
+                        }
+                    )
                 tool_payload = event.metadata.get("toolExecution")
                 if isinstance(tool_payload, dict):
                     tool_execution_payload = tool_payload
@@ -188,6 +203,19 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     artifact_id = str(tool_payload.get("artifactId") or "").strip()
                     if artifact_id and artifact_id not in persisted_tool_artifact_ids:
                         persisted_tool_artifact_ids.append(artifact_id)
+                    seq += 1
+                    await emit(
+                        {
+                            "runId": run_id,
+                            "sessionKey": session_key,
+                            "seq": seq,
+                            "state": "tool_result",
+                            "provider": provider_name,
+                            "model": request.model,
+                            "toolExecution": dict(tool_payload),
+                            "turnState": event.metadata.get("turnState") if isinstance(event.metadata.get("turnState"), dict) else None,
+                        }
+                    )
                 tool_result_payload = event.metadata.get("toolResult")
                 if isinstance(tool_result_payload, dict):
                     normalized_tool_results.append(dict(tool_result_payload))

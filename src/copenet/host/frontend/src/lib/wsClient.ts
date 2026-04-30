@@ -70,7 +70,10 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
     toolId,
     ok: Boolean(payload.ok),
     summary: String(payload.summary || '').trim(),
+    callId: payload.callId ? String(payload.callId) : null,
+    channel: payload.channel ? String(payload.channel) : null,
     error: payload.error ? String(payload.error) : null,
+    artifactId: payload.artifactId ? String(payload.artifactId) : null,
   };
 }
 
@@ -668,29 +671,40 @@ class WsClient {
     const runId = payload.runId ? String(payload.runId) : null;
     const sessionKey = payload.sessionKey;
     const toolExecution = normalizeToolExecution(payload.toolExecution);
+    const toolCall = payload.toolCall && typeof payload.toolCall === 'object' ? payload.toolCall : null;
 
-    // -----------------------------------------------------------------------
-    // Live tool call tracking: extract completed tool executions from delta
-    // events and push them into the liveToolCalls store slice so components
-    // can display what the agent is doing in real time.
-    // toolExecution on a delta/final event = the most recently completed tool.
-    // -----------------------------------------------------------------------
-    if (toolExecution && runId) {
-      const callId = `${runId}-live-${store.liveToolCalls.length}`;
-      const live: LiveToolCall = {
-        id: callId,
+    if (payload.state === 'tool_called' && runId && toolCall) {
+      const liveId = toolExecution?.callId || `${runId}:${toolCall.step ?? store.liveToolCalls.length}:${toolCall.toolId}`;
+      store.pushLiveToolCall({
+        id: liveId,
+        toolId: toolCall.toolId,
+        state: 'running',
+        summary: `Calling ${toolCall.toolId}`,
+        error: null,
+        startedAt: new Date().toISOString(),
+        completedAt: null,
+      });
+      return;
+    }
+
+    if (payload.state === 'tool_result' && runId && toolExecution) {
+      const existingMatch = [...store.liveToolCalls]
+        .reverse()
+        .find((call) => call.state === 'running' && call.toolId === toolExecution.toolId);
+      store.pushLiveToolCall({
+        id: existingMatch?.id || toolExecution.callId || `${runId}:${toolExecution.toolId}:${store.liveToolCalls.length}`,
         toolId: toolExecution.toolId,
         state: toolExecution.ok
           ? 'success'
-          : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.summary?.toLowerCase().includes('policy')
+          : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.channel === 'policy'
             ? 'blocked'
             : 'failed',
         summary: toolExecution.summary,
         error: toolExecution.error ?? null,
-        startedAt: new Date().toISOString(),
+        startedAt: existingMatch?.startedAt || new Date().toISOString(),
         completedAt: new Date().toISOString(),
-      };
-      store.pushLiveToolCall(live);
+      });
+      return;
     }
 
     if (payload.state === 'delta') {
@@ -774,7 +788,7 @@ class WsClient {
 
       // Capture turnState snapshot from final event before clearing live calls.
       if (payload.state === 'final') {
-        const ts = (payload as unknown as Record<string, unknown>).turnState;
+        const ts = payload.turnState;
         if (ts && typeof ts === 'object') {
           const t = ts as Record<string, unknown>;
           const snapshot: TurnStateSnapshot = {
