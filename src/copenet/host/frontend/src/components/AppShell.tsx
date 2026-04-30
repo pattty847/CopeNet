@@ -68,7 +68,7 @@ export function AppShell() {
         >
           {showMobileTopBar && <MobileTopBar />}
           <ConnectionBanner />
-          {!isMobile && (
+          {!isMobile && currentSection !== 'agents' && (
             <div className="flex items-center gap-3 pb-3">
               <TopCommandBar />
             </div>
