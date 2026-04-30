@@ -83,6 +83,24 @@ class WhisperTranscriber:
             except Exception:
                 pass
             self.model = None
+        try:
+            import torch  # type: ignore
+        except Exception:  # pragma: no cover - depends on optional install
+            torch = None
+        if torch is not None:
+            try:
+                if self.device == "cuda" and torch.cuda.is_available():
+                    torch.cuda.empty_cache()
+            except Exception:
+                pass
+            try:
+                mps_backend = getattr(torch.backends, "mps", None)
+                if self.device == "mps" and mps_backend is not None and mps_backend.is_available():
+                    empty_cache = getattr(torch.mps, "empty_cache", None)
+                    if callable(empty_cache):
+                        empty_cache()
+            except Exception:
+                pass
         gc.collect()
 
     def get_audio_duration(self, audio_path: Path) -> float:
@@ -141,13 +159,16 @@ class WhisperTranscriber:
                 _push(None)
 
         threading.Thread(target=_run, daemon=True).start()
-        while True:
-            if not errors.empty():
-                raise MediaTranscriptionError(str(await errors.get()))
-            item = await queue.get()
-            if item is None:
-                return
-            yield item
+        try:
+            while True:
+                if not errors.empty():
+                    raise MediaTranscriptionError(str(await errors.get()))
+                item = await queue.get()
+                if item is None:
+                    return
+                yield item
+        finally:
+            self.unload_model()
 
     async def progress_stream(self, audio_path: Path) -> AsyncIterator[dict[str, object]]:
         """Yield progress and transcript chunk events during transcription."""
