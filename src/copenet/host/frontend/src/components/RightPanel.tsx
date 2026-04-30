@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
+import { Activity, Info, Inbox, Settings2, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -147,8 +147,6 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
     return { inbox: 'Inbox', runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
-  const ActiveTabIcon = activeTab.icon;
-
   if (!rightPanelOpen && !mobile) {
     return (
       <aside className="w-11 bg-operator-bg flex flex-col h-full items-center py-3 gap-3">
@@ -203,13 +201,6 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
       {/* Tab strip */}
       {compactTabs ? (
         <div className="flex items-center gap-2 border-b border-operator-border bg-operator-panel/20 px-2 py-2 shrink-0">
-          <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-operator-accent/20 bg-operator-accent/6 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-accent"
-            title={activeTab.label}
-          >
-            <ActiveTabIcon className="h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-0 truncate">{activeTab.label}</span>
-          </div>
           <label htmlFor="inspector-tab-select" className="sr-only">
             Select inspector panel
           </label>
@@ -217,7 +208,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
             id="inspector-tab-select"
             value={rightPanelTab}
             onChange={(event) => setRightPanelTab(event.target.value as RightPanelTab)}
-            className="max-w-[8.25rem] rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
+            className="w-full rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
             title="Select inspector panel"
           >
             {tabs.map((tab) => (
@@ -280,24 +271,12 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           </section>
         )}
 
-        {/* 2. Live tool feed — only when a run is in progress */}
-        <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
-          <LiveToolFeed />
-          {/* Fallback: show hint when no run is active and no live calls */}
-          {!activeRunId && (
-            <div className="px-3 py-2.5 space-y-1">
-              <div className="flex items-center gap-2">
-                <TerminalSquare className="w-3 h-3 text-operator-muted/60" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/60">
-                  Tool Activity
-                </span>
-              </div>
-              <div className="text-[11px] text-operator-muted/60 italic leading-snug">
-                Live tool calls appear here while a run is in progress.
-              </div>
-            </div>
-          )}
-        </section>
+        {/* 2. Live tool feed — only while a run is active */}
+        {activeRunId && (
+          <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
+            <LiveToolFeed />
+          </section>
+        )}
 
         <div className="px-3 pb-3 flex flex-col gap-4">
           {/* 3. Session Info */}

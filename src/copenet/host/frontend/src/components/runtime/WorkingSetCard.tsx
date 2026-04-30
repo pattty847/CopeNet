@@ -11,7 +11,6 @@ import {
   Info,
   Link2,
   ShieldAlert,
-  Sparkles,
   StickyNote,
 } from 'lucide-react';
 import { useWorkingSet } from '../../runtime/adapter';
@@ -101,11 +100,7 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
   const resource = useWorkingSet(isDraft ? null : sessionKey);
 
   if (isDraft) {
-    return (
-      <InlineStrip icon={Sparkles} tone="muted">
-        Working Set will populate after the first turn — live task summary, entities, constraints, and open questions.
-      </InlineStrip>
-    );
+    return null;
   }
 
   if (resource.status === 'loading') {

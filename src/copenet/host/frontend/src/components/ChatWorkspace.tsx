@@ -52,7 +52,7 @@ export function ChatWorkspace() {
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 200)}px`;
+      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 84)}px`;
     }
   }, [input]);
 
@@ -383,7 +383,7 @@ export function ChatWorkspace() {
           </span>
         </div>
 
-        <div className={`flex gap-1.5 bg-operator-bg border border-operator-border rounded-xl p-2 focus-within:border-operator-accent/40 transition-colors duration-150 ${isMobile ? 'items-end' : 'items-end'}`}>
+        <div className={`flex gap-1.5 bg-operator-bg border border-operator-border rounded-xl px-2 py-1.5 focus-within:border-operator-accent/40 transition-colors duration-150 ${isMobile ? 'items-end' : 'items-end'}`}>
           <textarea
             ref={textareaRef}
             value={input}
@@ -391,7 +391,7 @@ export function ChatWorkspace() {
             onKeyDown={handleKeyDown}
             disabled={composerDisabled}
             placeholder={isArchived ? 'SESSION ARCHIVED' : isDraft ? 'Send the first message to create this session...' : 'Message the agent...'}
-            className="flex-1 bg-transparent px-2 py-1.5 text-[13px] font-sans text-operator-text focus:outline-none disabled:opacity-40 resize-none max-h-[200px] overflow-y-auto placeholder:text-operator-muted/50"
+            className="flex-1 bg-transparent px-2 py-1 text-[13px] leading-5 font-sans text-operator-text focus:outline-none disabled:opacity-40 resize-none max-h-[84px] overflow-y-auto placeholder:text-operator-muted/50"
             rows={1}
           />
 

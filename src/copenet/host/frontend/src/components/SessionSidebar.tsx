@@ -1,7 +1,7 @@
 import React, { useEffect, MouseEvent } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
-import { ArchiveRestore, Archive, Bug, ChevronLeft, ChevronRight, Download, Plus } from 'lucide-react';
+import { ArchiveRestore, Archive, ChevronLeft, ChevronRight, Plus } from 'lucide-react';
 
 function timeAgo(dateString?: string | null) {
   if (!dateString) return 'Just now';
@@ -28,7 +28,6 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
 
   const filteredSessions = sessions.filter((session) => session.archived === showArchived);
-  const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
 
   useEffect(() => {
     void wsClient.refreshSessions();
@@ -124,22 +123,6 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
 
       {/* Session list */}
       <div className="flex-1 space-y-1 overflow-y-auto p-1.5">
-        {activeSession && (
-          <div className="mx-1 rounded-xl border border-operator-accent/15 bg-operator-accent/6 px-3 py-2.5">
-            <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-accent">
-              <Bug className="h-3.5 w-3.5" />
-              Debug Tools
-            </div>
-            <div className="mt-1.5 text-[11px] leading-relaxed text-operator-muted">
-              Use the session header to run <span className="text-operator-text">Debug Copy</span> or <span className="text-operator-text">Export</span> for this {activeSession.archived ? 'archived' : 'active'} conversation.
-            </div>
-            <div className="mt-2 flex items-center gap-1.5 text-[10px] text-operator-muted/80">
-              <Download className="h-3 w-3" />
-              Metadata, transcript, and tool traces
-            </div>
-          </div>
-        )}
-
         {draftOpen && !showArchived && (
           <div className="w-full flex flex-col p-2.5 text-[13px] rounded-xl border border-operator-accent/30 bg-operator-accent/8">
             <div className="flex items-center justify-between gap-2 mb-1">
