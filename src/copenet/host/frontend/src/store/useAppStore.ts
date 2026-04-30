@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagingConfig, Model, PromptOption, Provider, ProviderAuthStatus, RunTimeline, Session, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, Session, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
@@ -144,6 +144,22 @@ interface AppState {
   providerAuthStatuses: Record<string, ProviderAuthStatus>;
   setProviderAuthStatus: (providerId: string, status: ProviderAuthStatus) => void;
   clearProviderAuthStatus: (providerId: string) => void;
+
+  // Pat Profile (v1 — frontend shell, backend contract pending)
+  // Null until the backend profile RPC ships and pushes a real profile.
+  patProfile: PatProfile | null;
+  setPatProfile: (profile: PatProfile | null) => void;
+
+  // Return Briefing — "I'm back" re-entry payload
+  // Null until the backend ships the briefing RPC or a dev trigger seeds it.
+  returnBriefing: ReturnBriefingPayload | null;
+  setReturnBriefing: (briefing: ReturnBriefingPayload | null) => void;
+  dismissReturnBriefing: () => void;
+
+  // Profile changelog — receipt-style history of profile mutations
+  profileChangelog: ProfileChangelogItem[];
+  setProfileChangelog: (changelog: ProfileChangelogItem[]) => void;
+  prependProfileChangelogItem: (item: ProfileChangelogItem) => void;
 }
 
 function sortSessions(sessions: Session[]) {
@@ -383,4 +399,16 @@ export const useAppStore = create<AppState>((set) => ({
       delete next[providerId];
       return { providerAuthStatuses: next };
     }),
+
+  patProfile: null,
+  setPatProfile: (profile) => set({ patProfile: profile }),
+
+  returnBriefing: null,
+  setReturnBriefing: (briefing) => set({ returnBriefing: briefing }),
+  dismissReturnBriefing: () => set({ returnBriefing: null }),
+
+  profileChangelog: [],
+  setProfileChangelog: (changelog) => set({ profileChangelog: changelog }),
+  prependProfileChangelogItem: (item) =>
+    set((state) => ({ profileChangelog: [item, ...state.profileChangelog] })),
 }));

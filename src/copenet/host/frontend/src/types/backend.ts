@@ -453,6 +453,103 @@ export interface LiveToolCall {
   completedAt?: string | null;        // ISO — when toolExecution arrived
 }
 
+// ---------------------------------------------------------------------------
+// Pat Profile — wire types
+// Backend contract is documented in docs/investigations/pat-profile-frontend-contract.md
+// These types are stubs until the backend RPC ships.
+// ---------------------------------------------------------------------------
+
+export type PatProfileSource = 'explicit' | 'inferred' | 'session_observation';
+
+export interface PatProfilePriority {
+  id: string;
+  label: string;
+  weight: number;        // 0–1 relative weight among priorities
+}
+
+export interface PatProfileGoal {
+  id: string;
+  text: string;
+  source: PatProfileSource;
+  updatedAt: string;
+}
+
+export interface PatProfileTonePreference {
+  directness: 'terse' | 'balanced' | 'verbose';
+  formality: 'casual' | 'professional';
+  preferBullets: boolean;
+}
+
+export interface PatProfile {
+  profileId: string;
+  displayName: string;
+  active: boolean;
+  source: PatProfileSource;
+  priorities: PatProfilePriority[];
+  goals: PatProfileGoal[];
+  tonePreference: PatProfileTonePreference;
+  noiseFilters: string[];         // topics/signals to suppress
+  lastUpdatedAt: string;          // ISO
+  changelogCount: number;         // total entries in the changelog
+}
+
+export type ProfileChangelogChangeKind =
+  | 'priority_updated'
+  | 'goal_added'
+  | 'goal_removed'
+  | 'tone_updated'
+  | 'noise_filter_added'
+  | 'noise_filter_removed'
+  | 'schedule_updated'
+  | 'constraint_updated';
+
+export interface ProfileChangelogItem {
+  id: string;
+  kind: ProfileChangelogChangeKind;
+  summary: string;                         // one-line human-readable change description
+  detail?: string | null;
+  source: PatProfileSource;
+  rationale?: string | null;               // why CopeNet made this change
+  triggeredBySessionKey?: string | null;
+  changedAt: string;                       // ISO
+}
+
+// Return Briefing — payload for the "I'm back" re-entry surface.
+// Sections mirror the spec: attention now / did while away / watching / one thing noticed.
+export interface BriefingAttentionItem {
+  id: string;
+  title: string;
+  urgency: 'high' | 'medium' | 'low';
+  source: string;           // e.g. "Agents · CopeNet Core session"
+  detail?: string | null;
+}
+
+export interface BriefingActivityItem {
+  id: string;
+  summary: string;          // what CopeNet did
+  sessionKey?: string | null;
+  toolsUsed?: number;
+  at: string;               // ISO
+}
+
+export interface BriefingWatchItem {
+  id: string;
+  label: string;
+  signal: string;           // developing signal description
+  source?: string | null;
+}
+
+export interface ReturnBriefingPayload {
+  briefingId: string;
+  generatedAt: string;                      // ISO
+  attentionItems: BriefingAttentionItem[];  // Section 1: What needs your attention now
+  activityItems: BriefingActivityItem[];   // Section 2: What CopeNet did while you were away
+  watchItems: BriefingWatchItem[];          // Section 3: What it's watching
+  noticeText: string | null;               // Section 4: One thing it noticed (personality slot)
+  noticeSource?: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Turn-level summary snapshot: extracted from turnState on final events.
 // Mirrors the subset of TurnState.to_public_dict() we care about in the UI.
 export interface TurnStateSnapshot {

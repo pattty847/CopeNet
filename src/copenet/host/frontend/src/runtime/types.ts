@@ -36,6 +36,18 @@ export type {
   LiveToolCall,
   ToolExecutionState,
   TurnStateSnapshot,
+  // Pat Profile + Return Briefing
+  PatProfile,
+  PatProfileSource,
+  PatProfilePriority,
+  PatProfileGoal,
+  PatProfileTonePreference,
+  ProfileChangelogItem,
+  ProfileChangelogChangeKind,
+  BriefingAttentionItem,
+  BriefingActivityItem,
+  BriefingWatchItem,
+  ReturnBriefingPayload,
 } from '../types/backend';
 
 export type RuntimeStatus = 'thinking' | 'executing' | 'awaiting_input' | 'idle';

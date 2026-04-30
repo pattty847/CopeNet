@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
+import { Activity, Brain, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -12,7 +12,7 @@ import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
 import { RunTimeline } from './RunTimeline';
 import { SendMessageComposer } from './SendMessageComposer';
-import { usePendingApproval, useApprovalHistory, useInboxItems } from '../runtime/adapter';
+import { usePendingApproval, useApprovalHistory, useInboxItems, usePatProfile } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
 function timeAgo(dateString?: string | null) {
@@ -53,6 +53,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
   const pendingApproval = usePendingApproval(activeSessionKey);
   const approvalHistory = useApprovalHistory(activeSessionKey);
+  const patProfile = usePatProfile();
   const pendingCount = approvalHistory.filter((r) => r.status === 'pending').length;
   const inboxItems = useInboxItems(activeSessionKey);
   const urgentCount = inboxItems.filter((i) => i.priority === 'urgent' || i.priority === 'attention').length;
@@ -468,6 +469,26 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               </div>
             </section>
           )}
+
+          {/* 7. Profile indicator — subtle, single line, honest about wiring state */}
+          <section>
+            <div className="flex items-center gap-1.5 mb-1 text-operator-muted">
+              <Brain className="w-3 h-3" />
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Profile</h3>
+            </div>
+            {patProfile?.active ? (
+              <div className="flex items-center justify-between rounded-lg border border-operator-border bg-operator-panel/30 px-2.5 py-2">
+                <span className="text-[11px] text-operator-text">{patProfile.displayName}</span>
+                <span className="rounded-full bg-operator-success/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-success">
+                  active
+                </span>
+              </div>
+            ) : (
+              <div className="rounded-lg border border-operator-border bg-operator-panel/30 px-2.5 py-2 text-[11px] italic text-operator-muted/60">
+                No profile overlay yet
+              </div>
+            )}
+          </section>
 
         </div>
       </div>
