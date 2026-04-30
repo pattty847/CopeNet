@@ -1,6 +1,6 @@
 # CopeNet
 
-CopeNet is a local-first agent operator studio for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
+CopeNet is a *continuity engine* agent operator for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
 
 ## Product Tour
 
