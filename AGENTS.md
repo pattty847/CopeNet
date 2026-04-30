@@ -242,6 +242,35 @@ CopeNet contributors should actively use parallel review capacity when it helps 
 - Prefer giving parallel reviewers tightly scoped questions, concrete file paths, and exact run bundle directories instead of broad “figure it out” prompts.
 - Record useful findings from outside reviewers in repo docs or investigation notes so the team can build on them rather than re-discovering them.
 
+### External AI Lanes
+
+CopeNet also has access to a separate paid Claude subscription outside the built-in sub-agent system. Treat Claude as an available parallel worker, not as an occasional novelty.
+
+- The human may mostly act as prompt/orchestration support while juggling work and life. The lead coding agent is expected to carry more autonomous project-management load: propose the next work, use Claude when helpful, and keep progress moving without waiting for repeated reminders.
+- The lead coding agent should proactively think about using Claude whenever parallel frontend, UX, or product-surface work would accelerate the project without blocking backend integration.
+- The lead coding agent should default toward action, implementation, debugging, and cleanup. Do not sit idle waiting for the human to remember available help, enumerate every next step, or manually orchestrate every lane.
+- Default Claude lane:
+  - frontend implementation
+  - product shell/layout refinement
+  - operator UX polish
+  - mock-to-real UI cleanup
+  - experiments / observability presentation work
+- Claude may work in its own worktree by default. If the lead agent decides the main workspace is the better fit, that is allowed, but should be a deliberate choice.
+- The lead agent should not wait for the human to remember Claude every time. If Claude would materially help, bring it up and propose the scoped task.
+- When frontend or UX work can proceed in parallel with backend/integration work, the lead agent should actively consider assigning Claude a bounded task and then continue local implementation instead of waiting.
+- Keep Claude on bounded, mergeable assignments with explicit files, goals, and constraints. Avoid vague “make the UI better” prompts.
+- Treat Claude output the same way we treat any outside reviewer or implementer:
+  - useful
+  - fast
+  - worth exploiting
+  - but always verified against the real repo state before merge
+- Gemini remains the preferred long-context investigator when the problem is trace-heavy, cross-run, or suspiciously subtle.
+- The intent is to maximize value from the paid tool stack. If Claude or Gemini can materially accelerate delivery, the lead agent should surface and use that lane rather than acting as if only one coding surface exists.
+- Working team default:
+  - Codex: lead engineer, backend owner, integration owner, final architecture decisions
+  - Claude: frontend/product implementation lane
+  - Gemini: long-context backend investigation and weird-runtime forensics
+
 ## Verification Expectations
 
 There is not a deep automated suite yet, so manual and targeted verification matter.
