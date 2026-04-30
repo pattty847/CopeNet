@@ -277,3 +277,192 @@ export interface MessageDestination {
   requiresApproval: boolean;    // whether sends to this destination need operator approval
   status: DestinationStatus;
 }
+
+// ---------------------------------------------------------------------------
+// Messaging platform configuration (operator settings)
+// ---------------------------------------------------------------------------
+
+export type MessagingPlatform = 'telegram' | 'slack' | 'discord';
+export type PlatformConnectionStatus = 'connected' | 'disconnected' | 'error' | 'unconfigured';
+
+export interface TelegramBotConfig {
+  botUsername: string | null;           // e.g. "@CopeNetBot" — resolved on connect
+  tokenMasked: string | null;           // e.g. "tg:7321...xxxx" — never full token
+  connectionStatus: PlatformConnectionStatus;
+  lastVerifiedAt: string | null;        // ISO timestamp
+  errorMessage: string | null;
+}
+
+export interface MessagingApprovalPolicy {
+  requireApprovalByDefault: boolean;    // global default; per-destination overrides apply
+  hardlineBlocklist: string[];          // destination targets that can NEVER be sent to by the agent
+}
+
+export interface MessagingConfig {
+  telegram: TelegramBotConfig | null;
+  destinations: MessageDestination[];
+  approvalPolicy: MessagingApprovalPolicy;
+}
+
+// ---------------------------------------------------------------------------
+// Orchestration runs (future execute_code-style tool)
+// ---------------------------------------------------------------------------
+
+export type OrchestrationRunStatus =
+  | 'pending'
+  | 'running'
+  | 'completed'
+  | 'failed'
+  | 'approval_required'
+  | 'cancelled';
+
+export interface OrchestrationToolInvocation {
+  toolId: string;
+  count: number;
+  summary: string;              // e.g. "probe output paths → 12 files"
+}
+
+export interface OrchestrationRun {
+  orchestrationId: string;
+  runId: string;
+  sessionKey: string;
+  status: OrchestrationRunStatus;
+  goal: string;                 // operator-readable description of what the script does
+  scriptSummary: string | null; // one-sentence description of the script logic
+  toolsUsed: OrchestrationToolInvocation[];
+  toolBudget: number;           // max tool calls allowed
+  toolCallsUsed: number;
+  timeoutSeconds: number;
+  durationMs: number | null;    // null if not yet completed
+  outputSummary: string | null;
+  relatedArtifactIds: string[];
+  approvalRequired: boolean;    // whether any step required approval
+  approvalId: string | null;    // linked approval if approvalRequired
+  startedAt: string;
+  completedAt: string | null;
+  error: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Operator inbox / action center
+// ---------------------------------------------------------------------------
+
+export type InboxItemPriority = 'urgent' | 'attention' | 'info';
+export type InboxItemKind =
+  | 'paused_run'
+  | 'pending_approval'
+  | 'failed_send'
+  | 'resolved_approval'
+  | 'sent_message';
+
+export interface InboxItem {
+  id: string;
+  priority: InboxItemPriority;
+  kind: InboxItemKind;
+  title: string;
+  subtitle: string;
+  createdAt: string;
+  sessionKey: string;
+  runId: string | null;
+  // Linked data — at most one will be set
+  approvalData?: ApprovalRequest;
+  outboundData?: OutboundMessageRecord;
+}
+
+// ---------------------------------------------------------------------------
+// Run timeline (paused-run lifecycle view)
+// ---------------------------------------------------------------------------
+
+export type RunTimelineEventKind =
+  | 'run_started'
+  | 'tool_called'
+  | 'tool_result'
+  | 'approval_requested'
+  | 'decision_made'
+  | 'run_resumed'
+  | 'run_completed'
+  | 'run_failed'
+  | 'note';
+
+export type RunTimelineEventStatus = 'ok' | 'pending' | 'paused' | 'error' | 'skipped';
+
+export interface RunTimelineEvent {
+  id: string;
+  kind: RunTimelineEventKind;
+  at: string;                        // ISO timestamp
+  label: string;                     // short label for the event
+  detail?: string | null;            // one-line contextual detail
+  status: RunTimelineEventStatus;
+  toolId?: string | null;            // for tool_called / tool_result
+  linkedApprovalId?: string | null;  // for approval_requested / decision_made
+  durationMs?: number | null;
+}
+
+export interface RunTimeline {
+  runId: string;
+  sessionKey: string;
+  pausedAt: string | null;           // ISO — when/if the run paused; null if not paused
+  resumedAt: string | null;
+  events: RunTimelineEvent[];
+}
+
+// ---------------------------------------------------------------------------
+// Provider auth (openai-codex OAuth flow + future providers)
+// Mirrors openai_codex.py OpenAICodexAuthService.status() return shape.
+// ---------------------------------------------------------------------------
+
+export type ProviderAuthType = 'oauth' | 'api_key' | 'none';
+
+export interface ProviderAuthStatus {
+  provider: string;                   // e.g. "openai-codex"
+  profileId: string;                  // e.g. "openai-codex:default"
+  requiresAuth: boolean;
+  authType: ProviderAuthType;
+  authenticated: boolean;
+  expired: boolean;
+  accountId: string | null;           // user account identifier if known
+  expiresAt: number | null;           // unix ms — when the token expires
+  scopes: string[];                   // OAuth scopes granted
+  // storePath is backend-only, not surfaced in UI
+}
+
+export interface ProviderAuthLoginInfo {
+  loginId: string;                    // correlates begin → complete
+  authorizeUrl: string;               // open in browser to authenticate
+  redirectUri: string;
+  state: string;
+}
+
+// ---------------------------------------------------------------------------
+// Live tool execution (frontend-only, for in-flight run visibility)
+// Populated from toolExecution payloads on streaming delta/final events.
+// ---------------------------------------------------------------------------
+
+// The five states the operator can observe for a tool call during a run.
+// 'queued' is a frontend-only state (pre-first-call in a run).
+// 'blocked' matches tool_loop policy rejections (channel: "policy").
+export type ToolExecutionState = 'queued' | 'running' | 'success' | 'blocked' | 'failed';
+
+export interface LiveToolCall {
+  id: string;                         // locally generated (runId + index)
+  toolId: string;
+  state: ToolExecutionState;
+  summary: string;
+  error?: string | null;
+  startedAt: string;                  // ISO — when we first saw this tool
+  completedAt?: string | null;        // ISO — when toolExecution arrived
+}
+
+// Turn-level summary snapshot: extracted from turnState on final events.
+// Mirrors the subset of TurnState.to_public_dict() we care about in the UI.
+export interface TurnStateSnapshot {
+  toolCallCount: number;
+  visitedTools: string[];
+  visitedPaths: string[];
+  groundingActions: string[];
+  failedActions: Array<{ toolId: string; summary: string; error: string | null }>;
+  openQuestions: string[];
+  lastToolResultSummary: string;
+  terminalReason: string | null;
+  transitionReason: string;
+}

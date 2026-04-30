@@ -3,9 +3,11 @@ import {
   ChatEventPayload,
   EventFrame,
   IncomingFrame,
+  LiveToolCall,
   Message,
   Model,
   Provider,
+  ProviderAuthStatus,
   PublicMessagePayload,
   ResponseFrame,
   Session,
@@ -14,6 +16,7 @@ import {
   SessionRunRecord,
   ToolDescriptor,
   ToolExecution,
+  TurnStateSnapshot,
 } from '../types/backend';
 
 type PendingRequest = {
@@ -585,6 +588,10 @@ class WsClient {
       }
 
       if (runId) {
+        // Clear live tool calls and turn state from the previous run.
+        store.clearLiveToolCalls();
+        store.setLastTurnState(null);
+
         const assistantMessage: Message = {
           localId: makeLocalId('assistant'),
           sessionKey: session.key,
@@ -634,11 +641,57 @@ class WsClient {
     });
   }
 
+  // ---------------------------------------------------------------------------
+  // Provider auth RPCs — wired to providerAuth.* methods in rpc_dispatch.py
+  // ---------------------------------------------------------------------------
+
+  async providerAuthStatus(providerId: string): Promise<ProviderAuthStatus> {
+    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.status', { provider: providerId });
+    return payload.status;
+  }
+
+  async providerAuthBeginLogin(providerId: string, redirectUri?: string): Promise<{ loginId: string; authorizeUrl: string; redirectUri: string; state: string }> {
+    const payload = await this.request<{ login: { loginId: string; authorizeUrl: string; redirectUri: string; state: string } }>(
+      'providerAuth.beginLogin',
+      { provider: providerId, redirectUri: redirectUri ?? undefined },
+    );
+    return payload.login;
+  }
+
+  async providerAuthLogout(providerId: string): Promise<ProviderAuthStatus> {
+    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.logout', { provider: providerId });
+    return payload.status;
+  }
+
   private handleChatEvent(payload: ChatEventPayload) {
     const store = useAppStore.getState();
     const runId = payload.runId ? String(payload.runId) : null;
     const sessionKey = payload.sessionKey;
     const toolExecution = normalizeToolExecution(payload.toolExecution);
+
+    // -----------------------------------------------------------------------
+    // Live tool call tracking: extract completed tool executions from delta
+    // events and push them into the liveToolCalls store slice so components
+    // can display what the agent is doing in real time.
+    // toolExecution on a delta/final event = the most recently completed tool.
+    // -----------------------------------------------------------------------
+    if (toolExecution && runId) {
+      const callId = `${runId}-live-${store.liveToolCalls.length}`;
+      const live: LiveToolCall = {
+        id: callId,
+        toolId: toolExecution.toolId,
+        state: toolExecution.ok
+          ? 'success'
+          : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.summary?.toLowerCase().includes('policy')
+            ? 'blocked'
+            : 'failed',
+        summary: toolExecution.summary,
+        error: toolExecution.error ?? null,
+        startedAt: new Date().toISOString(),
+        completedAt: new Date().toISOString(),
+      };
+      store.pushLiveToolCall(live);
+    }
 
     if (payload.state === 'delta') {
       let target = runId ? useAppStore.getState().pendingAssistants[runId] : undefined;
@@ -718,6 +771,32 @@ class WsClient {
       if (runId && store.activeRunId === runId) {
         store.setActiveRunId(null);
       }
+
+      // Capture turnState snapshot from final event before clearing live calls.
+      if (payload.state === 'final') {
+        const ts = (payload as unknown as Record<string, unknown>).turnState;
+        if (ts && typeof ts === 'object') {
+          const t = ts as Record<string, unknown>;
+          const snapshot: TurnStateSnapshot = {
+            toolCallCount: Number(t.toolCallCount ?? 0),
+            visitedTools: Array.isArray(t.visitedTools) ? (t.visitedTools as string[]) : [],
+            visitedPaths: Array.isArray(t.visitedPaths) ? (t.visitedPaths as string[]) : [],
+            groundingActions: Array.isArray(t.groundingActions) ? (t.groundingActions as string[]) : [],
+            failedActions: Array.isArray(t.failedActions)
+              ? (t.failedActions as Array<{ toolId: string; summary: string; error: string | null }>)
+              : [],
+            openQuestions: Array.isArray(t.openQuestions) ? (t.openQuestions as string[]) : [],
+            lastToolResultSummary: String(t.lastToolResultSummary ?? ''),
+            terminalReason: t.terminalReason != null ? String(t.terminalReason) : null,
+            transitionReason: String(t.transitionReason ?? 'completed'),
+          };
+          store.setLastTurnState(snapshot);
+        }
+        // Don't clear liveToolCalls immediately — RunActivityPanel takes over after
+        // a short delay when the activity data reloads.  Components that display
+        // live calls should switch to the run record once it's available.
+      }
+
       // Only close the draft if the completed run belongs to the currently active session.
       // Closing unconditionally would destroy a new draft the user opened while a prior run finished.
       if (sessionKey && store.activeSessionKey === sessionKey) {

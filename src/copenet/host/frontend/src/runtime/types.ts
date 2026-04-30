@@ -7,7 +7,36 @@
 // backend contract.
 
 import type { ApprovalRequest, OutboundMessageRecord } from '../types/backend';
-export type { ApprovalRequest, ApprovalOutcome, ApprovalStatus, ApprovalActionClass, OutboundMessageRecord, OutboundMessageStatus } from '../types/backend';
+export type {
+  ApprovalRequest,
+  ApprovalOutcome,
+  ApprovalStatus,
+  ApprovalActionClass,
+  OutboundMessageRecord,
+  OutboundMessageStatus,
+  OrchestrationRun,
+  OrchestrationRunStatus,
+  OrchestrationToolInvocation,
+  InboxItem,
+  InboxItemPriority,
+  InboxItemKind,
+  RunTimeline,
+  RunTimelineEvent,
+  RunTimelineEventKind,
+  RunTimelineEventStatus,
+  MessageDestination,
+  MessagingConfig,
+  TelegramBotConfig,
+  MessagingApprovalPolicy,
+  MessagingPlatform,
+  PlatformConnectionStatus,
+  ProviderAuthStatus,
+  ProviderAuthType,
+  ProviderAuthLoginInfo,
+  LiveToolCall,
+  ToolExecutionState,
+  TurnStateSnapshot,
+} from '../types/backend';
 
 export type RuntimeStatus = 'thinking' | 'executing' | 'awaiting_input' | 'idle';
 
@@ -40,7 +69,7 @@ export interface WorkingSet {
   referencedArtifactIds: string[];
 }
 
-export type ArtifactKind = 'summary' | 'patch_plan' | 'answer' | 'tool_bundle' | 'diff' | 'approval_request' | 'outbound_message';
+export type ArtifactKind = 'summary' | 'patch_plan' | 'answer' | 'tool_bundle' | 'diff' | 'approval_request' | 'outbound_message' | 'orchestration_run';
 
 export interface ArtifactFile {
   path: string;
@@ -71,6 +100,8 @@ export interface Artifact {
   approvalData?: ApprovalRequest;
   // outbound_message kind
   outboundData?: OutboundMessageRecord;
+  // orchestration_run kind
+  orchestrationData?: import('../types/backend').OrchestrationRun;
 }
 
 export type ActivityItemKind = 'tool_call' | 'read_batch' | 'bundle' | 'note';

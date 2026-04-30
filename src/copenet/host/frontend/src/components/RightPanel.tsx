@@ -2,14 +2,17 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Info, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
+import { Activity, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
+import { LiveToolFeed } from './runtime/LiveToolFeed';
 import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { ApprovalQueuePanel } from './ApprovalQueuePanel';
-import { DestinationDirectory } from './DestinationDirectory';
+import { OperatorActionCenter } from './OperatorActionCenter';
+import { ProviderAuthCard } from './ProviderAuthCard';
+import { RunTimeline } from './RunTimeline';
 import { SendMessageComposer } from './SendMessageComposer';
-import { usePendingApproval, useApprovalHistory } from '../runtime/adapter';
+import { usePendingApproval, useApprovalHistory, useInboxItems } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
 function timeAgo(dateString?: string | null) {
@@ -46,10 +49,13 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
   const rightPanelTab = useAppStore((state) => state.rightPanelTab);
   const setRightPanelTab = useAppStore((state) => state.setRightPanelTab);
+  const activeRunId = useAppStore((state) => state.activeRunId);
 
   const pendingApproval = usePendingApproval(activeSessionKey);
   const approvalHistory = useApprovalHistory(activeSessionKey);
   const pendingCount = approvalHistory.filter((r) => r.status === 'pending').length;
+  const inboxItems = useInboxItems(activeSessionKey);
+  const urgentCount = inboxItems.filter((i) => i.priority === 'urgent' || i.priority === 'attention').length;
 
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const messages = activeSessionKey ? messagesMap[activeSessionKey] || [] : [];
@@ -123,6 +129,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   };
 
   const tabs: { id: RightPanelTab; label: string; icon: typeof Activity; badge?: number }[] = [
+    { id: 'inbox', label: 'Inbox', icon: Inbox, badge: urgentCount || undefined },
     { id: 'runtime', label: 'Runtime', icon: Settings2 },
     { id: 'artifacts', label: 'Artifacts', icon: Package },
     { id: 'activity', label: 'Activity', icon: Layers },
@@ -131,13 +138,13 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const activeTab = tabs.find((tab) => tab.id === rightPanelTab) || tabs[0];
 
   const tabLabels = useMemo(() => {
-    if (panelWidth > 400) {
-      return { runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
+    if (panelWidth > 450) {
+      return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
     }
-    if (panelWidth > 315) {
-      return { runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
+    if (panelWidth > 340) {
+      return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
     }
-    return { runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
+    return { inbox: 'Inbox', runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
   const ActiveTabIcon = activeTab.icon;
@@ -152,6 +159,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
         >
           <ChevronLeft className="w-3.5 h-3.5" />
         </button>
+        {railBtn('inbox', Inbox, 'Inbox')}
         {railBtn('runtime', Settings2, 'Runtime')}
         {railBtn('artifacts', Package, 'Artifacts')}
         {railBtn('activity', Layers, 'Activity')}
@@ -250,6 +258,9 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
 
       {/* Body — scrollable per tab */}
       <div className="flex-1 overflow-y-auto">
+        {rightPanelTab === 'inbox' && (
+          <OperatorActionCenter sessionKey={activeSessionKey} />
+        )}
         {rightPanelTab === 'artifacts' && (
           <ArtifactsPanel sessionKey={activeSessionKey} isDraft={isDraft} />
         )}
@@ -260,198 +271,205 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           <ApprovalQueuePanel sessionKey={activeSessionKey} />
         )}
         {rightPanelTab === 'runtime' && (
-      <div className="p-3 flex flex-col gap-4 text-[12px]">
+      <div className="flex flex-col gap-4 text-[12px]">
 
-        {/* Pending approval — shown first so operator can't miss it */}
+        {/* 1. Pending approval — shown first; operator can't miss it */}
         {pendingApproval && (
-          <section>
+          <section className="px-3 pt-3">
             <ApprovalRequestCard approval={pendingApproval} />
           </section>
         )}
 
-        {/* Session Info */}
-        <section>
-          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
-            <Info className="w-3.5 h-3.5" />
-            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Session Info</h3>
-          </div>
-          <div className="space-y-1.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
-            <div className="flex justify-between">
-              <span className="text-operator-muted">Status:</span>
-              <span className={`font-semibold ${isDraft ? 'text-operator-accent' : 'text-operator-success'}`}>
-                {isDraft ? 'DRAFT' : 'LOCKED'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-operator-muted">Session:</span>
-              <span className="text-operator-text">
-                {activeSession?.archived ? 'Archived' : isDraft ? 'Pending Create' : 'Active'}
-              </span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-operator-muted">Created:</span>
-              <span className="text-operator-text">{timeAgo(activeSession?.createdAt)}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-operator-muted">Updated:</span>
-              <span className="text-operator-text">{timeAgo(activeSession?.updatedAt)}</span>
-            </div>
-          </div>
-        </section>
-
-        {/* Runtime Info */}
-        <section>
-          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
-            <Settings2 className="w-3.5 h-3.5" />
-            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Runtime Info</h3>
-          </div>
-          <div className="space-y-2.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
-            {/* Connection status */}
-            <div className="flex justify-between items-center">
-              <span className="text-operator-muted">Connection:</span>
-              <span className={`flex items-center gap-1.5 font-semibold ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
-                <span className="relative flex h-1.5 w-1.5">
-                  {wsStatus === 'connected' && (
-                    <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-60" />
-                  )}
-                  <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
+        {/* 2. Live tool feed — only when a run is in progress */}
+        <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
+          <LiveToolFeed />
+          {/* Fallback: show hint when no run is active and no live calls */}
+          {!activeRunId && (
+            <div className="px-3 py-2.5 space-y-1">
+              <div className="flex items-center gap-2">
+                <TerminalSquare className="w-3 h-3 text-operator-muted/60" />
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/60">
+                  Tool Activity
                 </span>
-                {wsStatus.toUpperCase()}
-              </span>
+              </div>
+              <div className="text-[11px] text-operator-muted/60 italic leading-snug">
+                Live tool calls appear here while a run is in progress.
+              </div>
             </div>
+          )}
+        </section>
 
-            {isDraft ? (
-              <>
-                <div className="rounded-lg border border-operator-accent/15 bg-operator-accent/5 px-2.5 py-2 text-[11px] leading-relaxed text-operator-muted">
-                  Draft settings are local until the first send. Your first message will create and lock the session.
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Provider</span>
-                  <select
-                    value={currentProvider || ''}
-                    onChange={(e) => updateDraftSetting('provider', e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="" disabled>Select Provider</option>
-                    {providers.map((provider) => (
-                      <option key={provider.id} value={provider.id}>{provider.displayName}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Model</span>
-                  <select
-                    value={currentModel || ''}
-                    onChange={(e) => updateDraftSetting('model', e.target.value)}
-                    className={selectClass}
-                  >
-                    <option value="" disabled>Select Model</option>
-                    {availableModels.map((model) => (
-                      <option key={model.id} value={model.id}>{model.displayName}</option>
-                    ))}
-                  </select>
-                  {!currentProvider && (
-                    <div className="text-[10px] text-operator-muted">Pick a provider to load chat models.</div>
-                  )}
-                  {currentProvider && !providerHasModels && (
-                    <div className="text-[10px] text-operator-muted">Loading models for {providerName}…</div>
-                  )}
-                  {currentProvider && providerHasModels && availableModels.length === 0 && (
-                    <div className="text-[10px] text-operator-error">
-                      No chat models available for this provider.
-                    </div>
-                  )}
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Profile</span>
-                  <select
-                    value={currentProfile || ''}
-                    onChange={(e) => updateDraftSetting('systemPromptId', e.target.value)}
-                    className={selectClass}
-                  >
-                    {profiles.map((profile) => (
-                      <option key={profile.id} value={profile.id}>{profile.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Mode</span>
-                  <select
-                    value={currentTaskMode || ''}
-                    onChange={(e) => updateDraftSetting('taskPromptId', e.target.value)}
-                    className={selectClass}
-                  >
-                    {taskModes.map((mode) => (
-                      <option key={mode.id} value={mode.id}>{mode.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </>
-            ) : (
-              <div className="space-y-1.5 mt-1">
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <span className="text-operator-muted">Provider:</span>
-                  <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={providerName}>{providerName}</span>
-                </div>
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <span className="text-operator-muted">Model:</span>
-                  <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={activeSession.model || ''}>
-                    {activeSession.model || 'None'}
-                  </span>
-                </div>
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <span className="text-operator-muted">Profile:</span>
-                  <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={profileName}>{profileName}</span>
-                </div>
-                <div className="flex min-w-0 items-start justify-between gap-3">
-                  <span className="text-operator-muted">Mode:</span>
-                  <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={taskModeName}>{taskModeName}</span>
-                </div>
+        <div className="px-3 pb-3 flex flex-col gap-4">
+          {/* 3. Session Info */}
+          <section>
+            <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+              <Info className="w-3.5 h-3.5" />
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Session Info</h3>
+            </div>
+            <div className="space-y-1.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
+              <div className="flex justify-between">
+                <span className="text-operator-muted">Status:</span>
+                <span className={`font-semibold ${isDraft ? 'text-operator-accent' : 'text-operator-success'}`}>
+                  {isDraft ? 'DRAFT' : 'LOCKED'}
+                </span>
               </div>
-            )}
-          </div>
-        </section>
+              <div className="flex justify-between">
+                <span className="text-operator-muted">Session:</span>
+                <span className="text-operator-text">
+                  {activeSession?.archived ? 'Archived' : isDraft ? 'Pending Create' : 'Active'}
+                </span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-operator-muted">Created:</span>
+                <span className="text-operator-text">{timeAgo(activeSession?.createdAt)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-operator-muted">Updated:</span>
+                <span className="text-operator-text">{timeAgo(activeSession?.updatedAt)}</span>
+              </div>
+            </div>
+          </section>
 
-        {/* Messaging */}
-        <section>
-          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
-            <Activity className="w-3.5 h-3.5" />
-            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Messaging</h3>
-          </div>
-          <DestinationDirectory />
-        </section>
-
-        {/* Tool Activity */}
-        <section>
-          <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
-            <TerminalSquare className="w-3.5 h-3.5" />
-            <h3 className="font-semibold text-[10px] uppercase tracking-wider">Latest Tool Activity</h3>
-          </div>
-          <div className="bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
-            {latestTool ? (
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center">
-                  <span className="text-operator-text font-semibold truncate">{latestTool.toolId}</span>
-                  <span className={`text-[10px] font-semibold ${latestTool.ok ? 'text-operator-success' : 'text-operator-error'}`}>
-                    {latestTool.ok ? 'SUCCESS' : 'ERROR'}
+          {/* 4. Runtime Info (provider / model / profile / mode) */}
+          <section>
+            <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+              <Settings2 className="w-3.5 h-3.5" />
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Runtime Info</h3>
+            </div>
+            <div className="space-y-2.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
+              <div className="flex justify-between items-center">
+                <span className="text-operator-muted">Connection:</span>
+                <span className={`flex items-center gap-1.5 font-semibold ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
+                  <span className="relative flex h-1.5 w-1.5">
+                    {wsStatus === 'connected' && (
+                      <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-60" />
+                    )}
+                    <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
                   </span>
-                </div>
-                <div className="text-[11px] text-operator-muted break-words leading-relaxed">
-                  {latestTool.summary || (latestTool.ok ? 'Tool completed successfully.' : 'Tool execution failed.')}
-                </div>
-                {latestTool.error && (
-                  <div className="text-[11px] text-operator-error break-words leading-relaxed border-t border-operator-error/15 pt-1.5">
-                    {latestTool.error}
+                  {wsStatus.toUpperCase()}
+                </span>
+              </div>
+
+              {isDraft ? (
+                <>
+                  <div className="rounded-lg border border-operator-accent/15 bg-operator-accent/5 px-2.5 py-2 text-[11px] leading-relaxed text-operator-muted">
+                    Draft settings are local until the first send. Your first message will create and lock the session.
                   </div>
-                )}
+                  <div className="flex flex-col gap-1">
+                    <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Provider</span>
+                    <select
+                      value={currentProvider || ''}
+                      onChange={(e) => updateDraftSetting('provider', e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="" disabled>Select Provider</option>
+                      {providers.map((provider) => (
+                        <option key={provider.id} value={provider.id}>{provider.displayName}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Model</span>
+                    <select
+                      value={currentModel || ''}
+                      onChange={(e) => updateDraftSetting('model', e.target.value)}
+                      className={selectClass}
+                    >
+                      <option value="" disabled>Select Model</option>
+                      {availableModels.map((model) => (
+                        <option key={model.id} value={model.id}>{model.displayName}</option>
+                      ))}
+                    </select>
+                    {!currentProvider && (
+                      <div className="text-[10px] text-operator-muted">Pick a provider to load chat models.</div>
+                    )}
+                    {currentProvider && !providerHasModels && (
+                      <div className="text-[10px] text-operator-muted">Loading models for {providerName}…</div>
+                    )}
+                    {currentProvider && providerHasModels && availableModels.length === 0 && (
+                      <div className="text-[10px] text-operator-error">
+                        No chat models available for this provider.
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Profile</span>
+                    <select
+                      value={currentProfile || ''}
+                      onChange={(e) => updateDraftSetting('systemPromptId', e.target.value)}
+                      className={selectClass}
+                    >
+                      {profiles.map((profile) => (
+                        <option key={profile.id} value={profile.id}>{profile.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Mode</span>
+                    <select
+                      value={currentTaskMode || ''}
+                      onChange={(e) => updateDraftSetting('taskPromptId', e.target.value)}
+                      className={selectClass}
+                    >
+                      {taskModes.map((mode) => (
+                        <option key={mode.id} value={mode.id}>{mode.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                </>
+              ) : (
+                <div className="space-y-1.5 mt-1">
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <span className="text-operator-muted">Provider:</span>
+                    <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={providerName}>{providerName}</span>
+                  </div>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <span className="text-operator-muted">Model:</span>
+                    <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={activeSession.model || ''}>
+                      {activeSession.model || 'None'}
+                    </span>
+                  </div>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <span className="text-operator-muted">Profile:</span>
+                    <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={profileName}>{profileName}</span>
+                  </div>
+                  <div className="flex min-w-0 items-start justify-between gap-3">
+                    <span className="text-operator-muted">Mode:</span>
+                    <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={taskModeName}>{taskModeName}</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </section>
+
+          {/* 5. Provider auth card — shown for openai-codex and any auth-requiring provider */}
+          {(currentProvider === 'openai-codex' || (!isDraft && activeSession?.provider === 'openai-codex')) && (
+            <section>
+              <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+                <ShieldAlert className="w-3.5 h-3.5" />
+                <h3 className="font-semibold text-[10px] uppercase tracking-wider">Provider Auth</h3>
               </div>
-            ) : (
-              <div className="text-operator-muted text-[11px] text-center py-1.5 leading-relaxed">
-                {isDraft ? 'Tool activity will appear here after the first response uses a CopeNet tool.' : 'No tools executed in this session yet.'}
+              <ProviderAuthCard
+                providerId="openai-codex"
+                displayName="OpenAI Codex"
+              />
+            </section>
+          )}
+
+          {/* 6. Run Timeline — visible when a run is paused */}
+          {pendingApproval && (
+            <section>
+              <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+                <Activity className="w-3.5 h-3.5" />
+                <h3 className="font-semibold text-[10px] uppercase tracking-wider">Run Timeline</h3>
               </div>
-            )}
-          </div>
-        </section>
+              <div className="bg-operator-panel/30 rounded-xl border border-operator-border overflow-hidden">
+                <RunTimeline sessionKey={activeSessionKey} />
+              </div>
+            </section>
+          )}
+
+        </div>
       </div>
         )}
       </div>

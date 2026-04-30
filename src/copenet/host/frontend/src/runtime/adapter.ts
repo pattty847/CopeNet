@@ -3,15 +3,14 @@ import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
 import type { SessionRunRecord, SessionStateRecord } from '../types/backend';
 import {
+  buildInboxItems,
   getArtifactById,
   getArtifacts,
   getBatchById as getMockBatchById,
-  getMockApprovalHistory,
   getMockDestinations,
-  getMockPendingApproval,
   getWorkingSet,
 } from './mocks';
-import type { MessageDestination, OutboundMessageRecord } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, ProviderAuthStatus, RunTimeline, TurnStateSnapshot } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -279,40 +278,22 @@ function withRuntimeStatus(workingSet: WorkingSet, activeRunId: string | null): 
   };
 }
 
-// Returns the live pending approval from the store, falling back to mock data
-// when no real backend approval has been pushed yet.
-export function usePendingApproval(sessionKey: string | null): ApprovalRequest | null {
-  const storePending = useAppStore((state) => state.pendingApproval);
-  if (storePending) return storePending;
-  return getMockPendingApproval(sessionKey);
+// Returns the live pending approval from the store.
+// Returns null when no real backend approval has been pushed.
+export function usePendingApproval(_sessionKey: string | null): ApprovalRequest | null {
+  return useAppStore((state) => state.pendingApproval);
 }
 
-// Returns the full approval history (store-first, then mock seed).
-export function useApprovalHistory(sessionKey: string | null): ApprovalRequest[] {
-  const storeHistory = useAppStore((state) => state.approvalHistory);
-  const loadApprovalHistory = useAppStore((state) => state.loadApprovalHistory);
-
-  useEffect(() => {
-    if (storeHistory.length === 0 && sessionKey) {
-      loadApprovalHistory(getMockApprovalHistory());
-    }
-  }, [sessionKey, storeHistory.length, loadApprovalHistory]);
-
-  return storeHistory.length > 0 ? storeHistory : getMockApprovalHistory();
+// Returns the full approval history from the store.
+// Empty until the backend pushes approval events for this session.
+export function useApprovalHistory(_sessionKey: string | null): ApprovalRequest[] {
+  return useAppStore((state) => state.approvalHistory);
 }
 
-// Returns the configured messaging destinations (store-first, then mock seed).
+// Returns the configured messaging destinations from the store.
+// Empty until the backend pushes destination config.
 export function useDestinations(): MessageDestination[] {
-  const storeDestinations = useAppStore((state) => state.destinations);
-  const setDestinations = useAppStore((state) => state.setDestinations);
-
-  useEffect(() => {
-    if (storeDestinations.length === 0) {
-      setDestinations(getMockDestinations());
-    }
-  }, [storeDestinations.length, setDestinations]);
-
-  return storeDestinations.length > 0 ? storeDestinations : getMockDestinations();
+  return useAppStore((state) => state.destinations);
 }
 
 // ---------------------------------------------------------------------------
@@ -425,10 +406,100 @@ export function useMockTransitions() {
   };
 }
 
+// Returns a priority-ordered list of inbox items for the operator action center.
+// Aggregates: paused run, pending approvals, recently resolved approvals.
+// When the backend ships, replace buildInboxItems() with a real RPC call.
+export function useInboxItems(sessionKey: string | null): InboxItem[] {
+  const runPausedReason = useAppStore((s) => s.runPausedReason);
+  const approvalHistory = useApprovalHistory(sessionKey);
+  return useMemo(
+    () => buildInboxItems(approvalHistory, runPausedReason),
+    [approvalHistory, runPausedReason],
+  );
+}
+
+// Returns the operator's messaging platform configuration from the store.
+// Null until the backend pushes a real config.
+export function useMessagingConfig(): MessagingConfig | null {
+  return useAppStore((s) => s.messagingConfig);
+}
+
+// Returns the paused-run timeline for the current session.
+// Populated by the backend when a run pauses; cleared when the run resumes.
+export function useRunTimeline(_sessionKey: string | null): RunTimeline | null {
+  const storeTimeline = useAppStore((s) => s.runTimeline);
+  const runPausedReason = useAppStore((s) => s.runPausedReason);
+  const setRunTimeline = useAppStore((s) => s.setRunTimeline);
+
+  useEffect(() => {
+    if (!runPausedReason) {
+      // Clear timeline when run resumes so stale data doesn't persist
+      setRunTimeline(null);
+    }
+  }, [runPausedReason, setRunTimeline]);
+
+  return storeTimeline;
+}
+
 function inferEntityKind(value: string): WorkingSet['entities'][number]['kind'] {
   if (value.includes('/') || value.endsWith('.py') || value.endsWith('.ts') || value.endsWith('.tsx') || value.endsWith('.md')) {
     return 'file';
   }
   if (value.includes('.')) return 'symbol';
   return 'note';
+}
+
+// ---------------------------------------------------------------------------
+// Phase 4 hooks — live tool activity, turn state, provider auth
+// ---------------------------------------------------------------------------
+
+// Returns live tool calls streaming in during the active run.
+// Populated by wsClient from toolExecution payloads on delta/final events.
+// Empty when no run is active (components should switch to RunActivityPanel).
+export function useLiveToolCalls(): LiveToolCall[] {
+  return useAppStore((s) => s.liveToolCalls);
+}
+
+// Returns the most recent completed turn's state snapshot.
+// Available after the final event; null while a run is in progress.
+export function useLastTurnState(): TurnStateSnapshot | null {
+  return useAppStore((s) => s.lastTurnState);
+}
+
+// Returns the auth status for a provider, fetching from the backend on mount.
+// Backend required: providerAuth.status RPC.
+// Falls back to a typed null when RPC is unavailable.
+export function useProviderAuth(providerId: string | null): {
+  status: ProviderAuthStatus | null;
+  loading: boolean;
+  error: string | null;
+  refresh: () => void;
+} {
+  const stored = useAppStore((s) => (providerId ? s.providerAuthStatuses[providerId] ?? null : null));
+  const setStatus = useAppStore((s) => s.setProviderAuthStatus);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetch = () => {
+    if (!providerId) return;
+    setLoading(true);
+    setError(null);
+    wsClient
+      .providerAuthStatus(providerId)
+      .then((s) => {
+        setStatus(providerId, s);
+        setLoading(false);
+      })
+      .catch((err) => {
+        setError(err instanceof Error ? err.message : String(err));
+        setLoading(false);
+      });
+  };
+
+  useEffect(() => {
+    if (providerId && !stored) fetch();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [providerId]);
+
+  return { status: stored, loading, error, refresh: fetch };
 }

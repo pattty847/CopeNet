@@ -1,5 +1,6 @@
 import {
   Box,
+  Cpu,
   ExternalLink,
   FileDiff,
   FileText,
@@ -15,6 +16,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useArtifacts } from '../../runtime/adapter';
 import type { Artifact, ArtifactKind } from '../../runtime/types';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
+import { OrchestrationRunCard } from '../OrchestrationRunCard';
 import { OutboundMessageCard } from '../OutboundMessageCard';
 import { EmptyState, ErrorState, LoadingState } from './ResourceStates';
 
@@ -69,6 +71,12 @@ const KIND_META: Record<
     tone: 'text-operator-success',
     bg: 'bg-operator-success/10',
   },
+  orchestration_run: {
+    label: 'Orchestration Run',
+    icon: Cpu,
+    tone: 'text-operator-accent',
+    bg: 'bg-operator-accent/10',
+  },
 };
 
 function timeAgo(iso: string) {
@@ -83,12 +91,15 @@ function timeAgo(iso: string) {
 function ArtifactCard({ artifact }: { artifact: Artifact }) {
   const setInspectorTarget = useAppStore((s) => s.setInspectorTarget);
 
-  // Delegate to specialized renderers for approval and outbound kinds.
+  // Delegate to specialized renderers for structured artifact kinds.
   if (artifact.kind === 'approval_request' && artifact.approvalData) {
     return <ApprovalRequestCard approval={artifact.approvalData} />;
   }
   if (artifact.kind === 'outbound_message' && artifact.outboundData) {
     return <OutboundMessageCard outbound={artifact.outboundData} />;
+  }
+  if (artifact.kind === 'orchestration_run' && artifact.orchestrationData) {
+    return <OrchestrationRunCard run={artifact.orchestrationData} />;
   }
 
   const meta = KIND_META[artifact.kind];
