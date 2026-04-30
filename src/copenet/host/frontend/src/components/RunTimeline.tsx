@@ -288,33 +288,10 @@ export function RunTimeline({ sessionKey }: { sessionKey: string | null }) {
   const timeline = useRunTimeline(sessionKey);
   const runPausedReason = useAppStore((s) => s.runPausedReason);
   const pendingApproval = useAppStore((s) => s.pendingApproval);
-  const { simulateApprovalRequested } = useMockTransitions();
 
   if (!timeline) {
-    // No paused run — show minimal placeholder
-    return (
-      <div className="px-3 py-3 space-y-2">
-        <div className="flex items-center gap-2">
-          <Zap className="w-3 h-3 text-operator-muted" />
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
-            Run Timeline
-          </span>
-        </div>
-        <div className="text-center py-5 space-y-1.5">
-          <div className="text-[11px] text-operator-muted">No run paused</div>
-          <div className="text-[10px] text-operator-muted/60">
-            Timeline appears when a run is paused for approval.
-          </div>
-          <button
-            type="button"
-            onClick={() => simulateApprovalRequested()}
-            className="mt-2 text-[10px] font-semibold text-operator-accent hover:underline"
-          >
-            Simulate paused run →
-          </button>
-        </div>
-      </div>
-    );
+    // No paused run — component should not be rendered; this is a fallback guard
+    return null;
   }
 
   return (

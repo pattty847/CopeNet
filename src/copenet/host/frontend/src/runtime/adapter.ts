@@ -7,11 +7,7 @@ import {
   getArtifactById,
   getArtifacts,
   getBatchById as getMockBatchById,
-  getMockApprovalHistory,
   getMockDestinations,
-  getMockMessagingConfig,
-  getMockPendingApproval,
-  getMockRunTimeline,
   getWorkingSet,
 } from './mocks';
 import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, ProviderAuthStatus, RunTimeline, TurnStateSnapshot } from '../types/backend';
@@ -282,40 +278,22 @@ function withRuntimeStatus(workingSet: WorkingSet, activeRunId: string | null): 
   };
 }
 
-// Returns the live pending approval from the store, falling back to mock data
-// when no real backend approval has been pushed yet.
-export function usePendingApproval(sessionKey: string | null): ApprovalRequest | null {
-  const storePending = useAppStore((state) => state.pendingApproval);
-  if (storePending) return storePending;
-  return getMockPendingApproval(sessionKey);
+// Returns the live pending approval from the store.
+// Returns null when no real backend approval has been pushed.
+export function usePendingApproval(_sessionKey: string | null): ApprovalRequest | null {
+  return useAppStore((state) => state.pendingApproval);
 }
 
-// Returns the full approval history (store-first, then mock seed).
-export function useApprovalHistory(sessionKey: string | null): ApprovalRequest[] {
-  const storeHistory = useAppStore((state) => state.approvalHistory);
-  const loadApprovalHistory = useAppStore((state) => state.loadApprovalHistory);
-
-  useEffect(() => {
-    if (storeHistory.length === 0 && sessionKey) {
-      loadApprovalHistory(getMockApprovalHistory());
-    }
-  }, [sessionKey, storeHistory.length, loadApprovalHistory]);
-
-  return storeHistory.length > 0 ? storeHistory : getMockApprovalHistory();
+// Returns the full approval history from the store.
+// Empty until the backend pushes approval events for this session.
+export function useApprovalHistory(_sessionKey: string | null): ApprovalRequest[] {
+  return useAppStore((state) => state.approvalHistory);
 }
 
-// Returns the configured messaging destinations (store-first, then mock seed).
+// Returns the configured messaging destinations from the store.
+// Empty until the backend pushes destination config.
 export function useDestinations(): MessageDestination[] {
-  const storeDestinations = useAppStore((state) => state.destinations);
-  const setDestinations = useAppStore((state) => state.setDestinations);
-
-  useEffect(() => {
-    if (storeDestinations.length === 0) {
-      setDestinations(getMockDestinations());
-    }
-  }, [storeDestinations.length, setDestinations]);
-
-  return storeDestinations.length > 0 ? storeDestinations : getMockDestinations();
+  return useAppStore((state) => state.destinations);
 }
 
 // ---------------------------------------------------------------------------
@@ -440,37 +418,25 @@ export function useInboxItems(sessionKey: string | null): InboxItem[] {
   );
 }
 
-// Returns the operator's messaging platform configuration.
-// Store-first; falls back to mock for demo mode.
-export function useMessagingConfig(): MessagingConfig {
-  const storeConfig = useAppStore((s) => s.messagingConfig);
-  const setMessagingConfig = useAppStore((s) => s.setMessagingConfig);
-
-  useEffect(() => {
-    if (!storeConfig) {
-      setMessagingConfig(getMockMessagingConfig());
-    }
-  }, [storeConfig, setMessagingConfig]);
-
-  return storeConfig ?? getMockMessagingConfig();
+// Returns the operator's messaging platform configuration from the store.
+// Null until the backend pushes a real config.
+export function useMessagingConfig(): MessagingConfig | null {
+  return useAppStore((s) => s.messagingConfig);
 }
 
 // Returns the paused-run timeline for the current session.
-// Store-first; seeds with mock data when a run is paused.
-export function useRunTimeline(sessionKey: string | null): RunTimeline | null {
+// Populated by the backend when a run pauses; cleared when the run resumes.
+export function useRunTimeline(_sessionKey: string | null): RunTimeline | null {
   const storeTimeline = useAppStore((s) => s.runTimeline);
   const runPausedReason = useAppStore((s) => s.runPausedReason);
   const setRunTimeline = useAppStore((s) => s.setRunTimeline);
 
   useEffect(() => {
-    if (runPausedReason === 'awaiting_approval' && !storeTimeline && sessionKey) {
-      setRunTimeline(getMockRunTimeline());
-    }
     if (!runPausedReason) {
       // Clear timeline when run resumes so stale data doesn't persist
       setRunTimeline(null);
     }
-  }, [runPausedReason, storeTimeline, sessionKey, setRunTimeline]);
+  }, [runPausedReason, setRunTimeline]);
 
   return storeTimeline;
 }

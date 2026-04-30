@@ -8,7 +8,6 @@ import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
 import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { ApprovalQueuePanel } from './ApprovalQueuePanel';
-import { MessagingSettingsPanel } from './MessagingSettingsPanel';
 import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
 import { RunTimeline } from './RunTimeline';
@@ -50,6 +49,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
   const rightPanelTab = useAppStore((state) => state.rightPanelTab);
   const setRightPanelTab = useAppStore((state) => state.setRightPanelTab);
+  const activeRunId = useAppStore((state) => state.activeRunId);
 
   const pendingApproval = usePendingApproval(activeSessionKey);
   const approvalHistory = useApprovalHistory(activeSessionKey);
@@ -284,7 +284,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
         <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
           <LiveToolFeed />
           {/* Fallback: show hint when no run is active and no live calls */}
-          {!useAppStore.getState().activeRunId && (
+          {!activeRunId && (
             <div className="px-3 py-2.5 space-y-1">
               <div className="flex items-center gap-2">
                 <TerminalSquare className="w-3 h-3 text-operator-muted/60" />
@@ -469,14 +469,6 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
             </section>
           )}
 
-          {/* 7. Messaging Settings */}
-          <section>
-            <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
-              <Activity className="w-3.5 h-3.5" />
-              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Messaging</h3>
-            </div>
-            <MessagingSettingsPanel />
-          </section>
         </div>
       </div>
         )}

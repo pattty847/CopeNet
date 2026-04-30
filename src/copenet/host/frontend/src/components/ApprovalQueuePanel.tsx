@@ -9,7 +9,6 @@ import {
   ShieldAlert,
   ShieldCheck,
   X,
-  Zap,
 } from 'lucide-react';
 import { useApprovalHistory, useMockTransitions } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
@@ -195,27 +194,6 @@ function ApprovalRow({ approval, defaultExpanded = false }: { approval: Approval
 }
 
 // ---------------------------------------------------------------------------
-// Demo control strip — simulates new approval requests for the queue
-// ---------------------------------------------------------------------------
-
-function DemoControls() {
-  const { simulateApprovalRequested } = useMockTransitions();
-  return (
-    <div className="flex items-center gap-2 px-3 py-2 bg-operator-accent/5 border border-operator-accent/20 rounded-xl">
-      <Zap className="w-3 h-3 text-operator-accent shrink-0" />
-      <span className="text-[10px] text-operator-muted flex-1">Demo: simulate incoming approval</span>
-      <button
-        type="button"
-        onClick={() => simulateApprovalRequested()}
-        className="text-[10px] font-semibold text-operator-accent hover:underline"
-      >
-        Request
-      </button>
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
 
@@ -228,9 +206,6 @@ export function ApprovalQueuePanel({ sessionKey }: { sessionKey: string | null }
 
   return (
     <div className="px-3 py-2.5 space-y-3">
-      {/* Demo controls */}
-      <DemoControls />
-
       {/* Pending queue */}
       <section>
         <div className="flex items-center gap-1.5 mb-2">

@@ -69,6 +69,7 @@ function ConnectionBadge({ status }: { status: PlatformConnectionStatus }) {
 
 function TelegramSection() {
   const config = useMessagingConfig();
+  if (!config) return null;
   const tg = config.telegram;
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'ok' | 'fail' | null>(null);
@@ -275,8 +276,9 @@ function DestinationRow({
 function ApprovalPolicySection() {
   const config = useMessagingConfig();
   const [defaultApproval, setDefaultApproval] = useState(
-    config.approvalPolicy.requireApprovalByDefault,
+    config?.approvalPolicy?.requireApprovalByDefault ?? true,
   );
+  if (!config) return null;
 
   return (
     <div className="space-y-2">
@@ -338,6 +340,14 @@ export function MessagingSettingsPanel() {
     setComposerTarget(target);
     setComposerOpen(true);
   };
+
+  if (!config) {
+    return (
+      <div className="px-3 py-4 text-[11px] text-operator-muted text-center">
+        Messaging not configured. Backend config not yet received.
+      </div>
+    );
+  }
 
   const configuredCount = config.destinations.filter((d) => d.status === 'configured').length;
 
