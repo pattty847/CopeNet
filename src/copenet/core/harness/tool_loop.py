@@ -1210,11 +1210,12 @@ def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor], con
         "Decide whether you need tools before answering. "
         "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.\n"
         "For repository inspection, directory listing alone is rarely enough. "
-        "Prefer direct evidence from files.read or directional discovery from files.search before summarizing. "
+        "Prefer direct evidence from files.read or directional discovery from files.rg before summarizing. "
         "Use context.prepare only for orientation, not as a substitute for inspecting files."
         "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and be ready to cite the specific files you inspected."
-        "\nDo not call files.read on directories; use files.list for directories and files.search for broader exploration."
-        "\nAvoid shell pipelines or command chaining in shell.exec. Prefer files.search, files.read, or simple single commands."
+        "\nIf you infer a file path instead of receiving it explicitly from the user, verify it exists with files.rg or files.list before calling files.read."
+        "\nDo not call files.read on directories; use files.list for directories and files.rg for broader exploration."
+        "\nAvoid shell pipelines or command chaining in shell.exec. Prefer files.rg, files.read, or simple single commands."
         f"\n\n{build_tool_prompt_section(tools)}"
     )
 
@@ -1315,9 +1316,10 @@ def compose_tool_follow_up_prompt(
         f"Pending follow-up inputs: {len(turn_state.pending_input)}\n"
         "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.\n"
         "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
-        "Prefer a follow-up files.read or files.search step unless the user asked only for a directory listing. "
+        "Prefer a follow-up files.rg or files.read step unless the user asked only for a directory listing. "
         "Use context.prepare for orientation only."
         "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and cite the specific files you inspected."
+        "\nIf you infer a file path instead of receiving it explicitly from the user, verify it exists with files.rg or files.list before calling files.read."
         "\nDo not use files.read on directories. Avoid shell.exec pipelines or chained shell commands."
         f"{corrective_line}"
     )

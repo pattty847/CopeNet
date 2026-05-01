@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, Session, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, Session, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
@@ -95,6 +95,10 @@ interface AppState {
   setMessages: (sessionKey: string, messages: Message[]) => void;
   addMessage: (sessionKey: string, message: Message) => void;
   updateMessage: (sessionKey: string, localId: string, updates: Partial<Message>) => void;
+  /** Append a MessagePart to a message's parts array.
+   *  If parts is not yet initialized, snapshots existing content as a TextPart first.
+   *  Adjacent TextParts are merged to avoid churn. */
+  appendMessagePart: (sessionKey: string, localId: string, part: MessagePart) => void;
   pendingAssistants: Record<string, { sessionKey: string; localId: string }>;
   registerPendingAssistant: (runId: string, sessionKey: string, localId: string) => void;
   clearPendingAssistant: (runId: string) => void;
@@ -311,6 +315,28 @@ export const useAppStore = create<AppState>((set) => ({
       if (existingIdx < 0) return state;
       const next = [...current];
       next[existingIdx] = { ...next[existingIdx], ...updates };
+      return { messages: { ...state.messages, [sessionKey]: next } };
+    }),
+  appendMessagePart: (sessionKey, localId, part) =>
+    set((state) => {
+      const current = state.messages[sessionKey] || [];
+      const idx = current.findIndex((m) => m.localId === localId);
+      if (idx < 0) return state;
+      const msg = current[idx];
+      // Initialize parts from existing content if entering parts mode for the first time.
+      let parts: MessagePart[] = msg.parts ? [...msg.parts] : [];
+      if (!msg.parts && msg.content) {
+        parts = [{ kind: 'text', content: msg.content } as TextPart];
+      }
+      // Merge adjacent TextParts to avoid churn.
+      if (part.kind === 'text' && parts.length > 0 && parts[parts.length - 1].kind === 'text') {
+        const last = parts[parts.length - 1] as TextPart;
+        parts = [...parts.slice(0, -1), { kind: 'text', content: last.content + part.content }];
+      } else {
+        parts = [...parts, part];
+      }
+      const next = [...current];
+      next[idx] = { ...msg, parts };
       return { messages: { ...state.messages, [sessionKey]: next } };
     }),
   pendingAssistants: {},

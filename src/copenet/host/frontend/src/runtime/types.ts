@@ -48,6 +48,17 @@ export type {
   BriefingActivityItem,
   BriefingWatchItem,
   ReturnBriefingPayload,
+  // Message parts — inline streamed tool activity
+  MessagePart,
+  TextPart,
+  ToolCallPart,
+  ToolResultPart,
+  ToolResultPreview,
+  FileReadPreview,
+  RepoSearchPreview,
+  RawPreview,
+  ToolBatchPart,
+  ToolBatchMember,
 } from '../types/backend';
 
 export type RuntimeStatus = 'thinking' | 'executing' | 'awaiting_input' | 'idle';

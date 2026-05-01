@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import re
+import subprocess
 
 from copenet.core.tools.contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
@@ -45,6 +47,17 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
         capabilities=["filesystem", "search"],
+    ),
+    ToolDescriptor(
+        id="files.rg",
+        name="Ripgrep Search",
+        description=(
+            "Search file contents under the current workdir with ripgrep. "
+            "Prefer this for repository discovery before choosing files.read when the exact path is not already known."
+        ),
+        category="repo-read",
+        input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
+        capabilities=["filesystem", "search", "ripgrep"],
     ),
 ]
 
@@ -180,10 +193,104 @@ async def search_files(request: ToolExecutionRequest, context: ToolExecutionCont
     )
 
 
+async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+    pattern = str(request.arguments.get("pattern") or "").strip()
+    warning_message, blocked_result = _repeat_response(
+        context,
+        tool_id=request.tool_id,
+        on_warning=(
+            "You have repeated the same files.rg call several times. Use the current matches to choose a file "
+            "for files.read or change the search."
+        ),
+        on_block=(
+            "Blocked repeated identical files.rg call. Stop repeating the same search and either read one of the "
+            "matches or change the pattern/path."
+        ),
+    )
+    if blocked_result is not None:
+        return blocked_result
+    if not pattern:
+        raise ValueError("pattern is required")
+    root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
+    if not root.exists():
+        raise RuntimeError(f"path not found: {root}")
+    try:
+        completed = subprocess.run(
+            [
+                "rg",
+                "--json",
+                "--line-number",
+                "--column",
+                "--color",
+                "never",
+                pattern,
+                str(root.relative_to(context.workdir) if root != context.workdir else "."),
+            ],
+            cwd=context.workdir,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except FileNotFoundError as exc:
+        raise RuntimeError("ripgrep (rg) is not installed or not available on PATH") from exc
+
+    hits: list[dict[str, object]] = []
+    stderr = completed.stderr.strip()
+    if completed.returncode not in (0, 1):
+        message = stderr or f"ripgrep exited with status {completed.returncode}"
+        raise RuntimeError(message)
+
+    for raw_line in completed.stdout.splitlines():
+        raw_line = raw_line.strip()
+        if not raw_line:
+            continue
+        try:
+            parsed = json.loads(raw_line)
+        except json.JSONDecodeError:
+            continue
+        if parsed.get("type") != "match":
+            continue
+        data = parsed.get("data") or {}
+        path_info = data.get("path") or {}
+        submatches = data.get("submatches") or []
+        lines = data.get("lines") or {}
+        line_number = int(data.get("line_number") or 0)
+        path_text = str(path_info.get("text") or "")
+        snippet = str(lines.get("text") or "").rstrip("\n")
+        column = 1
+        if submatches and isinstance(submatches, list):
+            first = submatches[0] if isinstance(submatches[0], dict) else {}
+            column = int(first.get("start") or 0) + 1
+        hits.append(
+            {
+                "path": path_text,
+                "line": line_number,
+                "column": column,
+                "text": snippet[:240],
+            }
+        )
+        if len(hits) >= context.policy.search_result_limit:
+            break
+
+    return ToolExecutionResult(
+        tool_id=request.tool_id,
+        ok=True,
+        summary=(
+            f"Found {len(hits)} matches for pattern via ripgrep."
+            + (f" Warning: {warning_message}" if warning_message else "")
+        ),
+        output={
+            "matches": hits,
+            **({"warning": warning_message} if warning_message else {}),
+        },
+    )
+
+
 HANDLERS = {
     "files.list": list_files,
     "files.read": read_file,
     "files.search": search_files,
+    "files.rg": ripgrep_files,
 }
 
 

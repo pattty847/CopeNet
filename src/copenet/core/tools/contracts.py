@@ -110,6 +110,12 @@ class ToolExecutionResult:
             payload["error"] = self.error
         if self.artifact_id:
             payload["artifactId"] = self.artifact_id
+        preview = _preview_payload(self.tool_id, self.body if self.body is not None else self.output)
+        if preview is not None:
+            payload["preview"] = preview
+        members = _batch_member_payloads(self.body if self.body is not None else self.output)
+        if members:
+            payload["members"] = members
         return payload
 
     def to_runtime_input(self) -> dict[str, Any]:
@@ -206,6 +212,59 @@ ToolHandler = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[T
 
 class ToolBlockedError(RuntimeError):
     """Raised when a tool request is blocked by policy or path boundaries."""
+
+
+def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
+    if not isinstance(body, dict):
+        return None
+    if tool_id == "files.read":
+        path = body.get("path")
+        content = body.get("content")
+        if isinstance(path, str) and isinstance(content, str):
+            return {"path": path, "content": content.rstrip()[:240]}
+    if tool_id in {"files.search", "files.rg"}:
+        matches = body.get("matches")
+        if isinstance(matches, list):
+            preview_matches: list[dict[str, Any]] = []
+            for item in matches[:5]:
+                if not isinstance(item, dict):
+                    continue
+                preview_item = {
+                    "path": item.get("path"),
+                    "line": item.get("line"),
+                    "text": item.get("text"),
+                }
+                if item.get("column") is not None:
+                    preview_item["column"] = item.get("column")
+                preview_matches.append(preview_item)
+            return {"matches": preview_matches}
+    if "artifactId" in body and "preview" in body:
+        return {"artifactId": body.get("artifactId"), "preview": body.get("preview")}
+    return None
+
+
+def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:
+    if not isinstance(body, dict):
+        return []
+    results = body.get("results")
+    if not isinstance(results, list):
+        return []
+    rows: list[dict[str, Any]] = []
+    for item in results:
+        if not isinstance(item, dict):
+            continue
+        tool_id = str(item.get("toolId") or "")
+        payload = {
+            "toolId": tool_id,
+            "ok": bool(item.get("ok")),
+            "summary": str(item.get("summary") or ""),
+            "error": str(item.get("error")).strip() if item.get("error") is not None else None,
+        }
+        preview = _preview_payload(tool_id, item.get("output"))
+        if preview is not None:
+            payload["preview"] = preview
+        rows.append(payload)
+    return rows
 
 
 def _candidate_json_objects(text: str) -> list[str]:

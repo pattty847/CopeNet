@@ -141,7 +141,7 @@ class ForkSnapshot:
 def _classify_evidence_category(tool_id: str) -> str:
     if tool_id == "files.list":
         return "reconnaissance"
-    if tool_id == "files.search":
+    if tool_id in {"files.search", "files.rg"}:
         return "directional"
     if tool_id == "files.read":
         return "grounding"

@@ -53,3 +53,28 @@ def test_read_history_skips_malformed_jsonl_lines(transcript_store: TranscriptSt
 
     history = transcript_store.read_history("session-1")
     assert [item["content"] for item in history] == ["one", "two"]
+
+
+def test_transcript_message_roundtrips_structured_parts(transcript_store: TranscriptStore) -> None:
+    transcript_store.append_message(
+        "session-1",
+        TranscriptMessage(
+            run_id="run-1",
+            role="assistant",
+            content="I will inspect the repo.",
+            provider="fake",
+            model="model-a",
+            provider_session_id=None,
+            timestamp="2024-01-01T00:00:00+00:00",
+            state="final",
+            tool_execution={"toolId": "files.read", "ok": True, "summary": "Read README.md."},
+            parts=[
+                {"kind": "text", "text": "I will inspect the repo."},
+                {"kind": "tool_call", "toolCall": {"toolId": "files.read", "arguments": {"path": "README.md"}}},
+                {"kind": "tool_result", "toolExecution": {"toolId": "files.read", "ok": True, "summary": "Read README.md."}},
+            ],
+        ),
+    )
+
+    history = transcript_store.read_history("session-1")
+    assert history[0]["parts"][1]["toolCall"]["toolId"] == "files.read"

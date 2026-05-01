@@ -5,6 +5,7 @@ import {
   IncomingFrame,
   LiveToolCall,
   Message,
+  MessagePart,
   Model,
   Provider,
   ProviderAuthStatus,
@@ -14,8 +15,10 @@ import {
   SessionExportPayload,
   SessionStateRecord,
   SessionRunRecord,
+  TextPart,
   ToolDescriptor,
   ToolExecution,
+  ToolResultPreview,
   TurnStateSnapshot,
 } from '../types/backend';
 
@@ -70,8 +73,77 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
     toolId,
     ok: Boolean(payload.ok),
     summary: String(payload.summary || '').trim(),
+    callId: payload.callId ? String(payload.callId) : null,
+    channel: payload.channel ? String(payload.channel) : null,
     error: payload.error ? String(payload.error) : null,
+    artifactId: payload.artifactId ? String(payload.artifactId) : null,
   };
+}
+
+function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const type = String(payload.type || '');
+  if (type === 'file_read') {
+    return {
+      type: 'file_read',
+      path: String(payload.path || ''),
+      lines: Array.isArray(payload.lines) ? payload.lines.slice(0, 20).map(String) : [],
+      totalLines: payload.totalLines != null ? Number(payload.totalLines) : null,
+    };
+  }
+  if (type === 'repo_search') {
+    const rawMatches = Array.isArray(payload.matches) ? payload.matches.slice(0, 8) : [];
+    return {
+      type: 'repo_search',
+      query: String(payload.query || ''),
+      matches: rawMatches.map((m: unknown) => {
+        const match = (m || {}) as Record<string, unknown>;
+        return {
+          path: String(match.path || ''),
+          line: Number(match.line || 0),
+          snippet: String(match.snippet || ''),
+        };
+      }),
+      totalMatches: payload.totalMatches != null ? Number(payload.totalMatches) : null,
+    };
+  }
+  if (typeof payload.path === 'string' && typeof payload.content === 'string') {
+    const lines = String(payload.content).split('\n').slice(0, 20);
+    return {
+      type: 'file_read',
+      path: String(payload.path),
+      lines,
+      totalLines: String(payload.content).split('\n').length,
+    };
+  }
+  if (Array.isArray(payload.matches)) {
+    return {
+      type: 'repo_search',
+      query: typeof payload.query === 'string' ? payload.query : '',
+      matches: payload.matches.slice(0, 8).map((m: unknown) => {
+        const match = (m || {}) as Record<string, unknown>;
+        return {
+          path: String(match.path || ''),
+          line: Number(match.line || 0),
+          snippet: String(match.text || match.snippet || ''),
+        };
+      }),
+      totalMatches: Array.isArray(payload.matches) ? payload.matches.length : null,
+    };
+  }
+  if (typeof payload.preview === 'string') {
+    return { type: 'raw', text: String(payload.preview).slice(0, 500) };
+  }
+  // Fall back to raw text preview
+  const text = payload.text ? String(payload.text) : JSON.stringify(payload);
+  return { type: 'raw', text: text.slice(0, 500) };
+}
+
+function buildBatchLabel(toolId: string, count: number): string {
+  if (toolId.includes('read') || toolId === 'files.read') return `Read ${count} files`;
+  if (toolId.includes('search') || toolId.includes('rg')) return `Search ${count} paths`;
+  return `${count} tool calls`;
 }
 
 function normalizeSession(raw: unknown): Session {
@@ -161,7 +233,72 @@ function normalizeMessage(
     toolExecution: normalizeToolExecution(raw?.toolExecution),
     errorMessage: null,
     optimistic,
+    parts: normalizeMessageParts(raw?.parts),
   };
+}
+
+function normalizeMessageParts(raw: unknown): MessagePart[] | null {
+  if (!Array.isArray(raw)) return null;
+  const parts: MessagePart[] = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const payload = item as Record<string, unknown>;
+    const kind = String(payload.kind || '');
+    if (kind === 'text') {
+      const content = typeof payload.content === 'string' ? payload.content : typeof payload.text === 'string' ? payload.text : '';
+      if (content) parts.push({ kind: 'text', content } as TextPart);
+      continue;
+    }
+    if (kind === 'tool_call') {
+      const toolCall = payload.toolCall && typeof payload.toolCall === 'object' ? payload.toolCall as Record<string, unknown> : payload;
+      parts.push({
+        kind: 'tool_call',
+        callId: String(toolCall.callId ?? payload.callId ?? ''),
+        toolId: String(toolCall.toolId ?? payload.toolId ?? ''),
+        hint: toolCall.hint ? String(toolCall.hint) : null,
+        at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
+      });
+      continue;
+    }
+    if (kind === 'tool_result') {
+      const toolExecution = payload.toolExecution && typeof payload.toolExecution === 'object'
+        ? payload.toolExecution as Record<string, unknown>
+        : payload;
+      const members = Array.isArray(toolExecution.members) ? toolExecution.members : [];
+      if (String(toolExecution.toolId ?? payload.toolId ?? '') === 'tool.batch' && members.length > 0) {
+        parts.push({
+          kind: 'tool_batch',
+          batchId: String(toolExecution.callId ?? payload.callId ?? makeLocalId('batch')),
+          label: buildBatchLabel('files.read', members.length),
+          members: members.map((m: unknown) => {
+            const member = (m || {}) as Record<string, unknown>;
+            return {
+              callId: String(member.callId ?? ''),
+              toolId: String(member.toolId ?? ''),
+              ok: Boolean(member.ok),
+              summary: String(member.summary ?? ''),
+              error: member.error ? String(member.error) : null,
+              preview: normalizeToolResultPreview(member.preview),
+            };
+          }),
+          ok: Boolean(toolExecution.ok ?? payload.ok),
+          at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
+        });
+      } else {
+        parts.push({
+          kind: 'tool_result',
+          callId: String(toolExecution.callId ?? payload.callId ?? ''),
+          toolId: String(toolExecution.toolId ?? payload.toolId ?? ''),
+          ok: Boolean(toolExecution.ok ?? payload.ok),
+          summary: String(toolExecution.summary ?? payload.summary ?? ''),
+          error: toolExecution.error ? String(toolExecution.error) : payload.error ? String(payload.error) : null,
+          preview: normalizeToolResultPreview((toolExecution as Record<string, unknown>).preview ?? payload.preview),
+          at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
+        });
+      }
+    }
+  }
+  return parts.length > 0 ? parts : null;
 }
 
 class WsClient {
@@ -642,24 +779,24 @@ class WsClient {
   }
 
   // ---------------------------------------------------------------------------
-  // Provider auth RPCs — wired to provider.auth.* methods in rpc_dispatch.py
+  // Provider auth RPCs
   // ---------------------------------------------------------------------------
 
   async providerAuthStatus(providerId: string): Promise<ProviderAuthStatus> {
-    const payload = await this.request<{ status: ProviderAuthStatus }>('provider.auth.status', { provider: providerId });
+    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.status', { provider: providerId });
     return payload.status;
   }
 
   async providerAuthBeginLogin(providerId: string, redirectUri?: string): Promise<{ loginId: string; authorizeUrl: string; redirectUri: string; state: string }> {
     const payload = await this.request<{ login: { loginId: string; authorizeUrl: string; redirectUri: string; state: string } }>(
-      'provider.auth.beginLogin',
+      'providerAuth.beginLogin',
       { provider: providerId, redirectUri: redirectUri ?? undefined },
     );
     return payload.login;
   }
 
   async providerAuthLogout(providerId: string): Promise<ProviderAuthStatus> {
-    const payload = await this.request<{ status: ProviderAuthStatus }>('provider.auth.logout', { provider: providerId });
+    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.logout', { provider: providerId });
     return payload.status;
   }
 
@@ -669,28 +806,98 @@ class WsClient {
     const sessionKey = payload.sessionKey;
     const toolExecution = normalizeToolExecution(payload.toolExecution);
 
-    // -----------------------------------------------------------------------
-    // Live tool call tracking: extract completed tool executions from delta
-    // events and push them into the liveToolCalls store slice so components
-    // can display what the agent is doing in real time.
-    // toolExecution on a delta/final event = the most recently completed tool.
-    // -----------------------------------------------------------------------
-    if (toolExecution && runId) {
-      const callId = `${runId}-live-${store.liveToolCalls.length}`;
-      const live: LiveToolCall = {
-        id: callId,
-        toolId: toolExecution.toolId,
-        state: toolExecution.ok
-          ? 'success'
-          : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.summary?.toLowerCase().includes('policy')
-            ? 'blocked'
-            : 'failed',
-        summary: toolExecution.summary,
-        error: toolExecution.error ?? null,
-        startedAt: new Date().toISOString(),
-        completedAt: new Date().toISOString(),
-      };
-      store.pushLiveToolCall(live);
+    if (payload.state === 'tool_called') {
+      const rawToolCall = payload.toolCall as Record<string, unknown> | null | undefined;
+      if (rawToolCall && runId) {
+        const toolId = String(rawToolCall.toolId ?? rawToolCall.tool_id ?? 'tool');
+        const liveId = String(rawToolCall.callId ?? rawToolCall.call_id ?? `${runId}:${rawToolCall.step ?? store.liveToolCalls.length}:${toolId}`);
+        store.pushLiveToolCall({
+          id: liveId,
+          toolId,
+          state: 'running',
+          summary: `Calling ${toolId}`,
+          error: null,
+          startedAt: new Date().toISOString(),
+          completedAt: null,
+        });
+        const target = store.pendingAssistants[runId];
+        if (target) {
+          const callId = String(rawToolCall.callId ?? rawToolCall.call_id ?? `${runId}:${rawToolCall.step ?? store.liveToolCalls.length}:${rawToolCall.toolId ?? rawToolCall.tool_id ?? 'tool'}`);
+          const hint = rawToolCall.hint
+            ? String(rawToolCall.hint)
+            : rawToolCall.arguments && typeof rawToolCall.arguments === 'object'
+              ? JSON.stringify(rawToolCall.arguments)
+              : null;
+          store.appendMessagePart(target.sessionKey, target.localId, {
+            kind: 'tool_call',
+            callId,
+            toolId,
+            hint,
+            at: new Date().toISOString(),
+          });
+        }
+      }
+      return;
+    }
+
+    if (payload.state === 'tool_result') {
+      if (toolExecution && runId) {
+        const existingMatch = [...store.liveToolCalls]
+          .reverse()
+          .find((call) => call.state === 'running' && call.toolId === toolExecution.toolId);
+        store.pushLiveToolCall({
+          id: existingMatch?.id || toolExecution.callId || `${runId}:${toolExecution.toolId}:${store.liveToolCalls.length}`,
+          toolId: toolExecution.toolId,
+          state: toolExecution.ok
+            ? 'success'
+            : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.channel === 'policy'
+              ? 'blocked'
+              : 'failed',
+          summary: toolExecution.summary,
+          error: toolExecution.error ?? null,
+          startedAt: existingMatch?.startedAt || new Date().toISOString(),
+          completedAt: new Date().toISOString(),
+        });
+
+        const target = store.pendingAssistants[runId];
+        if (target) {
+          const toolPayload = payload.toolExecution as unknown as Record<string, unknown> | null | undefined;
+          const batchMembers = Array.isArray(toolPayload?.members) ? toolPayload?.members : [];
+          if (Array.isArray(batchMembers) && batchMembers.length > 1) {
+            store.appendMessagePart(target.sessionKey, target.localId, {
+              kind: 'tool_batch',
+              batchId: toolExecution.callId || makeLocalId('batch'),
+              label: buildBatchLabel(String(batchMembers[0] && typeof batchMembers[0] === 'object' ? (batchMembers[0] as Record<string, unknown>).toolId || toolExecution.toolId : toolExecution.toolId), batchMembers.length),
+              members: batchMembers.map((m: unknown) => {
+                const mb = (m || {}) as Record<string, unknown>;
+                return {
+                  callId: String(mb.callId ?? ''),
+                  toolId: String(mb.toolId ?? toolExecution.toolId),
+                  ok: Boolean(mb.ok),
+                  summary: String(mb.summary ?? ''),
+                  error: mb.error ? String(mb.error) : null,
+                  preview: normalizeToolResultPreview(mb.preview),
+                };
+              }),
+              ok: toolExecution.ok,
+              at: new Date().toISOString(),
+            });
+          } else {
+            const toolPayloadRecord = payload.toolExecution as unknown as Record<string, unknown> | null | undefined;
+            store.appendMessagePart(target.sessionKey, target.localId, {
+              kind: 'tool_result',
+              callId: toolExecution.callId || '',
+              toolId: toolExecution.toolId,
+              ok: toolExecution.ok,
+              summary: toolExecution.summary,
+              error: toolExecution.error ?? null,
+              preview: normalizeToolResultPreview(toolPayloadRecord?.preview),
+              at: new Date().toISOString(),
+            });
+          }
+        }
+      }
+      return;
     }
 
     if (payload.state === 'delta') {
@@ -709,6 +916,7 @@ class WsClient {
           providerSessionId: payload.message?.providerSessionId ? String(payload.message.providerSessionId) : null,
           state: 'delta',
           toolExecution,
+          parts: normalizeMessageParts(payload.message?.parts),
           errorMessage: null,
           optimistic: true,
         });
@@ -719,14 +927,19 @@ class WsClient {
       if (target) {
         const existing = useAppStore.getState().messages[target.sessionKey]?.find((message) => message.localId === target.localId);
         const chunk = payload.message?.content ? String(payload.message.content) : '';
+        const normalizedParts = normalizeMessageParts(payload.message?.parts);
         store.updateMessage(target.sessionKey, target.localId, {
           content: `${existing?.content || ''}${chunk}`,
           provider: payload.provider ? String(payload.provider) : existing?.provider || null,
           model: payload.model ? String(payload.model) : existing?.model || null,
           state: 'delta',
           toolExecution: toolExecution || existing?.toolExecution || null,
+          parts: normalizedParts || existing?.parts || null,
           optimistic: true,
         });
+        if (!normalizedParts && chunk && existing?.parts != null) {
+          store.appendMessagePart(target.sessionKey, target.localId, { kind: 'text', content: chunk });
+        }
       }
       return;
     }
@@ -744,6 +957,7 @@ class WsClient {
           model: payload.model ? String(payload.model) : existing?.model || null,
           state: payload.state,
           toolExecution: toolExecution || existing?.toolExecution || null,
+          parts: normalizeMessageParts(payload.message?.parts) || existing?.parts || null,
           errorMessage: payload.errorMessage ? String(payload.errorMessage) : null,
           optimistic: false,
         });

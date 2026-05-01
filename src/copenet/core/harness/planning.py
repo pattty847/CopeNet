@@ -127,19 +127,19 @@ def infer_task_contract(*, prompt: str, tools: list[ToolDescriptor]) -> TaskCont
     elif "patch plan" in lowered or ("patch" in lowered and "plan" in lowered):
         task_kind = "patch_plan"
         goal = prompt.strip() or "Produce a grounded patch plan."
-        preferred = ["files.search", "files.read", "context.prepare"]
+        preferred = ["files.rg", "files.read", "context.prepare"]
         required = ["grounded file evidence tied to the patch plan"]
         done = ["grounded evidence", "file path citation"]
     elif any(token in lowered for token in ["architecture", "setup", "explain the repo", "summarize the repo", "explain the architecture"]):
         task_kind = "repo_explain"
         goal = prompt.strip() or "Explain the repository with grounded evidence."
-        preferred = ["files.read", "files.search", "context.prepare"]
+        preferred = ["files.rg", "files.read", "context.prepare"]
         required = ["grounded file evidence"]
         done = ["grounded file evidence", "file path citation"]
     else:
         task_kind = "repo_explore"
         goal = prompt.strip() or "Explore the repository using tools."
-        preferred = ["files.search", "files.read", "context.prepare"]
+        preferred = ["files.rg", "files.read", "context.prepare"]
         required = ["at least one grounding action beyond files.list"]
         done = ["grounded evidence"]
 

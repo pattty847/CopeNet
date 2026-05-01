@@ -90,7 +90,7 @@ async def test_plan_turn_attaches_patch_plan_contract_and_filters_shell_exec() -
     assert plan.task_contract.task_kind == "patch_plan"
     assert "shell.exec" not in plan.task_contract.allowed_tools
     assert all(tool.id != "shell.exec" for tool in plan.tools)
-    assert "files.read" in plan.task_contract.preferred_next_actions
+    assert plan.task_contract.preferred_next_actions[:2] == ["files.rg", "files.read"]
 
 
 @pytest.mark.asyncio

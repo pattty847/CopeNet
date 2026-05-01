@@ -260,6 +260,9 @@ async def test_send_chat_emits_live_tool_lifecycle_events(tmp_path) -> None:
     assert events[0]["toolCall"]["arguments"] == {"path": "README.md"}
     assert events[1]["toolExecution"]["toolId"] == "files.read"
     assert events[1]["toolExecution"]["ok"] is True
+    assert events[2]["message"]["parts"][0]["kind"] == "tool_call"
+    assert events[2]["message"]["parts"][1]["kind"] == "tool_result"
+    assert events[2]["message"]["parts"][2]["kind"] == "text"
 
 
 @pytest.mark.asyncio

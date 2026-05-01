@@ -34,6 +34,7 @@ class TranscriptMessage:
     timestamp: str
     state: str | None = None
     tool_execution: dict[str, Any] | None = None
+    parts: list[dict[str, Any]] | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Convert message into a JSON-serializable dictionary."""
@@ -50,6 +51,8 @@ class TranscriptMessage:
             payload["state"] = self.state
         if self.tool_execution:
             payload["tool_execution"] = self.tool_execution
+        if self.parts:
+            payload["parts"] = [dict(part) for part in self.parts]
         return payload
 
 
@@ -65,6 +68,7 @@ def to_public_message(record: dict[str, Any]) -> dict[str, Any]:
         "timestamp": record.get("timestamp"),
         "state": record.get("state"),
         "toolExecution": record.get("tool_execution"),
+        "parts": record.get("parts") if isinstance(record.get("parts"), list) else None,
     }
 
 
@@ -134,6 +138,7 @@ class TranscriptStore:
                     timestamp=str(record.get("timestamp") or utc_now_iso()),
                     state=str(record.get("state")) if record.get("state") is not None else None,
                     tool_execution=dict(record.get("tool_execution")) if isinstance(record.get("tool_execution"), dict) else None,
+                    parts=[dict(part) for part in record.get("parts")] if isinstance(record.get("parts"), list) else None,
                 ),
             )
             count += 1

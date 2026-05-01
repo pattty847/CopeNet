@@ -133,6 +133,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     provider = orchestrator._providers[provider_name]
     seq = 0
     assistant_parts: list[str] = []
+    assistant_message_parts: list[dict] = []
     tool_execution_payload: dict | None = None
     latest_turn_state: dict = {}
     normalized_tool_results: list[dict] = []
@@ -187,6 +188,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             if event.kind == "meta" and isinstance(event.metadata, dict):
                 tool_call_payload = event.metadata.get("toolCall")
                 if isinstance(tool_call_payload, dict):
+                    assistant_message_parts.append({"kind": "tool_call", "toolCall": dict(tool_call_payload)})
                     seq += 1
                     await emit(
                         {
@@ -203,6 +205,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool_payload = event.metadata.get("toolExecution")
                 if isinstance(tool_payload, dict):
                     tool_execution_payload = tool_payload
+                    assistant_message_parts.append({"kind": "tool_result", "toolExecution": dict(tool_payload)})
                     tool_steps.append(_normalize_tool_step(tool_payload))
                     artifact_id = str(tool_payload.get("artifactId") or "").strip()
                     if artifact_id and artifact_id not in persisted_tool_artifact_ids:
@@ -233,6 +236,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
 
             if event.kind == "delta" and event.text:
                 assistant_parts.append(event.text)
+                _append_text_part(assistant_message_parts, event.text)
                 seq += 1
                 await emit(
                     {
@@ -243,6 +247,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                         "message": {
                             "role": "assistant",
                             "content": event.text,
+                            "parts": [dict(part) for part in assistant_message_parts],
                             "provider": provider_name,
                             "model": request.model,
                         },
@@ -321,6 +326,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     timestamp=transcript_now(),
                     state="final",
                     tool_execution=tool_execution_payload,
+                    parts=[dict(part) for part in assistant_message_parts] if assistant_message_parts else None,
                 ),
             )
             trace.record(
@@ -422,6 +428,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "message": {
                 "role": "assistant",
                 "content": assistant_text,
+                "parts": [dict(part) for part in assistant_message_parts],
                 "provider": provider_name,
                 "model": request.model,
             }
@@ -565,6 +572,15 @@ def _append_unique(existing: list[str], incoming: list[str]) -> list[str]:
         if text and text not in rows:
             rows.append(text)
     return rows
+
+
+def _append_text_part(parts: list[dict], text: str) -> None:
+    if not text:
+        return
+    if parts and parts[-1].get("kind") == "text":
+        parts[-1]["text"] = f"{parts[-1].get('text') or ''}{text}"
+        return
+    parts.append({"kind": "text", "text": text})
 
 
 def _normalize_tool_step(tool_payload: dict) -> dict:

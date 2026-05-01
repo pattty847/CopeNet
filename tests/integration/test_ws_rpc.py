@@ -277,6 +277,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient) -
             "context.prepare",
             "files.list",
             "files.read",
+            "files.rg",
             "files.search",
             "git.diff",
             "git.status",

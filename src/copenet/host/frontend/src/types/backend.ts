@@ -42,7 +42,85 @@ export interface Message {
   toolExecution: ToolExecution | null;
   errorMessage: string | null;
   optimistic: boolean;
+  /** Structured part array — populated when a run emits tool_called events.
+   *  The content field is kept in sync for backward compat and export.
+   *  Render parts[] when present; fall back to content + toolExecution otherwise. */
+  parts?: MessagePart[] | null;
 }
+
+// ---------------------------------------------------------------------------
+// Message parts — structured inline tool rendering in the transcript.
+// Activated on first tool_called event for a run; prior content is
+// snapshotted into a TextPart. Content field kept for compat/export.
+// ---------------------------------------------------------------------------
+
+export interface TextPart {
+  kind: 'text';
+  content: string;
+}
+
+export interface ToolCallPart {
+  kind: 'tool_call';
+  callId: string;
+  toolId: string;
+  /** One-line hint shown while the tool is in-flight — path, query, etc. */
+  hint?: string | null;
+  at: string; // ISO
+}
+
+// Preview variants — bounded, always safe to truncate.
+export interface FileReadPreview {
+  type: 'file_read';
+  path: string;
+  lines: string[];         // max 20 lines shown
+  totalLines?: number | null;
+}
+
+export interface RepoSearchPreview {
+  type: 'repo_search';
+  query: string;
+  matches: Array<{ path: string; line: number; snippet: string }>; // max 8
+  totalMatches?: number | null;
+}
+
+export interface RawPreview {
+  type: 'raw';
+  text: string;            // truncated summary
+}
+
+export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview;
+
+export interface ToolResultPart {
+  kind: 'tool_result';
+  callId: string;
+  toolId: string;
+  ok: boolean;
+  summary: string;
+  error?: string | null;
+  preview?: ToolResultPreview | null;
+  at: string; // ISO
+}
+
+export interface ToolBatchMember {
+  callId: string;
+  toolId: string;
+  ok: boolean;
+  summary: string;
+  error?: string | null;
+  preview?: ToolResultPreview | null;
+}
+
+/** tool.batch — one collapsed card for N grouped file reads or search passes. */
+export interface ToolBatchPart {
+  kind: 'tool_batch';
+  batchId: string;
+  label: string;           // e.g. "Read 8 files"
+  members: ToolBatchMember[];
+  ok: boolean;
+  at: string; // ISO
+}
+
+export type MessagePart = TextPart | ToolCallPart | ToolResultPart | ToolBatchPart;
 
 export interface Provider {
   id: string;
@@ -91,6 +169,7 @@ export interface PublicMessagePayload {
   runId?: string | null;
   role?: string | null;
   content?: string | null;
+  parts?: unknown[] | null;
   provider?: string | null;
   model?: string | null;
   providerSessionId?: string | null;
