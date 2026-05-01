@@ -44,7 +44,7 @@ export function MessageBubble({ message }: { message: Message }) {
         </span>
       </div>
 
-      <div className={`group relative max-w-[85%] p-3 font-sans text-[13px] leading-relaxed border overflow-hidden ${
+      <div className={`group relative w-full p-3 font-sans text-[13px] leading-relaxed border overflow-hidden ${
         isUser
           ? 'bg-operator-panel border-operator-border text-operator-text rounded-2xl rounded-br-md'
           : 'bg-transparent border-operator-border text-operator-text rounded-2xl shadow-sm'

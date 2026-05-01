@@ -5,14 +5,14 @@
  * accountId if known, token expiry, and login/logout affordances.
  *
  * Backend wiring:
- *   - Reads: providerAuth.status RPC  → returns ProviderAuthStatus
- *   - Login: providerAuth.beginLogin  → returns authorizeUrl (open in browser)
- *   - Logout: providerAuth.logout     → clears stored auth
+ *   - Reads: provider.auth.status RPC  → returns ProviderAuthStatus
+ *   - Login: provider.auth.beginLogin  → returns authorizeUrl (open in browser)
+ *   - Logout: provider.auth.logout     → clears stored auth
  *
  * V1 gaps (documented):
  *   - Login flow currently requires the operator to open the authorizeUrl in
  *     their browser manually (no deep-link / system-browser auto-open from UI).
- *   - providerAuth.completeLogin is not wired in UI — the callback URL
+ *   - provider.auth.completeLogin is not wired in UI — the callback URL
  *     hits the local server directly (localhost:1455/auth/callback). The UI
  *     will see the status update on next refresh() call.
  *   - No WebSocket push event when auth state changes; operator must click
@@ -275,7 +275,7 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
             </div>
             <div className="text-[10px] text-operator-muted font-mono">{error}</div>
             <div className="text-[10px] text-operator-muted/60 italic">
-              Backend dep: providerAuth.status RPC
+              Backend dep: provider.auth.status RPC
             </div>
           </div>
         )}
@@ -308,7 +308,7 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
           <div className="text-[11px] text-operator-muted italic">
             Auth status unavailable.
             <span className="block text-[10px] mt-0.5 not-italic text-operator-muted/60">
-              Backend dep: providerAuth.status RPC
+              Backend dep: provider.auth.status RPC
             </span>
           </div>
         )}

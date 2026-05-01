@@ -6,13 +6,10 @@ import {
   LiveToolCall,
   Message,
   Model,
-  PatProfile,
-  ProfileChangelogItem,
   Provider,
   ProviderAuthStatus,
   PublicMessagePayload,
   ResponseFrame,
-  ReturnBriefingPayload,
   Session,
   SessionExportPayload,
   SessionStateRecord,
@@ -73,10 +70,7 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
     toolId,
     ok: Boolean(payload.ok),
     summary: String(payload.summary || '').trim(),
-    callId: payload.callId ? String(payload.callId) : null,
-    channel: payload.channel ? String(payload.channel) : null,
     error: payload.error ? String(payload.error) : null,
-    artifactId: payload.artifactId ? String(payload.artifactId) : null,
   };
 }
 
@@ -314,25 +308,6 @@ class WsClient {
 
     if (frame.event === 'chat') {
       this.handleChatEvent(frame.payload as unknown as ChatEventPayload);
-      return;
-    }
-
-    if (frame.event === 'profile.changed') {
-      const payload = (frame.payload || {}) as Record<string, unknown>;
-      if (payload.profile && typeof payload.profile === 'object') {
-        useAppStore.getState().setPatProfile(payload.profile as PatProfile);
-      }
-      if (payload.change && typeof payload.change === 'object') {
-        useAppStore.getState().prependProfileChangelogItem(payload.change as ProfileChangelogItem);
-      }
-      return;
-    }
-
-    if (frame.event === 'briefing.ready') {
-      const payload = (frame.payload || {}) as Record<string, unknown>;
-      if (payload.briefing && typeof payload.briefing === 'object') {
-        useAppStore.getState().setReturnBriefing(payload.briefing as ReturnBriefingPayload);
-      }
     }
   }
 
@@ -401,14 +376,11 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
         this.request<{ sessions: unknown[] }>('sessions.list', { includeArchived: useAppStore.getState().showArchived }),
-        this.request<{ profile?: PatProfile | null }>('profile.get', {}),
-        this.request<{ changelog?: ProfileChangelogItem[] }>('profile.changelog', { limit: 20 }),
-        this.request<{ briefing?: ReturnBriefingPayload | null }>('briefing.get', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -421,9 +393,6 @@ class WsClient {
         (promptsPayload.taskModes || []).map(normalizePrompt),
       );
       store.setSessions(sessions);
-      store.setPatProfile(profilePayload.profile || null);
-      store.setProfileChangelog(Array.isArray(changelogPayload.changelog) ? changelogPayload.changelog : []);
-      store.setReturnBriefing(briefingPayload.briefing || null);
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;
@@ -673,24 +642,24 @@ class WsClient {
   }
 
   // ---------------------------------------------------------------------------
-  // Provider auth RPCs — wired to providerAuth.* methods in rpc_dispatch.py
+  // Provider auth RPCs — wired to provider.auth.* methods in rpc_dispatch.py
   // ---------------------------------------------------------------------------
 
   async providerAuthStatus(providerId: string): Promise<ProviderAuthStatus> {
-    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.status', { provider: providerId });
+    const payload = await this.request<{ status: ProviderAuthStatus }>('provider.auth.status', { provider: providerId });
     return payload.status;
   }
 
   async providerAuthBeginLogin(providerId: string, redirectUri?: string): Promise<{ loginId: string; authorizeUrl: string; redirectUri: string; state: string }> {
     const payload = await this.request<{ login: { loginId: string; authorizeUrl: string; redirectUri: string; state: string } }>(
-      'providerAuth.beginLogin',
+      'provider.auth.beginLogin',
       { provider: providerId, redirectUri: redirectUri ?? undefined },
     );
     return payload.login;
   }
 
   async providerAuthLogout(providerId: string): Promise<ProviderAuthStatus> {
-    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.logout', { provider: providerId });
+    const payload = await this.request<{ status: ProviderAuthStatus }>('provider.auth.logout', { provider: providerId });
     return payload.status;
   }
 
@@ -699,41 +668,29 @@ class WsClient {
     const runId = payload.runId ? String(payload.runId) : null;
     const sessionKey = payload.sessionKey;
     const toolExecution = normalizeToolExecution(payload.toolExecution);
-    const toolCall = payload.toolCall && typeof payload.toolCall === 'object' ? (payload.toolCall as Record<string, unknown>) : null;
 
-    if (payload.state === 'tool_called' && runId && toolCall) {
-      const toolId = typeof toolCall.toolId === 'string' ? toolCall.toolId : 'tool';
-      const liveId = toolExecution?.callId || `${runId}:${toolCall.step ?? store.liveToolCalls.length}:${toolId}`;
-      store.pushLiveToolCall({
-        id: liveId,
-        toolId,
-        state: 'running',
-        summary: `Calling ${toolId}`,
-        error: null,
-        startedAt: new Date().toISOString(),
-        completedAt: null,
-      });
-      return;
-    }
-
-    if (payload.state === 'tool_result' && runId && toolExecution) {
-      const existingMatch = [...store.liveToolCalls]
-        .reverse()
-        .find((call) => call.state === 'running' && call.toolId === toolExecution.toolId);
-      store.pushLiveToolCall({
-        id: existingMatch?.id || toolExecution.callId || `${runId}:${toolExecution.toolId}:${store.liveToolCalls.length}`,
+    // -----------------------------------------------------------------------
+    // Live tool call tracking: extract completed tool executions from delta
+    // events and push them into the liveToolCalls store slice so components
+    // can display what the agent is doing in real time.
+    // toolExecution on a delta/final event = the most recently completed tool.
+    // -----------------------------------------------------------------------
+    if (toolExecution && runId) {
+      const callId = `${runId}-live-${store.liveToolCalls.length}`;
+      const live: LiveToolCall = {
+        id: callId,
         toolId: toolExecution.toolId,
         state: toolExecution.ok
           ? 'success'
-          : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.channel === 'policy'
+          : toolExecution.summary?.toLowerCase().includes('blocked') || toolExecution.summary?.toLowerCase().includes('policy')
             ? 'blocked'
             : 'failed',
         summary: toolExecution.summary,
         error: toolExecution.error ?? null,
-        startedAt: existingMatch?.startedAt || new Date().toISOString(),
+        startedAt: new Date().toISOString(),
         completedAt: new Date().toISOString(),
-      });
-      return;
+      };
+      store.pushLiveToolCall(live);
     }
 
     if (payload.state === 'delta') {
@@ -817,7 +774,7 @@ class WsClient {
 
       // Capture turnState snapshot from final event before clearing live calls.
       if (payload.state === 'final') {
-        const ts = payload.turnState;
+        const ts = (payload as unknown as Record<string, unknown>).turnState;
         if (ts && typeof ts === 'object') {
           const t = ts as Record<string, unknown>;
           const snapshot: TurnStateSnapshot = {
