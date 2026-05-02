@@ -137,6 +137,10 @@ export interface ActivityToolCall {
   ok: boolean;
   durationMs: number;
   at: string;
+  /** Primary call target — file path, search query, or URI. Populated when backend provides RunStep.target. */
+  target?: string | null;
+  /** Error string when ok=false. Populated when backend provides RunStep.error. */
+  error?: string | null;
 }
 
 export interface ActivityReadBatch {

@@ -249,6 +249,8 @@ export interface RunStep {
   ok: boolean;
   summary: string;
   error?: string | null;
+  /** Primary call target — file path, search query, or URI. Backend contract: Codex to populate. */
+  target?: string | null;
 }
 
 export interface SessionRunRecord {

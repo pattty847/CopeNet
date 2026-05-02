@@ -79,17 +79,17 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   return (
     <aside className={`${mobile ? 'w-full border-r-0' : 'w-full border-r'} border-operator-border bg-operator-bg flex h-full flex-col`}>
       {/* Header */}
-      <div className="border-b border-operator-border px-3 py-3">
-        <div className="mb-2 flex items-start justify-between gap-2">
-          <div>
-            <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">Session Fleet</div>
-            <div className="mt-1 text-[12px] leading-5 text-operator-muted">
-              {filteredSessions.length} {showArchived ? 'archived' : 'active'} conversations in reach.
-            </div>
+      <div className="border-b border-operator-border px-3 py-2.5">
+        <div className="mb-2 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">Session Fleet</span>
+            <span className="text-[10px] text-operator-muted/60 tabular-nums">
+              {filteredSessions.length}
+            </span>
           </div>
           <button
             onClick={() => setSidebarOpen(false)}
-            className="p-1.5 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg hover:bg-operator-panel"
+            className="p-1.5 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg hover:bg-operator-panel shrink-0"
             title="Collapse sidebar"
           >
             <ChevronLeft className="w-3.5 h-3.5" />
@@ -98,7 +98,7 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
 
         <button
           onClick={handleNewSession}
-          className="glow-accent flex w-full items-center justify-center gap-1.5 rounded-lg bg-operator-accent py-2 text-[13px] font-semibold text-operator-bg"
+          className="glow-accent flex w-full items-center justify-center gap-1.5 rounded-lg bg-operator-accent py-1.5 text-[12px] font-semibold text-operator-bg"
         >
           <Plus className="w-3.5 h-3.5" />
           New Chat
@@ -106,15 +106,15 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
       </div>
 
       {/* Tabs */}
-      <div className="flex border-b border-operator-border text-[11px] font-semibold tracking-wide">
+      <div className="flex border-b border-operator-border text-[10px] font-semibold tracking-wider">
         <button
-          className={`flex-1 py-2 text-center transition-colors duration-150 ${!showArchived ? 'text-operator-accent border-b-2 border-operator-accent bg-operator-panel/50' : 'text-operator-muted hover:text-operator-text'}`}
+          className={`flex-1 py-1.5 text-center transition-colors duration-150 ${!showArchived ? 'text-operator-accent border-b-2 border-operator-accent bg-operator-panel/50' : 'text-operator-muted hover:text-operator-text'}`}
           onClick={() => setShowArchived(false)}
         >
           ACTIVE
         </button>
         <button
-          className={`flex-1 py-2 text-center transition-colors duration-150 ${showArchived ? 'text-operator-accent border-b-2 border-operator-accent bg-operator-panel/50' : 'text-operator-muted hover:text-operator-text'}`}
+          className={`flex-1 py-1.5 text-center transition-colors duration-150 ${showArchived ? 'text-operator-accent border-b-2 border-operator-accent bg-operator-panel/50' : 'text-operator-muted hover:text-operator-text'}`}
           onClick={() => setShowArchived(true)}
         >
           ARCHIVED
@@ -143,27 +143,27 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
             <div
               key={session.key}
               onClick={() => handleSessionSelect(session.key)}
-              className={`w-full flex flex-col p-2.5 text-[13px] rounded-xl transition-all duration-150 cursor-pointer group relative ${
+              className={`w-full flex flex-col p-2 text-[13px] rounded-xl transition-all duration-150 cursor-pointer group relative ${
                 isActive
                   ? 'bg-operator-panel border border-operator-accent/20 shadow-sm'
                   : 'hover:bg-operator-panel/50 border border-operator-border/0'
               }`}
             >
-              {isActive && <div className="absolute left-0 top-2.5 bottom-2.5 w-[2.5px] rounded-full bg-operator-accent" />}
+              {isActive && <div className="absolute left-0 top-2 bottom-2 w-[2.5px] rounded-full bg-operator-accent" />}
               <div className="flex justify-between items-start mb-0.5">
-                <span className={`font-semibold truncate pr-5 text-[13px] ${isActive ? 'text-operator-text' : 'text-operator-muted group-hover:text-operator-text'} transition-colors duration-150`}>
+                <span className={`font-semibold truncate pr-5 text-[12px] ${isActive ? 'text-operator-text' : 'text-operator-muted group-hover:text-operator-text'} transition-colors duration-150`}>
                   {session.title || session.key || 'New Chat'}
                 </span>
                 <button
                   onClick={(e) => handleArchiveToggle(e, session.key, session.archived)}
-                  className="absolute top-2.5 right-2.5 opacity-0 group-hover:opacity-100 text-operator-muted hover:text-operator-accent transition-all duration-150"
+                  className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 text-operator-muted hover:text-operator-accent transition-all duration-150"
                   title={session.archived ? 'Restore Session' : 'Archive Session'}
                 >
                   {session.archived ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
                 </button>
               </div>
 
-              <div className="flex flex-wrap gap-1 mb-1.5">
+              <div className="flex flex-wrap items-center gap-1 mb-0">
                 {session.provider && (
                   <span className="px-1.5 py-0.5 bg-operator-border/40 text-operator-muted rounded-md text-[10px] border border-operator-border/60 truncate max-w-[72px]">
                     {providerName}
@@ -179,9 +179,8 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
                     {session.systemPromptId}
                   </span>
                 )}
+                <span className="ml-auto text-[10px] text-operator-muted/45 tabular-nums">{timeAgo(session.createdAt)}</span>
               </div>
-
-              <div className="text-[10px] text-operator-muted/50 mt-auto">{timeAgo(session.createdAt)}</div>
             </div>
           );
         })}

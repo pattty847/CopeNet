@@ -42,6 +42,13 @@ function formatDuration(ms: number) {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+/** Show last 2 path segments for compact display */
+function shortPath(path: string): string {
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join('/')}`;
+}
+
 function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: boolean }) {
   // Detect blocked state: ok=false + summary mentions 'blocked' or 'policy'
   const isBlocked = !call.ok && (
@@ -58,10 +65,16 @@ function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: bool
   return (
     <div className={`flex items-start gap-1.5 text-[11px] leading-snug ${compact ? 'py-0.5' : 'py-1'}`}>
       <Terminal className="w-3 h-3 text-operator-muted/70 shrink-0 mt-0.5" />
-      <span className="font-mono text-operator-text shrink-0">{call.toolId}</span>
-      <span className="text-operator-muted/80 truncate flex-1" title={call.summary}>
-        {call.summary}
-      </span>
+      <span className="font-mono text-operator-text/70 shrink-0 text-[10px]">{call.toolId}</span>
+      {call.target ? (
+        <span className="font-mono text-operator-accent/75 truncate flex-1 min-w-0" title={call.target}>
+          {shortPath(call.target)}
+        </span>
+      ) : (
+        <span className="text-operator-muted/80 truncate flex-1 min-w-0" title={call.summary}>
+          {call.summary}
+        </span>
+      )}
       <span className="text-operator-muted/60 font-mono text-[10px] shrink-0">
         {formatDuration(call.durationMs)}
       </span>
@@ -186,16 +199,24 @@ function SingleCallCard({ call }: { call: ActivityToolCall }) {
       </div>
       <div className="min-w-0 flex-1">
         <div className="flex items-center gap-1.5 mb-0.5">
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-operator-muted">Tool</span>
-          <span className="text-[10px] font-mono text-operator-muted/70">{timeOf(call.at)}</span>
-          <span className="text-[10px] font-mono text-operator-muted/60 ml-auto">
-            {formatDuration(call.durationMs)}
-          </span>
+          <span className="font-mono text-[10px] text-operator-muted/70">{call.toolId}</span>
+          <span className="text-[10px] font-mono text-operator-muted/50">{timeOf(call.at)}</span>
+          {call.durationMs > 0 && (
+            <span className="text-[10px] font-mono text-operator-muted/50 ml-auto">
+              {formatDuration(call.durationMs)}
+            </span>
+          )}
         </div>
-        <div className="text-[12px] leading-snug">
-          <span className="font-mono text-operator-text">{call.toolId}</span>
-          <span className="text-operator-muted"> · {call.summary}</span>
-        </div>
+        {call.target ? (
+          <div className="font-mono text-[11px] text-operator-accent/80 truncate" title={call.target}>
+            {shortPath(call.target)}
+          </div>
+        ) : (
+          <div className="text-[12px] text-operator-muted/80 leading-snug truncate">{call.summary}</div>
+        )}
+        {call.target && call.summary && call.summary !== call.target && (
+          <div className="text-[11px] text-operator-muted/60 leading-snug mt-0.5 truncate">{call.summary}</div>
+        )}
       </div>
       {call.ok ? (
         <CheckCircle2 className="w-3.5 h-3.5 text-operator-success shrink-0 mt-1" />

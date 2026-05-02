@@ -1,11 +1,14 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
   AlertTriangle,
   Box,
   CheckCircle2,
+  ChevronDown,
+  ChevronRight,
   FileDiff,
   FileText,
+  FolderOpen,
   Layers,
   MessageSquareQuote,
   Package,
@@ -84,47 +87,148 @@ function ArtifactBody({ artifact }: { artifact: Artifact }) {
   );
 }
 
+/** Show last 2 path segments: "…/components/Foo.tsx" */
+function shortPath(path: string): string {
+  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
+  if (parts.length <= 2) return path;
+  return `…/${parts.slice(-2).join('/')}`;
+}
+
+function formatDurationMs(ms: number): string {
+  if (ms < 1) return '';
+  if (ms < 1000) return `${Math.round(ms)}ms`;
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityToolCall }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasTarget = !!call.target;
+  const hasSummary = !!call.summary && call.summary !== call.target;
+  const isExpandable = hasTarget || hasSummary;
+  const dur = formatDurationMs(call.durationMs);
+
+  return (
+    <li className="rounded-lg border border-operator-border bg-operator-panel/30 overflow-hidden">
+      <div className="flex items-center gap-2 px-2.5 py-1.5 text-[11px]">
+        {call.ok ? (
+          <CheckCircle2 className="w-3 h-3 text-operator-success shrink-0" />
+        ) : (
+          <XCircle className="w-3 h-3 text-operator-error shrink-0" />
+        )}
+        {hasTarget ? (
+          <span className="font-mono text-operator-accent/85 flex-1 truncate min-w-0" title={call.target!}>
+            {shortPath(call.target!)}
+          </span>
+        ) : (
+          <>
+            <Terminal className="w-3 h-3 text-operator-muted/60 shrink-0" />
+            <span className="font-mono text-operator-text flex-1 truncate min-w-0">{call.toolId}</span>
+          </>
+        )}
+        {dur && <span className="font-mono text-[10px] text-operator-muted/60 shrink-0">{dur}</span>}
+        {isExpandable && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="shrink-0 text-operator-muted/50 hover:text-operator-muted transition-colors duration-100"
+          >
+            {expanded
+              ? <ChevronDown className="w-3 h-3" />
+              : <ChevronRight className="w-3 h-3" />
+            }
+          </button>
+        )}
+      </div>
+
+      {expanded && (
+        <div className="border-t border-operator-border/40 bg-operator-bg/40 px-2.5 py-2 space-y-1.5">
+          {hasTarget && (
+            <div className="flex items-start gap-1.5">
+              <FolderOpen className="w-3 h-3 text-operator-muted/60 shrink-0 mt-0.5" />
+              <span className="font-mono text-[10.5px] text-operator-muted/80 break-all">{call.target}</span>
+            </div>
+          )}
+          {hasTarget && (
+            <div className="flex items-center gap-1.5">
+              <Terminal className="w-3 h-3 text-operator-muted/50 shrink-0" />
+              <span className="font-mono text-[10px] text-operator-muted/60">{call.toolId}</span>
+            </div>
+          )}
+          {hasSummary && (
+            <div className="text-[11px] text-operator-muted/80 leading-relaxed">{call.summary}</div>
+          )}
+          {!call.ok && call.error && (
+            <pre className="mt-1 rounded border border-operator-error/25 bg-operator-error/5 px-2 py-1.5 text-[10.5px] font-mono text-operator-error whitespace-pre-wrap break-words">
+              {call.error}
+            </pre>
+          )}
+        </div>
+      )}
+    </li>
+  );
+}
+
 function BatchBody({ batch }: { batch: BatchResource }) {
+  // Collect unique targets from calls that have them — surfaces "what was read" prominently
+  const targets = batch.calls
+    .map((c) => c.target)
+    .filter((t): t is string => !!t);
+  const uniqueTargets = [...new Set(targets)];
+
   return (
     <div className="space-y-3">
+      {/* Batch summary card */}
       <div className="rounded-xl border border-operator-border bg-operator-panel/40 px-3 py-2.5">
         <div className="flex items-center gap-2 mb-1.5">
           <Layers className="w-3.5 h-3.5 text-operator-accent" />
           <span className="text-[9px] font-semibold uppercase tracking-wider text-operator-accent">
             {batch.kind === 'read_batch' ? 'Read Batch' : 'Bundle'}
           </span>
-          <span className="text-[10px] font-mono text-operator-muted/70 ml-auto">{batch.id}</span>
+          <span className="ml-auto text-[10px] font-mono text-operator-muted/60">{batch.id}</span>
         </div>
         <div className="text-[14px] text-operator-text font-medium leading-snug">{batch.label}</div>
         {batch.kind === 'read_batch' && batch.mergedSummary && (
-          <div className="text-[12px] text-operator-muted mt-1 leading-relaxed">
-            {batch.mergedSummary}
-          </div>
+          <div className="text-[12px] text-operator-muted mt-1 leading-relaxed">{batch.mergedSummary}</div>
         )}
       </div>
 
+      {/* Read targets — shown when backend populates RunStep.target */}
+      {uniqueTargets.length > 0 && (
+        <div>
+          <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5 px-0.5">
+            <FolderOpen className="w-3 h-3" />
+            Read Targets
+          </div>
+          <div className="rounded-xl border border-operator-border bg-operator-bg divide-y divide-operator-border/40 overflow-hidden">
+            {uniqueTargets.map((t) => (
+              <div key={t} className="flex items-center gap-2 px-2.5 py-1.5">
+                <span className="font-mono text-[10.5px] text-operator-accent/80 truncate flex-1 min-w-0" title={t}>
+                  {shortPath(t)}
+                </span>
+                <span className="font-mono text-[10px] text-operator-muted/50 shrink-0 truncate max-w-[55%]" title={t}>
+                  {t}
+                </span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Pending target data notice — honest empty state for path visibility */}
+      {uniqueTargets.length === 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-dashed border-operator-border px-2.5 py-2 text-[11px] text-operator-muted/60">
+          <FolderOpen className="w-3 h-3 shrink-0" />
+          <span>Read targets will appear here once the backend provides <span className="font-mono">RunStep.target</span>.</span>
+        </div>
+      )}
+
+      {/* Individual calls */}
       <div>
         <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5 px-0.5">
-          Calls
+          Calls · {batch.calls.length}
         </div>
         <ul className="space-y-1">
           {batch.calls.map((c) => (
-            <li
-              key={c.id}
-              className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-operator-border bg-operator-panel/30 text-[11px]"
-            >
-              <Terminal className="w-3 h-3 text-operator-muted shrink-0" />
-              <span className="font-mono text-operator-text">{c.toolId}</span>
-              <span className="text-operator-muted truncate flex-1">{c.summary}</span>
-              <span className="font-mono text-operator-muted/70 shrink-0">
-                {c.durationMs}ms
-              </span>
-              {c.ok ? (
-                <CheckCircle2 className="w-3 h-3 text-operator-success shrink-0" />
-              ) : (
-                <XCircle className="w-3 h-3 text-operator-error shrink-0" />
-              )}
-            </li>
+            <BatchCallRow key={c.id} call={c} />
           ))}
         </ul>
       </div>
@@ -274,7 +378,7 @@ export function InspectorDrawer() {
 
         <div className="px-4 py-2.5 border-t border-operator-border flex items-center justify-between bg-operator-panel/30">
           <span className="text-[10px] text-operator-muted">
-            Inspector shell · future home for causal trace, diff apply, and governance actions
+            Verbose context home — paths, payloads, and causal trace
           </span>
           <span className="text-[10px] text-operator-muted/70 font-mono">esc to close</span>
         </div>

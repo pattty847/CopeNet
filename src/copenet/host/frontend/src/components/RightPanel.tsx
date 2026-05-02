@@ -183,7 +183,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
       ref={panelRef}
       className={`${mobile ? 'w-full min-w-0 border-l-0' : 'w-full min-w-0 border-l'} border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden`}
     >
-      {/* Header */}
+      {/* Header — title reflects active tab */}
       <div className="px-3 py-3 border-b border-operator-border flex items-center gap-2">
         {!mobile && (
           <button
@@ -194,11 +194,8 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         )}
-        <Activity className="w-3.5 h-3.5 text-operator-accent" />
-        <div>
-          <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Inspector</h2>
-          <div className="text-[10px] text-operator-muted">Runtime, artifacts, and run telemetry.</div>
-        </div>
+        <ActiveTabIcon className="w-3.5 h-3.5 text-operator-accent shrink-0" />
+        <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">{activeTab.label}</h2>
       </div>
 
       {/* Tab strip */}

@@ -235,6 +235,8 @@ function mapToolStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'][
     ok: step.ok,
     durationMs: 0,
     at: run.completedAt || run.startedAt,
+    target: step.target ?? null,
+    error: step.error ?? null,
   };
 }
 
