@@ -137,8 +137,11 @@ export interface ActivityToolCall {
   ok: boolean;
   durationMs: number;
   at: string;
+  artifactId?: string | null;
   /** Primary call target — file path, search query, or URI. Populated when backend provides RunStep.target. */
   target?: string | null;
+  workspaceRoot?: string | null;
+  scope?: 'inside_workspace' | 'outside_workspace' | null;
   /** Error string when ok=false. Populated when backend provides RunStep.error. */
   error?: string | null;
 }

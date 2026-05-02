@@ -89,6 +89,7 @@ async def _run_harness_turn(
     registry = ToolRegistry()
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name=provider.name,
         model=None,
@@ -178,14 +179,14 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
             expect_trace_event=None,
         ),
         PromptMatrixCase(
-            name="blocked_path_request",
+            name="outside_workspace_path_request",
             first_turn='{"tool_id":"files.list","arguments":{"path":".."}}',
-            follow_up="The path was blocked by policy.",
+            follow_up="I inspected the parent directory and marked it as outside the home workspace.",
             expect_tool_requested=True,
             expect_correction=False,
             expected_tool_id="files.list",
-            expect_tool_ok=False,
-            expect_trace_event="tool_blocked",
+            expect_tool_ok=True,
+            expect_trace_event="tool_executed",
         ),
         PromptMatrixCase(
             name="wrong_but_valid_tool_json",
@@ -217,11 +218,13 @@ async def test_tool_prompt_matrix_behaviors(case: PromptMatrixCase, tmp_path: Pa
     if case.expect_tool_requested:
         assert len(tool_requested) == 1
         assert tool_requested[0]["toolId"] == case.expected_tool_id
-        meta_events = [event for event in events if event.kind == "meta"]
-        assert len(meta_events) == 1
-        tool_payload = meta_events[0].metadata["toolExecution"]
+        tool_meta_events = [event for event in events if event.kind == "meta" and "toolExecution" in event.metadata]
+        assert len(tool_meta_events) == 1
+        tool_payload = tool_meta_events[0].metadata["toolExecution"]
         assert tool_payload["toolId"] == case.expected_tool_id
         assert tool_payload["ok"] is case.expect_tool_ok
+        if case.name == "outside_workspace_path_request":
+            assert tool_payload["scope"] == "outside_workspace"
         if case.expect_trace_event is not None:
             matching = _find_trace_rows(traces, case.expect_trace_event)
             assert len(matching) == 1
@@ -235,9 +238,9 @@ async def test_tool_prompt_matrix_behaviors(case: PromptMatrixCase, tmp_path: Pa
         if case.expect_correction:
             correction_rows = _find_trace_rows(traces, "tool_correction_generated")
             assert len(correction_rows) == 1
-            meta_events = [event for event in events if event.kind == "meta"]
-            assert len(meta_events) == 1
-            assert meta_events[0].metadata["toolExecution"]["toolId"] == "tool.parse"
+            tool_meta_events = [event for event in events if event.kind == "meta" and "toolExecution" in event.metadata]
+            assert len(tool_meta_events) == 1
+            assert tool_meta_events[0].metadata["toolExecution"]["toolId"] == "tool.parse"
         else:
             assert all(event.kind != "meta" for event in events)
         delta_events = [event for event in events if event.kind == "delta"]

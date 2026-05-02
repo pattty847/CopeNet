@@ -44,6 +44,7 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
     title = _optional_text(raw, "title")
     system_prompt_id = _optional_text(raw, "systemPromptId")
     task_prompt_id = _optional_text(raw, "taskPromptId")
+    workspace_root = _optional_text(raw, "workspaceRoot")
     if not provider:
         await send_json(
             make_response_frame(
@@ -63,6 +64,7 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
             title=title,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
+            workspace_root=workspace_root,
         )
     except Exception as exc:
         await send_json(

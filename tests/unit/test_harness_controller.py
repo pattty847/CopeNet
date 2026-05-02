@@ -263,6 +263,7 @@ async def test_tool_registry_warns_then_blocks_repeated_identical_files_list(tmp
     registry = ToolRegistry()
     context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="prompted",
         model=None,

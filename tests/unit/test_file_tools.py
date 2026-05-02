@@ -12,6 +12,7 @@ from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, ToolP
 def _tool_context(tmp_path: Path) -> ToolExecutionContext:
     return ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model="test-model",
@@ -46,6 +47,8 @@ async def test_files_rg_returns_bounded_matches(monkeypatch: pytest.MonkeyPatch,
 
     assert result.ok is True
     assert result.summary == "Found 2 matches for pattern via ripgrep."
+    assert result.output["scope"] == "inside_workspace"
+    assert result.output["workspaceRoot"] == str(tmp_path)
     assert result.output["matches"] == [
         {"path": "src/app.py", "line": 12, "column": 5, "text": "needle appears here"},
         {"path": "README.md", "line": 3, "column": 1, "text": "needle again"},
@@ -68,3 +71,23 @@ async def test_files_rg_fails_clearly_when_rg_missing(monkeypatch: pytest.Monkey
 
     assert result.ok is False
     assert result.error == "ripgrep (rg) is not installed or not available on PATH"
+
+
+@pytest.mark.asyncio
+async def test_files_read_allows_outside_workspace_and_marks_scope(tmp_path: Path) -> None:
+    registry = ToolRegistry()
+    outside_root = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside_root.mkdir(exist_ok=True)
+    outside_file = outside_root / "note.txt"
+    outside_file.write_text("hello from outside\n", encoding="utf-8")
+
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="files.read", arguments={"path": str(outside_file)}),
+        _tool_context(tmp_path),
+    )
+
+    assert result.ok is True
+    assert result.output["scope"] == "outside_workspace"
+    assert result.output["workspaceRoot"] == str(tmp_path)
+    assert result.output["target"] == str(outside_file)
+    assert result.output["path"] == str(outside_file)

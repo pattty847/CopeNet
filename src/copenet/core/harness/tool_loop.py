@@ -42,9 +42,17 @@ def _tool_call_event_payload(
     channel: str = "tool",
     native: bool = False,
 ) -> dict[str, Any]:
+    hint = None
+    for key in ("path", "query", "pattern", "file", "dir", "uri"):
+        value = arguments.get(key)
+        if isinstance(value, str) and value.strip():
+            hint = value.strip()
+            break
     return {
         "toolId": tool_id,
         "arguments": dict(arguments),
+        "target": hint,
+        "hint": hint,
         "step": step,
         "channel": channel,
         "native": native,

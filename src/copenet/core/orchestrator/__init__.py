@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Awaitable, Callable
@@ -52,6 +53,7 @@ class ChatSendRequest:
     timeout_ms: int | None = None
     system_prompt: str | None = None
     allow_tools: bool = True
+    workspace_root: str | None = None
 
 
 class SessionInFlightError(RuntimeError):
@@ -137,6 +139,7 @@ class Orchestrator:
         title: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        workspace_root: str | None = None,
     ) -> dict:
         """Create a new session with a locked provider/model/profile/task binding."""
         return create_profiled_session(
@@ -147,6 +150,7 @@ class Orchestrator:
             title=title,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
+            workspace_root=self.validate_workspace_root(workspace_root) if workspace_root else None,
         )
 
     def rename_session(self, session_key: str, title: str | None) -> dict:
@@ -244,16 +248,56 @@ class Orchestrator:
         briefing = self._profile_service.build_return_briefing()
         return briefing.to_public_dict() if briefing is not None else None
 
-    def get_runtime_context(self) -> dict:
+    def validate_workspace_root(self, workspace_root: str | None) -> str:
+        """Validate and normalize one session workspace root."""
+        candidate = Path((workspace_root or "").strip() or str(self._workdir)).expanduser().resolve()
+        if not candidate.exists():
+            raise ValueError(f"workspace root not found: {candidate}")
+        if not candidate.is_dir():
+            raise ValueError(f"workspace root is not a directory: {candidate}")
+        return str(candidate)
+
+    def browse_workspace_root(self) -> str | None:
+        """Open a macOS-native folder picker and return the chosen path."""
+        script = 'set chosenFolder to choose folder with prompt "Choose CopeNet workspace root"\nPOSIX path of chosenFolder'
+        try:
+            completed = subprocess.run(
+                ["osascript", "-e", script],
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+        except FileNotFoundError as exc:
+            raise RuntimeError("native folder picker unavailable: osascript not found") from exc
+        if completed.returncode != 0:
+            stderr = (completed.stderr or "").strip()
+            if "User canceled" in stderr:
+                return None
+            raise RuntimeError(stderr or "native folder picker failed")
+        selected = (completed.stdout or "").strip()
+        return self.validate_workspace_root(selected) if selected else None
+
+    def get_runtime_context(
+        self,
+        *,
+        session_key: str | None = None,
+        workspace_root: str | None = None,
+    ) -> dict:
         """Return the current workspace root and access-policy summary."""
+        selected_root = workspace_root
+        if session_key:
+            entry = self._session_store.get(session_key.strip())
+            if entry is not None and entry.workspace_root:
+                selected_root = entry.workspace_root
+        resolved_root = self.validate_workspace_root(selected_root) if selected_root else str(self._workdir)
         return {
-            "workspaceRoot": str(self._workdir),
-            "fileToolScope": "workspace_only",
+            "workspaceRoot": resolved_root,
+            "fileToolScope": "workspace_home_visible_roaming",
             "shellToolScope": "cwd_default",
             "shellAllowlist": list(self._tool_policy.shell_allowlist),
             "note": (
-                "Repo/file tools are currently scoped to the workspace root. "
-                "Allowlisted shell commands run from that root."
+                "Repo/file tools default to this home workspace. Reads outside it are allowed but should be visibly marked. "
+                "Allowlisted shell commands run from this root."
             ),
         }
 

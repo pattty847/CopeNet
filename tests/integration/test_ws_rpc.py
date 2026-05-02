@@ -183,6 +183,8 @@ def rpc_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     monkeypatch.setenv("COPNET_TOKEN", "test-token")
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
     (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    outside_root = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside_root.mkdir(exist_ok=True)
 
     orchestrator = Orchestrator(
         session_store=SessionStore(path=tmp_path / "index.json"),
@@ -200,8 +202,8 @@ def rpc_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
             "prompted-blocked": PromptedToolProvider(
                 name="prompted-blocked",
                 display_name="Prompted Blocked",
-                tool_json='{"tool_id":"files.list","arguments":{"path":"/Users/copeharder/Desktop"}}',
-                follow_up="That path was blocked by policy.",
+                tool_json=f'{{"tool_id":"files.list","arguments":{{"path":"{outside_root}"}}}}',
+                follow_up="I inspected a directory outside the home workspace and marked it clearly.",
             ),
         },
     )
@@ -248,7 +250,7 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert failure["error"]["message"] == "invalid token"
 
 
-def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient) -> None:
+def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, tmp_path: Path) -> None:
     with _open_rpc(rpc_client) as socket:
         providers_id = socket.request("providers.list")
         providers = socket.recv_response(providers_id)
@@ -289,6 +291,15 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient) -
         sessions = socket.recv_response(sessions_id)
         assert sessions["payload"]["sessions"] == []
 
+        runtime_context_id = socket.request("runtime.context")
+        runtime_context = socket.recv_response(runtime_context_id)
+        assert runtime_context["payload"]["runtimeContext"]["workspaceRoot"] == str(tmp_path)
+        assert runtime_context["payload"]["runtimeContext"]["fileToolScope"] == "workspace_home_visible_roaming"
+
+        set_workspace_id = socket.request("runtime.workspace.set", {"workspaceRoot": str(tmp_path)})
+        set_workspace_response = socket.recv_response(set_workspace_id)
+        assert set_workspace_response["payload"]["workspaceRoot"] == str(tmp_path)
+
         create_id = socket.request(
             "sessions.create",
             {
@@ -298,6 +309,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient) -
                 "title": "Alpha Session",
                 "systemPromptId": "default",
                 "taskPromptId": "general",
+                "workspaceRoot": str(tmp_path),
             },
         )
         create_response = socket.recv_response(create_id)
@@ -307,6 +319,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient) -
         assert session["model"] == "model-a"
         assert session["systemPromptId"] == "default"
         assert session["taskPromptId"] == "general"
+        assert session["workspaceRoot"] == str(tmp_path)
         assert session["archived"] is False
 
         resolve_id = socket.request("sessions.resolve", {"key": "alpha"})
@@ -423,7 +436,7 @@ def test_chat_abort_returns_run_id_and_final_event(rpc_client: TestClient) -> No
         assert events[-1]["payload"]["message"] is None
 
 
-def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient) -> None:
+def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient, tmp_path: Path) -> None:
     with _open_rpc(rpc_client) as socket:
         success_id = socket.request(
             "chat.send",
@@ -473,11 +486,12 @@ def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient) ->
         assert blocked_events[0]["payload"]["state"] == "tool_called"
         assert blocked_events[1]["payload"]["state"] == "tool_result"
         assert blocked_final["toolExecution"]["toolId"] == "files.list"
-        assert blocked_final["toolExecution"]["ok"] is False
-        assert "path escapes workdir" in blocked_final["toolExecution"]["error"]
+        assert blocked_final["toolExecution"]["ok"] is True
+        assert blocked_final["toolExecution"]["scope"] == "outside_workspace"
+        assert blocked_final["toolExecution"]["workspaceRoot"] == str(tmp_path)
 
 
-def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient) -> None:
+def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp_path: Path) -> None:
     with _open_rpc(rpc_client) as socket:
         send_id = socket.request(
             "chat.send",
@@ -499,6 +513,8 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient) -> 
         assert runs[0]["status"] == "ok"
         assert runs[0]["artifactIds"]
         assert runs[0]["toolSteps"][0]["toolId"] == "files.read"
+        assert runs[0]["toolSteps"][0]["scope"] == "inside_workspace"
+        assert runs[0]["metadata"]["workspaceRoot"] == str(tmp_path)
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})
         run_detail = socket.recv_response(run_detail_id)

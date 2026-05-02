@@ -49,6 +49,7 @@ def session_payload(entry) -> dict:
         "model": entry.model,
         "systemPromptId": entry.system_prompt_id,
         "taskPromptId": entry.task_prompt_id,
+        "workspaceRoot": entry.workspace_root,
         "archived": entry.archived,
         "providerSessionId": entry.provider_session_id,
         "createdAt": entry.created_at,
@@ -78,6 +79,7 @@ def create_session_with_profile(
     title: str | None = None,
     system_prompt_id: str | None = None,
     task_prompt_id: str | None = None,
+    workspace_root: str | None = None,
 ) -> dict:
     if provider not in orchestrator._providers:
         init_error = orchestrator._provider_init_errors.get(provider)
@@ -92,6 +94,7 @@ def create_session_with_profile(
         title=title,
         system_prompt_id=system_prompt_id,
         task_prompt_id=task_prompt_id,
+        workspace_root=workspace_root,
     )
     return session_payload(entry)
 
@@ -180,6 +183,7 @@ def debug_copy_session(orchestrator: "Orchestrator", session_key: str) -> dict:
         title=f"Debug Copy — {title_prefix}",
         system_prompt_id=source.system_prompt_id,
         task_prompt_id=source.task_prompt_id,
+        workspace_root=source.workspace_root,
     )
 
     copied_count = orchestrator._transcript_store.copy_history(source.session_id, copied.session_id)
@@ -250,6 +254,7 @@ def export_session(orchestrator: "Orchestrator", session_key: str) -> dict[str, 
         f"- Model: `{entry.model or 'default'}`",
         f"- Profile: `{entry.system_prompt_id or 'none'}`",
         f"- Task mode: `{entry.task_prompt_id or 'none'}`",
+        f"- Workspace root: `{entry.workspace_root or 'default'}`",
         "",
     ]
     for message in messages:

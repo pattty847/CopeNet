@@ -100,6 +100,20 @@ function formatDurationMs(ms: number): string {
   return `${(ms / 1000).toFixed(1)}s`;
 }
 
+function ScopeBadge({ scope }: { scope?: 'inside_workspace' | 'outside_workspace' | null }) {
+  if (!scope) return null;
+  const tone =
+    scope === 'outside_workspace'
+      ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+      : 'border-operator-border bg-operator-panel/40 text-operator-muted';
+  const label = scope === 'outside_workspace' ? 'outside home' : 'inside home';
+  return (
+    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
 function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityToolCall }) {
   const [expanded, setExpanded] = useState(false);
   const hasTarget = !!call.target;
@@ -109,11 +123,11 @@ function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityTo
 
   return (
     <li className="rounded-lg border border-operator-border bg-operator-panel/30 overflow-hidden">
-      <div className="flex items-center gap-2 px-2.5 py-1.5 text-[11px]">
-        {call.ok ? (
-          <CheckCircle2 className="w-3 h-3 text-operator-success shrink-0" />
-        ) : (
-          <XCircle className="w-3 h-3 text-operator-error shrink-0" />
+        <div className="flex items-center gap-2 px-2.5 py-1.5 text-[11px]">
+          {call.ok ? (
+            <CheckCircle2 className="w-3 h-3 text-operator-success shrink-0" />
+          ) : (
+            <XCircle className="w-3 h-3 text-operator-error shrink-0" />
         )}
         {hasTarget ? (
           <span className="font-mono text-operator-accent/85 flex-1 truncate min-w-0" title={call.target!}>
@@ -125,6 +139,7 @@ function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityTo
             <span className="font-mono text-operator-text flex-1 truncate min-w-0">{call.toolId}</span>
           </>
         )}
+        <ScopeBadge scope={call.scope} />
         {dur && <span className="font-mono text-[10px] text-operator-muted/60 shrink-0">{dur}</span>}
         {isExpandable && (
           <button
@@ -145,6 +160,15 @@ function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityTo
             <div className="flex items-start gap-1.5">
               <FolderOpen className="w-3 h-3 text-operator-muted/60 shrink-0 mt-0.5" />
               <span className="font-mono text-[10.5px] text-operator-muted/80 break-all">{call.target}</span>
+            </div>
+          )}
+          {call.workspaceRoot && (
+            <div className="flex items-start gap-1.5">
+              <Box className="w-3 h-3 text-operator-muted/60 shrink-0 mt-0.5" />
+              <div className="min-w-0">
+                <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/45">home workspace</div>
+                <div className="font-mono text-[10.5px] text-operator-muted/80 break-all">{call.workspaceRoot}</div>
+              </div>
             </div>
           )}
           {hasTarget && (
@@ -173,6 +197,7 @@ function BatchBody({ batch }: { batch: BatchResource }) {
     .map((c) => c.target)
     .filter((t): t is string => !!t);
   const uniqueTargets = [...new Set(targets)];
+  const workspaceRoot = batch.calls.find((call) => call.workspaceRoot)?.workspaceRoot || null;
 
   return (
     <div className="space-y-3">
@@ -189,6 +214,12 @@ function BatchBody({ batch }: { batch: BatchResource }) {
         {batch.kind === 'read_batch' && batch.mergedSummary && (
           <div className="text-[12px] text-operator-muted mt-1 leading-relaxed">{batch.mergedSummary}</div>
         )}
+        {workspaceRoot && (
+          <div className="mt-2 rounded-lg border border-operator-border/60 bg-operator-bg/50 px-2.5 py-2">
+            <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/45">home workspace</div>
+            <div className="mt-1 font-mono text-[10.5px] text-operator-text/85 break-all">{workspaceRoot}</div>
+          </div>
+        )}
       </div>
 
       {/* Read targets — shown when backend populates RunStep.target */}
@@ -204,6 +235,7 @@ function BatchBody({ batch }: { batch: BatchResource }) {
                 <span className="font-mono text-[10.5px] text-operator-accent/80 truncate flex-1 min-w-0" title={t}>
                   {shortPath(t)}
                 </span>
+                <ScopeBadge scope={batch.calls.find((call) => call.target === t)?.scope} />
                 <span className="font-mono text-[10px] text-operator-muted/50 shrink-0 truncate max-w-[55%]" title={t}>
                   {t}
                 </span>

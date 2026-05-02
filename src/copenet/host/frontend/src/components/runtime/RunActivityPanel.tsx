@@ -49,6 +49,20 @@ function shortPath(path: string): string {
   return `…/${parts.slice(-2).join('/')}`;
 }
 
+function ScopeBadge({ scope }: { scope?: 'inside_workspace' | 'outside_workspace' | null }) {
+  if (!scope) return null;
+  const tone =
+    scope === 'outside_workspace'
+      ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+      : 'border-operator-border bg-operator-panel/40 text-operator-muted';
+  const label = scope === 'outside_workspace' ? 'outside home' : 'inside home';
+  return (
+    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
 function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: boolean }) {
   // Detect blocked state: ok=false + summary mentions 'blocked' or 'policy'
   const isBlocked = !call.ok && (
@@ -71,10 +85,11 @@ function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: bool
           {shortPath(call.target)}
         </span>
       ) : (
-        <span className="text-operator-muted/80 truncate flex-1 min-w-0" title={call.summary}>
-          {call.summary}
-        </span>
+          <span className="text-operator-muted/80 truncate flex-1 min-w-0" title={call.summary}>
+            {call.summary}
+          </span>
       )}
+      <ScopeBadge scope={call.scope} />
       <span className="text-operator-muted/60 font-mono text-[10px] shrink-0">
         {formatDuration(call.durationMs)}
       </span>
@@ -192,6 +207,7 @@ function BundleCard({ bundle }: { bundle: ActivityBundle }) {
 }
 
 function SingleCallCard({ call }: { call: ActivityToolCall }) {
+  const setInspectorTarget = useAppStore((s) => s.setInspectorTarget);
   return (
     <div className="rounded-xl border border-operator-border bg-operator-panel/30 px-2.5 py-2 flex items-start gap-2">
       <div className="flex h-6 w-6 items-center justify-center rounded-md bg-operator-panel text-operator-muted shrink-0 mt-0.5">
@@ -217,6 +233,18 @@ function SingleCallCard({ call }: { call: ActivityToolCall }) {
         {call.target && call.summary && call.summary !== call.target && (
           <div className="text-[11px] text-operator-muted/60 leading-snug mt-0.5 truncate">{call.summary}</div>
         )}
+        <div className="mt-1 flex items-center gap-1.5">
+          <ScopeBadge scope={call.scope} />
+          {call.artifactId && (
+            <button
+              type="button"
+              onClick={() => setInspectorTarget({ kind: 'artifact', artifactId: call.artifactId! })}
+              className="text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:text-operator-text"
+            >
+              Inspect
+            </button>
+          )}
+        </div>
       </div>
       {call.ok ? (
         <CheckCircle2 className="w-3.5 h-3.5 text-operator-success shrink-0 mt-1" />

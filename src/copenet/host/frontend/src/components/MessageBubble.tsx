@@ -78,7 +78,7 @@ function MarkdownBody({ content }: { content: string }) {
 // ---------------------------------------------------------------------------
 function PartsBody({ parts, isLive }: { parts: NonNullable<Message['parts']>; isLive?: boolean }) {
   return (
-    <div>
+    <div className="space-y-2">
       {parts.map((part, i) => {
         if (part.kind === 'text') {
           if (!part.content) return null;

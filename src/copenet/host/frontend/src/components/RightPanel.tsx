@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Brain, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert } from 'lucide-react';
+import { Activity, Brain, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -98,6 +98,10 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const providerName = providers.find((provider) => provider.id === currentProvider)?.displayName || currentProvider || 'None';
   const profileName = profiles.find((profile) => profile.id === currentProfile)?.name || currentProfile || 'Default';
   const taskModeName = taskModes.find((mode) => mode.id === currentTaskMode)?.name || currentTaskMode || 'None';
+  const displayedWorkspaceRoot = isDraft
+    ? (draftSettings.workspaceRoot || runtimeContext?.workspaceRoot || '')
+    : (activeSession?.workspaceRoot || runtimeContext?.workspaceRoot || '');
+  const [workspaceBusy, setWorkspaceBusy] = useState(false);
 
   const updateDraftSetting = (key: 'provider' | 'model' | 'systemPromptId' | 'taskPromptId', value: string) => {
     if (key === 'provider') {
@@ -106,6 +110,37 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
       return;
     }
     patchDraftSettings({ [key]: value } as Partial<DraftSettings>);
+  };
+
+  const chooseWorkspaceRoot = async () => {
+    if (!isDraft) return;
+    setWorkspaceBusy(true);
+    try {
+      const { workspaceRoot, runtimeContext: nextContext } = await wsClient.browseWorkspaceRoot();
+      if (!workspaceRoot) return;
+      patchDraftSettings({ workspaceRoot });
+      if (nextContext) {
+        useAppStore.getState().setRuntimeContext(nextContext);
+      }
+    } catch (error) {
+      useAppStore.getState().setAppError(error instanceof Error ? error.message : 'Unable to choose workspace root.');
+    } finally {
+      setWorkspaceBusy(false);
+    }
+  };
+
+  const resetWorkspaceRoot = async () => {
+    if (!isDraft) return;
+    setWorkspaceBusy(true);
+    try {
+      const nextContext = await wsClient.setWorkspaceRoot(runtimeContext?.workspaceRoot || '');
+      patchDraftSettings({ workspaceRoot: nextContext.workspaceRoot });
+      useAppStore.getState().setRuntimeContext(nextContext);
+    } catch (error) {
+      useAppStore.getState().setAppError(error instanceof Error ? error.message : 'Unable to reset workspace root.');
+    } finally {
+      setWorkspaceBusy(false);
+    }
   };
 
   const openToTab = (tab: RightPanelTab) => {
@@ -343,15 +378,39 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               <div className="rounded-lg border border-operator-border bg-operator-bg/50 px-2.5 py-2">
                 <div className="mb-1 flex items-center justify-between gap-3">
                   <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Project Root</span>
-                  <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted">
-                    {runtimeContext?.fileToolScope === 'workspace_only' ? 'workspace only' : 'custom'}
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted">
+                      home workspace
+                    </span>
+                    {isDraft ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => void chooseWorkspaceRoot()}
+                          disabled={workspaceBusy}
+                          className="inline-flex items-center gap-1 rounded-full border border-operator-accent/20 bg-operator-accent/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent disabled:opacity-50"
+                        >
+                          <FolderOpen className="h-2.5 w-2.5" />
+                          Browse
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void resetWorkspaceRoot()}
+                          disabled={workspaceBusy}
+                          className="inline-flex items-center gap-1 rounded-full border border-operator-border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted disabled:opacity-50"
+                        >
+                          <RotateCcw className="h-2.5 w-2.5" />
+                          Reset
+                        </button>
+                      </>
+                    ) : null}
+                  </div>
                 </div>
                 <div
                   className="font-mono text-[10.5px] leading-relaxed text-operator-text break-all"
-                  title={runtimeContext?.workspaceRoot || 'Workspace root unavailable'}
+                  title={displayedWorkspaceRoot || 'Workspace root unavailable'}
                 >
-                  {runtimeContext?.workspaceRoot || 'Workspace root unavailable'}
+                  {displayedWorkspaceRoot || 'Workspace root unavailable'}
                 </div>
                 {runtimeContext?.note && (
                   <div className="mt-1.5 text-[10px] leading-relaxed text-operator-muted/70">

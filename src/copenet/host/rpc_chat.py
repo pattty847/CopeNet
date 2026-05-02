@@ -46,6 +46,7 @@ class ChatSendParams:
     task_prompt_id: str | None
     timeout_ms: int | None
     system_prompt: str | None
+    workspace_root: str | None
 
 
 def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
@@ -64,6 +65,7 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
         task_prompt_id=task_prompt_id,
         timeout_ms=_optional_int(raw, "timeoutMs"),
         system_prompt=compose_prompt(system_prompt_id, task_prompt_id),
+        workspace_root=_optional_text(raw, "workspaceRoot"),
     )
 
 
@@ -130,6 +132,7 @@ async def handle_chat_send(
                     task_prompt_id=request.task_prompt_id,
                     timeout_ms=request.timeout_ms,
                     system_prompt=request.system_prompt,
+                    workspace_root=request.workspace_root,
                 ),
                 emit=emit_chat,
                 emit_event=emit_side_event,

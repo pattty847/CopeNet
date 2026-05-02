@@ -45,6 +45,7 @@ class SessionIndexEntry:
     model: str | None
     system_prompt_id: str | None
     task_prompt_id: str | None
+    workspace_root: str | None
     archived: bool
     provider_session_id: str | None
     created_at: str
@@ -66,6 +67,7 @@ class SessionIndexEntry:
             model=_optional_str(raw, "model"),
             system_prompt_id=_optional_str(raw, "system_prompt_id"),
             task_prompt_id=_optional_str(raw, "task_prompt_id"),
+            workspace_root=_optional_str(raw, "workspace_root"),
             archived=bool(raw.get("archived", False)),
             provider_session_id=_optional_str(raw, "provider_session_id"),
             created_at=_required_str(raw, "created_at") or utc_now_iso(),
@@ -115,6 +117,7 @@ class SessionStore:
         title: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        workspace_root: str | None = None,
     ) -> SessionIndexEntry:
         """Create a new locked session."""
         normalized_key = session_key.strip()
@@ -123,6 +126,7 @@ class SessionStore:
         normalized_title = title.strip() if title else None
         normalized_system_prompt_id = system_prompt_id.strip() if system_prompt_id else None
         normalized_task_prompt_id = task_prompt_id.strip() if task_prompt_id else None
+        normalized_workspace_root = workspace_root.strip() if workspace_root else None
         if not normalized_key:
             raise ValueError("session_key is required")
         if not normalized_provider:
@@ -143,6 +147,7 @@ class SessionStore:
                 model=normalized_model,
                 system_prompt_id=normalized_system_prompt_id,
                 task_prompt_id=normalized_task_prompt_id,
+                workspace_root=normalized_workspace_root,
                 archived=False,
                 provider_session_id=None,
                 created_at=now,
@@ -176,6 +181,7 @@ class SessionStore:
         model: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        workspace_root: str | None = None,
     ) -> SessionIndexEntry:
         """Resolve an existing session or create a new one when missing."""
         normalized_key = session_key.strip()
@@ -190,6 +196,7 @@ class SessionStore:
             model=model,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
+            workspace_root=workspace_root,
         )
 
     def assert_session_binding(
@@ -199,6 +206,7 @@ class SessionStore:
         model: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        workspace_root: str | None = None,
     ) -> SessionIndexEntry:
         """Ensure the requested provider/model matches the locked session binding."""
         normalized_key = session_key.strip()
@@ -206,6 +214,7 @@ class SessionStore:
         normalized_model = model.strip() if model else None
         normalized_system_prompt_id = system_prompt_id.strip() if system_prompt_id else None
         normalized_task_prompt_id = task_prompt_id.strip() if task_prompt_id else None
+        normalized_workspace_root = workspace_root.strip() if workspace_root else None
         if not normalized_key:
             raise ValueError("session_key is required")
 
@@ -231,6 +240,10 @@ class SessionStore:
             if entry.task_prompt_id and entry.task_prompt_id != normalized_task_prompt_id:
                 raise RuntimeError(
                     f"session is locked to task mode {entry.task_prompt_id}; requested {normalized_task_prompt_id or 'none'}"
+                )
+            if entry.workspace_root and entry.workspace_root != normalized_workspace_root:
+                raise RuntimeError(
+                    f"session is locked to workspace root {entry.workspace_root}; requested {normalized_workspace_root or 'default'}"
                 )
             return entry
 

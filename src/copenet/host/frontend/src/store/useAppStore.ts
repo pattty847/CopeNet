@@ -187,6 +187,7 @@ const DEFAULT_DRAFT: DraftSettings = {
   model: 'gpt-5.4',
   systemPromptId: 'default',
   taskPromptId: 'none',
+  workspaceRoot: '',
 };
 
 export const useAppStore = create<AppState>((set) => ({

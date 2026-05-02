@@ -110,6 +110,12 @@ class ToolExecutionResult:
             payload["error"] = self.error
         if self.artifact_id:
             payload["artifactId"] = self.artifact_id
+        body = self.body if self.body is not None else self.output
+        if isinstance(body, dict):
+            for key in ("target", "workspaceRoot", "scope"):
+                value = body.get(key)
+                if value is not None:
+                    payload[key] = value
         preview = _preview_payload(self.tool_id, self.body if self.body is not None else self.output)
         if preview is not None:
             payload["preview"] = preview
@@ -132,6 +138,12 @@ class ToolExecutionResult:
             payload["error"] = self.error
         if self.artifact_id:
             payload["artifactId"] = self.artifact_id
+        body = self.body if self.body is not None else self.output
+        if isinstance(body, dict):
+            for key in ("target", "workspaceRoot", "scope"):
+                value = body.get(key)
+                if value is not None:
+                    payload[key] = value
         return payload
 
 
@@ -195,6 +207,7 @@ class ToolExecutionContext:
     """Execution context shared across tool handlers."""
 
     workdir: Any
+    session_workspace_root: Any
     session_key: str | None
     provider_name: str | None
     model: str | None
@@ -260,6 +273,12 @@ def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:
             "summary": str(item.get("summary") or ""),
             "error": str(item.get("error")).strip() if item.get("error") is not None else None,
         }
+        output = item.get("output")
+        if isinstance(output, dict):
+            for key in ("target", "workspaceRoot", "scope"):
+                value = output.get(key)
+                if value is not None:
+                    payload[key] = value
         preview = _preview_payload(tool_id, item.get("output"))
         if preview is not None:
             payload["preview"] = preview

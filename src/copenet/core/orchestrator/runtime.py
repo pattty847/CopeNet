@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
@@ -64,6 +65,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             model=request.model,
             system_prompt_id=request.system_prompt_id,
             task_prompt_id=request.task_prompt_id,
+            workspace_root=orchestrator.validate_workspace_root(request.workspace_root) if request.workspace_root else None,
         )
         entry = orchestrator._session_store.assert_session_binding(
             session_key=session_key,
@@ -71,6 +73,12 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             model=request.model,
             system_prompt_id=request.system_prompt_id,
             task_prompt_id=request.task_prompt_id,
+            workspace_root=entry.workspace_root or request.workspace_root,
+        )
+        session_workspace_root = (
+            Path(orchestrator.validate_workspace_root(entry.workspace_root))
+            if entry.workspace_root
+            else orchestrator._workdir
         )
         orchestrator._session_store.mark_run_started(session_key=session_key, run_id=run_id)
         abort_event = asyncio.Event()
@@ -83,7 +91,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "messagePreview": message[:200],
             "profile": request.system_prompt_id,
             "taskMode": request.task_prompt_id,
-            "workdir": str(orchestrator._workdir),
+            "workdir": str(session_workspace_root),
         },
     )
     trace.record(
@@ -151,7 +159,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             available_tools=orchestrator._tool_registry.list_tools() if request.allow_tools else [],
             tool_executor=orchestrator._tool_registry.execute,
             tool_context=ToolExecutionContext(
-                workdir=orchestrator._workdir,
+                workdir=session_workspace_root,
+                session_workspace_root=session_workspace_root,
                 session_key=session_key,
                 provider_name=provider_name,
                 model=request.model,
@@ -388,6 +397,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "toolCalls": plan.capability_profile.tool_calls,
                     "promptedToolUse": plan.capability_profile.prompted_tool_use,
                 },
+                "workspaceRoot": str(session_workspace_root),
                 "turnState": dict(latest_turn_state),
             },
         )
@@ -487,6 +497,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             tool_results=normalized_tool_results,
             pending_input_count=int(latest_turn_state.get("pendingInputCount") or 0),
             oversized_tool_artifact_ids=list(persisted_tool_artifact_ids),
+            metadata={"workspaceRoot": str(session_workspace_root)} if "session_workspace_root" in locals() else {},
         )
         orchestrator._run_store.create(failed_run)
         trace.record(
@@ -592,6 +603,9 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
         "summary": str(tool_payload.get("summary") or ""),
         "error": str(tool_payload.get("error")).strip() if tool_payload.get("error") is not None else None,
         "artifactId": str(tool_payload.get("artifactId") or "").strip() or None,
+        "target": str(tool_payload.get("target") or "").strip() or None,
+        "workspaceRoot": str(tool_payload.get("workspaceRoot") or "").strip() or None,
+        "scope": str(tool_payload.get("scope") or "").strip() or None,
         "status": "blocked" if tool_payload.get("ok") is False else "ok",
         "batched": str(tool_payload.get("channel") or "") == "batch" or str(tool_payload.get("toolId") or "") == "tool.batch",
     }

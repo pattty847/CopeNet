@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from copenet.core.tools.contracts import ToolBlockedError, ToolExecutionContext
+from copenet.core.tools.contracts import ToolExecutionContext
 
 
 async def run_command(
@@ -50,12 +50,22 @@ def read_guidance(context: ToolExecutionContext) -> str:
 def resolve_relative_path(raw_path: str | None, context: ToolExecutionContext) -> Path:
     path_str = (raw_path or ".").strip() or "."
     candidate = Path(path_str).expanduser()
-    candidate = (context.workdir / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
+    return (context.workdir / candidate).resolve() if not candidate.is_absolute() else candidate.resolve()
+
+
+def scope_for_path(path: Path, context: ToolExecutionContext) -> str:
     try:
-        candidate.relative_to(context.workdir)
-    except ValueError as exc:
-        raise ToolBlockedError("path escapes workdir") from exc
-    return candidate
+        path.resolve().relative_to(context.session_workspace_root.resolve())
+        return "inside_workspace"
+    except ValueError:
+        return "outside_workspace"
+
+
+def display_path(path: Path, context: ToolExecutionContext) -> str:
+    try:
+        return str(path.resolve().relative_to(context.workdir.resolve()))
+    except ValueError:
+        return str(path.resolve())
 
 
 def expand_shell_argv(argv: list[str]) -> list[str]:

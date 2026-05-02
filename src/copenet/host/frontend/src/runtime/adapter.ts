@@ -235,7 +235,12 @@ function mapToolStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'][
     ok: step.ok,
     durationMs: 0,
     at: run.completedAt || run.startedAt,
+    artifactId: step.artifactId ?? null,
     target: step.target ?? null,
+    workspaceRoot:
+      step.workspaceRoot ??
+      (typeof run.metadata?.workspaceRoot === 'string' ? run.metadata.workspaceRoot : null),
+    scope: step.scope ?? null,
     error: step.error ?? null,
   };
 }

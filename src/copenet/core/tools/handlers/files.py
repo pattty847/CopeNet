@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 import re
 import subprocess
 
 from copenet.core.tools.contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
-from ._shared import resolve_relative_path
+from ._shared import display_path, resolve_relative_path, scope_for_path
 
 
 DESCRIPTORS = [
@@ -80,17 +81,24 @@ async def list_files(request: ToolExecutionRequest, context: ToolExecutionContex
         return blocked_result
     if not root.exists():
         raise RuntimeError(f"path not found: {root}")
+    target = display_path(root, context)
+    scope = scope_for_path(root, context)
     rows = []
     for file_path in sorted(root.iterdir())[: context.policy.list_result_limit]:
         rows.append(
             {
-                "path": str(file_path.relative_to(context.workdir)),
+                "path": display_path(file_path, context),
                 "name": file_path.name,
                 "isDir": file_path.is_dir(),
             }
         )
-    summary = f"Listed {len(rows)} entries under {root.relative_to(context.workdir) if root != context.workdir else '.'}."
-    output = {"entries": rows}
+    summary = f"Listed {len(rows)} entries under {target if target != str(context.workdir) else '.'}."
+    output = {
+        "entries": rows,
+        "target": target,
+        "workspaceRoot": str(context.session_workspace_root),
+        "scope": scope,
+    }
     if warning_message:
         summary = f"{summary} Warning: {warning_message}"
         output["warning"] = warning_message
@@ -115,21 +123,26 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
         return blocked_result
     if path.exists() and path.is_dir():
         raise RuntimeError(
-            f"path is a directory: {path.relative_to(context.workdir)}; use files.list to inspect directories or files.search to search inside them"
+            f"path is a directory: {display_path(path, context)}; use files.list to inspect directories or files.search to search inside them"
         )
     if not path.is_file():
         raise RuntimeError(f"file not found: {path}")
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         text = handle.read(context.policy.file_output_limit)
+    target = display_path(path, context)
+    scope = scope_for_path(path, context)
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
         summary=(
-            f"Read file {path.relative_to(context.workdir)}."
+            f"Read file {target}."
             + (f" Warning: {warning_message}" if warning_message else "")
         ),
         output={
-            "path": str(path.relative_to(context.workdir)),
+            "path": target,
+            "target": target,
+            "workspaceRoot": str(context.session_workspace_root),
+            "scope": scope,
             "content": text,
             **({"warning": warning_message} if warning_message else {}),
         },
@@ -155,6 +168,8 @@ async def search_files(request: ToolExecutionRequest, context: ToolExecutionCont
     if not pattern:
         raise ValueError("pattern is required")
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
+    target = display_path(root, context)
+    scope = scope_for_path(root, context)
     regex = re.compile(pattern, re.MULTILINE)
     hits = []
     for file_path in root.rglob("*"):
@@ -172,7 +187,7 @@ async def search_files(request: ToolExecutionRequest, context: ToolExecutionCont
             line = lines[line_no - 1] if lines else ""
             hits.append(
                 {
-                    "path": str(file_path.relative_to(context.workdir)),
+                    "path": display_path(file_path, context),
                     "line": line_no,
                     "text": line[:240],
                 }
@@ -188,6 +203,9 @@ async def search_files(request: ToolExecutionRequest, context: ToolExecutionCont
         ),
         output={
             "matches": hits,
+            "target": target,
+            "workspaceRoot": str(context.session_workspace_root),
+            "scope": scope,
             **({"warning": warning_message} if warning_message else {}),
         },
     )
@@ -214,6 +232,8 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
     if not root.exists():
         raise RuntimeError(f"path not found: {root}")
+    target = display_path(root, context)
+    scope = scope_for_path(root, context)
     try:
         completed = subprocess.run(
             [
@@ -224,7 +244,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
                 "--color",
                 "never",
                 pattern,
-                str(root.relative_to(context.workdir) if root != context.workdir else "."),
+                str(Path(target)),
             ],
             cwd=context.workdir,
             capture_output=True,
@@ -281,6 +301,9 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         ),
         output={
             "matches": hits,
+            "target": target,
+            "workspaceRoot": str(context.session_workspace_root),
+            "scope": scope,
             **({"warning": warning_message} if warning_message else {}),
         },
     )

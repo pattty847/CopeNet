@@ -190,11 +190,13 @@ async def test_orchestrator_tool_loop_reads_file(monkeypatch, tmp_path: Path) ->
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_tool_loop_blocks_path_escape(monkeypatch, tmp_path: Path) -> None:
+async def test_orchestrator_tool_loop_marks_outside_workspace_reads(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    outside_root = tmp_path.parent / f"{tmp_path.name}-outside"
+    outside_root.mkdir(exist_ok=True)
     provider = PromptedToolProvider(
-        tool_json='{"tool_id":"files.list","arguments":{"path":"/Users/copeharder/Desktop"}}',
-        follow_up='{"state":"FINAL_CANDIDATE","answer":"The tool was blocked, so I cannot inspect that path.","evidence":[],"done_conditions_met":[],"remaining_uncertainty":["Requested path escaped workdir."]}',
+        tool_json=f'{{"tool_id":"files.list","arguments":{{"path":"{outside_root}"}}}}',
+        follow_up='{"state":"FINAL_CANDIDATE","answer":"I inspected a directory outside the home workspace and marked it clearly.","evidence":[],"done_conditions_met":[],"remaining_uncertainty":[]}',
     )
     orchestrator = Orchestrator(
         session_store=SessionStore(path=tmp_path / "index.json"),
@@ -210,8 +212,10 @@ async def test_orchestrator_tool_loop_blocks_path_escape(monkeypatch, tmp_path: 
 
     final_event = events[-1]
     assert final_event["toolExecution"]["toolId"] == "files.list"
-    assert final_event["toolExecution"]["ok"] is False
-    assert "path escapes workdir" in final_event["toolExecution"]["error"]
+    assert final_event["toolExecution"]["ok"] is True
+    assert final_event["toolExecution"]["scope"] == "outside_workspace"
+    assert final_event["toolExecution"]["workspaceRoot"] == str(tmp_path)
+    assert final_event["toolExecution"]["target"] == str(outside_root)
 
 
 @pytest.mark.asyncio
@@ -238,6 +242,7 @@ async def test_harness_continues_read_only_tool_loop_until_answer(tmp_path: Path
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="prompted",
         model=None,
@@ -295,6 +300,7 @@ async def test_harness_follow_up_prompt_demands_grounding_before_repo_summary(tm
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="prompted",
         model=None,
@@ -372,6 +378,7 @@ async def test_harness_native_tool_loop_executes_provider_tool_calls(tmp_path: P
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="lm-studio",
         model=None,
@@ -468,6 +475,7 @@ async def test_harness_native_final_gate_rejects_ungrounded_answer_and_forces_fo
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="lm-studio",
         model=None,
@@ -552,6 +560,7 @@ async def test_native_step_exhaustion_forces_terminal_answer(tmp_path: Path) -> 
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="lm-studio",
         model=None,
@@ -600,6 +609,7 @@ async def test_harness_executes_safe_read_batch_and_emits_meta(tmp_path: Path) -
     registry = ToolRegistry()
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model=None,
@@ -650,6 +660,7 @@ async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
     registry = ToolRegistry()
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model=None,
@@ -697,6 +708,7 @@ async def test_harness_allows_safe_batch_with_context_prepare(tmp_path: Path) ->
     registry = ToolRegistry()
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model=None,
@@ -737,6 +749,7 @@ async def test_harness_generates_correction_result_for_malformed_tool_request(tm
     registry = ToolRegistry()
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model=None,
@@ -789,6 +802,7 @@ async def test_harness_rejects_freeform_final_and_requests_structured_action(tmp
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model=None,
@@ -842,6 +856,7 @@ async def test_harness_persists_oversized_tool_output_as_artifact(tmp_path: Path
     artifact_store = ArtifactStore(root_dir=tmp_path / "artifacts")
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key="alpha",
         provider_name="prompted",
         model=None,
@@ -958,6 +973,7 @@ async def test_harness_final_gate_rejects_listing_only_answer_and_forces_follow_
 
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
+        session_workspace_root=tmp_path,
         session_key=None,
         provider_name="prompted",
         model=None,

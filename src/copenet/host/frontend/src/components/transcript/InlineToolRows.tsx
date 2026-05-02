@@ -31,6 +31,7 @@ import type {
   ToolBatchMember,
   ToolResultPreview,
 } from '../../types/backend';
+import { useAppStore } from '../../store/useAppStore';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -73,6 +74,28 @@ function shortPath(path: string): string {
   const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
   if (parts.length <= 2) return path;
   return `…/${parts.slice(-2).join('/')}`;
+}
+
+function scopeTone(scope: 'inside_workspace' | 'outside_workspace' | null | undefined): string {
+  return scope === 'outside_workspace'
+    ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+    : 'border-operator-border bg-operator-panel/40 text-operator-muted';
+}
+
+function scopeLabel(scope: 'inside_workspace' | 'outside_workspace' | null | undefined): string | null {
+  if (scope === 'outside_workspace') return 'outside home';
+  if (scope === 'inside_workspace') return 'inside home';
+  return null;
+}
+
+function ScopeBadge({ scope }: { scope: 'inside_workspace' | 'outside_workspace' | null | undefined }) {
+  const label = scopeLabel(scope);
+  if (!label) return null;
+  return (
+    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${scopeTone(scope)}`}>
+      {label}
+    </span>
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +165,7 @@ function ToolPreview({ preview }: { preview: ToolResultPreview }) {
 // ---------------------------------------------------------------------------
 
 export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boolean }) {
-  const hint = formatHint(part.hint);
+  const hint = formatHint(part.target || part.hint);
   return (
     <div className="flex items-center gap-2 rounded-lg border border-operator-border/40 bg-operator-bg/60 px-2.5 py-1.5 text-[11px]">
       {isLive
@@ -153,7 +176,9 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
       {hint && (
         <>
           <span className="text-operator-muted/30">·</span>
-          <span className="truncate text-[10.5px] text-operator-muted/50 min-w-0">{hint}</span>
+          <span className="truncate text-[10.5px] text-operator-muted/50 min-w-0" title={hint}>
+            {part.target ? shortPath(hint) : hint}
+          </span>
         </>
       )}
     </div>
@@ -166,11 +191,13 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
   const [expanded, setExpanded] = useState(false);
+  const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const hasExpandable = !!part.preview || (!part.ok && !!part.error);
   const StatusIcon = part.ok ? CheckCircle2 : XCircle;
   const statusColor = part.ok ? 'text-operator-success' : 'text-operator-error';
   const borderTone = part.ok ? 'border-operator-border/50' : 'border-operator-error/25';
   const bgTone = part.ok ? 'bg-operator-bg/60' : 'bg-operator-error/5';
+  const targetLabel = part.target ? shortPath(part.target) : null;
 
   return (
     <div className={`rounded-lg border ${borderTone} ${bgTone} overflow-hidden`}>
@@ -181,7 +208,10 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
         >
           <StatusIcon className={`h-3 w-3 shrink-0 ${statusColor}`} />
           <span className="font-mono text-[10.5px] text-operator-muted/70 shrink-0">{part.toolId}</span>
-          <span className="flex-1 truncate text-[10.5px] text-operator-muted/60 min-w-0">{part.summary}</span>
+          <span className="flex-1 truncate text-[10.5px] text-operator-muted/60 min-w-0" title={part.target || part.summary}>
+            {targetLabel || part.summary}
+          </span>
+          <ScopeBadge scope={part.scope} />
           {expanded
             ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />
             : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />
@@ -191,18 +221,43 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
         <div className="flex items-center gap-2 px-2.5 py-1.5">
           <StatusIcon className={`h-3 w-3 shrink-0 ${statusColor}`} />
           <span className="font-mono text-[10.5px] text-operator-muted/70 shrink-0">{part.toolId}</span>
-          <span className="flex-1 truncate text-[10.5px] text-operator-muted/60 min-w-0">{part.summary}</span>
+          <span className="flex-1 truncate text-[10.5px] text-operator-muted/60 min-w-0" title={part.target || part.summary}>
+            {targetLabel || part.summary}
+          </span>
+          <ScopeBadge scope={part.scope} />
         </div>
       )}
 
       {expanded && (
         <div className="border-t border-operator-border/30 px-2.5 pb-2.5">
+          {part.target && (
+            <div className="mt-2 flex items-center gap-2 text-[10px] text-operator-muted/65">
+              <span className="font-semibold uppercase tracking-wider text-operator-muted/45">target</span>
+              <span className="font-mono truncate min-w-0" title={part.target}>{part.target}</span>
+            </div>
+          )}
+          {part.target && part.summary && part.summary !== part.target && (
+            <div className="mt-1 text-[10.5px] text-operator-muted/65 leading-relaxed">
+              {part.summary}
+            </div>
+          )}
           {!part.ok && part.error && (
             <pre className="mt-2 overflow-x-auto rounded-lg border border-operator-error/20 bg-operator-error/5 px-2.5 py-1.5 text-[10.5px] font-mono text-operator-error whitespace-pre-wrap">
               {part.error}
             </pre>
           )}
           {part.preview && <ToolPreview preview={part.preview} />}
+          {part.artifactId && (
+            <div className="mt-2 flex justify-end">
+              <button
+                type="button"
+                onClick={() => setInspectorTarget({ kind: 'artifact', artifactId: part.artifactId! })}
+                className="rounded-full border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
+              >
+                Open Inspector
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -232,6 +287,7 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
         >
           <StatusIcon className={`h-2.5 w-2.5 shrink-0 ${statusColor}`} />
           <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/75 min-w-0">{label}</span>
+          <ScopeBadge scope={member.scope} />
           <span className="shrink-0 truncate text-[10px] text-operator-muted/45 max-w-[45%]">{member.summary}</span>
           {expanded
             ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />
@@ -242,11 +298,18 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
         <div className="flex items-center gap-2 px-3 py-1.5">
           <StatusIcon className={`h-2.5 w-2.5 shrink-0 ${statusColor}`} />
           <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/75 min-w-0">{label}</span>
+          <ScopeBadge scope={member.scope} />
           <span className="shrink-0 text-[10px] text-operator-muted/45">{member.summary}</span>
         </div>
       )}
       {expanded && hasPreview && (
         <div className="px-3 pb-2">
+          {member.target && (
+            <div className="mt-1 text-[10px] text-operator-muted/65">
+              <span className="font-semibold uppercase tracking-wider text-operator-muted/45">target</span>{' '}
+              <span className="font-mono break-all">{member.target}</span>
+            </div>
+          )}
           <ToolPreview preview={member.preview!} />
         </div>
       )}
@@ -260,11 +323,20 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
 
 export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const failCount = part.members.filter((m) => !m.ok).length;
   const borderTone = part.ok ? 'border-operator-border/50' : 'border-operator-error/25';
   const bgTone = part.ok ? 'bg-operator-bg/60' : 'bg-operator-error/5';
   const StatusIcon = part.ok ? CheckCircle2 : XCircle;
   const statusColor = part.ok ? 'text-operator-success' : 'text-operator-error';
+  const scopeCounts = part.members.reduce(
+    (acc, member) => {
+      if (member.scope === 'outside_workspace') acc.outside += 1;
+      if (member.scope === 'inside_workspace') acc.inside += 1;
+      return acc;
+    },
+    { inside: 0, outside: 0 },
+  );
 
   return (
     <div className={`rounded-lg border ${borderTone} ${bgTone} overflow-hidden`}>
@@ -281,6 +353,7 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
           : <Layers className="h-3 w-3 shrink-0 text-operator-muted/50" />
         }
         <span className="flex-1 text-[10.5px] text-operator-muted/75 font-medium">{part.label}</span>
+        {scopeCounts.outside > 0 && <ScopeBadge scope="outside_workspace" />}
         {failCount > 0 && (
           <span className="shrink-0 rounded-full bg-operator-error/10 px-1.5 py-0.5 text-[9px] font-semibold text-operator-error">
             {failCount} failed
@@ -291,6 +364,12 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
 
       {expanded && (
         <div className="border-t border-operator-border/30">
+          {part.workspaceRoot && (
+            <div className="px-3 pt-2 text-[10px] text-operator-muted/65">
+              <span className="font-semibold uppercase tracking-wider text-operator-muted/45">home</span>{' '}
+              <span className="font-mono break-all">{part.workspaceRoot}</span>
+            </div>
+          )}
           {part.members.map((member, i) => (
             <ToolBatchMemberRow
               key={member.callId || String(i)}
@@ -298,6 +377,15 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
               index={i}
             />
           ))}
+          <div className="flex justify-end px-3 pb-2 pt-1">
+            <button
+              type="button"
+              onClick={() => setInspectorTarget({ kind: 'batch', batchId: part.batchId })}
+              className="rounded-full border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
+            >
+              Open Inspector
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -81,6 +81,9 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
     channel: payload.channel ? String(payload.channel) : null,
     error: payload.error ? String(payload.error) : null,
     artifactId: payload.artifactId ? String(payload.artifactId) : null,
+    target: payload.target ? String(payload.target) : null,
+    workspaceRoot: payload.workspaceRoot ? String(payload.workspaceRoot) : null,
+    scope: payload.scope === 'outside_workspace' ? 'outside_workspace' : payload.scope === 'inside_workspace' ? 'inside_workspace' : null,
   };
 }
 
@@ -160,6 +163,7 @@ function normalizeSession(raw: unknown): Session {
     model: payload.model ? String(payload.model) : null,
     systemPromptId: payload.systemPromptId ? String(payload.systemPromptId) : null,
     taskPromptId: payload.taskPromptId ? String(payload.taskPromptId) : null,
+    workspaceRoot: payload.workspaceRoot ? String(payload.workspaceRoot) : null,
     archived: Boolean(payload.archived),
     providerSessionId: payload.providerSessionId ? String(payload.providerSessionId) : null,
     createdAt: String(payload.createdAt || new Date().toISOString()),
@@ -323,7 +327,7 @@ function normalizeRuntimeContext(raw: unknown): RuntimeContext | null {
   if (!workspaceRoot) return null;
   return {
     workspaceRoot,
-    fileToolScope: 'workspace_only',
+    fileToolScope: 'workspace_home_visible_roaming',
     shellToolScope: 'cwd_default',
     shellAllowlist: Array.isArray(payload.shellAllowlist) ? payload.shellAllowlist.map(String) : [],
     note: String(payload.note || '').trim(),
@@ -375,6 +379,7 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
         callId: String(toolCall.callId ?? payload.callId ?? ''),
         toolId: String(toolCall.toolId ?? payload.toolId ?? ''),
         hint: toolCall.hint ? String(toolCall.hint) : null,
+        target: toolCall.target ? String(toolCall.target) : payload.target ? String(payload.target) : null,
         at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
       });
       continue;
@@ -387,7 +392,9 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
       if (members.length > 1) {
         parts.push({
           kind: 'tool_batch',
-          batchId: String(toolExecution.callId ?? payload.callId ?? makeLocalId('batch')),
+          batchId: typeof payload.runId === 'string' && payload.runId
+            ? `batch-${payload.runId}`
+            : String(toolExecution.callId ?? payload.callId ?? makeLocalId('batch')),
           label: buildBatchLabel('files.read', members.length),
           members: members.map((m: unknown) => {
             const member = (m || {}) as Record<string, unknown>;
@@ -397,10 +404,15 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
               ok: Boolean(member.ok),
               summary: String(member.summary ?? ''),
               error: member.error ? String(member.error) : null,
+              artifactId: member.artifactId ? String(member.artifactId) : null,
+              target: member.target ? String(member.target) : null,
+              workspaceRoot: member.workspaceRoot ? String(member.workspaceRoot) : null,
+              scope: member.scope === 'outside_workspace' ? 'outside_workspace' : member.scope === 'inside_workspace' ? 'inside_workspace' : null,
               preview: normalizeToolResultPreview(member.preview),
             };
           }),
           ok: Boolean(toolExecution.ok ?? payload.ok),
+          workspaceRoot: toolExecution.workspaceRoot ? String(toolExecution.workspaceRoot) : payload.workspaceRoot ? String(payload.workspaceRoot) : null,
           at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
         });
       } else {
@@ -411,6 +423,10 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
           ok: Boolean(toolExecution.ok ?? payload.ok),
           summary: String(toolExecution.summary ?? payload.summary ?? ''),
           error: toolExecution.error ? String(toolExecution.error) : payload.error ? String(payload.error) : null,
+          artifactId: toolExecution.artifactId ? String(toolExecution.artifactId) : payload.artifactId ? String(payload.artifactId) : null,
+          target: toolExecution.target ? String(toolExecution.target) : payload.target ? String(payload.target) : null,
+          workspaceRoot: toolExecution.workspaceRoot ? String(toolExecution.workspaceRoot) : payload.workspaceRoot ? String(payload.workspaceRoot) : null,
+          scope: toolExecution.scope === 'outside_workspace' ? 'outside_workspace' : toolExecution.scope === 'inside_workspace' ? 'inside_workspace' : payload.scope === 'outside_workspace' ? 'outside_workspace' : payload.scope === 'inside_workspace' ? 'inside_workspace' : null,
           preview: normalizeToolResultPreview((toolExecution as Record<string, unknown>).preview ?? payload.preview),
           at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
         });
@@ -646,6 +662,7 @@ class WsClient {
       model: nextProvider === current.provider ? current.model : '',
       systemPromptId: store.profiles.some((item) => item.id === current.systemPromptId) ? current.systemPromptId : defaultProfile,
       taskPromptId: store.taskModes.some((item) => item.id === current.taskPromptId) ? current.taskPromptId : defaultTaskMode,
+      workspaceRoot: current.workspaceRoot || store.runtimeContext?.workspaceRoot || '',
     });
   }
 
@@ -747,6 +764,25 @@ class WsClient {
     useAppStore.getState().setMessages(sessionKey, normalized);
   }
 
+  async browseWorkspaceRoot(): Promise<{ workspaceRoot: string | null; runtimeContext: RuntimeContext | null }> {
+    const payload = await this.request<{ workspaceRoot?: string | null; runtimeContext?: unknown | null }>('runtime.workspace.browse', {});
+    return {
+      workspaceRoot: payload.workspaceRoot ? String(payload.workspaceRoot) : null,
+      runtimeContext: normalizeRuntimeContext(payload.runtimeContext),
+    };
+  }
+
+  async setWorkspaceRoot(workspaceRoot: string): Promise<RuntimeContext> {
+    const payload = await this.request<{ workspaceRoot?: string | null; runtimeContext?: unknown | null }>('runtime.workspace.set', {
+      workspaceRoot,
+    });
+    const runtimeContext = normalizeRuntimeContext(payload.runtimeContext);
+    if (!runtimeContext) {
+      throw new Error('Workspace root update returned no runtime context.');
+    }
+    return runtimeContext;
+  }
+
   beginDraft() {
     const store = useAppStore.getState();
     store.setActiveSessionKey(null);
@@ -836,6 +872,7 @@ class WsClient {
         model: draft.model || undefined,
         systemPromptId: draft.systemPromptId || undefined,
         taskPromptId: draft.taskPromptId || undefined,
+        workspaceRoot: draft.workspaceRoot || undefined,
       });
       session = normalizeSession(createPayload.session);
       store.upsertSession(session);
@@ -985,6 +1022,7 @@ class WsClient {
             callId,
             toolId,
             hint,
+            target: rawToolCall.target ? String(rawToolCall.target) : hint,
             at: new Date().toISOString(),
           });
         }
@@ -1013,12 +1051,12 @@ class WsClient {
 
         const target = store.pendingAssistants[runId];
         if (target) {
-          const toolPayload = payload.toolExecution as unknown as Record<string, unknown> | null | undefined;
-          const batchMembers = Array.isArray(toolPayload?.members) ? toolPayload?.members : [];
+          const toolPayloadRecord = payload.toolExecution as unknown as Record<string, unknown> | null | undefined;
+          const batchMembers = Array.isArray(toolPayloadRecord?.members) ? toolPayloadRecord?.members : [];
           if (Array.isArray(batchMembers) && batchMembers.length > 1) {
             store.appendMessagePart(target.sessionKey, target.localId, {
               kind: 'tool_batch',
-              batchId: toolExecution.callId || makeLocalId('batch'),
+              batchId: `batch-${runId}`,
               label: buildBatchLabel(String(batchMembers[0] && typeof batchMembers[0] === 'object' ? (batchMembers[0] as Record<string, unknown>).toolId || toolExecution.toolId : toolExecution.toolId), batchMembers.length),
               members: batchMembers.map((m: unknown) => {
                 const mb = (m || {}) as Record<string, unknown>;
@@ -1028,14 +1066,18 @@ class WsClient {
                   ok: Boolean(mb.ok),
                   summary: String(mb.summary ?? ''),
                   error: mb.error ? String(mb.error) : null,
+                  artifactId: mb.artifactId ? String(mb.artifactId) : null,
+                  target: mb.target ? String(mb.target) : null,
+                  workspaceRoot: mb.workspaceRoot ? String(mb.workspaceRoot) : null,
+                  scope: mb.scope === 'outside_workspace' ? 'outside_workspace' : mb.scope === 'inside_workspace' ? 'inside_workspace' : null,
                   preview: normalizeToolResultPreview(mb.preview),
                 };
               }),
               ok: toolExecution.ok,
+              workspaceRoot: toolPayloadRecord?.workspaceRoot ? String(toolPayloadRecord.workspaceRoot) : toolExecution.workspaceRoot || null,
               at: new Date().toISOString(),
             });
           } else {
-            const toolPayloadRecord = payload.toolExecution as unknown as Record<string, unknown> | null | undefined;
             store.appendMessagePart(target.sessionKey, target.localId, {
               kind: 'tool_result',
               callId: toolExecution.callId || '',
@@ -1043,6 +1085,10 @@ class WsClient {
               ok: toolExecution.ok,
               summary: toolExecution.summary,
               error: toolExecution.error ?? null,
+              artifactId: toolExecution.artifactId || null,
+              target: toolExecution.target || null,
+              workspaceRoot: toolExecution.workspaceRoot || null,
+              scope: toolExecution.scope || null,
               preview: normalizeToolResultPreview(toolPayloadRecord?.preview),
               at: new Date().toISOString(),
             });

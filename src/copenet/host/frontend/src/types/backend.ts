@@ -10,6 +10,7 @@ export interface Session {
   model: string | null;
   systemPromptId: string | null;
   taskPromptId: string | null;
+  workspaceRoot: string | null;
   archived: boolean;
   providerSessionId: string | null;
   createdAt: string;
@@ -26,6 +27,9 @@ export interface ToolExecution {
   channel?: string | null;
   error?: string | null;
   artifactId?: string | null;
+  target?: string | null;
+  workspaceRoot?: string | null;
+  scope?: 'inside_workspace' | 'outside_workspace' | null;
 }
 
 export interface Message {
@@ -65,6 +69,7 @@ export interface ToolCallPart {
   toolId: string;
   /** One-line hint shown while the tool is in-flight — path, query, etc. */
   hint?: string | null;
+  target?: string | null;
   at: string; // ISO
 }
 
@@ -97,6 +102,10 @@ export interface ToolResultPart {
   ok: boolean;
   summary: string;
   error?: string | null;
+  artifactId?: string | null;
+  target?: string | null;
+  workspaceRoot?: string | null;
+  scope?: 'inside_workspace' | 'outside_workspace' | null;
   preview?: ToolResultPreview | null;
   at: string; // ISO
 }
@@ -107,6 +116,10 @@ export interface ToolBatchMember {
   ok: boolean;
   summary: string;
   error?: string | null;
+  artifactId?: string | null;
+  target?: string | null;
+  workspaceRoot?: string | null;
+  scope?: 'inside_workspace' | 'outside_workspace' | null;
   preview?: ToolResultPreview | null;
 }
 
@@ -117,6 +130,7 @@ export interface ToolBatchPart {
   label: string;           // e.g. "Read 8 files"
   members: ToolBatchMember[];
   ok: boolean;
+  workspaceRoot?: string | null;
   at: string; // ISO
 }
 
@@ -163,11 +177,12 @@ export interface DraftSettings {
   model: string;
   systemPromptId: string;
   taskPromptId: string;
+  workspaceRoot: string;
 }
 
 export interface RuntimeContext {
   workspaceRoot: string;
-  fileToolScope: 'workspace_only';
+  fileToolScope: 'workspace_home_visible_roaming';
   shellToolScope: 'cwd_default';
   shellAllowlist: string[];
   note: string;
@@ -257,8 +272,11 @@ export interface RunStep {
   ok: boolean;
   summary: string;
   error?: string | null;
+  artifactId?: string | null;
   /** Primary call target — file path, search query, or URI. Backend contract: Codex to populate. */
   target?: string | null;
+  workspaceRoot?: string | null;
+  scope?: 'inside_workspace' | 'outside_workspace' | null;
 }
 
 export interface SessionRunRecord {
