@@ -543,7 +543,7 @@ export interface LiveToolCall {
 // These types are stubs until the backend RPC ships.
 // ---------------------------------------------------------------------------
 
-export type PatProfileSource = 'explicit' | 'inferred' | 'session_observation';
+export type PatProfileSource = 'template' | 'explicit' | 'inferred' | 'session_observation';
 
 export interface PatProfilePriority {
   id: string;

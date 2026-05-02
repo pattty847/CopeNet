@@ -7,9 +7,12 @@ import {
   Message,
   MessagePart,
   Model,
+  PatProfile,
+  ProfileChangelogItem,
   Provider,
   ProviderAuthStatus,
   PublicMessagePayload,
+  ReturnBriefingPayload,
   ResponseFrame,
   Session,
   SessionExportPayload,
@@ -200,6 +203,107 @@ function normalizeTool(raw: unknown): ToolDescriptor {
     inputSchema: (payload.inputSchema as Record<string, unknown> | undefined) || {},
     safetyLevel: String(payload.safetyLevel || ''),
     capabilities: Array.isArray(payload.capabilities) ? payload.capabilities.map(String) : [],
+  };
+}
+
+function normalizePatProfile(raw: unknown): PatProfile | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    profileId: String(payload.profileId || ''),
+    displayName: String(payload.displayName || 'Operator'),
+    active: Boolean(payload.active),
+    source: String(payload.source || 'template') as PatProfile['source'],
+    priorities: Array.isArray(payload.priorities)
+      ? payload.priorities.map((item: unknown) => {
+          const priority = (item || {}) as Record<string, unknown>;
+          return {
+            id: String(priority.id || ''),
+            label: String(priority.label || ''),
+            weight: Number(priority.weight || 0),
+          };
+        })
+      : [],
+    goals: Array.isArray(payload.goals)
+      ? payload.goals.map((item: unknown) => {
+          const goal = (item || {}) as Record<string, unknown>;
+          return {
+            id: String(goal.id || ''),
+            text: String(goal.text || ''),
+            source: String(goal.source || 'template') as PatProfile['source'],
+            updatedAt: String(goal.updatedAt || new Date().toISOString()),
+          };
+        })
+      : [],
+    tonePreference: {
+      directness: String((payload.tonePreference as Record<string, unknown> | undefined)?.directness || 'balanced') as PatProfile['tonePreference']['directness'],
+      formality: String((payload.tonePreference as Record<string, unknown> | undefined)?.formality || 'casual') as PatProfile['tonePreference']['formality'],
+      preferBullets: Boolean((payload.tonePreference as Record<string, unknown> | undefined)?.preferBullets),
+    },
+    noiseFilters: Array.isArray(payload.noiseFilters) ? payload.noiseFilters.map(String) : [],
+    lastUpdatedAt: String(payload.lastUpdatedAt || new Date().toISOString()),
+    changelogCount: Number(payload.changelogCount || 0),
+  };
+}
+
+function normalizeProfileChangelogItem(raw: unknown): ProfileChangelogItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    id: String(payload.id || ''),
+    kind: String(payload.kind || 'constraint_updated') as ProfileChangelogItem['kind'],
+    summary: String(payload.summary || ''),
+    detail: payload.detail ? String(payload.detail) : null,
+    source: String(payload.source || 'template') as ProfileChangelogItem['source'],
+    rationale: payload.rationale ? String(payload.rationale) : null,
+    triggeredBySessionKey: payload.triggeredBySessionKey ? String(payload.triggeredBySessionKey) : null,
+    changedAt: String(payload.changedAt || new Date().toISOString()),
+  };
+}
+
+function normalizeReturnBriefing(raw: unknown): ReturnBriefingPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    briefingId: String(payload.briefingId || ''),
+    generatedAt: String(payload.generatedAt || new Date().toISOString()),
+    attentionItems: Array.isArray(payload.attentionItems)
+      ? payload.attentionItems.map((item: unknown) => {
+          const row = (item || {}) as Record<string, unknown>;
+          return {
+            id: String(row.id || ''),
+            title: String(row.title || ''),
+            urgency: String(row.urgency || 'low') as ReturnBriefingPayload['attentionItems'][number]['urgency'],
+            source: String(row.source || ''),
+            detail: row.detail ? String(row.detail) : null,
+          };
+        })
+      : [],
+    activityItems: Array.isArray(payload.activityItems)
+      ? payload.activityItems.map((item: unknown) => {
+          const row = (item || {}) as Record<string, unknown>;
+          return {
+            id: String(row.id || ''),
+            summary: String(row.summary || ''),
+            sessionKey: row.sessionKey ? String(row.sessionKey) : null,
+            toolsUsed: row.toolsUsed != null ? Number(row.toolsUsed) : undefined,
+            at: String(row.at || new Date().toISOString()),
+          };
+        })
+      : [],
+    watchItems: Array.isArray(payload.watchItems)
+      ? payload.watchItems.map((item: unknown) => {
+          const row = (item || {}) as Record<string, unknown>;
+          return {
+            id: String(row.id || ''),
+            label: String(row.label || ''),
+            signal: String(row.signal || ''),
+            source: row.source ? String(row.source) : null,
+          };
+        })
+      : [],
+    noticeText: payload.noticeText ? String(payload.noticeText) : null,
+    noticeSource: payload.noticeSource ? String(payload.noticeSource) : null,
   };
 }
 
@@ -445,6 +549,25 @@ class WsClient {
 
     if (frame.event === 'chat') {
       this.handleChatEvent(frame.payload as unknown as ChatEventPayload);
+      return;
+    }
+
+    if (frame.event === 'profile.changed') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const profile = normalizePatProfile(payload.profile);
+      const change = normalizeProfileChangelogItem(payload.change);
+      if (profile) {
+        useAppStore.getState().setPatProfile(profile);
+      }
+      if (change) {
+        useAppStore.getState().prependProfileChangelogItem(change);
+      }
+      return;
+    }
+
+    if (frame.event === 'briefing.ready') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      useAppStore.getState().setReturnBriefing(normalizeReturnBriefing(payload.briefing));
     }
   }
 
@@ -513,11 +636,14 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
         this.request<{ sessions: unknown[] }>('sessions.list', { includeArchived: useAppStore.getState().showArchived }),
+        this.request<{ profile?: unknown | null }>('profile.get', {}),
+        this.request<{ changelog?: unknown[] }>('profile.changelog', { limit: 20 }),
+        this.request<{ briefing?: unknown | null }>('briefing.get', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -530,6 +656,15 @@ class WsClient {
         (promptsPayload.taskModes || []).map(normalizePrompt),
       );
       store.setSessions(sessions);
+      store.setPatProfile(normalizePatProfile(profilePayload.profile));
+      store.setProfileChangelog(
+        Array.isArray(changelogPayload.changelog)
+          ? changelogPayload.changelog
+              .map(normalizeProfileChangelogItem)
+              .filter((item): item is ProfileChangelogItem => item != null)
+          : [],
+      );
+      store.setReturnBriefing(normalizeReturnBriefing(briefingPayload.briefing));
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;
