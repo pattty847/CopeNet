@@ -12,6 +12,7 @@ import {
   Provider,
   ProviderAuthStatus,
   PublicMessagePayload,
+  RuntimeContext,
   ReturnBriefingPayload,
   ResponseFrame,
   Session,
@@ -312,6 +313,20 @@ function normalizePrompt(raw: unknown) {
   return {
     id: String(payload.id || ''),
     name: String(payload.name || payload.id || ''),
+  };
+}
+
+function normalizeRuntimeContext(raw: unknown): RuntimeContext | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const workspaceRoot = String(payload.workspaceRoot || '').trim();
+  if (!workspaceRoot) return null;
+  return {
+    workspaceRoot,
+    fileToolScope: 'workspace_only',
+    shellToolScope: 'cwd_default',
+    shellAllowlist: Array.isArray(payload.shellAllowlist) ? payload.shellAllowlist.map(String) : [],
+    note: String(payload.note || '').trim(),
   };
 }
 
@@ -636,7 +651,7 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload, runtimeContextPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
@@ -644,6 +659,7 @@ class WsClient {
         this.request<{ profile?: unknown | null }>('profile.get', {}),
         this.request<{ changelog?: unknown[] }>('profile.changelog', { limit: 20 }),
         this.request<{ briefing?: unknown | null }>('briefing.get', {}),
+        this.request<{ runtimeContext?: unknown | null }>('runtime.context', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -665,6 +681,7 @@ class WsClient {
           : [],
       );
       store.setReturnBriefing(normalizeReturnBriefing(briefingPayload.briefing));
+      store.setRuntimeContext(normalizeRuntimeContext(runtimeContextPayload.runtimeContext));
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;

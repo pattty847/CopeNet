@@ -165,6 +165,14 @@ export interface DraftSettings {
   taskPromptId: string;
 }
 
+export interface RuntimeContext {
+  workspaceRoot: string;
+  fileToolScope: 'workspace_only';
+  shellToolScope: 'cwd_default';
+  shellAllowlist: string[];
+  note: string;
+}
+
 export interface PublicMessagePayload {
   runId?: string | null;
   role?: string | null;

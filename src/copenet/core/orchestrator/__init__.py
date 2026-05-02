@@ -244,6 +244,19 @@ class Orchestrator:
         briefing = self._profile_service.build_return_briefing()
         return briefing.to_public_dict() if briefing is not None else None
 
+    def get_runtime_context(self) -> dict:
+        """Return the current workspace root and access-policy summary."""
+        return {
+            "workspaceRoot": str(self._workdir),
+            "fileToolScope": "workspace_only",
+            "shellToolScope": "cwd_default",
+            "shellAllowlist": list(self._tool_policy.shell_allowlist),
+            "note": (
+                "Repo/file tools are currently scoped to the workspace root. "
+                "Allowlisted shell commands run from that root."
+            ),
+        }
+
     def resolve_session_state(self, session_key: str) -> dict | None:
         """Resolve one structured runtime state record for a session."""
         record = self._session_state_store.get(session_key.strip())

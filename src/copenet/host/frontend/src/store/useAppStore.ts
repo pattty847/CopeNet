@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, Session, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
@@ -90,6 +90,8 @@ interface AppState {
   draftSettings: DraftSettings;
   replaceDraftSettings: (settings: DraftSettings) => void;
   patchDraftSettings: (updates: Partial<DraftSettings>) => void;
+  runtimeContext: RuntimeContext | null;
+  setRuntimeContext: (context: RuntimeContext | null) => void;
 
   messages: Record<string, Message[]>;
   setMessages: (sessionKey: string, messages: Message[]) => void;
@@ -291,6 +293,8 @@ export const useAppStore = create<AppState>((set) => ({
         ...updates,
       },
     })),
+  runtimeContext: null,
+  setRuntimeContext: (context) => set({ runtimeContext: context }),
 
   messages: {},
   setMessages: (sessionKey, messages) =>

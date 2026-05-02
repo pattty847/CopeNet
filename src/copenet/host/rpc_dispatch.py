@@ -17,6 +17,7 @@ from .rpc_catalog import (
     handle_provider_auth_logout,
     handle_provider_auth_status,
     handle_providers_list,
+    handle_runtime_context_get,
     handle_tools_list,
 )
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
@@ -62,6 +63,8 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_profile_changelog(req.id, req.params, send_json, orchestrator)
     elif req.method == "briefing.get":
         await handle_briefing_get(req.id, send_json, orchestrator)
+    elif req.method == "runtime.context":
+        await handle_runtime_context_get(req.id, send_json, orchestrator)
     elif req.method == "providerAuth.status":
         await handle_provider_auth_status(req.id, req.params, send_json, orchestrator)
     elif req.method == "providerAuth.beginLogin":

@@ -102,6 +102,18 @@ async def handle_briefing_get(request_id: str, send_json: SendJson, orchestrator
     )
 
 
+async def handle_runtime_context_get(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"runtimeContext": orchestrator.get_runtime_context()},
+            )
+        )
+    )
+
+
 async def handle_provider_auth_status(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     provider_id = str((params or {}).get("provider") or "").strip()
     if not provider_id:

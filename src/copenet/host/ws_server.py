@@ -144,6 +144,7 @@ class CopeNetWsServer:
                                 "profile.get",
                                 "profile.changelog",
                                 "briefing.get",
+                                "runtime.context",
                                 "providerAuth.status",
                                 "providerAuth.beginLogin",
                                 "providerAuth.completeLogin",

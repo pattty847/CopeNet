@@ -44,6 +44,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const taskModes = useAppStore((state) => state.taskModes);
   const wsStatus = useAppStore((state) => state.wsStatus);
   const draftSettings = useAppStore((state) => state.draftSettings);
+  const runtimeContext = useAppStore((state) => state.runtimeContext);
   const patchDraftSettings = useAppStore((state) => state.patchDraftSettings);
   const rightPanelOpen = useAppStore((state) => state.rightPanelOpen);
   const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
@@ -136,7 +137,6 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
     { id: 'activity', label: 'Activity', icon: Layers },
     { id: 'approvals', label: 'Approvals', icon: ShieldAlert, badge: pendingCount || undefined },
   ];
-  const activeTab = tabs.find((tab) => tab.id === rightPanelTab) || tabs[0];
 
   const tabLabels = useMemo(() => {
     if (panelWidth > 450) {
@@ -148,7 +148,6 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
     return { inbox: 'Inbox', runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
-  const ActiveTabIcon = activeTab.icon;
 
   if (!rightPanelOpen && !mobile) {
     return (
@@ -183,7 +182,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
       ref={panelRef}
       className={`${mobile ? 'w-full min-w-0 border-l-0' : 'w-full min-w-0 border-l'} border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden`}
     >
-      {/* Header — title reflects active tab */}
+      {/* Header — stable panel identity, not a duplicate active-tab title */}
       <div className="px-3 py-3 border-b border-operator-border flex items-center gap-2">
         {!mobile && (
           <button
@@ -194,20 +193,13 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
             <ChevronRight className="w-3.5 h-3.5" />
           </button>
         )}
-        <ActiveTabIcon className="w-3.5 h-3.5 text-operator-accent shrink-0" />
-        <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">{activeTab.label}</h2>
+        <Activity className="w-3.5 h-3.5 text-operator-accent shrink-0" />
+        <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Inspector</h2>
       </div>
 
       {/* Tab strip */}
       {compactTabs ? (
-        <div className="flex items-center gap-2 border-b border-operator-border bg-operator-panel/20 px-2 py-2 shrink-0">
-          <div
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-operator-accent/20 bg-operator-accent/6 px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-accent"
-            title={activeTab.label}
-          >
-            <ActiveTabIcon className="h-3.5 w-3.5 shrink-0" />
-            <span className="min-w-0 truncate">{activeTab.label}</span>
-          </div>
+        <div className="border-b border-operator-border bg-operator-panel/20 px-2 py-2 shrink-0">
           <label htmlFor="inspector-tab-select" className="sr-only">
             Select inspector panel
           </label>
@@ -215,7 +207,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
             id="inspector-tab-select"
             value={rightPanelTab}
             onChange={(event) => setRightPanelTab(event.target.value as RightPanelTab)}
-            className="max-w-[8.25rem] rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
+            className="w-full rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
             title="Select inspector panel"
           >
             {tabs.map((tab) => (
@@ -346,6 +338,26 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
                   </span>
                   {wsStatus.toUpperCase()}
                 </span>
+              </div>
+
+              <div className="rounded-lg border border-operator-border bg-operator-bg/50 px-2.5 py-2">
+                <div className="mb-1 flex items-center justify-between gap-3">
+                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Project Root</span>
+                  <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted">
+                    {runtimeContext?.fileToolScope === 'workspace_only' ? 'workspace only' : 'custom'}
+                  </span>
+                </div>
+                <div
+                  className="font-mono text-[10.5px] leading-relaxed text-operator-text break-all"
+                  title={runtimeContext?.workspaceRoot || 'Workspace root unavailable'}
+                >
+                  {runtimeContext?.workspaceRoot || 'Workspace root unavailable'}
+                </div>
+                {runtimeContext?.note && (
+                  <div className="mt-1.5 text-[10px] leading-relaxed text-operator-muted/70">
+                    {runtimeContext.note}
+                  </div>
+                )}
               </div>
 
               {isDraft ? (
