@@ -265,7 +265,7 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
         ? payload.toolExecution as Record<string, unknown>
         : payload;
       const members = Array.isArray(toolExecution.members) ? toolExecution.members : [];
-      if (String(toolExecution.toolId ?? payload.toolId ?? '') === 'tool.batch' && members.length > 0) {
+      if (members.length > 1) {
         parts.push({
           kind: 'tool_batch',
           batchId: String(toolExecution.callId ?? payload.callId ?? makeLocalId('batch')),

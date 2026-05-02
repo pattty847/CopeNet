@@ -74,9 +74,9 @@ function MarkdownBody({ content }: { content: string }) {
 
 // ---------------------------------------------------------------------------
 // PartsBody — renders a structured parts array with interleaved tool rows.
-// ToolCallParts are suppressed when a matching ToolResultPart exists.
+// ToolCallParts remain visible as durable call → result receipts (audit trail).
 // ---------------------------------------------------------------------------
-function PartsBody({ parts }: { parts: NonNullable<Message['parts']> }) {
+function PartsBody({ parts, isLive }: { parts: NonNullable<Message['parts']>; isLive?: boolean }) {
   return (
     <div>
       {parts.map((part, i) => {
@@ -85,7 +85,7 @@ function PartsBody({ parts }: { parts: NonNullable<Message['parts']> }) {
           return <MarkdownBody key={i} content={part.content} />;
         }
         return (
-          <InlineToolPart key={i} part={part} />
+          <InlineToolPart key={i} part={part} isLive={isLive} />
         );
       })}
     </div>
@@ -147,7 +147,7 @@ export function MessageBubble({ message }: { message: Message }) {
 
         {/* Parts path — structured interleaved text + tool rows */}
         {message.parts && message.parts.length > 0 ? (
-          <PartsBody parts={message.parts} />
+          <PartsBody parts={message.parts} isLive={!!(message.optimistic && message.state === 'delta')} />
         ) : (
           <>
             {/* Legacy path — plain content + single ToolTraceCard at end */}
