@@ -937,6 +937,34 @@ async def test_orchestrator_tool_loop_blocks_shell_pipelines_with_actionable_err
     assert final_event["toolExecution"]["toolId"] == "shell.exec"
     assert final_event["toolExecution"]["ok"] is False
     assert "do not use pipes, chaining, or redirection" in final_event["toolExecution"]["error"]
+    assert final_event["toolExecution"]["policyDecision"] == "unsafe_unknown"
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_tool_loop_blocks_shell_write_like_git(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    provider = PromptedToolProvider(
+        tool_json='{"tool_id":"shell.exec","arguments":{"command":"git apply patch.diff"}}',
+        follow_up='{"state":"FINAL_CANDIDATE","answer":"That shell action was blocked because it could write to the repository.","evidence":[],"done_conditions_met":[],"remaining_uncertainty":["Use a dedicated patch/apply flow instead."]}',
+    )
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={"prompted": provider},
+    )
+
+    _, events = await _collect(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Apply the patch", provider="prompted"),
+    )
+
+    final_event = events[-1]
+    assert final_event["toolExecution"]["toolId"] == "shell.exec"
+    assert final_event["toolExecution"]["ok"] is False
+    assert final_event["toolExecution"]["policyDecision"] == "write_blocked"
+    assert final_event["toolExecution"]["accessAction"] == "write"
+    assert "blocked in shell.exec v1" in final_event["toolExecution"]["error"]
 
 
 @pytest.mark.asyncio

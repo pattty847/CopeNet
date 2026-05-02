@@ -12,6 +12,8 @@ from copenet.core.sessions import SessionStore, TranscriptStore
 
 ToolCategory = Literal["repo-read", "repo-write", "shell-read", "context", "mcp"]
 ToolSafetyLevel = Literal["safe", "guarded", "restricted"]
+ToolAccessAction = Literal["read", "write", "unknown"]
+ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "unsafe_unknown"]
 
 
 @dataclass(frozen=True)
@@ -112,7 +114,7 @@ class ToolExecutionResult:
             payload["artifactId"] = self.artifact_id
         body = self.body if self.body is not None else self.output
         if isinstance(body, dict):
-            for key in ("target", "workspaceRoot", "scope"):
+            for key in ("target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"):
                 value = body.get(key)
                 if value is not None:
                     payload[key] = value
@@ -140,7 +142,7 @@ class ToolExecutionResult:
             payload["artifactId"] = self.artifact_id
         body = self.body if self.body is not None else self.output
         if isinstance(body, dict):
-            for key in ("target", "workspaceRoot", "scope"):
+            for key in ("target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"):
                 value = body.get(key)
                 if value is not None:
                     payload[key] = value
@@ -226,6 +228,25 @@ ToolHandler = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[T
 class ToolBlockedError(RuntimeError):
     """Raised when a tool request is blocked by policy or path boundaries."""
 
+    def __init__(
+        self,
+        message: str,
+        *,
+        target: str | None = None,
+        workspace_root: str | None = None,
+        scope: str | None = None,
+        access_action: ToolAccessAction = "unknown",
+        policy_decision: ToolPolicyDecision = "unsafe_unknown",
+        policy_summary: str | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.target = target
+        self.workspace_root = workspace_root
+        self.scope = scope
+        self.access_action = access_action
+        self.policy_decision = policy_decision
+        self.policy_summary = policy_summary or message
+
 
 def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
     if not isinstance(body, dict):
@@ -275,7 +296,7 @@ def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:
         }
         output = item.get("output")
         if isinstance(output, dict):
-            for key in ("target", "workspaceRoot", "scope"):
+            for key in ("target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"):
                 value = output.get(key)
                 if value is not None:
                     payload[key] = value

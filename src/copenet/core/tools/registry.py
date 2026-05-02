@@ -51,6 +51,12 @@ class ToolRegistry:
                 ok=False,
                 summary=f"Unknown tool: {request.tool_id}",
                 error="unknown tool",
+                output={
+                    "workspaceRoot": str(context.session_workspace_root),
+                    "accessAction": "unknown",
+                    "policyDecision": "unsafe_unknown",
+                    "policySummary": "Unknown tools are blocked.",
+                },
             )
         if descriptor.category not in context.policy.allowed_categories:
             self._trace(
@@ -63,6 +69,12 @@ class ToolRegistry:
                 ok=False,
                 summary=f"Tool blocked: {descriptor.id}",
                 error=f"category not allowed: {descriptor.category}",
+                output={
+                    "workspaceRoot": str(context.session_workspace_root),
+                    "accessAction": "unknown",
+                    "policyDecision": "unsafe_unknown",
+                    "policySummary": f"Tool category {descriptor.category} is blocked by policy.",
+                },
             )
         _track_tool_repetition(context, request=request)
         try:
@@ -73,11 +85,28 @@ class ToolRegistry:
                 ok=False,
                 summary=f"Tool blocked: {descriptor.id}",
                 error=str(exc),
+                output={
+                    "target": exc.target,
+                    "workspaceRoot": exc.workspace_root or str(context.session_workspace_root),
+                    "scope": exc.scope,
+                    "accessAction": exc.access_action,
+                    "policyDecision": exc.policy_decision,
+                    "policySummary": exc.policy_summary,
+                },
             )
             self._trace(
                 context,
                 "tool_blocked",
-                {"toolId": descriptor.id, "reason": str(exc)},
+                {
+                    "toolId": descriptor.id,
+                    "reason": str(exc),
+                    "target": exc.target,
+                    "workspaceRoot": exc.workspace_root or str(context.session_workspace_root),
+                    "scope": exc.scope,
+                    "accessAction": exc.access_action,
+                    "policyDecision": exc.policy_decision,
+                    "policySummary": exc.policy_summary,
+                },
             )
             return result
         except Exception as exc:

@@ -30,6 +30,9 @@ export interface ToolExecution {
   target?: string | null;
   workspaceRoot?: string | null;
   scope?: 'inside_workspace' | 'outside_workspace' | null;
+  accessAction?: 'read' | 'write' | 'unknown' | null;
+  policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
+  policySummary?: string | null;
 }
 
 export interface Message {
@@ -106,6 +109,9 @@ export interface ToolResultPart {
   target?: string | null;
   workspaceRoot?: string | null;
   scope?: 'inside_workspace' | 'outside_workspace' | null;
+  accessAction?: 'read' | 'write' | 'unknown' | null;
+  policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
+  policySummary?: string | null;
   preview?: ToolResultPreview | null;
   at: string; // ISO
 }
@@ -120,6 +126,9 @@ export interface ToolBatchMember {
   target?: string | null;
   workspaceRoot?: string | null;
   scope?: 'inside_workspace' | 'outside_workspace' | null;
+  accessAction?: 'read' | 'write' | 'unknown' | null;
+  policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
+  policySummary?: string | null;
   preview?: ToolResultPreview | null;
 }
 
@@ -277,6 +286,9 @@ export interface RunStep {
   target?: string | null;
   workspaceRoot?: string | null;
   scope?: 'inside_workspace' | 'outside_workspace' | null;
+  accessAction?: 'read' | 'write' | 'unknown' | null;
+  policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
+  policySummary?: string | null;
 }
 
 export interface SessionRunRecord {

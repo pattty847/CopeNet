@@ -9,7 +9,7 @@ import subprocess
 
 from copenet.core.tools.contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
-from ._shared import display_path, resolve_relative_path, scope_for_path
+from ._shared import display_path, file_access_metadata, resolve_relative_path
 
 
 DESCRIPTORS = [
@@ -81,8 +81,8 @@ async def list_files(request: ToolExecutionRequest, context: ToolExecutionContex
         return blocked_result
     if not root.exists():
         raise RuntimeError(f"path not found: {root}")
-    target = display_path(root, context)
-    scope = scope_for_path(root, context)
+    access = file_access_metadata(root, context)
+    target = access["target"]
     rows = []
     for file_path in sorted(root.iterdir())[: context.policy.list_result_limit]:
         rows.append(
@@ -95,9 +95,7 @@ async def list_files(request: ToolExecutionRequest, context: ToolExecutionContex
     summary = f"Listed {len(rows)} entries under {target if target != str(context.workdir) else '.'}."
     output = {
         "entries": rows,
-        "target": target,
-        "workspaceRoot": str(context.session_workspace_root),
-        "scope": scope,
+        **access,
     }
     if warning_message:
         summary = f"{summary} Warning: {warning_message}"
@@ -129,8 +127,8 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
         raise RuntimeError(f"file not found: {path}")
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         text = handle.read(context.policy.file_output_limit)
-    target = display_path(path, context)
-    scope = scope_for_path(path, context)
+    access = file_access_metadata(path, context)
+    target = access["target"]
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -140,9 +138,7 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
         ),
         output={
             "path": target,
-            "target": target,
-            "workspaceRoot": str(context.session_workspace_root),
-            "scope": scope,
+            **access,
             "content": text,
             **({"warning": warning_message} if warning_message else {}),
         },
@@ -168,8 +164,8 @@ async def search_files(request: ToolExecutionRequest, context: ToolExecutionCont
     if not pattern:
         raise ValueError("pattern is required")
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
-    target = display_path(root, context)
-    scope = scope_for_path(root, context)
+    access = file_access_metadata(root, context)
+    target = access["target"]
     regex = re.compile(pattern, re.MULTILINE)
     hits = []
     for file_path in root.rglob("*"):
@@ -203,9 +199,7 @@ async def search_files(request: ToolExecutionRequest, context: ToolExecutionCont
         ),
         output={
             "matches": hits,
-            "target": target,
-            "workspaceRoot": str(context.session_workspace_root),
-            "scope": scope,
+            **access,
             **({"warning": warning_message} if warning_message else {}),
         },
     )
@@ -232,8 +226,8 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
     if not root.exists():
         raise RuntimeError(f"path not found: {root}")
-    target = display_path(root, context)
-    scope = scope_for_path(root, context)
+    access = file_access_metadata(root, context)
+    target = access["target"]
     try:
         completed = subprocess.run(
             [
@@ -244,7 +238,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
                 "--color",
                 "never",
                 pattern,
-                str(Path(target)),
+                str(root),
             ],
             cwd=context.workdir,
             capture_output=True,
@@ -276,6 +270,12 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         lines = data.get("lines") or {}
         line_number = int(data.get("line_number") or 0)
         path_text = str(path_info.get("text") or "")
+        if path_text:
+            hit_path = Path(path_text)
+            resolved_hit_path = (root / hit_path).resolve() if not hit_path.is_absolute() else hit_path.resolve()
+            display_hit_path = display_path(resolved_hit_path, context)
+        else:
+            display_hit_path = path_text
         snippet = str(lines.get("text") or "").rstrip("\n")
         column = 1
         if submatches and isinstance(submatches, list):
@@ -283,7 +283,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
             column = int(first.get("start") or 0) + 1
         hits.append(
             {
-                "path": path_text,
+                "path": display_hit_path,
                 "line": line_number,
                 "column": column,
                 "text": snippet[:240],
@@ -301,9 +301,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         ),
         output={
             "matches": hits,
-            "target": target,
-            "workspaceRoot": str(context.session_workspace_root),
-            "scope": scope,
+            **access,
             **({"warning": warning_message} if warning_message else {}),
         },
     )

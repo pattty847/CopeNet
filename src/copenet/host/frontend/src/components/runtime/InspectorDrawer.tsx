@@ -114,6 +114,31 @@ function ScopeBadge({ scope }: { scope?: 'inside_workspace' | 'outside_workspace
   );
 }
 
+function PolicyBadge({ decision }: { decision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null }) {
+  if (!decision || decision === 'allowed') return null;
+  const tone =
+    decision === 'write_blocked'
+      ? 'border-operator-error/30 bg-operator-error/10 text-operator-error'
+      : decision === 'approval_required'
+        ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+        : decision === 'unsafe_unknown'
+          ? 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300'
+          : 'border-sky-400/30 bg-sky-400/10 text-sky-300';
+  const label =
+    decision === 'write_blocked'
+      ? 'write blocked'
+      : decision === 'approval_required'
+        ? 'approval req'
+        : decision === 'unsafe_unknown'
+          ? 'shell risk'
+          : 'read roam';
+  return (
+    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
 function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityToolCall }) {
   const [expanded, setExpanded] = useState(false);
   const hasTarget = !!call.target;
@@ -140,6 +165,7 @@ function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityTo
           </>
         )}
         <ScopeBadge scope={call.scope} />
+        <PolicyBadge decision={call.policyDecision} />
         {dur && <span className="font-mono text-[10px] text-operator-muted/60 shrink-0">{dur}</span>}
         {isExpandable && (
           <button
@@ -179,6 +205,9 @@ function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityTo
           )}
           {hasSummary && (
             <div className="text-[11px] text-operator-muted/80 leading-relaxed">{call.summary}</div>
+          )}
+          {call.policySummary && call.policyDecision && (
+            <div className="text-[11px] text-operator-muted/80 leading-relaxed">{call.policySummary}</div>
           )}
           {!call.ok && call.error && (
             <pre className="mt-1 rounded border border-operator-error/25 bg-operator-error/5 px-2 py-1.5 text-[10.5px] font-mono text-operator-error whitespace-pre-wrap break-words">
@@ -236,6 +265,7 @@ function BatchBody({ batch }: { batch: BatchResource }) {
                   {shortPath(t)}
                 </span>
                 <ScopeBadge scope={batch.calls.find((call) => call.target === t)?.scope} />
+                <PolicyBadge decision={batch.calls.find((call) => call.target === t)?.policyDecision} />
                 <span className="font-mono text-[10px] text-operator-muted/50 shrink-0 truncate max-w-[55%]" title={t}>
                   {t}
                 </span>

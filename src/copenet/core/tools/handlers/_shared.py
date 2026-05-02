@@ -8,7 +8,7 @@ import os
 from pathlib import Path
 import subprocess
 
-from copenet.core.tools.contracts import ToolExecutionContext
+from copenet.core.tools.contracts import ToolBlockedError, ToolExecutionContext
 
 
 async def run_command(
@@ -59,6 +59,37 @@ def scope_for_path(path: Path, context: ToolExecutionContext) -> str:
         return "inside_workspace"
     except ValueError:
         return "outside_workspace"
+
+
+def policy_decision_for_scope(scope: str) -> str:
+    return "read_roam" if scope == "outside_workspace" else "allowed"
+
+
+def file_access_metadata(path: Path, context: ToolExecutionContext) -> dict[str, str]:
+    scope = scope_for_path(path, context)
+    return {
+        "target": display_path(path, context),
+        "workspaceRoot": str(context.session_workspace_root),
+        "scope": scope,
+        "accessAction": "read",
+        "policyDecision": policy_decision_for_scope(scope),
+        "policySummary": "Read roamed outside the home workspace." if scope == "outside_workspace" else "Read stayed inside the home workspace.",
+    }
+
+
+def ensure_write_allowed(path: Path, context: ToolExecutionContext) -> None:
+    scope = scope_for_path(path, context)
+    if scope == "outside_workspace":
+        target = display_path(path, context)
+        raise ToolBlockedError(
+            "writes outside the home workspace are blocked in v1",
+            target=target,
+            workspace_root=str(context.session_workspace_root),
+            scope=scope,
+            access_action="write",
+            policy_decision="write_blocked",
+            policy_summary="Write blocked outside the home workspace.",
+        )
 
 
 def display_path(path: Path, context: ToolExecutionContext) -> str:

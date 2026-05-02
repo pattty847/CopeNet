@@ -142,6 +142,9 @@ export interface ActivityToolCall {
   target?: string | null;
   workspaceRoot?: string | null;
   scope?: 'inside_workspace' | 'outside_workspace' | null;
+  accessAction?: 'read' | 'write' | 'unknown' | null;
+  policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
+  policySummary?: string | null;
   /** Error string when ok=false. Populated when backend provides RunStep.error. */
   error?: string | null;
 }

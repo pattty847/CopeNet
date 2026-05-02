@@ -606,6 +606,9 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
         "target": str(tool_payload.get("target") or "").strip() or None,
         "workspaceRoot": str(tool_payload.get("workspaceRoot") or "").strip() or None,
         "scope": str(tool_payload.get("scope") or "").strip() or None,
+        "accessAction": str(tool_payload.get("accessAction") or "").strip() or None,
+        "policyDecision": str(tool_payload.get("policyDecision") or "").strip() or None,
+        "policySummary": str(tool_payload.get("policySummary") or "").strip() or None,
         "status": "blocked" if tool_payload.get("ok") is False else "ok",
         "batched": str(tool_payload.get("channel") or "") == "batch" or str(tool_payload.get("toolId") or "") == "tool.batch",
     }

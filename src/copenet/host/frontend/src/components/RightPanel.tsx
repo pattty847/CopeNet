@@ -417,6 +417,17 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
                     {runtimeContext.note}
                   </div>
                 )}
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted">
+                    reads can roam
+                  </span>
+                  <span className="rounded-full border border-operator-error/25 bg-operator-error/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-error">
+                    outside-root writes blocked
+                  </span>
+                  <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-fuchsia-300">
+                    shell risk surfaced
+                  </span>
+                </div>
               </div>
 
               {isDraft ? (

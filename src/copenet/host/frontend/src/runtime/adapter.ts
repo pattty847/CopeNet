@@ -241,6 +241,9 @@ function mapToolStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'][
       step.workspaceRoot ??
       (typeof run.metadata?.workspaceRoot === 'string' ? run.metadata.workspaceRoot : null),
     scope: step.scope ?? null,
+    accessAction: step.accessAction ?? null,
+    policyDecision: step.policyDecision ?? null,
+    policySummary: step.policySummary ?? null,
     error: step.error ?? null,
   };
 }

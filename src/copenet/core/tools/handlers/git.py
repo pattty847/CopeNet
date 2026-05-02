@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from copenet.core.tools.contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
-from ._shared import run_command
+from ._shared import display_path, file_access_metadata, run_command
 
 
 DESCRIPTORS = [
@@ -36,19 +36,22 @@ async def git_status(request: ToolExecutionRequest, context: ToolExecutionContex
     )
     if code != 0:
         raise RuntimeError(stderr_text or stdout_text or "git status failed")
+    access = file_access_metadata(context.workdir, context)
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
         summary="Read git status.",
-        output={"statusText": stdout_text},
+        output={"statusText": stdout_text, **access},
     )
 
 
 async def git_diff(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     target = str(request.arguments.get("target") or "").strip()
     argv = ["git", "diff", "--stat", "--patch", "--minimal"]
+    access = file_access_metadata(context.workdir, context)
     if target:
         argv.append(target)
+        access["target"] = target
     code, stdout_text, stderr_text = await run_command(
         argv,
         cwd=context.workdir,
@@ -61,7 +64,7 @@ async def git_diff(request: ToolExecutionRequest, context: ToolExecutionContext)
         tool_id=request.tool_id,
         ok=True,
         summary="Read git diff.",
-        output={"diffText": stdout_text},
+        output={"diffText": stdout_text, **access},
     )
 
 

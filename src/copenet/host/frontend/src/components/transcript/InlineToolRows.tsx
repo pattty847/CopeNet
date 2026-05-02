@@ -98,6 +98,32 @@ function ScopeBadge({ scope }: { scope: 'inside_workspace' | 'outside_workspace'
   );
 }
 
+function policyTone(decision: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null | undefined): string {
+  if (decision === 'write_blocked') return 'border-operator-error/30 bg-operator-error/10 text-operator-error';
+  if (decision === 'approval_required') return 'border-amber-400/30 bg-amber-400/10 text-amber-300';
+  if (decision === 'unsafe_unknown') return 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300';
+  if (decision === 'read_roam') return 'border-sky-400/30 bg-sky-400/10 text-sky-300';
+  return 'border-operator-border bg-operator-panel/40 text-operator-muted';
+}
+
+function policyLabel(decision: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null | undefined): string | null {
+  if (decision === 'read_roam') return 'read roam';
+  if (decision === 'write_blocked') return 'write blocked';
+  if (decision === 'approval_required') return 'approval req';
+  if (decision === 'unsafe_unknown') return 'shell risk';
+  return null;
+}
+
+function PolicyBadge({ decision }: { decision: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null | undefined }) {
+  const label = policyLabel(decision);
+  if (!label) return null;
+  return (
+    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${policyTone(decision)}`}>
+      {label}
+    </span>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Preview rendering
 // ---------------------------------------------------------------------------
@@ -212,6 +238,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
             {targetLabel || part.summary}
           </span>
           <ScopeBadge scope={part.scope} />
+          <PolicyBadge decision={part.policyDecision} />
           {expanded
             ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />
             : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />
@@ -225,6 +252,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
             {targetLabel || part.summary}
           </span>
           <ScopeBadge scope={part.scope} />
+          <PolicyBadge decision={part.policyDecision} />
         </div>
       )}
 
@@ -239,6 +267,11 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
           {part.target && part.summary && part.summary !== part.target && (
             <div className="mt-1 text-[10.5px] text-operator-muted/65 leading-relaxed">
               {part.summary}
+            </div>
+          )}
+          {part.policySummary && part.policyDecision && (
+            <div className="mt-1 text-[10.5px] text-operator-muted/65 leading-relaxed">
+              {part.policySummary}
             </div>
           )}
           {!part.ok && part.error && (
@@ -288,6 +321,7 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
           <StatusIcon className={`h-2.5 w-2.5 shrink-0 ${statusColor}`} />
           <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/75 min-w-0">{label}</span>
           <ScopeBadge scope={member.scope} />
+          <PolicyBadge decision={member.policyDecision} />
           <span className="shrink-0 truncate text-[10px] text-operator-muted/45 max-w-[45%]">{member.summary}</span>
           {expanded
             ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />
@@ -299,6 +333,7 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
           <StatusIcon className={`h-2.5 w-2.5 shrink-0 ${statusColor}`} />
           <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/75 min-w-0">{label}</span>
           <ScopeBadge scope={member.scope} />
+          <PolicyBadge decision={member.policyDecision} />
           <span className="shrink-0 text-[10px] text-operator-muted/45">{member.summary}</span>
         </div>
       )}
@@ -309,6 +344,9 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
               <span className="font-semibold uppercase tracking-wider text-operator-muted/45">target</span>{' '}
               <span className="font-mono break-all">{member.target}</span>
             </div>
+          )}
+          {member.policySummary && member.policyDecision && (
+            <div className="mt-1 text-[10.5px] text-operator-muted/65 leading-relaxed">{member.policySummary}</div>
           )}
           <ToolPreview preview={member.preview!} />
         </div>
@@ -354,6 +392,9 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
         }
         <span className="flex-1 text-[10.5px] text-operator-muted/75 font-medium">{part.label}</span>
         {scopeCounts.outside > 0 && <ScopeBadge scope="outside_workspace" />}
+        {part.members.some((member) => member.policyDecision === 'read_roam') && <PolicyBadge decision="read_roam" />}
+        {part.members.some((member) => member.policyDecision === 'write_blocked') && <PolicyBadge decision="write_blocked" />}
+        {part.members.some((member) => member.policyDecision === 'unsafe_unknown') && <PolicyBadge decision="unsafe_unknown" />}
         {failCount > 0 && (
           <span className="shrink-0 rounded-full bg-operator-error/10 px-1.5 py-0.5 text-[9px] font-semibold text-operator-error">
             {failCount} failed

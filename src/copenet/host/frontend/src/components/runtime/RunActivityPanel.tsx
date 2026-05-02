@@ -63,6 +63,31 @@ function ScopeBadge({ scope }: { scope?: 'inside_workspace' | 'outside_workspace
   );
 }
 
+function PolicyBadge({ decision }: { decision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null }) {
+  if (!decision || decision === 'allowed') return null;
+  const tone =
+    decision === 'write_blocked'
+      ? 'border-operator-error/30 bg-operator-error/10 text-operator-error'
+      : decision === 'approval_required'
+        ? 'border-amber-400/30 bg-amber-400/10 text-amber-300'
+        : decision === 'unsafe_unknown'
+          ? 'border-fuchsia-400/30 bg-fuchsia-400/10 text-fuchsia-300'
+          : 'border-sky-400/30 bg-sky-400/10 text-sky-300';
+  const label =
+    decision === 'write_blocked'
+      ? 'write blocked'
+      : decision === 'approval_required'
+        ? 'approval req'
+        : decision === 'unsafe_unknown'
+          ? 'shell risk'
+          : 'read roam';
+  return (
+    <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${tone}`}>
+      {label}
+    </span>
+  );
+}
+
 function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: boolean }) {
   // Detect blocked state: ok=false + summary mentions 'blocked' or 'policy'
   const isBlocked = !call.ok && (
@@ -90,6 +115,7 @@ function ToolCallRow({ call, compact }: { call: ActivityToolCall; compact?: bool
           </span>
       )}
       <ScopeBadge scope={call.scope} />
+      <PolicyBadge decision={call.policyDecision} />
       <span className="text-operator-muted/60 font-mono text-[10px] shrink-0">
         {formatDuration(call.durationMs)}
       </span>
@@ -235,6 +261,7 @@ function SingleCallCard({ call }: { call: ActivityToolCall }) {
         )}
         <div className="mt-1 flex items-center gap-1.5">
           <ScopeBadge scope={call.scope} />
+          <PolicyBadge decision={call.policyDecision} />
           {call.artifactId && (
             <button
               type="button"
@@ -245,6 +272,9 @@ function SingleCallCard({ call }: { call: ActivityToolCall }) {
             </button>
           )}
         </div>
+        {call.policySummary && call.policyDecision && (
+          <div className="mt-1 text-[10.5px] text-operator-muted/65 leading-snug">{call.policySummary}</div>
+        )}
       </div>
       {call.ok ? (
         <CheckCircle2 className="w-3.5 h-3.5 text-operator-success shrink-0 mt-1" />

@@ -84,6 +84,16 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
     target: payload.target ? String(payload.target) : null,
     workspaceRoot: payload.workspaceRoot ? String(payload.workspaceRoot) : null,
     scope: payload.scope === 'outside_workspace' ? 'outside_workspace' : payload.scope === 'inside_workspace' ? 'inside_workspace' : null,
+    accessAction: payload.accessAction === 'read' || payload.accessAction === 'write' || payload.accessAction === 'unknown' ? payload.accessAction : null,
+    policyDecision:
+      payload.policyDecision === 'allowed' ||
+      payload.policyDecision === 'read_roam' ||
+      payload.policyDecision === 'write_blocked' ||
+      payload.policyDecision === 'approval_required' ||
+      payload.policyDecision === 'unsafe_unknown'
+        ? payload.policyDecision
+        : null,
+    policySummary: payload.policySummary ? String(payload.policySummary) : null,
   };
 }
 
@@ -408,6 +418,16 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
               target: member.target ? String(member.target) : null,
               workspaceRoot: member.workspaceRoot ? String(member.workspaceRoot) : null,
               scope: member.scope === 'outside_workspace' ? 'outside_workspace' : member.scope === 'inside_workspace' ? 'inside_workspace' : null,
+              accessAction: member.accessAction === 'read' || member.accessAction === 'write' || member.accessAction === 'unknown' ? member.accessAction : null,
+              policyDecision:
+                member.policyDecision === 'allowed' ||
+                member.policyDecision === 'read_roam' ||
+                member.policyDecision === 'write_blocked' ||
+                member.policyDecision === 'approval_required' ||
+                member.policyDecision === 'unsafe_unknown'
+                  ? member.policyDecision
+                  : null,
+              policySummary: member.policySummary ? String(member.policySummary) : null,
               preview: normalizeToolResultPreview(member.preview),
             };
           }),
@@ -427,6 +447,27 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
           target: toolExecution.target ? String(toolExecution.target) : payload.target ? String(payload.target) : null,
           workspaceRoot: toolExecution.workspaceRoot ? String(toolExecution.workspaceRoot) : payload.workspaceRoot ? String(payload.workspaceRoot) : null,
           scope: toolExecution.scope === 'outside_workspace' ? 'outside_workspace' : toolExecution.scope === 'inside_workspace' ? 'inside_workspace' : payload.scope === 'outside_workspace' ? 'outside_workspace' : payload.scope === 'inside_workspace' ? 'inside_workspace' : null,
+          accessAction:
+            toolExecution.accessAction === 'read' || toolExecution.accessAction === 'write' || toolExecution.accessAction === 'unknown'
+              ? toolExecution.accessAction
+              : payload.accessAction === 'read' || payload.accessAction === 'write' || payload.accessAction === 'unknown'
+                ? payload.accessAction
+                : null,
+          policyDecision:
+            toolExecution.policyDecision === 'allowed' ||
+            toolExecution.policyDecision === 'read_roam' ||
+            toolExecution.policyDecision === 'write_blocked' ||
+            toolExecution.policyDecision === 'approval_required' ||
+            toolExecution.policyDecision === 'unsafe_unknown'
+              ? toolExecution.policyDecision
+              : payload.policyDecision === 'allowed' ||
+                payload.policyDecision === 'read_roam' ||
+                payload.policyDecision === 'write_blocked' ||
+                payload.policyDecision === 'approval_required' ||
+                payload.policyDecision === 'unsafe_unknown'
+                ? payload.policyDecision
+                : null,
+          policySummary: toolExecution.policySummary ? String(toolExecution.policySummary) : payload.policySummary ? String(payload.policySummary) : null,
           preview: normalizeToolResultPreview((toolExecution as Record<string, unknown>).preview ?? payload.preview),
           at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
         });
@@ -1070,6 +1111,16 @@ class WsClient {
                   target: mb.target ? String(mb.target) : null,
                   workspaceRoot: mb.workspaceRoot ? String(mb.workspaceRoot) : null,
                   scope: mb.scope === 'outside_workspace' ? 'outside_workspace' : mb.scope === 'inside_workspace' ? 'inside_workspace' : null,
+                  accessAction: mb.accessAction === 'read' || mb.accessAction === 'write' || mb.accessAction === 'unknown' ? mb.accessAction : null,
+                  policyDecision:
+                    mb.policyDecision === 'allowed' ||
+                    mb.policyDecision === 'read_roam' ||
+                    mb.policyDecision === 'write_blocked' ||
+                    mb.policyDecision === 'approval_required' ||
+                    mb.policyDecision === 'unsafe_unknown'
+                      ? mb.policyDecision
+                      : null,
+                  policySummary: mb.policySummary ? String(mb.policySummary) : null,
                   preview: normalizeToolResultPreview(mb.preview),
                 };
               }),
@@ -1089,6 +1140,9 @@ class WsClient {
               target: toolExecution.target || null,
               workspaceRoot: toolExecution.workspaceRoot || null,
               scope: toolExecution.scope || null,
+              accessAction: toolExecution.accessAction || null,
+              policyDecision: toolExecution.policyDecision || null,
+              policySummary: toolExecution.policySummary || null,
               preview: normalizeToolResultPreview(toolPayloadRecord?.preview),
               at: new Date().toISOString(),
             });
