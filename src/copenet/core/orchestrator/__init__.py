@@ -25,6 +25,7 @@ from copenet.core.orchestrator.catalog import (
     rename_session as rename_session_record,
     resolve_session as resolve_session_record,
 )
+from copenet.core.orchestrator.merge import merge_sessions as merge_session_record, resolve_merge_state as resolve_merge_state_record
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
 from copenet.core.profile import PatProfileService
@@ -234,6 +235,31 @@ class Orchestrator:
         """Resolve one session by key."""
         return resolve_session_record(self, session_key)
 
+    async def merge_sessions(
+        self,
+        *,
+        source_session_keys: list[str],
+        provider: str,
+        model: str | None,
+        system_prompt_id: str | None,
+        task_prompt_id: str | None,
+        workspace_root: str | None,
+        title: str | None = None,
+        emit_event: SideEventEmit | None = None,
+    ) -> dict[str, dict]:
+        """Create a new merged session and begin async hydration."""
+        return await merge_session_record(
+            self,
+            source_session_keys=source_session_keys,
+            provider=provider,
+            model=model,
+            system_prompt_id=system_prompt_id,
+            task_prompt_id=task_prompt_id,
+            workspace_root=workspace_root,
+            title=title,
+            emit_event=emit_event,
+        )
+
     def get_pat_profile(self) -> dict | None:
         """Return the current public Pat Profile payload, if configured."""
         profile = self._profile_service.load_profile()
@@ -305,6 +331,10 @@ class Orchestrator:
         """Resolve one structured runtime state record for a session."""
         record = self._session_state_store.get(session_key.strip())
         return record.to_json() if record is not None else None
+
+    def resolve_merge_state(self, session_key: str) -> dict[str, object] | None:
+        """Resolve one persisted merge-state payload for a merged session."""
+        return resolve_merge_state_record(self, session_key)
 
     def list_session_artifacts(self, session_key: str, limit: int = 50) -> list[dict]:
         """List recent durable artifacts for one session."""

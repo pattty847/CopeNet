@@ -137,7 +137,7 @@ export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
   const status = STATUS_META[workingSet.status];
 
   return (
-    <div className={`${isMobile ? 'mx-3 mt-2.5' : 'mx-4 mt-3'} rounded-xl border border-operator-border bg-operator-panel/40 overflow-hidden`}>
+    <div className={`${isMobile ? 'mx-3 mt-2.5' : 'mx-2 mt-2.5'} border-y border-operator-border/65 overflow-hidden`}>
       <button
         onClick={() => setExpanded((v) => !v)}
         className={`w-full flex items-start gap-2.5 text-left hover:bg-operator-panel/60 transition-colors duration-150 ${

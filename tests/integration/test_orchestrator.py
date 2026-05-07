@@ -80,6 +80,47 @@ class ScriptedPromptedProvider:
         return []
 
 
+class MergeSummaryProvider:
+    name = "merge"
+    display_name = "Merge"
+
+    def __init__(self, summaries: dict[str, str], *, failing_sources: set[str] | None = None) -> None:
+        self.summaries = summaries
+        self.failing_sources = set(failing_sources or set())
+        self.prompts: list[str] = []
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        self.prompts.append(prompt)
+        source_key = ""
+        for line in prompt.splitlines():
+          if line.startswith("Source session key:"):
+              source_key = line.split(":", 1)[1].strip()
+              break
+        if source_key in self.failing_sources:
+            raise RuntimeError(f"summary failed for {source_key}")
+        text = self.summaries.get(source_key, f"Summary for {source_key or 'unknown source'}")
+        yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "merge-session")
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False},
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
 async def _collect_events(orchestrator: Orchestrator, request: ChatSendRequest) -> tuple[dict, list[dict]]:
     events: list[dict] = []
 
@@ -311,3 +352,128 @@ async def test_export_session_returns_messages_and_markdown(fake_orchestrator: O
     assert "# Conversation Export: alpha" in exported["markdown"]
     assert "Inspect the runtime" in exported["markdown"]
     assert "hello" in exported["markdown"]
+
+
+@pytest.mark.asyncio
+async def test_merge_sessions_creates_session_tracks_progress_and_writes_merge_brief(tmp_path) -> None:
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={
+            "fake": FakeProvider(),
+            "merge": MergeSummaryProvider(
+                {
+                    "alpha": "Alpha summary with decision A and open question A.",
+                    "beta": "Beta summary with decision B and open question B.",
+                }
+            ),
+        },
+    )
+
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect alpha", provider="fake", model="model-a"),
+    )
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="beta", message="Inspect beta", provider="fake", model="model-a"),
+    )
+
+    side_events: list[tuple[str, dict]] = []
+
+    async def emit_side(event: str, payload: dict) -> None:
+        side_events.append((event, payload))
+
+    created = await orchestrator.merge_sessions(
+        source_session_keys=["alpha", "beta"],
+        provider="merge",
+        model="merge-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+        workspace_root=str(tmp_path),
+        title="Merged Workspace",
+        emit_event=emit_side,
+    )
+
+    merged_key = created["session"]["key"]
+    initial_state = created["mergeState"]
+    assert created["session"]["title"] == "Merged Workspace"
+    assert initial_state["status"] in {"pending", "running"}
+    assert initial_state["totalSources"] == 2
+    assert initial_state["completedSources"] == 0
+
+    await asyncio.wait_for(asyncio.gather(*list(orchestrator._background_tasks)), timeout=1.0)
+
+    record = orchestrator._session_state_store.get(merged_key)
+    assert record is not None
+    assert record.merge_state is not None
+    assert record.merge_state["status"] == "complete"
+    assert record.merge_state["completed_sources"] == 2
+    assert len(record.merge_state["sources"]) == 2
+    assert {source["session_key"] for source in record.merge_state["sources"]} == {"alpha", "beta"}
+
+    history = orchestrator.history(merged_key)
+    assert [row["role"] for row in history] == ["assistant"]
+    assert "Merged context prepared from 2 sessions." in history[0]["content"]
+    assert "Alpha summary with decision A" in history[0]["content"]
+    assert "Beta summary with decision B" in history[0]["content"]
+
+    artifacts = orchestrator._artifact_store.list_for_session(merged_key)
+    assert artifacts
+    assert artifacts[0].type == "merge_brief"
+    assert "Merged context prepared from 2 sessions." in artifacts[0].body
+
+    merge_updates = [payload for event, payload in side_events if event == "sessions.merge.updated"]
+    assert merge_updates
+    assert merge_updates[-1]["mergeState"]["status"] == "complete"
+    assert merge_updates[-1]["message"]["content"].startswith("Merged context prepared")
+
+
+@pytest.mark.asyncio
+async def test_merge_sessions_surfaces_partial_failure_and_stays_usable(tmp_path) -> None:
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={
+            "fake": FakeProvider(),
+            "merge": MergeSummaryProvider(
+                {"alpha": "Alpha summary is available."},
+                failing_sources={"beta"},
+            ),
+        },
+    )
+
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="Inspect alpha", provider="fake", model="model-a"),
+    )
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="beta", message="Inspect beta", provider="fake", model="model-a"),
+    )
+
+    created = await orchestrator.merge_sessions(
+        source_session_keys=["alpha", "beta"],
+        provider="merge",
+        model="merge-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+        workspace_root=str(tmp_path),
+    )
+    merged_key = created["session"]["key"]
+
+    await asyncio.wait_for(asyncio.gather(*list(orchestrator._background_tasks)), timeout=1.0)
+
+    record = orchestrator._session_state_store.get(merged_key)
+    assert record is not None
+    assert record.merge_state is not None
+    assert record.merge_state["status"] == "failed"
+    assert record.merge_state["completed_sources"] == 1
+    assert any(source["status"] == "failed" for source in record.merge_state["sources"])
+
+    history = orchestrator.history(merged_key)
+    assert [row["role"] for row in history] == ["assistant"]
+    assert "Alpha summary is available." in history[0]["content"]
+    assert "beta" in history[0]["content"].lower()

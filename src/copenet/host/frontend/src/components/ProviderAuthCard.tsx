@@ -241,9 +241,8 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
   };
 
   return (
-    <div className="rounded-xl border border-operator-border bg-operator-panel/50 overflow-hidden">
-      {/* Card header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-operator-border/60">
+    <div className="border-t border-operator-border/70 pt-2">
+      <div className="flex items-center gap-2 pb-2">
         <KeyRound className="w-3 h-3 text-operator-muted shrink-0" />
         <span className="text-[11px] font-semibold text-operator-text truncate flex-1">
           {displayName ?? providerId}
@@ -258,8 +257,7 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
         </button>
       </div>
 
-      {/* Card body */}
-      <div className="px-3 py-2.5">
+      <div className="pb-1">
         {loading && !status && (
           <div className="flex items-center gap-2 text-[11px] text-operator-muted">
             <RefreshCw className="w-3 h-3 animate-spin" />

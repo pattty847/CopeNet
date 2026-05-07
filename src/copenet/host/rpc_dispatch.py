@@ -31,6 +31,8 @@ from .rpc_sessions import (
     handle_sessions_debug_copy,
     handle_sessions_export,
     handle_sessions_list,
+    handle_sessions_merge_create,
+    handle_sessions_merge_state,
     handle_sessions_rename,
     handle_sessions_run,
     handle_sessions_runs,
@@ -85,6 +87,10 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_provider_auth_logout(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
+    elif req.method == "sessions.merge.create":
+        await handle_sessions_merge_create(req.id, req.params, send_json, orchestrator)
+    elif req.method == "sessions.merge.state":
+        await handle_sessions_merge_state(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.rename":
         await handle_sessions_rename(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.archive":

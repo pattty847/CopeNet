@@ -30,3 +30,30 @@ def test_session_state_store_creates_and_roundtrips(tmp_dir) -> None:
     assert payload["task_summary"] == "Inspect archive restore flow"
     assert payload["relevant_artifact_ids"] == ["artifact-1"]
     assert saved.updated_at
+
+
+def test_session_state_store_roundtrips_merge_state(tmp_dir) -> None:
+    store = SessionStateStore(root_dir=tmp_dir / "state")
+
+    store.save(
+        SessionStateRecord(
+            session_key="merged-alpha-beta",
+            merge_state={
+                "status": "running",
+                "total_sources": 2,
+                "completed_sources": 1,
+                "source_session_keys": ["alpha", "beta"],
+                "sources": [
+                    {"session_key": "alpha", "title": "Alpha", "status": "complete", "summary": "Alpha summary"},
+                    {"session_key": "beta", "title": "Beta", "status": "running", "summary": None},
+                ],
+            },
+        )
+    )
+
+    loaded = store.get("merged-alpha-beta")
+    assert loaded is not None
+    assert loaded.merge_state is not None
+    assert loaded.merge_state["status"] == "running"
+    assert loaded.merge_state["completed_sources"] == 1
+    assert loaded.merge_state["source_session_keys"] == ["alpha", "beta"]

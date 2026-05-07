@@ -322,8 +322,32 @@ export interface SessionStateRecord {
   plan_snapshot: Record<string, unknown>;
   relevant_asset_ids: string[];
   relevant_artifact_ids: string[];
+  merge_state?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
+}
+
+export interface SessionMergeSource {
+  sessionKey: string;
+  title: string;
+  status: 'pending' | 'running' | 'complete' | 'failed';
+  summary: string | null;
+  error: string | null;
+  decisionCount: number;
+  openQuestionCount: number;
+}
+
+export interface SessionMergeState {
+  status: 'pending' | 'running' | 'complete' | 'failed';
+  sourceSessionKeys: string[];
+  totalSources: number;
+  completedSources: number;
+  startedAt: string;
+  completedAt: string | null;
+  briefRunId: string | null;
+  briefArtifactId: string | null;
+  conflicts: string[];
+  sources: SessionMergeSource[];
 }
 
 // ---------------------------------------------------------------------------

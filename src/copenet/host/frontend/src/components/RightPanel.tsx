@@ -30,7 +30,7 @@ function timeAgo(dateString?: string | null) {
 }
 
 const selectClass =
-  'bg-operator-bg border border-operator-border text-operator-text text-[12px] px-2 py-1.5 rounded-lg focus:outline-none focus:border-operator-accent/40 w-full transition-colors duration-150';
+  'bg-operator-bg border border-operator-border text-operator-text text-[12px] px-2 py-1.5 rounded-md focus:outline-none focus:border-operator-accent/40 w-full transition-colors duration-150';
 
 export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
@@ -174,15 +174,13 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   ];
 
   const tabLabels = useMemo(() => {
-    if (panelWidth > 450) {
+    if (panelWidth > 460) {
       return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
     }
-    if (panelWidth > 340) {
-      return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
-    }
-    return { inbox: 'Inbox', runtime: 'Run', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
+    return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
   }, [panelWidth]);
-  const compactTabs = !mobile && panelWidth > 0 && panelWidth < 340;
+  const compactTabs = !mobile && panelWidth > 0 && panelWidth < 320;
+  const iconOnlyTabs = !compactTabs && !mobile && panelWidth > 0 && panelWidth < 430;
 
   if (!rightPanelOpen && !mobile) {
     return (
@@ -218,7 +216,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
       className={`${mobile ? 'w-full min-w-0 border-l-0' : 'w-full min-w-0 border-l'} border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden`}
     >
       {/* Header — stable panel identity, not a duplicate active-tab title */}
-      <div className="px-3 py-3 border-b border-operator-border flex items-center gap-2">
+      <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
         {!mobile && (
           <button
             onClick={() => setRightPanelOpen(false)}
@@ -253,7 +251,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           </select>
         </div>
       ) : (
-        <div className="flex border-b border-operator-border bg-operator-panel/20 px-2 pt-1.5 shrink-0">
+        <div className="flex border-b border-operator-border bg-operator-panel/8 px-1.5 pt-1 shrink-0">
           {tabs.map((tab) => {
             const active = rightPanelTab === tab.id;
             const Icon = tab.icon;
@@ -261,7 +259,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               <button
                 key={tab.id}
                 onClick={() => setRightPanelTab(tab.id)}
-                className={`relative min-w-0 flex-1 overflow-hidden flex items-center justify-center gap-1 rounded-t-xl px-1.5 py-2.5 text-[9px] font-semibold uppercase tracking-[0.08em] transition-all duration-150 border-b-2 sm:px-2 sm:text-[10px] sm:tracking-[0.12em] ${
+                className={`relative min-w-0 flex-1 overflow-hidden flex items-center justify-center gap-1 rounded-t-lg px-1 py-2 text-[9px] font-semibold uppercase tracking-[0.08em] transition-all duration-150 border-b-2 sm:px-1.5 sm:text-[10px] sm:tracking-[0.12em] ${
                   active
                     ? 'text-operator-accent border-operator-accent bg-operator-accent/5'
                     : 'text-operator-muted border-transparent hover:text-operator-text hover:bg-operator-panel/40'
@@ -269,7 +267,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 title={tab.label}
               >
                 <Icon className="w-3 h-3 shrink-0" />
-                <span className="min-w-0 truncate">{tabLabels[tab.id]}</span>
+                {!iconOnlyTabs && <span className="min-w-0 truncate">{tabLabels[tab.id]}</span>}
                 {tab.badge && tab.badge > 0 && (
                   <span className="absolute top-1 right-1 h-3.5 w-3.5 flex items-center justify-center rounded-full bg-operator-accent text-[8px] font-bold text-white leading-none">
                     {tab.badge > 9 ? '9+' : tab.badge}
@@ -296,21 +294,21 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           <ApprovalQueuePanel sessionKey={activeSessionKey} />
         )}
         {rightPanelTab === 'runtime' && (
-      <div className="flex flex-col gap-4 text-[12px]">
+      <div className="flex flex-col gap-2.5 text-[12px]">
 
         {/* 1. Pending approval — shown first; operator can't miss it */}
         {pendingApproval && (
-          <section className="px-3 pt-3">
+          <section className="px-2.5 pt-2.5">
             <ApprovalRequestCard approval={pendingApproval} />
           </section>
         )}
 
         {/* 2. Live tool feed — only when a run is in progress */}
-        <section className="bg-operator-panel/20 rounded-xl border border-operator-accent/15 mx-3 mt-3 overflow-hidden">
+        <section className="mx-2.5 mt-2.5 overflow-hidden border-b border-operator-border/70 pb-2.5">
           <LiveToolFeed />
           {/* Fallback: show hint when no run is active and no live calls */}
           {!activeRunId && (
-            <div className="px-3 py-2.5 space-y-1">
+            <div className="px-0 py-1.5 space-y-1">
               <div className="flex items-center gap-2">
                 <TerminalSquare className="w-3 h-3 text-operator-muted/60" />
                 <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/60">
@@ -324,14 +322,14 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
           )}
         </section>
 
-        <div className="px-3 pb-3 flex flex-col gap-4">
+        <div className="px-2.5 pb-2.5 flex flex-col gap-3">
           {/* 3. Session Info */}
           <section>
             <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
               <Info className="w-3.5 h-3.5" />
               <h3 className="font-semibold text-[10px] uppercase tracking-wider">Session Info</h3>
             </div>
-            <div className="space-y-1.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
+            <div className="space-y-1.5 border-b border-operator-border/70 pb-2.5">
               <div className="flex justify-between">
                 <span className="text-operator-muted">Status:</span>
                 <span className={`font-semibold ${isDraft ? 'text-operator-accent' : 'text-operator-success'}`}>
@@ -361,7 +359,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               <Settings2 className="w-3.5 h-3.5" />
               <h3 className="font-semibold text-[10px] uppercase tracking-wider">Runtime Info</h3>
             </div>
-            <div className="space-y-2.5 bg-operator-panel/40 p-2.5 rounded-xl border border-operator-border">
+            <div className="space-y-2 border-b border-operator-border/70 pb-2.5">
               <div className="flex justify-between items-center">
                 <span className="text-operator-muted">Connection:</span>
                 <span className={`flex items-center gap-1.5 font-semibold ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
@@ -375,66 +373,59 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 </span>
               </div>
 
-              <div className="rounded-lg border border-operator-border bg-operator-bg/50 px-2.5 py-2">
-                <div className="mb-1 flex items-center justify-between gap-3">
-                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Project Root</span>
-                  <div className="flex items-center gap-1.5">
-                    <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted">
-                      home workspace
-                    </span>
-                    {isDraft ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => void chooseWorkspaceRoot()}
-                          disabled={workspaceBusy}
-                          className="inline-flex items-center gap-1 rounded-full border border-operator-accent/20 bg-operator-accent/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent disabled:opacity-50"
-                        >
-                          <FolderOpen className="h-2.5 w-2.5" />
-                          Browse
-                        </button>
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Home Workspace</span>
+                  {isDraft ? (
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => void chooseWorkspaceRoot()}
+                        disabled={workspaceBusy}
+                        className="inline-flex items-center gap-1 rounded-md border border-operator-accent/22 bg-operator-accent/8 px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent disabled:opacity-50"
+                      >
+                        <FolderOpen className="h-2.5 w-2.5" />
+                        Browse
+                      </button>
+                      {draftSettings.workspaceRoot && draftSettings.workspaceRoot !== (runtimeContext?.workspaceRoot || '') ? (
                         <button
                           type="button"
                           onClick={() => void resetWorkspaceRoot()}
                           disabled={workspaceBusy}
-                          className="inline-flex items-center gap-1 rounded-full border border-operator-border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted disabled:opacity-50"
+                          className="inline-flex items-center gap-1 rounded-md border border-operator-border px-1.5 py-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted disabled:opacity-50"
+                          title="Reset to default workspace"
                         >
                           <RotateCcw className="h-2.5 w-2.5" />
-                          Reset
                         </button>
-                      </>
-                    ) : null}
-                  </div>
+                      ) : null}
+                    </div>
+                  ) : (
+                    <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted/90">
+                      home
+                    </span>
+                  )}
                 </div>
                 <div
-                  className="font-mono text-[10.5px] leading-relaxed text-operator-text break-all"
+                  className="font-mono text-[10.5px] leading-snug text-operator-text break-words"
                   title={displayedWorkspaceRoot || 'Workspace root unavailable'}
                 >
                   {displayedWorkspaceRoot || 'Workspace root unavailable'}
                 </div>
-                {runtimeContext?.note && (
-                  <div className="mt-1.5 text-[10px] leading-relaxed text-operator-muted/70">
-                    {runtimeContext.note}
-                  </div>
-                )}
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted">
-                    reads can roam
+                <div className="flex flex-wrap gap-1">
+                  <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted" title="Reads may roam outside the home workspace.">
+                    roam reads
                   </span>
-                  <span className="rounded-full border border-operator-error/25 bg-operator-error/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-error">
-                    outside-root writes blocked
+                  <span className="rounded-full border border-operator-error/22 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-error" title="Outside-root writes are blocked in v1.">
+                    writes blocked
                   </span>
-                  <span className="rounded-full border border-fuchsia-400/25 bg-fuchsia-400/10 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-fuchsia-300">
-                    shell risk surfaced
+                  <span className="rounded-full border border-fuchsia-400/22 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-fuchsia-300" title="Shell commands with unclear side effects are surfaced as risk.">
+                    shell risk
                   </span>
                 </div>
               </div>
 
               {isDraft ? (
                 <>
-                  <div className="rounded-lg border border-operator-accent/15 bg-operator-accent/5 px-2.5 py-2 text-[11px] leading-relaxed text-operator-muted">
-                    Draft settings are local until the first send. Your first message will create and lock the session.
-                  </div>
                   <div className="flex flex-col gap-1">
                     <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Provider</span>
                     <select
@@ -460,9 +451,6 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
                         <option key={model.id} value={model.id}>{model.displayName}</option>
                       ))}
                     </select>
-                    {!currentProvider && (
-                      <div className="text-[10px] text-operator-muted">Pick a provider to load chat models.</div>
-                    )}
                     {currentProvider && !providerHasModels && (
                       <div className="text-[10px] text-operator-muted">Loading models for {providerName}…</div>
                     )}
@@ -543,7 +531,7 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
                 <Activity className="w-3.5 h-3.5" />
                 <h3 className="font-semibold text-[10px] uppercase tracking-wider">Run Timeline</h3>
               </div>
-              <div className="bg-operator-panel/30 rounded-xl border border-operator-border overflow-hidden">
+              <div className="overflow-hidden">
                 <RunTimeline sessionKey={activeSessionKey} />
               </div>
             </section>
@@ -556,14 +544,14 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
               <h3 className="font-semibold text-[10px] uppercase tracking-wider">Profile</h3>
             </div>
             {patProfile?.active ? (
-              <div className="flex items-center justify-between rounded-lg border border-operator-border bg-operator-panel/30 px-2.5 py-2">
+              <div className="flex items-center justify-between border-t border-operator-border/70 pt-2">
                 <span className="text-[11px] text-operator-text">{patProfile.displayName}</span>
                 <span className="rounded-full bg-operator-success/15 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-success">
                   active
                 </span>
               </div>
             ) : (
-              <div className="rounded-lg border border-operator-border bg-operator-panel/30 px-2.5 py-2 text-[11px] italic text-operator-muted/60">
+              <div className="border-t border-operator-border/70 pt-2 text-[11px] italic text-operator-muted/60">
                 No profile overlay yet
               </div>
             )}

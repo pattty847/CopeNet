@@ -23,6 +23,18 @@ def _optional_text(raw: dict[str, Any], key: str) -> str | None:
     return text or None
 
 
+def _string_list(raw: dict[str, Any], key: str) -> list[str]:
+    value = raw.get(key)
+    if not isinstance(value, list):
+        return []
+    rows: list[str] = []
+    for item in value:
+        text = str(item or "").strip()
+        if text:
+            rows.append(text)
+    return rows
+
+
 async def handle_sessions_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     include_archived = bool((params or {}).get("includeArchived", False))
     await send_json(
@@ -337,3 +349,87 @@ async def handle_sessions_export(request_id: str, params: dict[str, Any] | None,
         )
         return
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=exported)))
+
+
+async def handle_sessions_merge_create(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    raw = params or {}
+    source_session_keys = _string_list(raw, "sourceSessionKeys")
+    provider = _required_text(raw, "provider")
+    if len(source_session_keys) < 2:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="at least 2 sourceSessionKeys are required"),
+                )
+            )
+        )
+        return
+    if not provider:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="provider is required"),
+                )
+            )
+        )
+        return
+
+    async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
+        await send_json({"type": "event", "event": event, "payload": payload})
+
+    try:
+        merged = await orchestrator.merge_sessions(
+            source_session_keys=source_session_keys,
+            provider=provider,
+            model=_optional_text(raw, "model"),
+            system_prompt_id=_optional_text(raw, "systemPromptId"),
+            task_prompt_id=_optional_text(raw, "taskPromptId"),
+            workspace_root=_optional_text(raw, "workspaceRoot"),
+            title=_optional_text(raw, "title"),
+            emit_event=emit_side_event,
+        )
+    except Exception as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                )
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=merged)))
+
+
+async def handle_sessions_merge_state(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    key = _required_text(params or {}, "key")
+    if not key:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="key is required"),
+                )
+            )
+        )
+        return
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"mergeState": orchestrator.resolve_merge_state(key)},
+            )
+        )
+    )

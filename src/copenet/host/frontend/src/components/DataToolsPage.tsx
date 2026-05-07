@@ -658,48 +658,49 @@ function MediaImportsPage() {
 
           <form onSubmit={handleTranscribe} className="mt-6 space-y-4 sm:mt-8">
             <div className="rounded-[28px] border border-shell-border bg-shell-bg p-3 shadow-shell">
-              <div className="flex flex-col gap-3 md:flex-row md:items-center">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
                 <input
                   value={url}
                   onChange={(event) => setUrl(event.target.value)}
                   placeholder="Paste a YouTube or media URL for transcription or download…"
-                  className="h-14 flex-1 rounded-2xl border border-shell-border bg-shell-panel px-5 text-sm text-shell-text outline-none transition placeholder:text-shell-muted hover:border-shell-border-strong focus:border-shell-border-strong"
+                  className="h-14 min-w-0 flex-1 rounded-2xl border border-shell-border bg-shell-panel px-5 text-sm text-shell-text outline-none transition placeholder:text-shell-muted hover:border-shell-border-strong focus:border-shell-border-strong"
                 />
-                <div className={`flex ${isMobile ? 'flex-col gap-2' : 'flex-wrap gap-3'}`}>
+                <div className="grid grid-cols-2 gap-2 lg:grid-cols-4 xl:flex xl:flex-wrap xl:justify-end">
                   <button
                     type="submit"
                     disabled={!url.trim() || mediaImporting}
-                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-6 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-55"
+                    className="inline-flex h-14 min-w-0 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-4 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-55 lg:px-5"
                   >
-                    {mediaImporting && mediaAction === 'transcribe' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Video className="h-4 w-4" />}
-                    {isMobile ? 'Transcribe into CopeNet' : 'Transcribe'}
+                    {mediaImporting && mediaAction === 'transcribe' ? <LoaderCircle className="h-4 w-4 animate-spin shrink-0" /> : <Video className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">{isMobile ? 'Transcribe into CopeNet' : 'Transcribe'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleDownload()}
                     disabled={!url.trim() || mediaImporting}
-                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-6 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
+                    className="inline-flex h-14 min-w-0 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-4 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55 lg:px-5"
                   >
-                    {mediaImporting && mediaAction === 'download' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ExternalLink className="h-4 w-4" />}
-                    {isMobile ? 'Download only' : 'Download'}
+                    {mediaImporting && mediaAction === 'download' ? <LoaderCircle className="h-4 w-4 animate-spin shrink-0" /> : <ExternalLink className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">{isMobile ? 'Download only' : 'Download'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => void handleDoBoth()}
                     disabled={!url.trim() || mediaImporting}
-                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-accent-soft px-6 text-sm font-semibold text-shell-accent transition hover:border-shell-accent/40 disabled:cursor-not-allowed disabled:opacity-55"
+                    className="inline-flex h-14 min-w-0 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-accent-soft px-4 text-sm font-semibold text-shell-accent transition hover:border-shell-accent/40 disabled:cursor-not-allowed disabled:opacity-55 lg:px-5"
+                    title="Download and transcribe"
                   >
-                    {mediaImporting && mediaAction === 'both' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />}
-                    {isMobile ? 'Download + transcribe' : 'Do Both'}
+                    {mediaImporting && mediaAction === 'both' ? <LoaderCircle className="h-4 w-4 animate-spin shrink-0" /> : <Sparkles className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">{isMobile ? 'Download + transcribe' : 'Both'}</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
                     disabled={mediaImporting}
-                    className="inline-flex h-14 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-6 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
+                    className="inline-flex h-14 min-w-0 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-4 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55 lg:px-5"
                   >
-                    {mediaImporting && mediaAction === 'upload' ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
-                    {isMobile ? 'Upload video / media' : 'Upload Media'}
+                    {mediaImporting && mediaAction === 'upload' ? <LoaderCircle className="h-4 w-4 animate-spin shrink-0" /> : <Upload className="h-4 w-4 shrink-0" />}
+                    <span className="truncate">{isMobile ? 'Upload video / media' : 'Upload Media'}</span>
                   </button>
                   <input
                     ref={fileInputRef}

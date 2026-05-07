@@ -155,6 +155,8 @@ class CopeNetWsServer:
                                 "tools.list",
                                 "sessions.list",
                                 "sessions.create",
+                                "sessions.merge.create",
+                                "sessions.merge.state",
                                 "sessions.rename",
                                 "sessions.archive",
                                 "sessions.artifacts",
@@ -163,7 +165,7 @@ class CopeNetWsServer:
                                 "sessions.state",
                                 "sessions.resolve",
                             ],
-                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready"],
+                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "sessions.merge.updated"],
                         },
                     },
                 )

@@ -106,7 +106,7 @@ export function MessageBubble({ message }: { message: Message }) {
   if (isSystem) {
     return (
       <div className="animate-message flex justify-center my-3">
-        <div className="text-[11px] text-operator-muted bg-operator-panel px-3 py-1 rounded-lg border border-operator-border whitespace-pre-wrap">
+        <div className="text-[11px] text-operator-muted px-3 py-1 border border-operator-border/60 whitespace-pre-wrap">
           {message.content}
         </div>
       </div>
@@ -114,8 +114,8 @@ export function MessageBubble({ message }: { message: Message }) {
   }
 
   return (
-    <div className={`animate-message flex flex-col mb-5 relative ${isUser ? 'items-end' : 'items-start pl-5'}`}>
-      {!isUser && <div className="absolute left-2 top-2 bottom-0 w-px bg-operator-border" />}
+    <div className={`animate-message flex flex-col mb-4 relative ${isUser ? 'items-end' : 'items-start pl-4'}`}>
+      {!isUser && <div className="absolute left-2 top-2 bottom-0 w-px bg-operator-border/70" />}
       {!isUser && <div className="absolute left-[5px] top-1.5 w-2 h-2 rounded-full bg-operator-border border-2 border-operator-bg z-10" />}
 
       <div className={`flex items-center gap-1.5 mb-1 px-1 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
@@ -128,14 +128,14 @@ export function MessageBubble({ message }: { message: Message }) {
         </span>
       </div>
 
-      <div className={`group relative w-full p-3 font-sans text-[13px] leading-relaxed border overflow-hidden ${
+      <div className={`group relative w-full px-3 py-2.5 font-sans text-[13px] leading-relaxed overflow-hidden ${
         isUser
-          ? 'bg-operator-panel border-operator-border text-operator-text rounded-2xl rounded-br-md'
-          : 'bg-transparent border-operator-border text-operator-text rounded-2xl shadow-sm'
+          ? 'bg-operator-panel/22 border border-operator-border/60 text-operator-text rounded-[18px] rounded-br-md'
+          : 'bg-transparent border-b border-operator-border/55 text-operator-text'
       }`}>
         <button
           onClick={handleCopy}
-          className={`absolute top-2 ${isUser ? '-left-7' : '-right-7'} opacity-0 group-hover:opacity-100 transition-all duration-150 p-1 text-operator-muted hover:text-operator-text bg-operator-bg border border-operator-border rounded-lg z-10`}
+          className={`absolute top-2 ${isUser ? '-left-7' : '-right-7'} opacity-0 group-hover:opacity-100 transition-all duration-150 p-1 text-operator-muted hover:text-operator-text bg-operator-bg border border-operator-border/70 rounded-md z-10`}
           title="Copy message"
         >
           {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}

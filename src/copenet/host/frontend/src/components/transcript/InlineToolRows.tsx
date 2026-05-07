@@ -12,7 +12,7 @@
 //   RepoSearchPreview — query + match list (path:line  snippet, truncated)
 //   RawPreview        — plain truncated text
 
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import {
   ChevronDown,
   ChevronRight,
@@ -124,6 +124,18 @@ function PolicyBadge({ decision }: { decision: 'allowed' | 'read_roam' | 'write_
   );
 }
 
+
+function isFileReadMember(member: ToolBatchMember): boolean {
+  return member.preview?.type === 'file_read' || member.toolId === 'files.read';
+}
+
+function fileReadLabel(member: ToolBatchMember): string {
+  if (member.preview?.type === 'file_read') return member.preview.path;
+  if (member.target) return member.target;
+  const match = member.summary.match(/Read file\s+([^.;]+(?:\.[A-Za-z0-9_-]+)?)/i);
+  return match?.[1]?.trim() || member.summary;
+}
+
 // ---------------------------------------------------------------------------
 // Preview rendering
 // ---------------------------------------------------------------------------
@@ -226,7 +238,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
   const targetLabel = part.target ? shortPath(part.target) : null;
 
   return (
-    <div className={`rounded-lg border ${borderTone} ${bgTone} overflow-hidden`}>
+    <div className={`border border-x-0 ${borderTone} ${bgTone} overflow-hidden`}>
       {hasExpandable ? (
         <button
           onClick={() => setExpanded(!expanded)}
@@ -275,7 +287,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
             </div>
           )}
           {!part.ok && part.error && (
-            <pre className="mt-2 overflow-x-auto rounded-lg border border-operator-error/20 bg-operator-error/5 px-2.5 py-1.5 text-[10.5px] font-mono text-operator-error whitespace-pre-wrap">
+            <pre className="mt-2 overflow-x-auto border border-operator-error/20 bg-operator-error/5 px-2.5 py-1.5 text-[10.5px] font-mono text-operator-error whitespace-pre-wrap">
               {part.error}
             </pre>
           )}
@@ -285,7 +297,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
               <button
                 type="button"
                 onClick={() => setInspectorTarget({ kind: 'artifact', artifactId: part.artifactId! })}
-                className="rounded-full border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
+                className="border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
               >
                 Open Inspector
               </button>
@@ -301,7 +313,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
 // ToolBatchMemberRow — compact row inside an expanded batch card
 // ---------------------------------------------------------------------------
 
-function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index: number }) {
+function ToolBatchMemberRow({ member }: { member: ToolBatchMember }) {
   const [expanded, setExpanded] = useState(false);
   const hasPreview = !!member.preview;
   const StatusIcon = member.ok ? CheckCircle2 : XCircle;
@@ -312,38 +324,39 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
     : member.toolId;
 
   return (
-    <div className="border-b border-operator-border/25 last:border-0">
+    <div className="border-b border-operator-border/20 last:border-0">
       {hasPreview ? (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-left hover:bg-operator-panel/15 transition-colors duration-100"
+          className="flex w-full items-center gap-2 px-0 py-1.5 text-left hover:bg-operator-panel/10 transition-colors duration-100"
         >
           <StatusIcon className={`h-2.5 w-2.5 shrink-0 ${statusColor}`} />
-          <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/75 min-w-0">{label}</span>
+          <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/78 min-w-0">{label}</span>
           <ScopeBadge scope={member.scope} />
           <PolicyBadge decision={member.policyDecision} />
-          <span className="shrink-0 truncate text-[10px] text-operator-muted/45 max-w-[45%]">{member.summary}</span>
           {expanded
             ? <ChevronDown className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />
             : <ChevronRight className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />
           }
         </button>
       ) : (
-        <div className="flex items-center gap-2 px-3 py-1.5">
+        <div className="flex items-center gap-2 px-0 py-1.5">
           <StatusIcon className={`h-2.5 w-2.5 shrink-0 ${statusColor}`} />
-          <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/75 min-w-0">{label}</span>
+          <span className="flex-1 truncate font-mono text-[10px] text-operator-muted/78 min-w-0">{label}</span>
           <ScopeBadge scope={member.scope} />
           <PolicyBadge decision={member.policyDecision} />
-          <span className="shrink-0 text-[10px] text-operator-muted/45">{member.summary}</span>
         </div>
       )}
       {expanded && hasPreview && (
-        <div className="px-3 pb-2">
+        <div className="pb-2">
           {member.target && (
             <div className="mt-1 text-[10px] text-operator-muted/65">
               <span className="font-semibold uppercase tracking-wider text-operator-muted/45">target</span>{' '}
               <span className="font-mono break-all">{member.target}</span>
             </div>
+          )}
+          {member.summary && member.summary !== member.target && (
+            <div className="mt-1 text-[10.5px] text-operator-muted/60 leading-relaxed">{member.summary}</div>
           )}
           {member.policySummary && member.policyDecision && (
             <div className="mt-1 text-[10.5px] text-operator-muted/65 leading-relaxed">{member.policySummary}</div>
@@ -361,10 +374,11 @@ function ToolBatchMemberRow({ member, index }: { member: ToolBatchMember; index:
 
 export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: boolean }) {
   const [expanded, setExpanded] = useState(false);
+  const [showAllFiles, setShowAllFiles] = useState(false);
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const failCount = part.members.filter((m) => !m.ok).length;
-  const borderTone = part.ok ? 'border-operator-border/50' : 'border-operator-error/25';
-  const bgTone = part.ok ? 'bg-operator-bg/60' : 'bg-operator-error/5';
+  const borderTone = part.ok ? 'border-operator-border/45' : 'border-operator-error/25';
+  const bgTone = part.ok ? 'bg-operator-bg/45' : 'bg-operator-error/5';
   const StatusIcon = part.ok ? CheckCircle2 : XCircle;
   const statusColor = part.ok ? 'text-operator-success' : 'text-operator-error';
   const scopeCounts = part.members.reduce(
@@ -375,12 +389,16 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
     },
     { inside: 0, outside: 0 },
   );
+  const fileReadMembers = useMemo(() => part.members.filter(isFileReadMember), [part.members]);
+  const isFileReadBatch = fileReadMembers.length > 0 && fileReadMembers.length === part.members.length;
+  const visibleFileMembers = showAllFiles ? fileReadMembers : fileReadMembers.slice(0, 4);
+  const hiddenFileCount = Math.max(fileReadMembers.length - visibleFileMembers.length, 0);
 
   return (
-    <div className={`rounded-lg border ${borderTone} ${bgTone} overflow-hidden`}>
+    <div className={`border border-x-0 ${borderTone} ${bgTone} overflow-hidden`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-operator-panel/20 transition-colors duration-100"
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-operator-panel/14 transition-colors duration-100"
       >
         {expanded
           ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />
@@ -404,25 +422,53 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
       </button>
 
       {expanded && (
-        <div className="border-t border-operator-border/30">
+        <div className="border-t border-operator-border/25 px-2.5 pb-2 pt-1.5">
           {part.workspaceRoot && (
-            <div className="px-3 pt-2 text-[10px] text-operator-muted/65">
+            <div className="mb-1.5 text-[10px] text-operator-muted/60">
               <span className="font-semibold uppercase tracking-wider text-operator-muted/45">home</span>{' '}
               <span className="font-mono break-all">{part.workspaceRoot}</span>
             </div>
           )}
-          {part.members.map((member, i) => (
-            <ToolBatchMemberRow
-              key={member.callId || String(i)}
-              member={member}
-              index={i}
-            />
-          ))}
-          <div className="flex justify-end px-3 pb-2 pt-1">
+          {isFileReadBatch ? (
+            <div className="space-y-0.5">
+              {visibleFileMembers.map((member, i) => {
+                const displayPath = shortPath(fileReadLabel(member));
+                return (
+                  <div key={member.callId || String(i)} className="flex items-center gap-2 py-1 text-[10.5px]">
+                    <File className="h-2.5 w-2.5 shrink-0 text-operator-muted/55" />
+                    <span className="min-w-0 flex-1 truncate font-mono text-operator-text/82" title={fileReadLabel(member)}>
+                      {displayPath}
+                    </span>
+                    {!member.ok && <span className="shrink-0 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-error">failed</span>}
+                    {member.scope === 'outside_workspace' && <ScopeBadge scope={member.scope} />}
+                  </div>
+                );
+              })}
+              {hiddenFileCount > 0 && (
+                <button
+                  type="button"
+                  onClick={() => setShowAllFiles((value) => !value)}
+                  className="mt-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:text-operator-text"
+                >
+                  {showAllFiles ? 'show fewer' : `+${hiddenFileCount} more`}
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-0 px-0.5">
+              {part.members.map((member, i) => (
+                <ToolBatchMemberRow
+                  key={member.callId || String(i)}
+                  member={member}
+                />
+              ))}
+            </div>
+          )}
+          <div className="flex justify-end pt-1.5">
             <button
               type="button"
               onClick={() => setInspectorTarget({ kind: 'batch', batchId: part.batchId })}
-              className="rounded-full border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
+              className="border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
             >
               Open Inspector
             </button>

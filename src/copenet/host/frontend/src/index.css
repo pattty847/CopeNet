@@ -58,8 +58,8 @@ html[data-theme='dark'] {
   --color-shell-sidebar: #010204;
   --color-shell-panel: #080809;
   --color-shell-panel-strong: #111216;
-  --color-shell-border: rgba(254, 252, 244, 0.08);
-  --color-shell-border-strong: rgba(251, 148, 35, 0.2);
+  --color-shell-border: rgba(254, 252, 244, 0.06);
+  --color-shell-border-strong: rgba(251, 148, 35, 0.16);
   --color-shell-text: #fefcf4;
   --color-shell-muted: #a29b90;
   --color-shell-accent: #fb9423;
@@ -72,13 +72,13 @@ html[data-theme='dark'] {
   --color-shell-operator-frame: #010204;
 
   --shadow-shell-0: none;
-  --shadow-shell: 0 1px 2px rgba(0, 0, 0, 0.22), 0 8px 24px rgba(0, 0, 0, 0.16);
-  --shadow-shell-hover: 0 2px 8px rgba(0, 0, 0, 0.22), 0 18px 42px rgba(0, 0, 0, 0.2);
-  --shadow-shell-xl: 0 10px 28px rgba(0, 0, 0, 0.22), 0 34px 72px rgba(0, 0, 0, 0.3);
+  --shadow-shell: 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.12);
+  --shadow-shell-hover: 0 2px 8px rgba(0, 0, 0, 0.18), 0 14px 32px rgba(0, 0, 0, 0.16);
+  --shadow-shell-xl: 0 8px 20px rgba(0, 0, 0, 0.18), 0 28px 56px rgba(0, 0, 0, 0.24);
 
   --color-operator-bg: #010204;
   --color-operator-panel: #080809;
-  --color-operator-border: rgba(254, 252, 244, 0.08);
+  --color-operator-border: rgba(254, 252, 244, 0.06);
   --color-operator-text: #fefcf4;
   --color-operator-muted: #9d9688;
   --color-operator-accent: #fb9423;
@@ -144,7 +144,7 @@ html[data-theme='dark'] .shell-backdrop {
 }
 
 .shell-app-frame {
-  backdrop-filter: blur(14px);
+  backdrop-filter: blur(12px);
 }
 
 html[data-theme='dark'] .shell-app-frame {
@@ -291,7 +291,7 @@ html[data-theme='dark'] .shell-home-rail-card {
 .shell-operator-stage {
   position: relative;
   display: grid;
-  gap: 0.75rem;
+  gap: 0.125rem;
   min-height: 0;
 }
 
@@ -304,35 +304,27 @@ html[data-theme='dark'] .shell-home-rail-card {
 .shell-operator-pane {
   min-height: 0;
   overflow: hidden;
-  border-radius: 22px;
-  border: 1px solid var(--color-shell-border);
-  background: var(--color-shell-operator-frame);
-  box-shadow: var(--shadow-shell);
+  border-radius: 0;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
 }
 
 html[data-theme='dark'] .shell-operator-pane {
-  background:
-    linear-gradient(180deg, rgba(251, 148, 35, 0.028), rgba(251, 148, 35, 0) 18%),
-    linear-gradient(180deg, rgba(254, 252, 244, 0.01), rgba(254, 252, 244, 0)),
-    var(--color-shell-operator-frame);
+  background: transparent;
 }
 
 .shell-operator-pane--main {
-  box-shadow: var(--shadow-shell-xl);
+  box-shadow: none;
 }
 
 html[data-theme='dark'] .shell-operator-pane--main {
-  background:
-    linear-gradient(180deg, rgba(251, 148, 35, 0.032), rgba(251, 148, 35, 0) 16%),
-    linear-gradient(180deg, rgba(254, 252, 244, 0.012), rgba(254, 252, 244, 0)),
-    var(--color-shell-operator-frame);
+  background: transparent;
 }
 
 html[data-theme='dark'] .shell-operator-pane--sidebar,
 html[data-theme='dark'] .shell-operator-pane--inspector {
-  background:
-    linear-gradient(180deg, rgba(254, 252, 244, 0.012), rgba(254, 252, 244, 0)),
-    var(--color-shell-operator-frame);
+  background: transparent;
 }
 
 .shell-workbench-hero {

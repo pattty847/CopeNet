@@ -16,6 +16,7 @@ import {
   ReturnBriefingPayload,
   ResponseFrame,
   Session,
+  SessionMergeState,
   SessionExportPayload,
   SessionStateRecord,
   SessionRunRecord,
@@ -344,6 +345,44 @@ function normalizeRuntimeContext(raw: unknown): RuntimeContext | null {
   };
 }
 
+function normalizeMergeState(raw: unknown): SessionMergeState | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const status = String(payload.status || '').trim();
+  if (!status) return null;
+  const rawSources = Array.isArray(payload.sources) ? payload.sources : [];
+  return {
+    status:
+      status === 'running' || status === 'complete' || status === 'failed'
+        ? status
+        : 'pending',
+    sourceSessionKeys: Array.isArray(payload.sourceSessionKeys) ? payload.sourceSessionKeys.map(String) : [],
+    totalSources: Number(payload.totalSources || rawSources.length || 0),
+    completedSources: Number(payload.completedSources || 0),
+    startedAt: String(payload.startedAt || new Date().toISOString()),
+    completedAt: payload.completedAt ? String(payload.completedAt) : null,
+    briefRunId: payload.briefRunId ? String(payload.briefRunId) : null,
+    briefArtifactId: payload.briefArtifactId ? String(payload.briefArtifactId) : null,
+    conflicts: Array.isArray(payload.conflicts) ? payload.conflicts.map(String) : [],
+    sources: rawSources.map((item: unknown) => {
+      const source = (item || {}) as Record<string, unknown>;
+      const sourceStatus = String(source.status || '').trim();
+      return {
+        sessionKey: String(source.sessionKey || ''),
+        title: String(source.title || source.sessionKey || ''),
+        status:
+          sourceStatus === 'running' || sourceStatus === 'complete' || sourceStatus === 'failed'
+            ? sourceStatus
+            : 'pending',
+        summary: source.summary ? String(source.summary) : null,
+        error: source.error ? String(source.error) : null,
+        decisionCount: Number(source.decisionCount || 0),
+        openQuestionCount: Number(source.openQuestionCount || 0),
+      };
+    }),
+  };
+}
+
 function normalizeMessage(
   raw: PublicMessagePayload | null | undefined,
   sessionKey: string,
@@ -640,6 +679,27 @@ class WsClient {
     if (frame.event === 'briefing.ready') {
       const payload = (frame.payload || {}) as Record<string, unknown>;
       useAppStore.getState().setReturnBriefing(normalizeReturnBriefing(payload.briefing));
+      return;
+    }
+
+    if (frame.event === 'sessions.merge.updated') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const sessionKey = payload.sessionKey ? String(payload.sessionKey) : '';
+      const mergeState = normalizeMergeState(payload.mergeState);
+      if (sessionKey && mergeState) {
+        useAppStore.getState().setMergeState(sessionKey, mergeState);
+      }
+      if (sessionKey && payload.message) {
+        const message = normalizeMessage(
+          payload.message as PublicMessagePayload,
+          sessionKey,
+          `merge-brief-${sessionKey}-${(payload.message as PublicMessagePayload).runId || 'final'}`,
+          'assistant',
+          'final',
+          false,
+        );
+        useAppStore.getState().addMessage(sessionKey, message);
+      }
     }
   }
 
@@ -870,6 +930,30 @@ class WsClient {
     return session;
   }
 
+  async createMergedSession(params: {
+    sourceSessionKeys: string[];
+    provider: string;
+    model: string;
+    systemPromptId: string;
+    taskPromptId: string;
+    workspaceRoot: string;
+    title?: string;
+  }): Promise<{ session: Session; mergeState: SessionMergeState | null }> {
+    const payload = await this.request<{ session: unknown; mergeState?: unknown | null }>('sessions.merge.create', {
+      sourceSessionKeys: params.sourceSessionKeys,
+      provider: params.provider,
+      model: params.model || undefined,
+      systemPromptId: params.systemPromptId || undefined,
+      taskPromptId: params.taskPromptId || undefined,
+      workspaceRoot: params.workspaceRoot || undefined,
+      title: params.title || undefined,
+    });
+    return {
+      session: normalizeSession(payload.session),
+      mergeState: normalizeMergeState(payload.mergeState),
+    };
+  }
+
   async exportSession(key: string): Promise<SessionExportPayload> {
     const payload = await this.request<{
       session: unknown;
@@ -896,6 +980,11 @@ class WsClient {
   async resolveSessionState(key: string): Promise<SessionStateRecord | null> {
     const payload = await this.request<{ state?: SessionStateRecord | null }>('sessions.state', { key });
     return payload.state ?? null;
+  }
+
+  async resolveMergeState(key: string): Promise<SessionMergeState | null> {
+    const payload = await this.request<{ mergeState?: unknown | null }>('sessions.merge.state', { key });
+    return normalizeMergeState(payload.mergeState);
   }
 
   async sendMessage(message: string) {

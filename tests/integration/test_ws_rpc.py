@@ -112,6 +112,47 @@ class PromptedToolProvider:
         ]
 
 
+class MergeSummaryProvider:
+    def __init__(self, *, name: str = "merge", display_name: str = "Merge") -> None:
+        self.name = name
+        self.display_name = display_name
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        source_key = "unknown"
+        for line in prompt.splitlines():
+            if line.startswith("Source session key:"):
+                source_key = line.split(":", 1)[1].strip()
+                break
+        yield ProviderEvent(kind="delta", text=f"Summary for {source_key}", provider_session_id=provider_session_id or "merge-session")
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict[str, Any]:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False},
+        }
+
+    async def list_models(self) -> list[ProviderModel]:
+        return [
+            ProviderModel(
+                id="merge-model",
+                display_name="Merge Model",
+                provider=self.name,
+                description="Merge summary test model",
+                capabilities={"chat": True},
+            )
+        ]
+
+
 class RpcSocket:
     def __init__(self, websocket) -> None:
         self._websocket = websocket
@@ -193,6 +234,7 @@ def rpc_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         providers={
             "fake": FakeProvider(),
             "blocking": FakeProvider(name="blocking", display_name="Blocking", wait_for_abort=True),
+            "merge": MergeSummaryProvider(),
             "prompted-success": PromptedToolProvider(
                 name="prompted-success",
                 display_name="Prompted Success",
@@ -236,10 +278,13 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         response = socket.connect()
         assert response["ok"] is True
         assert "chat.send" in response["payload"]["features"]["methods"]
+        assert "sessions.merge.create" in response["payload"]["features"]["methods"]
+        assert "sessions.merge.state" in response["payload"]["features"]["methods"]
         assert "sessions.runs" in response["payload"]["features"]["methods"]
         assert "sessions.run" in response["payload"]["features"]["methods"]
         assert "sessions.state" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
+        assert "sessions.merge.updated" in response["payload"]["features"]["events"]
 
     with rpc_client.websocket_connect("/ws") as websocket:
         socket = RpcSocket(websocket)
@@ -540,6 +585,62 @@ def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None
         state = state_response["payload"]["state"]
         assert state["session_key"] == "tool-success"
         assert state["task_summary"] == "Read the README"
+
+
+def test_sessions_merge_create_opens_session_and_emits_progress(rpc_client: TestClient, tmp_path: Path) -> None:
+    with _open_rpc(rpc_client) as socket:
+        for key in ("alpha", "beta"):
+            send_id = socket.request(
+                "chat.send",
+                {
+                    "sessionKey": key,
+                    "message": f"Inspect {key}",
+                    "provider": "fake",
+                    "model": "model-a",
+                },
+            )
+            started = socket.recv_response(send_id)
+            socket.recv_chat_until_terminal(session_key=key, run_id=started["payload"]["runId"])
+
+        merge_id = socket.request(
+            "sessions.merge.create",
+            {
+                "sourceSessionKeys": ["alpha", "beta"],
+                "provider": "merge",
+                "model": "merge-model",
+                "systemPromptId": "default",
+                "taskPromptId": "none",
+                "workspaceRoot": str(tmp_path),
+                "title": "Merged Alpha Beta",
+            },
+        )
+        merge_res = socket.recv_response(merge_id)
+        merged_session = merge_res["payload"]["session"]
+        assert merged_session["title"] == "Merged Alpha Beta"
+        assert merge_res["payload"]["mergeState"]["totalSources"] == 2
+
+        updates: list[dict[str, Any]] = []
+        while True:
+            frame = socket._next_matching(
+                lambda candidate: candidate.get("type") == "event"
+                and candidate.get("event") == "sessions.merge.updated"
+                and (candidate.get("payload") or {}).get("sessionKey") == merged_session["key"]
+            )
+            updates.append(frame)
+            if frame["payload"]["mergeState"]["status"] in {"complete", "failed"}:
+                break
+
+        assert updates[-1]["payload"]["mergeState"]["status"] == "complete"
+        assert updates[-1]["payload"]["message"]["content"].startswith("Merged context prepared from 2 sessions.")
+
+        history_id = socket.request("chat.history", {"sessionKey": merged_session["key"]})
+        history = socket.recv_response(history_id)
+        assert history["payload"]["messages"][-1]["content"].startswith("Merged context prepared from 2 sessions.")
+
+        merge_state_id = socket.request("sessions.merge.state", {"key": merged_session["key"]})
+        merge_state_res = socket.recv_response(merge_state_id)
+        assert merge_state_res["payload"]["mergeState"]["completedSources"] == 2
+        assert {source["sessionKey"] for source in merge_state_res["payload"]["mergeState"]["sources"]} == {"alpha", "beta"}
 
 
 def test_session_artifacts_rpc_exposes_runtime_artifacts(rpc_client: TestClient) -> None:

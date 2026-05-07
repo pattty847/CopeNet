@@ -1,11 +1,28 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
 export type RightPanelTab = 'inbox' | 'runtime' | 'artifacts' | 'activity' | 'approvals';
 export type WorkflowsRoute = 'hub' | 'meme-lab';
+
+const THEME_STORAGE_KEY = 'copenet.themeMode';
+
+function readStoredThemeMode(): ThemeMode {
+  if (typeof window === 'undefined') return 'dark';
+  const stored = window.localStorage.getItem(THEME_STORAGE_KEY);
+  return stored === 'light' || stored === 'dark' ? stored : 'dark';
+}
+
+function persistThemeMode(mode: ThemeMode) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+}
+
+export interface MergeDraft {
+  sourceSessionKeys: string[];
+}
 
 interface AppState {
   wsStatus: WsStatus;
@@ -85,13 +102,23 @@ interface AppState {
   setActiveSessionKey: (key: string | null) => void;
   draftOpen: boolean;
   setDraftOpen: (open: boolean) => void;
+  mergeDraft: MergeDraft | null;
+  setMergeDraft: (draft: MergeDraft | null) => void;
   showArchived: boolean;
   setShowArchived: (show: boolean) => void;
+  sessionSelectMode: boolean;
+  setSessionSelectMode: (enabled: boolean) => void;
+  selectedSessionKeys: string[];
+  toggleSelectedSessionKey: (key: string) => void;
+  setSelectedSessionKeys: (keys: string[]) => void;
+  clearSelectedSessionKeys: () => void;
   draftSettings: DraftSettings;
   replaceDraftSettings: (settings: DraftSettings) => void;
   patchDraftSettings: (updates: Partial<DraftSettings>) => void;
   runtimeContext: RuntimeContext | null;
   setRuntimeContext: (context: RuntimeContext | null) => void;
+  mergeStates: Record<string, SessionMergeState>;
+  setMergeState: (sessionKey: string, mergeState: SessionMergeState | null) => void;
 
   messages: Record<string, Message[]>;
   setMessages: (sessionKey: string, messages: Message[]) => void;
@@ -202,12 +229,19 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveRunId: (id) => set({ activeRunId: id }),
   currentSection: 'home',
   setCurrentSection: (section) => set({ currentSection: section }),
-  themeMode: 'light',
-  setThemeMode: (mode) => set({ themeMode: mode }),
+  themeMode: readStoredThemeMode(),
+  setThemeMode: (mode) => {
+    persistThemeMode(mode);
+    set({ themeMode: mode });
+  },
   toggleThemeMode: () =>
-    set((state) => ({
-      themeMode: state.themeMode === 'light' ? 'dark' : 'light',
-    })),
+    set((state) => {
+      const nextMode = state.themeMode === 'light' ? 'dark' : 'light';
+      persistThemeMode(nextMode);
+      return {
+        themeMode: nextMode,
+      };
+    }),
   dataToolsRoute: 'hub',
   setDataToolsRoute: (route) => set({ dataToolsRoute: route }),
   workflowsRoute: 'hub',
@@ -283,8 +317,25 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveSessionKey: (key) => set({ activeSessionKey: key }),
   draftOpen: false,
   setDraftOpen: (open) => set({ draftOpen: open }),
+  mergeDraft: null,
+  setMergeDraft: (mergeDraft) => set({ mergeDraft }),
   showArchived: false,
   setShowArchived: (show) => set({ showArchived: show }),
+  sessionSelectMode: false,
+  setSessionSelectMode: (enabled) =>
+    set((state) => ({
+      sessionSelectMode: enabled,
+      selectedSessionKeys: enabled ? state.selectedSessionKeys : [],
+    })),
+  selectedSessionKeys: [],
+  toggleSelectedSessionKey: (key) =>
+    set((state) => ({
+      selectedSessionKeys: state.selectedSessionKeys.includes(key)
+        ? state.selectedSessionKeys.filter((item) => item !== key)
+        : [...state.selectedSessionKeys, key],
+    })),
+  setSelectedSessionKeys: (keys) => set({ selectedSessionKeys: keys }),
+  clearSelectedSessionKeys: () => set({ selectedSessionKeys: [] }),
   draftSettings: DEFAULT_DRAFT,
   replaceDraftSettings: (settings) => set({ draftSettings: settings }),
   patchDraftSettings: (updates) =>
@@ -296,6 +347,16 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   runtimeContext: null,
   setRuntimeContext: (context) => set({ runtimeContext: context }),
+  mergeStates: {},
+  setMergeState: (sessionKey, mergeState) =>
+    set((state) => {
+      if (!mergeState) {
+        const next = { ...state.mergeStates };
+        delete next[sessionKey];
+        return { mergeStates: next };
+      }
+      return { mergeStates: { ...state.mergeStates, [sessionKey]: mergeState } };
+    }),
 
   messages: {},
   setMessages: (sessionKey, messages) =>

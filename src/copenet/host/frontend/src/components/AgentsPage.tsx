@@ -13,7 +13,7 @@ const LEFT_MAX = 420;
 const RIGHT_MIN = 270;
 const RIGHT_MAX = 420;
 const CENTER_MIN = 520;
-const HANDLE_WIDTH = 10;
+const HANDLE_WIDTH = 8;
 const LEFT_DEFAULT = 320;
 const RIGHT_DEFAULT = 340;
 const LEFT_WIDTH_STORAGE_KEY = 'copenet.agents.leftPaneWidth';
@@ -190,7 +190,7 @@ export function AgentsPage() {
           className="group relative h-full cursor-col-resize"
           title="Drag to resize. Double-click to reset."
         >
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-shell-border/75 transition-colors duration-150 group-hover:bg-shell-accent group-active:bg-shell-accent" />
+          <div className="pointer-events-none absolute inset-y-1.5 left-1/2 w-px -translate-x-1/2 bg-shell-border/70 transition-colors duration-150 group-hover:bg-shell-accent/75 group-active:bg-shell-accent" />
         </div>
         <div className="shell-operator-pane shell-operator-pane--main min-h-0 flex-1">
           <ChatWorkspace />
@@ -204,7 +204,7 @@ export function AgentsPage() {
           className="group relative h-full cursor-col-resize"
           title="Drag to resize. Double-click to reset."
         >
-          <div className="pointer-events-none absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-shell-border/75 transition-colors duration-150 group-hover:bg-shell-accent group-active:bg-shell-accent" />
+          <div className="pointer-events-none absolute inset-y-1.5 left-1/2 w-px -translate-x-1/2 bg-shell-border/70 transition-colors duration-150 group-hover:bg-shell-accent/75 group-active:bg-shell-accent" />
         </div>
         <div className="shell-operator-pane shell-operator-pane--inspector min-h-0 shrink-0">
           <RightPanel />

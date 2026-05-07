@@ -31,6 +31,7 @@ class SessionStateRecord:
     plan_snapshot: dict[str, Any] = field(default_factory=dict)
     relevant_asset_ids: list[str] = field(default_factory=list)
     relevant_artifact_ids: list[str] = field(default_factory=list)
+    merge_state: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
@@ -49,6 +50,7 @@ class SessionStateRecord:
             plan_snapshot=_dict_value(raw.get("plan_snapshot")),
             relevant_asset_ids=_string_list(raw.get("relevant_asset_ids")),
             relevant_artifact_ids=_string_list(raw.get("relevant_artifact_ids")),
+            merge_state=_dict_value(raw.get("merge_state")),
             created_at=str(raw.get("created_at") or utc_now_iso()),
             updated_at=str(raw.get("updated_at") or utc_now_iso()),
         )
@@ -126,4 +128,3 @@ class SessionStateStore:
             tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
             tmp_path.replace(path)
         return SessionStateRecord.from_json(payload)
-
