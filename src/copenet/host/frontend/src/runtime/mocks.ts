@@ -459,6 +459,12 @@ export const MOCK_MESSAGING_CONFIG: MessagingConfig = {
     requireApprovalByDefault: true,
     hardlineBlocklist: [],
   },
+  telegramDefaults: {
+    provider: 'codex-cli',
+    model: 'gpt-5.4',
+    systemPromptId: 'default',
+    taskPromptId: 'none',
+  },
 };
 
 export function getMockMessagingConfig(): MessagingConfig {

@@ -7,6 +7,7 @@ from copenet.core.messaging import (
     MessagingApprovalPolicyRecord,
     MessagingConfigRecord,
     MessagingConfigStore,
+    TelegramDefaultsRecord,
     TelegramBotConfigRecord,
 )
 
@@ -127,3 +128,33 @@ def test_messaging_store_upserts_and_deletes_destinations(tmp_path: Path) -> Non
 
     after_delete = store.delete_destination(created_dest.id)
     assert after_delete.destinations == []
+
+
+def test_messaging_store_updates_telegram_defaults_without_clobbering_config(tmp_path: Path) -> None:
+    store = MessagingConfigStore(tmp_path / "messaging.json")
+    store.save(
+        MessagingConfigRecord(
+            telegram=TelegramBotConfigRecord(
+                bot_username="@CopeNetBot",
+                token_masked="tg:1234...abcd",
+                connection_status="connected",
+            ),
+            destinations=[],
+            approval_policy=MessagingApprovalPolicyRecord(),
+        )
+    )
+
+    updated = store.update_telegram_defaults(
+        TelegramDefaultsRecord(
+            provider="codex-cli",
+            model="gpt-5.4",
+            system_prompt_id="default",
+            task_prompt_id="none",
+        )
+    )
+
+    assert updated.telegram is not None
+    assert updated.telegram.bot_username == "@CopeNetBot"
+    assert updated.telegram_defaults is not None
+    assert updated.telegram_defaults.provider == "codex-cli"
+    assert updated.telegram_defaults.model == "gpt-5.4"

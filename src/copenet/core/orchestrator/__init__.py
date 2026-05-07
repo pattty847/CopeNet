@@ -210,9 +210,9 @@ class Orchestrator:
         """Return the persisted operator messaging configuration."""
         return get_messaging_config_record(self)
 
-    def update_messaging_config(self, *, approval_policy: dict | None = None) -> dict:
+    def update_messaging_config(self, *, approval_policy: dict | None = None, telegram_defaults: dict | None = None) -> dict:
         """Persist a minimal messaging configuration patch."""
-        return update_messaging_config_record(self, approval_policy=approval_policy)
+        return update_messaging_config_record(self, approval_policy=approval_policy, telegram_defaults=telegram_defaults)
 
     def test_messaging_platform(self, platform: str = "telegram") -> dict:
         """Run a conservative local messaging config test."""

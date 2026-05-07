@@ -310,6 +310,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
                 "requireApprovalByDefault": True,
                 "hardlineBlocklist": [],
             },
+            "telegramDefaults": None,
         }
 
         providers_id = socket.request("providers.list")
@@ -479,6 +480,28 @@ def test_messaging_destination_rpcs_upsert_and_delete(rpc_client: TestClient) ->
         delete_response = socket.recv_response(delete_id)
         assert delete_response["payload"]["deleted"] is True
         assert delete_response["payload"]["config"]["destinations"] == []
+
+
+def test_messaging_config_update_can_persist_telegram_runtime_defaults(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        update_id = socket.request(
+            "messaging.config.update",
+            {
+                "telegramDefaults": {
+                    "provider": "fake",
+                    "model": "model-a",
+                    "systemPromptId": "default",
+                    "taskPromptId": "general",
+                }
+            },
+        )
+        update_response = socket.recv_response(update_id)
+        assert update_response["payload"]["config"]["telegramDefaults"] == {
+            "provider": "fake",
+            "model": "model-a",
+            "systemPromptId": "default",
+            "taskPromptId": "general",
+        }
 
 
 def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestClient) -> None:

@@ -6,6 +6,7 @@ from .store import (
     MessagingConfigRecord,
     MessagingConfigStore,
     PlatformConnectionStatus,
+    TelegramDefaultsRecord,
     TelegramBotConfigRecord,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "MessagingConfigRecord",
     "MessagingConfigStore",
     "PlatformConnectionStatus",
+    "TelegramDefaultsRecord",
     "TelegramBotConfigRecord",
 ]

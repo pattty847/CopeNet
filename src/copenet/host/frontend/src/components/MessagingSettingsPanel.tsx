@@ -545,6 +545,134 @@ function ApprovalPolicySection() {
   );
 }
 
+function TelegramRuntimeDefaultsSection() {
+  const config = useMessagingConfig();
+  const providers = useAppStore((state) => state.providers);
+  const profiles = useAppStore((state) => state.profiles);
+  const taskModes = useAppStore((state) => state.taskModes);
+  const modelsByProvider = useAppStore((state) => state.modelsByProvider);
+  const [saving, setSaving] = useState(false);
+  const [provider, setProvider] = useState('');
+  const [model, setModel] = useState('');
+  const [systemPromptId, setSystemPromptId] = useState('');
+  const [taskPromptId, setTaskPromptId] = useState('');
+
+  useEffect(() => {
+    if (!config) return;
+    const fallbackProvider = providers.find((item) => item.available !== false)?.id || providers[0]?.id || '';
+    setProvider(config.telegramDefaults?.provider || fallbackProvider);
+    setModel(config.telegramDefaults?.model || '');
+    setSystemPromptId(config.telegramDefaults?.systemPromptId || profiles.find((item) => item.id === 'default')?.id || profiles[0]?.id || '');
+    setTaskPromptId(config.telegramDefaults?.taskPromptId || taskModes.find((item) => item.id === 'none')?.id || taskModes[0]?.id || '');
+  }, [config, providers, profiles, taskModes]);
+
+  useEffect(() => {
+    if (provider) {
+      void wsClient.loadModels(provider);
+    }
+  }, [provider]);
+
+  if (!config) return null;
+
+  const modelOptions = modelsByProvider[provider] || [];
+
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      const updated = await wsClient.updateTelegramRuntimeDefaults({
+        provider,
+        model,
+        systemPromptId,
+        taskPromptId,
+      });
+      if (updated) {
+        useAppStore.getState().setMessagingConfig(updated);
+        useAppStore.getState().setDestinations(updated.destinations);
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted flex items-center gap-1.5">
+        <Send className="w-3 h-3" />
+        Telegram Runtime
+      </div>
+      <div className="rounded-xl border border-operator-border bg-operator-panel/30 px-3 py-2.5 space-y-2">
+        <div className="text-[10px] text-operator-muted">
+          These defaults will seed future Telegram-originated sessions before slash-command overrides exist.
+        </div>
+        <div className="grid grid-cols-2 gap-2">
+          <label className="space-y-1">
+            <span className="text-[10px] text-operator-muted">Provider</span>
+            <select
+              value={provider}
+              onChange={(event) => {
+                setProvider(event.target.value);
+                setModel('');
+              }}
+              className="w-full rounded-lg border border-operator-border bg-operator-bg px-2 py-1.5 text-[11px] text-operator-text"
+            >
+              {providers.map((item) => (
+                <option key={item.id} value={item.id}>{item.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] text-operator-muted">Model</span>
+            <select
+              value={model}
+              onChange={(event) => setModel(event.target.value)}
+              className="w-full rounded-lg border border-operator-border bg-operator-bg px-2 py-1.5 text-[11px] text-operator-text"
+            >
+              <option value="">Default model</option>
+              {modelOptions.map((item) => (
+                <option key={item.id} value={item.id}>{item.displayName}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] text-operator-muted">Profile</span>
+            <select
+              value={systemPromptId}
+              onChange={(event) => setSystemPromptId(event.target.value)}
+              className="w-full rounded-lg border border-operator-border bg-operator-bg px-2 py-1.5 text-[11px] text-operator-text"
+            >
+              {profiles.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-[10px] text-operator-muted">Task mode</span>
+            <select
+              value={taskPromptId}
+              onChange={(event) => setTaskPromptId(event.target.value)}
+              className="w-full rounded-lg border border-operator-border bg-operator-bg px-2 py-1.5 text-[11px] text-operator-text"
+            >
+              {taskModes.map((item) => (
+                <option key={item.id} value={item.id}>{item.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void handleSave()}
+            disabled={saving || !provider}
+            className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-operator-accent border border-operator-accent/25 bg-operator-accent/8 disabled:opacity-60"
+          >
+            {saving ? 'Saving…' : 'Save Telegram defaults'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Main panel
 // ---------------------------------------------------------------------------
@@ -694,6 +822,8 @@ export function MessagingSettingsPanel() {
 
       {/* Approval policy */}
       <ApprovalPolicySection />
+
+      <TelegramRuntimeDefaultsSection />
     </div>
   );
 }

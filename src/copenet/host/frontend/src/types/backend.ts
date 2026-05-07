@@ -449,10 +449,18 @@ export interface MessagingApprovalPolicy {
   hardlineBlocklist: string[];          // destination targets that can NEVER be sent to by the agent
 }
 
+export interface TelegramRuntimeDefaults {
+  provider: string | null;
+  model: string | null;
+  systemPromptId: string | null;
+  taskPromptId: string | null;
+}
+
 export interface MessagingConfig {
   telegram: TelegramBotConfig | null;
   destinations: MessageDestination[];
   approvalPolicy: MessagingApprovalPolicy;
+  telegramDefaults: TelegramRuntimeDefaults | null;
 }
 
 // ---------------------------------------------------------------------------

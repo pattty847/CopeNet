@@ -113,10 +113,41 @@ class MessagingApprovalPolicyRecord:
 
 
 @dataclass(frozen=True)
+class TelegramDefaultsRecord:
+    provider: str | None = None
+    model: str | None = None
+    system_prompt_id: str | None = None
+    task_prompt_id: str | None = None
+
+    @classmethod
+    def from_json(cls, raw: dict[str, Any] | None) -> "TelegramDefaultsRecord | None":
+        if not isinstance(raw, dict):
+            return None
+        return cls(
+            provider=_optional_text(raw, "provider"),
+            model=_optional_text(raw, "model"),
+            system_prompt_id=_optional_text(raw, "system_prompt_id") or _optional_text(raw, "systemPromptId"),
+            task_prompt_id=_optional_text(raw, "task_prompt_id") or _optional_text(raw, "taskPromptId"),
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "provider": self.provider,
+            "model": self.model,
+            "systemPromptId": self.system_prompt_id,
+            "taskPromptId": self.task_prompt_id,
+        }
+
+
+@dataclass(frozen=True)
 class MessagingConfigRecord:
     telegram: TelegramBotConfigRecord | None = None
     destinations: list[MessageDestinationRecord] = field(default_factory=list)
     approval_policy: MessagingApprovalPolicyRecord = field(default_factory=MessagingApprovalPolicyRecord)
+    telegram_defaults: TelegramDefaultsRecord | None = None
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> "MessagingConfigRecord":
@@ -124,6 +155,7 @@ class MessagingConfigRecord:
             telegram=TelegramBotConfigRecord.from_json(raw.get("telegram")),
             destinations=_destinations_list(raw.get("destinations")),
             approval_policy=MessagingApprovalPolicyRecord.from_json(raw.get("approval_policy", raw.get("approvalPolicy"))),
+            telegram_defaults=TelegramDefaultsRecord.from_json(raw.get("telegram_defaults", raw.get("telegramDefaults"))),
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -131,6 +163,7 @@ class MessagingConfigRecord:
             "telegram": self.telegram.to_json() if self.telegram is not None else None,
             "destinations": [item.to_json() for item in self.destinations],
             "approval_policy": self.approval_policy.to_json(),
+            "telegram_defaults": self.telegram_defaults.to_json() if self.telegram_defaults is not None else None,
         }
 
     def to_public_dict(self) -> dict[str, Any]:
@@ -138,6 +171,7 @@ class MessagingConfigRecord:
             "telegram": self.telegram.to_public_dict() if self.telegram is not None else None,
             "destinations": [item.to_public_dict() for item in self.destinations],
             "approvalPolicy": self.approval_policy.to_public_dict(),
+            "telegramDefaults": self.telegram_defaults.to_public_dict() if self.telegram_defaults is not None else None,
         }
 
 
@@ -180,6 +214,7 @@ class MessagingConfigStore:
                     telegram=current.telegram,
                     destinations=current.destinations,
                     approval_policy=policy,
+                    telegram_defaults=current.telegram_defaults,
                 )
             )
             self._save_unlocked(updated)
@@ -193,6 +228,21 @@ class MessagingConfigStore:
                     telegram=telegram,
                     destinations=current.destinations,
                     approval_policy=current.approval_policy,
+                    telegram_defaults=current.telegram_defaults,
+                )
+            )
+            self._save_unlocked(updated)
+        return updated
+
+    def update_telegram_defaults(self, defaults: TelegramDefaultsRecord | None) -> MessagingConfigRecord:
+        with self._lock:
+            current = self._load_unlocked()
+            updated = _refresh_record(
+                MessagingConfigRecord(
+                    telegram=current.telegram,
+                    destinations=current.destinations,
+                    approval_policy=current.approval_policy,
+                    telegram_defaults=defaults,
                 )
             )
             self._save_unlocked(updated)
@@ -253,6 +303,7 @@ class MessagingConfigStore:
                     telegram=current.telegram,
                     destinations=rows,
                     approval_policy=current.approval_policy,
+                    telegram_defaults=current.telegram_defaults,
                 )
             )
             self._save_unlocked(updated)
@@ -267,6 +318,7 @@ class MessagingConfigStore:
                     telegram=current.telegram,
                     destinations=[item for item in current.destinations if item.id != target_id],
                     approval_policy=current.approval_policy,
+                    telegram_defaults=current.telegram_defaults,
                 )
             )
             self._save_unlocked(updated)
@@ -441,4 +493,10 @@ def _refresh_record(record: MessagingConfigRecord) -> MessagingConfigRecord:
             require_approval_by_default=bool(record.approval_policy.require_approval_by_default),
             hardline_blocklist=_string_list(record.approval_policy.hardline_blocklist),
         ),
+        telegram_defaults=TelegramDefaultsRecord(
+            provider=record.telegram_defaults.provider.strip() if record.telegram_defaults and record.telegram_defaults.provider else None,
+            model=record.telegram_defaults.model.strip() if record.telegram_defaults and record.telegram_defaults.model else None,
+            system_prompt_id=record.telegram_defaults.system_prompt_id.strip() if record.telegram_defaults and record.telegram_defaults.system_prompt_id else None,
+            task_prompt_id=record.telegram_defaults.task_prompt_id.strip() if record.telegram_defaults and record.telegram_defaults.task_prompt_id else None,
+        ) if record.telegram_defaults is not None else None,
     )

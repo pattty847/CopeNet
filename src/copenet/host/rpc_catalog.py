@@ -267,6 +267,7 @@ async def handle_messaging_config_update(
 ) -> None:
     config = orchestrator.update_messaging_config(
         approval_policy=((params or {}).get("approvalPolicy") if isinstance((params or {}).get("approvalPolicy"), dict) else None),
+        telegram_defaults=((params or {}).get("telegramDefaults") if isinstance((params or {}).get("telegramDefaults"), dict) else None),
     )
     await send_json(
         make_response_frame(

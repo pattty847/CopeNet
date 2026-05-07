@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from copenet.core.messaging import MessageDestinationRecord, MessagingConfigRecord, TelegramBotConfigRecord
+from copenet.core.messaging import MessageDestinationRecord, MessagingConfigRecord, TelegramBotConfigRecord, TelegramDefaultsRecord
 from copenet.core.sessions.session_store import utc_now_iso
 
 if TYPE_CHECKING:
@@ -20,15 +20,23 @@ def update_messaging_config(
     orchestrator: "Orchestrator",
     *,
     approval_policy: dict[str, Any] | None = None,
+    telegram_defaults: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     """Persist a minimal messaging config patch."""
-    if not approval_policy:
-        return get_messaging_config(orchestrator)
+    current = orchestrator._messaging_store.load()
+    updated = current
+    if approval_policy:
+        updated = orchestrator._messaging_store.update_approval_policy(
+            require_approval_by_default=approval_policy.get("requireApprovalByDefault"),
+            hardline_blocklist=approval_policy.get("hardlineBlocklist"),
+        )
+    if telegram_defaults is not None:
+        updated = orchestrator._messaging_store.update_telegram_defaults(
+            TelegramDefaultsRecord.from_json(telegram_defaults)
+        )
+    if not approval_policy and telegram_defaults is None:
+        return current.to_public_dict()
 
-    updated = orchestrator._messaging_store.update_approval_policy(
-        require_approval_by_default=approval_policy.get("requireApprovalByDefault"),
-        hardline_blocklist=approval_policy.get("hardlineBlocklist"),
-    )
     return updated.to_public_dict()
 
 

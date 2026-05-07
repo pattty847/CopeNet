@@ -391,6 +391,10 @@ function normalizeMessagingConfig(raw: unknown): MessagingConfig | null {
     : [];
   const approvalRaw = (payload.approvalPolicy || {}) as Record<string, unknown>;
   const telegramRaw = payload.telegram && typeof payload.telegram === 'object' ? (payload.telegram as Record<string, unknown>) : null;
+  const telegramDefaultsRaw =
+    payload.telegramDefaults && typeof payload.telegramDefaults === 'object'
+      ? (payload.telegramDefaults as Record<string, unknown>)
+      : null;
   return {
     telegram: telegramRaw
       ? {
@@ -412,6 +416,14 @@ function normalizeMessagingConfig(raw: unknown): MessagingConfig | null {
       requireApprovalByDefault: approvalRaw.requireApprovalByDefault !== false,
       hardlineBlocklist: Array.isArray(approvalRaw.hardlineBlocklist) ? approvalRaw.hardlineBlocklist.map(String) : [],
     },
+    telegramDefaults: telegramDefaultsRaw
+      ? {
+          provider: telegramDefaultsRaw.provider ? String(telegramDefaultsRaw.provider) : null,
+          model: telegramDefaultsRaw.model ? String(telegramDefaultsRaw.model) : null,
+          systemPromptId: telegramDefaultsRaw.systemPromptId ? String(telegramDefaultsRaw.systemPromptId) : null,
+          taskPromptId: telegramDefaultsRaw.taskPromptId ? String(telegramDefaultsRaw.taskPromptId) : null,
+        }
+      : null,
   };
 }
 
@@ -1102,6 +1114,23 @@ class WsClient {
       approvalPolicy: {
         requireApprovalByDefault: params.requireApprovalByDefault,
         hardlineBlocklist: params.hardlineBlocklist || [],
+      },
+    });
+    return normalizeMessagingConfig(payload.config);
+  }
+
+  async updateTelegramRuntimeDefaults(params: {
+    provider: string;
+    model: string;
+    systemPromptId: string;
+    taskPromptId: string;
+  }): Promise<MessagingConfig | null> {
+    const payload = await this.request<{ config?: unknown | null }>('messaging.config.update', {
+      telegramDefaults: {
+        provider: params.provider || undefined,
+        model: params.model || undefined,
+        systemPromptId: params.systemPromptId || undefined,
+        taskPromptId: params.taskPromptId || undefined,
       },
     });
     return normalizeMessagingConfig(payload.config);
