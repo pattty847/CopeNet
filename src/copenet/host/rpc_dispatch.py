@@ -13,6 +13,9 @@ from .rpc_catalog import (
     handle_messaging_destinations_delete,
     handle_messaging_destinations_list,
     handle_messaging_destinations_upsert,
+    handle_messaging_routes_delete,
+    handle_messaging_routes_list,
+    handle_messaging_routes_upsert,
     handle_messaging_test,
     handle_models_list,
     handle_profile_changelog,
@@ -107,6 +110,12 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_messaging_destinations_upsert(req.id, req.params, send_json, orchestrator)
     elif req.method == "messaging.destinations.delete":
         await handle_messaging_destinations_delete(req.id, req.params, send_json, orchestrator)
+    elif req.method == "messaging.routes.list":
+        await handle_messaging_routes_list(req.id, send_json, orchestrator)
+    elif req.method == "messaging.routes.upsert":
+        await handle_messaging_routes_upsert(req.id, req.params, send_json, orchestrator)
+    elif req.method == "messaging.routes.delete":
+        await handle_messaging_routes_delete(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.merge.create":

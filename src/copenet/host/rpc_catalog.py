@@ -351,3 +351,55 @@ async def handle_messaging_destinations_delete(
         )
     )
     await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"config": payload["config"]})))
+
+
+async def handle_messaging_routes_list(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"routes": orchestrator.list_messaging_routes()},
+            )
+        )
+    )
+
+
+async def handle_messaging_routes_upsert(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    payload = orchestrator.upsert_messaging_route(
+        route=((params or {}).get("route") if isinstance((params or {}).get("route"), dict) else {}),
+    )
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )
+    await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"routes": payload["routes"]})))
+
+
+async def handle_messaging_routes_delete(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    payload = orchestrator.delete_messaging_route(route_id=str((params or {}).get("routeId") or ""))
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )
+    await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"routes": payload["routes"]})))

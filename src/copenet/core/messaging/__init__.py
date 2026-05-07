@@ -9,6 +9,7 @@ from .store import (
     TelegramDefaultsRecord,
     TelegramBotConfigRecord,
 )
+from .routing_store import TelegramSessionRouteRecord, TelegramSessionRouteStore
 
 __all__ = [
     "MessageDestinationRecord",
@@ -18,4 +19,6 @@ __all__ = [
     "PlatformConnectionStatus",
     "TelegramDefaultsRecord",
     "TelegramBotConfigRecord",
+    "TelegramSessionRouteRecord",
+    "TelegramSessionRouteStore",
 ]

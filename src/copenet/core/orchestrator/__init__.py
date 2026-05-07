@@ -11,7 +11,7 @@ from typing import Awaitable, Callable
 
 from copenet.core.apps import AppStore
 from copenet.core.harness import ChatHarness
-from copenet.core.messaging import MessagingConfigStore
+from copenet.core.messaging import MessagingConfigStore, TelegramSessionRouteStore
 from copenet.core.orchestrator.catalog import (
     archive_session as archive_session_record,
     build_default_provider_registry,
@@ -28,10 +28,13 @@ from copenet.core.orchestrator.catalog import (
 )
 from copenet.core.orchestrator.merge import merge_sessions as merge_session_record, resolve_merge_state as resolve_merge_state_record
 from copenet.core.orchestrator.messaging import (
+    delete_messaging_route as delete_messaging_route_record,
     delete_messaging_destination as delete_messaging_destination_record,
     get_messaging_config as get_messaging_config_record,
     list_messaging_destinations as list_messaging_destinations_record,
+    list_messaging_routes as list_messaging_routes_record,
     test_messaging_platform as test_messaging_platform_record,
+    upsert_messaging_route as upsert_messaging_route_record,
     upsert_messaging_destination as upsert_messaging_destination_record,
     update_messaging_config as update_messaging_config_record,
 )
@@ -101,6 +104,7 @@ class Orchestrator:
         self._run_store = RunStore(root_dir=base / "runs")
         self._pulse_store = PulseStore(path=base / "pulses.json")
         self._messaging_store = MessagingConfigStore(path=base / "messaging.json")
+        self._route_store = TelegramSessionRouteStore(path=base / "telegram-routes.json")
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         self._app_store = AppStore(path=base / "apps.json")
@@ -229,6 +233,18 @@ class Orchestrator:
     def delete_messaging_destination(self, *, destination_id: str) -> dict:
         """Delete one messaging destination."""
         return delete_messaging_destination_record(self, destination_id=destination_id)
+
+    def list_messaging_routes(self) -> list[dict]:
+        """Return configured Telegram chat-to-session routes."""
+        return list_messaging_routes_record(self)
+
+    def upsert_messaging_route(self, *, route: dict) -> dict:
+        """Create or update one Telegram route mapping."""
+        return upsert_messaging_route_record(self, route=route)
+
+    def delete_messaging_route(self, *, route_id: str) -> dict:
+        """Delete one Telegram route mapping."""
+        return delete_messaging_route_record(self, route_id=route_id)
 
     def provider_auth_status(self, provider_id: str) -> dict:
         """Resolve auth status for a provider that owns local auth state."""

@@ -24,6 +24,7 @@ import {
   SessionStateRecord,
   SessionRunRecord,
   TextPart,
+  TelegramSessionRoute,
   ToolDescriptor,
   ToolExecution,
   ToolResultPreview,
@@ -383,6 +384,23 @@ function normalizeDestination(raw: unknown): MessageDestination | null {
   };
 }
 
+function normalizeTelegramRoute(raw: unknown): TelegramSessionRoute | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const id = String(payload.id || '').trim();
+  const chatId = String(payload.chatId || '').trim();
+  const sessionKey = String(payload.sessionKey || '').trim();
+  if (!id || !chatId || !sessionKey) return null;
+  return {
+    id,
+    platform: String(payload.platform || 'telegram').trim() || 'telegram',
+    chatId,
+    threadId: payload.threadId ? String(payload.threadId) : null,
+    sessionKey,
+    titleOverride: payload.titleOverride ? String(payload.titleOverride) : null,
+  };
+}
+
 function normalizeMessagingConfig(raw: unknown): MessagingConfig | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
@@ -395,6 +413,9 @@ function normalizeMessagingConfig(raw: unknown): MessagingConfig | null {
     payload.telegramDefaults && typeof payload.telegramDefaults === 'object'
       ? (payload.telegramDefaults as Record<string, unknown>)
       : null;
+  const routes = Array.isArray(payload.routes)
+    ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
+    : [];
   return {
     telegram: telegramRaw
       ? {
@@ -424,6 +445,7 @@ function normalizeMessagingConfig(raw: unknown): MessagingConfig | null {
           taskPromptId: telegramDefaultsRaw.taskPromptId ? String(telegramDefaultsRaw.taskPromptId) : null,
         }
       : null,
+    routes,
   };
 }
 
@@ -819,10 +841,20 @@ class WsClient {
     if (frame.event === 'messaging.updated') {
       const payload = (frame.payload || {}) as Record<string, unknown>;
       const config = normalizeMessagingConfig(payload.config);
+      const store = useAppStore.getState();
       if (config) {
-        const store = useAppStore.getState();
         store.setMessagingConfig(config);
         store.setDestinations(config.destinations);
+        return;
+      }
+      if (Array.isArray(payload.routes)) {
+        const current = store.messagingConfig;
+        if (current) {
+          store.setMessagingConfig({
+            ...current,
+            routes: payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null),
+          });
+        }
       }
     }
   }
@@ -1106,6 +1138,13 @@ class WsClient {
       : [];
   }
 
+  async listMessagingRoutes(): Promise<TelegramSessionRoute[]> {
+    const payload = await this.request<{ routes?: unknown[] }>('messaging.routes.list', {});
+    return Array.isArray(payload.routes)
+      ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
+      : [];
+  }
+
   async updateMessagingApprovalPolicy(params: {
     requireApprovalByDefault: boolean;
     hardlineBlocklist?: string[];
@@ -1193,6 +1232,37 @@ class WsClient {
     return {
       deleted: Boolean(payload.deleted),
       config: normalizeMessagingConfig(payload.config),
+    };
+  }
+
+  async upsertMessagingRoute(route: {
+    id?: string;
+    platform: string;
+    chatId: string;
+    threadId?: string | null;
+    sessionKey: string;
+    titleOverride?: string | null;
+  }): Promise<{ route: TelegramSessionRoute | null; routes: TelegramSessionRoute[] }> {
+    const payload = await this.request<{ route?: unknown | null; routes?: unknown[] }>('messaging.routes.upsert', {
+      route,
+    });
+    return {
+      route: normalizeTelegramRoute(payload.route),
+      routes: Array.isArray(payload.routes)
+        ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
+        : [],
+    };
+  }
+
+  async deleteMessagingRoute(routeId: string): Promise<{ deleted: boolean; routes: TelegramSessionRoute[] }> {
+    const payload = await this.request<{ deleted?: unknown; routes?: unknown[] }>('messaging.routes.delete', {
+      routeId,
+    });
+    return {
+      deleted: Boolean(payload.deleted),
+      routes: Array.isArray(payload.routes)
+        ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
+        : [],
     };
   }
 

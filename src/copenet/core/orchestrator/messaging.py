@@ -1,10 +1,16 @@
-"""Messaging configuration orchestration helpers."""
+"""Messaging configuration and Telegram routing orchestration helpers."""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from copenet.core.messaging import MessageDestinationRecord, MessagingConfigRecord, TelegramBotConfigRecord, TelegramDefaultsRecord
+from copenet.core.messaging import (
+    MessageDestinationRecord,
+    MessagingConfigRecord,
+    TelegramBotConfigRecord,
+    TelegramDefaultsRecord,
+    TelegramSessionRouteRecord,
+)
 from copenet.core.sessions.session_store import utc_now_iso
 
 if TYPE_CHECKING:
@@ -13,7 +19,9 @@ if TYPE_CHECKING:
 
 def get_messaging_config(orchestrator: "Orchestrator") -> dict[str, Any]:
     """Return the operator-visible messaging configuration."""
-    return orchestrator._messaging_store.load().to_public_dict()
+    payload = orchestrator._messaging_store.load().to_public_dict()
+    payload["routes"] = list_messaging_routes(orchestrator)
+    return payload
 
 
 def update_messaging_config(
@@ -35,14 +43,19 @@ def update_messaging_config(
             TelegramDefaultsRecord.from_json(telegram_defaults)
         )
     if not approval_policy and telegram_defaults is None:
-        return current.to_public_dict()
+        return get_messaging_config(orchestrator)
 
-    return updated.to_public_dict()
+    return get_messaging_config(orchestrator)
 
 
 def list_messaging_destinations(orchestrator: "Orchestrator") -> list[dict[str, Any]]:
     """Return the configured operator messaging destinations."""
     return [item.to_public_dict() for item in orchestrator._messaging_store.load().destinations]
+
+
+def list_messaging_routes(orchestrator: "Orchestrator") -> list[dict[str, Any]]:
+    """Return Telegram chat/thread routes mapped to CopeNet sessions."""
+    return [item.to_public_dict() for item in orchestrator._route_store.list_routes()]
 
 
 def upsert_messaging_destination(
@@ -60,7 +73,31 @@ def upsert_messaging_destination(
     target = next((item for item in updated.destinations if item.target == record.target and item.platform == record.platform), None)
     return {
         "destination": target.to_public_dict() if target is not None else None,
-        "config": updated.to_public_dict(),
+        "config": get_messaging_config(orchestrator),
+    }
+
+
+def upsert_messaging_route(orchestrator: "Orchestrator", *, route: dict[str, Any]) -> dict[str, Any]:
+    """Create or update one Telegram chat/thread route."""
+    record = TelegramSessionRouteRecord.from_json(route)
+    if not record.chat_id:
+        raise ValueError("route chatId is required")
+    if not record.session_key:
+        raise ValueError("route sessionKey is required")
+    rows = orchestrator._route_store.upsert_route(record)
+    target = next(
+        (
+            item
+            for item in rows
+            if item.chat_id == record.chat_id
+            and item.thread_id == record.thread_id
+            and item.platform == record.platform
+        ),
+        None,
+    )
+    return {
+        "route": target.to_public_dict() if target is not None else None,
+        "routes": [item.to_public_dict() for item in rows],
     }
 
 
@@ -75,7 +112,22 @@ def delete_messaging_destination(orchestrator: "Orchestrator", *, destination_id
     return {
         "deleted": existed,
         "destinationId": target_id,
-        "config": updated.to_public_dict(),
+        "config": get_messaging_config(orchestrator),
+    }
+
+
+def delete_messaging_route(orchestrator: "Orchestrator", *, route_id: str) -> dict[str, Any]:
+    """Delete one Telegram chat/thread route by id."""
+    target_id = str(route_id or "").strip()
+    if not target_id:
+        raise ValueError("routeId is required")
+    before = orchestrator._route_store.list_routes()
+    existed = any(item.id == target_id for item in before)
+    rows = orchestrator._route_store.delete_route(target_id)
+    return {
+        "deleted": existed,
+        "routeId": target_id,
+        "routes": [item.to_public_dict() for item in rows],
     }
 
 
@@ -110,7 +162,7 @@ def test_messaging_platform(orchestrator: "Orchestrator", *, platform: str) -> d
     persisted = orchestrator._messaging_store.update_telegram(refreshed)
     return {
         "platform": "telegram",
-        "config": persisted.to_public_dict(),
+        "config": get_messaging_config(orchestrator),
         "result": {
             "ok": True,
             "connectionStatus": "connected",

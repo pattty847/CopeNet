@@ -286,6 +286,9 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "messaging.config.get" in response["payload"]["features"]["methods"]
         assert "messaging.config.update" in response["payload"]["features"]["methods"]
         assert "messaging.test" in response["payload"]["features"]["methods"]
+        assert "messaging.routes.list" in response["payload"]["features"]["methods"]
+        assert "messaging.routes.upsert" in response["payload"]["features"]["methods"]
+        assert "messaging.routes.delete" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
         assert "sessions.merge.updated" in response["payload"]["features"]["events"]
         assert "messaging.updated" in response["payload"]["features"]["events"]
@@ -311,6 +314,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
                 "hardlineBlocklist": [],
             },
             "telegramDefaults": None,
+            "routes": [],
         }
 
         providers_id = socket.request("providers.list")
@@ -502,6 +506,45 @@ def test_messaging_config_update_can_persist_telegram_runtime_defaults(rpc_clien
             "systemPromptId": "default",
             "taskPromptId": "general",
         }
+
+
+def test_messaging_route_rpcs_upsert_list_and_delete(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        upsert_id = socket.request(
+            "messaging.routes.upsert",
+            {
+                "route": {
+                    "platform": "telegram",
+                    "chatId": "-1001234567890",
+                    "threadId": "42",
+                    "sessionKey": "alpha",
+                    "titleOverride": "Ops Thread",
+                }
+            },
+        )
+        upsert_response = socket.recv_response(upsert_id)
+        route = upsert_response["payload"]["route"]
+        assert route["id"]
+        assert route["platform"] == "telegram"
+        assert route["chatId"] == "-1001234567890"
+        assert route["threadId"] == "42"
+        assert route["sessionKey"] == "alpha"
+        assert route["titleOverride"] == "Ops Thread"
+
+        update_event = socket._next_matching(
+            lambda candidate: candidate.get("type") == "event" and candidate.get("event") == "messaging.updated"
+        )
+        assert update_event["payload"]["routes"][0]["sessionKey"] == "alpha"
+
+        list_id = socket.request("messaging.routes.list")
+        list_response = socket.recv_response(list_id)
+        assert list_response["payload"]["routes"] == [route]
+
+        delete_id = socket.request("messaging.routes.delete", {"routeId": route["id"]})
+        delete_response = socket.recv_response(delete_id)
+        assert delete_response["payload"]["deleted"] is True
+        assert delete_response["payload"]["routeId"] == route["id"]
+        assert delete_response["payload"]["routes"] == []
 
 
 def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestClient) -> None:

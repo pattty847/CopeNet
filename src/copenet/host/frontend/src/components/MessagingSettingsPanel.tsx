@@ -21,6 +21,7 @@ import { useEffect, useState } from 'react';
 import { wsClient } from '../lib/wsClient';
 import { useMessagingConfig } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
+import { MessagingRoutesSection } from './MessagingRoutesSection';
 import type { MessageDestination, PlatformConnectionStatus } from '../runtime/types';
 
 // ---------------------------------------------------------------------------
@@ -824,6 +825,8 @@ export function MessagingSettingsPanel() {
       <ApprovalPolicySection />
 
       <TelegramRuntimeDefaultsSection />
+
+      <MessagingRoutesSection />
     </div>
   );
 }

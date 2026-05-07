@@ -465,6 +465,7 @@ export const MOCK_MESSAGING_CONFIG: MessagingConfig = {
     systemPromptId: 'default',
     taskPromptId: 'none',
   },
+  routes: [],
 };
 
 export function getMockMessagingConfig(): MessagingConfig {

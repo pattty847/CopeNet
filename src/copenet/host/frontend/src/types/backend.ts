@@ -179,7 +179,7 @@ export interface PromptOption {
   name: string;
 }
 
-export type DataToolsRoute = 'hub' | 'sources' | 'media';
+export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'messaging';
 
 export interface DraftSettings {
   provider: string;
@@ -456,11 +456,21 @@ export interface TelegramRuntimeDefaults {
   taskPromptId: string | null;
 }
 
+export interface TelegramSessionRoute {
+  id: string;
+  platform: string;
+  chatId: string;
+  threadId: string | null;
+  sessionKey: string;
+  titleOverride: string | null;
+}
+
 export interface MessagingConfig {
   telegram: TelegramBotConfig | null;
   destinations: MessageDestination[];
   approvalPolicy: MessagingApprovalPolicy;
   telegramDefaults: TelegramRuntimeDefaults | null;
+  routes: TelegramSessionRoute[];
 }
 
 // ---------------------------------------------------------------------------

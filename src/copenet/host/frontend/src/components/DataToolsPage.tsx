@@ -25,6 +25,7 @@ import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobile
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail } from '../types/backend';
+import { MessagingSettingsPanel } from './MessagingSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
 
 function formatRelative(timestamp: string): string {
@@ -54,6 +55,7 @@ function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: (
     hub: ['Data & Tools'],
     sources: ['Data & Tools', 'Data Sources'],
     media: ['Data & Tools', 'Data Sources', 'Media Imports'],
+    messaging: ['Data & Tools', 'Messaging'],
   };
 
   return (
@@ -115,7 +117,7 @@ function HubCard({
   );
 }
 
-function DataToolsHub({ openSources }: { openSources: () => void }) {
+function DataToolsHub({ openSources, openMessaging }: { openSources: () => void; openMessaging: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
@@ -135,7 +137,7 @@ function DataToolsHub({ openSources }: { openSources: () => void }) {
         <HubCard eyebrow="Ground" title="Knowledge Bases" body="Curated context that can refresh, evolve, and stay anchored to the workspace." accent="text-shell-accent" />
         <HubCard eyebrow="Ingest" title="Data Sources" body="Feed media, web pages, APIs, and local files into the workbench." accent="text-shell-accent" onClick={openSources} />
         <HubCard eyebrow="Operate" title="Tool Catalog" body="Inspectable tool surfaces with safety rules and visible execution history." accent="text-shell-accent" />
-        <HubCard eyebrow="Shape" title="Workspace Context" body="Preset combinations of data, prompts, and runtimes for the jobs you repeat." accent="text-shell-accent" />
+        <HubCard eyebrow="Route" title="Messaging" body="Configure Telegram reachability, default runtimes, and chat-to-session routes." accent="text-shell-accent" onClick={openMessaging} />
       </section>
 
       <section className="shell-page-utility-tile rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
@@ -255,6 +257,48 @@ function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
                   <span>{item}</span>
                 </div>
               ))}
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function MessagingSettingsPage() {
+  return (
+    <div className="animate-fade-in-up space-y-3">
+      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
+          <RadioTower className="h-3.5 w-3.5 text-shell-accent" />
+          Messaging
+        </div>
+        <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
+          Wire Telegram into CopeNet without losing session truth.
+        </h1>
+        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
+          Set the runtime defaults, configure real destinations, and map Telegram chats or threads to specific CopeNet sessions before inbound routing goes fully live.
+        </p>
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_320px]">
+        <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+          <MessagingSettingsPanel />
+        </div>
+        <div className="space-y-3">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">How it works</div>
+            <div className="space-y-2 text-sm leading-6 text-shell-muted">
+              <p>One Telegram chat or thread can map to one CopeNet session.</p>
+              <p>Telegram runtime defaults seed new chat-anywhere sessions before slash-command overrides arrive.</p>
+              <p>Destinations stay honest so approval-backed sends have a real local address book.</p>
+            </div>
+          </div>
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next</div>
+            <div className="space-y-2 text-sm leading-6 text-shell-muted">
+              <p>Inbound Telegram messages can use these routes to continue the right session automatically.</p>
+              <p>Model selection via settings is already here; slash-command model switching can layer on top later.</p>
             </div>
           </div>
         </div>
@@ -862,9 +906,10 @@ export function DataToolsPage() {
   return (
     <div className="space-y-3">
       <SectionBreadcrumb route={route} onBack={handleBack} />
-      {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} />}
+      {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} />}
       {route === 'sources' && <DataSourcesPage openMedia={() => setRoute('media')} />}
       {route === 'media' && <MediaImportsPage />}
+      {route === 'messaging' && <MessagingSettingsPage />}
     </div>
   );
 }
