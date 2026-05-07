@@ -185,3 +185,49 @@ def test_app_api_sse_stream(app_client) -> None:
     cancel = client.post("/api/v1/runs/missing-run/cancel", headers=_auth(token))
     assert cancel.status_code == 200
     assert cancel.json() == {"ok": True, "aborted": False, "runIds": []}
+
+
+def test_telegram_inbound_endpoint_creates_and_continues_mapped_session(app_client) -> None:
+    client, orchestrator, _, _ = app_client
+    orchestrator.update_messaging_config(
+        telegram_defaults={
+            "provider": "fake",
+            "model": "model-a",
+            "systemPromptId": "default",
+            "taskPromptId": "general",
+        }
+    )
+
+    first = client.post(
+        "/api/v1/messaging/telegram/inbound",
+        headers=_auth("dev-token"),
+        json={
+            "chatId": "-1001234567890",
+            "threadId": "42",
+            "text": "hello from telegram",
+            "titleHint": "Ops Backchannel",
+        },
+    )
+    assert first.status_code == 200
+    first_payload = first.json()
+    assert first_payload["createdSession"] is True
+    assert first_payload["session"]["title"] == "Ops Backchannel"
+    assert first_payload["route"]["chatId"] == "-1001234567890"
+    assert first_payload["event"]["message"]["content"] == "hello from fake provider"
+
+    second = client.post(
+        "/api/v1/messaging/telegram/inbound",
+        headers=_auth("dev-token"),
+        json={
+            "chatId": "-1001234567890",
+            "threadId": "42",
+            "text": "follow up from telegram",
+        },
+    )
+    assert second.status_code == 200
+    second_payload = second.json()
+    assert second_payload["createdSession"] is False
+    assert second_payload["session"]["key"] == first_payload["session"]["key"]
+
+    history = orchestrator.history(first_payload["session"]["key"])
+    assert [message["role"] for message in history] == ["user", "assistant", "user", "assistant"]

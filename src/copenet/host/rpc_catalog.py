@@ -403,3 +403,27 @@ async def handle_messaging_routes_delete(
         )
     )
     await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"routes": payload["routes"]})))
+
+
+async def handle_messaging_routes_resolve(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    payload = orchestrator.resolve_messaging_route(
+        platform=str((params or {}).get("platform") or "telegram"),
+        chat_id=str((params or {}).get("chatId") or ""),
+        thread_id=str((params or {}).get("threadId") or "").strip() or None,
+        create_if_missing=bool((params or {}).get("createIfMissing", False)),
+        title_hint=str((params or {}).get("titleHint") or "").strip() or None,
+    )
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )

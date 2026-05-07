@@ -160,6 +160,7 @@ class CopeNetWsServer:
                                 "messaging.routes.list",
                                 "messaging.routes.upsert",
                                 "messaging.routes.delete",
+                                "messaging.routes.resolve",
                                 "models.list",
                                 "tools.list",
                                 "sessions.list",

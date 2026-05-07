@@ -11,6 +11,7 @@ from copenet.core.messaging import (
     TelegramDefaultsRecord,
     TelegramSessionRouteRecord,
 )
+from copenet.core.orchestrator.catalog import create_session_with_profile, session_payload
 from copenet.core.sessions.session_store import utc_now_iso
 
 if TYPE_CHECKING:
@@ -129,6 +130,108 @@ def delete_messaging_route(orchestrator: "Orchestrator", *, route_id: str) -> di
         "routeId": target_id,
         "routes": [item.to_public_dict() for item in rows],
     }
+
+
+def resolve_messaging_route(
+    orchestrator: "Orchestrator",
+    *,
+    platform: str,
+    chat_id: str,
+    thread_id: str | None = None,
+    create_if_missing: bool = False,
+    title_hint: str | None = None,
+) -> dict[str, Any]:
+    """Resolve one Telegram chat/thread to a normal CopeNet session, optionally autocreating it."""
+    target_platform = str(platform or "telegram").strip().lower() or "telegram"
+    if target_platform != "telegram":
+        raise ValueError(f"unsupported messaging platform: {platform}")
+    normalized_chat_id = str(chat_id or "").strip()
+    normalized_thread_id = str(thread_id).strip() if thread_id is not None and str(thread_id).strip() else None
+    if not normalized_chat_id:
+        raise ValueError("chatId is required")
+
+    route = orchestrator._route_store.find_route(
+        platform=target_platform,
+        chat_id=normalized_chat_id,
+        thread_id=normalized_thread_id,
+    )
+    entry = orchestrator._session_store.get(route.session_key) if route is not None else None
+    if route is not None and entry is not None:
+        return {
+            "created": False,
+            "route": route.to_public_dict(),
+            "session": session_payload(entry),
+        }
+    if not create_if_missing:
+        return {
+            "created": False,
+            "route": route.to_public_dict() if route is not None else None,
+            "session": None,
+        }
+
+    defaults = orchestrator._messaging_store.load().telegram_defaults
+    provider_id = _resolve_telegram_provider(orchestrator, defaults.provider if defaults is not None else None)
+    system_prompt_id = defaults.system_prompt_id if defaults and defaults.system_prompt_id else "default"
+    task_prompt_id = defaults.task_prompt_id if defaults and defaults.task_prompt_id else "none"
+    created = create_session_with_profile(
+        orchestrator,
+        provider=provider_id,
+        model=defaults.model if defaults is not None else None,
+        title=_resolve_telegram_title(route, title_hint, normalized_chat_id),
+        system_prompt_id=system_prompt_id,
+        task_prompt_id=task_prompt_id,
+        workspace_root=None,
+    )
+    route_rows = orchestrator._route_store.upsert_route(
+        TelegramSessionRouteRecord(
+            id=route.id if route is not None else "",
+            platform=target_platform,
+            chat_id=normalized_chat_id,
+            thread_id=normalized_thread_id,
+            session_key=created["key"],
+            title_override=route.title_override if route is not None else (str(title_hint).strip() if title_hint else None),
+        )
+    )
+    persisted_route = next(
+        (
+            item
+            for item in route_rows
+            if item.platform == target_platform
+            and item.chat_id == normalized_chat_id
+            and item.thread_id == normalized_thread_id
+        ),
+        None,
+    )
+    return {
+        "created": True,
+        "route": persisted_route.to_public_dict() if persisted_route is not None else None,
+        "session": created,
+    }
+
+
+def _resolve_telegram_provider(orchestrator: "Orchestrator", preferred_provider: str | None) -> str:
+    provider_id = str(preferred_provider or "").strip()
+    if provider_id and provider_id in orchestrator._providers:
+        return provider_id
+    if "codex-cli" in orchestrator._providers:
+        return "codex-cli"
+    provider_ids = sorted(orchestrator._providers)
+    if provider_ids:
+        return provider_ids[0]
+    raise RuntimeError("no providers available for Telegram session creation")
+
+
+def _resolve_telegram_title(
+    route: TelegramSessionRouteRecord | None,
+    title_hint: str | None,
+    chat_id: str,
+) -> str:
+    if route is not None and route.title_override:
+        return route.title_override
+    hinted = str(title_hint or "").strip()
+    if hinted:
+        return hinted
+    return f"Telegram · {chat_id}"
 
 
 def test_messaging_platform(orchestrator: "Orchestrator", *, platform: str) -> dict[str, Any]:

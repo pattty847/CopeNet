@@ -69,6 +69,20 @@ class TelegramSessionRouteStore:
         with self._lock:
             return self._load_unlocked()
 
+    def find_route(self, *, platform: str, chat_id: str, thread_id: str | None) -> TelegramSessionRouteRecord | None:
+        normalized_platform = str(platform or "telegram").strip() or "telegram"
+        normalized_chat_id = str(chat_id or "").strip()
+        normalized_thread_id = str(thread_id).strip() if thread_id is not None and str(thread_id).strip() else None
+        with self._lock:
+            for route in self._load_unlocked():
+                if (
+                    route.platform == normalized_platform
+                    and route.chat_id == normalized_chat_id
+                    and route.thread_id == normalized_thread_id
+                ):
+                    return route
+        return None
+
     def upsert_route(self, route: TelegramSessionRouteRecord) -> list[TelegramSessionRouteRecord]:
         normalized = _normalize_route(route)
         with self._lock:

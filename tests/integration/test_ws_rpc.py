@@ -289,6 +289,7 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "messaging.routes.list" in response["payload"]["features"]["methods"]
         assert "messaging.routes.upsert" in response["payload"]["features"]["methods"]
         assert "messaging.routes.delete" in response["payload"]["features"]["methods"]
+        assert "messaging.routes.resolve" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
         assert "sessions.merge.updated" in response["payload"]["features"]["events"]
         assert "messaging.updated" in response["payload"]["features"]["events"]
@@ -545,6 +546,40 @@ def test_messaging_route_rpcs_upsert_list_and_delete(rpc_client: TestClient) -> 
         assert delete_response["payload"]["deleted"] is True
         assert delete_response["payload"]["routeId"] == route["id"]
         assert delete_response["payload"]["routes"] == []
+
+
+def test_messaging_route_resolve_can_autocreate_session(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        update_id = socket.request(
+            "messaging.config.update",
+            {
+                "telegramDefaults": {
+                    "provider": "fake",
+                    "model": "model-a",
+                    "systemPromptId": "default",
+                    "taskPromptId": "general",
+                }
+            },
+        )
+        socket.recv_response(update_id)
+
+        resolve_id = socket.request(
+            "messaging.routes.resolve",
+            {
+                "platform": "telegram",
+                "chatId": "-1001234567890",
+                "threadId": "42",
+                "createIfMissing": True,
+                "titleHint": "Ops Backchannel",
+            },
+        )
+        resolve_response = socket.recv_response(resolve_id)
+        assert resolve_response["payload"]["created"] is True
+        assert resolve_response["payload"]["session"]["provider"] == "fake"
+        assert resolve_response["payload"]["session"]["model"] == "model-a"
+        assert resolve_response["payload"]["session"]["title"] == "Ops Backchannel"
+        assert resolve_response["payload"]["route"]["chatId"] == "-1001234567890"
+        assert resolve_response["payload"]["route"]["threadId"] == "42"
 
 
 def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestClient) -> None:

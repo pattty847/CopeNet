@@ -107,6 +107,14 @@ class MediaDownloadRequest(BaseModel):
     url: str
 
 
+class TelegramInboundRequest(BaseModel):
+    chat_id: str = Field(alias="chatId")
+    thread_id: str | None = Field(default=None, alias="threadId")
+    text: str
+    title_hint: str | None = Field(default=None, alias="titleHint")
+    idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
+
+
 def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionService | None = None) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["app-api"])
     media = media_service or MediaIngestionService()
@@ -148,6 +156,14 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
                 allow_tools=True,
             )
         return await require_app(authorization)
+
+    async def require_gateway(authorization: str | None = Header(default=None)) -> None:
+        token = _bearer_token(authorization)
+        if not token:
+            raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
+        if gateway_token and token == gateway_token:
+            return
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid bearer token")
 
     def _mapping_for(app: AuthenticatedApp, app_session_id: str):
         mapping = orchestrator._app_store.get_mapping(app.app_id, app_session_id)
@@ -256,6 +272,37 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         )
         return result, events
 
+    async def _run_session_chat(
+        *,
+        session_key: str,
+        content: str,
+        provider: str | None,
+        model: str | None,
+        system_prompt_id: str | None,
+        task_prompt_id: str | None,
+        idempotency_key: str | None,
+        allow_tools: bool = True,
+    ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
+        events: list[dict[str, Any]] = []
+
+        async def emit(payload: dict[str, Any]) -> None:
+            events.append(payload)
+
+        result = await orchestrator.send_chat(
+            ChatSendRequest(
+                session_key=session_key,
+                message=content,
+                idempotency_key=idempotency_key,
+                provider=(provider or "codex-cli").strip(),
+                model=(model or "").strip() or None,
+                system_prompt_id=system_prompt_id,
+                task_prompt_id=task_prompt_id,
+                allow_tools=allow_tools,
+            ),
+            emit=emit,
+        )
+        return result, events
+
     @router.get("/providers")
     async def list_providers(_: AuthenticatedApp = Depends(require_app)) -> dict[str, Any]:
         return {"providers": await orchestrator.list_providers_catalog()}
@@ -346,6 +393,39 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         )
         final_event = next((event for event in reversed(events) if event.get("state") in {"final", "error"}), None)
         return {
+            "run": result,
+            "event": final_event,
+            "events": events,
+        }
+
+    @router.post("/messaging/telegram/inbound")
+    async def telegram_inbound(body: TelegramInboundRequest, _: None = Depends(require_gateway)) -> dict[str, Any]:
+        resolved = orchestrator.resolve_messaging_route(
+            platform="telegram",
+            chat_id=body.chat_id,
+            thread_id=body.thread_id,
+            create_if_missing=True,
+            title_hint=body.title_hint,
+        )
+        session = resolved.get("session")
+        if not isinstance(session, dict):
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="failed to resolve session")
+
+        result, events = await _run_session_chat(
+            session_key=str(session.get("key") or ""),
+            content=body.text,
+            provider=str(session.get("provider") or ""),
+            model=str(session.get("model") or "") or None,
+            system_prompt_id=str(session.get("systemPromptId") or "") or None,
+            task_prompt_id=str(session.get("taskPromptId") or "") or None,
+            idempotency_key=body.idempotency_key,
+            allow_tools=True,
+        )
+        final_event = next((event for event in reversed(events) if event.get("state") in {"final", "error"}), None)
+        return {
+            "createdSession": bool(resolved.get("created")),
+            "route": resolved.get("route"),
+            "session": session,
             "run": result,
             "event": final_event,
             "events": events,

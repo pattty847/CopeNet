@@ -33,6 +33,7 @@ from copenet.core.orchestrator.messaging import (
     get_messaging_config as get_messaging_config_record,
     list_messaging_destinations as list_messaging_destinations_record,
     list_messaging_routes as list_messaging_routes_record,
+    resolve_messaging_route as resolve_messaging_route_record,
     test_messaging_platform as test_messaging_platform_record,
     upsert_messaging_route as upsert_messaging_route_record,
     upsert_messaging_destination as upsert_messaging_destination_record,
@@ -245,6 +246,25 @@ class Orchestrator:
     def delete_messaging_route(self, *, route_id: str) -> dict:
         """Delete one Telegram route mapping."""
         return delete_messaging_route_record(self, route_id=route_id)
+
+    def resolve_messaging_route(
+        self,
+        *,
+        platform: str,
+        chat_id: str,
+        thread_id: str | None = None,
+        create_if_missing: bool = False,
+        title_hint: str | None = None,
+    ) -> dict:
+        """Resolve or autocreate the CopeNet session backing one messaging conversation."""
+        return resolve_messaging_route_record(
+            self,
+            platform=platform,
+            chat_id=chat_id,
+            thread_id=thread_id,
+            create_if_missing=create_if_missing,
+            title_hint=title_hint,
+        )
 
     def provider_auth_status(self, provider_id: str) -> dict:
         """Resolve auth status for a provider that owns local auth state."""

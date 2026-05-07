@@ -479,6 +479,78 @@ async def test_export_session_returns_messages_and_markdown(fake_orchestrator: O
     assert "hello" in exported["markdown"]
 
 
+def test_resolve_messaging_route_can_create_session_from_telegram_defaults(tmp_path) -> None:
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"fake": FakeProvider()},
+    )
+    orchestrator.update_messaging_config(
+        telegram_defaults={
+            "provider": "fake",
+            "model": "model-a",
+            "systemPromptId": "default",
+            "taskPromptId": "general",
+        }
+    )
+
+    resolved = orchestrator.resolve_messaging_route(
+        platform="telegram",
+        chat_id="-1001234567890",
+        thread_id="42",
+        create_if_missing=True,
+        title_hint="Ops Backchannel",
+    )
+
+    assert resolved["created"] is True
+    assert resolved["session"]["provider"] == "fake"
+    assert resolved["session"]["model"] == "model-a"
+    assert resolved["session"]["systemPromptId"] == "default"
+    assert resolved["session"]["taskPromptId"] == "general"
+    assert resolved["session"]["title"] == "Ops Backchannel"
+    assert resolved["route"]["chatId"] == "-1001234567890"
+    assert resolved["route"]["threadId"] == "42"
+    assert resolved["route"]["sessionKey"] == resolved["session"]["key"]
+
+
+def test_resolve_messaging_route_reuses_existing_mapping(tmp_path) -> None:
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"fake": FakeProvider()},
+    )
+    created = orchestrator.create_session_with_profile(
+        provider="fake",
+        model="model-a",
+        key="alpha",
+        title="Alpha Session",
+        system_prompt_id="default",
+        task_prompt_id="general",
+    )
+    orchestrator.upsert_messaging_route(
+        route={
+            "platform": "telegram",
+            "chatId": "-1001234567890",
+            "threadId": "42",
+            "sessionKey": created["key"],
+            "titleOverride": "Pinned Title",
+        }
+    )
+
+    resolved = orchestrator.resolve_messaging_route(
+        platform="telegram",
+        chat_id="-1001234567890",
+        thread_id="42",
+        create_if_missing=False,
+    )
+
+    assert resolved["created"] is False
+    assert resolved["session"]["key"] == "alpha"
+    assert resolved["route"]["titleOverride"] == "Pinned Title"
+
+
 @pytest.mark.asyncio
 async def test_merge_sessions_creates_session_tracks_progress_and_writes_merge_brief(tmp_path) -> None:
     orchestrator = Orchestrator(
