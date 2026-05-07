@@ -33,6 +33,16 @@ const PLATFORM_ICON: Record<string, string> = {
   discord: '◆',
 };
 
+type DestinationDraft = {
+  id?: string;
+  platform: string;
+  target: string;
+  displayName: string;
+  threadLabel: string;
+  isDefault: boolean;
+  requiresApproval: boolean;
+};
+
 function timeLabel(iso: string | null) {
   if (!iso) return null;
   const d = new Date(iso);
@@ -41,6 +51,18 @@ function timeLabel(iso: string | null) {
   if (m < 1) return 'just now';
   if (m < 60) return `${m}m ago`;
   return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: false });
+}
+
+function toDestinationDraft(dest?: MessageDestination | null): DestinationDraft {
+  return {
+    id: dest?.id,
+    platform: dest?.platform || 'telegram',
+    target: dest?.target || '',
+    displayName: dest?.displayName || '',
+    threadLabel: dest?.threadLabel || '',
+    isDefault: dest?.isDefault ?? false,
+    requiresApproval: dest?.requiresApproval ?? true,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -207,79 +229,231 @@ function DestinationRow({
   dest,
   isDefault,
   onCompose,
+  onEdit,
+  onDelete,
 }: {
   dest: MessageDestination;
   isDefault: boolean;
   onCompose: (target: string) => void;
+  onEdit: (destination: MessageDestination) => void;
+  onDelete: (destinationId: string) => Promise<void>;
 }) {
   const [showDelete, setShowDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    setDeleting(true);
+    try {
+      await onDelete(dest.id);
+      setShowDelete(false);
+    } finally {
+      setDeleting(false);
+    }
+  };
 
   return (
-    <div className="flex items-start gap-2.5 py-2.5 border-b border-operator-border/40 last:border-0">
-      {/* Status dot */}
-      <span className="mt-1 shrink-0">
-        {dest.status === 'configured'
-          ? <Wifi className="w-3 h-3 text-operator-success" />
-          : <WifiOff className="w-3 h-3 text-operator-error" />
-        }
-      </span>
+    <div className="border-b border-operator-border/40 last:border-0">
+      <div className="flex items-start gap-2.5 py-2.5">
+        <span className="mt-1 shrink-0">
+          {dest.status === 'configured'
+            ? <Wifi className="w-3 h-3 text-operator-success" />
+            : <WifiOff className="w-3 h-3 text-operator-error" />
+          }
+        </span>
 
-      {/* Info */}
-      <div className="flex-1 min-w-0">
-        <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent">
-            {PLATFORM_ICON[dest.platform] ?? '→'} {dest.platform}
-          </span>
-          {isDefault && (
-            <span className="text-[9px] font-semibold uppercase tracking-wider bg-operator-accent/10 text-operator-accent rounded px-1 py-0.5">
-              Default
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent">
+              {PLATFORM_ICON[dest.platform] ?? '→'} {dest.platform}
             </span>
+            {isDefault && (
+              <span className="text-[9px] font-semibold uppercase tracking-wider bg-operator-accent/10 text-operator-accent rounded px-1 py-0.5">
+                Default
+              </span>
+            )}
+            {dest.requiresApproval ? (
+              <span className="flex items-center gap-0.5 text-[9px] text-operator-accent ml-auto shrink-0">
+                <ShieldAlert className="w-2.5 h-2.5" /> Approval
+              </span>
+            ) : (
+              <span className="flex items-center gap-0.5 text-[9px] text-operator-success ml-auto shrink-0">
+                <ShieldCheck className="w-2.5 h-2.5" /> Direct
+              </span>
+            )}
+          </div>
+          <div className="text-[12px] font-semibold text-operator-text mt-0.5 truncate">
+            {dest.displayName}
+          </div>
+          {dest.threadLabel && (
+            <div className="text-[10px] text-operator-muted">{dest.threadLabel}</div>
           )}
-          {dest.requiresApproval ? (
-            <span className="flex items-center gap-0.5 text-[9px] text-operator-accent ml-auto shrink-0">
-              <ShieldAlert className="w-2.5 h-2.5" /> Approval
-            </span>
-          ) : (
-            <span className="flex items-center gap-0.5 text-[9px] text-operator-success ml-auto shrink-0">
-              <ShieldCheck className="w-2.5 h-2.5" /> Direct
-            </span>
-          )}
+          <div className="text-[10px] font-mono text-operator-muted/60 truncate mt-0.5">
+            {dest.target}
+          </div>
         </div>
-        <div className="text-[12px] font-semibold text-operator-text mt-0.5 truncate">
-          {dest.displayName}
-        </div>
-        {dest.threadLabel && (
-          <div className="text-[10px] text-operator-muted">{dest.threadLabel}</div>
-        )}
-        <div className="text-[10px] font-mono text-operator-muted/60 truncate mt-0.5">
-          {dest.target}
+
+        <div className="flex items-center gap-1 shrink-0">
+          <button
+            type="button"
+            onClick={() => onCompose(dest.target)}
+            title="Compose message"
+            className="p-1.5 rounded-lg text-operator-muted hover:text-operator-accent hover:bg-operator-accent/8 transition-colors"
+          >
+            <PenLine className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onEdit(dest)}
+            title="Edit destination"
+            className="p-1.5 rounded-lg text-operator-muted hover:text-operator-text hover:bg-operator-panel transition-colors"
+          >
+            <Edit3 className="w-3 h-3" />
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowDelete((v) => !v)}
+            title="Remove destination"
+            className="p-1.5 rounded-lg text-operator-muted hover:text-operator-error hover:bg-operator-error/8 transition-colors"
+          >
+            <Trash2 className="w-3 h-3" />
+          </button>
         </div>
       </div>
+      {showDelete && (
+        <div className="mb-2 rounded-lg border border-operator-error/20 bg-operator-error/5 px-2.5 py-2">
+          <div className="flex items-center justify-between gap-2">
+            <div className="text-[10px] text-operator-muted">
+              Remove <span className="text-operator-text">{dest.displayName}</span> from configured destinations?
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setShowDelete(false)}
+                className="px-2 py-1 rounded text-[10px] font-semibold text-operator-muted hover:text-operator-text"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete()}
+                disabled={deleting}
+                className="px-2 py-1 rounded text-[10px] font-semibold text-operator-error border border-operator-error/25 disabled:opacity-60"
+              >
+                {deleting ? 'Removing…' : 'Remove'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
-      {/* Actions */}
-      <div className="flex items-center gap-1 shrink-0">
+function DestinationEditor({
+  initial,
+  onCancel,
+  onSave,
+}: {
+  initial?: MessageDestination | null;
+  onCancel: () => void;
+  onSave: (draft: DestinationDraft) => Promise<void>;
+}) {
+  const [draft, setDraft] = useState<DestinationDraft>(toDestinationDraft(initial));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const updateDraft = <K extends keyof DestinationDraft>(key: K, value: DestinationDraft[K]) => {
+    setDraft((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleSave = async () => {
+    if (!draft.target.trim()) {
+      setError('Target is required.');
+      return;
+    }
+    if (!draft.displayName.trim()) {
+      setError('Display name is required.');
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(draft);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : 'Failed to save destination.');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div className="rounded-lg border border-operator-border/60 bg-operator-bg/70 px-2.5 py-2.5 space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
+        {draft.id ? 'Edit destination' : 'Add destination'}
+      </div>
+      <div className="grid gap-2">
+        <label className="space-y-1">
+          <span className="text-[10px] text-operator-muted">Display name</span>
+          <input
+            value={draft.displayName}
+            onChange={(event) => updateDraft('displayName', event.target.value)}
+            className="w-full rounded-lg border border-operator-border bg-operator-panel px-2 py-1.5 text-[11px] text-operator-text outline-none"
+            placeholder="@copenet_ops"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] text-operator-muted">Target</span>
+          <input
+            value={draft.target}
+            onChange={(event) => updateDraft('target', event.target.value)}
+            className="w-full rounded-lg border border-operator-border bg-operator-panel px-2 py-1.5 text-[11px] font-mono text-operator-text outline-none"
+            placeholder="telegram:@copenet_ops"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-[10px] text-operator-muted">Thread label (optional)</span>
+          <input
+            value={draft.threadLabel}
+            onChange={(event) => updateDraft('threadLabel', event.target.value)}
+            className="w-full rounded-lg border border-operator-border bg-operator-panel px-2 py-1.5 text-[11px] text-operator-text outline-none"
+            placeholder="Alerts thread"
+          />
+        </label>
+      </div>
+      <div className="flex flex-wrap gap-3 text-[10px] text-operator-muted">
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={draft.isDefault}
+            onChange={(event) => updateDraft('isDefault', event.target.checked)}
+          />
+          Default destination
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input
+            type="checkbox"
+            checked={draft.requiresApproval}
+            onChange={(event) => updateDraft('requiresApproval', event.target.checked)}
+          />
+          Require approval
+        </label>
+      </div>
+      {error && <div className="text-[10px] text-operator-error">{error}</div>}
+      <div className="flex items-center justify-end gap-2">
         <button
           type="button"
-          onClick={() => onCompose(dest.target)}
-          title="Compose message"
-          className="p-1.5 rounded-lg text-operator-muted hover:text-operator-accent hover:bg-operator-accent/8 transition-colors"
+          onClick={onCancel}
+          className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-operator-muted hover:text-operator-text"
         >
-          <PenLine className="w-3 h-3" />
+          Cancel
         </button>
         <button
           type="button"
-          title="Edit destination"
-          className="p-1.5 rounded-lg text-operator-muted hover:text-operator-text hover:bg-operator-panel transition-colors"
+          onClick={() => void handleSave()}
+          disabled={saving}
+          className="px-2.5 py-1 rounded-lg text-[10px] font-semibold text-operator-accent border border-operator-accent/25 bg-operator-accent/8 disabled:opacity-60"
         >
-          <Edit3 className="w-3 h-3" />
-        </button>
-        <button
-          type="button"
-          onClick={() => setShowDelete(!showDelete)}
-          title="Remove destination"
-          className="p-1.5 rounded-lg text-operator-muted hover:text-operator-error hover:bg-operator-error/8 transition-colors"
-        >
-          <Trash2 className="w-3 h-3" />
+          {saving ? 'Saving…' : draft.id ? 'Save changes' : 'Add destination'}
         </button>
       </div>
     </div>
@@ -380,10 +554,42 @@ export function MessagingSettingsPanel() {
   const setComposerOpen = useAppStore((s) => s.setComposerOpen);
   const setComposerTarget = useAppStore((s) => s.setComposerTarget);
   const [showDestinations, setShowDestinations] = useState(true);
+  const [editingDestination, setEditingDestination] = useState<MessageDestination | null>(null);
+  const [addingDestination, setAddingDestination] = useState(false);
 
   const handleCompose = (target: string) => {
     setComposerTarget(target);
     setComposerOpen(true);
+  };
+
+  const applyMessagingConfig = (nextConfig: ReturnType<typeof useMessagingConfig>) => {
+    if (!nextConfig) return;
+    useAppStore.getState().setMessagingConfig(nextConfig);
+    useAppStore.getState().setDestinations(nextConfig.destinations);
+  };
+
+  const handleSaveDestination = async (draft: DestinationDraft) => {
+    const response = await wsClient.upsertMessagingDestination({
+      id: draft.id,
+      platform: draft.platform,
+      target: draft.target.trim(),
+      displayName: draft.displayName.trim(),
+      threadLabel: draft.threadLabel.trim() || null,
+      isDefault: draft.isDefault,
+      requiresApproval: draft.requiresApproval,
+      status: 'configured',
+    });
+    applyMessagingConfig(response.config);
+    setEditingDestination(null);
+    setAddingDestination(false);
+  };
+
+  const handleDeleteDestination = async (destinationId: string) => {
+    const response = await wsClient.deleteMessagingDestination(destinationId);
+    applyMessagingConfig(response.config);
+    if (editingDestination?.id === destinationId) {
+      setEditingDestination(null);
+    }
   };
 
   if (!config) {
@@ -435,6 +641,11 @@ export function MessagingSettingsPanel() {
                   dest={dest}
                   isDefault={dest.isDefault}
                   onCompose={handleCompose}
+                  onEdit={(destination) => {
+                    setEditingDestination(destination);
+                    setAddingDestination(false);
+                  }}
+                  onDelete={handleDeleteDestination}
                 />
               ))}
               {config.destinations.length === 0 && (
@@ -442,18 +653,39 @@ export function MessagingSettingsPanel() {
                   No destinations configured.
                 </div>
               )}
+              {editingDestination && (
+                <div className="py-2">
+                  <DestinationEditor
+                    initial={editingDestination}
+                    onCancel={() => setEditingDestination(null)}
+                    onSave={handleSaveDestination}
+                  />
+                </div>
+              )}
+              {addingDestination && (
+                <div className="py-2">
+                  <DestinationEditor
+                    onCancel={() => setAddingDestination(false)}
+                    onSave={handleSaveDestination}
+                  />
+                </div>
+              )}
             </div>
             {/* Add destination */}
             <div className="border-t border-operator-border/40 px-2.5 py-2">
               <button
                 type="button"
+                onClick={() => {
+                  setAddingDestination((current) => !current);
+                  setEditingDestination(null);
+                }}
                 className="flex items-center gap-1.5 text-[10px] font-semibold text-operator-muted hover:text-operator-accent transition-colors"
               >
                 <Plus className="w-3 h-3" />
-                Add destination
+                {addingDestination ? 'Close destination form' : 'Add destination'}
               </button>
               <div className="text-[9px] text-operator-muted/50 mt-0.5">
-                Requires backend configuration — set chat ID in CopeNet config.
+                Add real chat targets here so compose and future agent messaging have an honest address book.
               </div>
             </div>
           </div>

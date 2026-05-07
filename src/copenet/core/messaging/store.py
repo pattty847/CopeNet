@@ -8,6 +8,7 @@ import os
 from pathlib import Path
 import threading
 from typing import Any, Literal
+from uuid import uuid4
 
 from copenet.core.sessions.session_store import utc_now_iso
 
@@ -191,6 +192,80 @@ class MessagingConfigStore:
                 MessagingConfigRecord(
                     telegram=telegram,
                     destinations=current.destinations,
+                    approval_policy=current.approval_policy,
+                )
+            )
+            self._save_unlocked(updated)
+        return updated
+
+    def upsert_destination(self, destination: MessageDestinationRecord) -> MessagingConfigRecord:
+        with self._lock:
+            current = self._load_unlocked()
+            normalized = MessageDestinationRecord(
+                id=destination.id.strip() or f"dest-{uuid4()}",
+                platform=destination.platform.strip() or "telegram",
+                target=destination.target.strip(),
+                display_name=destination.display_name.strip() or destination.target.strip(),
+                thread_label=destination.thread_label.strip() if destination.thread_label else None,
+                is_default=bool(destination.is_default),
+                requires_approval=bool(destination.requires_approval),
+                status=_destination_status(destination.status),
+            )
+            rows: list[MessageDestinationRecord] = []
+            replaced = False
+            for item in current.destinations:
+                if item.id == normalized.id:
+                    rows.append(normalized)
+                    replaced = True
+                elif normalized.is_default and item.platform == normalized.platform:
+                    rows.append(
+                        MessageDestinationRecord(
+                            id=item.id,
+                            platform=item.platform,
+                            target=item.target,
+                            display_name=item.display_name,
+                            thread_label=item.thread_label,
+                            is_default=False,
+                            requires_approval=item.requires_approval,
+                            status=item.status,
+                        )
+                    )
+                else:
+                    rows.append(item)
+            if not replaced:
+                if normalized.is_default:
+                    rows = [
+                        MessageDestinationRecord(
+                            id=item.id,
+                            platform=item.platform,
+                            target=item.target,
+                            display_name=item.display_name,
+                            thread_label=item.thread_label,
+                            is_default=False if item.platform == normalized.platform else item.is_default,
+                            requires_approval=item.requires_approval,
+                            status=item.status,
+                        )
+                        for item in rows
+                    ]
+                rows.append(normalized)
+            updated = _refresh_record(
+                MessagingConfigRecord(
+                    telegram=current.telegram,
+                    destinations=rows,
+                    approval_policy=current.approval_policy,
+                )
+            )
+            self._save_unlocked(updated)
+        return updated
+
+    def delete_destination(self, destination_id: str) -> MessagingConfigRecord:
+        target_id = destination_id.strip()
+        with self._lock:
+            current = self._load_unlocked()
+            updated = _refresh_record(
+                MessagingConfigRecord(
+                    telegram=current.telegram,
+                    destinations=[item for item in current.destinations if item.id != target_id],
                     approval_policy=current.approval_policy,
                 )
             )

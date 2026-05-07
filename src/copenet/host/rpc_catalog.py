@@ -298,3 +298,55 @@ async def handle_messaging_test(
         )
     )
     await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"config": payload["config"]})))
+
+
+async def handle_messaging_destinations_list(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"destinations": orchestrator.list_messaging_destinations()},
+            )
+        )
+    )
+
+
+async def handle_messaging_destinations_upsert(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    payload = orchestrator.upsert_messaging_destination(
+        destination=((params or {}).get("destination") if isinstance((params or {}).get("destination"), dict) else {}),
+    )
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )
+    await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"config": payload["config"]})))
+
+
+async def handle_messaging_destinations_delete(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    payload = orchestrator.delete_messaging_destination(destination_id=str((params or {}).get("destinationId") or ""))
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )
+    await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"config": payload["config"]})))

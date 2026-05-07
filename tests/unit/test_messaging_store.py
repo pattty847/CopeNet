@@ -89,3 +89,41 @@ def test_messaging_store_updates_approval_policy_without_clobbering_destinations
     assert updated.approval_policy.require_approval_by_default is False
     assert updated.approval_policy.hardline_blocklist == ["telegram:@blocked", "telegram:@also-blocked"]
     assert updated.destinations[0].target == "telegram:@copenet_ops"
+
+
+def test_messaging_store_upserts_and_deletes_destinations(tmp_path: Path) -> None:
+    store = MessagingConfigStore(tmp_path / "messaging.json")
+    store.save(MessagingConfigRecord())
+
+    created = store.upsert_destination(
+        MessageDestinationRecord(
+            id="",
+            platform="telegram",
+            target="telegram:@new-dest",
+            display_name="New Dest",
+            is_default=True,
+            requires_approval=False,
+        )
+    )
+    assert len(created.destinations) == 1
+    created_dest = created.destinations[0]
+    assert created_dest.id
+    assert created_dest.is_default is True
+    assert created_dest.requires_approval is False
+
+    updated = store.upsert_destination(
+        MessageDestinationRecord(
+            id=created_dest.id,
+            platform="telegram",
+            target="telegram:@new-dest",
+            display_name="Renamed Dest",
+            is_default=False,
+            requires_approval=True,
+        )
+    )
+    assert updated.destinations[0].display_name == "Renamed Dest"
+    assert updated.destinations[0].is_default is False
+    assert updated.destinations[0].requires_approval is True
+
+    after_delete = store.delete_destination(created_dest.id)
+    assert after_delete.destinations == []

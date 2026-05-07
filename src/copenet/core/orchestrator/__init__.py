@@ -28,8 +28,11 @@ from copenet.core.orchestrator.catalog import (
 )
 from copenet.core.orchestrator.merge import merge_sessions as merge_session_record, resolve_merge_state as resolve_merge_state_record
 from copenet.core.orchestrator.messaging import (
+    delete_messaging_destination as delete_messaging_destination_record,
     get_messaging_config as get_messaging_config_record,
+    list_messaging_destinations as list_messaging_destinations_record,
     test_messaging_platform as test_messaging_platform_record,
+    upsert_messaging_destination as upsert_messaging_destination_record,
     update_messaging_config as update_messaging_config_record,
 )
 from copenet.core.orchestrator.pulse import (
@@ -214,6 +217,18 @@ class Orchestrator:
     def test_messaging_platform(self, platform: str = "telegram") -> dict:
         """Run a conservative local messaging config test."""
         return test_messaging_platform_record(self, platform=platform)
+
+    def list_messaging_destinations(self) -> list[dict]:
+        """Return configured messaging destinations."""
+        return list_messaging_destinations_record(self)
+
+    def upsert_messaging_destination(self, *, destination: dict) -> dict:
+        """Create or update one messaging destination."""
+        return upsert_messaging_destination_record(self, destination=destination)
+
+    def delete_messaging_destination(self, *, destination_id: str) -> dict:
+        """Delete one messaging destination."""
+        return delete_messaging_destination_record(self, destination_id=destination_id)
 
     def provider_auth_status(self, provider_id: str) -> dict:
         """Resolve auth status for a provider that owns local auth state."""

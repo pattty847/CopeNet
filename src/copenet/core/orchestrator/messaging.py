@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any
 
-from copenet.core.messaging import MessagingConfigRecord, TelegramBotConfigRecord
+from copenet.core.messaging import MessageDestinationRecord, MessagingConfigRecord, TelegramBotConfigRecord
 from copenet.core.sessions.session_store import utc_now_iso
 
 if TYPE_CHECKING:
@@ -30,6 +30,45 @@ def update_messaging_config(
         hardline_blocklist=approval_policy.get("hardlineBlocklist"),
     )
     return updated.to_public_dict()
+
+
+def list_messaging_destinations(orchestrator: "Orchestrator") -> list[dict[str, Any]]:
+    """Return the configured operator messaging destinations."""
+    return [item.to_public_dict() for item in orchestrator._messaging_store.load().destinations]
+
+
+def upsert_messaging_destination(
+    orchestrator: "Orchestrator",
+    *,
+    destination: dict[str, Any],
+) -> dict[str, Any]:
+    """Create or update one messaging destination."""
+    record = MessageDestinationRecord.from_json(destination)
+    if not record.target:
+      raise ValueError("destination target is required")
+    if not record.display_name:
+      raise ValueError("destination displayName is required")
+    updated = orchestrator._messaging_store.upsert_destination(record)
+    target = next((item for item in updated.destinations if item.target == record.target and item.platform == record.platform), None)
+    return {
+        "destination": target.to_public_dict() if target is not None else None,
+        "config": updated.to_public_dict(),
+    }
+
+
+def delete_messaging_destination(orchestrator: "Orchestrator", *, destination_id: str) -> dict[str, Any]:
+    """Delete one messaging destination by id."""
+    target_id = str(destination_id or "").strip()
+    if not target_id:
+        raise ValueError("destinationId is required")
+    before = orchestrator._messaging_store.load()
+    existed = any(item.id == target_id for item in before.destinations)
+    updated = orchestrator._messaging_store.delete_destination(target_id)
+    return {
+        "deleted": existed,
+        "destinationId": target_id,
+        "config": updated.to_public_dict(),
+    }
 
 
 def test_messaging_platform(orchestrator: "Orchestrator", *, platform: str) -> dict[str, Any]:

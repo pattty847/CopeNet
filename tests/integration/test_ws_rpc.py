@@ -447,6 +447,40 @@ def test_messaging_rpcs_update_policy_and_emit_live_status(rpc_client: TestClien
         assert test_response["payload"]["result"]["connectionStatus"] == "unconfigured"
 
 
+def test_messaging_destination_rpcs_upsert_and_delete(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        upsert_id = socket.request(
+            "messaging.destinations.upsert",
+            {
+                "destination": {
+                    "platform": "telegram",
+                    "target": "telegram:@copenet_ops",
+                    "displayName": "@copenet_ops",
+                    "isDefault": True,
+                    "requiresApproval": True,
+                }
+            },
+        )
+        upsert_response = socket.recv_response(upsert_id)
+        destination = upsert_response["payload"]["destination"]
+        assert destination["id"]
+        assert upsert_response["payload"]["config"]["destinations"][0]["target"] == "telegram:@copenet_ops"
+
+        update_event = socket._next_matching(
+            lambda candidate: candidate.get("type") == "event" and candidate.get("event") == "messaging.updated"
+        )
+        assert update_event["payload"]["config"]["destinations"][0]["displayName"] == "@copenet_ops"
+
+        list_id = socket.request("messaging.destinations.list")
+        list_response = socket.recv_response(list_id)
+        assert list_response["payload"]["destinations"][0]["id"] == destination["id"]
+
+        delete_id = socket.request("messaging.destinations.delete", {"destinationId": destination["id"]})
+        delete_response = socket.recv_response(delete_id)
+        assert delete_response["payload"]["deleted"] is True
+        assert delete_response["payload"]["config"]["destinations"] == []
+
+
 def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestClient) -> None:
     with _open_rpc(rpc_client) as socket:
         create_id = socket.request(

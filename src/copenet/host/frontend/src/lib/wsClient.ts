@@ -1087,6 +1087,13 @@ class WsClient {
     return normalizeMessagingConfig(payload.config);
   }
 
+  async listMessagingDestinations(): Promise<MessageDestination[]> {
+    const payload = await this.request<{ destinations?: unknown[] }>('messaging.destinations.list', {});
+    return Array.isArray(payload.destinations)
+      ? payload.destinations.map(normalizeDestination).filter((item): item is MessageDestination => item != null)
+      : [];
+  }
+
   async updateMessagingApprovalPolicy(params: {
     requireApprovalByDefault: boolean;
     hardlineBlocklist?: string[];
@@ -1127,6 +1134,36 @@ class WsClient {
         message: payload.result?.message ? String(payload.result.message) : '',
         verifiedAt: payload.result?.verifiedAt ? String(payload.result.verifiedAt) : null,
       },
+    };
+  }
+
+  async upsertMessagingDestination(destination: {
+    id?: string;
+    platform: string;
+    target: string;
+    displayName: string;
+    threadLabel?: string | null;
+    isDefault: boolean;
+    requiresApproval: boolean;
+    status?: 'configured' | 'unconfigured' | 'error';
+  }): Promise<{ destination: MessageDestination | null; config: MessagingConfig | null }> {
+    const payload = await this.request<{ destination?: unknown | null; config?: unknown | null }>(
+      'messaging.destinations.upsert',
+      { destination },
+    );
+    return {
+      destination: normalizeDestination(payload.destination),
+      config: normalizeMessagingConfig(payload.config),
+    };
+  }
+
+  async deleteMessagingDestination(destinationId: string): Promise<{ deleted: boolean; config: MessagingConfig | null }> {
+    const payload = await this.request<{ deleted?: unknown; config?: unknown | null }>('messaging.destinations.delete', {
+      destinationId,
+    });
+    return {
+      deleted: Boolean(payload.deleted),
+      config: normalizeMessagingConfig(payload.config),
     };
   }
 
