@@ -7,6 +7,8 @@ import json
 from typing import Any
 from typing import TYPE_CHECKING
 
+from copenet.core.orchestrator.personal_history import normalize_starter_intent, starter_intent_tags
+from copenet.core.sessions import SessionStateRecord
 from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 
 if TYPE_CHECKING:
@@ -80,6 +82,7 @@ def create_session_with_profile(
     system_prompt_id: str | None = None,
     task_prompt_id: str | None = None,
     workspace_root: str | None = None,
+    starter_intent: str | None = None,
 ) -> dict:
     if provider not in orchestrator._providers:
         init_error = orchestrator._provider_init_errors.get(provider)
@@ -96,6 +99,15 @@ def create_session_with_profile(
         task_prompt_id=task_prompt_id,
         workspace_root=workspace_root,
     )
+    normalized_intent = normalize_starter_intent(starter_intent)
+    if normalized_intent:
+        orchestrator._session_state_store.save(
+            SessionStateRecord(
+                session_key=entry.session_key,
+                starter_intent=normalized_intent,
+                topical_tags=starter_intent_tags(normalized_intent),
+            )
+        )
     return session_payload(entry)
 
 
@@ -219,6 +231,8 @@ def debug_copy_session(orchestrator: "Orchestrator", session_key: str) -> dict:
                 constraints=list(source_state.constraints),
                 unresolved_questions=list(source_state.unresolved_questions),
                 prior_decisions=list(source_state.prior_decisions),
+                starter_intent=source_state.starter_intent,
+                topical_tags=list(source_state.topical_tags),
                 plan_snapshot=dict(source_state.plan_snapshot),
                 relevant_asset_ids=list(source_state.relevant_asset_ids),
                 relevant_artifact_ids=[

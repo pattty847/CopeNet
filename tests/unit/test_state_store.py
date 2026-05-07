@@ -57,3 +57,25 @@ def test_session_state_store_roundtrips_merge_state(tmp_dir) -> None:
     assert loaded.merge_state["status"] == "running"
     assert loaded.merge_state["completed_sources"] == 1
     assert loaded.merge_state["source_session_keys"] == ["alpha", "beta"]
+
+
+def test_session_state_store_roundtrips_personal_history_fields(tmp_dir) -> None:
+    store = SessionStateStore(root_dir=tmp_dir / "state")
+
+    store.save(
+        SessionStateRecord(
+            session_key="personal-alpha",
+            task_summary="Figure out the next step for the launch",
+            goals=["Prepare a narrow launch plan"],
+            unresolved_questions=["What can ship this week?"],
+            prior_decisions=["Keep the scope to one page."],
+            starter_intent="plan_my_next_steps",
+            topical_tags=["planning", "execution"],
+        )
+    )
+
+    loaded = store.get("personal-alpha")
+    assert loaded is not None
+    assert loaded.starter_intent == "plan_my_next_steps"
+    assert loaded.topical_tags == ["planning", "execution"]
+    assert loaded.prior_decisions == ["Keep the scope to one page."]

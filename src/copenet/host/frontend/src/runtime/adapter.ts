@@ -10,7 +10,7 @@ import {
   getMockDestinations,
   getWorkingSet,
 } from './mocks';
-import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, TurnStateSnapshot } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, TurnStateSnapshot } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -445,9 +445,10 @@ export function useProfileChangelog(): ProfileChangelogItem[] {
 export function useInboxItems(sessionKey: string | null): InboxItem[] {
   const runPausedReason = useAppStore((s) => s.runPausedReason);
   const approvalHistory = useApprovalHistory(sessionKey);
+  const pulses = useAppStore((s) => s.pulses);
   return useMemo(
-    () => buildInboxItems(approvalHistory, runPausedReason),
-    [approvalHistory, runPausedReason],
+    () => [...mapPulsesToInboxItems(pulses), ...buildInboxItems(approvalHistory, runPausedReason)],
+    [approvalHistory, runPausedReason, pulses],
   );
 }
 
@@ -480,6 +481,20 @@ function inferEntityKind(value: string): WorkingSet['entities'][number]['kind'] 
   }
   if (value.includes('.')) return 'symbol';
   return 'note';
+}
+
+function mapPulsesToInboxItems(pulses: PulseRecord[]): InboxItem[] {
+  return pulses.map((pulse) => ({
+    id: `pulse:${pulse.pulseId}`,
+    priority: 'attention',
+    kind: 'pulse',
+    title: pulse.title,
+    subtitle: pulse.whyNow,
+    createdAt: pulse.createdAt,
+    sessionKey: pulse.sourceSessionKeys[0] || '__pulse__',
+    runId: pulse.sourceRunIds[0] || null,
+    pulseData: pulse,
+  }));
 }
 
 // ---------------------------------------------------------------------------

@@ -164,8 +164,12 @@ class CopeNetWsServer:
                                 "sessions.run",
                                 "sessions.state",
                                 "sessions.resolve",
+                                "pulse.list",
+                                "pulse.create_from_session",
+                                "pulse.save",
+                                "pulse.dismiss",
                             ],
-                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "sessions.merge.updated"],
+                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "sessions.merge.updated", "pulse.updated"],
                         },
                     },
                 )

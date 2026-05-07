@@ -57,6 +57,7 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
     system_prompt_id = _optional_text(raw, "systemPromptId")
     task_prompt_id = _optional_text(raw, "taskPromptId")
     workspace_root = _optional_text(raw, "workspaceRoot")
+    starter_intent = _optional_text(raw, "starterIntentId")
     if not provider:
         await send_json(
             make_response_frame(
@@ -77,6 +78,7 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
             workspace_root=workspace_root,
+            starter_intent=starter_intent,
         )
     except Exception as exc:
         await send_json(
@@ -433,3 +435,133 @@ async def handle_sessions_merge_state(request_id: str, params: dict[str, Any] | 
             )
         )
     )
+
+
+async def handle_pulse_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"pulses": orchestrator.list_pulses()},
+            )
+        )
+    )
+
+
+async def handle_pulse_create_from_session(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    session_key = _required_text(raw, "sessionKey")
+    provider = _required_text(raw, "provider")
+    if not session_key or not provider:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="sessionKey and provider are required"),
+                )
+            )
+        )
+        return
+
+    async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
+        await send_json({"type": "event", "event": event, "payload": payload})
+
+    try:
+        pulse = await orchestrator.create_pulse_from_session(
+            session_key=session_key,
+            provider=provider,
+            model=_optional_text(raw, "model"),
+            system_prompt_id=_optional_text(raw, "systemPromptId"),
+            task_prompt_id=_optional_text(raw, "taskPromptId"),
+            emit_event=emit_side_event,
+        )
+    except Exception as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                )
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"pulse": pulse})))
+
+
+async def handle_pulse_save(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    pulse_ids = _string_list(raw, "pulseIds")
+    provider = _required_text(raw, "provider")
+    if not pulse_ids or not provider:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="pulseIds and provider are required"),
+                )
+            )
+        )
+        return
+
+    async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
+        await send_json({"type": "event", "event": event, "payload": payload})
+
+    try:
+        result = await orchestrator.save_pulses(
+            pulse_ids=pulse_ids,
+            provider=provider,
+            model=_optional_text(raw, "model"),
+            system_prompt_id=_optional_text(raw, "systemPromptId"),
+            task_prompt_id=_optional_text(raw, "taskPromptId"),
+            workspace_root=_optional_text(raw, "workspaceRoot"),
+            emit_event=emit_side_event,
+        )
+    except Exception as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                )
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result)))
+
+
+async def handle_pulse_dismiss(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    pulse_id = _required_text(params or {}, "pulseId")
+    if not pulse_id:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="pulseId is required"),
+                )
+            )
+        )
+        return
+
+    async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
+        await send_json({"type": "event", "event": event, "payload": payload})
+
+    try:
+        pulse = await orchestrator.dismiss_pulse(pulse_id=pulse_id, emit_event=emit_side_event)
+    except Exception as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                )
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"pulse": pulse})))

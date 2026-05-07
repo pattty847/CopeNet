@@ -25,6 +25,10 @@ from .rpc_catalog import (
 )
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
 from .rpc_sessions import (
+    handle_pulse_create_from_session,
+    handle_pulse_dismiss,
+    handle_pulse_list,
+    handle_pulse_save,
     handle_sessions_archive,
     handle_sessions_artifacts,
     handle_sessions_create,
@@ -109,6 +113,14 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_sessions_state(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.resolve":
         await handle_sessions_resolve(req.id, req.params, send_json, orchestrator)
+    elif req.method == "pulse.list":
+        await handle_pulse_list(req.id, req.params, send_json, orchestrator)
+    elif req.method == "pulse.create_from_session":
+        await handle_pulse_create_from_session(req.id, req.params, send_json, orchestrator)
+    elif req.method == "pulse.save":
+        await handle_pulse_save(req.id, req.params, send_json, orchestrator)
+    elif req.method == "pulse.dismiss":
+        await handle_pulse_dismiss(req.id, req.params, send_json, orchestrator)
     else:
         await send_json(
             make_response_frame(

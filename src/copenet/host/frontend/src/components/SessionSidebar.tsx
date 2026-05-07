@@ -2,6 +2,7 @@ import React, { useEffect, MouseEvent } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { ArchiveRestore, Archive, CheckSquare, ChevronLeft, ChevronRight, GitMerge, Plus, Square } from 'lucide-react';
+import { describeSessionReturnCue } from '../lib/personalHistory';
 
 function timeAgo(dateString?: string | null) {
   if (!dateString) return 'Just now';
@@ -47,6 +48,8 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   const clearSelectedSessionKeys = useAppStore((state) => state.clearSelectedSessionKeys);
   const setMergeDraft = useAppStore((state) => state.setMergeDraft);
   const providers = useAppStore((state) => state.providers);
+  const sessionStates = useAppStore((state) => state.sessionStates);
+  const upsertSessionState = useAppStore((state) => state.upsertSessionState);
   const sidebarOpen = useAppStore((state) => state.sidebarOpen);
   const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
 
@@ -55,6 +58,26 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   useEffect(() => {
     void wsClient.refreshSessions();
   }, [showArchived]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const candidates = filteredSessions.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|');
+    if (!candidates) return;
+    void Promise.all(
+      filteredSessions.map(async (session) => {
+        const state = await wsClient.resolveSessionState(session.key);
+        return state ? [session.key, state] as const : null;
+      }),
+    ).then((records) => {
+      if (cancelled) return;
+      for (const record of records) {
+        if (record) upsertSessionState(record[1]);
+      }
+    }).catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [filteredSessions.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|'), upsertSessionState]);
 
   const handleNewSession = () => {
     clearSelectedSessionKeys();
@@ -213,6 +236,14 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
           const isSelected = selectedSessionKeys.includes(session.key);
           const providerName = providers.find((provider) => provider.id === session.provider)?.displayName || session.provider;
           const modelLabel = compactModelName(session.model);
+          const sessionState = sessionStates[session.key];
+          const returnCue = describeSessionReturnCue({
+            providerLabel: providerName,
+            modelLabel,
+            taskSummary: sessionState?.task_summary || null,
+            starterIntent: sessionState?.starter_intent || null,
+            topicalTags: sessionState?.topical_tags || [],
+          });
 
           return (
             <div
@@ -252,16 +283,10 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
               </div>
 
               <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-operator-muted/80">
-                <div className="flex min-w-0 items-center gap-1.5 overflow-hidden">
-                  <span className="min-w-0 truncate" title={providerName}>{providerName}</span>
-                  {modelLabel && (
-                    <>
-                      <span className="text-operator-muted/30">·</span>
-                      <span className="min-w-0 truncate font-medium text-operator-text/88" title={session.model || undefined}>{modelLabel}</span>
-                    </>
-                  )}
+                <div className="min-w-0 truncate" title={returnCue.primary}>
+                  <span className={returnCue.kind === 'personal' ? 'text-operator-muted/92' : ''}>{returnCue.primary}</span>
                 </div>
-                <span className="shrink-0 text-[10px] text-operator-muted/45 tabular-nums">{timeAgo(session.createdAt)}</span>
+                <span className="shrink-0 text-[10px] text-operator-muted/45 tabular-nums">{timeAgo(session.updatedAt || session.createdAt)}</span>
               </div>
             </div>
           );

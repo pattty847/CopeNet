@@ -9,11 +9,13 @@ import {
   Inbox,
   Pause,
   Pencil,
+  Sparkles,
   ShieldAlert,
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import { wsClient } from '../lib/wsClient';
 import { useInboxItems, useMockTransitions } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
 import type { InboxItem, InboxItemPriority } from '../runtime/types';
@@ -55,8 +57,21 @@ const PRIORITY_META: Record<InboxItemPriority, { border: string; bg: string; glo
 // Individual inbox item row
 // ---------------------------------------------------------------------------
 
-function InboxItemRow({ item }: { item: InboxItem }) {
-  const [expanded, setExpanded] = useState(item.priority === 'urgent');
+function InboxItemRow({
+  item,
+  pulseSelected,
+  onTogglePulseSelection,
+  onSavePulse,
+  onDismissPulse,
+}: {
+  item: InboxItem;
+  pulseSelected: boolean;
+  onTogglePulseSelection: (pulseId: string) => void;
+  onSavePulse: (pulseIds: string[]) => Promise<void>;
+  onDismissPulse: (pulseId: string) => Promise<void>;
+}) {
+  const [expanded, setExpanded] = useState(item.priority === 'urgent' || item.kind === 'pulse');
+  const [pulseBusy, setPulseBusy] = useState<'save' | 'dismiss' | null>(null);
   const { simulateApprove, simulateReject } = useMockTransitions();
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab);
   const style = PRIORITY_META[item.priority];
@@ -66,8 +81,10 @@ function InboxItemRow({ item }: { item: InboxItem }) {
   const isResolved = item.kind === 'resolved_approval' || item.kind === 'sent_message';
   const isFailed = item.kind === 'failed_send';
 
+  const isPulse = item.kind === 'pulse';
   const StatusIcon =
-    isPaused ? Pause
+    isPulse ? Sparkles
+    : isPaused ? Pause
     : item.kind === 'pending_approval' ? ShieldAlert
     : item.approvalData?.status === 'approved' ? ShieldCheck
     : item.approvalData?.status === 'modified' ? Pencil
@@ -77,7 +94,8 @@ function InboxItemRow({ item }: { item: InboxItem }) {
     : Check;
 
   const statusTone =
-    isPaused ? 'text-operator-error'
+    isPulse ? 'text-operator-accent'
+    : isPaused ? 'text-operator-error'
     : item.kind === 'pending_approval' ? 'text-operator-accent'
     : item.approvalData?.status === 'approved' ? 'text-operator-success'
     : item.approvalData?.status === 'modified' ? 'text-operator-accent'
@@ -87,7 +105,8 @@ function InboxItemRow({ item }: { item: InboxItem }) {
     : 'text-operator-success';
 
   const statusLabel =
-    isPaused ? 'Run paused'
+    isPulse ? 'Pulse ready'
+    : isPaused ? 'Run paused'
     : item.kind === 'pending_approval' ? 'Awaiting decision'
     : item.approvalData?.status === 'approved' ? 'Approved'
     : item.approvalData?.status === 'modified' ? 'Modified & sent'
@@ -139,6 +158,84 @@ function InboxItemRow({ item }: { item: InboxItem }) {
               </div>
               <div className="text-[11px] text-operator-text bg-operator-bg rounded-lg px-2.5 py-2 border border-operator-border leading-relaxed whitespace-pre-wrap break-words max-h-28 overflow-y-auto">
                 {String(item.approvalData.proposedAction.payload.message)}
+              </div>
+            </div>
+          )}
+
+          {isPulse && item.pulseData && (
+            <div className="space-y-2">
+              <div>
+                <div className="text-[9px] font-semibold uppercase tracking-wider text-operator-muted mb-1">
+                  Summary
+                </div>
+                <div className="text-[11px] text-operator-text leading-relaxed">
+                  {item.pulseData.summary}
+                </div>
+              </div>
+              {item.pulseData.sourceSessions.length > 0 && (
+                <div>
+                  <div className="text-[9px] font-semibold uppercase tracking-wider text-operator-muted mb-1">
+                    Source sessions
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {item.pulseData.sourceSessions.map((source) => (
+                      <span
+                        key={`${item.pulseData!.pulseId}:${source.sessionKey}`}
+                        className="rounded-full border border-operator-border px-2 py-0.5 text-[10px] text-operator-muted"
+                      >
+                        {source.title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+              <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onTogglePulseSelection(item.pulseData!.pulseId);
+                  }}
+                  className={`rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition-colors ${
+                    pulseSelected
+                      ? 'border-operator-accent/30 bg-operator-accent/10 text-operator-accent'
+                      : 'border-operator-border text-operator-muted hover:text-operator-text'
+                  }`}
+                >
+                  {pulseSelected ? 'Selected' : 'Select'}
+                </button>
+                <button
+                  type="button"
+                  disabled={pulseBusy !== null}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setPulseBusy('save');
+                    try {
+                      await onSavePulse([item.pulseData!.pulseId]);
+                    } finally {
+                      setPulseBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-operator-accent/25 bg-operator-accent/10 px-2.5 py-1.5 text-[11px] font-semibold text-operator-accent transition-colors hover:bg-operator-accent/15 disabled:opacity-40"
+                >
+                  {pulseBusy === 'save' ? 'Saving…' : 'Save'}
+                </button>
+                <button
+                  type="button"
+                  disabled={pulseBusy !== null}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    setPulseBusy('dismiss');
+                    try {
+                      await onDismissPulse(item.pulseData!.pulseId);
+                    } finally {
+                      setPulseBusy(null);
+                    }
+                  }}
+                  className="rounded-lg border border-operator-border px-2.5 py-1.5 text-[11px] font-semibold text-operator-muted transition-colors hover:text-operator-text disabled:opacity-40"
+                >
+                  {pulseBusy === 'dismiss' ? 'Dismissing…' : 'Dismiss'}
+                </button>
               </div>
             </div>
           )}
@@ -250,11 +347,58 @@ function AllClearBanner() {
 export function OperatorActionCenter({ sessionKey }: { sessionKey: string | null }) {
   const items = useInboxItems(sessionKey);
   const [showHistory, setShowHistory] = useState(true);
+  const [selectedPulseIds, setSelectedPulseIds] = useState<string[]>([]);
+  const draftSettings = useAppStore((s) => s.draftSettings);
+  const upsertSession = useAppStore((s) => s.upsertSession);
+  const setActiveSessionKey = useAppStore((s) => s.setActiveSessionKey);
+  const setDraftOpen = useAppStore((s) => s.setDraftOpen);
+  const setCurrentSection = useAppStore((s) => s.setCurrentSection);
+  const setMergeState = useAppStore((s) => s.setMergeState);
+  const setAppError = useAppStore((s) => s.setAppError);
+  const pulseItems = useMemo(() => items.filter((item) => item.kind === 'pulse' && item.pulseData), [items]);
 
   const urgentItems = items.filter((i) => i.priority === 'urgent');
-  const attentionItems = items.filter((i) => i.priority === 'attention');
+  const attentionItems = items.filter((i) => i.priority === 'attention' && i.kind !== 'pulse');
+  const pulseAttentionItems = items.filter((i) => i.kind === 'pulse');
   const historyItems = items.filter((i) => i.priority === 'info');
-  const actionRequired = urgentItems.length + attentionItems.length;
+  const actionRequired = urgentItems.length + attentionItems.length + pulseAttentionItems.length;
+
+  const togglePulseSelection = (pulseId: string) => {
+    setSelectedPulseIds((current) =>
+      current.includes(pulseId) ? current.filter((item) => item !== pulseId) : [...current, pulseId],
+    );
+  };
+
+  const handleSavePulseIds = async (pulseIds: string[]) => {
+    try {
+      const created = await wsClient.savePulses({
+        pulseIds,
+        provider: draftSettings.provider,
+        model: draftSettings.model,
+        systemPromptId: draftSettings.systemPromptId,
+        taskPromptId: draftSettings.taskPromptId,
+        workspaceRoot: draftSettings.workspaceRoot || '',
+      });
+      upsertSession(created.session);
+      setActiveSessionKey(created.session.key);
+      setDraftOpen(false);
+      setCurrentSection('agents');
+      setMergeState(created.session.key, created.mergeState);
+      setSelectedPulseIds((current) => current.filter((id) => !pulseIds.includes(id)));
+      await wsClient.loadHistory(created.session.key);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to save pulse.');
+    }
+  };
+
+  const handleDismissPulse = async (pulseId: string) => {
+    try {
+      await wsClient.dismissPulse(pulseId);
+      setSelectedPulseIds((current) => current.filter((id) => id !== pulseId));
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to dismiss pulse.');
+    }
+  };
 
   return (
     <div className="px-3 py-2.5 space-y-3">
@@ -282,7 +426,14 @@ export function OperatorActionCenter({ sessionKey }: { sessionKey: string | null
           </div>
           <div className="space-y-1.5">
             {urgentItems.map((item) => (
-              <InboxItemRow key={item.id} item={item} />
+              <InboxItemRow
+                key={item.id}
+                item={item}
+                pulseSelected={false}
+                onTogglePulseSelection={togglePulseSelection}
+                onSavePulse={handleSavePulseIds}
+                onDismissPulse={handleDismissPulse}
+              />
             ))}
           </div>
         </section>
@@ -299,14 +450,53 @@ export function OperatorActionCenter({ sessionKey }: { sessionKey: string | null
           </div>
           <div className="space-y-1.5">
             {attentionItems.map((item) => (
-              <InboxItemRow key={item.id} item={item} />
+              <InboxItemRow
+                key={item.id}
+                item={item}
+                pulseSelected={false}
+                onTogglePulseSelection={togglePulseSelection}
+                onSavePulse={handleSavePulseIds}
+                onDismissPulse={handleDismissPulse}
+              />
             ))}
           </div>
         </section>
       )}
 
       {/* All clear */}
-      {urgentItems.length === 0 && attentionItems.length === 0 && <AllClearBanner />}
+      {urgentItems.length === 0 && attentionItems.length === 0 && pulseItems.length === 0 && <AllClearBanner />}
+
+      {pulseItems.length > 0 && (
+        <section>
+          <div className="mb-2 flex items-center gap-1.5">
+            <Sparkles className="w-3 h-3 text-operator-accent" />
+            <h3 className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent">
+              Pulses · {pulseItems.length}
+            </h3>
+            {selectedPulseIds.length > 1 && (
+              <button
+                type="button"
+                onClick={() => void handleSavePulseIds(selectedPulseIds)}
+                className="ml-auto rounded-lg border border-operator-accent/25 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent"
+              >
+                Save {selectedPulseIds.length} to Workspace
+              </button>
+            )}
+          </div>
+          <div className="space-y-1.5">
+            {pulseItems.map((item) => (
+              <InboxItemRow
+                key={item.id}
+                item={item}
+                pulseSelected={Boolean(item.pulseData && selectedPulseIds.includes(item.pulseData.pulseId))}
+                onTogglePulseSelection={togglePulseSelection}
+                onSavePulse={handleSavePulseIds}
+                onDismissPulse={handleDismissPulse}
+              />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* History section */}
       {historyItems.length > 0 && (
@@ -327,7 +517,14 @@ export function OperatorActionCenter({ sessionKey }: { sessionKey: string | null
           {showHistory && (
             <div className="space-y-1.5">
               {historyItems.map((item) => (
-                <InboxItemRow key={item.id} item={item} />
+                <InboxItemRow
+                  key={item.id}
+                  item={item}
+                  pulseSelected={false}
+                  onTogglePulseSelection={togglePulseSelection}
+                  onSavePulse={handleSavePulseIds}
+                  onDismissPulse={handleDismissPulse}
+                />
               ))}
             </div>
           )}

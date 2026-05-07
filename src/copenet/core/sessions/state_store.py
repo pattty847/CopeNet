@@ -28,10 +28,13 @@ class SessionStateRecord:
     constraints: list[str] = field(default_factory=list)
     unresolved_questions: list[str] = field(default_factory=list)
     prior_decisions: list[str] = field(default_factory=list)
+    starter_intent: str | None = None
+    topical_tags: list[str] = field(default_factory=list)
     plan_snapshot: dict[str, Any] = field(default_factory=dict)
     relevant_asset_ids: list[str] = field(default_factory=list)
     relevant_artifact_ids: list[str] = field(default_factory=list)
     merge_state: dict[str, Any] = field(default_factory=dict)
+    pulse_state: dict[str, Any] = field(default_factory=dict)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
@@ -47,10 +50,13 @@ class SessionStateRecord:
             constraints=_string_list(raw.get("constraints")),
             unresolved_questions=_string_list(raw.get("unresolved_questions")),
             prior_decisions=_string_list(raw.get("prior_decisions")),
+            starter_intent=_optional_text(raw.get("starter_intent")),
+            topical_tags=_string_list(raw.get("topical_tags")),
             plan_snapshot=_dict_value(raw.get("plan_snapshot")),
             relevant_asset_ids=_string_list(raw.get("relevant_asset_ids")),
             relevant_artifact_ids=_string_list(raw.get("relevant_artifact_ids")),
             merge_state=_dict_value(raw.get("merge_state")),
+            pulse_state=_dict_value(raw.get("pulse_state")),
             created_at=str(raw.get("created_at") or utc_now_iso()),
             updated_at=str(raw.get("updated_at") or utc_now_iso()),
         )

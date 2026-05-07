@@ -14,6 +14,8 @@ export type {
   ApprovalActionClass,
   OutboundMessageRecord,
   OutboundMessageStatus,
+  PulseRecord,
+  PulseStatus,
   OrchestrationRun,
   OrchestrationRunStatus,
   OrchestrationToolInvocation,

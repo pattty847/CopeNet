@@ -8,6 +8,7 @@ import {
   MessagePart,
   Model,
   PatProfile,
+  PulseRecord,
   ProfileChangelogItem,
   Provider,
   ProviderAuthStatus,
@@ -320,6 +321,42 @@ function normalizeReturnBriefing(raw: unknown): ReturnBriefingPayload | null {
       : [],
     noticeText: payload.noticeText ? String(payload.noticeText) : null,
     noticeSource: payload.noticeSource ? String(payload.noticeSource) : null,
+  };
+}
+
+function normalizePulse(raw: unknown): PulseRecord | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const pulseId = String(payload.pulseId || '').trim();
+  if (!pulseId) return null;
+  return {
+    pulseId,
+    status:
+      payload.status === 'saved' || payload.status === 'dismissed'
+        ? payload.status
+        : 'new',
+    title: String(payload.title || ''),
+    summary: String(payload.summary || ''),
+    whyNow: String(payload.whyNow || ''),
+    sourceSessionKeys: Array.isArray(payload.sourceSessionKeys) ? payload.sourceSessionKeys.map(String) : [],
+    sourceRunIds: Array.isArray(payload.sourceRunIds) ? payload.sourceRunIds.map(String) : [],
+    sourceSessions: Array.isArray(payload.sourceSessions)
+      ? payload.sourceSessions
+          .map((item) => {
+            const row = (item || {}) as Record<string, unknown>;
+            const sessionKey = String(row.sessionKey || '').trim();
+            if (!sessionKey) return null;
+            return {
+              sessionKey,
+              title: String(row.title || sessionKey),
+            };
+          })
+          .filter((item): item is { sessionKey: string; title: string } => item != null)
+      : [],
+    createdAt: String(payload.createdAt || new Date().toISOString()),
+    updatedAt: String(payload.updatedAt || new Date().toISOString()),
+    savedAt: payload.savedAt ? String(payload.savedAt) : null,
+    dismissedAt: payload.dismissedAt ? String(payload.dismissedAt) : null,
   };
 }
 
@@ -700,6 +737,15 @@ class WsClient {
         );
         useAppStore.getState().addMessage(sessionKey, message);
       }
+      return;
+    }
+
+    if (frame.event === 'pulse.updated') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const pulse = normalizePulse(payload.pulse);
+      if (pulse) {
+        useAppStore.getState().upsertPulse(pulse);
+      }
     }
   }
 
@@ -769,7 +815,7 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload, runtimeContextPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
@@ -778,6 +824,7 @@ class WsClient {
         this.request<{ changelog?: unknown[] }>('profile.changelog', { limit: 20 }),
         this.request<{ briefing?: unknown | null }>('briefing.get', {}),
         this.request<{ runtimeContext?: unknown | null }>('runtime.context', {}),
+        this.request<{ pulses?: unknown[] }>('pulse.list', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -800,6 +847,7 @@ class WsClient {
       );
       store.setReturnBriefing(normalizeReturnBriefing(briefingPayload.briefing));
       store.setRuntimeContext(normalizeRuntimeContext(runtimeContextPayload.runtimeContext));
+      store.setPulses(Array.isArray(pulsePayload.pulses) ? pulsePayload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null) : []);
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;
@@ -888,6 +936,7 @@ class WsClient {
     const store = useAppStore.getState();
     store.setActiveSessionKey(null);
     store.setDraftOpen(true);
+    store.setDraftStarterIntent(null);
     store.clearAppError();
     this.ensureDraftDefaults();
   }
@@ -954,6 +1003,61 @@ class WsClient {
     };
   }
 
+  async listPulses(): Promise<PulseRecord[]> {
+    const payload = await this.request<{ pulses?: unknown[] }>('pulse.list', {});
+    return Array.isArray(payload.pulses)
+      ? payload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null)
+      : [];
+  }
+
+  async createPulseFromSession(params: {
+    sessionKey: string;
+    provider: string;
+    model: string;
+    systemPromptId: string;
+    taskPromptId: string;
+  }): Promise<PulseRecord> {
+    const payload = await this.request<{ pulse: unknown }>('pulse.create_from_session', {
+      sessionKey: params.sessionKey,
+      provider: params.provider,
+      model: params.model || undefined,
+      systemPromptId: params.systemPromptId || undefined,
+      taskPromptId: params.taskPromptId || undefined,
+    });
+    const pulse = normalizePulse(payload.pulse);
+    if (!pulse) throw new Error('Pulse creation returned no pulse.');
+    return pulse;
+  }
+
+  async dismissPulse(pulseId: string): Promise<PulseRecord> {
+    const payload = await this.request<{ pulse: unknown }>('pulse.dismiss', { pulseId });
+    const pulse = normalizePulse(payload.pulse);
+    if (!pulse) throw new Error('Pulse dismiss returned no pulse.');
+    return pulse;
+  }
+
+  async savePulses(params: {
+    pulseIds: string[];
+    provider: string;
+    model: string;
+    systemPromptId: string;
+    taskPromptId: string;
+    workspaceRoot: string;
+  }): Promise<{ session: Session; mergeState: SessionMergeState | null }> {
+    const payload = await this.request<{ session: unknown; mergeState?: unknown | null }>('pulse.save', {
+      pulseIds: params.pulseIds,
+      provider: params.provider,
+      model: params.model || undefined,
+      systemPromptId: params.systemPromptId || undefined,
+      taskPromptId: params.taskPromptId || undefined,
+      workspaceRoot: params.workspaceRoot || undefined,
+    });
+    return {
+      session: normalizeSession(payload.session),
+      mergeState: normalizeMergeState(payload.mergeState),
+    };
+  }
+
   async exportSession(key: string): Promise<SessionExportPayload> {
     const payload = await this.request<{
       session: unknown;
@@ -1003,11 +1107,13 @@ class WsClient {
         systemPromptId: draft.systemPromptId || undefined,
         taskPromptId: draft.taskPromptId || undefined,
         workspaceRoot: draft.workspaceRoot || undefined,
+        starterIntentId: store.draftStarterIntent?.id || undefined,
       });
       session = normalizeSession(createPayload.session);
       store.upsertSession(session);
       store.setActiveSessionKey(session.key);
       store.setDraftOpen(false);
+      store.setDraftStarterIntent(null);
     }
 
     const userMessage: Message = {

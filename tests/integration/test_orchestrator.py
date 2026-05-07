@@ -3,7 +3,7 @@ import asyncio
 import pytest
 
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
-from copenet.core.sessions import SessionStore, TranscriptStore
+from copenet.core.sessions import SessionStore, TranscriptMessage, TranscriptStore
 from copenet.providers import ProviderEvent
 
 
@@ -107,6 +107,54 @@ class MergeSummaryProvider:
             raise RuntimeError(f"summary failed for {source_key}")
         text = self.summaries.get(source_key, f"Summary for {source_key or 'unknown source'}")
         yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "merge-session")
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False},
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
+class PulseSummaryProvider:
+    name = "pulse"
+    display_name = "Pulse"
+
+    def __init__(self) -> None:
+        self.prompts: list[str] = []
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        self.prompts.append(prompt)
+        source_key = "unknown"
+        for line in prompt.splitlines():
+            if line.startswith("Source session key:"):
+                source_key = line.split(":", 1)[1].strip()
+                break
+        if "Create a CopeNet Pulse" in prompt:
+            yield ProviderEvent(
+                kind="delta",
+                text=(
+                    f"Title: Pulse for {source_key}\n"
+                    f"Summary: Compact summary for {source_key}.\n"
+                    f"Why now: This thread looks worth revisiting."
+                ),
+                provider_session_id=provider_session_id or "pulse-session",
+            )
+            yield ProviderEvent(kind="final")
+            return
+        yield ProviderEvent(kind="delta", text=f"Summary for {source_key}", provider_session_id=provider_session_id or "pulse-session")
         yield ProviderEvent(kind="final")
 
     async def describe(self) -> dict:
@@ -239,6 +287,83 @@ async def test_send_chat_persists_state_and_answer_artifact(fake_orchestrator: O
     assert len(artifacts) == 1
     assert artifacts[0].type == "answer"
     assert artifacts[0].body == "hello"
+
+
+
+class PersonalSummaryProvider:
+    name = "personal"
+    display_name = "Personal"
+
+    async def run(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        abort_event: asyncio.Event,
+        model: str | None = None,
+        system_prompt: str | None = None,
+    ):
+        yield ProviderEvent(
+            kind="delta",
+            text=(
+                "Key decisions:\n"
+                "- Start with the customer update.\n"
+                "- Keep the plan to three steps.\n\n"
+                "Open questions:\n"
+                "- Who needs to review the note?"
+            ),
+            provider_session_id=provider_session_id or "personal-session",
+        )
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False},
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
+@pytest.mark.asyncio
+async def test_send_chat_enriches_personal_history_state(tmp_path) -> None:
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"personal": PersonalSummaryProvider()},
+    )
+    orchestrator.create_session_with_profile(
+        provider="personal",
+        model="personal-model",
+        key="alpha",
+        title="Personal Alpha",
+        starter_intent="plan_my_next_steps",
+    )
+
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(
+            session_key="alpha",
+            message="How should I sequence the launch tasks for next week?",
+            provider="personal",
+            model="personal-model",
+        ),
+    )
+
+    state = orchestrator._session_state_store.get("alpha")
+    assert state is not None
+    assert state.starter_intent == "plan_my_next_steps"
+    assert state.topical_tags == ["planning", "execution"]
+    assert state.goals == ["How should I sequence the launch tasks for next week?"]
+    assert "How should I sequence the launch tasks for next week?" in state.unresolved_questions
+    assert "Who needs to review the note?" in state.unresolved_questions
+    assert state.prior_decisions[:2] == [
+        "Start with the customer update.",
+        "Keep the plan to three steps.",
+    ]
 
 
 @pytest.mark.asyncio
@@ -477,3 +602,115 @@ async def test_merge_sessions_surfaces_partial_failure_and_stays_usable(tmp_path
     assert [row["role"] for row in history] == ["assistant"]
     assert "Alpha summary is available." in history[0]["content"]
     assert "beta" in history[0]["content"].lower()
+
+
+@pytest.mark.asyncio
+async def test_create_pulse_from_session_persists_record_and_uses_summary_provider(tmp_path) -> None:
+    provider = PulseSummaryProvider()
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"pulse": provider},
+    )
+    session = orchestrator.create_session_with_profile(provider="pulse", model="pulse-model", key="alpha", title="Alpha Session")
+    orchestrator._transcript_store.append_message(
+        session["sessionId"],
+        TranscriptMessage(
+            run_id="run-1",
+            role="assistant",
+            content="We should revisit the provider contract after the current pass.",
+            provider="pulse",
+            model="pulse-model",
+            provider_session_id=None,
+            timestamp="2026-05-07T00:00:00+00:00",
+            state="final",
+        ),
+    )
+    state = orchestrator._session_state_store.get_or_create("alpha")
+    state.task_summary = "Review provider drift"
+    state.unresolved_questions = ["Should Pulse reuse merge summaries?"]
+    orchestrator._session_state_store.save(state)
+
+    pulse = await orchestrator.create_pulse_from_session(
+        session_key="alpha",
+        provider="pulse",
+        model="pulse-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+    )
+
+    assert pulse["title"] == "Pulse for alpha"
+    assert pulse["status"] == "new"
+    assert pulse["sourceSessionKeys"] == ["alpha"]
+    listed = orchestrator.list_pulses()
+    assert listed[0]["pulseId"] == pulse["pulseId"]
+    assert any("Create a CopeNet Pulse" in prompt for prompt in provider.prompts)
+
+
+@pytest.mark.asyncio
+async def test_save_pulses_creates_single_session_and_multi_merge(tmp_path) -> None:
+    provider = PulseSummaryProvider()
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"pulse": provider},
+    )
+    alpha = orchestrator.create_session_with_profile(provider="pulse", model="pulse-model", key="alpha", title="Alpha Session")
+    beta = orchestrator.create_session_with_profile(provider="pulse", model="pulse-model", key="beta", title="Beta Session")
+    for session in (alpha, beta):
+        orchestrator._transcript_store.append_message(
+            session["sessionId"],
+            TranscriptMessage(
+                run_id=f"run-{session['key']}",
+                role="assistant",
+                content=f"Session content for {session['key']}",
+                provider="pulse",
+                model="pulse-model",
+                provider_session_id=None,
+                timestamp="2026-05-07T00:00:00+00:00",
+                state="final",
+            ),
+        )
+
+    pulse_one = await orchestrator.create_pulse_from_session(
+        session_key="alpha",
+        provider="pulse",
+        model="pulse-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+    )
+    pulse_two = await orchestrator.create_pulse_from_session(
+        session_key="beta",
+        provider="pulse",
+        model="pulse-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+    )
+
+    single = await orchestrator.save_pulses(
+        pulse_ids=[pulse_one["pulseId"]],
+        provider="pulse",
+        model="pulse-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+        workspace_root=None,
+    )
+    assert single["session"]["title"].startswith("Pulse — ")
+    single_history = orchestrator.history(single["session"]["key"])
+    assert any("Pulse saved from 1 source session." in str(item.get("content") or "") for item in single_history)
+
+    multi = await orchestrator.save_pulses(
+        pulse_ids=[pulse_one["pulseId"], pulse_two["pulseId"]],
+        provider="pulse",
+        model="pulse-model",
+        system_prompt_id="default",
+        task_prompt_id="none",
+        workspace_root=None,
+    )
+    await asyncio.wait_for(asyncio.gather(*list(orchestrator._background_tasks)), timeout=1.0)
+
+    assert multi["mergeState"] is not None
+    assert multi["session"]["title"].startswith("Pulse Workspace")
+    assert orchestrator.list_pulses() == []

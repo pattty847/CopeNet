@@ -319,10 +319,13 @@ export interface SessionStateRecord {
   constraints: string[];
   unresolved_questions: string[];
   prior_decisions: string[];
+  starter_intent?: string | null;
+  topical_tags?: string[];
   plan_snapshot: Record<string, unknown>;
   relevant_asset_ids: string[];
   relevant_artifact_ids: string[];
   merge_state?: Record<string, unknown>;
+  pulse_state?: Record<string, unknown>;
   created_at: string;
   updated_at: string;
 }
@@ -501,7 +504,25 @@ export type InboxItemKind =
   | 'pending_approval'
   | 'failed_send'
   | 'resolved_approval'
-  | 'sent_message';
+  | 'sent_message'
+  | 'pulse';
+
+export type PulseStatus = 'new' | 'saved' | 'dismissed';
+
+export interface PulseRecord {
+  pulseId: string;
+  status: PulseStatus;
+  title: string;
+  summary: string;
+  whyNow: string;
+  sourceSessionKeys: string[];
+  sourceRunIds: string[];
+  sourceSessions: Array<{ sessionKey: string; title: string }>;
+  createdAt: string;
+  updatedAt: string;
+  savedAt: string | null;
+  dismissedAt: string | null;
+}
 
 export interface InboxItem {
   id: string;
@@ -515,6 +536,7 @@ export interface InboxItem {
   // Linked data — at most one will be set
   approvalData?: ApprovalRequest;
   outboundData?: OutboundMessageRecord;
+  pulseData?: PulseRecord;
 }
 
 // ---------------------------------------------------------------------------

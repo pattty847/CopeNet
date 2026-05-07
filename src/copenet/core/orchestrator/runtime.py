@@ -7,6 +7,12 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
+from copenet.core.orchestrator.personal_history import (
+    extract_personal_questions,
+    extract_resume_decisions,
+    normalize_personal_focus,
+    starter_intent_tags,
+)
 from copenet.core.orchestrator.working_set import assemble_working_set
 from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
@@ -357,6 +363,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         updated_state = _evolve_session_state(
             session_state=session_state,
             message=message,
+            assistant_text=assistant_text,
             run_id=run_id,
             plan=plan,
             working_set=working_set.metadata,
@@ -532,6 +539,7 @@ def _evolve_session_state(
     *,
     session_state: SessionStateRecord,
     message: str,
+    assistant_text: str,
     run_id: str,
     plan,
     working_set: dict,
@@ -542,14 +550,32 @@ def _evolve_session_state(
         session_state.relevant_artifact_ids,
         created_artifact_ids,
     )[-10:]
+    focus = normalize_personal_focus(message)
     active_entities = list(session_state.active_entities)
     tool_id = str((tool_execution_payload or {}).get("toolId") or "").strip()
     if tool_id:
         active_entities = _append_unique(active_entities, [tool_id])[-10:]
+    unresolved_questions = _append_unique(
+        list(session_state.unresolved_questions),
+        extract_personal_questions(message, assistant_text),
+    )[-10:]
+    prior_decisions = list(session_state.prior_decisions)
+    if tool_id:
+        prior_decisions = _append_unique(
+            prior_decisions,
+            [f"Run {run_id} completed with tool mode {plan.tool_execution_mode}"],
+        )[-10:]
+    personal_decisions = extract_resume_decisions(assistant_text)
+    if personal_decisions:
+        prior_decisions = _append_unique(prior_decisions, personal_decisions)[-10:]
+    topical_tags = _append_unique(list(session_state.topical_tags), starter_intent_tags(session_state.starter_intent))[-8:]
+    goals = list(session_state.goals)
+    if session_state.starter_intent and focus:
+        goals = _append_unique(goals, [focus])[-6:]
     return SessionStateRecord(
         session_key=session_state.session_key,
-        task_summary=message.strip(),
-        goals=list(session_state.goals),
+        task_summary=focus or session_state.task_summary,
+        goals=goals,
         active_entities=active_entities,
         working_set_refs=_append_unique(
             list(session_state.working_set_refs),
@@ -559,11 +585,10 @@ def _evolve_session_state(
             ],
         )[-10:],
         constraints=list(session_state.constraints),
-        unresolved_questions=list(session_state.unresolved_questions),
-        prior_decisions=_append_unique(
-            list(session_state.prior_decisions),
-            [f"Run {run_id} completed with tool mode {plan.tool_execution_mode}"],
-        )[-10:],
+        unresolved_questions=unresolved_questions,
+        prior_decisions=prior_decisions,
+        starter_intent=session_state.starter_intent,
+        topical_tags=topical_tags,
         plan_snapshot={
             "runId": run_id,
             "toolExecutionMode": plan.tool_execution_mode,

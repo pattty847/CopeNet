@@ -1,5 +1,6 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
@@ -22,6 +23,10 @@ function persistThemeMode(mode: ThemeMode) {
 
 export interface MergeDraft {
   sourceSessionKeys: string[];
+}
+
+export interface DraftStarterIntent {
+  id: PersonalStarterIntentId;
 }
 
 interface AppState {
@@ -102,6 +107,8 @@ interface AppState {
   setActiveSessionKey: (key: string | null) => void;
   draftOpen: boolean;
   setDraftOpen: (open: boolean) => void;
+  draftStarterIntent: DraftStarterIntent | null;
+  setDraftStarterIntent: (intent: DraftStarterIntent | null) => void;
   mergeDraft: MergeDraft | null;
   setMergeDraft: (draft: MergeDraft | null) => void;
   showArchived: boolean;
@@ -119,6 +126,11 @@ interface AppState {
   setRuntimeContext: (context: RuntimeContext | null) => void;
   mergeStates: Record<string, SessionMergeState>;
   setMergeState: (sessionKey: string, mergeState: SessionMergeState | null) => void;
+  sessionStates: Record<string, SessionStateRecord>;
+  upsertSessionState: (record: SessionStateRecord) => void;
+  pulses: PulseRecord[];
+  setPulses: (pulses: PulseRecord[]) => void;
+  upsertPulse: (pulse: PulseRecord) => void;
 
   messages: Record<string, Message[]>;
   setMessages: (sessionKey: string, messages: Message[]) => void;
@@ -317,6 +329,8 @@ export const useAppStore = create<AppState>((set) => ({
   setActiveSessionKey: (key) => set({ activeSessionKey: key }),
   draftOpen: false,
   setDraftOpen: (open) => set({ draftOpen: open }),
+  draftStarterIntent: null,
+  setDraftStarterIntent: (intent) => set({ draftStarterIntent: intent }),
   mergeDraft: null,
   setMergeDraft: (mergeDraft) => set({ mergeDraft }),
   showArchived: false,
@@ -356,6 +370,21 @@ export const useAppStore = create<AppState>((set) => ({
         return { mergeStates: next };
       }
       return { mergeStates: { ...state.mergeStates, [sessionKey]: mergeState } };
+    }),
+  sessionStates: {},
+  upsertSessionState: (record) =>
+    set((state) => ({
+      sessionStates: { ...state.sessionStates, [record.session_key]: record },
+    })),
+  pulses: [],
+  setPulses: (pulses) => set({ pulses: [...pulses].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))) }),
+  upsertPulse: (pulse) =>
+    set((state) => {
+      const next = state.pulses.filter((item) => item.pulseId !== pulse.pulseId);
+      if (pulse.status === 'new') next.push(pulse);
+      return {
+        pulses: next.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))),
+      };
     }),
 
   messages: {},

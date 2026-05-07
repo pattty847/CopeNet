@@ -26,6 +26,13 @@ from copenet.core.orchestrator.catalog import (
     resolve_session as resolve_session_record,
 )
 from copenet.core.orchestrator.merge import merge_sessions as merge_session_record, resolve_merge_state as resolve_merge_state_record
+from copenet.core.orchestrator.pulse import (
+    create_pulse_from_session as create_pulse_from_session_record,
+    dismiss_pulse as dismiss_pulse_record,
+    list_pulses as list_pulses_record,
+    save_pulses as save_pulses_record,
+)
+from copenet.core.pulse import PulseStore
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
 from copenet.core.profile import PatProfileService
@@ -83,6 +90,7 @@ class Orchestrator:
         self._session_state_store = SessionStateStore(root_dir=default_session_state_dir() if sessions_dir is None else base / "state")
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
         self._run_store = RunStore(root_dir=base / "runs")
+        self._pulse_store = PulseStore(path=base / "pulses.json")
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         self._app_store = AppStore(path=base / "apps.json")
@@ -141,6 +149,7 @@ class Orchestrator:
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
         workspace_root: str | None = None,
+        starter_intent: str | None = None,
     ) -> dict:
         """Create a new session with a locked provider/model/profile/task binding."""
         return create_profiled_session(
@@ -152,6 +161,7 @@ class Orchestrator:
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
             workspace_root=self.validate_workspace_root(workspace_root) if workspace_root else None,
+            starter_intent=starter_intent,
         )
 
     def rename_session(self, session_key: str, title: str | None) -> dict:
@@ -257,6 +267,58 @@ class Orchestrator:
             task_prompt_id=task_prompt_id,
             workspace_root=workspace_root,
             title=title,
+            emit_event=emit_event,
+        )
+
+    def list_pulses(self) -> list[dict]:
+        """List active Inbox pulses."""
+        return list_pulses_record(self)
+
+    async def create_pulse_from_session(
+        self,
+        *,
+        session_key: str,
+        provider: str,
+        model: str | None,
+        system_prompt_id: str | None,
+        task_prompt_id: str | None,
+        emit_event: SideEventEmit | None = None,
+    ) -> dict[str, object]:
+        """Create one durable Pulse from a source session."""
+        return await create_pulse_from_session_record(
+            self,
+            session_key=session_key,
+            provider=provider,
+            model=model,
+            system_prompt_id=system_prompt_id,
+            task_prompt_id=task_prompt_id,
+            emit_event=emit_event,
+        )
+
+    async def dismiss_pulse(self, *, pulse_id: str, emit_event: SideEventEmit | None = None) -> dict[str, object]:
+        """Dismiss one Pulse from the Inbox."""
+        return await dismiss_pulse_record(self, pulse_id=pulse_id, emit_event=emit_event)
+
+    async def save_pulses(
+        self,
+        *,
+        pulse_ids: list[str],
+        provider: str,
+        model: str | None,
+        system_prompt_id: str | None,
+        task_prompt_id: str | None,
+        workspace_root: str | None,
+        emit_event: SideEventEmit | None = None,
+    ) -> dict[str, object]:
+        """Save one or more pulses into a new Agent session/workspace."""
+        return await save_pulses_record(
+            self,
+            pulse_ids=pulse_ids,
+            provider=provider,
+            model=model,
+            system_prompt_id=system_prompt_id,
+            task_prompt_id=task_prompt_id,
+            workspace_root=workspace_root,
             emit_event=emit_event,
         )
 

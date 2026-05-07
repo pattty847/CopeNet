@@ -587,6 +587,28 @@ def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None
         assert state["task_summary"] == "Read the README"
 
 
+def test_sessions_create_can_seed_personal_starter_intent(rpc_client: TestClient, tmp_path: Path) -> None:
+    with _open_rpc(rpc_client) as socket:
+        create_id = socket.request(
+            "sessions.create",
+            {
+                "provider": "fake",
+                "model": "model-a",
+                "key": "personal-alpha",
+                "title": "Personal Alpha",
+                "workspaceRoot": str(tmp_path),
+                "starterIntentId": "plan_my_next_steps",
+            },
+        )
+        socket.recv_response(create_id)
+
+        state_id = socket.request("sessions.state", {"key": "personal-alpha"})
+        state_response = socket.recv_response(state_id)
+        state = state_response["payload"]["state"]
+        assert state["starter_intent"] == "plan_my_next_steps"
+        assert state["topical_tags"] == ["planning", "execution"]
+
+
 def test_sessions_merge_create_opens_session_and_emits_progress(rpc_client: TestClient, tmp_path: Path) -> None:
     with _open_rpc(rpc_client) as socket:
         for key in ("alpha", "beta"):

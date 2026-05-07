@@ -4,9 +4,11 @@ import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { PausedRunBanner } from './PausedRunBanner';
-import { Archive, ArrowDown, ArrowUp, CopyPlus, Download, Ellipsis, GitMerge, Mic, Paperclip, Send, X } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, CopyPlus, Download, Ellipsis, GitMerge, Mic, Paperclip, Send, Sparkles, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
+import { PERSONAL_STARTER_PRESETS, shouldRenderResumeSnapshot } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
+import type { SessionStateRecord } from '../types/backend';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -17,12 +19,15 @@ export function ChatWorkspace() {
   const clearAppError = useAppStore((state) => state.clearAppError);
   const setAppError = useAppStore((state) => state.setAppError);
   const draftSettings = useAppStore((state) => state.draftSettings);
+  const draftStarterIntent = useAppStore((state) => state.draftStarterIntent);
+  const setDraftStarterIntent = useAppStore((state) => state.setDraftStarterIntent);
   const mergeDraft = useAppStore((state) => state.mergeDraft);
   const setMergeDraft = useAppStore((state) => state.setMergeDraft);
   const mergeStates = useAppStore((state) => state.mergeStates);
   const setMergeState = useAppStore((state) => state.setMergeState);
   const draftComposerSeed = useAppStore((state) => state.draftComposerSeed);
   const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
+  const upsertSessionState = useAppStore((state) => state.upsertSessionState);
 
   const messages = (activeSessionKey ? messagesMap[activeSessionKey] : undefined) || [];
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
@@ -41,6 +46,8 @@ export function ChatWorkspace() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [pulseState, setPulseState] = useState<Record<string, unknown> | null>(null);
+  const [sessionState, setSessionState] = useState<SessionStateRecord | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
@@ -54,15 +61,29 @@ export function ChatWorkspace() {
   useEffect(() => {
     if (!activeSessionKey) return;
     let cancelled = false;
+    setPulseState(null);
+    setSessionState(null);
     void wsClient.resolveMergeState(activeSessionKey).then((mergeState) => {
       if (!cancelled) setMergeState(activeSessionKey, mergeState);
     }).catch(() => {
       if (!cancelled) setMergeState(activeSessionKey, null);
     });
+    void wsClient.resolveSessionState(activeSessionKey).then((state) => {
+      if (!cancelled) {
+        setSessionState(state);
+        if (state) upsertSessionState(state);
+        setPulseState(state?.pulse_state && typeof state.pulse_state === 'object' ? state.pulse_state as Record<string, unknown> : null);
+      }
+    }).catch(() => {
+      if (!cancelled) {
+        setSessionState(null);
+        setPulseState(null);
+      }
+    });
     return () => {
       cancelled = true;
     };
-  }, [activeSessionKey, setMergeState]);
+  }, [activeSessionKey, setMergeState, upsertSessionState]);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -133,6 +154,20 @@ export function ChatWorkspace() {
     () => (mergeDraft?.sourceSessionKeys || []).map((key) => sessions.find((session) => session.key === key)).filter((session): session is NonNullable<typeof activeSession> => Boolean(session)),
     [mergeDraft, sessions],
   );
+  const resumeDecisions = useMemo(
+    () => (sessionState?.prior_decisions || []).filter((value) => !/^Run .* completed with tool mode /.test(value)).slice(0, 3),
+    [sessionState],
+  );
+  const showResumeSnapshot = Boolean(
+    activeSession &&
+    sessionState &&
+    shouldRenderResumeSnapshot({
+      taskSummary: sessionState.task_summary || null,
+      unresolvedQuestions: sessionState.unresolved_questions || [],
+      priorDecisions: resumeDecisions,
+      starterIntent: sessionState.starter_intent || null,
+    }),
+  );
 
   const handleExportConversation = async () => {
     if (!activeSession) return;
@@ -153,9 +188,33 @@ export function ChatWorkspace() {
     }
   };
 
+  const handleCreatePulse = async () => {
+    if (!activeSession) return;
+    try {
+      clearAppError();
+      const pulse = await wsClient.createPulseFromSession({
+        sessionKey: activeSession.key,
+        provider: draftSettings.provider || activeSession.provider,
+        model: draftSettings.model || activeSession.model || '',
+        systemPromptId: draftSettings.systemPromptId || activeSession.systemPromptId || 'default',
+        taskPromptId: draftSettings.taskPromptId || activeSession.taskPromptId || 'none',
+      });
+      useAppStore.getState().upsertPulse(pulse);
+      useAppStore.getState().setRightPanelTab('inbox');
+      useAppStore.getState().setRightPanelOpen(true);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to create pulse.');
+    }
+  };
+
   const applyPromptSeed = (seed: string) => {
     setInput(seed);
     window.requestAnimationFrame(() => textareaRef.current?.focus());
+  };
+
+  const handleStarterIntent = (intentId: typeof PERSONAL_STARTER_PRESETS[number]['id'], seed: string) => {
+    setDraftStarterIntent({ id: intentId });
+    applyPromptSeed(seed);
   };
 
   const updateMergeDraftKeys = (keys: string[]) => {
@@ -263,6 +322,7 @@ export function ChatWorkspace() {
                 compact={true}
                 onDebugCopy={handleDebugCopy}
                 onExportConversation={handleExportConversation}
+                onCreatePulse={activeSession ? handleCreatePulse : undefined}
                 onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
               />
             ) : (
@@ -293,6 +353,14 @@ export function ChatWorkspace() {
                     >
                       <Download className="w-3.5 h-3.5 shrink-0" />
                       Export
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void handleCreatePulse(); setActionsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-accent hover:bg-operator-panel/60 transition-colors text-left"
+                    >
+                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                      Create Pulse
                     </button>
                     {activeSession && (
                       <button
@@ -354,6 +422,77 @@ export function ChatWorkspace() {
                 {source.title || source.sessionKey}
               </button>
             ))}
+          </div>
+        </div>
+      )}
+
+      {activeSession && !activeMergeState && pulseState && (
+        <div className={`${isMobile ? 'px-3 py-2' : 'px-4 py-2'} border-b border-operator-border/70 bg-operator-panel/10`}>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-operator-muted">
+            <span className="inline-flex items-center gap-1.5 font-semibold text-operator-text">
+              <Sparkles className="h-3.5 w-3.5 text-operator-accent" />
+              Pulse context ready
+            </span>
+            {typeof pulseState.why_now === 'string' && pulseState.why_now.trim() && (
+              <span className="text-operator-muted/75">{pulseState.why_now}</span>
+            )}
+          </div>
+          {Array.isArray(pulseState.source_session_keys) && pulseState.source_session_keys.length > 0 && (
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {(pulseState.source_session_keys as unknown[]).map((value) => {
+                const sourceKey = String(value || '').trim();
+                if (!sourceKey) return null;
+                const sourceSession = sessions.find((session) => session.key === sourceKey);
+                return (
+                  <button
+                    key={sourceKey}
+                    type="button"
+                    onClick={() => useAppStore.getState().setActiveSessionKey(sourceKey)}
+                    className="rounded-full border border-operator-border px-2 py-1 text-[10px] text-operator-muted transition-colors hover:border-operator-accent/30 hover:text-operator-accent"
+                    title={sourceSession?.title || sourceKey}
+                  >
+                    {sourceSession?.title || sourceKey}
+                  </button>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {showResumeSnapshot && sessionState && (
+        <div className={`${isMobile ? 'px-3 py-2' : 'px-4 py-2'} border-b border-operator-border/70 bg-operator-panel/5`}>
+          <div className="flex flex-wrap items-center gap-2 text-[11px] text-operator-muted">
+            <span className="font-semibold text-operator-text">Where we left off</span>
+            {sessionState.starter_intent && (
+              <span className="rounded-full border border-operator-accent/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent">
+                {sessionState.starter_intent.replaceAll('_', ' ')}
+              </span>
+            )}
+          </div>
+          <div className="mt-2 grid gap-2 md:grid-cols-3">
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Current focus</div>
+              <div className="mt-1 text-[12px] leading-5 text-operator-text">{sessionState.task_summary || 'Session context is ready.'}</div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Open questions</div>
+              <div className="mt-1 space-y-1 text-[12px] leading-5 text-operator-text">
+                {(sessionState.unresolved_questions || []).slice(0, 2).map((item) => (
+                  <div key={item}>• {item}</div>
+                ))}
+                {(sessionState.unresolved_questions || []).length === 0 && <div className="text-operator-muted">No open questions saved.</div>}
+              </div>
+            </div>
+            <div className="min-w-0">
+              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Latest decisions</div>
+              <div className="mt-1 space-y-1 text-[12px] leading-5 text-operator-text">
+                {resumeDecisions.slice(0, 2).map((item) => (
+                  <div key={item}>• {item}</div>
+                ))}
+                {resumeDecisions.length === 0 && <div className="text-operator-muted">No explicit decisions saved yet.</div>}
+              </div>
+            </div>
           </div>
         </div>
       )}
@@ -505,6 +644,32 @@ export function ChatWorkspace() {
                           {option.label}
                         </button>
                       ))}
+                    </div>
+                  </div>
+
+                  <div className="mt-4 border-t border-operator-border/60 pt-4">
+                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
+                      Personal starters
+                    </div>
+                    <div className="grid gap-2 sm:grid-cols-3">
+                      {PERSONAL_STARTER_PRESETS.map((option) => {
+                        const active = draftStarterIntent?.id === option.id;
+                        return (
+                          <button
+                            key={option.id}
+                            type="button"
+                            onClick={() => handleStarterIntent(option.id, option.seed)}
+                            className={`rounded-xl border px-3 py-2 text-left transition-colors duration-150 ${
+                              active
+                                ? 'border-operator-accent/35 bg-operator-accent/8'
+                                : 'border-operator-border bg-operator-panel/30 hover:border-operator-accent/28'
+                            }`}
+                          >
+                            <div className="text-[12px] font-semibold text-operator-text">{option.label}</div>
+                            <div className="mt-1 text-[11px] leading-5 text-operator-muted">{option.cue}</div>
+                          </button>
+                        );
+                      })}
                     </div>
                   </div>
                 </div>
