@@ -7,7 +7,6 @@ import {
   getArtifactById,
   getArtifacts,
   getBatchById as getMockBatchById,
-  getMockDestinations,
   getWorkingSet,
 } from './mocks';
 import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, TurnStateSnapshot } from '../types/backend';
@@ -376,7 +375,7 @@ export function useMockTransitions() {
   };
 
   const simulateSendMessageComposed = (target: string, message: string): OutboundMessageRecord => {
-    const dest = getMockDestinations().find((d) => d.target === target);
+    const dest = useAppStore.getState().destinations.find((d) => d.target === target);
     const needsApproval = dest?.requiresApproval ?? true;
     const record: OutboundMessageRecord = {
       messageId: `msg_sim_${Date.now()}`,

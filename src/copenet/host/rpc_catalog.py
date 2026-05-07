@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from copenet.host.rpc_schema import ResponseFrame, make_response_frame
+from copenet.host.rpc_schema import EventFrame, ResponseFrame, make_event_frame, make_response_frame
 from copenet.prompts import list_profiles, list_task_modes
 
 
@@ -245,3 +245,56 @@ async def handle_provider_auth_logout(request_id: str, params: dict[str, Any] | 
             )
         )
     )
+
+
+async def handle_messaging_config_get(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"config": orchestrator.get_messaging_config()},
+            )
+        )
+    )
+
+
+async def handle_messaging_config_update(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    config = orchestrator.update_messaging_config(
+        approval_policy=((params or {}).get("approvalPolicy") if isinstance((params or {}).get("approvalPolicy"), dict) else None),
+    )
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"config": config},
+            )
+        )
+    )
+    await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"config": config})))
+
+
+async def handle_messaging_test(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    platform = str((params or {}).get("platform") or "telegram").strip() or "telegram"
+    payload = orchestrator.test_messaging_platform(platform)
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )
+    await send_json(make_event_frame(EventFrame(event="messaging.updated", payload={"config": payload["config"]})))

@@ -283,8 +283,12 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "sessions.runs" in response["payload"]["features"]["methods"]
         assert "sessions.run" in response["payload"]["features"]["methods"]
         assert "sessions.state" in response["payload"]["features"]["methods"]
+        assert "messaging.config.get" in response["payload"]["features"]["methods"]
+        assert "messaging.config.update" in response["payload"]["features"]["methods"]
+        assert "messaging.test" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
         assert "sessions.merge.updated" in response["payload"]["features"]["events"]
+        assert "messaging.updated" in response["payload"]["features"]["events"]
 
     with rpc_client.websocket_connect("/ws") as websocket:
         socket = RpcSocket(websocket)
@@ -297,6 +301,17 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
 
 def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, tmp_path: Path) -> None:
     with _open_rpc(rpc_client) as socket:
+        messaging_id = socket.request("messaging.config.get")
+        messaging = socket.recv_response(messaging_id)
+        assert messaging["payload"]["config"] == {
+            "telegram": None,
+            "destinations": [],
+            "approvalPolicy": {
+                "requireApprovalByDefault": True,
+                "hardlineBlocklist": [],
+            },
+        }
+
         providers_id = socket.request("providers.list")
         providers = socket.recv_response(providers_id)
         provider_rows = providers["payload"]["providers"]
@@ -400,6 +415,36 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
         assert {row["key"] for row in archived_list["payload"]["sessions"]} == {"alpha", copied_session["key"]}
         alpha_row = next(row for row in archived_list["payload"]["sessions"] if row["key"] == "alpha")
         assert alpha_row["archived"] is True
+
+
+def test_messaging_rpcs_update_policy_and_emit_live_status(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        update_id = socket.request(
+            "messaging.config.update",
+            {
+                "approvalPolicy": {
+                    "requireApprovalByDefault": False,
+                    "hardlineBlocklist": ["telegram:@blocked"],
+                }
+            },
+        )
+        update_response = socket.recv_response(update_id)
+        assert update_response["payload"]["config"]["approvalPolicy"] == {
+            "requireApprovalByDefault": False,
+            "hardlineBlocklist": ["telegram:@blocked"],
+        }
+
+        update_event = socket._next_matching(
+            lambda candidate: candidate.get("type") == "event" and candidate.get("event") == "messaging.updated"
+        )
+        assert update_event["payload"]["config"]["approvalPolicy"]["requireApprovalByDefault"] is False
+
+        test_id = socket.request("messaging.test", {"platform": "telegram"})
+        test_response = socket.recv_response(test_id)
+        assert test_response["payload"]["platform"] == "telegram"
+        assert test_response["payload"]["config"]["telegram"] is None
+        assert test_response["payload"]["result"]["ok"] is False
+        assert test_response["payload"]["result"]["connectionStatus"] == "unconfigured"
 
 
 def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestClient) -> None:

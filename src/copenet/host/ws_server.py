@@ -151,6 +151,9 @@ class CopeNetWsServer:
                                 "providerAuth.beginLogin",
                                 "providerAuth.completeLogin",
                                 "providerAuth.logout",
+                                "messaging.config.get",
+                                "messaging.config.update",
+                                "messaging.test",
                                 "models.list",
                                 "tools.list",
                                 "sessions.list",
@@ -169,7 +172,7 @@ class CopeNetWsServer:
                                 "pulse.save",
                                 "pulse.dismiss",
                             ],
-                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "sessions.merge.updated", "pulse.updated"],
+                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "sessions.merge.updated", "pulse.updated", "messaging.updated"],
                         },
                     },
                 )

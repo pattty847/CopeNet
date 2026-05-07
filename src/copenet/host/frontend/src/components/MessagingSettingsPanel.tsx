@@ -17,7 +17,8 @@ import {
   WifiOff,
   X,
 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { wsClient } from '../lib/wsClient';
 import { useMessagingConfig } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
 import type { MessageDestination, PlatformConnectionStatus } from '../runtime/types';
@@ -69,19 +70,30 @@ function ConnectionBadge({ status }: { status: PlatformConnectionStatus }) {
 
 function TelegramSection() {
   const config = useMessagingConfig();
-  if (!config) return null;
-  const tg = config.telegram;
   const [testing, setTesting] = useState(false);
   const [testResult, setTestResult] = useState<'ok' | 'fail' | null>(null);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  if (!config) return null;
+  const tg = config.telegram;
 
-  const handleTest = () => {
+  const handleTest = async () => {
     setTesting(true);
     setTestResult(null);
-    // Simulate a connection test
-    setTimeout(() => {
+    setTestMessage(null);
+    try {
+      const response = await wsClient.testMessagingPlatform('telegram');
+      if (response.config) {
+        useAppStore.getState().setMessagingConfig(response.config);
+        useAppStore.getState().setDestinations(response.config.destinations);
+      }
+      setTestResult(response.result.ok ? 'ok' : 'fail');
+      setTestMessage(response.result.message || null);
+    } catch (error) {
+      setTestResult('fail');
+      setTestMessage(error instanceof Error ? error.message : 'Connection test failed.');
+    } finally {
       setTesting(false);
-      setTestResult('ok');
-    }, 1200);
+    }
   };
 
   return (
@@ -160,6 +172,11 @@ function TelegramSection() {
               </span>
             )}
           </div>
+          {testMessage && (
+            <div className={`text-[10px] ${testResult === 'fail' ? 'text-operator-error' : 'text-operator-muted'}`}>
+              {testMessage}
+            </div>
+          )}
         </div>
       )}
 
@@ -278,7 +295,33 @@ function ApprovalPolicySection() {
   const [defaultApproval, setDefaultApproval] = useState(
     config?.approvalPolicy?.requireApprovalByDefault ?? true,
   );
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    setDefaultApproval(config.approvalPolicy?.requireApprovalByDefault ?? true);
+  }, [config?.approvalPolicy?.requireApprovalByDefault]);
+
   if (!config) return null;
+
+  const handleToggle = async () => {
+    const next = !defaultApproval;
+    setDefaultApproval(next);
+    setSaving(true);
+    try {
+      const updated = await wsClient.updateMessagingApprovalPolicy({
+        requireApprovalByDefault: next,
+        hardlineBlocklist: config.approvalPolicy.hardlineBlocklist,
+      });
+      if (updated) {
+        useAppStore.getState().setMessagingConfig(updated);
+        useAppStore.getState().setDestinations(updated.destinations);
+      }
+    } catch {
+      setDefaultApproval(config.approvalPolicy?.requireApprovalByDefault ?? true);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <div className="space-y-2">
@@ -299,10 +342,11 @@ function ApprovalPolicySection() {
           </div>
           <button
             type="button"
-            onClick={() => setDefaultApproval((v) => !v)}
+            onClick={() => void handleToggle()}
+            disabled={saving}
             className={`relative flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors duration-200 ${
               defaultApproval ? 'bg-operator-accent' : 'bg-operator-border'
-            }`}
+            } ${saving ? 'opacity-60' : ''}`}
           >
             <span
               className={`absolute h-3.5 w-3.5 rounded-full bg-white shadow-sm transition-transform duration-200 ${
@@ -320,6 +364,7 @@ function ApprovalPolicySection() {
               Warning: direct sends bypass operator review.
             </span>
           )}
+          {saving && <span className="ml-1">Saving…</span>}
         </div>
       </div>
     </div>

@@ -11,6 +11,7 @@ from typing import Awaitable, Callable
 
 from copenet.core.apps import AppStore
 from copenet.core.harness import ChatHarness
+from copenet.core.messaging import MessagingConfigStore
 from copenet.core.orchestrator.catalog import (
     archive_session as archive_session_record,
     build_default_provider_registry,
@@ -26,6 +27,11 @@ from copenet.core.orchestrator.catalog import (
     resolve_session as resolve_session_record,
 )
 from copenet.core.orchestrator.merge import merge_sessions as merge_session_record, resolve_merge_state as resolve_merge_state_record
+from copenet.core.orchestrator.messaging import (
+    get_messaging_config as get_messaging_config_record,
+    test_messaging_platform as test_messaging_platform_record,
+    update_messaging_config as update_messaging_config_record,
+)
 from copenet.core.orchestrator.pulse import (
     create_pulse_from_session as create_pulse_from_session_record,
     dismiss_pulse as dismiss_pulse_record,
@@ -91,6 +97,7 @@ class Orchestrator:
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
         self._run_store = RunStore(root_dir=base / "runs")
         self._pulse_store = PulseStore(path=base / "pulses.json")
+        self._messaging_store = MessagingConfigStore(path=base / "messaging.json")
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         self._app_store = AppStore(path=base / "apps.json")
@@ -195,6 +202,18 @@ class Orchestrator:
     def list_sessions(self, include_archived: bool = False) -> list[dict]:
         """List known sessions."""
         return list_session_catalog(self, include_archived=include_archived)
+
+    def get_messaging_config(self) -> dict:
+        """Return the persisted operator messaging configuration."""
+        return get_messaging_config_record(self)
+
+    def update_messaging_config(self, *, approval_policy: dict | None = None) -> dict:
+        """Persist a minimal messaging configuration patch."""
+        return update_messaging_config_record(self, approval_policy=approval_policy)
+
+    def test_messaging_platform(self, platform: str = "telegram") -> dict:
+        """Run a conservative local messaging config test."""
+        return test_messaging_platform_record(self, platform=platform)
 
     def provider_auth_status(self, provider_id: str) -> dict:
         """Resolve auth status for a provider that owns local auth state."""

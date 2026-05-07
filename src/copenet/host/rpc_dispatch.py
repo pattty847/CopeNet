@@ -8,6 +8,9 @@ from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
 from .rpc_catalog import (
     handle_briefing_get,
+    handle_messaging_config_get,
+    handle_messaging_config_update,
+    handle_messaging_test,
     handle_models_list,
     handle_profile_changelog,
     handle_profile_get,
@@ -89,6 +92,12 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_provider_auth_complete_login(req.id, req.params, send_json, orchestrator)
     elif req.method == "providerAuth.logout":
         await handle_provider_auth_logout(req.id, req.params, send_json, orchestrator)
+    elif req.method == "messaging.config.get":
+        await handle_messaging_config_get(req.id, send_json, orchestrator)
+    elif req.method == "messaging.config.update":
+        await handle_messaging_config_update(req.id, req.params, send_json, orchestrator)
+    elif req.method == "messaging.test":
+        await handle_messaging_test(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.merge.create":

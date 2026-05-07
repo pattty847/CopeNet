@@ -4,8 +4,10 @@ import {
   EventFrame,
   IncomingFrame,
   LiveToolCall,
+  MessageDestination,
   Message,
   MessagePart,
+  MessagingConfig,
   Model,
   PatProfile,
   PulseRecord,
@@ -357,6 +359,59 @@ function normalizePulse(raw: unknown): PulseRecord | null {
     updatedAt: String(payload.updatedAt || new Date().toISOString()),
     savedAt: payload.savedAt ? String(payload.savedAt) : null,
     dismissedAt: payload.dismissedAt ? String(payload.dismissedAt) : null,
+  };
+}
+
+function normalizeDestination(raw: unknown): MessageDestination | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const id = String(payload.id || '').trim();
+  const target = String(payload.target || '').trim();
+  if (!id || !target) return null;
+  return {
+    id,
+    platform: String(payload.platform || 'telegram').trim() || 'telegram',
+    target,
+    displayName: String(payload.displayName || target).trim() || target,
+    threadLabel: payload.threadLabel ? String(payload.threadLabel) : null,
+    isDefault: Boolean(payload.isDefault),
+    requiresApproval: payload.requiresApproval !== false,
+    status:
+      payload.status === 'configured' || payload.status === 'unconfigured' || payload.status === 'error'
+        ? payload.status
+        : 'configured',
+  };
+}
+
+function normalizeMessagingConfig(raw: unknown): MessagingConfig | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const destinations = Array.isArray(payload.destinations)
+    ? payload.destinations.map(normalizeDestination).filter((item): item is MessageDestination => item != null)
+    : [];
+  const approvalRaw = (payload.approvalPolicy || {}) as Record<string, unknown>;
+  const telegramRaw = payload.telegram && typeof payload.telegram === 'object' ? (payload.telegram as Record<string, unknown>) : null;
+  return {
+    telegram: telegramRaw
+      ? {
+          botUsername: telegramRaw.botUsername ? String(telegramRaw.botUsername) : null,
+          tokenMasked: telegramRaw.tokenMasked ? String(telegramRaw.tokenMasked) : null,
+          connectionStatus:
+            telegramRaw.connectionStatus === 'connected' ||
+            telegramRaw.connectionStatus === 'disconnected' ||
+            telegramRaw.connectionStatus === 'error' ||
+            telegramRaw.connectionStatus === 'unconfigured'
+              ? telegramRaw.connectionStatus
+              : 'unconfigured',
+          lastVerifiedAt: telegramRaw.lastVerifiedAt ? String(telegramRaw.lastVerifiedAt) : null,
+          errorMessage: telegramRaw.errorMessage ? String(telegramRaw.errorMessage) : null,
+        }
+      : null,
+    destinations,
+    approvalPolicy: {
+      requireApprovalByDefault: approvalRaw.requireApprovalByDefault !== false,
+      hardlineBlocklist: Array.isArray(approvalRaw.hardlineBlocklist) ? approvalRaw.hardlineBlocklist.map(String) : [],
+    },
   };
 }
 
@@ -746,6 +801,17 @@ class WsClient {
       if (pulse) {
         useAppStore.getState().upsertPulse(pulse);
       }
+      return;
+    }
+
+    if (frame.event === 'messaging.updated') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const config = normalizeMessagingConfig(payload.config);
+      if (config) {
+        const store = useAppStore.getState();
+        store.setMessagingConfig(config);
+        store.setDestinations(config.destinations);
+      }
     }
   }
 
@@ -815,7 +881,7 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
@@ -825,6 +891,7 @@ class WsClient {
         this.request<{ briefing?: unknown | null }>('briefing.get', {}),
         this.request<{ runtimeContext?: unknown | null }>('runtime.context', {}),
         this.request<{ pulses?: unknown[] }>('pulse.list', {}),
+        this.request<{ config?: unknown | null }>('messaging.config.get', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -848,6 +915,11 @@ class WsClient {
       store.setReturnBriefing(normalizeReturnBriefing(briefingPayload.briefing));
       store.setRuntimeContext(normalizeRuntimeContext(runtimeContextPayload.runtimeContext));
       store.setPulses(Array.isArray(pulsePayload.pulses) ? pulsePayload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null) : []);
+      const messagingConfig = normalizeMessagingConfig(messagingPayload.config);
+      if (messagingConfig) {
+        store.setMessagingConfig(messagingConfig);
+        store.setDestinations(messagingConfig.destinations);
+      }
       this.ensureDraftDefaults();
 
       const currentKey = store.activeSessionKey;
@@ -1008,6 +1080,54 @@ class WsClient {
     return Array.isArray(payload.pulses)
       ? payload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null)
       : [];
+  }
+
+  async getMessagingConfig(): Promise<MessagingConfig | null> {
+    const payload = await this.request<{ config?: unknown | null }>('messaging.config.get', {});
+    return normalizeMessagingConfig(payload.config);
+  }
+
+  async updateMessagingApprovalPolicy(params: {
+    requireApprovalByDefault: boolean;
+    hardlineBlocklist?: string[];
+  }): Promise<MessagingConfig | null> {
+    const payload = await this.request<{ config?: unknown | null }>('messaging.config.update', {
+      approvalPolicy: {
+        requireApprovalByDefault: params.requireApprovalByDefault,
+        hardlineBlocklist: params.hardlineBlocklist || [],
+      },
+    });
+    return normalizeMessagingConfig(payload.config);
+  }
+
+  async testMessagingPlatform(platform = 'telegram'): Promise<{
+    config: MessagingConfig | null;
+    result: {
+      ok: boolean;
+      connectionStatus: 'connected' | 'disconnected' | 'error' | 'unconfigured';
+      message: string;
+      verifiedAt: string | null;
+    };
+  }> {
+    const payload = await this.request<{
+      config?: unknown | null;
+      result?: Record<string, unknown>;
+    }>('messaging.test', { platform });
+    return {
+      config: normalizeMessagingConfig(payload.config),
+      result: {
+        ok: Boolean(payload.result?.ok),
+        connectionStatus:
+          payload.result?.connectionStatus === 'connected' ||
+          payload.result?.connectionStatus === 'disconnected' ||
+          payload.result?.connectionStatus === 'error' ||
+          payload.result?.connectionStatus === 'unconfigured'
+            ? payload.result.connectionStatus
+            : 'unconfigured',
+        message: payload.result?.message ? String(payload.result.message) : '',
+        verifiedAt: payload.result?.verifiedAt ? String(payload.result.verifiedAt) : null,
+      },
+    };
   }
 
   async createPulseFromSession(params: {
