@@ -130,7 +130,7 @@ function PolicyBadge({ decision }: { decision?: 'allowed' | 'read_roam' | 'write
       : decision === 'approval_required'
         ? 'approval req'
         : decision === 'unsafe_unknown'
-          ? 'shell risk'
+          ? 'policy block'
           : 'read roam';
   return (
     <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${tone}`}>

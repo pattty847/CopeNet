@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
-import type { SessionRunRecord, SessionStateRecord } from '../types/backend';
+import type { SessionArtifactRecord, SessionRunRecord, SessionStateRecord } from '../types/backend';
 import {
   buildInboxItems,
   getArtifactById,
@@ -9,6 +9,7 @@ import {
   getBatchById as getMockBatchById,
   getWorkingSet,
 } from './mocks';
+import { mapRunToActivity } from './activityProof';
 import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, TurnStateSnapshot } from '../types/backend';
 import type {
   ActivityBundle,
@@ -45,10 +46,6 @@ function errored<T>(message: string): AsyncResource<T> {
 
 function loading<T>(): AsyncResource<T> {
   return { status: 'loading', data: null, error: null };
-}
-
-function useSyncResource<T>(factory: () => AsyncResource<T>, deps: ReadonlyArray<unknown>): AsyncResource<T> {
-  return useMemo(factory, deps);
 }
 
 export function useWorkingSet(sessionKey: string | null): AsyncResource<WorkingSet> {
@@ -88,27 +85,80 @@ export function useWorkingSet(sessionKey: string | null): AsyncResource<WorkingS
 }
 
 export function useArtifacts(sessionKey: string | null): AsyncResource<Artifact[]> {
-  return useSyncResource(() => {
-    if (!sessionKey) return empty();
-    try {
-      const artifacts = getArtifacts(sessionKey);
-      return artifacts.length === 0 ? empty() : ready(artifacts);
-    } catch (error) {
-      return errored(String(error));
+  const activeRunId = useAppStore((state) => state.activeRunId);
+  const sessionUpdatedAt = useAppStore(
+    (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
+  );
+  const [resource, setResource] = useState<AsyncResource<Artifact[]>>(sessionKey ? loading() : empty());
+
+  useEffect(() => {
+    if (!sessionKey) {
+      setResource(empty());
+      return;
     }
-  }, [sessionKey]);
+
+    let cancelled = false;
+    setResource(loading());
+    void wsClient
+      .listSessionArtifacts(sessionKey, 100)
+      .then((records) => {
+        if (cancelled) return;
+        if (records.length > 0) {
+          setResource(ready(records.map(mapSessionArtifact)));
+          return;
+        }
+        const artifacts = getArtifacts(sessionKey);
+        setResource(artifacts.length === 0 ? empty() : ready(artifacts));
+      })
+      .catch((error) => {
+        if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, sessionKey, sessionUpdatedAt]);
+
+  return resource;
 }
 
 export function useArtifact(sessionKey: string | null, id: string | null): AsyncResource<Artifact> {
-  return useSyncResource(() => {
-    if (!sessionKey || !id) return empty();
-    try {
-      const artifact = getArtifactById(sessionKey, id);
-      return artifact ? ready(artifact) : empty();
-    } catch (error) {
-      return errored(String(error));
+  const activeRunId = useAppStore((state) => state.activeRunId);
+  const sessionUpdatedAt = useAppStore(
+    (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
+  );
+  const [resource, setResource] = useState<AsyncResource<Artifact>>(sessionKey && id ? loading() : empty());
+
+  useEffect(() => {
+    if (!sessionKey || !id) {
+      setResource(empty());
+      return;
     }
-  }, [sessionKey, id]);
+
+    let cancelled = false;
+    setResource(loading());
+    void wsClient
+      .listSessionArtifacts(sessionKey, 100)
+      .then((records) => {
+        if (cancelled) return;
+        const record = records.find((item) => item.artifactId === id);
+        if (record) {
+          setResource(ready(mapSessionArtifact(record)));
+          return;
+        }
+        const artifact = getArtifactById(sessionKey, id);
+        setResource(artifact ? ready(artifact) : empty());
+      })
+      .catch((error) => {
+        if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeRunId, sessionKey, sessionUpdatedAt, id]);
+
+  return resource;
 }
 
 export function useRunActivity(sessionKey: string | null): AsyncResource<RunActivity> {
@@ -134,7 +184,7 @@ export function useRunActivity(sessionKey: string | null): AsyncResource<RunActi
           setResource(empty());
           return;
         }
-        setResource(ready(mapRunToActivity(runs[runs.length - 1])));
+        setResource(ready(mapRunToActivity(runs[runs.length - 1], getArtifacts(sessionKey))));
       })
       .catch((error) => {
         if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
@@ -167,7 +217,8 @@ export function useBatch(sessionKey: string | null, id: string | null): AsyncRes
       .listSessionRuns(sessionKey, 10)
       .then((runs) => {
         if (cancelled) return;
-        const activity = [...runs].reverse().map(mapRunToActivity);
+        const artifacts = getArtifacts(sessionKey);
+        const activity = [...runs].reverse().map((run) => mapRunToActivity(run, artifacts));
         for (const run of activity) {
           for (const item of run.items) {
             if ((item.kind === 'read_batch' || item.kind === 'bundle') && item.id === id) {
@@ -191,67 +242,6 @@ export function useBatch(sessionKey: string | null, id: string | null): AsyncRes
   return resource;
 }
 
-function mapRunToActivity(run: SessionRunRecord): RunActivity {
-  const calls = run.toolSteps.map((step, index) => mapToolStep(run, step, index));
-  const items: RunActivity['items'] = [];
-
-  if (calls.length > 1) {
-    items.push({
-      id: `batch-${run.runId}`,
-      kind: 'read_batch',
-      label: compactLabel(run.userMessage),
-      at: run.startedAt,
-      calls,
-      mergedSummary: run.outputSummary || undefined,
-    });
-  } else if (calls.length === 1) {
-    items.push(calls[0]);
-  }
-
-  if (run.outputSummary) {
-    items.push({
-      id: `note-${run.runId}`,
-      kind: 'note',
-      at: run.completedAt || run.startedAt,
-      text: run.outputSummary,
-    });
-  }
-
-  return {
-    runId: run.runId,
-    startedAt: run.startedAt,
-    endedAt: run.completedAt,
-    items,
-  };
-}
-
-function mapToolStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'][number], index: number): ActivityToolCall {
-  return {
-    id: `${run.runId}-tool-${index}`,
-    kind: 'tool_call',
-    toolId: step.toolId,
-    summary: step.summary,
-    ok: step.ok,
-    durationMs: 0,
-    at: run.completedAt || run.startedAt,
-    artifactId: step.artifactId ?? null,
-    target: step.target ?? null,
-    workspaceRoot:
-      step.workspaceRoot ??
-      (typeof run.metadata?.workspaceRoot === 'string' ? run.metadata.workspaceRoot : null),
-    scope: step.scope ?? null,
-    accessAction: step.accessAction ?? null,
-    policyDecision: step.policyDecision ?? null,
-    policySummary: step.policySummary ?? null,
-    error: step.error ?? null,
-  };
-}
-
-function compactLabel(text: string): string {
-  const compact = text.trim();
-  if (compact.length <= 56) return compact;
-  return `${compact.slice(0, 53)}...`;
-}
 
 function mapSessionStateToWorkingSet(
   state: SessionStateRecord,
@@ -277,6 +267,36 @@ function mapSessionStateToWorkingSet(
       text: value,
     })),
     referencedArtifactIds: state.relevant_artifact_ids,
+  };
+}
+
+function mapSessionArtifact(record: SessionArtifactRecord): Artifact {
+  const normalizedKind = (() => {
+    const kind = String(record.type || '').trim();
+    if (kind === 'tool_output') return 'tool_bundle';
+    if (
+      kind === 'summary' ||
+      kind === 'patch_plan' ||
+      kind === 'answer' ||
+      kind === 'tool_bundle' ||
+      kind === 'diff' ||
+      kind === 'approval_request' ||
+      kind === 'outbound_message' ||
+      kind === 'orchestration_run'
+    ) {
+      return kind;
+    }
+    return 'summary';
+  })();
+  const compactBody = String(record.body || '').trim();
+  return {
+    id: record.artifactId,
+    kind: normalizedKind,
+    title: record.title || 'Artifact',
+    oneLine: compactBody ? compactBody.split('\n')[0].slice(0, 180) : 'Runtime artifact',
+    producedAt: record.updatedAt || record.createdAt,
+    runId: record.runId || null,
+    bodyMarkdown: compactBody || undefined,
   };
 }
 

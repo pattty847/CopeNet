@@ -1,7 +1,7 @@
 import React, { useEffect, MouseEvent } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
-import { ArchiveRestore, Archive, CheckSquare, ChevronLeft, ChevronRight, GitMerge, Plus, Square } from 'lucide-react';
+import { ArchiveRestore, Archive, CheckSquare, GitMerge, Plus, Square } from 'lucide-react';
 import { describeSessionReturnCue } from '../lib/personalHistory';
 
 function timeAgo(dateString?: string | null) {
@@ -50,9 +50,6 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
   const providers = useAppStore((state) => state.providers);
   const sessionStates = useAppStore((state) => state.sessionStates);
   const upsertSessionState = useAppStore((state) => state.upsertSessionState);
-  const sidebarOpen = useAppStore((state) => state.sidebarOpen);
-  const setSidebarOpen = useAppStore((state) => state.setSidebarOpen);
-
   const filteredSessions = sessions.filter((session) => session.archived === showArchived);
 
   useEffect(() => {
@@ -113,32 +110,6 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
     }
   };
 
-  if (!sidebarOpen) {
-    return (
-      <aside className={`${mobile ? 'hidden' : 'w-11'} bg-operator-bg flex flex-col h-full items-center py-3 gap-3`}>
-        <button
-          onClick={() => setSidebarOpen(true)}
-          className="flex h-8 w-8 items-center justify-center rounded-xl text-operator-muted hover:text-operator-accent hover:bg-operator-panel transition-all duration-150"
-          title="Expand session list"
-        >
-          <ChevronRight className="w-3.5 h-3.5" />
-        </button>
-        <button
-          onClick={handleNewSession}
-          className="flex h-8 w-8 items-center justify-center rounded-xl bg-operator-accent/10 text-operator-accent hover:bg-operator-accent/20 transition-all duration-150"
-          title="New Chat"
-        >
-          <Plus className="w-3.5 h-3.5" />
-        </button>
-        <div className="mt-auto flex flex-col gap-2 items-center">
-          <div className="text-[9px] font-semibold text-operator-muted -rotate-90 whitespace-nowrap">
-            {filteredSessions.length} sessions
-          </div>
-        </div>
-      </aside>
-    );
-  }
-
   return (
     <aside className={`${mobile ? 'w-full border-r-0' : 'w-full border-r'} border-operator-border bg-operator-bg flex h-full flex-col`}>
       {/* Header */}
@@ -168,13 +139,6 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
                 {sessionSelectMode ? <CheckSquare className="w-3 h-3" /> : <Square className="w-3 h-3" />}
               </button>
             )}
-            <button
-              onClick={() => setSidebarOpen(false)}
-              className="p-1.5 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-md hover:bg-operator-panel shrink-0"
-              title="Collapse sidebar"
-            >
-              <ChevronLeft className="w-3.5 h-3.5" />
-            </button>
           </div>
         </div>
 

@@ -39,6 +39,7 @@ Look at:
 - `willAttemptToolLoop` — if `false`, the capability gate rejected the tool loop
 - `capabilityProfile.promptedToolUse` — this must be `true` for the loop to trigger
 - `capabilityProfile.toolCalls` — the provider model must report tool capability
+- `availableToolIds` — write tools (`files.edit`, `files.write`) only appear when the session task mode is **`full-access`** (`policy_for_task_mode` in `core/tools/policy.py`). If the model tries to call writes in another mode you will see **`write tool unavailable in current mode`** in traces / `toolExecution.policyDecision = write_blocked` on the client payload.
 
 If `willAttemptToolLoop: true` but no `tool_requested` event appeared:
 
@@ -70,6 +71,20 @@ Then use the JSON artifact in `tmp/live_probe_results/` plus the trace files nam
 
 ---
 
+## Symptom: Mixed TOOL_BATCH — reads ran but writes/shell were deferred
+
+**Cause:** `TOOL_BATCH` is intentionally limited to **`repo-read` + `context`** tools. If the model mixes e.g. `files.read` + `files.write` in one batch, the harness executes the safe reads, synthesizes failed members for deferred tools, and emits trace `tool_batch_split` with `executedToolIds` vs `deferredToolIds`.
+
+**What to check:**
+
+```bash
+jq 'select(.event == "tool_batch_split" or .event == "batch_planned")' <run-id>.jsonl
+```
+
+Then inspect the `tool.batch` result in the UI or transcript: `policySummary` explains the repair; the model should retry deferred tools as individual **`TOOL_CALL`** actions.
+
+---
+
 ## Symptom: Tool was blocked
 
 **What to check in the trace:**
@@ -83,10 +98,13 @@ The `payload.reason` field tells you exactly why. Known reasons:
 | reason | fix |
 |---|---|
 | `path escapes workdir` | The model requested a path outside the configured workdir. This is expected and correct behavior — the model needs to use a relative path inside the workdir. |
-| `category not allowed: <cat>` | The tool category is not in `ToolPolicy.allowed_categories`. Adjust policy if needed. |
+| `category not allowed: <cat>` | The tool category is not in `ToolPolicy.allowed_categories` for this session. |
 | `command not allowed: <cmd>` | The shell command is not in `ToolPolicy.shell_allowlist`. Default: `git`, `rg`, `ls`, `pwd`, `find`. |
 | `shell execution disabled by policy` | `ToolPolicy.allow_shell` is false. |
 | `unknown tool` | Tool id not registered. Check `tools.list` in the UI or client. |
+| `write tool unavailable in current mode` | Task mode is not `full-access`, so `repo-write` tools are filtered out of the manifest. Start a session with task mode **`full-access`** or avoid write tools. |
+| `artifact tool unavailable in current mode` | Reserved for narrowed policies that drop the `artifact` category. |
+| `unsafe or unsupported batch request` | The batch had no read/context calls the harness could legally run together. |
 
 ---
 
@@ -123,16 +141,16 @@ jq 'select(.event == "run_failed")' <run-id>.jsonl
 
 ## Symptom: Latency looks wrong
 
-Tool-assisted runs make **two** provider calls. Compare timestamps:
+Tool-assisted runs often make **multiple** provider calls (tool attempt, follow-up, and any additional tool-loop steps). Compare timestamps:
 
 ```bash
 jq 'select(.event | startswith("provider_turn"))' <run-id>.jsonl | jq -r '[.timestamp, .event, .payload.phase] | @tsv'
 ```
 
-- First pair: `tool-attempt` — model decides whether to use a tool
-- Second pair: `tool-follow-up` — model synthesizes the final answer
+- `tool-attempt` — first loop pass (or first pass after idle) where the model proposes tools
+- `tool-follow-up` — pass that ingests tool results; there may be several `tool-follow-up` phases if the harness continues the loop
 
-If the follow-up turn is very slow, the tool result may have been large. Check `tool_executed.summary` for output size hints.
+If a follow-up turn is very slow, the tool result may have been large. Check `tool_executed.summary` for output size hints.
 
 ---
 
@@ -141,6 +159,12 @@ If the follow-up turn is very slow, the tool result may have been large. Check `
 No model was specified in the request. The provider selected a default model but that resolved value is not currently surfaced in the trace. This is a known gap — see [TRACE-FINDINGS.md](TRACE-FINDINGS.md) F3.
 
 Workaround: explicitly specify a model in the session or check the provider's logs for which model it used.
+
+---
+
+## Symptom: Tool Activity proof looks wrong in the Agents UI
+
+Runtime “proof” cards are derived client-side from **`SessionRunRecord.toolSteps`** (and persisted **artifacts** filtered by `runId`) in `host/frontend/src/runtime/activityProof.ts`, rendered by `ToolActivityProof.tsx`. If the backend omits `members` on a `tool.batch` step, expand **Show proof** — policy text and previews come from the normalized `toolExecution` payload on chat events.
 
 ---
 
@@ -154,7 +178,8 @@ Check whether `run_completed` appears with `toolExecutionAttached: true` while t
 
 ```
 [ ] Trace file exists?          → if not, provider init failed
-[ ] harness_planned present?    → willAttemptToolLoop matches expectations?
+[ ] harness_planned present?    → willAttemptToolLoop + tool ids match task mode (writes need full-access)?
+[ ] batch / split events?       → tool_batch_split explains mixed TOOL_BATCH repairs
 [ ] tool_requested present?     → if expected but missing, model didn't parse JSON
 [ ] tool_executed or blocked?   → check reason
 [ ] assistant_finalized?        → responseLength and toolExecutionAttached correct?

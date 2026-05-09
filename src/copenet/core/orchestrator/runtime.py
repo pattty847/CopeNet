@@ -18,7 +18,7 @@ from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
-from copenet.core.tools import ToolExecutionContext
+from copenet.core.tools import ToolExecutionContext, policy_for_task_mode
 from copenet.core.tracing import RunTraceWriter
 
 if TYPE_CHECKING:
@@ -154,6 +154,12 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     artifact_drafts: list[dict] = []
     tool_steps: list[dict] = []
     persisted_tool_artifact_ids: list[str] = []
+    effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
+    available_tools = [
+        tool
+        for tool in orchestrator._tool_registry.list_tools()
+        if tool.category in effective_tool_policy.allowed_categories
+    ] if request.allow_tools else []
     try:
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
@@ -162,7 +168,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             abort_event=abort_event,
             model=request.model,
             system_prompt=effective_system_prompt,
-            available_tools=orchestrator._tool_registry.list_tools() if request.allow_tools else [],
+            available_tools=available_tools,
             tool_executor=orchestrator._tool_registry.execute,
             tool_context=ToolExecutionContext(
                 workdir=session_workspace_root,
@@ -173,8 +179,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 session_store=orchestrator._session_store,
                 transcript_store=orchestrator._transcript_store,
                 providers=orchestrator._providers,
-                policy=orchestrator._tool_policy,
+                policy=effective_tool_policy,
                 artifact_store=orchestrator._artifact_store,
+                task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
+                run_id=run_id,
                 trace=trace.record,
             ),
             trace=trace.record,
@@ -620,6 +628,26 @@ def _append_text_part(parts: list[dict], text: str) -> None:
 
 
 def _normalize_tool_step(tool_payload: dict) -> dict:
+    members: list[dict] = []
+    raw_members = tool_payload.get("members")
+    if isinstance(raw_members, list):
+        for item in raw_members:
+            if not isinstance(item, dict):
+                continue
+            member: dict[str, object] = {
+                "toolId": str(item.get("toolId") or "").strip(),
+                "ok": bool(item.get("ok")),
+                "summary": str(item.get("summary") or ""),
+                "error": str(item.get("error")).strip() if item.get("error") is not None else None,
+            }
+            for key in ("callId", "artifactId", "target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"):
+                value = item.get(key)
+                if value is not None:
+                    member[key] = value
+            preview = item.get("preview")
+            if isinstance(preview, dict):
+                member["preview"] = dict(preview)
+            members.append(member)
     return {
         "callId": str(tool_payload.get("callId") or "").strip() or None,
         "toolId": str(tool_payload.get("toolId") or "").strip(),
@@ -636,6 +664,7 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
         "policySummary": str(tool_payload.get("policySummary") or "").strip() or None,
         "status": "blocked" if tool_payload.get("ok") is False else "ok",
         "batched": str(tool_payload.get("channel") or "") == "batch" or str(tool_payload.get("toolId") or "") == "tool.batch",
+        "members": members,
     }
 
 

@@ -79,6 +79,7 @@ async def _run_harness_turn(
     prompt: str,
     tmp_path: Path,
     provider_session_id: str | None = None,
+    expect_tool_loop: bool = True,
 ) -> tuple[list[ProviderEvent], list[TraceRow], str | None]:
     traces: list[TraceRow] = []
 
@@ -115,7 +116,7 @@ async def _run_harness_turn(
         provider_session_id,
     )
 
-    assert plan.will_attempt_tool_loop is True
+    assert plan.will_attempt_tool_loop is expect_tool_loop
     assert any(event == "harness_planned" for event, _ in traces)
     return events, traces, discovered_session_id
 
@@ -254,8 +255,10 @@ async def test_tool_prompt_matrix_resume_drift_is_visible_in_traces(tmp_path: Pa
     provider = ScriptedPromptProvider(
         outputs=[
             '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
-            "Used the README contents to answer.",
+            '{"state":"FINAL_CANDIDATE","answer":"Used the README contents to answer.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
             "I cannot use files.read here because that tool is not actually available in this environment.",
+            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            '{"state":"FINAL_CANDIDATE","answer":"Used the README contents to answer after repairing the resumed tool request.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":["resume drift required one repair"]}',
         ]
     )
 
@@ -276,14 +279,98 @@ async def test_tool_prompt_matrix_resume_drift_is_visible_in_traces(tmp_path: Pa
 
     assert provider_session_id == resumed_session_id == "provider-session"
     assert len(first_tool_request) == 1
-    assert first_tool_request[0]["toolId"] == "files.read"
-    assert _find_trace_rows(first_traces, "tool_executed")[0]["toolId"] == "files.read"
-    assert any(event.kind == "meta" for event in first_events)
 
-    assert second_tool_request == []
-    assert _find_trace_rows(second_traces, "tool_executed") == []
-    assert _find_trace_rows(second_traces, "tool_blocked") == []
-    assert all(event.kind != "meta" for event in second_events)
-    assert [event.text for event in second_events if event.kind == "delta"] == [
-        "I cannot use files.read here because that tool is not actually available in this environment."
-    ]
+
+@pytest.mark.asyncio
+async def test_soft_harness_feedback_prompt_stays_conversational(tmp_path: Path) -> None:
+    provider = ScriptedPromptProvider(outputs=["Just answer casually."])
+
+    events, traces, _ = await _run_harness_turn(
+        provider=provider,
+        prompt="What do you think of this harness direction? I want the vibe to feel less constrained.",
+        tmp_path=tmp_path,
+        expect_tool_loop=False,
+    )
+
+    planned = _find_trace_rows(traces, "harness_planned")
+    assert planned[0]["interactionClass"] == "advisory"
+    assert planned[0]["willAttemptToolLoop"] is False
+    assert planned[0]["toolLoopSuppressedReason"] == "interaction_class_advisory"
+    assert "Respond with exactly one legal JSON action" not in provider.prompts[0]
+    delta_events = [event for event in events if event.kind == "delta"]
+    assert delta_events[0].text == "Just answer casually."
+
+
+@pytest.mark.asyncio
+async def test_explicit_repo_inspection_prompt_uses_tool_loop_prompt_shape(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    provider = ScriptedPromptProvider(
+        outputs=[
+            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            '{"state":"FINAL_CANDIDATE","answer":"Grounded answer.","evidence":["README.md"],"done_conditions_met":["grounded file evidence","file path citation"],"remaining_uncertainty":[]}',
+        ]
+    )
+
+    events, traces, _ = await _run_harness_turn(
+        provider=provider,
+        prompt="Inspect the repo and explain the architecture with grounded evidence.",
+        tmp_path=tmp_path,
+    )
+
+    planned = _find_trace_rows(traces, "harness_planned")
+    assert planned[0]["interactionClass"] == "agent"
+    assert planned[0]["willAttemptToolLoop"] is True
+    assert "Respond with exactly one legal JSON action" in provider.prompts[0]
+    tool_requests = _find_trace_rows(traces, "tool_requested")
+    assert tool_requests[0]["toolId"] == "files.read"
+    assert _find_trace_rows(traces, "tool_executed")[0]["toolId"] == "files.read"
+    assert any(event.kind == "meta" for event in events)
+
+
+@pytest.mark.asyncio
+async def test_tool_system_prompt_declares_capability_manifest_for_read_only_mode(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    provider = ScriptedPromptProvider(
+        outputs=[
+            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            '{"state":"FINAL_CANDIDATE","answer":"Read complete.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
+        ]
+    )
+    traces: list[TraceRow] = []
+
+    def trace(event: str, payload: dict[str, Any] | None = None) -> None:
+        traces.append((event, payload))
+
+    harness = ChatHarness()
+    registry = ToolRegistry()
+    tool_context = ToolExecutionContext(
+        workdir=tmp_path,
+        session_workspace_root=tmp_path,
+        session_key="alpha",
+        provider_name=provider.name,
+        model=None,
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        providers={provider.name: provider},
+        policy=ToolPolicy(allowed_categories={"repo-read", "shell-read", "context", "artifact"}),
+        trace=trace,
+    )
+    _, stream = await harness.run_turn(
+        provider=provider,
+        prompt="Read the README then answer.",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        available_tools=registry.list_tools(),
+        tool_executor=registry.execute,
+        tool_context=tool_context,
+        trace=trace,
+    )
+    _ = [event async for event in stream]
+
+    system_prompt = provider.system_prompts[0] or ""
+    assert "Workspace root:" in system_prompt
+    assert "Tool mode:" in system_prompt
+    assert "Available tool ids:" in system_prompt
+    assert "Unavailable capability classes:" in system_prompt
+    assert "repo-write" in system_prompt
+    assert "TOOL_BATCH only supports read-only repo/context work" in system_prompt

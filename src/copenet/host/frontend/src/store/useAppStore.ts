@@ -7,8 +7,10 @@ export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'obser
 export type ThemeMode = 'light' | 'dark';
 export type RightPanelTab = 'inbox' | 'runtime' | 'artifacts' | 'activity' | 'approvals';
 export type WorkflowsRoute = 'hub' | 'meme-lab';
+export type AgentWorkspaceTab = 'messages' | 'tool_activity' | 'artifacts';
 
 const THEME_STORAGE_KEY = 'copenet.themeMode';
+const PINNED_SESSIONS_STORAGE_KEY = 'copenet.pinnedSessionKeys';
 
 function readStoredThemeMode(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
@@ -19,6 +21,23 @@ function readStoredThemeMode(): ThemeMode {
 function persistThemeMode(mode: ThemeMode) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(THEME_STORAGE_KEY, mode);
+}
+
+function readPinnedSessionKeys(): string[] {
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = window.localStorage.getItem(PINNED_SESSIONS_STORAGE_KEY);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? parsed.filter((value): value is string => typeof value === 'string') : [];
+  } catch {
+    return [];
+  }
+}
+
+function persistPinnedSessionKeys(keys: string[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(PINNED_SESSIONS_STORAGE_KEY, JSON.stringify(keys));
 }
 
 export interface MergeDraft {
@@ -55,8 +74,10 @@ interface AppState {
 
   primaryNavCollapsed: boolean;
   setPrimaryNavCollapsed: (collapsed: boolean) => void;
-  sidebarOpen: boolean;
-  setSidebarOpen: (open: boolean) => void;
+  sessionDrawerOpen: boolean;
+  setSessionDrawerOpen: (open: boolean) => void;
+  pinnedSessionKeys: string[];
+  togglePinnedSessionKey: (key: string) => void;
   mobileOverflowOpen: boolean;
   setMobileOverflowOpen: (open: boolean) => void;
   mobileSessionsOpen: boolean;
@@ -73,6 +94,8 @@ interface AppState {
   setCommandPaletteOpen: (open: boolean) => void;
   rightPanelTab: RightPanelTab;
   setRightPanelTab: (tab: RightPanelTab) => void;
+  agentWorkspaceTab: AgentWorkspaceTab;
+  setAgentWorkspaceTab: (tab: AgentWorkspaceTab) => void;
   inspectorTarget: InspectorTarget | null;
   setInspectorTarget: (target: InspectorTarget | null) => void;
 
@@ -263,10 +286,19 @@ export const useAppStore = create<AppState>((set) => ({
   memeLabSeedAsset: null,
   setMemeLabSeedAsset: (asset) => set({ memeLabSeedAsset: asset }),
 
-  primaryNavCollapsed: false,
+  primaryNavCollapsed: true,
   setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),
-  sidebarOpen: true,
-  setSidebarOpen: (open) => set({ sidebarOpen: open }),
+  sessionDrawerOpen: false,
+  setSessionDrawerOpen: (open) => set({ sessionDrawerOpen: open }),
+  pinnedSessionKeys: readPinnedSessionKeys(),
+  togglePinnedSessionKey: (key) =>
+    set((state) => {
+      const next = state.pinnedSessionKeys.includes(key)
+        ? state.pinnedSessionKeys.filter((item) => item !== key)
+        : [key, ...state.pinnedSessionKeys];
+      persistPinnedSessionKeys(next);
+      return { pinnedSessionKeys: next };
+    }),
   mobileOverflowOpen: false,
   setMobileOverflowOpen: (open) => set({ mobileOverflowOpen: open }),
   mobileSessionsOpen: false,
@@ -283,6 +315,8 @@ export const useAppStore = create<AppState>((set) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   rightPanelTab: 'runtime',
   setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
+  agentWorkspaceTab: 'messages',
+  setAgentWorkspaceTab: (tab) => set({ agentWorkspaceTab: tab }),
   inspectorTarget: null,
   setInspectorTarget: (target) => set({ inspectorTarget: target }),
 

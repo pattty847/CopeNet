@@ -8,6 +8,7 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { Spinner } from './Spinner';
+import type { MessagePart, ToolBatchPart, ToolCallPart, ToolResultPart } from '../types/backend';
 
 // ---------------------------------------------------------------------------
 // Shared markdown renderer — used for both legacy content and TextParts.
@@ -72,14 +73,45 @@ function MarkdownBody({ content }: { content: string }) {
   );
 }
 
+function partsShouldCollapseIntoSingleRow(current: ToolCallPart, next: ToolResultPart | ToolBatchPart): boolean {
+  if (next.kind === 'tool_result') {
+    if (current.callId && next.callId && current.callId === next.callId) return true;
+    return current.toolId === next.toolId;
+  }
+  if (next.kind === 'tool_batch') {
+    return current.toolId === 'tool.batch';
+  }
+  return false;
+}
+
+export function collapseRenderedMessageParts(parts: MessagePart[]): MessagePart[] {
+  const collapsed: MessagePart[] = [];
+  for (let index = 0; index < parts.length; index += 1) {
+    const current = parts[index];
+    if (current.kind === 'tool_call') {
+      const next = parts[index + 1];
+      if (
+        next &&
+        (next.kind === 'tool_result' || next.kind === 'tool_batch') &&
+        partsShouldCollapseIntoSingleRow(current, next)
+      ) {
+        continue;
+      }
+    }
+    collapsed.push(current);
+  }
+  return collapsed;
+}
+
 // ---------------------------------------------------------------------------
 // PartsBody — renders a structured parts array with interleaved tool rows.
 // ToolCallParts remain visible as durable call → result receipts (audit trail).
 // ---------------------------------------------------------------------------
 function PartsBody({ parts, isLive }: { parts: NonNullable<Message['parts']>; isLive?: boolean }) {
+  const renderParts = collapseRenderedMessageParts(parts);
   return (
     <div className="space-y-2">
-      {parts.map((part, i) => {
+      {renderParts.map((part, i) => {
         if (part.kind === 'text') {
           if (!part.content) return null;
           return <MarkdownBody key={i} content={part.content} />;

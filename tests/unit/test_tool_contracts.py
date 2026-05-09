@@ -92,6 +92,15 @@ def test_extract_final_candidate_rejects_empty_answer() -> None:
     assert extract_final_candidate('{"state":"FINAL_CANDIDATE","answer":"   "}') is None
 
 
+def test_extract_final_candidate_accepts_type_and_content_aliases() -> None:
+    envelope = extract_final_candidate(
+        '{"type":"FINAL_CANDIDATE","content":"Done from alias.","evidence":["README.md"]}'
+    )
+    assert envelope is not None
+    assert envelope.answer == "Done from alias."
+    assert envelope.evidence == ["README.md"]
+
+
 def test_build_tool_prompt_section_lists_all_tool_ids() -> None:
     tools = [
         ToolDescriptor(id="files.read", name="Read File", description="Read one file.", category="repo-read"),

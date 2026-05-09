@@ -19,12 +19,12 @@ import {
   Video,
   Wrench,
 } from 'lucide-react';
-import { downloadMediaFromUrl, getMediaAssetDetail, importMediaFromUrl, listMediaAssets, uploadMediaFile } from '../lib/appApi';
+import { downloadMediaFromUrl, extractWebPage, getMediaAssetDetail, importMediaFromUrl, listMediaAssets, uploadMediaFile } from '../lib/appApi';
 import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../lib/mediaMemeBridge';
 import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobileCopy';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
-import { DataToolsRoute, MediaAsset, MediaAssetDetail } from '../types/backend';
+import { DataToolsRoute, MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
 import { MessagingSettingsPanel } from './MessagingSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
 
@@ -55,6 +55,7 @@ function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: (
     hub: ['Data & Tools'],
     sources: ['Data & Tools', 'Data Sources'],
     media: ['Data & Tools', 'Data Sources', 'Media Imports'],
+    web: ['Data & Tools', 'Data Sources', 'Web Pages'],
     messaging: ['Data & Tools', 'Messaging'],
   };
 
@@ -187,7 +188,7 @@ function SourceTypeCard({
   );
 }
 
-function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
+function DataSourcesPage({ openMedia, openWeb }: { openMedia: () => void; openWeb: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
@@ -215,10 +216,11 @@ function DataSourcesPage({ openMedia }: { openMedia: () => void }) {
           />
           <SourceTypeCard
             icon={Globe}
-            eyebrow="Next source"
+            eyebrow="Ready now"
             title="Web Pages"
             body="Cleanly scrape articles and pages into markdown-like content for later knowledge base and workspace use."
-            action="Jina-style ingest next"
+            action="Open web ingest"
+            onClick={openWeb}
           />
           <SourceTypeCard
             icon={LibraryBig}
@@ -300,6 +302,184 @@ function MessagingSettingsPage() {
               <p>Inbound Telegram messages can use these routes to continue the right session automatically.</p>
               <p>Model selection via settings is already here; slash-command model switching can layer on top later.</p>
             </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function WebPageImportsPage() {
+  const [url, setUrl] = useState('');
+  const [document, setDocument] = useState<WebExtractDocument | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState<'text' | 'markdown' | null>(null);
+
+  async function handleExtract(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const nextUrl = url.trim();
+    if (!nextUrl || loading) return;
+    setLoading(true);
+    setError(null);
+    setCopied(null);
+    try {
+      const result = await extractWebPage(nextUrl);
+      setDocument(result);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Web extract failed.');
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function copyValue(kind: 'text' | 'markdown') {
+    if (!document) return;
+    try {
+      await navigator.clipboard.writeText(kind === 'markdown' ? document.markdown : document.text);
+      setCopied(kind);
+      window.setTimeout(() => setCopied((current) => (current === kind ? null : current)), 1800);
+    } catch {
+      setCopied(null);
+    }
+  }
+
+  return (
+    <div className="animate-fade-in-up space-y-3">
+      <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
+        <div className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
+            <Globe className="h-3.5 w-3.5 text-shell-accent" />
+            Web Pages
+          </div>
+          <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
+            Paste a URL and pull clean readable text into CopeNet.
+          </h1>
+          <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
+            Jina-style ingest for articles, docs, and web pages. CopeNet fetches the page, strips noise, and returns reusable text plus markdown-like output.
+          </p>
+
+          <form onSubmit={handleExtract} className="mt-6 space-y-4 sm:mt-8">
+            <div className="rounded-[28px] border border-shell-border bg-shell-bg p-3 shadow-shell">
+              <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+                <input
+                  value={url}
+                  onChange={(event) => setUrl(event.target.value)}
+                  placeholder="Paste an article or docs URL…"
+                  className="h-14 min-w-0 flex-1 rounded-2xl border border-shell-border bg-shell-panel px-5 text-sm text-shell-text outline-none transition placeholder:text-shell-muted hover:border-shell-border-strong focus:border-shell-border-strong"
+                />
+                <button
+                  type="submit"
+                  disabled={!url.trim() || loading}
+                  className="inline-flex h-14 min-w-0 items-center justify-center gap-2 rounded-2xl bg-shell-ink px-5 text-sm font-semibold text-white transition hover:opacity-92 disabled:cursor-not-allowed disabled:opacity-55"
+                >
+                  {loading ? <LoaderCircle className="h-4 w-4 animate-spin shrink-0" /> : <Globe className="h-4 w-4 shrink-0" />}
+                  <span>{loading ? 'Extracting…' : 'Extract page'}</span>
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+
+        <div className="space-y-2.5">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What you get</div>
+            <div className="space-y-3">
+              {[
+                'Readable text from articles and documentation.',
+                'Markdown-like output ready for agents or notes.',
+                'A lightweight bridge between URLs and durable workspace context.',
+              ].map((item) => (
+                <div key={item} className="flex items-start gap-3 rounded-2xl border border-shell-border bg-shell-bg px-4 py-3 text-sm text-shell-text">
+                  <Sparkles className="mt-0.5 h-4 w-4 shrink-0 text-shell-accent" />
+                  <span>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Status</div>
+            <p className="text-sm leading-6 text-shell-muted">
+              {error
+                ? error
+                : loading
+                  ? 'Fetching and extracting readable content…'
+                  : document
+                    ? `Loaded ${document.wordCount.toLocaleString()} words from ${document.title}.`
+                    : 'Paste a URL to test the first web ingest slice.'}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.55fr)_320px]">
+        <div className="rounded-[34px] border border-shell-border bg-shell-panel px-4 py-5 shadow-shell sm:px-6 sm:py-6">
+          <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Extracted preview</div>
+              <h2 className="mt-2 text-xl font-semibold tracking-tight text-shell-text sm:text-2xl">
+                {document?.title || 'No page extracted yet'}
+              </h2>
+            </div>
+            {document ? (
+              <a href={document.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-sm font-medium text-shell-text transition hover:text-shell-accent">
+                <ExternalLink className="h-4 w-4" />
+                <span className="truncate">Open source</span>
+              </a>
+            ) : null}
+          </div>
+
+          {document ? (
+            <div className="space-y-4">
+              <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted">
+                <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{document.wordCount.toLocaleString()} words</div>
+                <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">Readable text</div>
+                <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">Markdown output</div>
+              </div>
+              <div className="rounded-[24px] border border-shell-border bg-shell-bg px-4 py-4 text-sm leading-6 text-shell-text whitespace-pre-wrap">
+                {document.excerpt || document.text}
+              </div>
+            </div>
+          ) : (
+            <div className="rounded-[24px] border border-dashed border-shell-border bg-shell-bg px-6 py-10 text-center">
+              <h3 className="text-lg font-semibold text-shell-text">No extracted page yet</h3>
+              <p className="mt-3 text-sm leading-6 text-shell-muted">
+                Start with an article or docs page and CopeNet will return a clean readable preview.
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="space-y-2.5">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Export</div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                disabled={!document}
+                onClick={() => void copyValue('text')}
+                className="inline-flex w-full items-center justify-between rounded-2xl border border-shell-border bg-shell-bg px-4 py-3 text-sm font-medium text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                <span>Copy plain text</span>
+                <Copy className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                disabled={!document}
+                onClick={() => void copyValue('markdown')}
+                className="inline-flex w-full items-center justify-between rounded-2xl border border-shell-border bg-shell-bg px-4 py-3 text-sm font-medium text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-55"
+              >
+                <span>Copy markdown</span>
+                <Copy className="h-4 w-4" />
+              </button>
+            </div>
+            {copied ? <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-shell-accent">Copied {copied}.</p> : null}
+          </div>
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next</div>
+            <p className="text-sm leading-6 text-shell-muted">
+              The natural follow-up is saving extracted pages as workspace assets so agents can attach, summarize, file, and compare them later.
+            </p>
           </div>
         </div>
       </section>
@@ -896,7 +1076,7 @@ export function DataToolsPage() {
   const setRoute = useAppStore((state) => state.setDataToolsRoute);
 
   function handleBack() {
-    if (route === 'media') {
+    if (route === 'media' || route === 'web') {
       setRoute('sources');
       return;
     }
@@ -907,8 +1087,9 @@ export function DataToolsPage() {
     <div className="space-y-3">
       <SectionBreadcrumb route={route} onBack={handleBack} />
       {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} />}
-      {route === 'sources' && <DataSourcesPage openMedia={() => setRoute('media')} />}
+      {route === 'sources' && <DataSourcesPage openMedia={() => setRoute('media')} openWeb={() => setRoute('web')} />}
       {route === 'media' && <MediaImportsPage />}
+      {route === 'web' && <WebPageImportsPage />}
       {route === 'messaging' && <MessagingSettingsPage />}
     </div>
   );

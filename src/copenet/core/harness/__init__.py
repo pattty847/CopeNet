@@ -15,6 +15,7 @@ from .final_gate import FinalGateDecision, TaskContract, final_gate_evaluate
 from .tool_loop import (
     ToolExecutor,
     collect_provider_turn,
+    compose_interaction_system_prompt,
     compose_provider_prompt,
     provider_system_prompt,
     run_with_native_tools,
@@ -65,21 +66,31 @@ class ChatHarness:
         trace: TraceRecorder | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
         """Return the normalized plan and provider event stream."""
+        effective_tools = available_tools
+        if available_tools is not None and tool_context is not None:
+            effective_tools = [
+                tool for tool in available_tools if tool.category in tool_context.policy.allowed_categories
+            ]
         plan = await self.plan_turn(
             provider=provider,
             provider_name=getattr(provider, "name", "unknown"),
             model=model,
-            available_tools=available_tools,
+            available_tools=effective_tools,
             prompt=prompt,
             trace=trace,
         )
+        effective_system_prompt = compose_interaction_system_prompt(
+            provider=provider,
+            system_prompt=system_prompt,
+            plan=plan,
+        )
         if not plan.will_attempt_tool_loop or tool_executor is None or tool_context is None:
             stream = provider.run(
-                prompt=compose_provider_prompt(provider, prompt, system_prompt),
+                prompt=compose_provider_prompt(provider, prompt, effective_system_prompt),
                 provider_session_id=provider_session_id,
                 abort_event=abort_event,
                 model=model,
-                system_prompt=provider_system_prompt(provider, system_prompt),
+                system_prompt=provider_system_prompt(provider, effective_system_prompt),
             )
             return plan, stream
 
@@ -90,7 +101,7 @@ class ChatHarness:
                 provider_session_id=provider_session_id,
                 abort_event=abort_event,
                 model=model,
-                system_prompt=system_prompt,
+                system_prompt=effective_system_prompt,
                 plan=plan,
                 tool_executor=tool_executor,
                 tool_context=tool_context,
@@ -103,7 +114,7 @@ class ChatHarness:
                 provider_session_id=provider_session_id,
                 abort_event=abort_event,
                 model=model,
-                system_prompt=system_prompt,
+                system_prompt=effective_system_prompt,
                 plan=plan,
                 tool_executor=tool_executor,
                 tool_context=tool_context,

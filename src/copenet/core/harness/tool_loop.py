@@ -423,6 +423,7 @@ async def run_with_one_tool(
         provider=provider,
         system_prompt=system_prompt,
         tools=plan.tools,
+        tool_context=tool_context,
     )
     correction_attempted = False
     last_tool_result: ToolExecutionResult | None = None
@@ -458,13 +459,14 @@ async def run_with_one_tool(
                         "contentLength": len(current_text),
                     },
                 )
-            if _is_safe_batch(batch_invocation, plan.tools):
+            safe_batch, deferred_calls = _split_batch_invocation(batch_invocation, plan.tools)
+            if safe_batch is not None:
                 if trace is not None:
                     trace(
                         "batch_planned",
                         {
-                            "toolIds": [call.tool_id for call in batch_invocation.calls],
-                            "count": len(batch_invocation.calls),
+                            "toolIds": [call.tool_id for call in safe_batch.calls],
+                            "count": len(safe_batch.calls),
                             "step": step_index + 1,
                         },
                     )
@@ -490,12 +492,28 @@ async def run_with_one_tool(
                     },
                 )
                 tool_result, artifact_draft = await _run_tool_batch(
-                    batch_invocation=batch_invocation,
+                    batch_invocation=safe_batch,
                     tool_executor=tool_executor,
                     tool_context=tool_context,
                     trace=trace,
                 )
                 batch_members = artifact_draft.pop("batchMembers", []) if artifact_draft is not None else []
+                if deferred_calls:
+                    tool_result, artifact_draft, batch_members = _attach_deferred_batch_members(
+                        tool_result=tool_result,
+                        artifact_draft=artifact_draft,
+                        batch_members=batch_members,
+                        deferred_calls=deferred_calls,
+                    )
+                    if trace is not None:
+                        trace(
+                            "tool_batch_split",
+                            {
+                                "executedToolIds": [call.tool_id for call in safe_batch.calls],
+                                "deferredToolIds": [call.tool_id for call in deferred_calls],
+                                "step": step_index + 1,
+                            },
+                        )
                 tool_result, persisted_draft = _materialize_tool_result_artifact(
                     tool_result=tool_result,
                     tool_context=tool_context,
@@ -520,7 +538,7 @@ async def run_with_one_tool(
                             artifact_id=member.get("artifactId"),
                         ),
                     )
-                turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
+                turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_batch_repair" if deferred_calls else "tool_followup")
                 meta_payload: dict[str, Any] = {
                     "toolExecution": tool_result.to_event_payload(),
                     "toolResult": tool_result.to_runtime_input(),
@@ -563,11 +581,12 @@ async def run_with_one_tool(
                     provider=provider,
                     system_prompt=system_prompt,
                     tools=plan.tools,
+                    tool_context=tool_context,
                 )
                 if trace is not None:
                     trace(
                         "tool_loop_continued",
-                        {"step": step_index + 1, "lastToolId": tool_result.tool_id},
+                        {"step": step_index + 1, "lastToolId": tool_result.tool_id, "transitionReason": turn_state.transition_reason},
                     )
                 continue
 
@@ -576,11 +595,16 @@ async def run_with_one_tool(
                 summary="Tool batch blocked.",
                 error="unsafe or unsupported batch request",
                 channel="policy",
+                body={
+                    "results": [_deferred_batch_member(call) for call in batch_invocation.calls],
+                    "policyDecision": "unsafe_unknown",
+                    "policySummary": "TOOL_BATCH only supports read-only repo/context work. Request writes or shell commands as individual TOOL_CALL actions.",
+                },
             )
             executed_results.append(blocked)
-            turn_state.tool_call_count += 1
+            turn_state.tool_call_count += len(batch_invocation.calls)
             turn_state.record_tool_step(tool_id=blocked.tool_id, arguments={}, result=blocked)
-            turn_state.queue_input(blocked.to_runtime_input(), reason="tool_error_correction")
+            turn_state.queue_input(blocked.to_runtime_input(), reason="tool_batch_repair")
             yield ProviderEvent(
                 kind="meta",
                 metadata={
@@ -604,29 +628,23 @@ async def run_with_one_tool(
                     {
                         "toolId": "tool.batch",
                         "reason": "unsafe or unsupported batch request",
-                        "transitionReason": "tool_error_correction",
+                        "transitionReason": "tool_batch_repair",
                     },
                 )
-            final_events, _ = await collect_provider_turn(
-                provider=provider,
-                prompt=compose_tool_terminal_prompt(
-                    user_prompt=prompt,
-                    tool_results=executed_results,
-                ),
-                provider_session_id=discovered_provider_session_id,
-                abort_event=abort_event,
-                model=model,
-                system_prompt=compose_system_prompt(
-                    provider=provider,
-                    system_prompt=system_prompt,
-                    extra_instructions="Use the tool result to answer directly. Do not request another tool.",
-                ),
-                trace=trace,
-                phase="tool-final-answer",
+            turn_state.drain_pending_input()
+            current_prompt = compose_tool_follow_up_prompt(
+                user_prompt=prompt,
+                tool_results=executed_results,
+                turn_state=turn_state,
+                contract=plan.task_contract,
             )
-            for event in final_events:
-                yield event
-            return
+            current_system_prompt = compose_tool_system_prompt(
+                provider=provider,
+                system_prompt=system_prompt,
+                tools=plan.tools,
+                tool_context=tool_context,
+            )
+            continue
 
         invocation = extract_tool_invocation(current_text)
         final_candidate = extract_final_candidate(current_text)
@@ -814,6 +832,7 @@ async def run_with_one_tool(
                     provider=provider,
                     system_prompt=system_prompt,
                     tools=plan.tools,
+                    tool_context=tool_context,
                 )
                 if trace is not None:
                     trace(
@@ -942,6 +961,7 @@ async def run_with_one_tool(
             provider=provider,
             system_prompt=system_prompt,
             tools=plan.tools,
+            tool_context=tool_context,
         )
         if trace is not None:
             trace(
@@ -957,17 +977,83 @@ async def run_with_one_tool(
         trace("turn_completed", turn_state.to_public_dict())
 
 
-def _is_safe_batch(batch: ToolBatchEnvelope, tools: list[ToolDescriptor]) -> bool:
+def _split_batch_invocation(
+    batch: ToolBatchEnvelope,
+    tools: list[ToolDescriptor],
+) -> tuple[ToolBatchEnvelope | None, list[ToolInvocationEnvelope]]:
     descriptors = {tool.id: tool for tool in tools}
-    if len(batch.calls) < 2:
-        return False
+    safe_calls: list[ToolInvocationEnvelope] = []
+    deferred_calls: list[ToolInvocationEnvelope] = []
     for call in batch.calls:
         descriptor = descriptors.get(call.tool_id)
-        if descriptor is None:
-            return False
-        if descriptor.category not in {"repo-read", "context"}:
-            return False
-    return True
+        if descriptor is not None and descriptor.category in {"repo-read", "context"}:
+            safe_calls.append(call)
+        else:
+            deferred_calls.append(call)
+    return (ToolBatchEnvelope(calls=safe_calls) if safe_calls else None, deferred_calls)
+
+
+def _deferred_batch_member(call: ToolInvocationEnvelope) -> dict[str, Any]:
+    hint = None
+    for key in ("path", "query", "pattern", "file", "dir", "command"):
+        value = call.arguments.get(key)
+        if isinstance(value, str) and value.strip():
+            hint = value.strip()
+            break
+    policy_summary = "TOOL_BATCH only supports read-only repo/context work. Request this tool as an individual TOOL_CALL after the read batch finishes."
+    output = {
+        "target": hint,
+        "policyDecision": "unsafe_unknown",
+        "policySummary": policy_summary,
+    }
+    return {
+        "toolId": call.tool_id,
+        "ok": False,
+        "summary": f"Deferred {call.tool_id}; request it as an individual TOOL_CALL.",
+        "output": output,
+        "body": output,
+        "error": policy_summary,
+        "arguments": dict(call.arguments),
+    }
+
+
+def _attach_deferred_batch_members(
+    *,
+    tool_result: ToolExecutionResult,
+    artifact_draft: dict[str, Any] | None,
+    batch_members: list[dict[str, Any]],
+    deferred_calls: list[ToolInvocationEnvelope],
+) -> tuple[ToolExecutionResult, dict[str, Any] | None, list[dict[str, Any]]]:
+    if not deferred_calls:
+        return tool_result, artifact_draft, batch_members
+    body = tool_result.body if isinstance(tool_result.body, dict) else dict(tool_result.output)
+    results = list(body.get("results") or []) if isinstance(body, dict) else []
+    deferred_members = [_deferred_batch_member(call) for call in deferred_calls]
+    results.extend(deferred_members)
+    body = dict(body)
+    body["results"] = results
+    body["policyDecision"] = "unsafe_unknown"
+    body["policySummary"] = "TOOL_BATCH only supports read-only repo/context work. Continue remaining writes or shell commands as individual TOOL_CALL actions."
+    executed_count = len(batch_members)
+    deferred_count = len(deferred_members)
+    merged = ToolExecutionResult(
+        tool_id=tool_result.tool_id,
+        call_id=tool_result.call_id,
+        channel=tool_result.channel,
+        ok=False,
+        summary=f"Executed {executed_count} safe read{'s' if executed_count != 1 else ''}; {deferred_count} remaining tool request{'s' if deferred_count != 1 else ''} must be requested individually.",
+        output=body,
+        body=body,
+        error="mixed batch request repaired",
+        artifact_id=tool_result.artifact_id,
+    )
+    if artifact_draft is not None:
+        artifact_draft = dict(artifact_draft)
+        artifact_draft["body"] = merged.to_prompt_payload()
+        metadata = dict(artifact_draft.get("metadata") or {})
+        metadata["deferredToolIds"] = [call.tool_id for call in deferred_calls]
+        artifact_draft["metadata"] = metadata
+    return merged, artifact_draft, [*batch_members, *deferred_members]
 
 
 async def _run_tool_batch(
@@ -1157,6 +1243,8 @@ def _native_final_candidate(
     ledger = turn_state.evidence_ledger
     visited_paths = list(ledger.get("visitedPaths") or [])
     cited_paths = _extract_cited_evidence(answer, visited_paths)
+    if not cited_paths and len(visited_paths) == 1 and turn_state.grounding_actions:
+        cited_paths = [visited_paths[0]]
     done_conditions = list(getattr(contract, "done_conditions", []) or []) if contract is not None else []
     return FinalCandidateEnvelope(
         answer=answer.strip() or "No grounded final answer was produced.",
@@ -1220,6 +1308,7 @@ def compose_tool_attempt_prompt(*, prompt: str, tools: list[ToolDescriptor], con
         "For repository inspection, directory listing alone is rarely enough. "
         "Prefer direct evidence from files.read or directional discovery from files.rg before summarizing. "
         "Use context.prepare only for orientation, not as a substitute for inspecting files."
+        "\nRepeated shallow reconnaissance is a bad stop point. If you already used files.list or context.prepare, your next action should usually be files.rg or files.read."
         "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and be ready to cite the specific files you inspected."
         "\nIf you infer a file path instead of receiving it explicitly from the user, verify it exists with files.rg or files.list before calling files.read."
         "\nDo not call files.read on directories; use files.list for directories and files.rg for broader exploration."
@@ -1255,6 +1344,7 @@ def compose_native_tool_follow_up_prompt(
             + "\n"
             + f"Recommended next action type: {final_gate_decision.recommended_next_action_type or 'tool'}\n\n"
         )
+    shallow_recon = _shallow_reconnaissance_nudge(turn_state)
     return (
         "Original user request:\n"
         f"{user_prompt}\n\n"
@@ -1267,6 +1357,7 @@ def compose_native_tool_follow_up_prompt(
         f"- Visited paths: {', '.join(ledger.get('visitedPaths') or []) or '(none)'}\n"
         f"- Grounding actions: {', '.join(ledger.get('groundingActions') or []) or '(none)'}\n"
         f"- Last tool summary: {ledger.get('lastToolResultSummary') or '(none)'}\n\n"
+        f"{shallow_recon}"
         "Continue by using the available native tools if evidence is still missing. "
         "Do not finalize until your answer cites the grounded files you inspected. "
         "Use context.prepare only for overview; repository claims need direct file evidence."
@@ -1286,6 +1377,11 @@ def compose_tool_follow_up_prompt(
         corrective_line = (
             "\nThe previous tool request failed validation, policy, or execution. "
             "Repair the tool call directly if another tool is still needed.\n"
+        )
+    elif turn_state.transition_reason == "tool_batch_repair":
+        corrective_line = (
+            "\nThe previous TOOL_BATCH mixed read-only work with writes or shell commands. "
+            "Use TOOL_BATCH only for read-only repo/context work, then continue remaining edits or shell commands as individual TOOL_CALL actions.\n"
         )
     contract_block = ""
     if contract is not None:
@@ -1312,6 +1408,7 @@ def compose_tool_follow_up_prompt(
             + "\n".join(f"- {item}" for item in final_gate_decision.missing_requirements)
             + "\n"
         )
+    shallow_recon = _shallow_reconnaissance_nudge(turn_state)
     return (
         "Original user request:\n"
         f"{user_prompt}\n\n"
@@ -1322,12 +1419,15 @@ def compose_tool_follow_up_prompt(
         f"{rejection_block}"
         f"Current transition reason: {turn_state.transition_reason}\n"
         f"Pending follow-up inputs: {len(turn_state.pending_input)}\n"
+        f"{shallow_recon}"
         "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.\n"
         "For repository exploration, a plain files.list result usually is not enough evidence to stop. "
         "Prefer a follow-up files.rg or files.read step unless the user asked only for a directory listing. "
         "Use context.prepare for orientation only."
         "\nBefore answering a repository-architecture or setup question, gather evidence from meaningful files and cite the specific files you inspected."
         "\nIf you infer a file path instead of receiving it explicitly from the user, verify it exists with files.rg or files.list before calling files.read."
+        "\nUse write tools only if they are listed in the capability manifest. If write tools are unavailable, continue with read/shell/artifact tools and explain the limitation honestly."
+        "\nWhen a task mixes read, edit, shell, and artifact work, prefer the sequence inspect -> edit/write -> verify -> artifact."
         "\nDo not use files.read on directories. Avoid shell.exec pipelines or chained shell commands."
         f"{corrective_line}"
     )
@@ -1373,11 +1473,12 @@ def compose_tool_system_prompt(
     provider: Provider,
     system_prompt: str | None,
     tools: list[ToolDescriptor],
+    tool_context: ToolExecutionContext,
 ) -> str | None:
     return compose_system_prompt(
         provider=provider,
         system_prompt=system_prompt,
-        extra_instructions=build_tool_prompt_section(tools),
+        extra_instructions=build_tool_prompt_section(tools, context=tool_context),
     )
 
 
@@ -1405,7 +1506,8 @@ def compose_native_tool_system_prompt(
         "Use the provider-native tools when evidence is missing. "
         "For repository and coding questions, directory names and conventions are not enough proof. "
         "Inspect relevant files, then cite the specific files you used in the final answer. "
-        "If you are missing evidence, continue with another tool call instead of guessing."
+        "If you are missing evidence, continue with another tool call instead of guessing. "
+        "Use context.prepare for orientation only, and escalate away from repeated files.list toward files.rg or files.read."
     )
     if contract_lines:
         extra = extra + "\n\n" + "\n".join(contract_lines)
@@ -1441,15 +1543,19 @@ def _build_correction_result(
     summary: str,
     error: str,
     channel: str,
+    body: dict[str, Any] | None = None,
 ) -> ToolExecutionResult:
+    payload = dict(body or {"error": error})
+    if "error" not in payload:
+        payload["error"] = error
     return ToolExecutionResult(
         tool_id=tool_id,
         call_id=f"correction-{uuid4().hex[:10]}",
         channel=channel,
         ok=False,
         summary=summary,
-        body={"error": error},
-        output={"error": error},
+        body=payload,
+        output=dict(payload),
         error=error,
     )
 
@@ -1561,6 +1667,53 @@ def compose_system_prompt(
     if not parts:
         return None
     return "\n\n".join(parts)
+
+
+def compose_interaction_system_prompt(
+    *,
+    provider: Provider,
+    system_prompt: str | None,
+    plan: HarnessTurnPlan,
+) -> str | None:
+    extra = _interaction_instructions(plan)
+    return compose_system_prompt(
+        provider=provider,
+        system_prompt=system_prompt,
+        extra_instructions=extra,
+    )
+
+
+def _interaction_instructions(plan: HarnessTurnPlan) -> str:
+    if plan.interaction_class == "casual":
+        return (
+            "Be warm and conversational by default. "
+            "Do not foreground harness machinery, tool protocol, or repo inspection unless the user clearly asks for action."
+        )
+    if plan.interaction_class == "advisory":
+        return (
+            "Be structured but conversational. "
+            "Do not imply you inspected the repo unless you actually did. "
+            "If inspection would improve confidence, say so briefly instead of jumping into tools automatically."
+        )
+    if plan.interaction_class == "risky":
+        return (
+            "Treat this as an action-heavy turn. Use tools carefully, ground non-trivial claims, and surface caution around risky or irreversible actions."
+        )
+    return (
+        "Treat this as an action-oriented turn. Use tools when they materially help, read/search before editing, and ground non-trivial repo claims in specific files."
+    )
+
+
+def _shallow_reconnaissance_nudge(turn_state: TurnState) -> str:
+    shallow_count = sum(
+        1 for item in turn_state.evidence_items if item.get("category") in {"reconnaissance", "contextual"}
+    )
+    if shallow_count < 2 or turn_state.grounding_actions:
+        return ""
+    return (
+        "Shallow reconnaissance saturation: you already used files.list/context.prepare without direct file evidence. "
+        "Your next step should usually be files.rg or files.read, not another shallow overview.\n"
+    )
 
 
 def provider_system_prompt(provider: Provider, system_prompt: str | None) -> str | None:

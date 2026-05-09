@@ -77,7 +77,7 @@ run_completed
 
 ### Tool-Assisted Run (model emits a tool invocation)
 
-The harness makes **two provider turns**: one to ask the model which tool to use, one to synthesize the final answer after the tool runs.
+The harness makes **two or more provider turns** on the default path (first turn proposes a tool or batch; later turns ingest tool results and either finalize or loop again).
 
 ```
 run_started
@@ -89,9 +89,13 @@ tool_requested           toolId, arguments
 tool_executed            toolId, ok, summary      ← or tool_blocked
 provider_turn_started    phase: "tool-follow-up"
 provider_turn_completed  phase: "tool-follow-up"
+tool_loop_continued      step, optional lastToolId, transitionReason
+…                        (repeat turns while the tool loop stays active)
 assistant_finalized
 run_completed
 ```
+
+**Batched reads:** If the model returns `TOOL_BATCH` with multiple read-only repo/context calls, you may see `batch_planned` (safe subset actually executed). If that batch also contained writes or shell tools, trace `tool_batch_split` (`executedToolIds` vs `deferredToolIds`) — deferred calls are synthesized as failed batch members so the harness can instruct the model to re-request them as single `TOOL_CALL`s.
 
 ### Tool Loop Planned But Not Triggered
 
@@ -132,13 +136,24 @@ run_failed               phase: "send_chat", error: "..."
   },
   "willAttemptToolLoop": true,
   "availableToolIds": [
-    "context.prepare", "files.list", "files.read",
-    "files.search", "git.diff", "git.status", "shell.exec"
+    "artifact.create",
+    "context.prepare",
+    "files.edit",
+    "files.list",
+    "files.read",
+    "files.rg",
+    "files.search",
+    "files.write",
+    "git.diff",
+    "git.status",
+    "shell.exec"
   ]
 }
 ```
 
 **Critical distinction:** `availableToolIds` is populated even when `willAttemptToolLoop: false`. The gate is `capabilityProfile.promptedToolUse`, not the presence of registered tools. If a model doesn't report `toolCalls: true` in its capabilities, the tool loop won't trigger regardless of which tools are registered.
+
+**Concrete tool list:** Registered built-ins live in `core/tools/handlers/` and `builtin_readonly.py`. **Write tools (`files.edit`, `files.write`) only appear here when task mode policy allows category `repo-write`** (currently `full-access`). **Artifact tooling (`artifact.create`)** stays available under default policy whenever tools are enabled; it still requires a live session, `run_id`, and `artifact_store` or the handler blocks with its own diagnostic.
 
 ### `provider_turn_started` / `provider_turn_completed`
 
@@ -192,6 +207,11 @@ Known `reason` values:
 | `command not allowed: <cmd>` | shell command not in `ToolPolicy.shell_allowlist` |
 | `shell execution disabled by policy` | `ToolPolicy.allow_shell` is false |
 | `unknown tool` | tool id not in the registry |
+| `write tool unavailable in current mode` | Registry-level block: `repo-write` category not allowed for this session’s task mode (not `full-access`) |
+| `artifact tool unavailable in current mode` | Registry-level block: `artifact` category not allowed (reserved for narrowed policies) |
+| `unsafe or unsupported batch request` | `TOOL_BATCH` had no runnable read/context subset — model must retry as individual calls |
+
+Many batch “repairs” also surface inside the synthesized `tool.batch` execution body (`policySummary`, per-member summaries) rather than always as standalone `tool_blocked` lines after the partial read batch runs.
 
 Default shell allowlist: `git`, `rg`, `ls`, `pwd`, `find`.
 
@@ -222,13 +242,13 @@ For a full debugging playbook, see [DEBUGGING.md](DEBUGGING.md).
 Quick order for an unexpected run:
 
 1. **Find the trace** — newest file in `~/.copenet/logs/runs/`
-2. **`harness_planned`** — was the tool loop planned? Was `promptedToolUse: true`?
+2. **`harness_planned`** — was the tool loop planned? Was `promptedToolUse: true`? Do `availableToolIds` reflect the session task mode (**`full-access` needed for write tools**)?
 3. **`tool_requested`** — did the model call the expected tool with correct arguments?
-4. **`tool_executed` or `tool_blocked`** — policy rejection or real failure?
+4. **`tool_executed`, `tool_blocked`, or mixed batch traces** (`batch_planned`, `tool_batch_split`) — policy rejection, execution failure, or deferred batch calls?
 5. **`assistant_finalized`** — was `toolExecutionAttached` as expected? Is `responseLength` plausible?
 6. **`run_failed`** — if present, the error message is the primary diagnostic
 
-For latency: diff timestamps on `provider_turn_started` and `provider_turn_completed`. Tool-assisted runs have two such pairs.
+For latency: diff timestamps on `provider_turn_started` and `provider_turn_completed`. Multi-step tool loops may have **multiple** pairs per run.
 
 ## Trace Report Format (for agents)
 

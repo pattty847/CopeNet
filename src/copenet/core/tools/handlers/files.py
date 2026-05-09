@@ -9,7 +9,7 @@ import subprocess
 
 from copenet.core.tools.contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
-from ._shared import display_path, file_access_metadata, resolve_relative_path
+from ._shared import display_path, ensure_write_allowed, file_access_metadata, resolve_relative_path
 
 
 DESCRIPTORS = [
@@ -59,6 +59,44 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
         capabilities=["filesystem", "search", "ripgrep"],
+    ),
+    ToolDescriptor(
+        id="files.write",
+        name="Write File",
+        description=(
+            "Create or overwrite a text file inside the current workspace. "
+            "Use this after inspection when you need to materialize a concrete file change."
+        ),
+        category="repo-write",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "content": {"type": "string"},
+            },
+            "required": ["path", "content"],
+        },
+        capabilities=["filesystem", "write"],
+    ),
+    ToolDescriptor(
+        id="files.edit",
+        name="Edit File",
+        description=(
+            "Apply a targeted text replacement inside an existing text file in the current workspace. "
+            "Prefer this after reading the file when you know the exact text to replace."
+        ),
+        category="repo-write",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "old_text": {"type": "string"},
+                "new_text": {"type": "string"},
+                "replace_all": {"type": "boolean"},
+            },
+            "required": ["path", "old_text", "new_text"],
+        },
+        capabilities=["filesystem", "write", "edit"],
     ),
 ]
 
@@ -307,11 +345,78 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     )
 
 
+async def write_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+    path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
+    content = request.arguments.get("content")
+    if not path.name:
+        raise ValueError("path is required")
+    if not isinstance(content, str):
+        raise ValueError("content is required")
+    ensure_write_allowed(path, context)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(content, encoding="utf-8")
+    access = file_access_metadata(path, context)
+    access["accessAction"] = "write"
+    access["policySummary"] = "Write stayed inside the home workspace."
+    return ToolExecutionResult(
+        tool_id=request.tool_id,
+        ok=True,
+        summary=f"Wrote file {access['target']}.",
+        output={
+            "path": access["target"],
+            "bytes": len(content.encode("utf-8")),
+            **access,
+        },
+    )
+
+
+async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+    path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
+    old_text = request.arguments.get("old_text")
+    new_text = request.arguments.get("new_text")
+    replace_all = bool(request.arguments.get("replace_all"))
+    if not path.name:
+        raise ValueError("path is required")
+    if not isinstance(old_text, str) or not old_text:
+        raise ValueError("old_text is required")
+    if not isinstance(new_text, str):
+        raise ValueError("new_text is required")
+    ensure_write_allowed(path, context)
+    if not path.is_file():
+        raise RuntimeError(f"file not found: {path}")
+    text = path.read_text(encoding="utf-8", errors="replace")
+    occurrence_count = text.count(old_text)
+    if occurrence_count == 0:
+        raise RuntimeError(f"old_text not found in {display_path(path, context)}")
+    if occurrence_count > 1 and not replace_all:
+        raise RuntimeError(
+            f"old_text appears {occurrence_count} times in {display_path(path, context)}; set replace_all=true or choose a more specific old_text"
+        )
+    next_text = text.replace(old_text, new_text) if replace_all else text.replace(old_text, new_text, 1)
+    path.write_text(next_text, encoding="utf-8")
+    access = file_access_metadata(path, context)
+    access["accessAction"] = "write"
+    access["policySummary"] = "Write stayed inside the home workspace."
+    replacements = occurrence_count if replace_all else 1
+    return ToolExecutionResult(
+        tool_id=request.tool_id,
+        ok=True,
+        summary=f"Edited file {access['target']} ({replacements} replacement{'s' if replacements != 1 else ''}).",
+        output={
+            "path": access["target"],
+            "replacements": replacements,
+            **access,
+        },
+    )
+
+
 HANDLERS = {
     "files.list": list_files,
     "files.read": read_file,
     "files.search": search_files,
     "files.rg": ripgrep_files,
+    "files.write": write_file,
+    "files.edit": edit_file,
 }
 
 

@@ -25,6 +25,7 @@ from copenet.core.meme_ideation import (
 )
 from copenet.core.media import MediaDependencyError, MediaDownloadError, MediaIngestionService, MediaTranscriptionError
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.web_ingest import WebIngestError, WebIngestionService
 
 
 @dataclass(frozen=True)
@@ -115,9 +116,19 @@ class TelegramInboundRequest(BaseModel):
     idempotency_key: str | None = Field(default=None, alias="idempotencyKey")
 
 
-def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionService | None = None) -> APIRouter:
+class WebExtractRequest(BaseModel):
+    url: str
+    max_chars: int = Field(default=20000, alias="maxChars")
+
+
+def create_app_router(
+    orchestrator: Orchestrator,
+    media_service: MediaIngestionService | None = None,
+    web_ingestion_service: WebIngestionService | None = None,
+) -> APIRouter:
     router = APIRouter(prefix="/api/v1", tags=["app-api"])
     media = media_service or MediaIngestionService()
+    web_ingest = web_ingestion_service or WebIngestionService()
     gateway_token = os.environ.get("COPNET_TOKEN", "dev-token").strip()
 
     def _bearer_token(authorization: str | None) -> str:
@@ -170,6 +181,11 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
         if mapping is None:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="unknown session")
         return mapping
+
+    def _web_ingest_error(exc: Exception) -> HTTPException:
+        if isinstance(exc, WebIngestError):
+            return HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc))
+        return HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=f"web ingest failed: {exc}")
 
     def _public_session(app_session_id: str, session: dict[str, Any]) -> dict[str, Any]:
         return {
@@ -688,6 +704,14 @@ def create_app_router(orchestrator: Orchestrator, media_service: MediaIngestionS
             except OSError:
                 pass
         return {"asset": asset.to_public_dict()}
+
+    @router.post("/web/extract")
+    async def extract_web_page(body: WebExtractRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
+        try:
+            result = await web_ingest.extract_url(url=body.url, max_chars=body.max_chars)
+        except Exception as exc:
+            raise _web_ingest_error(exc) from exc
+        return {"document": result.to_public_dict()}
 
     @router.get("/media/import/stream")
     async def stream_import_media(

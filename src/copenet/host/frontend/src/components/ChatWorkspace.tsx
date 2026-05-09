@@ -4,11 +4,14 @@ import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { PausedRunBanner } from './PausedRunBanner';
-import { Archive, ArrowDown, ArrowUp, CopyPlus, Download, Ellipsis, GitMerge, Mic, Paperclip, Send, Sparkles, X } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, CopyPlus, Download, Ellipsis, GitMerge, Sparkles, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
-import { PERSONAL_STARTER_PRESETS, shouldRenderResumeSnapshot } from '../lib/personalHistory';
+import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
-import type { SessionStateRecord } from '../types/backend';
+import { AgentWorkspaceTabs } from './agents/AgentWorkspaceTabs';
+import { AgentComposer } from './agents/AgentComposer';
+import { RunActivityPanel } from './runtime/RunActivityPanel';
+import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -28,6 +31,11 @@ export function ChatWorkspace() {
   const draftComposerSeed = useAppStore((state) => state.draftComposerSeed);
   const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
   const upsertSessionState = useAppStore((state) => state.upsertSessionState);
+  const providers = useAppStore((state) => state.providers);
+  const profiles = useAppStore((state) => state.profiles);
+  const runtimeContext = useAppStore((state) => state.runtimeContext);
+  const agentWorkspaceTab = useAppStore((state) => state.agentWorkspaceTab);
+  const setAgentWorkspaceTab = useAppStore((state) => state.setAgentWorkspaceTab);
 
   const messages = (activeSessionKey ? messagesMap[activeSessionKey] : undefined) || [];
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
@@ -46,10 +54,7 @@ export function ChatWorkspace() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
-  const [pulseState, setPulseState] = useState<Record<string, unknown> | null>(null);
-  const [sessionState, setSessionState] = useState<SessionStateRecord | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -61,24 +66,15 @@ export function ChatWorkspace() {
   useEffect(() => {
     if (!activeSessionKey) return;
     let cancelled = false;
-    setPulseState(null);
-    setSessionState(null);
     void wsClient.resolveMergeState(activeSessionKey).then((mergeState) => {
       if (!cancelled) setMergeState(activeSessionKey, mergeState);
     }).catch(() => {
       if (!cancelled) setMergeState(activeSessionKey, null);
     });
     void wsClient.resolveSessionState(activeSessionKey).then((state) => {
-      if (!cancelled) {
-        setSessionState(state);
-        if (state) upsertSessionState(state);
-        setPulseState(state?.pulse_state && typeof state.pulse_state === 'object' ? state.pulse_state as Record<string, unknown> : null);
-      }
+      if (!cancelled && state) upsertSessionState(state);
     }).catch(() => {
-      if (!cancelled) {
-        setSessionState(null);
-        setPulseState(null);
-      }
+      return;
     });
     return () => {
       cancelled = true;
@@ -88,13 +84,6 @@ export function ChatWorkspace() {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
-
-  useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.style.height = 'auto';
-      textareaRef.current.style.height = `${Math.min(textareaRef.current.scrollHeight, 84)}px`;
-    }
-  }, [input]);
 
   useEffect(() => {
     if (!draftComposerSeed) return;
@@ -113,14 +102,12 @@ export function ChatWorkspace() {
     return () => document.removeEventListener('mousedown', handler);
   }, [actionsOpen]);
 
-  const handleSend = async () => {
-    if (!input.trim() || activeRunId) return;
+  const handleSend = async (messageOverride?: string) => {
+    const message = (messageOverride ?? input).trim();
+    if (!message || activeRunId) return;
     try {
-      await wsClient.sendMessage(input);
+      await wsClient.sendMessage(message);
       setInput('');
-      if (textareaRef.current) {
-        textareaRef.current.style.height = 'auto';
-      }
     } catch {
       // user-visible error is already stored
     }
@@ -153,20 +140,6 @@ export function ChatWorkspace() {
   const mergeSourceSessions = useMemo(
     () => (mergeDraft?.sourceSessionKeys || []).map((key) => sessions.find((session) => session.key === key)).filter((session): session is NonNullable<typeof activeSession> => Boolean(session)),
     [mergeDraft, sessions],
-  );
-  const resumeDecisions = useMemo(
-    () => (sessionState?.prior_decisions || []).filter((value) => !/^Run .* completed with tool mode /.test(value)).slice(0, 3),
-    [sessionState],
-  );
-  const showResumeSnapshot = Boolean(
-    activeSession &&
-    sessionState &&
-    shouldRenderResumeSnapshot({
-      taskSummary: sessionState.task_summary || null,
-      unresolvedQuestions: sessionState.unresolved_questions || [],
-      priorDecisions: resumeDecisions,
-      starterIntent: sessionState.starter_intent || null,
-    }),
   );
 
   const handleExportConversation = async () => {
@@ -209,7 +182,6 @@ export function ChatWorkspace() {
 
   const applyPromptSeed = (seed: string) => {
     setInput(seed);
-    window.requestAnimationFrame(() => textareaRef.current?.focus());
   };
 
   const handleStarterIntent = (intentId: typeof PERSONAL_STARTER_PRESETS[number]['id'], seed: string) => {
@@ -264,6 +236,27 @@ export function ChatWorkspace() {
     }
   };
 
+  const providerName = providers.find((provider) => provider.id === (isDraft ? draftSettings.provider : activeSession?.provider))?.displayName
+    || (isDraft ? draftSettings.provider : activeSession?.provider)
+    || 'None';
+  const profileName = profiles.find((profile) => profile.id === (isDraft ? draftSettings.systemPromptId : activeSession?.systemPromptId || ''))?.name
+    || (isDraft ? draftSettings.systemPromptId : activeSession?.systemPromptId)
+    || 'Default';
+  const runtimeSummary = {
+    provider: providerName,
+    model: (isDraft ? draftSettings.model : activeSession?.model) || 'default',
+    profile: profileName,
+    statusLabel: isMergePrep ? 'Merge Prep' : isDraft ? 'Draft' : 'Locked',
+    workspaceRoot: (isDraft ? draftSettings.workspaceRoot : activeSession?.workspaceRoot) || runtimeContext?.workspaceRoot || '',
+    locked: !isDraft && !isMergePrep,
+  };
+  const handleStartNewSession = () => {
+    useAppStore.getState().setActiveSessionKey(null);
+    useAppStore.getState().setDraftOpen(false);
+    setMergeDraft(null);
+    wsClient.beginDraft();
+  };
+
   return (
     <main className="flex-1 flex flex-col bg-operator-bg relative h-full overflow-hidden">
       {/* Run-in-progress accent bar */}
@@ -275,9 +268,9 @@ export function ChatWorkspace() {
       <PausedRunBanner />
 
       {/* Header */}
-      <div className="border-b border-operator-border bg-operator-bg flex flex-col">
+      <div className="border-b border-operator-border bg-operator-bg">
         <div className={`flex gap-2.5 sm:px-4 sm:py-2.5 ${isMobile ? 'items-start justify-between px-3 py-2' : 'px-3 py-2.5 items-center justify-between'}`}>
-          <div className="flex-1 min-w-0">
+          <div className="min-w-0 flex flex-1 flex-wrap items-center gap-2">
             {/* Title */}
             {isEditingTitle ? (
               <input
@@ -304,14 +297,10 @@ export function ChatWorkspace() {
                 {activeSession?.title || (mergeDraft ? 'Merge Workspace' : 'New Chat')}
               </h1>
             )}
-
-            {activeSession?.archived && (
-              <div className="mt-1.5">
-                <span className="px-2 py-0.5 rounded-md border border-operator-error/25 bg-operator-error/8 text-[10px] font-semibold uppercase tracking-wider text-operator-error">
-                  Archived
-                </span>
-              </div>
-            )}
+            <span className="text-[11px] text-operator-muted">{providerName} · {runtimeSummary.model}</span>
+            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${activeSession?.archived ? 'border-operator-error/25 bg-operator-error/8 text-operator-error' : runtimeSummary.locked ? 'border-operator-success/25 bg-operator-success/8 text-operator-success' : 'border-operator-accent/25 bg-operator-accent/8 text-operator-accent'}`}>
+              {activeSession?.archived ? 'Archived' : runtimeSummary.statusLabel}
+            </span>
           </div>
 
           {/* Actions */}
@@ -426,81 +415,12 @@ export function ChatWorkspace() {
         </div>
       )}
 
-      {activeSession && !activeMergeState && pulseState && (
-        <div className={`${isMobile ? 'px-3 py-2' : 'px-4 py-2'} border-b border-operator-border/70 bg-operator-panel/10`}>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-operator-muted">
-            <span className="inline-flex items-center gap-1.5 font-semibold text-operator-text">
-              <Sparkles className="h-3.5 w-3.5 text-operator-accent" />
-              Pulse context ready
-            </span>
-            {typeof pulseState.why_now === 'string' && pulseState.why_now.trim() && (
-              <span className="text-operator-muted/75">{pulseState.why_now}</span>
-            )}
-          </div>
-          {Array.isArray(pulseState.source_session_keys) && pulseState.source_session_keys.length > 0 && (
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {(pulseState.source_session_keys as unknown[]).map((value) => {
-                const sourceKey = String(value || '').trim();
-                if (!sourceKey) return null;
-                const sourceSession = sessions.find((session) => session.key === sourceKey);
-                return (
-                  <button
-                    key={sourceKey}
-                    type="button"
-                    onClick={() => useAppStore.getState().setActiveSessionKey(sourceKey)}
-                    className="rounded-full border border-operator-border px-2 py-1 text-[10px] text-operator-muted transition-colors hover:border-operator-accent/30 hover:text-operator-accent"
-                    title={sourceSession?.title || sourceKey}
-                  >
-                    {sourceSession?.title || sourceKey}
-                  </button>
-                );
-              })}
-            </div>
-          )}
-        </div>
-      )}
-
-      {showResumeSnapshot && sessionState && (
-        <div className={`${isMobile ? 'px-3 py-2' : 'px-4 py-2'} border-b border-operator-border/70 bg-operator-panel/5`}>
-          <div className="flex flex-wrap items-center gap-2 text-[11px] text-operator-muted">
-            <span className="font-semibold text-operator-text">Where we left off</span>
-            {sessionState.starter_intent && (
-              <span className="rounded-full border border-operator-accent/20 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent">
-                {sessionState.starter_intent.replaceAll('_', ' ')}
-              </span>
-            )}
-          </div>
-          <div className="mt-2 grid gap-2 md:grid-cols-3">
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Current focus</div>
-              <div className="mt-1 text-[12px] leading-5 text-operator-text">{sessionState.task_summary || 'Session context is ready.'}</div>
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Open questions</div>
-              <div className="mt-1 space-y-1 text-[12px] leading-5 text-operator-text">
-                {(sessionState.unresolved_questions || []).slice(0, 2).map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
-                {(sessionState.unresolved_questions || []).length === 0 && <div className="text-operator-muted">No open questions saved.</div>}
-              </div>
-            </div>
-            <div className="min-w-0">
-              <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Latest decisions</div>
-              <div className="mt-1 space-y-1 text-[12px] leading-5 text-operator-text">
-                {resumeDecisions.slice(0, 2).map((item) => (
-                  <div key={item}>• {item}</div>
-                ))}
-                {resumeDecisions.length === 0 && <div className="text-operator-muted">No explicit decisions saved yet.</div>}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Working Set — glanceable, pinned above the message stream */}
       {!isMergePrep && <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />}
 
-      {/* Messages */}
+      <AgentWorkspaceTabs value={agentWorkspaceTab} onChange={setAgentWorkspaceTab} />
+
+      {agentWorkspaceTab === 'messages' && (
       <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-2.5' : 'px-2 py-2.5'}`}>
         {messages.length === 0 ? (
           mergeDraft ? (
@@ -712,63 +632,44 @@ export function ChatWorkspace() {
           </div>
         )}
       </div>
+      )}
+
+      {agentWorkspaceTab === 'tool_activity' && (
+        <div className="flex-1 overflow-y-auto">
+          <RunActivityPanel sessionKey={activeSessionKey} isDraft={isDraft} />
+        </div>
+      )}
+
+      {agentWorkspaceTab === 'artifacts' && (
+        <div className="flex-1 overflow-y-auto">
+          <ArtifactsPanel sessionKey={activeSessionKey} isDraft={isDraft} />
+        </div>
+      )}
 
       {/* Composer */}
-      <div className={`border-t border-operator-border bg-operator-panel/40 ${isMobile ? 'px-3 pb-3 pt-2.5' : 'px-3 py-2.5'}`}>
-        <div className="flex items-center justify-between px-1 pb-1 text-[10px] font-semibold uppercase tracking-wider">
-          <span className={`${composerDisabled ? 'text-operator-muted/50' : 'text-operator-muted'}`}>
-            {isMergePrep
-              ? 'Create the merged workspace before sending messages'
-              : isArchived
-                ? 'Composer disabled for archived sessions'
-                : activeRunId
-                  ? 'Assistant response in progress'
-                  : isDraft
-                    ? 'First send creates and locks this session'
-                    : 'Session is live and locked to its runtime'}
-          </span>
-          <span className={(isDraft || isMergePrep) ? 'text-operator-accent' : 'text-operator-success'}>
-            {isMergePrep ? 'Merge Prep' : isDraft ? 'Draft' : 'Locked'}
-          </span>
-        </div>
-
-        <div className={`flex gap-1.5 bg-operator-bg border border-operator-border rounded-lg px-2 py-1.5 focus-within:border-operator-accent/40 transition-colors duration-150 ${isMobile ? 'items-end' : 'items-end'}`}>
-          <textarea
-            ref={textareaRef}
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={composerDisabled}
-            placeholder={isMergePrep ? 'Create the merged workspace to begin...' : isArchived ? 'SESSION ARCHIVED' : isDraft ? 'Send the first message to create this session...' : 'Message the agent...'}
-            className="flex-1 bg-transparent px-2 py-1 text-[13px] leading-5 font-sans text-operator-text focus:outline-none disabled:opacity-40 resize-none max-h-[84px] overflow-y-auto placeholder:text-operator-muted/50"
-            rows={1}
-          />
-
-          <div className={`flex items-center gap-0.5 shrink-0 ${isMobile ? 'pb-0' : 'pb-0.5'}`}>
-            <button
-              disabled={composerDisabled}
-              className="p-2 text-operator-muted hover:text-operator-text transition-colors duration-150 disabled:opacity-40 rounded-lg hover:bg-operator-panel"
-              title="Attach file"
-            >
-              <Paperclip className="w-3.5 h-3.5" />
-            </button>
-            <button
-              disabled={composerDisabled}
-              className="p-2 text-operator-muted hover:text-operator-text transition-colors duration-150 disabled:opacity-40 rounded-lg hover:bg-operator-panel"
-              title="Voice input"
-            >
-              <Mic className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => void handleSend()}
-              disabled={!input.trim() || composerDisabled}
-              className="glow-accent flex items-center justify-center h-10 w-10 ml-0.5 bg-operator-accent text-operator-bg rounded-xl disabled:opacity-30 disabled:cursor-not-allowed disabled:shadow-none"
-            >
-              <Send className="w-3.5 h-3.5" />
-            </button>
-          </div>
-        </div>
-      </div>
+      <AgentComposer
+        value={input}
+        onChange={setInput}
+        onKeyDown={handleKeyDown}
+        onSend={(messageOverride) => void handleSend(messageOverride)}
+        optimizationProviderId={isDraft ? draftSettings.provider : activeSession?.provider || draftSettings.provider}
+        optimizationModelId={isDraft ? draftSettings.model : activeSession?.model || draftSettings.model}
+        disabled={composerDisabled}
+        placeholder={isMergePrep ? 'Create the merged workspace to begin...' : isArchived ? 'SESSION ARCHIVED' : isDraft ? 'Send the first message to create this session...' : 'Message the agent...'}
+        statusCopy={
+          isMergePrep
+            ? 'Create the merged workspace before sending messages'
+            : isArchived
+              ? 'Composer disabled for archived sessions'
+              : activeRunId
+                ? 'Assistant response in progress'
+                : isDraft
+                  ? 'First send creates and locks this session'
+                  : 'Session is live and locked to its runtime'
+        }
+        runtimeSummary={runtimeSummary}
+        onStartNewSession={handleStartNewSession}
+      />
     </main>
   );
 }

@@ -7,7 +7,14 @@ from typing import Any, Literal
 
 from copenet.core.tools import FinalCandidateEnvelope
 
-TaskKind = Literal["repo_explore", "repo_explain", "patch_plan", "patch_apply_verify"]
+TaskKind = Literal[
+    "repo_explore",
+    "repo_explain",
+    "patch_plan",
+    "patch_apply_verify",
+    "repo_edit",
+    "artifact_workflow",
+]
 
 
 @dataclass(frozen=True)
@@ -62,9 +69,13 @@ def final_gate_evaluate(
     evidence_items = list(ledger.get("evidenceItems") or [])
     has_grounding = bool(grounding_actions)
     has_directional = any(item.get("category") == "directional" for item in evidence_items)
-    reconnaissance_count = sum(1 for item in evidence_items if item.get("category") == "reconnaissance")
-    has_patch = any(tool_id == "patch.apply" for tool_id in visited_tools)
-    has_verification = any(tool_id == "test.run" for tool_id in visited_tools)
+    has_contextual = any(item.get("category") == "contextual" for item in evidence_items)
+    shallow_reconnaissance_count = sum(
+        1 for item in evidence_items if item.get("category") in {"reconnaissance", "contextual"}
+    )
+    has_patch = any(tool_id in {"patch.apply", "files.edit", "files.write"} for tool_id in visited_tools)
+    has_verification = any(tool_id in {"test.run", "shell.exec", "git.diff"} for tool_id in visited_tools)
+    has_artifact = any(tool_id == "artifact.create" for tool_id in visited_tools)
 
     candidate_answer = candidate.answer.strip()
     candidate_evidence = list(candidate.evidence)
@@ -78,7 +89,7 @@ def final_gate_evaluate(
         missing.append("non-empty final answer")
         reason_code = "empty_final_answer"
 
-    if task_kind in {"repo_explore", "repo_explain", "patch_plan", "patch_apply_verify"} and not candidate_evidence:
+    if task_kind in {"repo_explore", "repo_explain", "patch_plan", "patch_apply_verify", "repo_edit", "artifact_workflow"} and not candidate_evidence:
         missing.append("grounded evidence list")
 
     unknown_paths = [path for path in candidate_evidence if path not in visited_paths]
@@ -105,17 +116,29 @@ def final_gate_evaluate(
     if "verification run" in supported_done and not has_verification:
         missing.append("verification run")
         reason_code = reason_code or "missing_verification"
-        next_action = "test.run"
+        next_action = "shell.exec"
+    if "artifact created" in supported_done and not has_artifact:
+        missing.append("artifact created")
+        reason_code = reason_code or "missing_artifact"
+        next_action = "artifact.create"
 
     if task_kind == "repo_explore":
         if not has_grounding:
             missing.append("grounded file evidence")
-            reason_code = reason_code or ("reconnaissance_saturation" if reconnaissance_count >= 2 else "missing_grounding")
+            reason_code = reason_code or (
+                "reconnaissance_saturation"
+                if shallow_reconnaissance_count >= 2
+                else ("contextual_only_evidence" if has_contextual else "missing_grounding")
+            )
             next_action = "files.read" if visited_paths else "files.search"
     elif task_kind == "repo_explain":
         if not has_grounding:
             missing.append("grounded file evidence")
-            reason_code = reason_code or ("reconnaissance_saturation" if reconnaissance_count >= 2 else "missing_file_evidence")
+            reason_code = reason_code or (
+                "reconnaissance_saturation"
+                if shallow_reconnaissance_count >= 2
+                else ("contextual_only_evidence" if has_contextual else "missing_file_evidence")
+            )
             next_action = "files.read" if visited_paths else "files.search"
         elif not candidate_evidence:
             missing.append("file path citation")
@@ -124,11 +147,11 @@ def final_gate_evaluate(
     elif task_kind == "patch_plan":
         if not has_grounding:
             missing.append("grounded file evidence tied to the patch plan")
-            if reconnaissance_count >= 2:
+            if shallow_reconnaissance_count >= 2:
                 reason_code = reason_code or "reconnaissance_saturation"
                 next_action = "files.read" if visited_paths else "files.search"
             else:
-                reason_code = reason_code or "missing_patch_evidence"
+                reason_code = reason_code or ("contextual_only_evidence" if has_contextual else "missing_patch_evidence")
                 next_action = "files.read" if has_directional else "files.search"
         elif not candidate_evidence:
             missing.append("file path citation")
@@ -137,16 +160,38 @@ def final_gate_evaluate(
     elif task_kind == "patch_apply_verify":
         if not has_grounding:
             missing.append("grounded file evidence")
-            reason_code = reason_code or "missing_grounding"
+            reason_code = reason_code or ("contextual_only_evidence" if has_contextual else "missing_grounding")
             next_action = "files.read"
         elif not has_patch:
             missing.append("patch applied")
             reason_code = reason_code or "missing_patch_evidence"
-            next_action = "patch.apply"
+            next_action = "files.edit"
         elif not has_verification:
             missing.append("verification run")
             reason_code = reason_code or "missing_verification"
-            next_action = "test.run"
+            next_action = "shell.exec"
+    elif task_kind == "repo_edit":
+        if not has_grounding:
+            missing.append("grounded file evidence")
+            reason_code = reason_code or ("contextual_only_evidence" if has_contextual else "missing_grounding")
+            next_action = "files.read" if visited_paths else "files.search"
+        elif not has_patch:
+            missing.append("patch applied")
+            reason_code = reason_code or "missing_patch_evidence"
+            next_action = "files.edit"
+    elif task_kind == "artifact_workflow":
+        if not has_grounding:
+            missing.append("grounded file evidence")
+            reason_code = reason_code or (
+                "reconnaissance_saturation"
+                if shallow_reconnaissance_count >= 2
+                else ("contextual_only_evidence" if has_contextual else "missing_grounding")
+            )
+            next_action = "files.read" if visited_paths else "files.search"
+        elif not has_artifact:
+            missing.append("artifact created")
+            reason_code = reason_code or "missing_artifact"
+            next_action = "artifact.create"
 
     if missing:
         deduped_missing = list(dict.fromkeys(missing))

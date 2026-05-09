@@ -1,4 +1,4 @@
-import { MediaAsset, MediaAssetDetail } from '../types/backend';
+import { MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
 
 const DEFAULT_DEV_TOKEN = 'dev-token';
 
@@ -52,6 +52,18 @@ function normalizeMediaAssetDetail(raw: unknown): MediaAssetDetail {
   return {
     ...asset,
     transcriptContent: String(payload.transcriptContent || ''),
+  };
+}
+
+function normalizeWebExtractDocument(raw: unknown): WebExtractDocument {
+  const payload = (raw || {}) as Record<string, unknown>;
+  return {
+    url: String(payload.url || ''),
+    title: String(payload.title || 'Untitled document'),
+    text: String(payload.text || ''),
+    markdown: String(payload.markdown || ''),
+    excerpt: String(payload.excerpt || ''),
+    wordCount: typeof payload.wordCount === 'number' ? payload.wordCount : Number(payload.wordCount || 0),
   };
 }
 
@@ -175,6 +187,19 @@ export async function downloadMediaFromUrl(url: string): Promise<void> {
   anchor.click();
   anchor.remove();
   window.setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+}
+
+export async function extractWebPage(url: string, maxChars = 20000): Promise<WebExtractDocument> {
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/web/extract`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ url, maxChars }),
+  });
+  const payload = await readJson<{ document?: unknown }>(response);
+  return normalizeWebExtractDocument(payload.document);
 }
 
 export async function uploadMediaFile(file: File): Promise<MediaAsset> {

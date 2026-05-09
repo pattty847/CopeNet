@@ -179,7 +179,20 @@ export interface PromptOption {
   name: string;
 }
 
-export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'messaging';
+export interface PromptOptimizationVariant {
+  id: string;
+  label: string;
+  prompt: string;
+  rationale: string;
+}
+
+export interface PromptOptimizationResult {
+  variants: PromptOptimizationVariant[];
+  provider: string;
+  model: string | null;
+}
+
+export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'web' | 'messaging';
 
 export interface DraftSettings {
   provider: string;
@@ -187,6 +200,15 @@ export interface DraftSettings {
   systemPromptId: string;
   taskPromptId: string;
   workspaceRoot: string;
+}
+
+export interface WebExtractDocument {
+  url: string;
+  title: string;
+  text: string;
+  markdown: string;
+  excerpt: string;
+  wordCount: number;
 }
 
 export interface RuntimeContext {
@@ -276,7 +298,22 @@ export interface SessionExportPayload {
   markdown: string;
 }
 
+export interface SessionArtifactRecord {
+  artifactId: string;
+  sessionKey: string;
+  runId: string;
+  type: string;
+  title: string;
+  body: string;
+  sourceAssetIds: string[];
+  sourceArtifactIds: string[];
+  createdAt: string;
+  updatedAt: string;
+  metadata: Record<string, unknown>;
+}
+
 export interface RunStep {
+  callId?: string | null;
   toolId: string;
   ok: boolean;
   summary: string;
@@ -289,6 +326,7 @@ export interface RunStep {
   accessAction?: 'read' | 'write' | 'unknown' | null;
   policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
   policySummary?: string | null;
+  members?: ToolBatchMember[];
 }
 
 export interface SessionRunRecord {

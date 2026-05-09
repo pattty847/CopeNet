@@ -342,11 +342,14 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
         tools = socket.recv_response(tools_id)
         tool_rows = tools["payload"]["tools"]
         assert {tool["id"] for tool in tool_rows} == {
+            "artifact.create",
             "context.prepare",
+            "files.edit",
             "files.list",
             "files.read",
             "files.rg",
             "files.search",
+            "files.write",
             "git.diff",
             "git.status",
             "shell.exec",

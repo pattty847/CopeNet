@@ -140,6 +140,7 @@ class CopeNetWsServer:
                                 "chat.abort",
                                 "chat.history",
                                 "prompts.list",
+                                "prompts.optimize",
                                 "providers.list",
                                 "profile.get",
                                 "profile.changelog",

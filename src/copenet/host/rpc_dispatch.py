@@ -22,6 +22,7 @@ from .rpc_catalog import (
     handle_profile_changelog,
     handle_profile_get,
     handle_prompts_list,
+    handle_prompts_optimize,
     handle_provider_auth_begin_login,
     handle_provider_auth_complete_login,
     handle_provider_auth_logout,
@@ -70,6 +71,8 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_sessions_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "prompts.list":
         await handle_prompts_list(req.id, send_json)
+    elif req.method == "prompts.optimize":
+        await handle_prompts_optimize(req.id, req.params, send_json, orchestrator)
     elif req.method == "providers.list":
         await handle_providers_list(req.id, send_json, orchestrator)
     elif req.method == "models.list":

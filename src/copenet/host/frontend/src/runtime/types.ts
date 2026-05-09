@@ -129,7 +129,26 @@ export interface Artifact {
   orchestrationData?: import('../types/backend').OrchestrationRun;
 }
 
-export type ActivityItemKind = 'tool_call' | 'read_batch' | 'bundle' | 'note';
+export type ActivityItemKind = 'tool_call' | 'read_batch' | 'bundle' | 'note' | 'proof_group';
+
+export type ActivityProofGroupKind = 'commands' | 'files_read' | 'files_edited' | 'skills' | 'artifacts';
+
+export interface ActivityProofMember {
+  id: string;
+  label: string;
+  detail?: string;
+  status: 'success' | 'blocked' | 'failed';
+  toolId?: string | null;
+  target?: string | null;
+  artifactId?: string | null;
+  additions?: number | null;
+  deletions?: number | null;
+  fileCount?: number | null;
+  outputPreview?: string | null;
+  fullOutput?: string | null;
+  artifactKind?: ArtifactKind | null;
+}
+
 
 export interface ActivityToolCall {
   id: string;
@@ -149,6 +168,8 @@ export interface ActivityToolCall {
   policySummary?: string | null;
   /** Error string when ok=false. Populated when backend provides RunStep.error. */
   error?: string | null;
+  /** Optional bounded proof preview, especially useful for expanded tool.batch members. */
+  preview?: string | null;
 }
 
 export interface ActivityReadBatch {
@@ -169,6 +190,16 @@ export interface ActivityBundle {
   producedArtifactId?: string;
 }
 
+export interface ActivityProofGroup {
+  id: string;
+  kind: 'proof_group';
+  group: ActivityProofGroupKind;
+  label: string;
+  at: string;
+  summary?: string;
+  members: ActivityProofMember[];
+}
+
 export interface ActivityNote {
   id: string;
   kind: 'note';
@@ -180,6 +211,7 @@ export type ActivityItem =
   | ActivityToolCall
   | ActivityReadBatch
   | ActivityBundle
+  | ActivityProofGroup
   | ActivityNote;
 
 export interface RunActivity {

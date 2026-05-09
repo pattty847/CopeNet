@@ -27,6 +27,33 @@ async def handle_prompts_list(request_id: str, send_json: SendJson) -> None:
     )
 
 
+async def handle_prompts_optimize(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    raw = params or {}
+    prompt = str(raw.get("prompt") or "").strip()
+    if not prompt:
+        raise ValueError("prompt is required")
+    payload = await orchestrator.optimize_prompt(
+        prompt=prompt,
+        provider_id=str(raw.get("provider") or "").strip() or None,
+        model=str(raw.get("model") or "").strip() or None,
+        custom_transform=str(raw.get("customTransform") or "").strip() or None,
+    )
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=payload,
+            )
+        )
+    )
+
+
 async def handle_providers_list(request_id: str, send_json: SendJson, orchestrator) -> None:
     await send_json(
         make_response_frame(

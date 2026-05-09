@@ -59,21 +59,33 @@ class ToolRegistry:
                 },
             )
         if descriptor.category not in context.policy.allowed_categories:
+            if descriptor.category == "repo-write":
+                error = "write tool unavailable in current mode"
+                policy_decision = "write_blocked"
+                policy_summary = "Current tool mode does not allow repository write tools."
+            elif descriptor.category == "artifact":
+                error = "artifact tool unavailable in current mode"
+                policy_decision = "unsafe_unknown"
+                policy_summary = "Current tool mode does not allow artifact creation."
+            else:
+                error = f"category not allowed: {descriptor.category}"
+                policy_decision = "unsafe_unknown"
+                policy_summary = f"Tool category {descriptor.category} is blocked by policy."
             self._trace(
                 context,
                 "tool_blocked",
-                {"toolId": descriptor.id, "reason": f"category not allowed: {descriptor.category}"},
+                {"toolId": descriptor.id, "reason": error},
             )
             return ToolExecutionResult(
                 tool_id=descriptor.id,
                 ok=False,
-                summary=f"Tool blocked: {descriptor.id}",
-                error=f"category not allowed: {descriptor.category}",
+                summary=f"Tool unavailable in current mode: {descriptor.id}",
+                error=error,
                 output={
                     "workspaceRoot": str(context.session_workspace_root),
-                    "accessAction": "unknown",
-                    "policyDecision": "unsafe_unknown",
-                    "policySummary": f"Tool category {descriptor.category} is blocked by policy.",
+                    "accessAction": "write" if descriptor.category in {"repo-write", "artifact"} else "unknown",
+                    "policyDecision": policy_decision,
+                    "policySummary": policy_summary,
                 },
             )
         _track_tool_repetition(context, request=request)

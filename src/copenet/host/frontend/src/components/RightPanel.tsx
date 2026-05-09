@@ -12,6 +12,7 @@ import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
 import { RunTimeline } from './RunTimeline';
 import { SendMessageComposer } from './SendMessageComposer';
+import { InspectorOverview } from './agents/InspectorOverview';
 import { usePendingApproval, useApprovalHistory, useInboxItems, usePatProfile } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
@@ -32,7 +33,7 @@ function timeAgo(dateString?: string | null) {
 const selectClass =
   'bg-operator-bg border border-operator-border text-operator-text text-[12px] px-2 py-1.5 rounded-md focus:outline-none focus:border-operator-accent/40 w-full transition-colors duration-150';
 
-export function RightPanel({ mobile = false }: { mobile?: boolean }) {
+export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: boolean; overviewOnly?: boolean }) {
   const panelRef = useRef<HTMLDivElement | null>(null);
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const sessions = useAppStore((state) => state.sessions);
@@ -181,6 +182,31 @@ export function RightPanel({ mobile = false }: { mobile?: boolean }) {
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 320;
   const iconOnlyTabs = !compactTabs && !mobile && panelWidth > 0 && panelWidth < 430;
+
+  if (overviewOnly && !mobile) {
+    return (
+      <>
+        <aside
+          ref={panelRef}
+          className="w-full min-w-0 border-l border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden"
+        >
+          <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
+            <Activity className="w-3.5 h-3.5 text-operator-accent shrink-0" />
+            <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Inspector</h2>
+          </div>
+          <div className="border-b border-operator-border bg-operator-panel/8 px-3 pt-1">
+            <div className="inline-flex rounded-t-lg border-b-2 border-operator-accent bg-operator-accent/5 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-accent">
+              Overview
+            </div>
+          </div>
+          <div className="flex-1 overflow-y-auto">
+            <InspectorOverview overviewOnly />
+          </div>
+        </aside>
+        <SendMessageComposer />
+      </>
+    );
+  }
 
   if (!rightPanelOpen && !mobile) {
     return (

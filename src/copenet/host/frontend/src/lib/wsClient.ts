@@ -10,6 +10,8 @@ import {
   MessagingConfig,
   Model,
   PatProfile,
+  PromptOptimizationResult,
+  PromptOptimizationVariant,
   PulseRecord,
   ProfileChangelogItem,
   Provider,
@@ -21,6 +23,7 @@ import {
   Session,
   SessionMergeState,
   SessionExportPayload,
+  SessionArtifactRecord,
   SessionStateRecord,
   SessionRunRecord,
   TextPart,
@@ -517,12 +520,13 @@ function normalizeMessage(
   fallbackState: Message['state'],
   optimistic = false,
 ): Message {
+  const content = typeof raw?.content === 'string' ? normalizeAssistantDisplayText(raw.content) : '';
   return {
     localId,
     sessionKey,
     runId: raw?.runId ? String(raw.runId) : null,
     role: raw?.role === 'assistant' || raw?.role === 'system' ? raw.role : fallbackRole,
-    content: typeof raw?.content === 'string' ? raw.content : '',
+    content,
     timestamp: raw?.timestamp ? String(raw.timestamp) : new Date().toISOString(),
     provider: raw?.provider ? String(raw.provider) : null,
     model: raw?.model ? String(raw.model) : null,
@@ -535,6 +539,31 @@ function normalizeMessage(
   };
 }
 
+function extractFinalCandidateText(raw: string): string | null {
+  const candidate = raw.trim();
+  if (!candidate || (!candidate.startsWith('{') && !candidate.startsWith('```'))) return null;
+  let text = candidate;
+  if (text.startsWith('```')) {
+    const lines = text.split('\n');
+    if (lines.length >= 3 && lines[lines.length - 1]?.trim().startsWith('```')) {
+      text = lines.slice(1, -1).join('\n').trim();
+    }
+  }
+  try {
+    const parsed = JSON.parse(text) as Record<string, unknown>;
+    const finalType = parsed.state ?? parsed.type;
+    if (finalType !== 'FINAL_CANDIDATE') return null;
+    const answer = parsed.answer ?? parsed.content ?? parsed.message;
+    return typeof answer === 'string' && answer.trim() ? answer : null;
+  } catch {
+    return null;
+  }
+}
+
+export function normalizeAssistantDisplayText(raw: string): string {
+  return extractFinalCandidateText(raw) ?? raw;
+}
+
 function normalizeMessageParts(raw: unknown): MessagePart[] | null {
   if (!Array.isArray(raw)) return null;
   const parts: MessagePart[] = [];
@@ -544,7 +573,8 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
     const kind = String(payload.kind || '');
     if (kind === 'text') {
       const content = typeof payload.content === 'string' ? payload.content : typeof payload.text === 'string' ? payload.text : '';
-      if (content) parts.push({ kind: 'text', content } as TextPart);
+      const normalized = normalizeAssistantDisplayText(content);
+      if (normalized) parts.push({ kind: 'text', content: normalized } as TextPart);
       continue;
     }
     if (kind === 'tool_call') {
@@ -1053,6 +1083,9 @@ class WsClient {
     store.setActiveSessionKey(null);
     store.setDraftOpen(true);
     store.setDraftStarterIntent(null);
+    store.setSessionDrawerOpen(false);
+    store.setAgentWorkspaceTab('messages');
+    store.setInspectorTarget(null);
     store.clearAppError();
     this.ensureDraftDefaults();
   }
@@ -1332,6 +1365,11 @@ class WsClient {
     return Array.isArray(payload.runs) ? payload.runs : [];
   }
 
+  async listSessionArtifacts(key: string, limit = 50): Promise<SessionArtifactRecord[]> {
+    const payload = await this.request<{ artifacts?: SessionArtifactRecord[] }>('sessions.artifacts', { key, limit });
+    return Array.isArray(payload.artifacts) ? payload.artifacts : [];
+  }
+
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     const payload = await this.request<{ run?: SessionRunRecord | null }>('sessions.run', { key, runId });
     return payload.run ?? null;
@@ -1345,6 +1383,34 @@ class WsClient {
   async resolveMergeState(key: string): Promise<SessionMergeState | null> {
     const payload = await this.request<{ mergeState?: unknown | null }>('sessions.merge.state', { key });
     return normalizeMergeState(payload.mergeState);
+  }
+
+  async optimizePrompt(options: {
+    prompt: string;
+    provider?: string;
+    model?: string;
+    customTransform?: string;
+  }): Promise<PromptOptimizationResult> {
+    const payload = await this.request<{
+      variants?: PromptOptimizationVariant[];
+      provider?: string;
+      model?: string | null;
+    }>('prompts.optimize', {
+      prompt: options.prompt,
+      provider: options.provider || undefined,
+      model: options.model || undefined,
+      customTransform: options.customTransform || undefined,
+    });
+    return {
+      variants: Array.isArray(payload.variants) ? payload.variants.map((variant) => ({
+        id: String(variant.id || ''),
+        label: String(variant.label || ''),
+        prompt: String(variant.prompt || ''),
+        rationale: String(variant.rationale || ''),
+      })).filter((variant) => variant.id && variant.prompt) : [],
+      provider: String(payload.provider || options.provider || ''),
+      model: payload.model == null ? null : String(payload.model),
+    };
   }
 
   async sendMessage(message: string) {
@@ -1654,7 +1720,7 @@ class WsClient {
         store.updateMessage(target.sessionKey, target.localId, {
           content:
             typeof payload.message?.content === 'string' && payload.message.content.length > 0
-              ? payload.message.content
+              ? normalizeAssistantDisplayText(payload.message.content)
               : existing?.content || '',
           provider: payload.provider ? String(payload.provider) : existing?.provider || null,
           model: payload.model ? String(payload.model) : existing?.model || null,

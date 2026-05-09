@@ -193,6 +193,14 @@ For current behavior, assume:
 - Add shared capability logic here before touching providers or UI.
 - Keep the abstractions practical.
 - Do not commit to one vendor’s tool-calling shape as the system architecture.
+- **`build_tool_prompt_section`** injects the capability manifest; keep it aligned with `policy_for_task_mode` and registered tool ids.
+
+### Tools runtime
+
+- Handlers live under `src/copenet/core/tools/handlers/` (`files.py`, `git.py`, `shell.py`, `context.py`, `artifacts.py`); `builtin_readonly.py` aggregates them (name is historical — write + artifact tools are included).
+- Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: default modes allow read/shell/context/artifact; task mode **`full-access`** adds **`repo-write`** (`files.edit`, `files.write`).
+- **`TOOL_BATCH`** is limited to bundled **read/context** calls; mixed batches split with trace `tool_batch_split` and client-visible repair summaries on `tool.batch`.
+- **`artifact.create`** persists session artifacts when `artifact_store`, `session_key`, and `run_id` are present.
 
 ### WebSocket / RPC
 
@@ -216,11 +224,12 @@ For current behavior, assume:
   - first-send runtime lock
   - inline `toolExecution` rendering
   - archive/restore
-  - right-panel runtime + tool telemetry
+  - right-panel runtime + tool telemetry (**Tool Activity proof** groups `SessionRunRecord.toolSteps` and run-scoped artifacts via `runtime/activityProof.ts` + `ToolActivityProof.tsx`)
 - Real backend wiring is still concentrated in `Agents`; the other sections are intentional direction-setting shells for now.
 - Global app state lives in `src/copenet/host/frontend/src/store/useAppStore.ts`. Keep it explicit and small.
 - If a feature needs backend support, add and verify the RPC first.
 - Make session state obvious: active section, active session, provider, model, profile, task mode, lock state, and connection state.
+- Prefer Browser Use against the Codex in-app browser for localhost UI verification when the plugin is available. Use it to reproduce interaction bugs, verify fixes, and catch runtime UI failures that lint/build will miss.
 - Treat the legacy UI in `src/copenet/host/static/` as fallback compatibility code, not the primary product surface.
 
 ## Safe Collaboration Rules
@@ -281,6 +290,7 @@ Common checks:
 - `npm run lint` in `src/copenet/host/frontend`
 - `npm run build` in `src/copenet/host/frontend`
 - `uv run copenet`
+- Browser Use validation in the Codex in-app browser for the affected session/runtime flow when available
 - browser validation of the affected session/runtime flow
 
 For current integration coverage, also know about:
@@ -299,11 +309,12 @@ Known gaps and past findings: [docs/TRACE-FINDINGS.md](docs/TRACE-FINDINGS.md)
 
 **Triage order for a bad run:**
 
-1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`?
-2. Check `tool_requested` — did the model invoke the expected tool with correct arguments?
-3. Check `tool_executed` or `tool_blocked` — was this a policy rejection or a real failure?
-4. Check `assistant_finalized` — was `toolExecutionAttached` as expected?
-5. Check `run_failed` — the `error` field is the primary diagnostic.
+1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`? Does `availableToolIds` match task mode expectations (**write tools only with `full-access`**)?
+2. Check mixed batch traces when debugging bad batches — `tool_batch_split` / `batch_planned`.
+3. Check `tool_requested` — did the model invoke the expected tool with correct arguments?
+4. Check `tool_executed` or `tool_blocked` — was this a policy rejection or a real failure?
+5. Check `assistant_finalized` — was `toolExecutionAttached` as expected?
+6. Check `run_failed` — the `error` field is the primary diagnostic.
 
 **No trace file?** The provider failed to initialize before the run started. Check provider availability via `providers.list` or startup logs.
 

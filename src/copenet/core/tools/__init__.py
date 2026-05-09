@@ -18,7 +18,7 @@ from .contracts import (
     extract_tool_batch_invocation,
     extract_tool_invocation,
 )
-from .policy import ToolPolicy
+from .policy import ToolPolicy, policy_for_task_mode
 from .registry import ToolRegistry
 
 __all__ = [
@@ -40,4 +40,5 @@ __all__ = [
     "extract_final_candidate",
     "extract_tool_batch_invocation",
     "extract_tool_invocation",
+    "policy_for_task_mode",
 ]

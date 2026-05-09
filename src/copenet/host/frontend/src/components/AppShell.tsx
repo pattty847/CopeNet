@@ -10,6 +10,7 @@ import { HomePage } from './HomePage';
 import { MobileBottomNav, MobileTopBar } from './mobile/MobileNav';
 import { ObservabilityPage } from './ObservabilityPage';
 import { SidebarNav } from './SidebarNav';
+import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { TopCommandBar } from './TopCommandBar';
 import { WorkflowsPage } from './WorkflowsPage';
 import { useIsMobile } from '../lib/responsive';
@@ -74,7 +75,9 @@ export function AppShell() {
             </div>
           )}
           <div className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${isMobile && !showMobileTopBar ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : ''}`}>
-            <AppSectionContent />
+            <SectionErrorBoundary sectionName={currentSection}>
+              <AppSectionContent />
+            </SectionErrorBoundary>
           </div>
         </div>
         {isMobile && <MobileBottomNav />}

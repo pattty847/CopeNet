@@ -189,20 +189,26 @@ When a tool call succeeds or fails in a tool-enabled path, `toolExecution` may b
 
 ```json
 {
-  "toolId": "files.list",
+  "toolId": "files.read",
   "ok": true,
-  "summary": "Listed 12 entries under ."
+  "summary": "Read file src/copenet/tracing.py."
 }
 ```
 
 Possible fields:
 
 - `toolId`
+- `callId`
+- `channel`
 - `ok`
 - `summary`
 - `error` when the tool failed or was blocked
+- `artifactId` when an artifact-producing tool persists output
+- `target`, `workspaceRoot`, `scope`, `accessAction`, `policyDecision`, `policySummary` when present on the normalized tool body/output (writes, shells, blocked paths)
+- `preview` — compact excerpt (reads, rg matches, artifact title preview)
+- `members` — expanded per-call rows when `toolId` is `tool.batch`
 
-This is intentionally compact and user-facing, not a full raw tool transcript.
+This stays user-facing telemetry, not the full raw tool transcript.
 
 ## Compatibility Guidance
 

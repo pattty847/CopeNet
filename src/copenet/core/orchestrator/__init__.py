@@ -49,6 +49,7 @@ from copenet.core.pulse import PulseStore
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
 from copenet.core.profile import PatProfileService
+from copenet.prompts.optimizer import optimize_prompt_variants
 from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
@@ -206,6 +207,29 @@ class Orchestrator:
     async def list_models(self, provider_id: str | None = None, kind: str = "chat") -> list[dict]:
         """List models for one provider or all providers."""
         return await list_provider_models(self, provider_id=provider_id, kind=kind)
+
+    async def optimize_prompt(
+        self,
+        *,
+        prompt: str,
+        provider_id: str | None = None,
+        model: str | None = None,
+        custom_transform: str | None = None,
+    ) -> dict:
+        """Generate optimized prompt variants using one configured provider."""
+        requested_provider = (provider_id or "").strip()
+        provider = self._providers.get(requested_provider) if requested_provider else next(iter(self._providers.values()), None)
+        if provider is None:
+            if requested_provider and requested_provider in self._provider_init_errors:
+                raise ValueError(self._provider_init_errors[requested_provider])
+            raise ValueError("No prompt-optimization provider is available")
+        result = await optimize_prompt_variants(
+            provider=provider,
+            prompt=prompt,
+            model=model,
+            custom_transform=custom_transform,
+        )
+        return result.to_dict()
 
     def list_sessions(self, include_archived: bool = False) -> list[dict]:
         """List known sessions."""

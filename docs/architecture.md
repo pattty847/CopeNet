@@ -32,8 +32,9 @@ copenet/
 │   │   ├── contracts.py         ← ToolDescriptor, ToolExecutionContext, etc.
 │   │   ├── policy.py            ← ToolPolicy
 │   │   ├── registry.py          ← ToolRegistry
-│   │   ├── builtin_readonly.py  ← read-only built-ins
+│   │   ├── builtin_readonly.py  ← registers all built-ins (read + write + artifact; name is historical)
 │   │   └── handlers/            ← built-in tool implementations (files, git, shell, …)
+│   │       ├── artifacts.py
 │   │       ├── context.py
 │   │       ├── files.py
 │   │       ├── git.py
@@ -222,6 +223,15 @@ Runtime usage today:
 ## Harness Direction
 
 The harness exists to keep provider execution normalized and to prepare for richer capability routing and future tool work. It should remain a shared layer rather than becoming provider-specific glue.
+
+### Prompted tools and policy (today)
+
+- **Categories** (`ToolCategory` in `core/tools/contracts.py`): `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, and reserved `mcp`.
+- **Task mode drives policy**: `policy_for_task_mode()` in `core/tools/policy.py` builds the effective policy from the persisted session **`task_prompt_id`**. Baseline modes allow **`repo-read`**, **`shell-read`**, **`context`**, **`artifact`**. **`full-access`** adds **`repo-write`** so `files.edit` / `files.write` register in `available_tools` for that run.
+- **Built-in ids** include `context.prepare`, **`files.list`**, **`files.read`**, **`files.search`**, **`files.rg`**, **`files.write`**, **`files.edit`**, `git.diff`, `git.status`, **`shell.exec`**, **`artifact.create`**.
+- **`ToolExecutionContext`** carries **`task_prompt_id`**, **`run_id`**, and optional **`artifact_store`** so prompts and artifact writes stay session-scoped.
+- **TOOL_BATCH** executes only **`repo-read` + `context`** calls together. Writes or shell mixed into the same JSON batch are deferred and repaired (trace `tool_batch_split`; see `core/harness/tool_loop.py`).
+- **`build_tool_prompt_section`** attaches a deterministic **capability manifest** next to the JSON action grammar (workspace root, allowed tool ids, unavailable capability classes, shell allowlist).
 
 ## Configuration
 

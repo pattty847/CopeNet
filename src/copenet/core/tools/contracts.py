@@ -10,7 +10,7 @@ from copenet.providers import Provider
 from copenet.core.sessions import SessionStore, TranscriptStore
 
 
-ToolCategory = Literal["repo-read", "repo-write", "shell-read", "context", "mcp"]
+ToolCategory = Literal["repo-read", "repo-write", "shell-read", "context", "artifact", "mcp"]
 ToolSafetyLevel = Literal["safe", "guarded", "restricted"]
 ToolAccessAction = Literal["read", "write", "unknown"]
 ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "unsafe_unknown"]
@@ -218,6 +218,8 @@ class ToolExecutionContext:
     providers: dict[str, Provider]
     policy: Any
     artifact_store: Any | None = None
+    task_prompt_id: str | None = None
+    run_id: str | None = None
     trace: Callable[[str, dict[str, Any] | None], None] | None = None
     ephemeral: dict[str, Any] = field(default_factory=dict)
 
@@ -274,6 +276,11 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             return {"matches": preview_matches}
     if "artifactId" in body and "preview" in body:
         return {"artifactId": body.get("artifactId"), "preview": body.get("preview")}
+    if tool_id == "artifact.create" and isinstance(body.get("title"), str):
+        return {
+            "artifactId": body.get("artifactId"),
+            "preview": body.get("preview") or body.get("title"),
+        }
     return None
 
 
@@ -425,9 +432,14 @@ def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
             continue
         if not isinstance(parsed, dict):
             continue
-        if parsed.get("state") != "FINAL_CANDIDATE":
+        final_type = parsed.get("state") or parsed.get("type")
+        if final_type != "FINAL_CANDIDATE":
             continue
         answer = parsed.get("answer")
+        if not isinstance(answer, str):
+            answer = parsed.get("content")
+        if not isinstance(answer, str):
+            answer = parsed.get("message")
         if not isinstance(answer, str) or not answer.strip():
             continue
 
@@ -459,16 +471,38 @@ def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
     return None
 
 
-def build_tool_prompt_section(tools: list[ToolDescriptor]) -> str:
+def build_tool_prompt_section(tools: list[ToolDescriptor], *, context: ToolExecutionContext | None = None) -> str:
     """Return instructions for one-step prompted tool use."""
     if not tools:
         return ""
+    tool_mode = (context.task_prompt_id or "none").strip() if context is not None else "none"
+    workspace_root = str(context.session_workspace_root) if context is not None else "(unknown)"
+    shell_allowlist = ", ".join(sorted(getattr(context.policy, "shell_allowlist", ()) or ())) if context is not None else "(unknown)"
+    available_ids = ", ".join(tool.id for tool in tools) or "(none)"
+    available_categories = {tool.category for tool in tools}
+    unavailable_categories = [
+        category
+        for category in ("repo-write", "artifact", "shell-read")
+        if category not in available_categories
+    ]
+    unavailable_text = ", ".join(unavailable_categories) if unavailable_categories else "(none)"
+    artifact_support = "available via artifact.create" if "artifact.create" in {tool.id for tool in tools} else "not available in this session"
     lines = [
         "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.",
+        "Capability manifest:",
+        f"- Workspace root: {workspace_root}",
+        f"- Tool mode: {tool_mode}",
+        f"- Available tool ids: {available_ids}",
+        f"- Unavailable capability classes: {unavailable_text}",
+        f"- Shell constraints: allowlisted read-only commands only ({shell_allowlist})",
+        f"- Artifact support: {artifact_support}",
+        "- Sequence normal work as: inspect -> edit/write if available -> verify/read shell -> create artifact if asked.",
+        "- Shallow orientation is not enough for repo/code claims: files.list and context.prepare should lead to files.rg or files.read, not to early finalization.",
         "If a single tool is needed, respond with only a JSON object in this shape:",
         '{"tool_id":"<tool id>","arguments":{}}',
-        "If multiple independent read-only tools are needed, respond with only a JSON object in this shape:",
+        "If multiple independent read-only repo/context tools are needed, respond with only a JSON object in this shape:",
         '{"tool_calls":[{"tool_id":"<tool id>","arguments":{}},{"tool_id":"<tool id>","arguments":{}}]}',
+        "TOOL_BATCH only supports read-only repo/context work. Request writes, patches, or shell commands as individual TOOL_CALL actions after you inspect the needed files.",
         "If you are ready to finalize, respond with only a JSON object in this shape:",
         '{"state":"FINAL_CANDIDATE","answer":"...","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
         "No markdown fences. No prose outside JSON. No extra wrapper keys.",

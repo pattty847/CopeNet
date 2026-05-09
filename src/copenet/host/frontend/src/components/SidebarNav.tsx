@@ -6,6 +6,7 @@ import {
   FlaskConical,
   Home,
   Layers3,
+  PanelLeft,
   Wrench,
 } from 'lucide-react';
 import { AppSection, useAppStore } from '../store/useAppStore';
@@ -26,6 +27,8 @@ export function SidebarNav() {
   const wsStatus = useAppStore((state) => state.wsStatus);
   const primaryNavCollapsed = useAppStore((state) => state.primaryNavCollapsed);
   const setPrimaryNavCollapsed = useAppStore((state) => state.setPrimaryNavCollapsed);
+  const sessionDrawerOpen = useAppStore((state) => state.sessionDrawerOpen);
+  const setSessionDrawerOpen = useAppStore((state) => state.setSessionDrawerOpen);
 
   const systemLabel =
     wsStatus === 'connected' ? 'All systems nominal' : wsStatus === 'connecting' ? 'Connecting…' : 'Needs attention';
@@ -107,6 +110,33 @@ export function SidebarNav() {
           );
         })}
       </nav>
+
+      {currentSection === 'agents' && (
+        <div className="pt-3">
+          <button
+            type="button"
+            onClick={() => setSessionDrawerOpen(!sessionDrawerOpen)}
+            title="Open Resume Session"
+            aria-label="Open Resume Session"
+            className={`group relative flex w-full rounded-xl py-2 text-left text-[13px] font-medium transition-all duration-150 ${
+              primaryNavCollapsed ? 'justify-center px-2.5' : 'items-center gap-2.5 px-3'
+            } ${
+              sessionDrawerOpen
+                ? 'bg-shell-accent-soft text-shell-text'
+                : 'text-shell-muted hover:bg-shell-panel-strong hover:text-shell-text'
+            }`}
+          >
+            {sessionDrawerOpen && (
+              <>
+                <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-shell-accent shadow-[0_0_10px_var(--color-shell-accent)]" />
+                <span className="pointer-events-none absolute inset-y-1 right-2 w-1/3 rounded-xl bg-shell-accent-glow blur-md" />
+              </>
+            )}
+            <PanelLeft className={`h-[15px] w-[15px] transition-colors duration-150 ${sessionDrawerOpen ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
+            {!primaryNavCollapsed && <span>Resume Session</span>}
+          </button>
+        </div>
+      )}
 
       {/* Footer */}
       <div className="mt-auto space-y-3 pt-4">

@@ -641,7 +641,7 @@ async def test_harness_executes_safe_read_batch_and_emits_meta(tmp_path: Path) -
 
 
 @pytest.mark.asyncio
-async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
+async def test_harness_repairs_mixed_batch_request_with_safe_read_subset(tmp_path: Path) -> None:
     provider = PromptedBatchProvider(
         tool_json=(
             '{"tool_calls":['
@@ -685,11 +685,14 @@ async def test_harness_blocks_unsafe_batch_request(tmp_path: Path) -> None:
     meta_event = next(event for event in events if event.kind == "meta" and "toolExecution" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is False
-    blocked_trace = next(payload for event, payload in traces if event == "tool_blocked")
-    assert blocked_trace is not None
-    assert blocked_trace["toolId"] == "tool.batch"
-    assert blocked_trace["step"] == 1
-    assert "shell.exec" in blocked_trace["rawText"]
+    split_trace = next(payload for event, payload in traces if event == "tool_batch_split")
+    assert split_trace is not None
+    assert split_trace["executedToolIds"] == ["files.list"]
+    assert split_trace["deferredToolIds"] == ["shell.exec"]
+    members = meta_event.metadata["toolExecution"].get("members") or []
+    assert [member["toolId"] for member in members] == ["files.list", "shell.exec"]
+    assert members[0]["ok"] is True
+    assert members[1]["ok"] is False
 
 
 @pytest.mark.asyncio
@@ -732,6 +735,118 @@ async def test_harness_allows_safe_batch_with_context_prepare(tmp_path: Path) ->
     meta_event = next(event for event in events if event.kind == "meta" and "toolResult" in (event.metadata or {}))
     assert meta_event.metadata["toolExecution"]["toolId"] == "tool.batch"
     assert meta_event.metadata["toolExecution"]["ok"] is True
+
+
+@pytest.mark.asyncio
+async def test_harness_splits_mixed_batch_and_recovers_with_follow_up(tmp_path: Path) -> None:
+    provider = SequencedPromptProvider(
+        outputs=[
+            '{"tool_calls":[{"tool_id":"files.read","arguments":{"path":"README.md"}},{"tool_id":"shell.exec","arguments":{"command":"pwd"}}]}',
+            '{"tool_id":"shell.exec","arguments":{"command":"pwd"}}',
+            '{"state":"FINAL_CANDIDATE","answer":"I read README.md and confirmed the workspace path.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
+        ]
+    )
+    traces: list[tuple[str, dict | None]] = []
+
+    def trace(event: str, payload: dict | None = None) -> None:
+        traces.append((event, payload))
+
+    harness = ChatHarness()
+    executed: list[str] = []
+
+    async def tool_executor(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+        del context
+        executed.append(request.tool_id)
+        if request.tool_id == 'files.read':
+            return ToolExecutionResult(
+                tool_id='files.read',
+                ok=True,
+                summary='Read README.md.',
+                output={'path': 'README.md', 'content': '# CopeNet'},
+                body={'path': 'README.md', 'content': '# CopeNet'},
+            )
+        if request.tool_id == 'shell.exec':
+            return ToolExecutionResult(
+                tool_id='shell.exec',
+                ok=True,
+                summary='Ran pwd.',
+                output={'command': 'pwd', 'stdout': str(tmp_path)},
+                body={'command': 'pwd', 'stdout': str(tmp_path)},
+            )
+        raise AssertionError(f'unexpected tool: {request.tool_id}')
+
+    tool_context = ToolExecutionContext(
+        workdir=tmp_path,
+        session_workspace_root=tmp_path,
+        session_key='alpha',
+        provider_name='prompted',
+        model=None,
+        session_store=SessionStore(path=tmp_path / 'index.json'),
+        transcript_store=TranscriptStore(root_dir=tmp_path / 'history'),
+        providers={'prompted': provider},
+        policy=ToolPolicy(),
+        trace=trace,
+    )
+    _, stream = await harness.run_turn(
+        provider=provider,
+        prompt='Inspect the repo, then run pwd.',
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        available_tools=ToolRegistry().list_tools(),
+        tool_executor=tool_executor,
+        tool_context=tool_context,
+        trace=trace,
+    )
+    events = [event async for event in stream]
+
+    batch_meta = next(event for event in events if event.kind == 'meta' and event.metadata.get('toolExecution', {}).get('toolId') == 'tool.batch')
+    members = batch_meta.metadata['toolExecution'].get('members') or []
+    assert [member['toolId'] for member in members] == ['files.read', 'shell.exec']
+    assert members[0]['ok'] is True
+    assert members[1]['ok'] is False
+    assert 'individual TOOL_CALL' in (members[1]['error'] or '')
+    assert executed == ['files.read', 'shell.exec']
+    assert len(provider.prompts) == 3
+    assert 'Use TOOL_BATCH only for read-only repo/context work' in provider.prompts[1]
+    assert any(
+        event.kind == 'meta' and event.metadata.get('toolCall', {}).get('toolId') == 'shell.exec'
+        for event in events
+    )
+    assert any(event_name == 'tool_batch_split' for event_name, _ in traces)
+
+
+@pytest.mark.asyncio
+async def test_orchestrator_persists_repaired_batch_members_in_run_history(monkeypatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    (tmp_path / "README.md").write_text("# CopeNet\n", encoding="utf-8")
+    provider = SequencedPromptProvider(
+        outputs=[
+            '{"tool_calls":[{"tool_id":"files.read","arguments":{"path":"README.md"}},{"tool_id":"shell.exec","arguments":{"command":"pwd"}}]}',
+            '{"tool_id":"shell.exec","arguments":{"command":"pwd"}}',
+            '{"state":"FINAL_CANDIDATE","answer":"Recovered the mixed batch and completed the shell call.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
+        ]
+    )
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"prompted": provider},
+    )
+
+    result, _ = await _collect(
+        orchestrator,
+        ChatSendRequest(session_key="mixed-batch", message="Inspect then run pwd.", provider="prompted"),
+    )
+
+    assert result["status"] == "ok"
+    runs = orchestrator.list_session_runs("mixed-batch")
+    assert len(runs) == 1
+    step = runs[0]["toolSteps"][0]
+    assert step["toolId"] == "tool.batch"
+    assert [member["toolId"] for member in step["members"]] == ["files.read", "shell.exec"]
+    assert step["members"][0]["ok"] is True
+    assert step["members"][1]["ok"] is False
+    assert "individual TOOL_CALL" in (step["members"][1]["error"] or "")
 
 
 @pytest.mark.asyncio

@@ -110,7 +110,7 @@ function policyLabel(decision: 'allowed' | 'read_roam' | 'write_blocked' | 'appr
   if (decision === 'read_roam') return 'read roam';
   if (decision === 'write_blocked') return 'write blocked';
   if (decision === 'approval_required') return 'approval req';
-  if (decision === 'unsafe_unknown') return 'shell risk';
+  if (decision === 'unsafe_unknown') return 'policy block';
   return null;
 }
 
