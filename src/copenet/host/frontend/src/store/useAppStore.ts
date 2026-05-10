@@ -1,7 +1,8 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextPayload, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextPayload, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, PersonaHomeSummary, PersonaSettings, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
+import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } from '../components/home/homeLayout';
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
@@ -12,6 +13,7 @@ export type AgentWorkspaceTab = 'messages' | 'tool_activity' | 'artifacts';
 const THEME_STORAGE_KEY = 'copenet.themeMode';
 const PINNED_SESSIONS_STORAGE_KEY = 'copenet.pinnedSessionKeys';
 const DRAFT_RUNTIME_STORAGE_KEY = 'copenet.draftRuntime';
+const HOME_LAYOUT_STORAGE_KEY = 'copenet.homeLayout';
 
 function readStoredThemeMode(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
@@ -71,6 +73,24 @@ function persistDraftRuntime(settings: Pick<DraftSettings, 'provider' | 'model'>
       model: settings.model || '',
     }),
   );
+}
+
+function readStoredHomeLayout(): HomeCardLayoutItem[] {
+  if (typeof window === 'undefined') {
+    return DEFAULT_HOME_LAYOUT;
+  }
+  try {
+    const raw = window.localStorage.getItem(HOME_LAYOUT_STORAGE_KEY);
+    if (!raw) return DEFAULT_HOME_LAYOUT;
+    return normalizeHomeLayout(JSON.parse(raw));
+  } catch {
+    return DEFAULT_HOME_LAYOUT;
+  }
+}
+
+function persistHomeLayout(layout: HomeCardLayoutItem[]) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(HOME_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
 }
 
 export interface MergeDraft {
@@ -231,6 +251,10 @@ interface AppState {
   setComposerMessage: (message: string) => void;
   resetComposer: () => void;
 
+  homeLayout: HomeCardLayoutItem[];
+  setHomeLayout: (layout: HomeCardLayoutItem[]) => void;
+  resetHomeLayout: () => void;
+
   // Live tool execution (in-flight run streaming)
   // Populated from toolExecution payloads on delta events; cleared on run start/finish.
   liveToolCalls: LiveToolCall[];
@@ -250,6 +274,10 @@ interface AppState {
   // Null until the backend profile RPC ships and pushes a real profile.
   patProfile: PatProfile | null;
   setPatProfile: (profile: PatProfile | null) => void;
+  personaHome: PersonaHomeSummary | null;
+  setPersonaHome: (personaHome: PersonaHomeSummary | null) => void;
+  personaSettings: PersonaSettings | null;
+  setPersonaSettings: (personaSettings: PersonaSettings | null) => void;
   identityContext: IdentityContextPayload | null;
   setIdentityContext: (payload: IdentityContextPayload | null) => void;
   memoryItems: MemoryItem[];
@@ -287,12 +315,16 @@ function upsertInHistory(history: ApprovalRequest[], req: ApprovalRequest): Appr
 }
 
 const storedDraftRuntime = readStoredDraftRuntime();
+const storedHomeLayout = readStoredHomeLayout();
 
 const DEFAULT_DRAFT: DraftSettings = {
   provider: storedDraftRuntime.provider,
   model: storedDraftRuntime.model,
   systemPromptId: 'default',
   taskPromptId: 'none',
+  personaId: 'default',
+  personaFlavorId: '',
+  personaPrivacyTier: 'private',
   workspaceRoot: '',
 };
 
@@ -580,6 +612,17 @@ export const useAppStore = create<AppState>((set) => ({
   setComposerMessage: (message) => set({ composerMessage: message }),
   resetComposer: () => set({ composerOpen: false, composerTarget: null, composerMessage: '' }),
 
+  homeLayout: storedHomeLayout,
+  setHomeLayout: (layout) => {
+    const next = normalizeHomeLayout(layout);
+    persistHomeLayout(next);
+    set({ homeLayout: next });
+  },
+  resetHomeLayout: () => {
+    persistHomeLayout(DEFAULT_HOME_LAYOUT);
+    set({ homeLayout: DEFAULT_HOME_LAYOUT });
+  },
+
   liveToolCalls: [],
   pushLiveToolCall: (call) =>
     set((state) => {
@@ -606,6 +649,10 @@ export const useAppStore = create<AppState>((set) => ({
 
   patProfile: null,
   setPatProfile: (profile) => set({ patProfile: profile }),
+  personaHome: null,
+  setPersonaHome: (personaHome) => set({ personaHome }),
+  personaSettings: null,
+  setPersonaSettings: (personaSettings) => set({ personaSettings }),
   identityContext: null,
   setIdentityContext: (identityContext) => set({ identityContext }),
   memoryItems: [],
