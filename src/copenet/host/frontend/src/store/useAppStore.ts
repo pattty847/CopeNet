@@ -11,6 +11,7 @@ export type AgentWorkspaceTab = 'messages' | 'tool_activity' | 'artifacts';
 
 const THEME_STORAGE_KEY = 'copenet.themeMode';
 const PINNED_SESSIONS_STORAGE_KEY = 'copenet.pinnedSessionKeys';
+const DRAFT_RUNTIME_STORAGE_KEY = 'copenet.draftRuntime';
 
 function readStoredThemeMode(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
@@ -38,6 +39,38 @@ function readPinnedSessionKeys(): string[] {
 function persistPinnedSessionKeys(keys: string[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(PINNED_SESSIONS_STORAGE_KEY, JSON.stringify(keys));
+}
+
+function readStoredDraftRuntime(): Pick<DraftSettings, 'provider' | 'model'> {
+  if (typeof window === 'undefined') {
+    return { provider: 'codex-cli', model: 'gpt-5.4' };
+  }
+  try {
+    const raw = window.localStorage.getItem(DRAFT_RUNTIME_STORAGE_KEY);
+    if (!raw) {
+      return { provider: 'codex-cli', model: 'gpt-5.4' };
+    }
+    const parsed = JSON.parse(raw) as { provider?: unknown; model?: unknown };
+    const provider = typeof parsed.provider === 'string' && parsed.provider.trim() ? parsed.provider.trim() : 'codex-cli';
+    const model = typeof parsed.model === 'string' ? parsed.model.trim() : '';
+    return {
+      provider,
+      model: model || 'gpt-5.4',
+    };
+  } catch {
+    return { provider: 'codex-cli', model: 'gpt-5.4' };
+  }
+}
+
+function persistDraftRuntime(settings: Pick<DraftSettings, 'provider' | 'model'>) {
+  if (typeof window === 'undefined') return;
+  window.localStorage.setItem(
+    DRAFT_RUNTIME_STORAGE_KEY,
+    JSON.stringify({
+      provider: settings.provider || 'codex-cli',
+      model: settings.model || '',
+    }),
+  );
 }
 
 export interface MergeDraft {
@@ -253,9 +286,11 @@ function upsertInHistory(history: ApprovalRequest[], req: ApprovalRequest): Appr
   return [req, ...history];
 }
 
+const storedDraftRuntime = readStoredDraftRuntime();
+
 const DEFAULT_DRAFT: DraftSettings = {
-  provider: 'codex-cli',
-  model: 'gpt-5.4',
+  provider: storedDraftRuntime.provider,
+  model: storedDraftRuntime.model,
   systemPromptId: 'default',
   taskPromptId: 'none',
   workspaceRoot: '',
@@ -394,14 +429,19 @@ export const useAppStore = create<AppState>((set) => ({
   setSelectedSessionKeys: (keys) => set({ selectedSessionKeys: keys }),
   clearSelectedSessionKeys: () => set({ selectedSessionKeys: [] }),
   draftSettings: DEFAULT_DRAFT,
-  replaceDraftSettings: (settings) => set({ draftSettings: settings }),
+  replaceDraftSettings: (settings) => {
+    persistDraftRuntime(settings);
+    set({ draftSettings: settings });
+  },
   patchDraftSettings: (updates) =>
-    set((state) => ({
-      draftSettings: {
+    set((state) => {
+      const next = {
         ...state.draftSettings,
         ...updates,
-      },
-    })),
+      };
+      persistDraftRuntime(next);
+      return { draftSettings: next };
+    }),
   runtimeContext: null,
   setRuntimeContext: (context) => set({ runtimeContext: context }),
   mergeStates: {},

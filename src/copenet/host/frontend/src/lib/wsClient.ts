@@ -583,6 +583,16 @@ function normalizeMessage(
 }
 
 function extractFinalCandidateText(raw: string): string | null {
+  function unwrapCandidatePayload(parsed: Record<string, unknown>): Record<string, unknown> | null {
+    const finalType = parsed.state ?? parsed.type;
+    if (finalType === 'FINAL_CANDIDATE') return parsed;
+    const nested = parsed.FINAL_CANDIDATE;
+    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
+      return { state: 'FINAL_CANDIDATE', ...(nested as Record<string, unknown>) };
+    }
+    return null;
+  }
+
   const candidate = raw.trim();
   if (!candidate || (!candidate.startsWith('{') && !candidate.startsWith('```'))) return null;
   let text = candidate;
@@ -594,9 +604,9 @@ function extractFinalCandidateText(raw: string): string | null {
   }
   try {
     const parsed = JSON.parse(text) as Record<string, unknown>;
-    const finalType = parsed.state ?? parsed.type;
-    if (finalType !== 'FINAL_CANDIDATE') return null;
-    const answer = parsed.answer ?? parsed.content ?? parsed.message;
+    const payload = unwrapCandidatePayload(parsed);
+    if (!payload) return null;
+    const answer = payload.answer ?? payload.content ?? payload.message ?? payload.response;
     return typeof answer === 'string' && answer.trim() ? answer : null;
   } catch {
     return null;
@@ -1003,9 +1013,13 @@ class WsClient {
     const nextProvider = store.providers.some((provider) => provider.id === current.provider && provider.available !== false)
       ? current.provider
       : preferredProvider;
+    const knownModels = store.loadedModelProviders[nextProvider] ? store.modelsByProvider[nextProvider] || [] : [];
+    const nextModel = nextProvider === current.provider
+      ? (!knownModels.length || knownModels.some((item) => item.id === current.model) ? current.model : '')
+      : '';
     store.replaceDraftSettings({
       provider: nextProvider,
-      model: nextProvider === current.provider ? current.model : '',
+      model: nextModel,
       systemPromptId: store.profiles.some((item) => item.id === current.systemPromptId) ? current.systemPromptId : defaultProfile,
       taskPromptId: store.taskModes.some((item) => item.id === current.taskPromptId) ? current.taskPromptId : defaultTaskMode,
       workspaceRoot: current.workspaceRoot || store.runtimeContext?.workspaceRoot || '',
@@ -1096,6 +1110,7 @@ class WsClient {
       .then((payload) => {
         const models = (payload.models || []).map(normalizeModel);
         useAppStore.getState().setModelsForProvider(providerId, models);
+        this.ensureDraftDefaults();
         this.modelLoads.delete(providerId);
         return models;
       })
