@@ -11,6 +11,7 @@ from typing import Awaitable, Callable
 
 from copenet.core.apps import AppStore
 from copenet.core.harness import ChatHarness
+from copenet.core.memory import MemoryService, MemoryStore
 from copenet.core.messaging import MessagingConfigStore, TelegramSessionRouteStore
 from copenet.core.orchestrator.catalog import (
     archive_session as archive_session_record,
@@ -107,6 +108,8 @@ class Orchestrator:
         self._pulse_store = PulseStore(path=base / "pulses.json")
         self._messaging_store = MessagingConfigStore(path=base / "messaging.json")
         self._route_store = TelegramSessionRouteStore(path=base / "telegram-routes.json")
+        self._memory_store = MemoryStore(path=base / "memory.json")
+        self._memory_service = MemoryService(self._memory_store)
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         self._app_store = AppStore(path=base / "apps.json")
@@ -420,6 +423,49 @@ class Orchestrator:
         """Return the current public Pat Profile payload, if configured."""
         profile = self._profile_service.load_profile()
         return profile.to_public_dict() if profile is not None else None
+
+    def get_identity_prompt_payload(self) -> dict:
+        """Return the current identity prompt payload used by the harness."""
+        return self._profile_service.build_identity_prompt_payload(include_briefing=True).to_public_dict()
+
+    def list_memory(self, *, include_archived: bool = False, category: str | None = None, limit: int = 50) -> list[dict]:
+        """Return recent user-visible memory items."""
+        return [
+            item.to_public_dict()
+            for item in self._memory_service.list_memory(
+                include_archived=include_archived,
+                category=category if category in {"preference", "project_convention", "ongoing_priority", "fact"} else None,
+                limit=limit,
+            )
+        ]
+
+    def upsert_memory(
+        self,
+        *,
+        category: str,
+        title: str,
+        summary: str,
+        detail: str | None = None,
+        tags: list[str] | None = None,
+        memory_id: str | None = None,
+    ) -> dict:
+        """Create or update one user-visible memory item."""
+        item = self._memory_service.upsert_memory(
+            memory_id=memory_id,
+            category=category,  # type: ignore[arg-type]
+            title=title,
+            summary=summary,
+            detail=detail,
+            tags=tags or [],
+            source="explicit",
+            confidence=0.95,
+        )
+        return item.to_public_dict()
+
+    def archive_memory(self, *, memory_id: str, archived: bool = True) -> dict | None:
+        """Archive or restore one memory item."""
+        item = self._memory_service.archive_memory(memory_id, archived=archived)
+        return item.to_public_dict() if item is not None else None
 
     def list_profile_changelog(self, limit: int = 20) -> list[dict]:
         """Return recent Pat Profile changelog entries."""

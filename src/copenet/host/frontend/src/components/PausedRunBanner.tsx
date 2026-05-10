@@ -26,24 +26,25 @@ export function PausedRunBanner() {
     <button
       type="button"
       onClick={openApprovalPanel}
-      className="group w-full flex items-center gap-2.5 px-4 py-2.5 bg-operator-accent/8 border-b border-operator-accent/25 text-left transition-colors duration-150 hover:bg-operator-accent/12"
+      className="group flex w-full items-center gap-2.5 border-b border-operator-accent/25 bg-operator-accent/6 px-4 py-2 text-left transition-colors duration-150 hover:bg-operator-accent/12"
     >
       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg bg-operator-accent/15 text-operator-accent">
-        <Pause className="w-3 h-3 fill-current" />
+        <Pause className="h-3 w-3 fill-current" />
       </span>
-      <span className="flex-1 min-w-0">
-        <span className="block text-[12px] font-semibold text-operator-accent leading-snug">
-          Run paused — approval required
-        </span>
-        <span className="block text-[11px] text-operator-muted leading-snug truncate">
-          Agent wants to run <span className="font-mono">{toolLabel}</span>
-          {actionClass ? ` (${actionClass.replace(/_/g, ' ')})` : ''}. Review in the Inspector.
+      <span className="min-w-0 flex-1">
+        <span className="block truncate text-[12px] leading-snug text-operator-text">
+          <span className="font-semibold text-operator-accent">Approval needed</span>
+          <span className="text-operator-muted/70"> · </span>
+          <span className="font-mono text-operator-text/85">{toolLabel}</span>
+          {actionClass && (
+            <span className="text-operator-muted/85"> ({actionClass.replace(/_/g, ' ')})</span>
+          )}
         </span>
       </span>
-      <span className="flex items-center gap-1 text-[10px] font-semibold text-operator-accent uppercase tracking-wider shrink-0 opacity-70 group-hover:opacity-100 transition-opacity">
-        <AlertTriangle className="w-3 h-3" />
+      <span className="flex shrink-0 items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent opacity-80 transition-opacity group-hover:opacity-100">
+        <AlertTriangle className="h-3 w-3" />
         Review
-        <ChevronRight className="w-3 h-3" />
+        <ChevronRight className="h-3 w-3" />
       </span>
     </button>
   );

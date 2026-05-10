@@ -328,13 +328,13 @@ function InboxItemRow({
 
 function AllClearBanner() {
   return (
-    <div className="flex flex-col items-center justify-center py-8 gap-2 text-center">
-      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-operator-success/10 text-operator-success">
-        <CheckCheck className="w-5 h-5" />
+    <div className="flex flex-col items-center justify-center gap-2 py-10 text-center">
+      <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-operator-success/8 text-operator-success">
+        <CheckCheck className="h-4 w-4" />
       </div>
-      <div className="text-[12px] font-semibold text-operator-text">All clear</div>
-      <div className="text-[11px] text-operator-muted max-w-[180px]">
-        No pending approvals, failed sends, or paused runs.
+      <div className="text-[12.5px] font-medium text-operator-text">All clear</div>
+      <div className="max-w-[200px] text-[11.5px] leading-relaxed text-operator-muted/85">
+        Nothing waiting on you right now.
       </div>
     </div>
   );
@@ -401,19 +401,15 @@ export function OperatorActionCenter({ sessionKey }: { sessionKey: string | null
   };
 
   return (
-    <div className="px-3 py-2.5 space-y-3">
-      {/* Header summary */}
-      <div className="flex items-center gap-2">
-        <Inbox className="w-3.5 h-3.5 text-operator-muted" />
-        <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted flex-1">
-          Action Center
-        </span>
-        {actionRequired > 0 && (
-          <span className="text-[9px] font-bold px-1.5 py-0.5 rounded-full bg-operator-error/15 text-operator-error border border-operator-error/25">
-            {actionRequired} need{actionRequired === 1 ? 's' : ''} attention
+    <div className="px-3 py-3 space-y-3">
+      {actionRequired > 0 && (
+        <div className="flex items-center gap-2 rounded-xl border border-operator-error/25 bg-operator-error/5 px-3 py-2 text-[11px]">
+          <Inbox className="h-3 w-3 shrink-0 text-operator-error" />
+          <span className="font-semibold text-operator-error">
+            {actionRequired} item{actionRequired === 1 ? '' : 's'} need{actionRequired === 1 ? 's' : ''} your attention
           </span>
-        )}
-      </div>
+        </div>
+      )}
 
       {/* Urgent section */}
       {urgentItems.length > 0 && (

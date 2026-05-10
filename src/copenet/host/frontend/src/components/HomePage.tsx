@@ -17,6 +17,7 @@ import { useAppStore } from '../store/useAppStore';
 import { ProfileStatusCard } from './profile/ProfileStatusCard';
 import { ReturnBriefing, DEV_SKELETON_FOR_TEST } from './profile/ReturnBriefing';
 import { ProfileChangelog } from './profile/ProfileChangelog';
+import { MemorySurface } from './profile/MemorySurface';
 import { useReturnBriefing } from '../runtime/adapter';
 
 const HOME_HERO_DARK_URL = new URL('../../../../../../docs/imgs/wallpaper.png', import.meta.url).href;
@@ -471,6 +472,7 @@ export function HomePage() {
           {/* Pat Profile — compact operator surface */}
           {!isMobile && (
             <>
+              <MemorySurface />
               <ProfileStatusCard onViewChangelog={() => setShowChangelog((v) => !v)} />
               {showChangelog && (
                 <div className="shell-home-panel rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">

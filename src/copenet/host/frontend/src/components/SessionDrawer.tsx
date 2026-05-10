@@ -343,17 +343,27 @@ export function SessionDrawer() {
               </button>
             </div>
 
-            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-3 py-2.5">
-              <Search className="h-3.5 w-3.5 text-shell-muted" />
+            <div className="mt-4 flex items-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-3 py-2 transition-colors focus-within:border-shell-accent/35">
+              <Search className="h-3.5 w-3.5 text-shell-muted/85" />
               <input
                 ref={searchRef}
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
-                className="min-w-0 flex-1 bg-transparent text-[12px] text-shell-text outline-none placeholder:text-shell-muted/60"
+                className="min-w-0 flex-1 bg-transparent text-[12px] text-shell-text outline-none placeholder:text-shell-muted/55"
                 placeholder="Search sessions..."
                 aria-label="Search sessions"
               />
-              <span className="rounded-lg border border-shell-border bg-shell-panel-strong px-2 py-0.5 text-[10px] font-semibold text-shell-muted">⌘K</span>
+              {query && (
+                <button
+                  type="button"
+                  onClick={() => setQuery('')}
+                  className="rounded-md p-0.5 text-shell-muted/70 transition-colors hover:bg-shell-panel-strong hover:text-shell-text"
+                  title="Clear"
+                  aria-label="Clear search"
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              )}
             </div>
 
             <div className="mt-4 flex items-center gap-2">

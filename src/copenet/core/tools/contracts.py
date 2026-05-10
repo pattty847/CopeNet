@@ -4,10 +4,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
-from typing import Any, Awaitable, Callable, Literal
+from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
 
 from copenet.providers import Provider
 from copenet.core.sessions import SessionStore, TranscriptStore
+
+if TYPE_CHECKING:
+    from copenet.core.memory import MemoryService
+    from copenet.core.profile import PatProfileService
 
 
 ToolCategory = Literal["repo-read", "repo-write", "shell-read", "context", "artifact", "mcp"]
@@ -217,6 +221,8 @@ class ToolExecutionContext:
     transcript_store: TranscriptStore
     providers: dict[str, Provider]
     policy: Any
+    memory_service: MemoryService | None = None
+    profile_service: PatProfileService | None = None
     artifact_store: Any | None = None
     task_prompt_id: str | None = None
     run_id: str | None = None

@@ -245,6 +245,7 @@ export interface ChatEventPayload {
   toolExecution?: ToolExecution | null;
   toolCall?: Record<string, unknown> | null;
   turnState?: Record<string, unknown> | null;
+  identityContext?: IdentityContextRuntime | null;
 }
 
 export interface RpcErrorPayload {
@@ -717,6 +718,41 @@ export interface PatProfile {
   noiseFilters: string[];         // topics/signals to suppress
   lastUpdatedAt: string;          // ISO
   changelogCount: number;         // total entries in the changelog
+}
+
+export interface IdentityContextPayload {
+  stableIdentity: string | null;
+  situationalBriefing: string | null;
+}
+
+export type MemoryCategory = 'preference' | 'project_convention' | 'ongoing_priority' | 'fact';
+
+export interface MemoryItem {
+  id: string;
+  category: MemoryCategory;
+  title: string;
+  summary: string;
+  detail?: string | null;
+  tags: string[];
+  source: string;
+  confidence: number;
+  createdAt: string;
+  updatedAt: string;
+  archived: boolean;
+  lastSessionKey?: string | null;
+}
+
+export interface IdentityContextRuntime {
+  profileActive: boolean;
+  memoryCount: number;
+  memoryItemIds: string[];
+}
+
+export interface MemoryChangeEvent {
+  item: MemoryItem;
+  reason: string;
+  sessionKey?: string | null;
+  runId?: string | null;
 }
 
 export type ProfileChangelogChangeKind =

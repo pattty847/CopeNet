@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, LiveToolCall, MediaAsset, MediaAssetDetail, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextPayload, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 
@@ -217,6 +217,15 @@ interface AppState {
   // Null until the backend profile RPC ships and pushes a real profile.
   patProfile: PatProfile | null;
   setPatProfile: (profile: PatProfile | null) => void;
+  identityContext: IdentityContextPayload | null;
+  setIdentityContext: (payload: IdentityContextPayload | null) => void;
+  memoryItems: MemoryItem[];
+  setMemoryItems: (items: MemoryItem[]) => void;
+  upsertMemoryItem: (item: MemoryItem) => void;
+  lastMemoryChange: MemoryChangeEvent | null;
+  setLastMemoryChange: (event: MemoryChangeEvent | null) => void;
+  sessionIdentityUsage: Record<string, IdentityContextRuntime>;
+  setSessionIdentityUsage: (sessionKey: string, usage: IdentityContextRuntime | null) => void;
 
   // Return Briefing — "I'm back" re-entry payload
   // Null until the backend ships the briefing RPC or a dev trigger seeds it.
@@ -557,6 +566,27 @@ export const useAppStore = create<AppState>((set) => ({
 
   patProfile: null,
   setPatProfile: (profile) => set({ patProfile: profile }),
+  identityContext: null,
+  setIdentityContext: (identityContext) => set({ identityContext }),
+  memoryItems: [],
+  setMemoryItems: (memoryItems) => set({ memoryItems }),
+  upsertMemoryItem: (item) =>
+    set((state) => ({
+      memoryItems: [item, ...state.memoryItems.filter((existing) => existing.id !== item.id)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
+    })),
+  lastMemoryChange: null,
+  setLastMemoryChange: (event) => set({ lastMemoryChange: event }),
+  sessionIdentityUsage: {},
+  setSessionIdentityUsage: (sessionKey, usage) =>
+    set((state) => {
+      const next = { ...state.sessionIdentityUsage };
+      if (!usage) {
+        delete next[sessionKey];
+      } else {
+        next[sessionKey] = usage;
+      }
+      return { sessionIdentityUsage: next };
+    }),
 
   returnBriefing: null,
   setReturnBriefing: (briefing) => set({ returnBriefing: briefing }),

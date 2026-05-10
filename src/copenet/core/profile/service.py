@@ -280,6 +280,20 @@ class ReturnBriefingPayload:
         }
 
 
+
+
+@dataclass(frozen=True)
+class IdentityPromptPayload:
+    stable_identity: str | None = None
+    situational_briefing: str | None = None
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "stableIdentity": self.stable_identity,
+            "situationalBriefing": self.situational_briefing,
+        }
+
+
 @dataclass(frozen=True)
 class PatProfileBundle:
     profile: PatProfile | None
@@ -563,35 +577,56 @@ class PatProfileService:
             notice_source=notice_source,
         )
 
-    def render_session_context(self) -> str | None:
+    def build_identity_prompt_payload(self, *, include_briefing: bool = True) -> IdentityPromptPayload:
         bundle = self.load_bundle()
         if not bundle.profile:
-            return None
-        parts = [
+            return IdentityPromptPayload()
+
+        stable_parts = [
             "Pat Profile:",
             f"- Display name: {bundle.profile.display_name}",
         ]
         if bundle.profile.priorities:
-            parts.append(
+            stable_parts.append(
                 "- Active priorities: "
                 + ", ".join(str(item.get("label") or "").strip() for item in bundle.profile.priorities if str(item.get("label") or "").strip())
             )
         if bundle.profile.goals:
-            parts.append(
+            stable_parts.append(
                 "- Current goals: "
                 + "; ".join(str(item.get("text") or "").strip() for item in bundle.profile.goals if str(item.get("text") or "").strip())
             )
         if bundle.profile.noise_filters:
-            parts.append("- Noise filters: " + "; ".join(bundle.profile.noise_filters))
+            stable_parts.append("- Noise filters: " + "; ".join(bundle.profile.noise_filters))
         if bundle.identity.get("scheduleBasics"):
-            parts.append("- Schedule basics: " + "; ".join(_string_list(bundle.identity.get("scheduleBasics"))))
+            stable_parts.append("- Schedule basics: " + "; ".join(_string_list(bundle.identity.get("scheduleBasics"))))
         if bundle.identity.get("recurringConstraints"):
-            parts.append("- Recurring constraints: " + "; ".join(_string_list(bundle.identity.get("recurringConstraints"))))
-        if bundle.observed_tendencies:
-            parts.append("- Observed tendencies: " + "; ".join(item.label for item in bundle.observed_tendencies[:3]))
+            stable_parts.append("- Recurring constraints: " + "; ".join(_string_list(bundle.identity.get("recurringConstraints"))))
         if bundle.guidance_rules:
-            parts.append("- Guidance rules: " + "; ".join(item.rule for item in bundle.guidance_rules[:3]))
-        return "\n".join(parts)
+            stable_parts.append("- Guidance rules: " + "; ".join(item.rule for item in bundle.guidance_rules[:3]))
+
+        stable_identity = "\n".join(stable_parts)
+
+        situational_parts: list[str] = []
+        if bundle.observed_tendencies:
+            situational_parts.append("- Observed tendencies: " + "; ".join(item.label for item in bundle.observed_tendencies[:3]))
+        if include_briefing:
+            briefing = self.build_return_briefing()
+            if briefing is not None:
+                if briefing.notice_text:
+                    situational_parts.append(f"- Return briefing note: {briefing.notice_text}")
+                if briefing.attention_items:
+                    situational_parts.append(
+                        "- Attention now: "
+                        + "; ".join(item.title for item in briefing.attention_items[:2])
+                    )
+        situational_briefing = "\n".join(["Recent operator context:", *situational_parts]) if situational_parts else None
+        return IdentityPromptPayload(stable_identity=stable_identity, situational_briefing=situational_briefing)
+
+    def render_session_context(self) -> str | None:
+        payload = self.build_identity_prompt_payload(include_briefing=True)
+        parts = [part for part in (payload.stable_identity, payload.situational_briefing) if part]
+        return "\n\n".join(parts) if parts else None
 
     def _ensure_overlay_scaffold(self) -> None:
         self._overlay_dir.mkdir(parents=True, exist_ok=True)

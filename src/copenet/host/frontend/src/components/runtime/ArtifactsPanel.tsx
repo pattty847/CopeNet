@@ -1,10 +1,9 @@
 import {
   Box,
   Cpu,
-  ExternalLink,
+  ChevronRight,
   FileDiff,
   FileText,
-  GitCompareArrows,
   MessageSquareQuote,
   Package,
   Send,
@@ -111,24 +110,29 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
   };
 
   return (
-    <div className="group lift-sm rounded-xl border border-operator-border bg-operator-panel/40 overflow-hidden">
+    <button
+      type="button"
+      onClick={openInspect}
+      className="group lift-sm w-full text-left rounded-xl border border-operator-border bg-operator-panel/30 hover:border-operator-accent/30 hover:bg-operator-panel/55 transition-all overflow-hidden"
+    >
       <div className="flex items-start gap-2.5 px-3 py-2.5">
         <div className={`flex h-8 w-8 items-center justify-center rounded-lg shrink-0 ${meta.bg} ${meta.tone}`}>
           <Icon className="w-3.5 h-3.5" />
         </div>
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 mb-0.5">
-            <span className={`text-[9px] font-semibold uppercase tracking-wider ${meta.tone}`}>
+            <span className={`text-[9px] font-semibold uppercase tracking-[0.14em] ${meta.tone}`}>
               {meta.label}
             </span>
             {artifact.promoted && (
-              <span className="text-[9px] font-semibold uppercase tracking-wider text-operator-accent flex items-center gap-0.5">
+              <span className="text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-accent flex items-center gap-0.5">
                 <Star className="w-2.5 h-2.5 fill-current" /> Saved
               </span>
             )}
-            <span className="text-[9px] text-operator-muted/70 font-mono ml-auto">
+            <span className="text-[10px] text-operator-muted/65 font-mono ml-auto tabular-nums">
               {timeAgo(artifact.producedAt)}
             </span>
+            <ChevronRight className="h-3 w-3 text-operator-muted/40 group-hover:text-operator-accent transition-colors" />
           </div>
           <div
             className="text-[13px] text-operator-text font-medium leading-snug mb-0.5 line-clamp-2 break-words"
@@ -136,7 +140,7 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
           >
             {artifact.title}
           </div>
-          <div className="text-[11px] text-operator-muted leading-relaxed break-words">
+          <div className="text-[11px] text-operator-muted/85 leading-relaxed break-words line-clamp-2">
             {artifact.oneLine}
           </div>
           {artifact.files && artifact.files.length > 0 && (
@@ -144,9 +148,9 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
               {artifact.files.slice(0, 3).map((f) => (
                 <span
                   key={f.path}
-                  className="inline-flex items-center gap-1 rounded-md bg-operator-bg border border-operator-border px-1.5 py-0.5 text-[10px] font-mono text-operator-muted"
+                  className="inline-flex items-center gap-1 rounded-md bg-operator-bg/60 border border-operator-border px-1.5 py-0.5 text-[10px] font-mono text-operator-muted"
                 >
-                  <span className="truncate max-w-[200px]">{f.path.split('/').pop()}</span>
+                  <span className="truncate max-w-[180px]">{f.path.split('/').pop()}</span>
                   <span className="text-operator-success">+{f.additions}</span>
                   <span className="text-operator-error">−{f.deletions}</span>
                 </span>
@@ -158,30 +162,7 @@ function ArtifactCard({ artifact }: { artifact: Artifact }) {
           )}
         </div>
       </div>
-
-      <div className="flex items-center gap-1 px-3 py-1.5 border-t border-operator-border/60 bg-operator-bg/40 opacity-80 group-hover:opacity-100 transition-opacity duration-150">
-        <button
-          onClick={openInspect}
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-operator-text hover:bg-operator-panel transition-colors duration-150"
-        >
-          <ExternalLink className="w-3 h-3" /> Open
-        </button>
-        <button
-          disabled
-          title="Compare — coming soon"
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-operator-muted/60 cursor-not-allowed"
-        >
-          <GitCompareArrows className="w-3 h-3" /> Compare
-        </button>
-        <button
-          disabled
-          title="Promote — coming soon"
-          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[11px] font-medium text-operator-muted/60 cursor-not-allowed ml-auto"
-        >
-          <Star className="w-3 h-3" /> Promote
-        </button>
-      </div>
-    </div>
+    </button>
   );
 }
 
@@ -194,7 +175,7 @@ export function ArtifactsPanel({ sessionKey, isDraft }: ArtifactsPanelProps) {
       <EmptyState
         icon={Sparkles}
         title="No artifacts yet"
-        body="The agent will produce patch plans, summaries, answers, and tool bundles here as the run unfolds."
+        body="Patch plans, summaries, answers, and tool bundles will land here."
       />
     );
   }
@@ -207,8 +188,8 @@ export function ArtifactsPanel({ sessionKey, isDraft }: ArtifactsPanelProps) {
     return (
       <EmptyState
         icon={Box}
-        title="No artifacts produced"
-        body="This session has not produced any runtime artifacts. They will stream in here as the agent works."
+        title="No artifacts yet"
+        body="Artifacts will stream in here as the agent works."
       />
     );
   }
@@ -216,18 +197,12 @@ export function ArtifactsPanel({ sessionKey, isDraft }: ArtifactsPanelProps) {
   const artifacts = resource.data;
 
   return (
-    <div className="px-3 py-2.5 space-y-2">
-      <div className="flex items-center justify-between mb-0.5">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
-          Artifacts · {artifacts.length}
+    <div className="px-3 py-3 space-y-2">
+      <div className="flex items-center justify-between mb-0.5 px-0.5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-muted/85">
+          Artifacts
         </div>
-        <button
-          disabled
-          className="text-[10px] text-operator-muted/60 uppercase tracking-wider cursor-not-allowed"
-          title="Filter — coming soon"
-        >
-          All kinds
-        </button>
+        <span className="text-[10px] tabular-nums text-operator-muted/55">{artifacts.length}</span>
       </div>
       <div className="space-y-2 stagger-children">
         {artifacts.map((a) => (

@@ -238,29 +238,29 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
   const targetLabel = part.target ? shortPath(part.target) : null;
 
   return (
-    <div className={`border border-x-0 ${borderTone} ${bgTone} overflow-hidden`}>
+    <div className={`rounded-lg border ${borderTone} ${bgTone} overflow-hidden`}>
       {hasExpandable ? (
         <button
           onClick={() => setExpanded(!expanded)}
-          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-operator-panel/20 transition-colors duration-100"
+          className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-operator-panel/30 transition-colors duration-100"
         >
           <StatusIcon className={`h-3 w-3 shrink-0 ${statusColor}`} />
-          <span className="font-mono text-[10.5px] text-operator-muted/70 shrink-0">{part.toolId}</span>
-          <span className="flex-1 truncate text-[10.5px] text-operator-muted/60 min-w-0" title={part.target || part.summary}>
+          <span className="font-mono text-[10.5px] text-operator-muted/75 shrink-0">{part.toolId}</span>
+          <span className="flex-1 truncate text-[10.5px] text-operator-muted/75 min-w-0" title={part.target || part.summary}>
             {targetLabel || part.summary}
           </span>
           <ScopeBadge scope={part.scope} />
           <PolicyBadge decision={part.policyDecision} />
           {expanded
-            ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />
-            : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />
+            ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/55" />
+            : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/55" />
           }
         </button>
       ) : (
         <div className="flex items-center gap-2 px-2.5 py-1.5">
           <StatusIcon className={`h-3 w-3 shrink-0 ${statusColor}`} />
-          <span className="font-mono text-[10.5px] text-operator-muted/70 shrink-0">{part.toolId}</span>
-          <span className="flex-1 truncate text-[10.5px] text-operator-muted/60 min-w-0" title={part.target || part.summary}>
+          <span className="font-mono text-[10.5px] text-operator-muted/75 shrink-0">{part.toolId}</span>
+          <span className="flex-1 truncate text-[10.5px] text-operator-muted/75 min-w-0" title={part.target || part.summary}>
             {targetLabel || part.summary}
           </span>
           <ScopeBadge scope={part.scope} />
@@ -297,7 +297,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
               <button
                 type="button"
                 onClick={() => setInspectorTarget({ kind: 'artifact', artifactId: part.artifactId! })}
-                className="border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/15"
+                className="rounded-md border border-operator-accent/20 bg-operator-accent/10 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-accent transition-colors duration-150 hover:bg-operator-accent/18 hover:border-operator-accent/35"
               >
                 Open Inspector
               </button>
@@ -395,10 +395,10 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
   const hiddenFileCount = Math.max(fileReadMembers.length - visibleFileMembers.length, 0);
 
   return (
-    <div className={`border border-x-0 ${borderTone} ${bgTone} overflow-hidden`}>
+    <div className={`rounded-lg border ${borderTone} ${bgTone} overflow-hidden`}>
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-operator-panel/14 transition-colors duration-100"
+        className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left hover:bg-operator-panel/30 transition-colors duration-100"
       >
         {expanded
           ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />

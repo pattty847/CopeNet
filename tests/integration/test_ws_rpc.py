@@ -352,9 +352,19 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "files.write",
             "git.diff",
             "git.status",
+            "memory.read",
+            "memory.write",
             "shell.exec",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
+
+        identity_id = socket.request("identity.context")
+        identity = socket.recv_response(identity_id)
+        assert set(identity["payload"]["identityContext"]) == {"stableIdentity", "situationalBriefing"}
+
+        memory_list_id = socket.request("memory.list")
+        memory_list = socket.recv_response(memory_list_id)
+        assert memory_list["payload"]["items"] == []
 
         sessions_id = socket.request("sessions.list")
         sessions = socket.recv_response(sessions_id)

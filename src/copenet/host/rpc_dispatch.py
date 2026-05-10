@@ -8,6 +8,10 @@ from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
 from .rpc_catalog import (
     handle_briefing_get,
+    handle_identity_context_get,
+    handle_memory_archive,
+    handle_memory_list,
+    handle_memory_upsert,
     handle_messaging_config_get,
     handle_messaging_config_update,
     handle_messaging_destinations_delete,
@@ -81,10 +85,18 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_tools_list(req.id, send_json, orchestrator)
     elif req.method == "profile.get":
         await handle_profile_get(req.id, send_json, orchestrator)
+    elif req.method == "identity.context":
+        await handle_identity_context_get(req.id, send_json, orchestrator)
     elif req.method == "profile.changelog":
         await handle_profile_changelog(req.id, req.params, send_json, orchestrator)
     elif req.method == "briefing.get":
         await handle_briefing_get(req.id, send_json, orchestrator)
+    elif req.method == "memory.list":
+        await handle_memory_list(req.id, req.params, send_json, orchestrator)
+    elif req.method == "memory.upsert":
+        await handle_memory_upsert(req.id, req.params, send_json, orchestrator)
+    elif req.method == "memory.archive":
+        await handle_memory_archive(req.id, req.params, send_json, orchestrator)
     elif req.method == "runtime.context":
         if req.params:
             await handle_runtime_context_resolve(req.id, req.params, send_json, orchestrator)

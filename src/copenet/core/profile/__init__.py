@@ -2,6 +2,7 @@
 
 from .service import (
     GuidanceRule,
+    IdentityPromptPayload,
     ObservedTendency,
     PatProfile,
     PatProfileBundle,
@@ -12,6 +13,7 @@ from .service import (
 
 __all__ = [
     "GuidanceRule",
+    "IdentityPromptPayload",
     "ObservedTendency",
     "PatProfile",
     "PatProfileBundle",

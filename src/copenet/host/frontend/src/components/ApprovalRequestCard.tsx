@@ -15,9 +15,9 @@ import type { ApprovalRequest } from '../runtime/types';
 
 const ACTION_CLASS_LABELS: Record<string, { label: string; icon: typeof ShieldAlert; tone: string }> = {
   external_communication: { label: 'External Communication', icon: Send, tone: 'text-operator-accent' },
-  filesystem_write: { label: 'File System Write', icon: Pencil, tone: 'text-operator-warning' },
+  filesystem_write: { label: 'File System Write', icon: Pencil, tone: 'text-amber-400' },
   process_execution: { label: 'Process Execution', icon: ShieldAlert, tone: 'text-operator-error' },
-  network_side_effect: { label: 'Network Side Effect', icon: ShieldAlert, tone: 'text-operator-warning' },
+  network_side_effect: { label: 'Network Side Effect', icon: ShieldAlert, tone: 'text-amber-400' },
   credential_or_sensitive_target: { label: 'Sensitive Target', icon: ShieldAlert, tone: 'text-operator-error' },
 };
 

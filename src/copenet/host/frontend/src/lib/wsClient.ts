@@ -3,7 +3,10 @@ import {
   ChatEventPayload,
   EventFrame,
   IncomingFrame,
+  IdentityContextPayload,
+  IdentityContextRuntime,
   LiveToolCall,
+  MemoryItem,
   MessageDestination,
   Message,
   MessagePart,
@@ -266,6 +269,46 @@ function normalizePatProfile(raw: unknown): PatProfile | null {
     noiseFilters: Array.isArray(payload.noiseFilters) ? payload.noiseFilters.map(String) : [],
     lastUpdatedAt: String(payload.lastUpdatedAt || new Date().toISOString()),
     changelogCount: Number(payload.changelogCount || 0),
+  };
+}
+
+function normalizeIdentityContext(raw: unknown): IdentityContextPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    stableIdentity: payload.stableIdentity ? String(payload.stableIdentity) : null,
+    situationalBriefing: payload.situationalBriefing ? String(payload.situationalBriefing) : null,
+  };
+}
+
+function normalizeMemoryItem(raw: unknown): MemoryItem | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const category = String(payload.category || '');
+  if (!['preference', 'project_convention', 'ongoing_priority', 'fact'].includes(category)) return null;
+  return {
+    id: String(payload.id || ''),
+    category: category as MemoryItem['category'],
+    title: String(payload.title || 'Memory'),
+    summary: String(payload.summary || payload.title || ''),
+    detail: payload.detail ? String(payload.detail) : null,
+    tags: Array.isArray(payload.tags) ? payload.tags.map((tag) => String(tag)).filter(Boolean) : [],
+    source: String(payload.source || 'explicit'),
+    confidence: Number(payload.confidence || 0),
+    createdAt: String(payload.createdAt || new Date().toISOString()),
+    updatedAt: String(payload.updatedAt || payload.createdAt || new Date().toISOString()),
+    archived: Boolean(payload.archived),
+    lastSessionKey: payload.lastSessionKey ? String(payload.lastSessionKey) : null,
+  };
+}
+
+function normalizeIdentityContextRuntime(raw: unknown): IdentityContextRuntime | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    profileActive: Boolean(payload.profileActive),
+    memoryCount: Number(payload.memoryCount || 0),
+    memoryItemIds: Array.isArray(payload.memoryItemIds) ? payload.memoryItemIds.map((value) => String(value)).filter(Boolean) : [],
   };
 }
 
@@ -832,6 +875,22 @@ class WsClient {
       return;
     }
 
+    if (frame.event === 'memory.changed') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const item = normalizeMemoryItem(payload.item);
+      if (item) {
+        const store = useAppStore.getState();
+        store.upsertMemoryItem(item);
+        store.setLastMemoryChange({
+          item,
+          reason: payload.reason ? String(payload.reason) : 'upsert',
+          sessionKey: payload.sessionKey ? String(payload.sessionKey) : null,
+          runId: payload.runId ? String(payload.runId) : null,
+        });
+      }
+      return;
+    }
+
     if (frame.event === 'briefing.ready') {
       const payload = (frame.payload || {}) as Record<string, unknown>;
       useAppStore.getState().setReturnBriefing(normalizeReturnBriefing(payload.briefing));
@@ -955,12 +1014,14 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, identityPayload, memoryPayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
         this.request<{ sessions: unknown[] }>('sessions.list', { includeArchived: useAppStore.getState().showArchived }),
         this.request<{ profile?: unknown | null }>('profile.get', {}),
+        this.request<{ identityContext?: unknown | null }>('identity.context', {}),
+        this.request<{ items?: unknown[] }>('memory.list', { limit: 24 }),
         this.request<{ changelog?: unknown[] }>('profile.changelog', { limit: 20 }),
         this.request<{ briefing?: unknown | null }>('briefing.get', {}),
         this.request<{ runtimeContext?: unknown | null }>('runtime.context', {}),
@@ -979,6 +1040,12 @@ class WsClient {
       );
       store.setSessions(sessions);
       store.setPatProfile(normalizePatProfile(profilePayload.profile));
+      store.setIdentityContext(normalizeIdentityContext(identityPayload.identityContext));
+      store.setMemoryItems(
+        Array.isArray(memoryPayload.items)
+          ? memoryPayload.items.map(normalizeMemoryItem).filter((item): item is MemoryItem => item != null)
+          : [],
+      );
       store.setProfileChangelog(
         Array.isArray(changelogPayload.changelog)
           ? changelogPayload.changelog
@@ -1363,6 +1430,33 @@ class WsClient {
   async listSessionRuns(key: string, limit = 20): Promise<SessionRunRecord[]> {
     const payload = await this.request<{ runs?: SessionRunRecord[] }>('sessions.runs', { key, limit });
     return Array.isArray(payload.runs) ? payload.runs : [];
+  }
+
+  async upsertMemory(input: {
+    id?: string | null;
+    category: MemoryItem['category'];
+    title: string;
+    summary: string;
+    detail?: string | null;
+    tags?: string[];
+  }): Promise<MemoryItem | null> {
+    const payload = await this.request<{ memoryItem?: unknown | null }>('memory.upsert', {
+      id: input.id || undefined,
+      category: input.category,
+      title: input.title,
+      summary: input.summary,
+      detail: input.detail || undefined,
+      tags: input.tags || [],
+    });
+    return normalizeMemoryItem(payload.memoryItem);
+  }
+
+  async archiveMemory(id: string, archived = true): Promise<MemoryItem | null> {
+    const payload = await this.request<{ memoryItem?: unknown | null }>('memory.archive', {
+      id,
+      archived,
+    });
+    return normalizeMemoryItem(payload.memoryItem);
   }
 
   async listSessionArtifacts(key: string, limit = 50): Promise<SessionArtifactRecord[]> {
@@ -1774,6 +1868,10 @@ class WsClient {
             transitionReason: String(t.transitionReason ?? 'completed'),
           };
           store.setLastTurnState(snapshot);
+        }
+        const identityContext = normalizeIdentityContextRuntime((payload as unknown as Record<string, unknown>).identityContext);
+        if (identityContext) {
+          store.setSessionIdentityUsage(sessionKey, identityContext);
         }
         // Don't clear liveToolCalls immediately — RunActivityPanel takes over after
         // a short delay when the activity data reloads.  Components that display

@@ -22,6 +22,7 @@ import type { AsyncResource, BatchResource } from '../../runtime/adapter';
 import type { Artifact } from '../../runtime/types';
 import { DiffArtifactView } from './DiffArtifactView';
 import { LoadingState } from './ResourceStates';
+import { ChatMarkdown } from '../ChatMarkdown';
 
 function ArtifactBody({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'patch_plan' || artifact.kind === 'diff') {
@@ -36,48 +37,50 @@ function ArtifactBody({ artifact }: { artifact: Artifact }) {
       : Package;
 
   return (
-    <div className="space-y-3">
-      <div className="rounded-xl border border-operator-border bg-operator-panel/40 px-3 py-2.5">
-        <div className="flex items-center gap-2 mb-1.5">
-          <Icon className="w-3.5 h-3.5 text-operator-accent" />
-          <span className="text-[9px] font-semibold uppercase tracking-wider text-operator-accent">
+    <div className="space-y-4">
+      <div className="rounded-2xl border border-operator-border bg-operator-panel/30 px-3.5 py-3">
+        <div className="flex items-center gap-2 mb-2">
+          <span className="inline-flex h-6 w-6 items-center justify-center rounded-md bg-operator-accent/10 text-operator-accent">
+            <Icon className="w-3.5 h-3.5" />
+          </span>
+          <span className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-operator-accent">
             {artifact.kind.replace('_', ' ')}
           </span>
-          <span className="text-[10px] font-mono text-operator-muted/70">{artifact.id}</span>
-          {artifact.runId && (
-            <span className="text-[10px] font-mono text-operator-muted/60 ml-auto">
-              {artifact.runId}
-            </span>
-          )}
+          <span className="ml-auto inline-flex items-center gap-2 text-[10px] font-mono text-operator-muted/70">
+            <span title={artifact.id} className="truncate max-w-[120px]">{artifact.id}</span>
+            {artifact.runId && <span className="text-operator-muted/45">· {artifact.runId}</span>}
+          </span>
         </div>
-        <div className="text-[14px] text-operator-text font-medium leading-snug">
+        <div className="text-[15px] text-operator-text font-semibold leading-snug">
           {artifact.title}
         </div>
-        <div className="text-[12px] text-operator-muted mt-1 leading-relaxed">
-          {artifact.oneLine}
-        </div>
+        {artifact.oneLine && (
+          <div className="text-[12px] text-operator-muted mt-1.5 leading-relaxed">
+            {artifact.oneLine}
+          </div>
+        )}
       </div>
 
       {artifact.bodyMarkdown && (
-        <div className="rounded-xl border border-operator-border bg-operator-bg p-3 text-[13px] text-operator-text leading-relaxed whitespace-pre-wrap">
-          {artifact.bodyMarkdown}
+        <div className="rounded-2xl border border-operator-border bg-operator-bg px-4 py-3.5">
+          <ChatMarkdown content={artifact.bodyMarkdown} />
         </div>
       )}
 
       {artifact.toolIds && artifact.toolIds.length > 0 && (
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1.5 px-0.5">
-            Tools in Bundle
+          <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-muted mb-2 px-0.5">
+            Tools in Bundle · {artifact.toolIds.length}
           </div>
-          <ul className="space-y-1">
+          <ul className="rounded-xl border border-operator-border overflow-hidden divide-y divide-operator-border/40">
             {artifact.toolIds.map((tid, idx) => (
               <li
                 key={`${tid}-${idx}`}
-                className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg border border-operator-border bg-operator-panel/30 text-[11px]"
+                className="flex items-center gap-2 px-2.5 py-1.5 text-[11px] bg-operator-panel/20"
               >
-                <Terminal className="w-3 h-3 text-operator-muted shrink-0" />
-                <span className="font-mono text-operator-text">{tid}</span>
-                <span className="text-operator-muted/70 ml-auto">#{idx + 1}</span>
+                <Terminal className="w-3 h-3 text-operator-muted/70 shrink-0" />
+                <span className="font-mono text-operator-text/85 truncate">{tid}</span>
+                <span className="text-operator-muted/55 ml-auto tabular-nums">#{idx + 1}</span>
               </li>
             ))}
           </ul>
@@ -412,16 +415,16 @@ export function InspectorDrawer() {
         onClick={() => close(null)}
       />
 
-      <div className="relative ml-auto h-full w-full max-w-[640px] bg-operator-bg border-l border-operator-border shadow-shell-xl flex flex-col animate-slide-in-right">
-        <div className="flex items-center gap-2 px-4 py-3 border-b border-operator-border">
+      <div className="relative ml-auto h-full w-full max-w-[680px] bg-operator-bg border-l border-operator-border shadow-shell-xl flex flex-col animate-slide-in-right">
+        <div className="flex items-center gap-2.5 px-4 py-3 border-b border-operator-border">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-operator-accent/10 text-operator-accent">
             <HeaderIcon className="w-3.5 h-3.5" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
+            <div className="text-[9.5px] font-semibold uppercase tracking-[0.16em] text-operator-muted/80">
               Inspector
             </div>
-            <div className="text-[14px] text-operator-text font-medium truncate">
+            <div className="mt-0.5 text-[14px] text-operator-text font-semibold truncate">
               {title}
             </div>
           </div>
@@ -438,11 +441,11 @@ export function InspectorDrawer() {
           {target.kind === 'batch' ? renderBatchResource(batchResource) : renderArtifactResource(artifactResource)}
         </div>
 
-        <div className="px-4 py-2.5 border-t border-operator-border flex items-center justify-between bg-operator-panel/30">
-          <span className="text-[10px] text-operator-muted">
-            Verbose context home — paths, payloads, and causal trace
+        <div className="px-4 py-2 border-t border-operator-border flex items-center justify-between bg-operator-panel/25">
+          <span className="text-[10.5px] text-operator-muted/75">
+            Paths, payloads, and causal trace
           </span>
-          <span className="text-[10px] text-operator-muted/70 font-mono">esc to close</span>
+          <span className="rounded-md border border-operator-border bg-operator-bg px-1.5 py-0.5 text-[9.5px] font-mono text-operator-muted/75">esc</span>
         </div>
       </div>
     </div>,

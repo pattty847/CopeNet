@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from copenet.core.orchestrator.personal_history import (
@@ -130,10 +130,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "workingSetRefCount": len(session_state.working_set_refs),
         },
     )
-    profile_context = orchestrator._profile_service.render_session_context()
     effective_system_prompt = request.system_prompt
-    if profile_context:
-        effective_system_prompt = f"{request.system_prompt}\n\n{profile_context}".strip() if request.system_prompt else profile_context
     working_set = assemble_working_set(
         user_message=message,
         session_state=session_state,
@@ -154,6 +151,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     artifact_drafts: list[dict] = []
     tool_steps: list[dict] = []
     persisted_tool_artifact_ids: list[str] = []
+    identity_context_payload: dict[str, object] = {
+        "profileActive": False,
+        "memoryCount": 0,
+        "memoryItemIds": [],
+    }
     effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
     available_tools = [
         tool
@@ -180,12 +182,20 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 transcript_store=orchestrator._transcript_store,
                 providers=orchestrator._providers,
                 policy=effective_tool_policy,
+                memory_service=orchestrator._memory_service,
+                profile_service=orchestrator._profile_service,
                 artifact_store=orchestrator._artifact_store,
                 task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
                 run_id=run_id,
                 trace=trace.record,
             ),
             trace=trace.record,
+            prompt_context_builder=lambda resolved_plan: _build_identity_memory_overlay(
+                orchestrator=orchestrator,
+                plan=resolved_plan,
+                query=message,
+                sink=identity_context_payload,
+            ),
         )
         if not plan.will_attempt_tool_loop:
             trace.record(
@@ -414,6 +424,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 },
                 "workspaceRoot": str(session_workspace_root),
                 "turnState": dict(latest_turn_state),
+                "identityContext": dict(identity_context_payload),
             },
         )
         orchestrator._run_store.create(run_record)
@@ -430,6 +441,19 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             user_message=message,
             run_record=run_record,
         )
+        memory_changes = orchestrator._memory_service.extract_from_run(
+            user_message=message,
+            run_record=run_record,
+        )
+        if memory_changes.created:
+            trace.record(
+                "memory_extracted",
+                {
+                    "count": len(memory_changes.created),
+                    "itemIds": [item.id for item in memory_changes.created],
+                    "categories": [item.category for item in memory_changes.created],
+                },
+            )
         if emit_event is not None and profile_changes:
             profile_payload = orchestrator.get_pat_profile()
             for item in profile_changes:
@@ -438,6 +462,17 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     {
                         "profile": profile_payload,
                         "change": item.to_json(),
+                    },
+                )
+        if emit_event is not None and memory_changes.created:
+            for item in memory_changes.created:
+                await emit_event(
+                    "memory.changed",
+                    {
+                        "item": item.to_public_dict(),
+                        "reason": "run_extraction",
+                        "sessionKey": session_key,
+                        "runId": run_id,
                     },
                 )
         briefing_payload = orchestrator.get_return_briefing()
@@ -467,6 +502,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             },
             "toolExecution": tool_execution_payload,
             "turnState": latest_turn_state or None,
+            "identityContext": identity_context_payload,
         }
         await emit(final_payload)
         trace.record(
@@ -670,3 +706,25 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
 
 def _summarize_output(text: str) -> str:
     return " ".join(text.split())[:240]
+
+
+def _build_identity_memory_overlay(
+    *,
+    orchestrator: "Orchestrator",
+    plan,
+    query: str,
+    sink: dict[str, object],
+) -> str | None:
+    identity_payload = orchestrator._profile_service.build_identity_prompt_payload(
+        include_briefing=plan.interaction_class in {"agent", "risky"}
+    )
+    memory_payload = orchestrator._memory_service.build_prompt_payload(
+        query=query,
+        interaction_class=plan.interaction_class,
+        limit=3 if plan.interaction_class in {"agent", "risky", "advisory"} else 1,
+    )
+    sink["profileActive"] = bool(identity_payload.stable_identity)
+    sink["memoryCount"] = len(memory_payload.memory_items)
+    sink["memoryItemIds"] = [item.id for item in memory_payload.memory_items]
+    parts = [part for part in (identity_payload.stable_identity, identity_payload.situational_briefing, memory_payload.digest) if part]
+    return "\n\n".join(parts) if parts else None

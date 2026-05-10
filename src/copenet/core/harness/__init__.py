@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass
-from typing import AsyncIterator
+from typing import AsyncIterator, Callable
 
 from copenet.providers import Provider, ProviderEvent
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext
@@ -64,6 +64,7 @@ class ChatHarness:
         tool_executor: ToolExecutor | None = None,
         tool_context: ToolExecutionContext | None = None,
         trace: TraceRecorder | None = None,
+        prompt_context_builder: Callable[[HarnessTurnPlan], str | None] | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
         """Return the normalized plan and provider event stream."""
         effective_tools = available_tools
@@ -79,9 +80,11 @@ class ChatHarness:
             prompt=prompt,
             trace=trace,
         )
+        context_overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
+        combined_system_prompt = "\n\n".join(part for part in (system_prompt, context_overlay) if part)
         effective_system_prompt = compose_interaction_system_prompt(
             provider=provider,
-            system_prompt=system_prompt,
+            system_prompt=combined_system_prompt,
             plan=plan,
         )
         if not plan.will_attempt_tool_loop or tool_executor is None or tool_context is None:
