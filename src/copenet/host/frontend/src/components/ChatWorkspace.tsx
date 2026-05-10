@@ -269,8 +269,19 @@ export function ChatWorkspace() {
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg">
-        <div className={`flex gap-2.5 sm:px-4 sm:py-2.5 ${isMobile ? 'items-start justify-between px-3 py-2' : 'px-3 py-2.5 items-center justify-between'}`}>
-          <div className="min-w-0 flex flex-1 flex-wrap items-center gap-2">
+        <div className={`flex gap-2.5 sm:px-4 sm:py-2 ${isMobile ? 'items-start justify-between px-3 py-2' : 'px-3 py-2 items-center justify-between'}`}>
+          <div className="min-w-0 flex flex-1 items-center gap-2.5">
+            {/* Status dot */}
+            <span
+              className={`relative flex h-2 w-2 shrink-0 ${activeSession?.archived ? 'opacity-60' : ''}`}
+              title={activeSession?.archived ? 'Archived' : runtimeSummary.statusLabel}
+            >
+              {!activeSession?.archived && runtimeSummary.locked && (
+                <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-50" />
+              )}
+              <span className={`relative inline-flex h-2 w-2 rounded-full ${activeSession?.archived ? 'bg-operator-error' : runtimeSummary.locked ? 'bg-operator-success' : 'bg-operator-accent'}`} />
+            </span>
+
             {/* Title */}
             {isEditingTitle ? (
               <input
@@ -282,11 +293,11 @@ export function ChatWorkspace() {
                   if (e.key === 'Enter') handleTitleSave();
                   if (e.key === 'Escape') setIsEditingTitle(false);
                 }}
-                className="bg-operator-panel border border-operator-accent outline-none font-semibold text-[17px] text-operator-text w-full max-w-md rounded-lg px-2 py-1 -ml-2 font-sans"
+                className="bg-operator-panel border border-operator-accent outline-none font-semibold text-[15.5px] text-operator-text w-full max-w-md rounded-lg px-2 py-0.5 font-sans"
               />
             ) : (
               <h1
-                className={`font-semibold ${isMobile ? 'text-[15px]' : 'text-[17px]'} text-operator-text font-sans truncate ${activeSession ? 'cursor-pointer hover:text-operator-accent transition-colors duration-150' : ''}`}
+                className={`min-w-0 font-semibold ${isMobile ? 'text-[14.5px]' : 'text-[15.5px]'} text-operator-text font-sans truncate tracking-tight ${activeSession ? 'cursor-pointer hover:text-operator-accent transition-colors duration-150' : ''}`}
                 onClick={() => {
                   if (!activeSession) return;
                   setEditTitleValue(activeSession.title || '');
@@ -297,10 +308,13 @@ export function ChatWorkspace() {
                 {activeSession?.title || (mergeDraft ? 'Merge Workspace' : 'New Chat')}
               </h1>
             )}
-            <span className="text-[11px] text-operator-muted">{providerName} · {runtimeSummary.model}</span>
-            <span className={`rounded-full border px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${activeSession?.archived ? 'border-operator-error/25 bg-operator-error/8 text-operator-error' : runtimeSummary.locked ? 'border-operator-success/25 bg-operator-success/8 text-operator-success' : 'border-operator-accent/25 bg-operator-accent/8 text-operator-accent'}`}>
-              {activeSession?.archived ? 'Archived' : runtimeSummary.statusLabel}
-            </span>
+
+            {!isMobile && (
+              <span className="text-[11px] text-operator-muted/85 truncate" title={`${providerName} · ${runtimeSummary.model}`}>
+                <span className="text-operator-muted/55">·</span> {providerName}
+                <span className="text-operator-muted/40"> / </span>{runtimeSummary.model}
+              </span>
+            )}
           </div>
 
           {/* Actions */}
@@ -418,38 +432,47 @@ export function ChatWorkspace() {
       {/* Working Set — glanceable, pinned above the message stream */}
       {!isMergePrep && <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />}
 
-      <AgentWorkspaceTabs value={agentWorkspaceTab} onChange={setAgentWorkspaceTab} />
+      <AgentWorkspaceTabs
+        value={agentWorkspaceTab}
+        onChange={setAgentWorkspaceTab}
+        sessionKey={activeSessionKey}
+        isDraft={isDraft}
+      />
 
       {agentWorkspaceTab === 'messages' && (
-      <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-2.5' : 'px-2 py-2.5'}`}>
+      <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-3' : 'px-4 py-4'}`}>
         {messages.length === 0 ? (
           mergeDraft ? (
-            <div className={`mx-auto w-full max-w-3xl ${isMobile ? 'mt-2.5' : 'mt-3'} border border-operator-border/70 border-x-0 px-4 py-4`}>
-              <div className="mb-2 inline-flex items-center border border-operator-accent/18 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">
-                Merge Workspace
+            <div className={`mx-auto w-full max-w-2xl ${isMobile ? 'mt-4' : 'mt-10'}`}>
+              <div className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent/85">
+                <GitMerge className="h-3 w-3" />
+                Merge workspace
               </div>
-              <h2 className={`font-serif text-operator-text ${isMobile ? 'text-[24px] leading-8' : 'text-[30px] leading-[1.08]'}`}>
-                Build one fresh agent session from the sessions you want to think across.
+              <h2 className={`mt-2 font-serif text-operator-text tracking-tight ${isMobile ? 'text-[24px] leading-[1.15]' : 'text-[30px] leading-[1.08]'}`}>
+                One fresh session, drawn from many.
               </h2>
-              <p className="mt-2.5 max-w-2xl text-[13px] leading-6 text-operator-muted">
-                Choose the runtime in the inspector, keep the source list tight, and CopeNet will open the merged session immediately while source summaries stream in.
+              <p className="mt-2 max-w-xl text-[13px] leading-6 text-operator-muted/90">
+                Pick a runtime in the inspector. CopeNet will open the merged session immediately and stream source summaries in.
               </p>
 
-              <div className="mt-4 border-y border-operator-border/60">
+              <div className="mt-5 overflow-hidden rounded-xl border border-operator-border bg-operator-panel/30">
                 {mergeSourceSessions.map((session, index) => (
-                  <div key={session.key} className="flex items-center gap-2 border-b border-operator-border/50 px-0 py-2 last:border-b-0">
+                  <div key={session.key} className="flex items-center gap-2 border-b border-operator-border/55 px-3 py-2 last:border-b-0">
+                    <span className="inline-flex h-5 w-5 items-center justify-center rounded-full border border-operator-border text-[10px] font-mono text-operator-muted/85 tabular-nums">
+                      {index + 1}
+                    </span>
                     <div className="min-w-0 flex-1">
-                      <div className="truncate text-[12px] font-semibold text-operator-text">{session.title || session.key}</div>
-                      <div className="truncate text-[11px] text-operator-muted">
+                      <div className="truncate text-[12.5px] font-medium text-operator-text">{session.title || session.key}</div>
+                      <div className="truncate text-[11px] text-operator-muted/85">
                         {session.provider} · {session.model || 'default'}
                       </div>
                     </div>
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-0.5">
                       <button
                         type="button"
                         onClick={() => moveMergeSource(index, -1)}
                         disabled={index === 0}
-                        className="rounded-md border border-operator-border p-1 text-operator-muted transition-colors hover:text-operator-accent disabled:opacity-35"
+                        className="rounded-md p-1 text-operator-muted/70 transition-colors hover:bg-operator-bg/60 hover:text-operator-accent disabled:opacity-30"
                         title="Move up"
                       >
                         <ArrowUp className="h-3 w-3" />
@@ -458,7 +481,7 @@ export function ChatWorkspace() {
                         type="button"
                         onClick={() => moveMergeSource(index, 1)}
                         disabled={index === mergeSourceSessions.length - 1}
-                        className="rounded-md border border-operator-border p-1 text-operator-muted transition-colors hover:text-operator-accent disabled:opacity-35"
+                        className="rounded-md p-1 text-operator-muted/70 transition-colors hover:bg-operator-bg/60 hover:text-operator-accent disabled:opacity-30"
                         title="Move down"
                       >
                         <ArrowDown className="h-3 w-3" />
@@ -466,7 +489,7 @@ export function ChatWorkspace() {
                       <button
                         type="button"
                         onClick={() => removeMergeSource(session.key)}
-                        className="rounded-md border border-operator-border p-1 text-operator-muted transition-colors hover:text-operator-error"
+                        className="rounded-md p-1 text-operator-muted/70 transition-colors hover:bg-operator-bg/60 hover:text-operator-error"
                         title="Remove source"
                       >
                         <X className="h-3 w-3" />
@@ -476,19 +499,16 @@ export function ChatWorkspace() {
                 ))}
               </div>
 
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-[11px] text-operator-muted">
-                <span className="rounded-full border border-operator-border px-2 py-1">
-                  Preparing summaries for {mergeSourceSessions.length} sessions
-                </span>
-                <span>Runtime comes from the inspector on the right.</span>
+              <div className="mt-3 text-[11px] text-operator-muted/80">
+                {mergeSourceSessions.length} source session{mergeSourceSessions.length === 1 ? '' : 's'} · runtime from the inspector
               </div>
 
-              <div className="mt-4 flex items-center gap-2">
+              <div className="mt-5 flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => void handleCreateMergedWorkspace()}
                   disabled={mergeSourceSessions.length < 2 || Boolean(activeRunId)}
-                  className="glow-accent inline-flex items-center gap-1.5 rounded-lg bg-operator-accent px-3 py-2 text-[12px] font-semibold text-operator-bg disabled:cursor-not-allowed disabled:opacity-40"
+                  className="glow-accent inline-flex items-center gap-1.5 rounded-xl bg-operator-accent px-3.5 py-2 text-[12px] font-semibold text-operator-bg disabled:cursor-not-allowed disabled:opacity-40"
                 >
                   <GitMerge className="h-3.5 w-3.5" />
                   Create merged workspace
@@ -496,135 +516,94 @@ export function ChatWorkspace() {
                 <button
                   type="button"
                   onClick={() => setMergeDraft(null)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-operator-border px-3 py-2 text-[12px] font-semibold text-operator-muted transition-colors hover:text-operator-text"
+                  className="inline-flex items-center gap-1.5 rounded-xl border border-operator-border px-3 py-2 text-[12px] font-medium text-operator-muted transition-colors hover:border-operator-accent/30 hover:text-operator-text"
                 >
                   Cancel
                 </button>
               </div>
             </div>
           ) : isDraft ? (
-            <div className={`mx-auto w-full max-w-3xl ${isMobile ? 'mt-2.5' : 'mt-3'} border border-operator-border/70 border-x-0 px-4 py-4`}>
-              <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-[minmax(0,1.7fr)_minmax(14rem,0.9fr)]'}`}>
-                <div>
-                  <div className="mb-2 inline-flex items-center border border-operator-accent/18 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">
-                    Operator Launchpad
-                  </div>
-                  <h2 className={`font-serif text-operator-text ${isMobile ? 'text-[24px] leading-8' : 'text-[32px] leading-[1.05]'}`}>
-                    Stand up a fresh agent run with a little more intention.
-                  </h2>
-                  <p className="mt-2.5 max-w-2xl text-[13px] leading-6 text-operator-muted">
-                    Pick a runtime in the inspector, seed the composer with a proven opening move, and let the first send lock the session around a real job instead of a blank box.
-                  </p>
+            <div className={`mx-auto w-full max-w-2xl ${isMobile ? 'mt-4' : 'mt-10'}`}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent/85">
+                New Session
+              </div>
+              <h2 className={`mt-2 font-serif text-operator-text ${isMobile ? 'text-[26px] leading-[1.15]' : 'text-[32px] leading-[1.08]'} tracking-tight`}>
+                What are we working on?
+              </h2>
+              <p className="mt-2 text-[13px] leading-6 text-operator-muted/90">
+                Pick a runtime in the inspector and the first message will lock this session around the job.
+              </p>
 
-                  <div className={`mt-4 grid gap-0 ${isMobile ? 'grid-cols-1' : 'grid-cols-3 divide-x divide-operator-border/60 border-y border-operator-border/60'}`}>
-                    {[
-                      { label: 'Active sessions', value: String(activeSessions), hint: 'Live operator runs' },
-                      { label: 'Archived', value: String(archivedSessions), hint: 'Readable handoffs' },
-                      { label: 'Connected runtimes', value: String(connectedProviders || 0), hint: 'Providers in rotation' },
-                    ].map((item) => (
-                      <div key={item.label} className={`px-3 py-2.5 ${isMobile ? 'border-b border-operator-border/60 last:border-b-0' : ''}`}>
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
-                          {item.label}
-                        </div>
-                        <div className="mt-2 text-[28px] font-semibold leading-none text-operator-text">
-                          {item.value}
-                        </div>
-                        <div className="mt-2 text-[11px] text-operator-muted">
-                          {item.hint}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+              <div className="mt-6 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted/75">
+                <span>Opening moves</span>
+                <span className="tabular-nums text-operator-muted/50">
+                  {activeSessions} active · {archivedSessions} archived
+                </span>
+              </div>
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {[
+                  {
+                    label: 'Research Scout',
+                    seed: 'Inspect the repository with tools, then summarize the architecture, the sharp edges, and the next best moves.',
+                  },
+                  {
+                    label: 'Signal Sweep',
+                    seed: 'Review the latest runs, artifacts, and failures, then call out anything anomalous or worth operator attention.',
+                  },
+                  {
+                    label: 'Workflow Draft',
+                    seed: 'Turn this objective into a repeatable workflow with checkpoints, dependencies, and clear handoff notes.',
+                  },
+                ].map((option) => (
+                  <button
+                    key={option.label}
+                    type="button"
+                    onClick={() => applyPromptSeed(option.seed)}
+                    className="rounded-full border border-operator-border bg-operator-panel/60 px-3 py-1.5 text-[12px] font-medium text-operator-text transition-all duration-150 hover:border-operator-accent/35 hover:text-operator-accent hover:bg-operator-panel"
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
 
-                  <div className="mt-4">
-                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
-                      Opening Moves
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {[
-                        {
-                          label: 'Research Scout',
-                          seed: 'Inspect the repository with tools, then summarize the architecture, the sharp edges, and the next best moves.',
-                        },
-                        {
-                          label: 'Signal Sweep',
-                          seed: 'Review the latest runs, artifacts, and failures, then call out anything anomalous or worth operator attention.',
-                        },
-                        {
-                          label: 'Workflow Draft',
-                          seed: 'Turn this objective into a repeatable workflow with checkpoints, dependencies, and clear handoff notes.',
-                        },
-                      ].map((option) => (
-                        <button
-                          key={option.label}
-                          type="button"
-                          onClick={() => applyPromptSeed(option.seed)}
-                          className="rounded-full border border-operator-border bg-operator-panel px-3 py-1.5 text-[12px] font-medium text-operator-text transition-colors duration-150 hover:border-operator-accent/35 hover:text-operator-accent"
-                        >
-                          {option.label}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div className="mt-4 border-t border-operator-border/60 pt-4">
-                    <div className="mb-2 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
-                      Personal starters
-                    </div>
-                    <div className="grid gap-2 sm:grid-cols-3">
-                      {PERSONAL_STARTER_PRESETS.map((option) => {
-                        const active = draftStarterIntent?.id === option.id;
-                        return (
-                          <button
-                            key={option.id}
-                            type="button"
-                            onClick={() => handleStarterIntent(option.id, option.seed)}
-                            className={`rounded-xl border px-3 py-2 text-left transition-colors duration-150 ${
-                              active
-                                ? 'border-operator-accent/35 bg-operator-accent/8'
-                                : 'border-operator-border bg-operator-panel/30 hover:border-operator-accent/28'
-                            }`}
-                          >
-                            <div className="text-[12px] font-semibold text-operator-text">{option.label}</div>
-                            <div className="mt-1 text-[11px] leading-5 text-operator-muted">{option.cue}</div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-
-                <div className="border-l border-operator-border/60 pl-4">
-                  <div className="text-[10px] font-semibold uppercase tracking-[0.2em] text-operator-accent">
-                    Session Doctrine
-                  </div>
-                  <div className="mt-2.5 space-y-2.5 text-[12px] leading-6 text-operator-muted">
-                    <p>First send creates and locks the session around its provider, model, profile, and mode.</p>
-                    <p>Keep the opener concrete. The cleanest sessions start with a bounded objective and an explicit output shape.</p>
-                    <p className="text-operator-text">
-                      Tonight’s setup is ready whenever you are: choose the runtime, seed the ask, and let the console do the rest.
-                    </p>
-                  </div>
-                </div>
+              <div className="mt-6 grid gap-2 sm:grid-cols-3">
+                {PERSONAL_STARTER_PRESETS.map((option) => {
+                  const active = draftStarterIntent?.id === option.id;
+                  return (
+                    <button
+                      key={option.id}
+                      type="button"
+                      onClick={() => handleStarterIntent(option.id, option.seed)}
+                      className={`rounded-xl border px-3 py-2.5 text-left transition-all duration-150 ${
+                        active
+                          ? 'border-operator-accent/40 bg-operator-accent/8 shadow-[inset_0_0_0_1px_var(--color-operator-accent)]/[.06]'
+                          : 'border-operator-border bg-operator-panel/30 hover:border-operator-accent/28 hover:bg-operator-panel/55'
+                      }`}
+                    >
+                      <div className="text-[12px] font-semibold text-operator-text">{option.label}</div>
+                      <div className="mt-1 text-[11px] leading-5 text-operator-muted/85">{option.cue}</div>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           ) : (
-            <div className={`max-w-lg mx-auto ${isMobile ? 'mt-4' : 'mt-8'} border border-operator-border/60 px-4 py-4 text-center`}>
-              <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-accent mb-2">
-                {isArchived ? 'Archived Session' : 'Session Ready'}
+            <div className={`max-w-md mx-auto ${isMobile ? 'mt-6' : 'mt-12'} text-center`}>
+              <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-accent/85">
+                {isArchived ? 'Archived' : 'Ready'}
               </div>
-              <div className="text-operator-text font-sans text-[14px] mb-1.5">
-                {isArchived ? 'This session is archived. Restore it to continue chatting.' : 'No history loaded for this session yet.'}
+              <div className="mt-2 font-serif text-operator-text text-[22px] leading-tight">
+                {isArchived ? 'This session is read-only.' : 'Send a message to begin.'}
               </div>
-              <div className="text-operator-muted text-[12px] leading-relaxed">
+              <div className="mt-2 text-[12px] leading-relaxed text-operator-muted/85">
                 {isArchived
-                  ? 'Archived sessions stay readable, but input stays disabled until you restore them.'
-                  : 'This conversation has not received any assistant output yet.'}
+                  ? 'Restore from the actions menu to continue the conversation.'
+                  : 'No assistant output yet — your first message will kick things off.'}
               </div>
             </div>
           )
         ) : (
-          <div className="flex flex-col">
+          <div className="mx-auto flex w-full max-w-3xl flex-col">
             {messages.map((message) => (
               <MessageBubble key={message.localId} message={message} />
             ))}

@@ -33,7 +33,7 @@ export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps)
       <EmptyState
         icon={Sparkles}
         title="No run activity yet"
-        body="Grouped proof receipts will land here once the agent starts using tools, reading files, editing code, or producing artifacts."
+        body="Tool calls, reads, edits, and artifacts will appear here as the agent works."
       />
     );
   }
@@ -46,8 +46,8 @@ export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps)
     return (
       <EmptyState
         icon={Clock}
-        title="No activity recorded"
-        body="This session has not produced any tool activity yet. Grouped proof receipts will appear here as the run progresses."
+        title="Nothing yet"
+        body="Tool calls and proof receipts will stream in here as the run progresses."
       />
     );
   }
@@ -55,20 +55,20 @@ export function RunActivityPanel({ sessionKey, isDraft }: RunActivityPanelProps)
   const activity = resource.data;
 
   return (
-    <div className="space-y-2 px-3 py-2.5">
-      <div className="mb-0.5 flex items-center justify-between">
-        <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted">
+    <div className="space-y-2.5 px-3 py-3">
+      <div className="flex items-center justify-between px-0.5">
+        <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-muted/85">
           Tool Activity
         </div>
-        <span className="font-mono text-[10px] text-operator-muted/70">{activity.runId}</span>
+        <span className="font-mono text-[10px] text-operator-muted/55 truncate max-w-[140px]" title={activity.runId}>{activity.runId}</span>
       </div>
 
       {turnState && turnState.toolCallCount > 0 ? (
         <div className="rounded-xl border border-operator-accent/20 bg-operator-accent/6 px-3 py-2">
-          <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-accent">Working now</div>
+          <div className="mb-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] text-operator-accent">Working now</div>
           <TurnSummaryStrip callCount={turnState.toolCallCount} failedCount={turnState.failedActions.length} />
           {turnState.terminalReason && turnState.terminalReason !== 'completed' ? (
-            <div className="mt-1 font-mono text-[10px] text-operator-muted">terminal: {turnState.terminalReason}</div>
+            <div className="mt-1 font-mono text-[10px] text-operator-muted/85">terminal: {turnState.terminalReason}</div>
           ) : null}
         </div>
       ) : null}

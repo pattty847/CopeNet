@@ -18,20 +18,20 @@ function StateShell({ icon: Icon, title, body, tone = 'muted' }: StateShellProps
       ? 'text-operator-error'
       : tone === 'accent'
       ? 'text-operator-accent'
-      : 'text-operator-muted';
+      : 'text-operator-muted/80';
   const bgTone =
     tone === 'error'
-      ? 'bg-operator-error/10'
+      ? 'bg-operator-error/8'
       : tone === 'accent'
-      ? 'bg-operator-accent/10'
-      : 'bg-operator-panel';
+      ? 'bg-operator-accent/8'
+      : 'bg-operator-panel/60';
   return (
-    <div className="px-3 py-6 text-center">
-      <div className={`mx-auto mb-2 flex h-9 w-9 items-center justify-center rounded-xl ${bgTone} ${iconTone}`}>
+    <div className="px-4 py-10 text-center">
+      <div className={`mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-2xl ${bgTone} ${iconTone}`}>
         <Icon className="w-4 h-4" />
       </div>
-      <div className="text-[12px] text-operator-text font-medium mb-1">{title}</div>
-      <div className="text-[11px] text-operator-muted leading-relaxed max-w-[240px] mx-auto">
+      <div className="text-[12.5px] text-operator-text font-medium mb-1.5">{title}</div>
+      <div className="text-[11.5px] text-operator-muted/85 leading-relaxed max-w-[260px] mx-auto">
         {body}
       </div>
     </div>
@@ -40,13 +40,13 @@ function StateShell({ icon: Icon, title, body, tone = 'muted' }: StateShellProps
 
 export function LoadingState({ label = 'Loading runtime state…' }: { label?: string }) {
   return (
-    <div className="px-3 py-5 space-y-2">
-      <div className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted mb-1">
+    <div className="px-3 py-4 space-y-2">
+      <div className="text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-muted/85 mb-1">
         {label}
       </div>
-      <div className="shimmer rounded-xl bg-operator-panel/40 h-14" />
-      <div className="shimmer rounded-xl bg-operator-panel/30 h-10" />
-      <div className="shimmer rounded-xl bg-operator-panel/20 h-10" />
+      <div className="shimmer rounded-xl bg-operator-panel/40 h-12" />
+      <div className="shimmer rounded-xl bg-operator-panel/30 h-9" />
+      <div className="shimmer rounded-xl bg-operator-panel/20 h-9" />
     </div>
   );
 }

@@ -66,8 +66,8 @@ function RuntimeMenu({
   onClose: () => void;
 }) {
   return (
-    <div className="absolute bottom-full left-0 z-30 mb-2 min-w-[15rem] overflow-hidden rounded-2xl border border-white/10 bg-[#171c27]/95 shadow-[0_22px_60px_rgba(0,0,0,0.55)] backdrop-blur-xl">
-      <div className="border-b border-white/6 px-3 py-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">
+    <div className="absolute bottom-full left-0 z-30 mb-2 min-w-[15rem] overflow-hidden rounded-2xl border border-operator-border bg-operator-panel shadow-shell-xl backdrop-blur">
+      <div className="border-b border-operator-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted/85">
         {label}
       </div>
       <div className="max-h-72 overflow-y-auto p-1.5">
@@ -81,11 +81,11 @@ function RuntimeMenu({
                 onSelect(option.id);
                 onClose();
               }}
-              className={`flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${selected ? 'bg-white/8 text-white' : 'text-operator-text hover:bg-white/5'}`}
+              className={`flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left transition-colors ${selected ? 'bg-operator-accent/10 text-operator-accent' : 'text-operator-text hover:bg-operator-bg/70'}`}
             >
               <span className="min-w-0 flex-1">
                 <span className="block truncate text-[12px] font-medium">{option.label}</span>
-                {option.hint ? <span className="mt-0.5 block truncate text-[10px] text-operator-muted">{option.hint}</span> : null}
+                {option.hint ? <span className="mt-0.5 block truncate text-[10px] text-operator-muted/85">{option.hint}</span> : null}
               </span>
               <span className="shrink-0 text-operator-accent">{selected ? <Check className="h-3.5 w-3.5" /> : null}</span>
             </button>
@@ -114,18 +114,18 @@ function RuntimeSegment({
   children?: React.ReactNode;
 }) {
   return (
-    <div className="relative min-w-0">
+    <div className="relative min-w-0 flex-1">
       <button
         type="button"
         onClick={onClick}
         disabled={disabled || !onClick}
-        className={`group flex min-w-0 items-center gap-1 rounded-lg px-2 py-1.25 text-left transition-all ${disabled || !onClick ? 'cursor-default opacity-70' : active ? 'bg-white/8 text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.08)]' : 'hover:bg-white/5'} `}
+        className={`group flex w-full min-w-0 items-center gap-1 rounded-lg px-2 py-1 text-left transition-all ${disabled || !onClick ? 'cursor-default opacity-60' : active ? 'bg-operator-accent/8 text-operator-accent shadow-[inset_0_0_0_1px_var(--color-operator-accent)]/[.18]' : 'hover:bg-operator-panel/70'} `}
       >
         <span className="block min-w-0">
-          <span className="block text-[9px] font-semibold uppercase tracking-[0.16em] text-operator-muted/80">{title}</span>
-          <span className="mt-0.5 block truncate text-[12px] font-medium text-operator-text">{value}</span>
+          <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-muted/75">{title}</span>
+          <span className="mt-0.5 block truncate text-[11.5px] font-medium text-operator-text">{value}</span>
         </span>
-        {onClick ? <ChevronDown className={`h-3 w-3 shrink-0 text-operator-muted transition-transform ${active ? 'translate-y-[1px] text-operator-accent' : 'group-hover:text-operator-text'}`} /> : null}
+        {onClick ? <ChevronDown className={`ml-auto h-3 w-3 shrink-0 text-operator-muted/65 transition-transform ${active ? 'rotate-180 text-operator-accent' : 'group-hover:text-operator-text'}`} /> : null}
       </button>
       {children}
     </div>
@@ -185,19 +185,19 @@ function PromptOptimizerModal({
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true">
       <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" onClick={onClose} />
-      <div className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-[1.8rem] border border-white/10 bg-[#0f141c] shadow-[0_30px_120px_rgba(0,0,0,0.65)] sm:rounded-[1.8rem]">
-        <div className="flex items-start gap-3 border-b border-white/8 px-4 py-4 sm:px-5">
-          <div className="mt-0.5 flex h-10 w-10 items-center justify-center rounded-2xl bg-operator-accent/12 text-operator-accent">
+      <div className="relative z-10 flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-t-3xl border border-operator-border bg-operator-bg shadow-shell-xl sm:rounded-3xl">
+        <div className="flex items-start gap-3 border-b border-operator-border px-4 py-3.5 sm:px-5">
+          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-accent/10 text-operator-accent">
             <Sparkles className="h-4 w-4" />
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-operator-muted">Optimize Prompt</div>
-            <div className="mt-1 text-[14px] font-medium text-operator-text">Clarify the ask before sending. Original stays yours unless you replace it.</div>
+            <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted/85">Optimize Prompt</div>
+            <div className="mt-0.5 text-[14px] font-medium text-operator-text">Clarify the ask before sending. Original stays yours unless you replace it.</div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="flex h-9 w-9 items-center justify-center rounded-xl text-operator-muted transition-colors hover:bg-white/5 hover:text-white"
+            className="flex h-8 w-8 items-center justify-center rounded-lg text-operator-muted transition-colors hover:bg-operator-panel hover:text-operator-text"
             title="Close"
           >
             <X className="h-4 w-4" />
@@ -205,17 +205,17 @@ function PromptOptimizerModal({
         </div>
 
         <div className="flex-1 space-y-4 overflow-y-auto px-4 py-4 sm:px-5">
-          <section className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
+          <section className="rounded-2xl border border-operator-border bg-operator-panel/40 p-3">
             <div className="mb-2 flex items-center justify-between gap-2">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Original</div>
-                <div className="mt-1 text-[12px] text-operator-muted">Edit the source prompt, then regenerate variants if you want a fresh pass.</div>
+                <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-operator-muted/85">Original</div>
+                <div className="mt-0.5 text-[11.5px] text-operator-muted/85">Edit the source prompt, then regenerate variants if you want a fresh pass.</div>
               </div>
               <button
                 type="button"
                 onClick={onGenerate}
                 disabled={!originalPrompt.trim() || busy}
-                className="rounded-xl border border-white/10 px-3 py-2 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/35 hover:text-operator-accent disabled:opacity-40"
+                className="rounded-lg border border-operator-border px-3 py-1.5 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/35 hover:text-operator-accent disabled:opacity-40"
               >
                 {busy ? 'Generating…' : 'Regenerate'}
               </button>
@@ -224,17 +224,17 @@ function PromptOptimizerModal({
               value={originalPrompt}
               onChange={(event) => onOriginalPromptChange(event.target.value)}
               rows={4}
-              className="w-full resize-y rounded-2xl border border-white/8 bg-[#0b1017] px-3 py-3 text-[13px] leading-5 text-operator-text outline-none transition-colors focus:border-operator-accent/35"
+              className="w-full resize-y rounded-xl border border-operator-border bg-operator-bg px-3 py-2.5 text-[13px] leading-5 text-operator-text outline-none transition-colors focus:border-operator-accent/40"
             />
           </section>
 
           <section className="space-y-3">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Optimized Variants</div>
-                <div className="mt-1 text-[12px] text-operator-muted">Pick one, tweak it if you want, then replace the composer or send it.</div>
+                <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-operator-muted/85">Optimized Variants</div>
+                <div className="mt-0.5 text-[11.5px] text-operator-muted/85">Pick one, tweak it if you want, then replace the composer or send it.</div>
               </div>
-              {error ? <div className="text-right text-[11px] text-amber-300">{error}</div> : null}
+              {error ? <div className="text-right text-[11px] text-operator-error">{error}</div> : null}
             </div>
 
             <div className="grid gap-3 lg:grid-cols-3">
@@ -245,14 +245,14 @@ function PromptOptimizerModal({
                     key={variant.id}
                     type="button"
                     onClick={() => onSelectVariant(variant.id)}
-                    className={`rounded-2xl border p-3 text-left transition-all ${selected ? 'border-operator-accent/45 bg-operator-accent/10 shadow-[inset_0_0_0_1px_rgba(109,168,255,0.18)]' : 'border-white/8 bg-white/[0.03] hover:border-white/14 hover:bg-white/[0.05]'}`}
+                    className={`rounded-2xl border p-3 text-left transition-all ${selected ? 'border-operator-accent/45 bg-operator-accent/8' : 'border-operator-border bg-operator-panel/30 hover:border-operator-accent/25 hover:bg-operator-panel/50'}`}
                   >
                     <div className="flex items-start justify-between gap-2">
-                      <div>
+                      <div className="min-w-0">
                         <div className="text-[13px] font-semibold text-operator-text">{variant.label}</div>
-                        <div className="mt-1 text-[11px] leading-4 text-operator-muted">{variant.rationale}</div>
+                        <div className="mt-1 text-[11px] leading-[1.4] text-operator-muted/85">{variant.rationale}</div>
                       </div>
-                      <span className={`mt-0.5 inline-flex h-5 w-5 items-center justify-center rounded-full border ${selected ? 'border-operator-accent/55 bg-operator-accent/20 text-operator-accent' : 'border-white/10 text-transparent'}`}>
+                      <span className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-operator-accent/60 bg-operator-accent/20 text-operator-accent' : 'border-operator-border text-transparent'}`}>
                         <Check className="h-3 w-3" />
                       </span>
                     </div>
@@ -261,7 +261,7 @@ function PromptOptimizerModal({
                       onChange={(event) => onVariantPromptChange(variant.id, event.target.value)}
                       onClick={(event) => event.stopPropagation()}
                       rows={8}
-                      className="mt-3 w-full resize-y rounded-2xl border border-white/8 bg-[#0b1017] px-3 py-3 text-[12px] leading-5 text-operator-text outline-none transition-colors focus:border-operator-accent/35"
+                      className="mt-3 w-full resize-y rounded-xl border border-operator-border bg-operator-bg px-3 py-2.5 text-[12px] leading-5 text-operator-text outline-none transition-colors focus:border-operator-accent/40"
                     />
                   </button>
                 );
@@ -269,21 +269,21 @@ function PromptOptimizerModal({
             </div>
           </section>
 
-          <section className="rounded-2xl border border-white/8 bg-white/[0.03] p-3">
-            <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Custom Transform</div>
-            <div className="mt-1 text-[12px] text-operator-muted">Ask for a specific rewrite like “make it more technical” or “turn this into an execution plan”.</div>
-            <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+          <section className="rounded-2xl border border-operator-border bg-operator-panel/30 p-3">
+            <div className="text-[10.5px] font-semibold uppercase tracking-[0.14em] text-operator-muted/85">Custom Transform</div>
+            <div className="mt-0.5 text-[11.5px] text-operator-muted/85">Ask for a specific rewrite like "make it more technical" or "turn this into an execution plan".</div>
+            <div className="mt-2.5 flex flex-col gap-2 sm:flex-row">
               <input
                 value={customTransform}
                 onChange={(event) => onCustomTransformChange(event.target.value)}
                 placeholder="Make it more technical, shorter, or execution-focused…"
-                className="min-w-0 flex-1 rounded-2xl border border-white/8 bg-[#0b1017] px-3 py-2.5 text-[12px] text-operator-text outline-none transition-colors focus:border-operator-accent/35"
+                className="min-w-0 flex-1 rounded-xl border border-operator-border bg-operator-bg px-3 py-2 text-[12px] text-operator-text outline-none transition-colors focus:border-operator-accent/40"
               />
               <button
                 type="button"
                 onClick={onGenerateCustom}
                 disabled={!originalPrompt.trim() || !customTransform.trim() || busy}
-                className="rounded-2xl border border-white/10 px-3 py-2.5 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/35 hover:text-operator-accent disabled:opacity-40"
+                className="rounded-xl border border-operator-border px-3 py-2 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/35 hover:text-operator-accent disabled:opacity-40"
               >
                 {busy ? 'Generating…' : 'Generate custom'}
               </button>
@@ -291,11 +291,11 @@ function PromptOptimizerModal({
           </section>
         </div>
 
-        <div className="flex flex-col gap-2 border-t border-white/8 bg-[#0c1118] px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
+        <div className="flex flex-col gap-2 border-t border-operator-border bg-operator-panel/40 px-4 py-3 sm:flex-row sm:items-center sm:justify-between sm:px-5">
           <button
             type="button"
             onClick={onUseOriginal}
-            className="rounded-2xl border border-white/10 px-3 py-2.5 text-[11px] font-semibold text-operator-text transition-colors hover:border-white/20"
+            className="rounded-xl border border-operator-border px-3 py-2 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/30 hover:text-operator-accent"
           >
             Send original
           </button>
@@ -304,7 +304,7 @@ function PromptOptimizerModal({
               type="button"
               onClick={onReplaceComposer}
               disabled={!selectedVariant?.prompt?.trim()}
-              className="rounded-2xl border border-white/10 px-3 py-2.5 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/35 hover:text-operator-accent disabled:opacity-40"
+              className="rounded-xl border border-operator-border px-3 py-2 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/35 hover:text-operator-accent disabled:opacity-40"
             >
               Replace composer
             </button>
@@ -312,7 +312,7 @@ function PromptOptimizerModal({
               type="button"
               onClick={onSendSelected}
               disabled={!selectedVariant?.prompt?.trim()}
-              className="rounded-2xl bg-operator-accent px-3 py-2.5 text-[11px] font-semibold text-operator-bg transition-opacity disabled:opacity-40"
+              className="glow-accent rounded-xl bg-operator-accent px-4 py-2 text-[11px] font-semibold text-operator-bg disabled:opacity-40"
             >
               Send selected
             </button>
@@ -500,51 +500,55 @@ export function AgentComposer({
 
   return (
     <>
-      <div className="border-t border-operator-border bg-operator-panel/40 px-3 py-2.5">
-        <div className="flex items-center justify-between px-0.5 pb-1 text-[10px] font-semibold uppercase tracking-wider">
-          <span className={disabled ? 'text-operator-muted/50' : 'text-operator-muted'}>{statusCopy}</span>
-          <span className={runtimeSummary.locked ? 'text-operator-success' : 'text-operator-accent'}>{runtimeSummary.statusLabel}</span>
-        </div>
-
+      <div className="border-t border-operator-border bg-operator-bg px-3 pb-3 pt-2">
         {!isDraft && (
-          <div className="mb-2 relative" ref={runtimeRef}>
+          <div className="relative mb-1.5 flex items-center gap-2 px-1 text-[10.5px]" ref={runtimeRef}>
             <button
               type="button"
               onClick={() => setRuntimeOpen((current) => !current)}
-              className="flex min-h-10 w-full flex-wrap items-center gap-2 rounded-xl border border-operator-border bg-operator-bg px-3 py-2 text-left text-[12px] transition-colors hover:border-operator-accent/30"
+              className="inline-flex min-w-0 max-w-full items-center gap-1.5 rounded-full border border-operator-border bg-operator-panel/50 px-2.5 py-1 text-operator-muted/85 transition-colors hover:border-operator-accent/30 hover:text-operator-text"
+              title="Runtime details"
             >
-              <span className="font-medium text-operator-text">{runtimeSummary.provider}</span>
-              <span className="text-operator-muted">·</span>
-              <span className="text-operator-text">{runtimeSummary.model}</span>
-              <span className="text-operator-muted">·</span>
-              <span className="text-operator-text">{runtimeSummary.profile}</span>
-              <span className="ml-auto inline-flex items-center rounded-full border border-operator-border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-operator-success">
-                {runtimeSummary.statusLabel}
+              <span className="relative flex h-1.5 w-1.5">
+                <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-50" />
+                <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-operator-success" />
               </span>
+              <span className="truncate text-operator-text/90">{runtimeSummary.provider}</span>
+              <span className="text-operator-muted/45">/</span>
+              <span className="truncate text-operator-text/85">{runtimeSummary.model}</span>
+              <span className="text-operator-muted/45">·</span>
+              <span className="truncate">{runtimeSummary.profile}</span>
+              <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${runtimeOpen ? 'rotate-180 text-operator-accent' : ''}`} />
             </button>
 
+            <span className={`ml-auto truncate text-[10.5px] ${disabled ? 'text-operator-muted/50' : 'text-operator-muted/70'}`}>
+              {statusCopy}
+            </span>
+
             {runtimeOpen && (
-              <div className="absolute bottom-full left-0 z-20 mb-2 w-full rounded-2xl border border-operator-border bg-operator-bg p-3 shadow-xl">
-                <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-operator-muted">Runtime</div>
-                <div className="mt-2 space-y-1.5 text-[12px] text-operator-text">
-                  <div>Provider: {runtimeSummary.provider}</div>
-                  <div>Model: {runtimeSummary.model}</div>
-                  <div>Profile: {runtimeSummary.profile}</div>
-                  {runtimeSummary.workspaceRoot && <div className="break-all text-operator-muted">Workspace: {runtimeSummary.workspaceRoot}</div>}
+              <div className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-sm rounded-2xl border border-operator-border bg-operator-bg p-3 shadow-shell-xl">
+                <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted/85">Runtime</div>
+                <div className="mt-2 space-y-1 text-[12px] text-operator-text">
+                  <div className="flex justify-between gap-2"><span className="text-operator-muted">Provider</span><span className="truncate text-right">{runtimeSummary.provider}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-operator-muted">Model</span><span className="truncate text-right">{runtimeSummary.model}</span></div>
+                  <div className="flex justify-between gap-2"><span className="text-operator-muted">Profile</span><span className="truncate text-right">{runtimeSummary.profile}</span></div>
+                  {runtimeSummary.workspaceRoot && (
+                    <div className="pt-1 break-all font-mono text-[10.5px] leading-5 text-operator-muted">{runtimeSummary.workspaceRoot}</div>
+                  )}
                 </div>
                 {runtimeSummary.locked && (
-                  <div className="mt-3 rounded-xl border border-operator-accent/20 bg-operator-accent/8 px-3 py-2 text-[11px] leading-5 text-operator-muted">
-                    This session is locked to its current runtime. Start a new session if you want a different provider, model, profile, or mode.
+                  <div className="mt-2.5 rounded-lg border border-operator-accent/15 bg-operator-accent/5 px-2.5 py-1.5 text-[11px] leading-5 text-operator-muted">
+                    Locked to this runtime. Start a new session to change provider, model, profile, or mode.
                   </div>
                 )}
-                <div className="mt-3 flex items-center gap-2">
+                <div className="mt-2.5">
                   <button
                     type="button"
                     onClick={() => {
                       setRuntimeOpen(false);
                       onStartNewSession();
                     }}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-operator-border px-3 py-2 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/30 hover:text-operator-accent"
+                    className="inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-operator-border px-3 py-1.5 text-[11px] font-semibold text-operator-text transition-colors hover:border-operator-accent/30 hover:text-operator-accent"
                   >
                     <Plus className="h-3.5 w-3.5" />
                     Start new session
@@ -555,8 +559,8 @@ export function AgentComposer({
           </div>
         )}
 
-        <div className="rounded-[1.2rem] border border-white/7 bg-[#0f141c] shadow-[inset_0_1px_0_rgba(255,255,255,0.02)] transition-colors focus-within:border-operator-accent/35" ref={isDraft ? runtimeRef : undefined}>
-          <div className="flex items-end gap-1 px-2.5 py-2">
+        <div className="rounded-2xl border border-operator-border bg-operator-panel/65 shadow-shell transition-colors focus-within:border-operator-accent/45 focus-within:shadow-shell-hover" ref={isDraft ? runtimeRef : undefined}>
+          <div className="flex items-end gap-1 px-3 py-2">
             <textarea
               ref={textareaRef}
               value={value}
@@ -564,21 +568,21 @@ export function AgentComposer({
               onKeyDown={onKeyDown}
               disabled={disabled}
               placeholder={placeholder}
-              className="max-h-[128px] flex-1 resize-none overflow-y-auto bg-transparent px-0.5 py-0.5 text-[13px] leading-5 text-operator-text outline-none placeholder:text-operator-muted/50 disabled:opacity-40"
+              className="max-h-[160px] min-h-[28px] flex-1 resize-none overflow-y-auto bg-transparent px-0.5 py-1 text-[13.5px] leading-[1.5] text-operator-text outline-none placeholder:text-operator-muted/55 disabled:opacity-40"
               rows={1}
             />
             <div className="flex items-center gap-0.5 pb-0">
-              <button disabled={disabled} className="rounded-lg p-2 text-operator-muted transition-colors hover:bg-white/5 hover:text-operator-text disabled:opacity-40" title="Attach file">
+              <button disabled={disabled} className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-text disabled:opacity-40" title="Attach file">
                 <Paperclip className="h-3.5 w-3.5" />
               </button>
-              <button disabled={disabled} className="rounded-lg p-2 text-operator-muted transition-colors hover:bg-white/5 hover:text-operator-text disabled:opacity-40" title="Voice input">
+              <button disabled={disabled} className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-text disabled:opacity-40" title="Voice input">
                 <Mic className="h-3.5 w-3.5" />
               </button>
               <button
                 type="button"
                 onClick={() => void openOptimizer()}
                 disabled={!value.trim() || disabled}
-                className="rounded-lg p-2 text-operator-muted transition-colors hover:bg-white/5 hover:text-operator-accent disabled:opacity-40"
+                className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-accent disabled:opacity-40"
                 title="Optimize prompt"
               >
                 <Sparkles className="h-3.5 w-3.5" />
@@ -587,7 +591,8 @@ export function AgentComposer({
                 type="button"
                 onClick={() => onSend()}
                 disabled={!value.trim() || disabled}
-                className="glow-accent ml-0.5 flex h-10 w-10 items-center justify-center rounded-xl bg-operator-accent text-operator-bg disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
+                className="glow-accent ml-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-accent text-operator-bg disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
+                title="Send"
               >
                 <Send className="h-3.5 w-3.5" />
               </button>
@@ -595,8 +600,8 @@ export function AgentComposer({
           </div>
 
           {isDraft ? (
-            <div className="border-t border-white/6 px-2 pb-2 pt-1.5">
-              <div className="flex flex-wrap items-stretch gap-1 rounded-[1rem] border border-white/6 bg-[#141923] p-1">
+            <div className="border-t border-operator-border/60 px-1.5 pb-1.5 pt-1.5">
+              <div className="flex flex-wrap items-stretch gap-0.5 rounded-xl bg-operator-bg/40 p-0.5">
                 <RuntimeSegment title="Provider" value={selectedProvider} active={openDraftMenu === 'provider'} onClick={() => setOpenDraftMenu((current) => current === 'provider' ? null : 'provider')}>
                   {openDraftMenu === 'provider' ? (
                     <RuntimeMenu
@@ -609,7 +614,7 @@ export function AgentComposer({
                   ) : null}
                 </RuntimeSegment>
 
-                <span className="my-1 hidden w-px bg-white/6 sm:block" />
+                <span className="my-1 hidden w-px bg-operator-border/55 sm:block" />
 
                 <RuntimeSegment title="Model" value={selectedModel} active={openDraftMenu === 'model'} disabled={!draftSettings.provider} onClick={() => draftSettings.provider ? setOpenDraftMenu((current) => current === 'model' ? null : 'model') : null}>
                   {openDraftMenu === 'model' ? (
@@ -623,7 +628,7 @@ export function AgentComposer({
                   ) : null}
                 </RuntimeSegment>
 
-                <span className="my-1 hidden w-px bg-white/6 sm:block" />
+                <span className="my-1 hidden w-px bg-operator-border/55 sm:block" />
 
                 <RuntimeSegment title="Profile" value={selectedProfile} active={openDraftMenu === 'profile'} onClick={() => setOpenDraftMenu((current) => current === 'profile' ? null : 'profile')}>
                   {openDraftMenu === 'profile' ? (
@@ -637,7 +642,7 @@ export function AgentComposer({
                   ) : null}
                 </RuntimeSegment>
 
-                <span className="my-1 hidden w-px bg-white/6 sm:block" />
+                <span className="my-1 hidden w-px bg-operator-border/55 sm:block" />
 
                 <RuntimeSegment title="Mode" value={selectedMode} active={openDraftMenu === 'mode'} onClick={() => setOpenDraftMenu((current) => current === 'mode' ? null : 'mode')}>
                   {openDraftMenu === 'mode' ? (
@@ -651,20 +656,20 @@ export function AgentComposer({
                   ) : null}
                 </RuntimeSegment>
 
-                <span className="my-1 hidden w-px bg-white/6 sm:block" />
+                <span className="my-1 hidden w-px bg-operator-border/55 sm:block" />
 
                 <div className="min-w-0 flex-1">
                   <button
                     type="button"
                     onClick={() => void chooseWorkspaceRoot()}
                     disabled={workspaceBusy}
-                    className="group flex h-full min-h-[2.8rem] w-full min-w-0 items-center gap-2 rounded-lg px-2 py-1.25 text-left transition-colors hover:bg-white/5 disabled:opacity-50"
+                    className="group flex h-full min-h-[2.4rem] w-full min-w-0 items-center gap-1.5 rounded-lg px-2 py-1 text-left transition-colors hover:bg-operator-panel/70 disabled:opacity-50"
                     title={currentWorkspaceRoot || 'Choose workspace root'}
                   >
                     <FolderOpen className="h-3.5 w-3.5 shrink-0 text-operator-accent" />
                     <span className="min-w-0 flex-1">
-                      <span className="block text-[9px] font-semibold uppercase tracking-[0.18em] text-operator-muted/80">Workspace</span>
-                      <span className="mt-0.5 block truncate text-[12px] font-medium text-operator-text">{workspaceBusy ? 'Choosing workspace…' : workspaceName}</span>
+                      <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-muted/75">Workspace</span>
+                      <span className="mt-0.5 block truncate text-[11.5px] font-medium text-operator-text">{workspaceBusy ? 'Choosing workspace…' : workspaceName}</span>
                     </span>
                   </button>
                 </div>

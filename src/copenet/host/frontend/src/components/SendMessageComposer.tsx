@@ -211,12 +211,12 @@ export function SendMessageComposer() {
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-4">
       {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-operator-bg/60 backdrop-blur-sm"
+        className="absolute inset-0 bg-black/45 backdrop-blur-sm"
         onClick={handleClose}
       />
 
       {/* Panel */}
-      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-operator-border bg-operator-bg shadow-2xl overflow-hidden">
+      <div className="relative z-10 w-full max-w-lg rounded-2xl border border-operator-border bg-operator-bg shadow-shell-xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center gap-2.5 px-4 py-3 border-b border-operator-border">
           <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-operator-accent/10 text-operator-accent">

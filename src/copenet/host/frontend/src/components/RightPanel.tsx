@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Brain, Info, Inbox, Settings2, TerminalSquare, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
+import { Activity, Brain, Info, Inbox, Settings2, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -190,14 +190,20 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
           ref={panelRef}
           className="w-full min-w-0 border-l border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden"
         >
-          <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
-            <Activity className="w-3.5 h-3.5 text-operator-accent shrink-0" />
-            <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Inspector</h2>
-          </div>
-          <div className="border-b border-operator-border bg-operator-panel/8 px-3 pt-1">
-            <div className="inline-flex rounded-t-lg border-b-2 border-operator-accent bg-operator-accent/5 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-accent">
-              Overview
+          <div className="flex items-center justify-between gap-2 border-b border-operator-border px-3 py-2">
+            <div className="flex items-center gap-2 min-w-0">
+              <Activity className="w-3.5 h-3.5 text-operator-accent shrink-0" />
+              <h2 className="font-semibold text-[11px] uppercase tracking-[0.16em] text-operator-text/90">Inspector</h2>
             </div>
+            <span className={`flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
+              <span className="relative flex h-1.5 w-1.5">
+                {wsStatus === 'connected' && (
+                  <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-55" />
+                )}
+                <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
+              </span>
+              {wsStatus}
+            </span>
           </div>
           <div className="flex-1 overflow-y-auto">
             <InspectorOverview overviewOnly />
@@ -242,62 +248,79 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
       className={`${mobile ? 'w-full min-w-0 border-l-0' : 'w-full min-w-0 border-l'} border-operator-border bg-operator-bg flex h-full flex-col overflow-hidden`}
     >
       {/* Header — stable panel identity, not a duplicate active-tab title */}
-      <div className="px-3 py-2.5 border-b border-operator-border flex items-center gap-2">
+      <div className="flex items-center gap-2 border-b border-operator-border px-3 py-2">
         {!mobile && (
           <button
             onClick={() => setRightPanelOpen(false)}
-            className="p-1 text-operator-muted hover:text-operator-accent transition-colors duration-150 rounded-lg"
+            className="rounded-lg p-1 text-operator-muted/85 transition-colors duration-150 hover:bg-operator-panel hover:text-operator-accent"
             title="Collapse panel"
           >
-            <ChevronRight className="w-3.5 h-3.5" />
+            <ChevronRight className="h-3.5 w-3.5" />
           </button>
         )}
-        <Activity className="w-3.5 h-3.5 text-operator-accent shrink-0" />
-        <h2 className="font-semibold text-[12px] uppercase tracking-wider text-operator-text">Inspector</h2>
+        <Activity className="h-3.5 w-3.5 shrink-0 text-operator-accent" />
+        <h2 className="font-semibold text-[11px] uppercase tracking-[0.16em] text-operator-text/90">Inspector</h2>
+        <span className={`ml-auto flex items-center gap-1 text-[9.5px] font-semibold uppercase tracking-[0.14em] ${wsStatus === 'connected' ? 'text-operator-success' : 'text-operator-error'}`}>
+          <span className="relative flex h-1.5 w-1.5">
+            {wsStatus === 'connected' && (
+              <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-operator-success opacity-55" />
+            )}
+            <span className={`relative inline-flex h-1.5 w-1.5 rounded-full ${wsStatus === 'connected' ? 'bg-operator-success' : 'bg-operator-error'}`} />
+          </span>
+          {wsStatus}
+        </span>
       </div>
 
       {/* Tab strip */}
       {compactTabs ? (
-        <div className="border-b border-operator-border bg-operator-panel/20 px-2 py-2 shrink-0">
+        <div className="border-b border-operator-border bg-operator-panel/20 px-2 py-1.5 shrink-0">
           <label htmlFor="inspector-tab-select" className="sr-only">
             Select inspector panel
           </label>
-          <select
-            id="inspector-tab-select"
-            value={rightPanelTab}
-            onChange={(event) => setRightPanelTab(event.target.value as RightPanelTab)}
-            className="w-full rounded-xl border border-operator-border bg-operator-panel px-2.5 py-2 text-[10px] font-semibold uppercase tracking-[0.14em] text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
-            title="Select inspector panel"
-          >
-            {tabs.map((tab) => (
-              <option key={tab.id} value={tab.id}>
-                {tab.label}
-              </option>
-            ))}
-          </select>
+          <div className="relative">
+            <select
+              id="inspector-tab-select"
+              value={rightPanelTab}
+              onChange={(event) => setRightPanelTab(event.target.value as RightPanelTab)}
+              className="w-full appearance-none rounded-lg border border-operator-border bg-operator-panel px-2.5 py-1.5 pr-7 text-[11px] font-medium text-operator-text outline-none transition-colors duration-150 hover:border-operator-accent/30 focus:border-operator-accent/40"
+              title="Select inspector panel"
+            >
+              {tabs.map((tab) => (
+                <option key={tab.id} value={tab.id}>
+                  {tab.label}{tab.badge ? ` (${tab.badge})` : ''}
+                </option>
+              ))}
+            </select>
+            <ChevronRight className="pointer-events-none absolute right-2 top-1/2 h-3 w-3 -translate-y-1/2 rotate-90 text-operator-muted/70" />
+          </div>
         </div>
       ) : (
         <div className="flex border-b border-operator-border bg-operator-panel/8 px-1.5 pt-1 shrink-0">
           {tabs.map((tab) => {
             const active = rightPanelTab === tab.id;
             const Icon = tab.icon;
+            const showBadgeNumber = !iconOnlyTabs;
             return (
               <button
                 key={tab.id}
                 onClick={() => setRightPanelTab(tab.id)}
-                className={`relative min-w-0 flex-1 overflow-hidden flex items-center justify-center gap-1 rounded-t-lg px-1 py-2 text-[9px] font-semibold uppercase tracking-[0.08em] transition-all duration-150 border-b-2 sm:px-1.5 sm:text-[10px] sm:tracking-[0.12em] ${
+                className={`relative min-w-0 flex-1 overflow-visible flex items-center justify-center gap-1 rounded-t-lg px-1 py-2 text-[9.5px] font-semibold uppercase tracking-[0.08em] transition-all duration-150 border-b-2 sm:px-1.5 sm:text-[10px] sm:tracking-[0.12em] ${
                   active
                     ? 'text-operator-accent border-operator-accent bg-operator-accent/5'
                     : 'text-operator-muted border-transparent hover:text-operator-text hover:bg-operator-panel/40'
                 }`}
-                title={tab.label}
+                title={tab.badge ? `${tab.label} (${tab.badge})` : tab.label}
               >
-                <Icon className="w-3 h-3 shrink-0" />
+                <Icon className="h-3 w-3 shrink-0" />
                 {!iconOnlyTabs && <span className="min-w-0 truncate">{tabLabels[tab.id]}</span>}
                 {tab.badge && tab.badge > 0 && (
-                  <span className="absolute top-1 right-1 h-3.5 w-3.5 flex items-center justify-center rounded-full bg-operator-accent text-[8px] font-bold text-white leading-none">
-                    {tab.badge > 9 ? '9+' : tab.badge}
-                  </span>
+                  showBadgeNumber ? (
+                    <span className="ml-0.5 inline-flex h-3.5 min-w-[1rem] items-center justify-center rounded-full bg-operator-accent/15 px-1 text-[9px] font-bold tabular-nums leading-none text-operator-accent">
+                      {tab.badge > 9 ? '9+' : tab.badge}
+                    </span>
+                  ) : (
+                    <span className="absolute right-1 top-1 h-1.5 w-1.5 rounded-full bg-operator-accent shadow-[0_0_0_2px_var(--color-operator-bg)]" />
+                  )
                 )}
               </button>
             );
@@ -329,24 +352,12 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
           </section>
         )}
 
-        {/* 2. Live tool feed — only when a run is in progress */}
-        <section className="mx-2.5 mt-2.5 overflow-hidden border-b border-operator-border/70 pb-2.5">
-          <LiveToolFeed />
-          {/* Fallback: show hint when no run is active and no live calls */}
-          {!activeRunId && (
-            <div className="px-0 py-1.5 space-y-1">
-              <div className="flex items-center gap-2">
-                <TerminalSquare className="w-3 h-3 text-operator-muted/60" />
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-operator-muted/60">
-                  Tool Activity
-                </span>
-              </div>
-              <div className="text-[11px] text-operator-muted/60 italic leading-snug">
-                Live tool calls appear here while a run is in progress.
-              </div>
-            </div>
-          )}
-        </section>
+        {/* 2. Live tool feed — only renders when a run is in progress */}
+        {activeRunId && (
+          <section className="mx-2.5 mt-2.5 overflow-hidden border-b border-operator-border/70 pb-2.5">
+            <LiveToolFeed />
+          </section>
+        )}
 
         <div className="px-2.5 pb-2.5 flex flex-col gap-3">
           {/* 3. Session Info */}

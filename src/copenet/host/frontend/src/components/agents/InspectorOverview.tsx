@@ -58,57 +58,73 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
     <div className={`${overviewOnly ? 'px-3 py-3' : 'px-2.5 pb-2.5'} flex flex-col gap-3 text-[12px]`}>
       {pendingApproval && <ApprovalRequestCard approval={pendingApproval} />}
 
-      <Section icon={Settings2} title="Overview">
-        <div className="space-y-1.5">
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Connection</span><span className="font-semibold text-operator-success">Connected</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Provider</span><span className="text-right text-operator-text">{providerName}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Model</span><span className="text-right text-operator-text">{currentModel || '--'}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Profile</span><span className="text-right text-operator-text">{profileName}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Mode</span><span className="text-right text-operator-text">{taskModeName}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Session</span><span className={`font-semibold ${isDraft ? 'text-operator-accent' : 'text-operator-success'}`}>{isDraft ? 'Draft' : 'Locked'}</span></div>
-          {(activeSession?.workspaceRoot || runtimeContext?.workspaceRoot) && (
-            <div className="pt-1 text-[11px] leading-5 text-operator-muted break-all">{activeSession?.workspaceRoot || runtimeContext?.workspaceRoot}</div>
-          )}
-        </div>
-      </Section>
-
-      <Section icon={Package} title={`Artifacts${artifacts.length ? ` (${artifacts.length})` : ''}`}>
-        {artifacts.length === 0 ? (
-          <div className="text-[11px] text-operator-muted">No session artifacts yet.</div>
-        ) : (
-          <div className="space-y-2">
-            {artifacts.slice(0, 3).map((artifact) => (
-              <div key={artifact.id} className="rounded-xl border border-operator-border bg-operator-panel/30 px-2.5 py-2">
-                <div className="truncate text-[12px] font-medium text-operator-text">{artifact.title}</div>
-                <div className="mt-1 text-[10px] text-operator-muted">{artifact.oneLine}</div>
-              </div>
-            ))}
-            <button
-              type="button"
-              onClick={() => setAgentWorkspaceTab('artifacts')}
-              className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-operator-accent transition-colors hover:text-operator-text"
-            >
-              <FolderOpen className="h-3 w-3" />
-              View all artifacts
-            </button>
+      <Section icon={Settings2} title="Runtime">
+        <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+          <dt className="text-operator-muted">Status</dt>
+          <dd className={`text-right font-semibold ${isDraft ? 'text-operator-accent' : 'text-operator-success'}`}>{isDraft ? 'Draft' : 'Locked'}</dd>
+          <dt className="text-operator-muted">Provider</dt>
+          <dd className="truncate text-right text-operator-text" title={providerName}>{providerName}</dd>
+          <dt className="text-operator-muted">Model</dt>
+          <dd className="truncate text-right text-operator-text" title={currentModel || '--'}>{currentModel || '--'}</dd>
+          <dt className="text-operator-muted">Profile</dt>
+          <dd className="truncate text-right text-operator-text" title={profileName}>{profileName}</dd>
+          <dt className="text-operator-muted">Mode</dt>
+          <dd className="truncate text-right text-operator-text" title={taskModeName}>{taskModeName}</dd>
+        </dl>
+        {(activeSession?.workspaceRoot || runtimeContext?.workspaceRoot) && (
+          <div className="mt-2 rounded-lg border border-operator-border/60 bg-operator-panel/30 px-2.5 py-1.5">
+            <div className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-operator-muted/75">Workspace</div>
+            <div className="mt-0.5 break-all font-mono text-[10.5px] leading-5 text-operator-text/85">
+              {activeSession?.workspaceRoot || runtimeContext?.workspaceRoot}
+            </div>
           </div>
         )}
       </Section>
 
-      <Section icon={Send} title="Messaging & Destinations">
-        {destinations.length === 0 ? (
-          <div className="text-[11px] text-operator-muted">No configured destinations yet.</div>
+      <Section icon={Package} title={`Artifacts${artifacts.length ? ` · ${artifacts.length}` : ''}`}>
+        {artifacts.length === 0 ? (
+          <div className="text-[11px] text-operator-muted/85 italic">No session artifacts yet.</div>
         ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
+            {artifacts.slice(0, 3).map((artifact) => (
+              <button
+                key={artifact.id}
+                type="button"
+                onClick={() => setAgentWorkspaceTab('artifacts')}
+                className="w-full text-left rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-1.5 transition-colors hover:border-operator-accent/30 hover:bg-operator-panel/55"
+              >
+                <div className="truncate text-[12px] font-medium text-operator-text">{artifact.title}</div>
+                <div className="mt-0.5 truncate text-[10.5px] text-operator-muted/85">{artifact.oneLine}</div>
+              </button>
+            ))}
+            {artifacts.length > 3 && (
+              <button
+                type="button"
+                onClick={() => setAgentWorkspaceTab('artifacts')}
+                className="inline-flex items-center gap-1.5 pt-0.5 text-[11px] font-semibold text-operator-accent transition-colors hover:text-operator-text"
+              >
+                <FolderOpen className="h-3 w-3" />
+                View all {artifacts.length} artifacts
+              </button>
+            )}
+          </div>
+        )}
+      </Section>
+
+      <Section icon={Send} title="Destinations">
+        {destinations.length === 0 ? (
+          <div className="text-[11px] text-operator-muted/85 italic">No configured destinations yet.</div>
+        ) : (
+          <div className="space-y-1.5">
             {destinations.slice(0, 3).map((destination) => (
-              <div key={destination.id} className="rounded-xl border border-operator-border bg-operator-panel/30 px-2.5 py-2">
+              <div key={destination.id} className="rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-1.5">
                 <div className="flex items-center justify-between gap-2">
                   <div className="min-w-0 truncate text-[12px] font-medium text-operator-text">{destination.displayName}</div>
-                  <span className={`text-[10px] font-semibold ${destination.requiresApproval ? 'text-operator-accent' : 'text-operator-success'}`}>
-                    {destination.requiresApproval ? 'Approval required' : 'Direct send'}
+                  <span className={`shrink-0 rounded-full border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] ${destination.requiresApproval ? 'border-operator-accent/25 text-operator-accent' : 'border-operator-success/25 text-operator-success'}`}>
+                    {destination.requiresApproval ? 'Approval' : 'Direct'}
                   </span>
                 </div>
-                <div className="mt-1 break-all text-[10px] text-operator-muted">{destination.target}</div>
+                <div className="mt-0.5 truncate font-mono text-[10px] text-operator-muted/85">{destination.target}</div>
               </div>
             ))}
           </div>
@@ -116,12 +132,16 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
       </Section>
 
       <Section icon={Info} title="Session Info">
-        <div className="space-y-1.5">
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Created</span><span className="text-operator-text">{timeAgo(activeSession?.createdAt)}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Updated</span><span className="text-operator-text">{timeAgo(activeSession?.updatedAt)}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Messages</span><span className="text-operator-text">{messages.length}</span></div>
-          <div className="flex justify-between gap-3"><span className="text-operator-muted">Artifacts</span><span className="text-operator-text">{artifacts.length}</span></div>
-        </div>
+        <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+          <dt className="text-operator-muted">Created</dt>
+          <dd className="text-right text-operator-text tabular-nums">{timeAgo(activeSession?.createdAt)}</dd>
+          <dt className="text-operator-muted">Updated</dt>
+          <dd className="text-right text-operator-text tabular-nums">{timeAgo(activeSession?.updatedAt)}</dd>
+          <dt className="text-operator-muted">Messages</dt>
+          <dd className="text-right text-operator-text tabular-nums">{messages.length}</dd>
+          <dt className="text-operator-muted">Artifacts</dt>
+          <dd className="text-right text-operator-text tabular-nums">{artifacts.length}</dd>
+        </dl>
       </Section>
     </div>
   );
