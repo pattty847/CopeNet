@@ -10,9 +10,9 @@ The Home dashboard is the front door to CopeNet: active sessions, provider healt
 ![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
 
 ### Agents Console — persistent sessions with inspectable runtime context
-The Agents view keeps the live conversation, session list, working set, debug actions, and runtime inspector together so a run stays understandable instead of turning into opaque chat history.
+The Agents view keeps the live conversation, session list, working set, debug actions, and runtime inspector together so a run stays understandable instead of turning into opaque chat history. Here it is mid-session with OpenAI Codex 5.5 in the `friendly` profile answering a quantum optics question while the runtime inspector stays visible on the side.
 
-![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+![CopeNet Agents Console](docs/imgs/copenet-agents-console-openai-codex-spdc.png)
 
 ### Workflows — purpose-built operator surfaces beyond a single chat
 The Workflows section is where CopeNet starts feeling like an operator studio instead of a prompt box: focused workflow entrypoints, scoped task surfaces, and room for productized agent behaviors that deserve more than one conversation pane.
