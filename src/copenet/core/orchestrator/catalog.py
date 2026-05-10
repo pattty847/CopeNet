@@ -9,13 +9,19 @@ from typing import TYPE_CHECKING
 
 from copenet.core.orchestrator.personal_history import normalize_starter_intent, starter_intent_tags
 from copenet.core.sessions import SessionStateRecord
-from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
+from copenet.providers import ClaudeCliProvider, CodexCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 
 if TYPE_CHECKING:
     from . import Orchestrator
 
 
-_PROVIDER_CLASSES: tuple[type, ...] = (CodexCliProvider, OpenAICodexProvider, LmStudioProvider, OllamaProvider)
+_PROVIDER_CLASSES: tuple[type, ...] = (
+    ClaudeCliProvider,
+    CodexCliProvider,
+    OpenAICodexProvider,
+    LmStudioProvider,
+    OllamaProvider,
+)
 
 
 def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, str]]:
@@ -25,6 +31,10 @@ def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, st
         providers["codex-cli"] = CodexCliProvider()
     except Exception as exc:
         init_errors["codex-cli"] = str(exc)
+    try:
+        providers["claude-cli"] = ClaudeCliProvider()
+    except Exception as exc:
+        init_errors["claude-cli"] = str(exc)
     providers["openai-codex"] = OpenAICodexProvider()
     providers["lm-studio"] = LmStudioProvider(
         base_url=os.environ.get("COPNET_LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
@@ -51,6 +61,9 @@ def session_payload(entry) -> dict:
         "model": entry.model,
         "systemPromptId": entry.system_prompt_id,
         "taskPromptId": entry.task_prompt_id,
+        "personaId": entry.persona_id,
+        "personaFlavorId": entry.persona_flavor_id,
+        "personaPrivacyTier": entry.persona_privacy_tier,
         "workspaceRoot": entry.workspace_root,
         "archived": entry.archived,
         "providerSessionId": entry.provider_session_id,
@@ -81,6 +94,9 @@ def create_session_with_profile(
     title: str | None = None,
     system_prompt_id: str | None = None,
     task_prompt_id: str | None = None,
+    persona_id: str | None = None,
+    persona_flavor_id: str | None = None,
+    persona_privacy_tier: str | None = None,
     workspace_root: str | None = None,
     starter_intent: str | None = None,
 ) -> dict:
@@ -97,6 +113,9 @@ def create_session_with_profile(
         title=title,
         system_prompt_id=system_prompt_id,
         task_prompt_id=task_prompt_id,
+        persona_id=persona_id,
+        persona_flavor_id=persona_flavor_id,
+        persona_privacy_tier=persona_privacy_tier,
         workspace_root=workspace_root,
     )
     normalized_intent = normalize_starter_intent(starter_intent)

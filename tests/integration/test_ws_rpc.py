@@ -303,6 +303,52 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert failure["error"]["message"] == "invalid token"
 
 
+def test_persona_rpcs_expose_settings_context_and_flavor_save(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        settings_id = socket.request("persona.settings.get")
+        settings = socket.recv_response(settings_id)
+        assert settings["ok"] is True
+        assert settings["payload"]["settings"]["defaultPersonaId"] == "default"
+
+        update_id = socket.request(
+            "persona.settings.update",
+            {
+                "defaultPersonaId": "default",
+                "defaultPrivacyTier": "safe",
+                "modelOverrides": {
+                    "fake:model-a": {
+                        "personaId": "default",
+                        "flavorId": "fake/model-a",
+                    }
+                },
+            },
+        )
+        updated = socket.recv_response(update_id)
+        assert updated["ok"] is True
+        assert updated["payload"]["settings"]["defaultPrivacyTier"] == "safe"
+
+        save_id = socket.request(
+            "persona.flavor.save",
+            {
+                "provider": "fake",
+                "model": "model-a",
+                "draft": {
+                    "displayName": "Fake Spark",
+                    "identityMarkdown": "# Fake Spark\n\nA quick test flavor.",
+                },
+            },
+        )
+        saved = socket.recv_response(save_id)
+        assert saved["ok"] is True
+        assert saved["payload"]["flavor"]["flavorId"] == "fake/model-a"
+
+        context_id = socket.request("persona.context", {"provider": "fake", "model": "model-a"})
+        context = socket.recv_response(context_id)
+        assert context["ok"] is True
+        assert context["payload"]["personaContext"]["personaFlavorId"] == "fake/model-a"
+        assert "A quick test flavor." in context["payload"]["personaContext"]["prompt"]
+
+
 def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, tmp_path: Path) -> None:
     with _open_rpc(rpc_client) as socket:
         messaging_id = socket.request("messaging.config.get")

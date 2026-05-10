@@ -6,11 +6,12 @@ This document is the shared working agreement for human contributors and coding 
 
 CopeNet is a local agent gateway. It provides:
 
-- a FastAPI + WebSocket host
-- pluggable provider adapters for Codex CLI, LM Studio, and Ollama
-- persisted session and transcript storage
+- a FastAPI + WebSocket host (with a secondary REST + SSE `/api/v1` lane for external apps)
+- pluggable provider adapters for Codex CLI, Claude CLI, OpenAI Codex (OAuth), LM Studio, and Ollama
+- persisted session and transcript storage, plus per-run records and per-session artifacts
+- operator-side stores for Pulse, memory, messaging routes, profile, and external-app credentials
 - a React operator workspace UI with a Home dashboard and agent console
-- a CopeNet-native harness layer that normalizes provider execution and future tool capability work
+- a CopeNet-native harness layer that normalizes provider execution and tool capability work
 
 The current product direction is:
 
@@ -21,19 +22,32 @@ The current product direction is:
 
 ## Major Subsystems
 
-| Subsystem | Location | Role |
-|---|---|---|
-| Host / RPC | `src/copenet/host/` | FastAPI app, WebSocket server, frame protocol, static UI |
-| Orchestrator | `src/copenet/core/orchestrator/` | Coordinates sessions, transcripts, provider execution, run lifecycle |
-| Harness | `src/copenet/core/harness/` | Normalizes model capabilities and turn execution |
-| Tracing | `src/copenet/core/tracing/` | Per-run JSONL trace writer |
-| Sessions | `src/copenet/core/sessions/` | Session index and transcript persistence |
-| Tools | `src/copenet/core/tools/` | Tool contracts, policy, registry, and built-in handlers |
-| Providers | `src/copenet/providers/` | Codex CLI and local HTTP provider adapters |
-| Prompts | `src/copenet/prompts/` | Profile and task-mode loaders plus prompt content |
-| Client | `src/copenet/client.py` | Programmatic gateway client |
-| Web UI | `src/copenet/host/frontend/` | React + Vite workspace app served by the host when built |
-| Legacy UI | `src/copenet/host/static/` | Old vanilla fallback UI kept for compatibility |
+| Subsystem      | Location                                     | Role |
+|----------------|----------------------------------------------|------|
+| Host / RPC     | `src/copenet/host/`                          | FastAPI app, `/ws` JSON-RPC, `/api/v1` REST+SSE, static UI mounting |
+| Orchestrator   | `src/copenet/core/orchestrator/`             | Coordinates sessions, transcripts, provider execution, run lifecycle, merges, pulse, messaging |
+| Harness        | `src/copenet/core/harness/`                  | Capability profiles, turn planning, tool loop, final-answer gating |
+| Sessions       | `src/copenet/core/sessions/`                 | Session index, transcript store, structured session state |
+| Runtime        | `src/copenet/core/runtime/`                  | RunStore (durable run records), ArtifactStore, per-turn state |
+| Tools          | `src/copenet/core/tools/`                    | Tool contracts, policy (`policy_for_task_mode`), registry, built-in handlers |
+| Tracing        | `src/copenet/core/tracing/`                  | Per-run JSONL trace writer |
+| Profile        | `src/copenet/core/profile/`                  | Pat Profile loader, changelog, return-briefing builder |
+| Memory         | `src/copenet/core/memory/`                   | User-visible memory items (preferences, conventions, facts) |
+| Pulse          | `src/copenet/core/pulse/`                    | Inbox pulse store |
+| Messaging      | `src/copenet/core/messaging/`                | Messaging config + Telegram chat→session route store |
+| Media          | `src/copenet/core/media/`                    | URL/audio ingestion + transcription + asset store |
+| Web ingest     | `src/copenet/core/web_ingest.py`             | Web URL ingestion service |
+| Knowledge runtime | `src/copenet/core/knowledge_runtime.py` + `meme_*.py` | Meme Lab knowledge runtime + ideation API |
+| External apps  | `src/copenet/core/apps/`                     | Bearer-token registry for `/api/v1` consumers |
+| Provider auth  | `src/copenet/core/provider_auth/`            | Provider-owned auth state (e.g. OpenAI Codex OAuth) |
+| Providers      | `src/copenet/providers/`                     | Adapters: `codex-cli`, `claude-cli`, `openai-codex`, `lm-studio`, `ollama` |
+| CLI runner     | `src/copenet/runner/cli_runner.py`           | Shared CLI subprocess runner used by Codex/Claude CLI providers |
+| Prompts        | `src/copenet/prompts/`                       | Profile + task-mode loaders, optimizer, preset markdown |
+| Client         | `src/copenet/client.py`                      | Programmatic GatewayClient |
+| Web UI         | `src/copenet/host/frontend/`                 | React + Vite workspace app (primary surface) |
+| Legacy UI      | `src/copenet/host/static/`                   | Vanilla fallback UI kept for compatibility |
+| Browser agent  | `src/copenet/browser_agent/`                 | Playwright-backed deterministic browser-control prototype (separate CLI lane) |
+| Probes         | `src/copenet/probes/`                        | Runtime probe payload helper for `scripts/live_probe_matrix.py` |
 
 The `src/copenet/core/` package owns all business logic and run lifecycle. Transport, hosting, and provider adapters stay outside it.
 

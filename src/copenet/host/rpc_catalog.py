@@ -116,6 +116,126 @@ async def handle_identity_context_get(request_id: str, send_json: SendJson, orch
     )
 
 
+async def handle_persona_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={
+                    "persona": orchestrator.get_persona(
+                        provider=str(raw.get("provider") or "").strip() or None,
+                        model=str(raw.get("model") or "").strip() or None,
+                        privacy_tier=str(raw.get("privacyTier") or "").strip() or None,
+                    )
+                },
+            )
+        )
+    )
+
+
+async def handle_persona_settings_get(request_id: str, send_json: SendJson, orchestrator) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"settings": orchestrator.get_persona_settings()},
+            )
+        )
+    )
+
+
+async def handle_persona_settings_update(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    raw = params or {}
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={
+                    "settings": orchestrator.update_persona_settings(
+                        default_persona_id=str(raw.get("defaultPersonaId") or "").strip() or None,
+                        default_privacy_tier=str(raw.get("defaultPrivacyTier") or "").strip() or None,
+                        model_overrides=raw.get("modelOverrides") if isinstance(raw.get("modelOverrides"), dict) else None,
+                    )
+                },
+            )
+        )
+    )
+
+
+async def handle_persona_context_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={
+                    "personaContext": orchestrator.get_persona_context(
+                        provider=str(raw.get("provider") or "").strip() or None,
+                        model=str(raw.get("model") or "").strip() or None,
+                        privacy_tier=str(raw.get("privacyTier") or "").strip() or None,
+                        query=str(raw.get("query") or "").strip(),
+                    )
+                },
+            )
+        )
+    )
+
+
+async def handle_persona_flavor_draft(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    raw = params or {}
+    provider = str(raw.get("provider") or "").strip()
+    if not provider:
+        raise ValueError("provider is required")
+    payload = await orchestrator.draft_persona_flavor(
+        provider_id=provider,
+        model=str(raw.get("model") or "").strip() or None,
+    )
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload)))
+
+
+async def handle_persona_flavor_save(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    raw = params or {}
+    provider = str(raw.get("provider") or "").strip()
+    if not provider:
+        raise ValueError("provider is required")
+    draft = raw.get("draft") if isinstance(raw.get("draft"), dict) else {}
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={
+                    "flavor": orchestrator.save_persona_flavor(
+                        provider_id=provider,
+                        model=str(raw.get("model") or "").strip() or None,
+                        draft=draft,
+                    )
+                },
+            )
+        )
+    )
+
+
 async def handle_profile_changelog(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     limit = int((params or {}).get("limit") or 20)
     await send_json(

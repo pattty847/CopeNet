@@ -302,6 +302,30 @@ async def test_soft_harness_feedback_prompt_stays_conversational(tmp_path: Path)
 
 
 @pytest.mark.asyncio
+async def test_bookish_conversation_prompt_stays_casual_without_repo_tools(tmp_path: Path) -> None:
+    provider = ScriptedPromptProvider(outputs=["Kepler is a wonderful bridge figure."])
+
+    events, traces, _ = await _run_harness_turn(
+        provider=provider,
+        prompt=(
+            "I want to step through the minds of explorers like Kepler and explore the mind "
+            "understanding the place in our universe. So, I am reading his Astronomia Nova, "
+            "and I find it super interesting. Think of maybe Principia next."
+        ),
+        tmp_path=tmp_path,
+        expect_tool_loop=False,
+    )
+
+    planned = _find_trace_rows(traces, "harness_planned")
+    assert planned[0]["interactionClass"] == "casual"
+    assert planned[0]["willAttemptToolLoop"] is False
+    assert planned[0]["toolLoopSuppressedReason"] == "interaction_class_casual"
+    assert "Respond with exactly one legal JSON action" not in provider.prompts[0]
+    delta_events = [event for event in events if event.kind == "delta"]
+    assert delta_events[0].text == "Kepler is a wonderful bridge figure."
+
+
+@pytest.mark.asyncio
 async def test_explicit_repo_inspection_prompt_uses_tool_loop_prompt_shape(tmp_path: Path) -> None:
     (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
     provider = ScriptedPromptProvider(

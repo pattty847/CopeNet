@@ -10,6 +10,9 @@ __pycache__/
 # Local tool worktrees
 .claude/
 .superpowers/
+.agents/runs/
+.agents/worktrees/
+.agents/active-manifest
 
 # Local scratch outputs
 tmp/
@@ -34,3 +37,4 @@ docs/investigations/**/raw/
 knowledge-cache/
 config/knowledge-sources.local.toml
 config/*.local.toml
+.claire/

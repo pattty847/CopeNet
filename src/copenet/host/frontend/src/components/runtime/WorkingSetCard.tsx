@@ -17,6 +17,7 @@ import { useWorkingSet } from '../../runtime/adapter';
 import { useIsMobile } from '../../lib/responsive';
 import {
   getWorkingSetSectionLabel,
+  shouldCollapseWorkingSetByDefault,
   shouldUseWorkingSetCompactGrid,
 } from '../../lib/agentMobile';
 import type { RuntimeStatus, WorkingSetEntity } from '../../runtime/types';
@@ -94,7 +95,7 @@ function InlineStrip({ icon: Icon, tone, children }: {
 
 export function WorkingSetCard({ sessionKey, isDraft }: WorkingSetCardProps) {
   const isMobile = useIsMobile();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(!shouldCollapseWorkingSetByDefault(isMobile));
   // Drafts bypass the adapter entirely — draft is a UI state, not runtime data.
   const resource = useWorkingSet(isDraft ? null : sessionKey);
 

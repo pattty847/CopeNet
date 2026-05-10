@@ -44,6 +44,9 @@ class ChatSendParams:
     model: str | None
     system_prompt_id: str | None
     task_prompt_id: str | None
+    persona_id: str | None
+    persona_flavor_id: str | None
+    persona_privacy_tier: str | None
     timeout_ms: int | None
     system_prompt: str | None
     workspace_root: str | None
@@ -63,6 +66,9 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
         model=_optional_text(raw, "model"),
         system_prompt_id=system_prompt_id,
         task_prompt_id=task_prompt_id,
+        persona_id=_optional_text(raw, "personaId"),
+        persona_flavor_id=_optional_text(raw, "personaFlavorId"),
+        persona_privacy_tier=_optional_text(raw, "personaPrivacyTier"),
         timeout_ms=_optional_int(raw, "timeoutMs"),
         system_prompt=compose_prompt(system_prompt_id, task_prompt_id),
         workspace_root=_optional_text(raw, "workspaceRoot"),
@@ -130,6 +136,9 @@ async def handle_chat_send(
                     model=request.model,
                     system_prompt_id=request.system_prompt_id,
                     task_prompt_id=request.task_prompt_id,
+                    persona_id=request.persona_id,
+                    persona_flavor_id=request.persona_flavor_id,
+                    persona_privacy_tier=request.persona_privacy_tier,  # type: ignore[arg-type]
                     timeout_ms=request.timeout_ms,
                     system_prompt=request.system_prompt,
                     workspace_root=request.workspace_root,

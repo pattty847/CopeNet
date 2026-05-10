@@ -54,3 +54,11 @@ def default_pat_profile_dir() -> Path:
     if base:
         return Path(base).expanduser() / "profile"
     return Path.home() / ".copenet" / "profile"
+
+
+def default_personas_dir() -> Path:
+    """Return default Persona Home root: COPNET_DATA_DIR/personas or ~/.copenet/personas."""
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "personas"
+    return Path.home() / ".copenet" / "personas"

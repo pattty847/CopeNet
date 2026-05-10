@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from copenet.core.media import MediaIngestionService
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.web_ingest import WebIngestionService
+from copenet.host.agents_api import create_agents_router
 from copenet.host.app_api import create_app_router
 from copenet.host.ws_server import CopeNetWsServer
 
@@ -46,6 +47,7 @@ def create_app(
             web_ingestion_service=web_ingestion_service,
         )
     )
+    app.include_router(create_agents_router())
 
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     if (_FRONTEND_DIST_DIR / "assets").is_dir():

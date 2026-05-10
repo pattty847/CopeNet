@@ -1,0 +1,347 @@
+"""File-backed Persona Home runtime."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta, timezone
+import json
+from pathlib import Path
+import re
+from typing import Any, Literal
+
+from copenet._paths import default_personas_dir
+
+PersonaPrivacyTier = Literal["private", "safe", "off"]
+
+
+def _text(value: Any) -> str:
+    return str(value or "").strip()
+
+
+def _safe_segment(value: str) -> str:
+    cleaned = re.sub(r"[^a-zA-Z0-9_.-]+", "-", value.strip()).strip("-")
+    return cleaned or "default"
+
+
+def _read_text(path: Path) -> str:
+    try:
+        return path.read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _write_text_if_missing(path: Path, body: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    if not path.exists():
+        path.write_text(body.strip() + "\n", encoding="utf-8")
+
+
+def _read_json(path: Path, fallback: Any) -> Any:
+    try:
+        return json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return fallback
+
+
+def _write_json(path: Path, payload: Any) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp.replace(path)
+
+
+@dataclass(frozen=True)
+class PersonaSettingsOverride:
+    persona_id: str = "default"
+    flavor_id: str | None = None
+
+    @classmethod
+    def from_json(cls, raw: dict[str, Any]) -> "PersonaSettingsOverride":
+        return cls(
+            persona_id=_safe_segment(_text(raw.get("personaId") or raw.get("persona_id") or "default")),
+            flavor_id=_text(raw.get("flavorId") or raw.get("flavor_id")) or None,
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "personaId": self.persona_id,
+            "flavorId": self.flavor_id,
+        }
+
+
+@dataclass(frozen=True)
+class PersonaSettings:
+    default_persona_id: str = "default"
+    default_privacy_tier: PersonaPrivacyTier = "private"
+    model_overrides: dict[str, PersonaSettingsOverride] = field(default_factory=dict)
+
+    @classmethod
+    def from_json(cls, raw: dict[str, Any]) -> "PersonaSettings":
+        tier = _text(raw.get("defaultPrivacyTier") or raw.get("default_privacy_tier") or "private")
+        if tier not in {"private", "safe", "off"}:
+            tier = "private"
+        overrides_raw = raw.get("modelOverrides") or raw.get("model_overrides") or {}
+        overrides: dict[str, PersonaSettingsOverride] = {}
+        if isinstance(overrides_raw, dict):
+            for key, value in overrides_raw.items():
+                if isinstance(value, dict) and _text(key):
+                    overrides[_text(key)] = PersonaSettingsOverride.from_json(value)
+        return cls(
+            default_persona_id=_safe_segment(_text(raw.get("defaultPersonaId") or raw.get("default_persona_id") or "default")),
+            default_privacy_tier=tier,  # type: ignore[arg-type]
+            model_overrides=overrides,
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        return {
+            "defaultPersonaId": self.default_persona_id,
+            "defaultPrivacyTier": self.default_privacy_tier,
+            "modelOverrides": {key: value.to_json() for key, value in sorted(self.model_overrides.items())},
+        }
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return self.to_json()
+
+
+@dataclass(frozen=True)
+class PersonaFlavor:
+    persona_id: str
+    flavor_id: str
+    provider: str
+    model: str
+    display_name: str | None = None
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "personaId": self.persona_id,
+            "flavorId": self.flavor_id,
+            "provider": self.provider,
+            "model": self.model,
+            "displayName": self.display_name,
+        }
+
+
+@dataclass(frozen=True)
+class PersonaPromptContext:
+    persona_id: str
+    privacy_tier: PersonaPrivacyTier
+    prompt: str
+    flavor_id: str | None = None
+    loaded_files: tuple[str, ...] = ()
+
+    def to_public_dict(self) -> dict[str, Any]:
+        return {
+            "personaId": self.persona_id,
+            "personaFlavorId": self.flavor_id,
+            "personaPrivacyTier": self.privacy_tier,
+            "prompt": self.prompt,
+            "loadedFiles": list(self.loaded_files),
+        }
+
+
+class PersonaHomeService:
+    """Loads Persona Home files and resolves per-model flavor overlays."""
+
+    def __init__(self, *, root_dir: Path | None = None) -> None:
+        self._root_dir = root_dir if root_dir is not None else default_personas_dir()
+
+    @property
+    def root_dir(self) -> Path:
+        return self._root_dir
+
+    def load_settings(self) -> PersonaSettings:
+        self._ensure_scaffold()
+        raw = _read_json(self._settings_path(), {})
+        return PersonaSettings.from_json(raw if isinstance(raw, dict) else {})
+
+    def update_settings(
+        self,
+        *,
+        default_persona_id: str | None = None,
+        default_privacy_tier: PersonaPrivacyTier | None = None,
+        model_overrides: dict[str, dict[str, Any] | PersonaSettingsOverride] | None = None,
+    ) -> PersonaSettings:
+        current = self.load_settings()
+        tier = default_privacy_tier or current.default_privacy_tier
+        if tier not in {"private", "safe", "off"}:
+            tier = current.default_privacy_tier
+        overrides = dict(current.model_overrides)
+        if model_overrides is not None:
+            overrides = {}
+            for key, value in model_overrides.items():
+                if isinstance(value, PersonaSettingsOverride):
+                    overrides[_text(key)] = value
+                elif isinstance(value, dict):
+                    overrides[_text(key)] = PersonaSettingsOverride.from_json(value)
+        settings = PersonaSettings(
+            default_persona_id=_safe_segment(default_persona_id or current.default_persona_id),
+            default_privacy_tier=tier,
+            model_overrides={key: value for key, value in overrides.items() if key},
+        )
+        _write_json(self._settings_path(), settings.to_json())
+        return settings
+
+    def get_summary(
+        self,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        privacy_tier: PersonaPrivacyTier | None = None,
+    ) -> dict[str, Any]:
+        context = self.build_prompt_context(
+            provider=provider or "",
+            model=model,
+            privacy_tier=privacy_tier,
+            query="",
+        )
+        return {
+            "personaId": context.persona_id,
+            "personaFlavorId": context.flavor_id,
+            "personaPrivacyTier": context.privacy_tier,
+            "active": bool(context.prompt),
+            "rootDir": str(self._root_dir),
+            "loadedFiles": list(context.loaded_files),
+        }
+
+    def build_prompt_context(
+        self,
+        *,
+        provider: str,
+        model: str | None,
+        privacy_tier: PersonaPrivacyTier | None,
+        query: str,
+    ) -> PersonaPromptContext:
+        self._ensure_scaffold()
+        settings = self.load_settings()
+        resolved_tier = privacy_tier or settings.default_privacy_tier
+        if resolved_tier not in {"private", "safe", "off"}:
+            resolved_tier = settings.default_privacy_tier
+        override = settings.model_overrides.get(_model_key(provider, model))
+        persona_id = override.persona_id if override else settings.default_persona_id
+        flavor_id = override.flavor_id if override else self._existing_flavor_id(persona_id, provider, model)
+        if resolved_tier == "off":
+            return PersonaPromptContext(persona_id=persona_id, privacy_tier="off", prompt="", flavor_id=flavor_id)
+
+        persona_root = self._persona_dir(persona_id)
+        sections: list[tuple[str, str, Path]] = []
+        for path in (
+            persona_root / "core" / "SOUL.md",
+            persona_root / "core" / "IDENTITY.md",
+            persona_root / "core" / "AGENTS.md",
+        ):
+            if text := _read_text(path):
+                sections.append((path.name, text, path))
+        if flavor_id:
+            for name in ("IDENTITY.md", "SOUL.md", "NOTES.md"):
+                path = persona_root / "models" / flavor_id / name
+                if text := _read_text(path):
+                    sections.append((f"Model flavor {name}", text, path))
+        if resolved_tier == "private":
+            for path in (
+                persona_root / "user" / "USER.md",
+                persona_root / "memory" / "MEMORY.md",
+            ):
+                if text := _read_text(path):
+                    sections.append((path.name, text, path))
+            for path in self._recent_daily_paths(persona_root):
+                if text := _read_text(path):
+                    sections.append((f"Daily memory {path.name}", text, path))
+        public_memory = persona_root / "memory" / "PUBLIC.md"
+        if text := _read_text(public_memory):
+            sections.append(("Public memory", text, public_memory))
+        if resolved_tier == "private":
+            tools_path = persona_root / "environment" / "TOOLS.md"
+            if text := _read_text(tools_path):
+                sections.append(("Environment notes", text, tools_path))
+
+        prompt = "\n\n".join(f"## {title}\n{text}" for title, text, _ in sections if text)
+        return PersonaPromptContext(
+            persona_id=persona_id,
+            privacy_tier=resolved_tier,
+            prompt=prompt,
+            flavor_id=flavor_id,
+            loaded_files=tuple(str(path) for _, _, path in sections),
+        )
+
+    def save_flavor(self, *, provider: str, model: str | None, draft: dict[str, Any]) -> PersonaFlavor:
+        settings = self.load_settings()
+        persona_id = settings.default_persona_id
+        safe_provider = _safe_segment(provider)
+        safe_model = _safe_segment(model or "default")
+        flavor_id = f"{safe_provider}/{safe_model}"
+        flavor_dir = self._persona_dir(persona_id) / "models" / flavor_id
+        _write_text_if_missing(flavor_dir / ".keep", "")
+        identity = _text(draft.get("identityMarkdown") or draft.get("identity") or "")
+        soul = _text(draft.get("soulMarkdown") or draft.get("soul") or "")
+        notes = _text(draft.get("notesMarkdown") or draft.get("notes") or "")
+        if not identity:
+            display = _text(draft.get("displayName")) or f"{safe_provider} {safe_model}"
+            identity = f"# {display}\n\nA CopeNet model flavor for {provider} / {model or 'default'}."
+        (flavor_dir / "IDENTITY.md").write_text(identity.rstrip() + "\n", encoding="utf-8")
+        if soul:
+            (flavor_dir / "SOUL.md").write_text(soul.rstrip() + "\n", encoding="utf-8")
+        if notes:
+            (flavor_dir / "NOTES.md").write_text(notes.rstrip() + "\n", encoding="utf-8")
+        overrides = dict(settings.model_overrides)
+        overrides[_model_key(provider, model)] = PersonaSettingsOverride(persona_id=persona_id, flavor_id=flavor_id)
+        self.update_settings(
+            default_persona_id=settings.default_persona_id,
+            default_privacy_tier=settings.default_privacy_tier,
+            model_overrides=overrides,
+        )
+        return PersonaFlavor(
+            persona_id=persona_id,
+            flavor_id=flavor_id,
+            provider=provider,
+            model=model or "default",
+            display_name=_text(draft.get("displayName")) or None,
+        )
+
+    def _ensure_scaffold(self) -> None:
+        persona_root = self._persona_dir("default")
+        _write_text_if_missing(
+            persona_root / "core" / "SOUL.md",
+            "# CopeNet Home\n\nBe genuinely helpful, practical, warm, and careful with private context.",
+        )
+        _write_text_if_missing(
+            persona_root / "core" / "IDENTITY.md",
+            "# CopeNet Identity\n\nThis is CopeNet's shared persona home. Individual models may layer their own flavor on top.",
+        )
+        _write_text_if_missing(
+            persona_root / "core" / "AGENTS.md",
+            "# CopeNet Persona Operating Notes\n\nUse shared memory responsibly. Keep private context out of shared or public channels.",
+        )
+        _write_text_if_missing(
+            persona_root / "user" / "USER.md",
+            "# USER.md\n\nPrivate operator context belongs here.",
+        )
+        _write_text_if_missing(
+            persona_root / "environment" / "TOOLS.md",
+            "# TOOLS.md\n\nLocal machine and environment notes belong here.",
+        )
+        memory_dir = persona_root / "memory" / "daily"
+        memory_dir.mkdir(parents=True, exist_ok=True)
+        _write_text_if_missing(persona_root / "memory" / "PUBLIC.md", "# Public Memory\n\nPublic-safe collaboration notes.")
+        if not self._settings_path().exists():
+            _write_json(self._settings_path(), PersonaSettings().to_json())
+
+    def _settings_path(self) -> Path:
+        return self._root_dir / "settings.json"
+
+    def _persona_dir(self, persona_id: str) -> Path:
+        return self._root_dir / _safe_segment(persona_id)
+
+    def _existing_flavor_id(self, persona_id: str, provider: str, model: str | None) -> str | None:
+        flavor_id = f"{_safe_segment(provider)}/{_safe_segment(model or 'default')}"
+        return flavor_id if (self._persona_dir(persona_id) / "models" / flavor_id).is_dir() else None
+
+    def _recent_daily_paths(self, persona_root: Path) -> list[Path]:
+        today = datetime.now(timezone.utc).date()
+        return [
+            persona_root / "memory" / "daily" / f"{(today - timedelta(days=offset)).isoformat()}.md"
+            for offset in range(2)
+        ]
+
+
+def _model_key(provider: str, model: str | None) -> str:
+    return f"{provider}:{model or 'default'}"

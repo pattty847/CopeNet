@@ -37,7 +37,6 @@ export function shouldUseWorkingSetCompactGrid(isMobile: boolean): boolean {
   return isMobile;
 }
 
-export function shouldCollapseWorkingSetByDefault(_isMobile: boolean): boolean {
-  // Always start collapsed — one-click to expand. Saves vertical space above the transcript.
-  return true;
+export function shouldCollapseWorkingSetByDefault(isMobile: boolean): boolean {
+  return isMobile;
 }
