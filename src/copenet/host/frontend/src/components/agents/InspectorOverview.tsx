@@ -129,7 +129,6 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
           <div className="text-[11px] text-operator-muted/85 italic">Identity stays available in the background. Relevant memory appears here after a run uses it.</div>
         )}
       </Section>
-
       <Section icon={Package} title={`Artifacts${artifacts.length ? ` · ${artifacts.length}` : ''}`}>
         {artifacts.length === 0 ? (
           <div className="text-[11px] text-operator-muted/85 italic">No session artifacts yet.</div>
