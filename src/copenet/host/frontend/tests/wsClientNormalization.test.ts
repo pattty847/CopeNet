@@ -11,6 +11,14 @@ test('normalizeAssistantDisplayText unwraps FINAL_CANDIDATE content aliases', ()
   assert.equal(normalized, 'Hello there.\n\nSecond paragraph.');
 });
 
+test('normalizeAssistantDisplayText unwraps nested FINAL_CANDIDATE response aliases', () => {
+  const normalized = normalizeAssistantDisplayText(
+    '{"FINAL_CANDIDATE":{"response":"Nested hello.\\n\\nParagraph two."}}',
+  );
+
+  assert.equal(normalized, 'Nested hello.\n\nParagraph two.');
+});
+
 test('normalizeAssistantDisplayText leaves ordinary assistant prose alone', () => {
   const normalized = normalizeAssistantDisplayText('Normal assistant response.');
 

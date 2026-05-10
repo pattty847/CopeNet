@@ -59,12 +59,13 @@ CopeNet is evolving into an operator workspace, not just a chat client. Today it
 
 CopeNet currently supports local, CLI-backed, and subscription-backed runtimes through a shared harness:
 
-- `openai-codex`
-- `codex-cli`
-- `lm-studio`
-- `ollama`
+- `codex-cli` — local Codex CLI subprocess
+- `claude-cli` — local `claude` CLI subprocess
+- `openai-codex` — OpenAI Codex via OAuth (`uv run copenet auth login --provider openai-codex`)
+- `lm-studio` — local LM Studio HTTP server
+- `ollama` — local Ollama daemon
 
-The goal is provider-agnostic operator tooling: one workspace, multiple runtimes, consistent session semantics.
+The goal is provider-agnostic operator tooling: one workspace, multiple runtimes, consistent session semantics. See [`docs/CAPABILITY-MATRIX.md`](docs/CAPABILITY-MATRIX.md) for tool-loop and feature support per provider.
 
 ## Quickstart
 
@@ -75,8 +76,9 @@ The goal is provider-agnostic operator tooling: one workspace, multiple runtimes
 - Optional local runtimes:
   - Ollama running on `http://127.0.0.1:11434`
   - LM Studio local server on `http://127.0.0.1:1234`
-- Optional CLI runtime:
-  - Codex CLI installed and authenticated
+- Optional CLI runtimes:
+  - Codex CLI installed and authenticated (for `codex-cli`)
+  - Claude CLI on PATH (for `claude-cli`)
 - Optional subscription-backed runtime:
   - OpenAI Codex OAuth via `uv run copenet auth login --provider openai-codex`
 
@@ -199,17 +201,24 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 
 ### Architecture
 
-- [Architecture](docs/ARCHITECTURE.md)
-- [App API](docs/APP-API.md)
-- [Event Contract](docs/EVENT-CONTRACT.md)
+- [Architecture](docs/architecture.md)
+- [App API](docs/APP-API.md) — `/api/v1` REST + SSE for external apps
+- [Event Contract](docs/EVENT-CONTRACT.md) — `/ws` frame protocol
 - [Session Continuity](docs/SESSION-CONTINUITY.md)
 - [Capability Matrix](docs/CAPABILITY-MATRIX.md)
+- [Operator UX Model](docs/operator-ux-model.md) — three-layer tool truth (transcript / activity / inspector)
 
 ### Runtime Debugging
 
 - [Tracing](docs/TRACING.md)
 - [Debugging](docs/DEBUGGING.md)
 - [Runbook](docs/RUNBOOK.md)
+- [Trace Findings](docs/TRACE-FINDINGS.md)
+
+### Prototypes & Investigations
+
+- [Browser Agent Prototype](docs/BROWSER-AGENT-PROTOTYPE.md)
+- [Hermes Harness Investigation](docs/investigations/hermes-harness/README.md)
 
 ## Troubleshooting
 

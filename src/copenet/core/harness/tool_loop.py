@@ -1717,13 +1717,13 @@ def _shallow_reconnaissance_nudge(turn_state: TurnState) -> str:
 
 
 def provider_system_prompt(provider: Provider, system_prompt: str | None) -> str | None:
-    if getattr(provider, "name", "") == "codex-cli":
+    if getattr(provider, "name", "") in {"claude-cli", "codex-cli"}:
         return None
     return system_prompt
 
 
 def compose_provider_prompt(provider: Provider, prompt: str, system_prompt: str | None) -> str:
-    if getattr(provider, "name", "") != "codex-cli" or not system_prompt:
+    if getattr(provider, "name", "") not in {"claude-cli", "codex-cli"} or not system_prompt:
         return prompt
     return (
         "System instructions:\n"

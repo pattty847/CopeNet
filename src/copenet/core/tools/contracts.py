@@ -431,6 +431,16 @@ def extract_tool_batch_invocation(text: str) -> ToolBatchEnvelope | None:
 
 def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
     """Parse a structured final answer candidate JSON object from model output."""
+    def _unwrap_candidate_payload(parsed: dict[str, Any]) -> dict[str, Any] | None:
+        if (parsed.get("state") or parsed.get("type")) == "FINAL_CANDIDATE":
+            return parsed
+        nested = parsed.get("FINAL_CANDIDATE")
+        if isinstance(nested, dict):
+            merged = dict(nested)
+            merged.setdefault("state", "FINAL_CANDIDATE")
+            return merged
+        return None
+
     for raw in _candidate_json_objects(text):
         try:
             parsed = json.loads(raw)
@@ -438,14 +448,16 @@ def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
             continue
         if not isinstance(parsed, dict):
             continue
-        final_type = parsed.get("state") or parsed.get("type")
-        if final_type != "FINAL_CANDIDATE":
+        candidate = _unwrap_candidate_payload(parsed)
+        if not isinstance(candidate, dict):
             continue
-        answer = parsed.get("answer")
+        answer = candidate.get("answer")
         if not isinstance(answer, str):
-            answer = parsed.get("content")
+            answer = candidate.get("content")
         if not isinstance(answer, str):
-            answer = parsed.get("message")
+            answer = candidate.get("message")
+        if not isinstance(answer, str):
+            answer = candidate.get("response")
         if not isinstance(answer, str) or not answer.strip():
             continue
 
@@ -463,9 +475,9 @@ def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
                     normalized.append(stripped)
             return normalized
 
-        evidence = _normalize_str_list(parsed.get("evidence"))
-        done_conditions_met = _normalize_str_list(parsed.get("done_conditions_met"))
-        remaining_uncertainty = _normalize_str_list(parsed.get("remaining_uncertainty"))
+        evidence = _normalize_str_list(candidate.get("evidence"))
+        done_conditions_met = _normalize_str_list(candidate.get("done_conditions_met"))
+        remaining_uncertainty = _normalize_str_list(candidate.get("remaining_uncertainty"))
         if evidence is None or done_conditions_met is None or remaining_uncertainty is None:
             continue
         return FinalCandidateEnvelope(

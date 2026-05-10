@@ -101,6 +101,15 @@ def test_extract_final_candidate_accepts_type_and_content_aliases() -> None:
     assert envelope.evidence == ["README.md"]
 
 
+def test_extract_final_candidate_accepts_nested_response_alias() -> None:
+    envelope = extract_final_candidate(
+        '{"FINAL_CANDIDATE":{"response":"Nested response works.","evidence":["README.md"]}}'
+    )
+    assert envelope is not None
+    assert envelope.answer == "Nested response works."
+    assert envelope.evidence == ["README.md"]
+
+
 def test_build_tool_prompt_section_lists_all_tool_ids() -> None:
     tools = [
         ToolDescriptor(id="files.read", name="Read File", description="Read one file.", category="repo-read"),

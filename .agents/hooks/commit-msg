@@ -1,0 +1,12 @@
+#!/bin/sh
+set -eu
+
+HOOK_DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+if [ -f "$HOOK_DIR/../scripts/mao_check_commit_msg.py" ]; then
+  SCRIPT_DIR=$(CDPATH= cd -- "$HOOK_DIR/../scripts" && pwd)
+else
+  REPO_ROOT=$(git rev-parse --show-toplevel)
+  SCRIPT_DIR="$REPO_ROOT/.agents/scripts"
+fi
+
+exec python3 "$SCRIPT_DIR/mao_check_commit_msg.py" "$@"
