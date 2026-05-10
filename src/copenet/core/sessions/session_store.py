@@ -45,6 +45,9 @@ class SessionIndexEntry:
     model: str | None
     system_prompt_id: str | None
     task_prompt_id: str | None
+    persona_id: str | None
+    persona_flavor_id: str | None
+    persona_privacy_tier: str | None
     workspace_root: str | None
     archived: bool
     provider_session_id: str | None
@@ -67,6 +70,9 @@ class SessionIndexEntry:
             model=_optional_str(raw, "model"),
             system_prompt_id=_optional_str(raw, "system_prompt_id"),
             task_prompt_id=_optional_str(raw, "task_prompt_id"),
+            persona_id=_optional_str(raw, "persona_id"),
+            persona_flavor_id=_optional_str(raw, "persona_flavor_id"),
+            persona_privacy_tier=_optional_str(raw, "persona_privacy_tier"),
             workspace_root=_optional_str(raw, "workspace_root"),
             archived=bool(raw.get("archived", False)),
             provider_session_id=_optional_str(raw, "provider_session_id"),
@@ -117,6 +123,9 @@ class SessionStore:
         title: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        persona_id: str | None = None,
+        persona_flavor_id: str | None = None,
+        persona_privacy_tier: str | None = None,
         workspace_root: str | None = None,
     ) -> SessionIndexEntry:
         """Create a new locked session."""
@@ -126,6 +135,9 @@ class SessionStore:
         normalized_title = title.strip() if title else None
         normalized_system_prompt_id = system_prompt_id.strip() if system_prompt_id else None
         normalized_task_prompt_id = task_prompt_id.strip() if task_prompt_id else None
+        normalized_persona_id = persona_id.strip() if persona_id else None
+        normalized_persona_flavor_id = persona_flavor_id.strip() if persona_flavor_id else None
+        normalized_persona_privacy_tier = persona_privacy_tier.strip() if persona_privacy_tier else None
         normalized_workspace_root = workspace_root.strip() if workspace_root else None
         if not normalized_key:
             raise ValueError("session_key is required")
@@ -147,6 +159,9 @@ class SessionStore:
                 model=normalized_model,
                 system_prompt_id=normalized_system_prompt_id,
                 task_prompt_id=normalized_task_prompt_id,
+                persona_id=normalized_persona_id,
+                persona_flavor_id=normalized_persona_flavor_id,
+                persona_privacy_tier=normalized_persona_privacy_tier,
                 workspace_root=normalized_workspace_root,
                 archived=False,
                 provider_session_id=None,
@@ -181,6 +196,9 @@ class SessionStore:
         model: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        persona_id: str | None = None,
+        persona_flavor_id: str | None = None,
+        persona_privacy_tier: str | None = None,
         workspace_root: str | None = None,
     ) -> SessionIndexEntry:
         """Resolve an existing session or create a new one when missing."""
@@ -196,6 +214,9 @@ class SessionStore:
             model=model,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
+            persona_id=persona_id,
+            persona_flavor_id=persona_flavor_id,
+            persona_privacy_tier=persona_privacy_tier,
             workspace_root=workspace_root,
         )
 
@@ -206,6 +227,9 @@ class SessionStore:
         model: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        persona_id: str | None = None,
+        persona_flavor_id: str | None = None,
+        persona_privacy_tier: str | None = None,
         workspace_root: str | None = None,
     ) -> SessionIndexEntry:
         """Ensure the requested provider/model matches the locked session binding."""
@@ -214,6 +238,9 @@ class SessionStore:
         normalized_model = model.strip() if model else None
         normalized_system_prompt_id = system_prompt_id.strip() if system_prompt_id else None
         normalized_task_prompt_id = task_prompt_id.strip() if task_prompt_id else None
+        normalized_persona_id = persona_id.strip() if persona_id else None
+        normalized_persona_flavor_id = persona_flavor_id.strip() if persona_flavor_id else None
+        normalized_persona_privacy_tier = persona_privacy_tier.strip() if persona_privacy_tier else None
         normalized_workspace_root = workspace_root.strip() if workspace_root else None
         if not normalized_key:
             raise ValueError("session_key is required")
@@ -240,6 +267,18 @@ class SessionStore:
             if entry.task_prompt_id and entry.task_prompt_id != normalized_task_prompt_id:
                 raise RuntimeError(
                     f"session is locked to task mode {entry.task_prompt_id}; requested {normalized_task_prompt_id or 'none'}"
+                )
+            if entry.persona_id and entry.persona_id != normalized_persona_id:
+                raise RuntimeError(
+                    f"session is locked to persona {entry.persona_id}; requested {normalized_persona_id or 'none'}"
+                )
+            if entry.persona_flavor_id and entry.persona_flavor_id != normalized_persona_flavor_id:
+                raise RuntimeError(
+                    f"session is locked to persona flavor {entry.persona_flavor_id}; requested {normalized_persona_flavor_id or 'none'}"
+                )
+            if entry.persona_privacy_tier and entry.persona_privacy_tier != normalized_persona_privacy_tier:
+                raise RuntimeError(
+                    f"session is locked to persona privacy tier {entry.persona_privacy_tier}; requested {normalized_persona_privacy_tier or 'none'}"
                 )
             if entry.workspace_root and entry.workspace_root != normalized_workspace_root:
                 raise RuntimeError(

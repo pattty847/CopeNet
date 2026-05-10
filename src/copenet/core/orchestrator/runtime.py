@@ -65,12 +65,25 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
 
             raise SessionInFlightError(active_run)
 
+        persona_context = orchestrator._persona_service.build_prompt_context(
+            provider=provider_name,
+            model=request.model,
+            privacy_tier=request.persona_privacy_tier,
+            query=message,
+        )
+        resolved_persona_id = request.persona_id or persona_context.persona_id
+        resolved_persona_flavor_id = request.persona_flavor_id or persona_context.flavor_id
+        resolved_persona_privacy_tier = request.persona_privacy_tier or persona_context.privacy_tier
+
         entry = orchestrator._session_store.resolve_or_create(
             session_key=session_key,
             provider=provider_name,
             model=request.model,
             system_prompt_id=request.system_prompt_id,
             task_prompt_id=request.task_prompt_id,
+            persona_id=resolved_persona_id,
+            persona_flavor_id=resolved_persona_flavor_id,
+            persona_privacy_tier=resolved_persona_privacy_tier,
             workspace_root=orchestrator.validate_workspace_root(request.workspace_root) if request.workspace_root else None,
         )
         entry = orchestrator._session_store.assert_session_binding(
@@ -79,6 +92,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             model=request.model,
             system_prompt_id=request.system_prompt_id,
             task_prompt_id=request.task_prompt_id,
+            persona_id=resolved_persona_id,
+            persona_flavor_id=resolved_persona_flavor_id,
+            persona_privacy_tier=resolved_persona_privacy_tier,
             workspace_root=entry.workspace_root or request.workspace_root,
         )
         session_workspace_root = (
@@ -155,6 +171,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         "profileActive": False,
         "memoryCount": 0,
         "memoryItemIds": [],
+        "personaActive": False,
+        "personaId": entry.persona_id,
+        "personaFlavorId": entry.persona_flavor_id,
+        "personaPrivacyTier": entry.persona_privacy_tier,
     }
     effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
     available_tools = [
@@ -194,6 +214,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 orchestrator=orchestrator,
                 plan=resolved_plan,
                 query=message,
+                provider=provider_name,
+                model=request.model,
+                persona_id=entry.persona_id,
+                persona_flavor_id=entry.persona_flavor_id,
+                persona_privacy_tier=entry.persona_privacy_tier,
                 sink=identity_context_payload,
             ),
         )
@@ -713,8 +738,19 @@ def _build_identity_memory_overlay(
     orchestrator: "Orchestrator",
     plan,
     query: str,
+    provider: str,
+    model: str | None,
+    persona_id: str | None,
+    persona_flavor_id: str | None,
+    persona_privacy_tier: str | None,
     sink: dict[str, object],
 ) -> str | None:
+    persona_payload = orchestrator._persona_service.build_prompt_context(
+        provider=provider,
+        model=model,
+        privacy_tier=persona_privacy_tier,  # type: ignore[arg-type]
+        query=query,
+    )
     identity_payload = orchestrator._profile_service.build_identity_prompt_payload(
         include_briefing=plan.interaction_class in {"agent", "risky"}
     )
@@ -726,5 +762,18 @@ def _build_identity_memory_overlay(
     sink["profileActive"] = bool(identity_payload.stable_identity)
     sink["memoryCount"] = len(memory_payload.memory_items)
     sink["memoryItemIds"] = [item.id for item in memory_payload.memory_items]
-    parts = [part for part in (identity_payload.stable_identity, identity_payload.situational_briefing, memory_payload.digest) if part]
+    sink["personaActive"] = bool(persona_payload.prompt)
+    sink["personaId"] = persona_id or persona_payload.persona_id
+    sink["personaFlavorId"] = persona_flavor_id or persona_payload.flavor_id
+    sink["personaPrivacyTier"] = persona_privacy_tier or persona_payload.privacy_tier
+    parts = [
+        part
+        for part in (
+            persona_payload.prompt,
+            identity_payload.stable_identity,
+            identity_payload.situational_briefing,
+            memory_payload.digest,
+        )
+        if part
+    ]
     return "\n\n".join(parts) if parts else None

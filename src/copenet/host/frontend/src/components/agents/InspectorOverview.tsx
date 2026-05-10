@@ -57,6 +57,9 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   const taskModeName = taskModes.find((mode) => mode.id === currentTaskMode)?.name || currentTaskMode || 'None';
   const artifacts = artifactsResource.status === 'ready' && artifactsResource.data ? artifactsResource.data : [];
   const identityUsage = activeSessionKey ? sessionIdentityUsage[activeSessionKey] || null : null;
+  const personaLabel = isDraft
+    ? draftSettings.personaFlavorId || draftSettings.personaId || 'default'
+    : activeSession?.personaFlavorId || activeSession?.personaId || 'default';
   const relatedMemory = identityUsage
     ? memoryItems.filter((item) => identityUsage.memoryItemIds.includes(item.id)).slice(0, 3)
     : [];
@@ -80,6 +83,8 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
           <dd className="truncate text-right text-operator-text" title={profileName}>{profileName}</dd>
           <dt className="text-operator-muted">Mode</dt>
           <dd className="truncate text-right text-operator-text" title={taskModeName}>{taskModeName}</dd>
+          <dt className="text-operator-muted">Persona</dt>
+          <dd className="truncate text-right text-operator-text" title={personaLabel}>{personaLabel}</dd>
         </dl>
         {(activeSession?.workspaceRoot || runtimeContext?.workspaceRoot) && (
           <div className="mt-2 rounded-lg border border-operator-border/60 bg-operator-panel/30 px-2.5 py-1.5">
@@ -97,14 +102,14 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
             <div className="rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[11px] font-medium text-operator-text">
-                  {identityUsage.profileActive ? 'Identity overlay active' : 'Memory assist active'}
+                  {identityUsage.personaActive ? 'Persona home active' : identityUsage.profileActive ? 'Identity overlay active' : 'Memory assist active'}
                 </div>
                 <div className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent">
                   {identityUsage.memoryCount} memory
                 </div>
               </div>
               <div className="mt-1 text-[10.5px] leading-5 text-operator-muted/85">
-                This run used bounded identity context and only the most relevant memory items.
+                This run used {identityUsage.personaPrivacyTier || 'private'} persona context and only the most relevant memory items.
               </div>
               {sessionMemoryChange ? (
                 <div className="mt-2 rounded-md border border-operator-accent/20 bg-operator-accent/8 px-2 py-1 text-[10px] leading-4 text-operator-text/90">

@@ -10,6 +10,9 @@ export interface Session {
   model: string | null;
   systemPromptId: string | null;
   taskPromptId: string | null;
+  personaId: string | null;
+  personaFlavorId: string | null;
+  personaPrivacyTier: PersonaPrivacyTier | null;
   workspaceRoot: string | null;
   archived: boolean;
   providerSessionId: string | null;
@@ -199,7 +202,40 @@ export interface DraftSettings {
   model: string;
   systemPromptId: string;
   taskPromptId: string;
+  personaId: string;
+  personaFlavorId: string;
+  personaPrivacyTier: PersonaPrivacyTier;
   workspaceRoot: string;
+}
+
+export type PersonaPrivacyTier = 'private' | 'safe' | 'off';
+
+export interface PersonaHomeSummary {
+  personaId: string;
+  personaFlavorId: string | null;
+  personaPrivacyTier: PersonaPrivacyTier;
+  active: boolean;
+  rootDir: string;
+  loadedFiles: string[];
+}
+
+export interface PersonaSettingsOverride {
+  personaId: string;
+  flavorId: string | null;
+}
+
+export interface PersonaSettings {
+  defaultPersonaId: string;
+  defaultPrivacyTier: PersonaPrivacyTier;
+  modelOverrides: Record<string, PersonaSettingsOverride>;
+}
+
+export interface PersonaContextPayload {
+  personaId: string;
+  personaFlavorId: string | null;
+  personaPrivacyTier: PersonaPrivacyTier;
+  prompt: string;
+  loadedFiles: string[];
 }
 
 export interface WebExtractDocument {
@@ -746,6 +782,10 @@ export interface IdentityContextRuntime {
   profileActive: boolean;
   memoryCount: number;
   memoryItemIds: string[];
+  personaActive?: boolean;
+  personaId?: string | null;
+  personaFlavorId?: string | null;
+  personaPrivacyTier?: PersonaPrivacyTier | null;
 }
 
 export interface MemoryChangeEvent {

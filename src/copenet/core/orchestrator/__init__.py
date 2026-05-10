@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import subprocess
 from dataclasses import dataclass
@@ -47,6 +48,7 @@ from copenet.core.orchestrator.pulse import (
     save_pulses as save_pulses_record,
 )
 from copenet.core.pulse import PulseStore
+from copenet.core.persona import PersonaHomeService, PersonaPrivacyTier
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
 from copenet.core.profile import PatProfileService
@@ -55,7 +57,7 @@ from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
-from copenet._paths import default_artifacts_dir, default_pat_profile_dir, default_session_state_dir, default_sessions_dir
+from copenet._paths import default_artifacts_dir, default_pat_profile_dir, default_personas_dir, default_session_state_dir, default_sessions_dir
 
 
 ChatEmit = Callable[[dict], Awaitable[None]]
@@ -73,6 +75,9 @@ class ChatSendRequest:
     model: str | None = None
     system_prompt_id: str | None = None
     task_prompt_id: str | None = None
+    persona_id: str | None = None
+    persona_flavor_id: str | None = None
+    persona_privacy_tier: PersonaPrivacyTier | None = None
     timeout_ms: int | None = None
     system_prompt: str | None = None
     allow_tools: bool = True
@@ -112,6 +117,8 @@ class Orchestrator:
         self._memory_service = MemoryService(self._memory_store)
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
+        persona_root = default_personas_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "personas"
+        self._persona_service = PersonaHomeService(root_dir=persona_root)
         self._app_store = AppStore(path=base / "apps.json")
         if providers is None:
             self._providers, self._provider_init_errors = build_default_provider_registry()
@@ -167,6 +174,9 @@ class Orchestrator:
         title: str | None = None,
         system_prompt_id: str | None = None,
         task_prompt_id: str | None = None,
+        persona_id: str | None = None,
+        persona_flavor_id: str | None = None,
+        persona_privacy_tier: PersonaPrivacyTier | None = None,
         workspace_root: str | None = None,
         starter_intent: str | None = None,
     ) -> dict:
@@ -179,6 +189,9 @@ class Orchestrator:
             title=title,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
+            persona_id=persona_id,
+            persona_flavor_id=persona_flavor_id,
+            persona_privacy_tier=persona_privacy_tier,
             workspace_root=self.validate_workspace_root(workspace_root) if workspace_root else None,
             starter_intent=starter_intent,
         )
@@ -428,6 +441,77 @@ class Orchestrator:
         """Return the current identity prompt payload used by the harness."""
         return self._profile_service.build_identity_prompt_payload(include_briefing=True).to_public_dict()
 
+    def get_persona(self, *, provider: str | None = None, model: str | None = None, privacy_tier: PersonaPrivacyTier | None = None) -> dict:
+        """Return the resolved Persona Home summary for UI clients."""
+        return self._persona_service.get_summary(provider=provider, model=model, privacy_tier=privacy_tier)
+
+    def get_persona_settings(self) -> dict:
+        """Return Persona Home defaults and provider/model overrides."""
+        return self._persona_service.load_settings().to_public_dict()
+
+    def update_persona_settings(
+        self,
+        *,
+        default_persona_id: str | None = None,
+        default_privacy_tier: PersonaPrivacyTier | None = None,
+        model_overrides: dict | None = None,
+    ) -> dict:
+        """Persist Persona Home defaults and provider/model overrides."""
+        return self._persona_service.update_settings(
+            default_persona_id=default_persona_id,
+            default_privacy_tier=default_privacy_tier,
+            model_overrides=model_overrides,
+        ).to_public_dict()
+
+    def get_persona_context(
+        self,
+        *,
+        provider: str | None = None,
+        model: str | None = None,
+        privacy_tier: PersonaPrivacyTier | None = None,
+        query: str = "",
+    ) -> dict:
+        """Return effective Persona Home prompt context for debugging and UI proof."""
+        return self._persona_service.build_prompt_context(
+            provider=provider or "",
+            model=model,
+            privacy_tier=privacy_tier,
+            query=query,
+        ).to_public_dict()
+
+    async def draft_persona_flavor(self, *, provider_id: str, model: str | None = None) -> dict:
+        """Ask a model to draft its own compact identity flavor without saving it."""
+        provider = self._providers.get(provider_id)
+        if provider is None:
+            raise ValueError(f"unsupported provider: {provider_id}")
+        prompt = (
+            "Draft a compact CopeNet model identity flavor for yourself. "
+            "Return JSON only with displayName, identityMarkdown, soulMarkdown, and notesMarkdown. "
+            "Do not include private user data or claim memories you do not have."
+        )
+        abort_event = asyncio.Event()
+        parts: list[str] = []
+        async for event in provider.run(
+            prompt=prompt,
+            provider_session_id=None,
+            abort_event=abort_event,
+            model=model,
+            system_prompt="You draft concise assistant identity files for local operator review.",
+        ):
+            if event.kind == "delta" and event.text:
+                parts.append(event.text)
+        raw_text = "".join(parts).strip()
+        return {
+            "provider": provider_id,
+            "model": model,
+            "draft": _parse_persona_flavor_draft(raw_text),
+            "rawText": raw_text,
+        }
+
+    def save_persona_flavor(self, *, provider_id: str, model: str | None = None, draft: dict | None = None) -> dict:
+        """Save an operator-approved model identity flavor."""
+        return self._persona_service.save_flavor(provider=provider_id, model=model, draft=draft or {}).to_public_dict()
+
     def list_memory(self, *, include_archived: bool = False, category: str | None = None, limit: int = 50) -> list[dict]:
         """Return recent user-visible memory items."""
         return [
@@ -617,3 +701,18 @@ class Orchestrator:
             first_user_message=first_user_message,
             first_assistant_message=first_assistant_message,
         )
+
+
+def _parse_persona_flavor_draft(raw_text: str) -> dict:
+    try:
+        parsed = json.loads(raw_text)
+    except json.JSONDecodeError:
+        parsed = {}
+    if not isinstance(parsed, dict):
+        parsed = {}
+    return {
+        "displayName": str(parsed.get("displayName") or parsed.get("name") or "Model Flavor").strip(),
+        "identityMarkdown": str(parsed.get("identityMarkdown") or parsed.get("identity") or raw_text or "# Model Flavor").strip(),
+        "soulMarkdown": str(parsed.get("soulMarkdown") or parsed.get("soul") or "").strip(),
+        "notesMarkdown": str(parsed.get("notesMarkdown") or parsed.get("notes") or "").strip(),
+    }

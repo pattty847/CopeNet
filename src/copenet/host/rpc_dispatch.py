@@ -23,6 +23,12 @@ from .rpc_catalog import (
     handle_messaging_routes_upsert,
     handle_messaging_test,
     handle_models_list,
+    handle_persona_context_get,
+    handle_persona_flavor_draft,
+    handle_persona_flavor_save,
+    handle_persona_get,
+    handle_persona_settings_get,
+    handle_persona_settings_update,
     handle_profile_changelog,
     handle_profile_get,
     handle_prompts_list,
@@ -87,6 +93,18 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         await handle_profile_get(req.id, send_json, orchestrator)
     elif req.method == "identity.context":
         await handle_identity_context_get(req.id, send_json, orchestrator)
+    elif req.method == "persona.get":
+        await handle_persona_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.settings.get":
+        await handle_persona_settings_get(req.id, send_json, orchestrator)
+    elif req.method == "persona.settings.update":
+        await handle_persona_settings_update(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.context":
+        await handle_persona_context_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.flavor.draft":
+        await handle_persona_flavor_draft(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.flavor.save":
+        await handle_persona_flavor_save(req.id, req.params, send_json, orchestrator)
     elif req.method == "profile.changelog":
         await handle_profile_changelog(req.id, req.params, send_json, orchestrator)
     elif req.method == "briefing.get":

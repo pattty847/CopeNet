@@ -13,6 +13,8 @@ import {
   MessagingConfig,
   Model,
   PatProfile,
+  PersonaHomeSummary,
+  PersonaSettings,
   PromptOptimizationResult,
   PromptOptimizationVariant,
   PulseRecord,
@@ -184,6 +186,9 @@ function normalizeSession(raw: unknown): Session {
     model: payload.model ? String(payload.model) : null,
     systemPromptId: payload.systemPromptId ? String(payload.systemPromptId) : null,
     taskPromptId: payload.taskPromptId ? String(payload.taskPromptId) : null,
+    personaId: payload.personaId ? String(payload.personaId) : null,
+    personaFlavorId: payload.personaFlavorId ? String(payload.personaFlavorId) : null,
+    personaPrivacyTier: payload.personaPrivacyTier ? String(payload.personaPrivacyTier) as Session['personaPrivacyTier'] : null,
     workspaceRoot: payload.workspaceRoot ? String(payload.workspaceRoot) : null,
     archived: Boolean(payload.archived),
     providerSessionId: payload.providerSessionId ? String(payload.providerSessionId) : null,
@@ -281,6 +286,41 @@ function normalizeIdentityContext(raw: unknown): IdentityContextPayload | null {
   };
 }
 
+function normalizePersonaHome(raw: unknown): PersonaHomeSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    personaId: String(payload.personaId || 'default'),
+    personaFlavorId: payload.personaFlavorId ? String(payload.personaFlavorId) : null,
+    personaPrivacyTier: String(payload.personaPrivacyTier || 'private') as PersonaHomeSummary['personaPrivacyTier'],
+    active: Boolean(payload.active),
+    rootDir: String(payload.rootDir || ''),
+    loadedFiles: Array.isArray(payload.loadedFiles) ? payload.loadedFiles.map((value) => String(value)).filter(Boolean) : [],
+  };
+}
+
+function normalizePersonaSettings(raw: unknown): PersonaSettings | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const overridesRaw = payload.modelOverrides && typeof payload.modelOverrides === 'object'
+    ? payload.modelOverrides as Record<string, unknown>
+    : {};
+  const modelOverrides: PersonaSettings['modelOverrides'] = {};
+  for (const [key, value] of Object.entries(overridesRaw)) {
+    if (!value || typeof value !== 'object') continue;
+    const override = value as Record<string, unknown>;
+    modelOverrides[key] = {
+      personaId: String(override.personaId || 'default'),
+      flavorId: override.flavorId ? String(override.flavorId) : null,
+    };
+  }
+  return {
+    defaultPersonaId: String(payload.defaultPersonaId || 'default'),
+    defaultPrivacyTier: String(payload.defaultPrivacyTier || 'private') as PersonaSettings['defaultPrivacyTier'],
+    modelOverrides,
+  };
+}
+
 function normalizeMemoryItem(raw: unknown): MemoryItem | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
@@ -309,6 +349,10 @@ function normalizeIdentityContextRuntime(raw: unknown): IdentityContextRuntime |
     profileActive: Boolean(payload.profileActive),
     memoryCount: Number(payload.memoryCount || 0),
     memoryItemIds: Array.isArray(payload.memoryItemIds) ? payload.memoryItemIds.map((value) => String(value)).filter(Boolean) : [],
+    personaActive: Boolean(payload.personaActive),
+    personaId: payload.personaId ? String(payload.personaId) : null,
+    personaFlavorId: payload.personaFlavorId ? String(payload.personaFlavorId) : null,
+    personaPrivacyTier: payload.personaPrivacyTier ? String(payload.personaPrivacyTier) as IdentityContextRuntime['personaPrivacyTier'] : null,
   };
 }
 
@@ -1017,23 +1061,29 @@ class WsClient {
     const nextModel = nextProvider === current.provider
       ? (!knownModels.length || knownModels.some((item) => item.id === current.model) ? current.model : '')
       : '';
+    const personaSettings = store.personaSettings;
     store.replaceDraftSettings({
       provider: nextProvider,
       model: nextModel,
       systemPromptId: store.profiles.some((item) => item.id === current.systemPromptId) ? current.systemPromptId : defaultProfile,
       taskPromptId: store.taskModes.some((item) => item.id === current.taskPromptId) ? current.taskPromptId : defaultTaskMode,
+      personaId: current.personaId || personaSettings?.defaultPersonaId || 'default',
+      personaFlavorId: current.personaFlavorId || '',
+      personaPrivacyTier: current.personaPrivacyTier || personaSettings?.defaultPrivacyTier || 'private',
       workspaceRoot: current.workspaceRoot || store.runtimeContext?.workspaceRoot || '',
     });
   }
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, identityPayload, memoryPayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, personaPayload, personaSettingsPayload, identityPayload, memoryPayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
         this.request<{ sessions: unknown[] }>('sessions.list', { includeArchived: useAppStore.getState().showArchived }),
         this.request<{ profile?: unknown | null }>('profile.get', {}),
+        this.request<{ persona?: unknown | null }>('persona.get', {}),
+        this.request<{ settings?: unknown | null }>('persona.settings.get', {}),
         this.request<{ identityContext?: unknown | null }>('identity.context', {}),
         this.request<{ items?: unknown[] }>('memory.list', { limit: 24 }),
         this.request<{ changelog?: unknown[] }>('profile.changelog', { limit: 20 }),
@@ -1054,6 +1104,8 @@ class WsClient {
       );
       store.setSessions(sessions);
       store.setPatProfile(normalizePatProfile(profilePayload.profile));
+      store.setPersonaHome(normalizePersonaHome(personaPayload.persona));
+      store.setPersonaSettings(normalizePersonaSettings(personaSettingsPayload.settings));
       store.setIdentityContext(normalizeIdentityContext(identityPayload.identityContext));
       store.setMemoryItems(
         Array.isArray(memoryPayload.items)
@@ -1474,6 +1526,28 @@ class WsClient {
     return normalizeMemoryItem(payload.memoryItem);
   }
 
+  async updatePersonaSettings(settings: PersonaSettings): Promise<PersonaSettings | null> {
+    const payload = await this.request<{ settings?: unknown | null }>('persona.settings.update', { ...settings });
+    const normalized = normalizePersonaSettings(payload.settings);
+    useAppStore.getState().setPersonaSettings(normalized);
+    return normalized;
+  }
+
+  async savePersonaFlavor(options: { provider: string; model?: string; draft: Record<string, unknown> }): Promise<PersonaHomeSummary | null> {
+    await this.request('persona.flavor.save', {
+      provider: options.provider,
+      model: options.model || undefined,
+      draft: options.draft,
+    });
+    const payload = await this.request<{ persona?: unknown | null }>('persona.get', {
+      provider: options.provider,
+      model: options.model || undefined,
+    });
+    const normalized = normalizePersonaHome(payload.persona);
+    useAppStore.getState().setPersonaHome(normalized);
+    return normalized;
+  }
+
   async listSessionArtifacts(key: string, limit = 50): Promise<SessionArtifactRecord[]> {
     const payload = await this.request<{ artifacts?: SessionArtifactRecord[] }>('sessions.artifacts', { key, limit });
     return Array.isArray(payload.artifacts) ? payload.artifacts : [];
@@ -1537,6 +1611,9 @@ class WsClient {
         model: draft.model || undefined,
         systemPromptId: draft.systemPromptId || undefined,
         taskPromptId: draft.taskPromptId || undefined,
+        personaId: draft.personaId || undefined,
+        personaFlavorId: draft.personaFlavorId || undefined,
+        personaPrivacyTier: draft.personaPrivacyTier || undefined,
         workspaceRoot: draft.workspaceRoot || undefined,
         starterIntentId: store.draftStarterIntent?.id || undefined,
       });
@@ -1572,6 +1649,9 @@ class WsClient {
         model: session.model || undefined,
         systemPromptId: session.systemPromptId || undefined,
         taskPromptId: session.taskPromptId || undefined,
+        personaId: session.personaId || undefined,
+        personaFlavorId: session.personaFlavorId || undefined,
+        personaPrivacyTier: session.personaPrivacyTier || undefined,
       });
       const runId = payload.runId ? String(payload.runId) : null;
       const status = payload.status ? String(payload.status) : '';

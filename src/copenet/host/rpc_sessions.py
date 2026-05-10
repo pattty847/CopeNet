@@ -56,6 +56,9 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
     title = _optional_text(raw, "title")
     system_prompt_id = _optional_text(raw, "systemPromptId")
     task_prompt_id = _optional_text(raw, "taskPromptId")
+    persona_id = _optional_text(raw, "personaId")
+    persona_flavor_id = _optional_text(raw, "personaFlavorId")
+    persona_privacy_tier = _optional_text(raw, "personaPrivacyTier")
     workspace_root = _optional_text(raw, "workspaceRoot")
     starter_intent = _optional_text(raw, "starterIntentId")
     if not provider:
@@ -77,6 +80,9 @@ async def handle_sessions_create(request_id: str, params: dict[str, Any] | None,
             title=title,
             system_prompt_id=system_prompt_id,
             task_prompt_id=task_prompt_id,
+            persona_id=persona_id,
+            persona_flavor_id=persona_flavor_id,
+            persona_privacy_tier=persona_privacy_tier,
             workspace_root=workspace_root,
             starter_intent=starter_intent,
         )

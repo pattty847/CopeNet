@@ -32,6 +32,9 @@ test('draft runtime preference persists provider and model selections', () => {
       model: 'gpt-5.5',
       systemPromptId: 'friendly',
       taskPromptId: 'none',
+      personaId: 'default',
+      personaFlavorId: '',
+      personaPrivacyTier: 'private',
       workspaceRoot: '',
     });
 
