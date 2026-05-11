@@ -1,5 +1,7 @@
 # CopeNet
 
+![CopeNet Showcase](docs/imgs/copenet-showcase.gif)
+
 CopeNet is a *continuity engine* agent operator for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
 
 ## Product Tour
