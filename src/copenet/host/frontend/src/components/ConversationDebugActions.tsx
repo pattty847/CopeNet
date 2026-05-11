@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { CopyPlus, Download, Check, Archive, Ellipsis, Sparkles } from 'lucide-react';
+import { Copy, CopyPlus, Download, Check, Archive, Ellipsis, Sparkles } from 'lucide-react';
 import { getConversationActionTriggerLabel, getDebugActionLabel } from '../lib/agentMobile';
 import { MobileSheet } from './mobile/MobileSheet';
 
@@ -8,6 +8,7 @@ type Props = {
   helperText?: string;
   compact?: boolean;
   onDebugCopy: () => Promise<void>;
+  onCopyConversation: () => Promise<void>;
   onExportConversation: () => Promise<void>;
   onArchiveConversation?: () => void;
   onCreatePulse?: () => Promise<void>;
@@ -17,13 +18,14 @@ export function ConversationDebugActions({
   disabled = false,
   helperText,
   onDebugCopy,
+  onCopyConversation,
   onExportConversation,
   compact = false,
   onArchiveConversation,
   onCreatePulse,
 }: Props) {
-  const [busyAction, setBusyAction] = useState<'copy' | 'export' | 'pulse' | null>(null);
-  const [copied, setCopied] = useState(false);
+  const [busyAction, setBusyAction] = useState<'copy' | 'chat_copy' | 'export' | 'pulse' | null>(null);
+  const [copiedAction, setCopiedAction] = useState<'debug' | 'chat' | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
   const handleDebugCopy = async () => {
@@ -31,8 +33,20 @@ export function ConversationDebugActions({
     setBusyAction('copy');
     try {
       await onDebugCopy();
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
+      setCopiedAction('debug');
+      window.setTimeout(() => setCopiedAction((current) => (current === 'debug' ? null : current)), 1800);
+    } finally {
+      setBusyAction(null);
+    }
+  };
+
+  const handleCopyConversation = async () => {
+    if (disabled || busyAction) return;
+    setBusyAction('chat_copy');
+    try {
+      await onCopyConversation();
+      setCopiedAction('chat');
+      window.setTimeout(() => setCopiedAction((current) => (current === 'chat' ? null : current)), 1800);
     } finally {
       setBusyAction(null);
     }
@@ -89,8 +103,20 @@ export function ConversationDebugActions({
               disabled={disabled || busyAction !== null}
               className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
             >
-              {copied ? <Check className="h-4 w-4 shrink-0" /> : <CopyPlus className="h-4 w-4 shrink-0" />}
+              {copiedAction === 'debug' ? <Check className="h-4 w-4 shrink-0" /> : <CopyPlus className="h-4 w-4 shrink-0" />}
               <span>{busyAction === 'copy' ? 'Copying…' : getDebugActionLabel('copy', true)}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void handleCopyConversation();
+                setMobileActionsOpen(false);
+              }}
+              disabled={disabled || busyAction !== null}
+              className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
+            >
+              {copiedAction === 'chat' ? <Check className="h-4 w-4 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
+              <span>{busyAction === 'chat_copy' ? 'Copying…' : 'Copy Chat'}</span>
             </button>
             <button
               type="button"
@@ -146,8 +172,17 @@ export function ConversationDebugActions({
         className={`${compact ? 'px-2 py-1.5 text-[11px] min-w-0 flex-1 justify-center' : 'px-3 py-1.5 text-[12px]'} border border-operator-border text-operator-muted hover:text-operator-accent hover:border-operator-accent/30 rounded-lg font-medium flex items-center gap-1.5 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed`}
         title="Create a fresh debug copy of this conversation"
       >
-        {copied ? <Check className="w-3.5 h-3.5" /> : <CopyPlus className="w-3.5 h-3.5" />}
-        <span className="truncate">{busyAction === 'copy' ? 'Copying…' : copied ? 'Copied' : getDebugActionLabel('copy', compact)}</span>
+        {copiedAction === 'debug' ? <Check className="w-3.5 h-3.5" /> : <CopyPlus className="w-3.5 h-3.5" />}
+        <span className="truncate">{busyAction === 'copy' ? 'Copying…' : copiedAction === 'debug' ? 'Copied' : getDebugActionLabel('copy', compact)}</span>
+      </button>
+      <button
+        onClick={() => void handleCopyConversation()}
+        disabled={disabled || busyAction !== null}
+        className={`${compact ? 'px-2 py-1.5 text-[11px] min-w-0 flex-1 justify-center' : 'px-3 py-1.5 text-[12px]'} border border-operator-border text-operator-muted hover:text-operator-text hover:border-operator-border rounded-lg font-medium flex items-center gap-1.5 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed`}
+        title="Copy this chat as markdown"
+      >
+        {copiedAction === 'chat' ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
+        <span className="truncate">{busyAction === 'chat_copy' ? 'Copying…' : copiedAction === 'chat' ? 'Copied' : 'Copy Chat'}</span>
       </button>
       <button
         onClick={() => void handleExport()}

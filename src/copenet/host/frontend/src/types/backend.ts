@@ -195,7 +195,7 @@ export interface PromptOptimizationResult {
   model: string | null;
 }
 
-export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'web' | 'messaging';
+export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'web' | 'messaging' | 'persona';
 
 export interface DraftSettings {
   provider: string;
@@ -236,6 +236,13 @@ export interface PersonaContextPayload {
   personaPrivacyTier: PersonaPrivacyTier;
   prompt: string;
   loadedFiles: string[];
+}
+
+export interface PersonaFlavorDraft {
+  displayName: string;
+  identityMarkdown: string;
+  soulMarkdown: string;
+  notesMarkdown: string;
 }
 
 export interface WebExtractDocument {

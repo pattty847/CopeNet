@@ -244,6 +244,7 @@ For current behavior, assume:
 - If a feature needs backend support, add and verify the RPC first.
 - Make session state obvious: active section, active session, provider, model, profile, task mode, lock state, and connection state.
 - Prefer Browser Use against the Codex in-app browser for localhost UI verification when the plugin is available. Use it to reproduce interaction bugs, verify fixes, and catch runtime UI failures that lint/build will miss.
+- For Codex specifically, treat `[@Browser](plugin://browser-use@openai-bundled)` as the canonical browser-validation path when the plugin is available. Read the Browser skill first, use the in-app browser workflow for localhost verification, and only fall back to Playwright or Computer Use if that path is genuinely unavailable. Claude and Gemini do not share this Codex-only browser surface, so do not assume they can follow the same workflow.
 - When a UI pass materially improves the product surface, capture a fresh product screenshot right away, store it under `docs/imgs/`, and update the matching `README.md` section in the canonical GitHub repo (`github.com/pattty847/CopeNet`). Prefer Browser Use for the capture flow when available; otherwise use a trustworthy automated localhost fallback such as Playwright. `gh` is installed, so repo docs/screenshot refreshes should be treated as part of finishing polished UI work rather than a nice-to-have.
 - Treat the legacy UI in `src/copenet/host/static/` as fallback compatibility code, not the primary product surface.
 

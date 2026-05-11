@@ -27,6 +27,7 @@ import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
 import { MessagingSettingsPanel } from './MessagingSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
+import { PersonaHomePanel } from './persona/PersonaHomePanel';
 
 function formatRelative(timestamp: string): string {
   const then = new Date(timestamp).getTime();
@@ -57,6 +58,7 @@ function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: (
     media: ['Data & Tools', 'Data Sources', 'Media Imports'],
     web: ['Data & Tools', 'Data Sources', 'Web Pages'],
     messaging: ['Data & Tools', 'Messaging'],
+    persona: ['Data & Tools', 'Persona Home'],
   };
 
   return (
@@ -118,7 +120,7 @@ function HubCard({
   );
 }
 
-function DataToolsHub({ openSources, openMessaging }: { openSources: () => void; openMessaging: () => void }) {
+function DataToolsHub({ openSources, openMessaging, openPersona }: { openSources: () => void; openMessaging: () => void; openPersona: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
@@ -134,11 +136,12 @@ function DataToolsHub({ openSources, openMessaging }: { openSources: () => void;
         </p>
       </section>
 
-      <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
+      <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
         <HubCard eyebrow="Ground" title="Knowledge Bases" body="Curated context that can refresh, evolve, and stay anchored to the workspace." accent="text-shell-accent" />
         <HubCard eyebrow="Ingest" title="Data Sources" body="Feed media, web pages, APIs, and local files into the workbench." accent="text-shell-accent" onClick={openSources} />
         <HubCard eyebrow="Operate" title="Tool Catalog" body="Inspectable tool surfaces with safety rules and visible execution history." accent="text-shell-accent" />
         <HubCard eyebrow="Route" title="Messaging" body="Configure Telegram reachability, default runtimes, and chat-to-session routes." accent="text-shell-accent" onClick={openMessaging} />
+        <HubCard eyebrow="Identity" title="Persona Home" body="Inspect identity files, privacy defaults, and model-specific persona flavors." accent="text-shell-accent" onClick={openPersona} />
       </section>
 
       <section className="shell-page-utility-tile rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
@@ -1086,11 +1089,12 @@ export function DataToolsPage() {
   return (
     <div className="space-y-3">
       <SectionBreadcrumb route={route} onBack={handleBack} />
-      {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} />}
+      {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} openPersona={() => setRoute('persona')} />}
       {route === 'sources' && <DataSourcesPage openMedia={() => setRoute('media')} openWeb={() => setRoute('web')} />}
       {route === 'media' && <MediaImportsPage />}
       {route === 'web' && <WebPageImportsPage />}
       {route === 'messaging' && <MessagingSettingsPage />}
+      {route === 'persona' && <PersonaHomePanel />}
     </div>
   );
 }

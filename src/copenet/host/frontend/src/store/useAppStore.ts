@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextPayload, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, PersonaHomeSummary, PersonaSettings, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextPayload, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } from '../components/home/homeLayout';
@@ -278,6 +278,12 @@ interface AppState {
   setPersonaHome: (personaHome: PersonaHomeSummary | null) => void;
   personaSettings: PersonaSettings | null;
   setPersonaSettings: (personaSettings: PersonaSettings | null) => void;
+  personaContext: PersonaContextPayload | null;
+  setPersonaContext: (personaContext: PersonaContextPayload | null) => void;
+  personaFlavorDraft: PersonaFlavorDraft | null;
+  setPersonaFlavorDraft: (draft: PersonaFlavorDraft | null) => void;
+  personaFlavorReviewOpen: boolean;
+  setPersonaFlavorReviewOpen: (open: boolean) => void;
   identityContext: IdentityContextPayload | null;
   setIdentityContext: (payload: IdentityContextPayload | null) => void;
   memoryItems: MemoryItem[];
@@ -653,6 +659,12 @@ export const useAppStore = create<AppState>((set) => ({
   setPersonaHome: (personaHome) => set({ personaHome }),
   personaSettings: null,
   setPersonaSettings: (personaSettings) => set({ personaSettings }),
+  personaContext: null,
+  setPersonaContext: (personaContext) => set({ personaContext }),
+  personaFlavorDraft: null,
+  setPersonaFlavorDraft: (personaFlavorDraft) => set({ personaFlavorDraft }),
+  personaFlavorReviewOpen: false,
+  setPersonaFlavorReviewOpen: (personaFlavorReviewOpen) => set({ personaFlavorReviewOpen }),
   identityContext: null,
   setIdentityContext: (identityContext) => set({ identityContext }),
   memoryItems: [],

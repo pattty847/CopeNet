@@ -484,10 +484,19 @@ class Orchestrator:
         provider = self._providers.get(provider_id)
         if provider is None:
             raise ValueError(f"unsupported provider: {provider_id}")
+        persona_context = self._persona_service.build_prompt_context(
+            provider=provider_id,
+            model=model,
+            privacy_tier="private",
+            query="draft a model flavor",
+        )
         prompt = (
+            "Use this CopeNet Persona Home context as your base and draft a model-specific flavor.\n\n"
+            f"{persona_context.prompt}\n\n"
             "Draft a compact CopeNet model identity flavor for yourself. "
             "Return JSON only with displayName, identityMarkdown, soulMarkdown, and notesMarkdown. "
-            "Do not include private user data or claim memories you do not have."
+            "Reflect the operator/workspace reality honestly. "
+            "Do not invent new private memories or claim a relationship history you do not have."
         )
         abort_event = asyncio.Event()
         parts: list[str] = []
@@ -496,7 +505,10 @@ class Orchestrator:
             provider_session_id=None,
             abort_event=abort_event,
             model=model,
-            system_prompt="You draft concise assistant identity files for local operator review.",
+            system_prompt=(
+                "You draft concise assistant identity files for local operator review. "
+                "Use the provided Persona Home context carefully and stay grounded in the real workspace."
+            ),
         ):
             if event.kind == "delta" and event.text:
                 parts.append(event.text)

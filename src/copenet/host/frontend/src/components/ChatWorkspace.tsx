@@ -4,7 +4,7 @@ import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { PausedRunBanner } from './PausedRunBanner';
-import { Archive, ArrowDown, ArrowUp, CopyPlus, Download, Ellipsis, GitMerge, Sparkles, X } from 'lucide-react';
+import { Archive, ArrowDown, ArrowUp, Copy, CopyPlus, Download, Ellipsis, GitMerge, Sparkles, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
 import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
@@ -12,6 +12,8 @@ import { AgentWorkspaceTabs } from './agents/AgentWorkspaceTabs';
 import { AgentComposer } from './agents/AgentComposer';
 import { RunActivityPanel } from './runtime/RunActivityPanel';
 import { ArtifactsPanel } from './runtime/ArtifactsPanel';
+import { buildPersonaCommandHelpText, DRAFT_TRANSCRIPT_SESSION_KEY, parsePersonaSlashCommand, resolvePersonaRuntime } from '../lib/personaCommands';
+import { formatConversationMarkdown } from '../lib/chatExport';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -24,6 +26,7 @@ export function ChatWorkspace() {
   const draftSettings = useAppStore((state) => state.draftSettings);
   const draftStarterIntent = useAppStore((state) => state.draftStarterIntent);
   const setDraftStarterIntent = useAppStore((state) => state.setDraftStarterIntent);
+  const patchDraftSettings = useAppStore((state) => state.patchDraftSettings);
   const mergeDraft = useAppStore((state) => state.mergeDraft);
   const setMergeDraft = useAppStore((state) => state.setMergeDraft);
   const mergeStates = useAppStore((state) => state.mergeStates);
@@ -33,11 +36,12 @@ export function ChatWorkspace() {
   const upsertSessionState = useAppStore((state) => state.upsertSessionState);
   const providers = useAppStore((state) => state.providers);
   const profiles = useAppStore((state) => state.profiles);
+  const personaSettings = useAppStore((state) => state.personaSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
   const agentWorkspaceTab = useAppStore((state) => state.agentWorkspaceTab);
   const setAgentWorkspaceTab = useAppStore((state) => state.setAgentWorkspaceTab);
 
-  const messages = (activeSessionKey ? messagesMap[activeSessionKey] : undefined) || [];
+  const messages = (activeSessionKey ? messagesMap[activeSessionKey] : messagesMap[DRAFT_TRANSCRIPT_SESSION_KEY]) || [];
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const activeMergeState = activeSessionKey ? mergeStates[activeSessionKey] || null : null;
   const isDraft = !activeSession;
@@ -102,9 +106,125 @@ export function ChatWorkspace() {
     return () => document.removeEventListener('mousedown', handler);
   }, [actionsOpen]);
 
+  const appendLocalPersonaReceipt = (content: string) => {
+    const sessionKey = activeSession?.key || DRAFT_TRANSCRIPT_SESSION_KEY;
+    useAppStore.getState().addMessage(sessionKey, {
+      localId: `persona-local-${Date.now()}`,
+      sessionKey,
+      runId: null,
+      role: 'assistant',
+      content,
+      timestamp: new Date().toISOString(),
+      provider: null,
+      model: null,
+      providerSessionId: null,
+      state: 'final',
+      toolExecution: null,
+      errorMessage: null,
+      optimistic: false,
+    });
+    setAgentWorkspaceTab('messages');
+  };
+
+  const formatPersonaSummaryReceipt = (summary: Awaited<ReturnType<typeof wsClient.getPersonaSummary>>) => {
+    if (!summary) return '## Persona Home\n\nPersona Home is not active for this runtime yet.';
+    return [
+      '## Persona Home',
+      '',
+      `- Persona: \`${summary.personaId}\``,
+      `- Privacy: \`${summary.personaPrivacyTier}\``,
+      `- Flavor: \`${summary.personaFlavorId || 'none'}\``,
+      `- Loaded files: \`${summary.loadedFiles.length}\``,
+      `- Root: \`${summary.rootDir}\``,
+    ].join('\n');
+  };
+
+  const formatPersonaFilesReceipt = (loadedFiles: string[]) => {
+    if (!loadedFiles.length) {
+      return '## Persona Files\n\nNo persona files are currently loaded for this runtime.';
+    }
+    return ['## Persona Files', '', ...loadedFiles.map((path) => `- \`${path}\``)].join('\n');
+  };
+
+  const handlePersonaCommand = async (rawMessage: string) => {
+    const command = parsePersonaSlashCommand(rawMessage);
+    if (!command) return false;
+    if (command.kind === 'help') {
+      appendLocalPersonaReceipt(buildPersonaCommandHelpText());
+      return true;
+    }
+
+    const runtime = resolvePersonaRuntime(activeSession, draftSettings);
+    try {
+      if (command.kind === 'summary') {
+        const summary = await wsClient.getPersonaSummary({
+          provider: runtime.provider,
+          model: runtime.model,
+          privacyTier: runtime.personaPrivacyTier,
+        });
+        appendLocalPersonaReceipt(formatPersonaSummaryReceipt(summary));
+        return true;
+      }
+
+      if (command.kind === 'files') {
+        const context = await wsClient.getPersonaContext({
+          provider: runtime.provider,
+          model: runtime.model,
+          privacyTier: runtime.personaPrivacyTier,
+        });
+        appendLocalPersonaReceipt(formatPersonaFilesReceipt(context?.loadedFiles || []));
+        return true;
+      }
+
+      if (command.kind === 'privacy') {
+        const currentSettings = personaSettings || {
+          defaultPersonaId: runtime.personaId || 'default',
+          defaultPrivacyTier: runtime.personaPrivacyTier,
+          modelOverrides: {},
+        };
+        await wsClient.updatePersonaSettings({
+          ...currentSettings,
+          defaultPrivacyTier: command.privacyTier,
+        });
+        if (!activeSession) {
+          patchDraftSettings({ personaPrivacyTier: command.privacyTier });
+          appendLocalPersonaReceipt(`## Persona Privacy\n\nDefault privacy is now \`${command.privacyTier}\`, and this draft will use it too.`);
+        } else {
+          appendLocalPersonaReceipt(
+            `## Persona Privacy\n\nDefault privacy is now \`${command.privacyTier}\`. This active session stays \`${runtime.personaPrivacyTier}\` because session identity is locked after first send.`,
+          );
+        }
+        return true;
+      }
+
+      if (command.kind === 'onboard') {
+        const draft = await wsClient.draftPersonaFlavor({
+          provider: runtime.provider,
+          model: runtime.model,
+        });
+        if (!draft) {
+          throw new Error('Persona flavor draft returned no content.');
+        }
+        appendLocalPersonaReceipt(
+          `## Persona Onboarding\n\nDrafted a flavor for \`${runtime.provider}\` / \`${runtime.model || 'default'}\` using your private Persona Home baseline. Review the modal before saving.`,
+        );
+        return true;
+      }
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Persona command failed.');
+      return true;
+    }
+    return true;
+  };
+
   const handleSend = async (messageOverride?: string) => {
     const message = (messageOverride ?? input).trim();
     if (!message || activeRunId) return;
+    const handledPersonaCommand = await handlePersonaCommand(message);
+    if (handledPersonaCommand) {
+      setInput('');
+      return;
+    }
     try {
       await wsClient.sendMessage(message);
       setInput('');
@@ -158,6 +278,22 @@ export function ChatWorkspace() {
       window.setTimeout(() => URL.revokeObjectURL(url), 0);
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to export conversation.');
+    }
+  };
+
+  const handleCopyConversation = async () => {
+    if (!activeSession) return;
+    try {
+      clearAppError();
+      const markdown = formatConversationMarkdown({
+        session: activeSession,
+        messages,
+        providerLabel: providerName,
+        modelLabel: runtimeSummary.model,
+      });
+      await navigator.clipboard.writeText(markdown);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to copy chat.');
     }
   };
 
@@ -324,6 +460,7 @@ export function ChatWorkspace() {
                 disabled={!canDebugConversation}
                 compact={true}
                 onDebugCopy={handleDebugCopy}
+                onCopyConversation={handleCopyConversation}
                 onExportConversation={handleExportConversation}
                 onCreatePulse={activeSession ? handleCreatePulse : undefined}
                 onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
@@ -348,6 +485,14 @@ export function ChatWorkspace() {
                     >
                       <CopyPlus className="w-3.5 h-3.5 shrink-0" />
                       Debug Copy
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void handleCopyConversation(); setActionsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
+                    >
+                      <Copy className="w-3.5 h-3.5 shrink-0" />
+                      Copy Chat
                     </button>
                     <button
                       type="button"

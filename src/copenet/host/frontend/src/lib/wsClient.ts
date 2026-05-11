@@ -13,6 +13,8 @@ import {
   MessagingConfig,
   Model,
   PatProfile,
+  PersonaContextPayload,
+  PersonaFlavorDraft,
   PersonaHomeSummary,
   PersonaSettings,
   PromptOptimizationResult,
@@ -38,6 +40,7 @@ import {
   ToolResultPreview,
   TurnStateSnapshot,
 } from '../types/backend';
+import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 
 type PendingRequest = {
   resolve: (payload: Record<string, unknown>) => void;
@@ -318,6 +321,30 @@ function normalizePersonaSettings(raw: unknown): PersonaSettings | null {
     defaultPersonaId: String(payload.defaultPersonaId || 'default'),
     defaultPrivacyTier: String(payload.defaultPrivacyTier || 'private') as PersonaSettings['defaultPrivacyTier'],
     modelOverrides,
+  };
+}
+
+function normalizePersonaContext(raw: unknown): PersonaContextPayload | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const tier = String(payload.personaPrivacyTier || 'private');
+  return {
+    personaId: String(payload.personaId || 'default'),
+    personaFlavorId: payload.personaFlavorId ? String(payload.personaFlavorId) : null,
+    personaPrivacyTier: tier === 'safe' || tier === 'off' ? tier : 'private',
+    prompt: String(payload.prompt || ''),
+    loadedFiles: Array.isArray(payload.loadedFiles) ? payload.loadedFiles.map((value) => String(value)).filter(Boolean) : [],
+  };
+}
+
+function normalizePersonaFlavorDraft(raw: unknown): PersonaFlavorDraft | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  return {
+    displayName: String(payload.displayName || payload.name || 'Model Flavor'),
+    identityMarkdown: String(payload.identityMarkdown || payload.identity || ''),
+    soulMarkdown: String(payload.soulMarkdown || payload.soul || ''),
+    notesMarkdown: String(payload.notesMarkdown || payload.notes || ''),
   };
 }
 
@@ -1217,6 +1244,7 @@ class WsClient {
     store.setActiveSessionKey(null);
     store.setDraftOpen(true);
     store.setDraftStarterIntent(null);
+    store.setMessages(DRAFT_TRANSCRIPT_SESSION_KEY, []);
     store.setSessionDrawerOpen(false);
     store.setAgentWorkspaceTab('messages');
     store.setInspectorTarget(null);
@@ -1530,6 +1558,53 @@ class WsClient {
     const payload = await this.request<{ settings?: unknown | null }>('persona.settings.update', { ...settings });
     const normalized = normalizePersonaSettings(payload.settings);
     useAppStore.getState().setPersonaSettings(normalized);
+    return normalized;
+  }
+
+  async getPersonaSummary(options?: {
+    provider?: string | null;
+    model?: string | null;
+    privacyTier?: string | null;
+  }): Promise<PersonaHomeSummary | null> {
+    const payload = await this.request<{ persona?: unknown | null }>('persona.get', {
+      provider: options?.provider || undefined,
+      model: options?.model || undefined,
+      privacyTier: options?.privacyTier || undefined,
+    });
+    const normalized = normalizePersonaHome(payload.persona);
+    useAppStore.getState().setPersonaHome(normalized);
+    return normalized;
+  }
+
+  async getPersonaContext(options?: {
+    provider?: string | null;
+    model?: string | null;
+    privacyTier?: string | null;
+    query?: string | null;
+  }): Promise<PersonaContextPayload | null> {
+    const payload = await this.request<{ personaContext?: unknown | null }>('persona.context', {
+      provider: options?.provider || undefined,
+      model: options?.model || undefined,
+      privacyTier: options?.privacyTier || undefined,
+      query: options?.query || undefined,
+    });
+    const normalized = normalizePersonaContext(payload.personaContext);
+    useAppStore.getState().setPersonaContext(normalized);
+    return normalized;
+  }
+
+  async draftPersonaFlavor(options: {
+    provider: string;
+    model?: string | null;
+  }): Promise<PersonaFlavorDraft | null> {
+    const payload = await this.request<{ draft?: unknown | null }>('persona.flavor.draft', {
+      provider: options.provider,
+      model: options.model || undefined,
+    });
+    const normalized = normalizePersonaFlavorDraft(payload.draft);
+    const store = useAppStore.getState();
+    store.setPersonaFlavorDraft(normalized);
+    store.setPersonaFlavorReviewOpen(Boolean(normalized));
     return normalized;
   }
 

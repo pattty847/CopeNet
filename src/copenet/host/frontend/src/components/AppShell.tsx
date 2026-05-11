@@ -9,6 +9,7 @@ import { ExperimentsPage } from './ExperimentsPage';
 import { HomePage } from './HomePage';
 import { MobileBottomNav, MobileTopBar } from './mobile/MobileNav';
 import { ObservabilityPage } from './ObservabilityPage';
+import { PersonaFlavorReviewModal } from './persona/PersonaFlavorReviewModal';
 import { SidebarNav } from './SidebarNav';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { TopCommandBar } from './TopCommandBar';
@@ -60,6 +61,7 @@ export function AppShell() {
     <div className="flex h-screen w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">
       <div className="absolute inset-0 shell-backdrop pointer-events-none" />
       <CommandPalette />
+      <PersonaFlavorReviewModal />
       <div className={`relative flex h-full w-full max-w-full overflow-x-hidden ${isMobile ? 'p-0' : 'gap-2 p-2'}`}>
         {!isMobile && <SidebarNav />}
         <div
