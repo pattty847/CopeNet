@@ -6,9 +6,8 @@ import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } fro
 
 export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
-export type RightPanelTab = 'inbox' | 'runtime' | 'artifacts' | 'activity' | 'approvals';
+export type RightPanelTab = 'inbox' | 'runtime' | 'approvals';
 export type WorkflowsRoute = 'hub' | 'meme-lab';
-export type AgentWorkspaceTab = 'messages' | 'tool_activity' | 'artifacts';
 
 const THEME_STORAGE_KEY = 'copenet.themeMode';
 const PINNED_SESSIONS_STORAGE_KEY = 'copenet.pinnedSessionKeys';
@@ -147,8 +146,6 @@ interface AppState {
   setCommandPaletteOpen: (open: boolean) => void;
   rightPanelTab: RightPanelTab;
   setRightPanelTab: (tab: RightPanelTab) => void;
-  agentWorkspaceTab: AgentWorkspaceTab;
-  setAgentWorkspaceTab: (tab: AgentWorkspaceTab) => void;
   inspectorTarget: InspectorTarget | null;
   setInspectorTarget: (target: InspectorTarget | null) => void;
 
@@ -397,8 +394,6 @@ export const useAppStore = create<AppState>((set) => ({
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   rightPanelTab: 'runtime',
   setRightPanelTab: (tab) => set({ rightPanelTab: tab }),
-  agentWorkspaceTab: 'messages',
-  setAgentWorkspaceTab: (tab) => set({ agentWorkspaceTab: tab }),
   inspectorTarget: null,
   setInspectorTarget: (target) => set({ inspectorTarget: target }),
 

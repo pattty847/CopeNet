@@ -25,6 +25,7 @@ import {
   ProviderAuthStatus,
   PublicMessagePayload,
   RuntimeContext,
+  WorkspaceIntelSummary,
   ReturnBriefingPayload,
   ResponseFrame,
   Session,
@@ -237,6 +238,8 @@ function normalizeTool(raw: unknown): ToolDescriptor {
     inputSchema: (payload.inputSchema as Record<string, unknown> | undefined) || {},
     safetyLevel: String(payload.safetyLevel || ''),
     capabilities: Array.isArray(payload.capabilities) ? payload.capabilities.map(String) : [],
+    riskClass: payload.riskClass ? String(payload.riskClass) : undefined,
+    approvalMode: payload.approvalMode ? String(payload.approvalMode) : undefined,
   };
 }
 
@@ -584,7 +587,28 @@ function normalizeRuntimeContext(raw: unknown): RuntimeContext | null {
     fileToolScope: 'workspace_home_visible_roaming',
     shellToolScope: 'cwd_default',
     shellAllowlist: Array.isArray(payload.shellAllowlist) ? payload.shellAllowlist.map(String) : [],
+    workspaceIntel: normalizeWorkspaceIntelSummary(payload.workspaceIntel),
     note: String(payload.note || '').trim(),
+  };
+}
+
+function normalizeWorkspaceIntelSummary(raw: unknown): WorkspaceIntelSummary | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const workspaceRoot = String(payload.workspaceRoot || '').trim();
+  if (!workspaceRoot) return null;
+  const cacheStatus = String(payload.cacheStatus || 'cached').trim();
+  return {
+    workspaceRoot,
+    cacheStatus:
+      cacheStatus === 'fresh' || cacheStatus === 'refreshed' || cacheStatus === 'stale'
+        ? cacheStatus
+        : 'cached',
+    languages: Array.isArray(payload.languages) ? payload.languages.map(String) : [],
+    packageManagers: Array.isArray(payload.packageManagers) ? payload.packageManagers.map(String) : [],
+    recommendedDefaultChecks: Array.isArray(payload.recommendedDefaultChecks)
+      ? payload.recommendedDefaultChecks.map(String)
+      : [],
   };
 }
 
@@ -653,39 +677,8 @@ function normalizeMessage(
   };
 }
 
-function extractFinalCandidateText(raw: string): string | null {
-  function unwrapCandidatePayload(parsed: Record<string, unknown>): Record<string, unknown> | null {
-    const finalType = parsed.state ?? parsed.type;
-    if (finalType === 'FINAL_CANDIDATE') return parsed;
-    const nested = parsed.FINAL_CANDIDATE;
-    if (nested && typeof nested === 'object' && !Array.isArray(nested)) {
-      return { state: 'FINAL_CANDIDATE', ...(nested as Record<string, unknown>) };
-    }
-    return null;
-  }
-
-  const candidate = raw.trim();
-  if (!candidate || (!candidate.startsWith('{') && !candidate.startsWith('```'))) return null;
-  let text = candidate;
-  if (text.startsWith('```')) {
-    const lines = text.split('\n');
-    if (lines.length >= 3 && lines[lines.length - 1]?.trim().startsWith('```')) {
-      text = lines.slice(1, -1).join('\n').trim();
-    }
-  }
-  try {
-    const parsed = JSON.parse(text) as Record<string, unknown>;
-    const payload = unwrapCandidatePayload(parsed);
-    if (!payload) return null;
-    const answer = payload.answer ?? payload.content ?? payload.message ?? payload.response;
-    return typeof answer === 'string' && answer.trim() ? answer : null;
-  } catch {
-    return null;
-  }
-}
-
 export function normalizeAssistantDisplayText(raw: string): string {
-  return extractFinalCandidateText(raw) ?? raw;
+  return raw;
 }
 
 function normalizeMessageParts(raw: unknown): MessagePart[] | null {
@@ -1246,7 +1239,6 @@ class WsClient {
     store.setDraftStarterIntent(null);
     store.setMessages(DRAFT_TRANSCRIPT_SESSION_KEY, []);
     store.setSessionDrawerOpen(false);
-    store.setAgentWorkspaceTab('messages');
     store.setInspectorTarget(null);
     store.clearAppError();
     this.ensureDraftDefaults();

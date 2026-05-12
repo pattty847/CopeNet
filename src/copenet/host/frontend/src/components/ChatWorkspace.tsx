@@ -8,12 +8,9 @@ import { Archive, ArrowDown, ArrowUp, Copy, CopyPlus, Download, Ellipsis, GitMer
 import { ConversationDebugActions } from './ConversationDebugActions';
 import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
-import { AgentWorkspaceTabs } from './agents/AgentWorkspaceTabs';
 import { AgentComposer } from './agents/AgentComposer';
-import { RunActivityPanel } from './runtime/RunActivityPanel';
-import { ArtifactsPanel } from './runtime/ArtifactsPanel';
 import { buildPersonaCommandHelpText, DRAFT_TRANSCRIPT_SESSION_KEY, parsePersonaSlashCommand, resolvePersonaRuntime } from '../lib/personaCommands';
-import { formatConversationMarkdown } from '../lib/chatExport';
+import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown } from '../lib/chatExport';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -38,8 +35,6 @@ export function ChatWorkspace() {
   const profiles = useAppStore((state) => state.profiles);
   const personaSettings = useAppStore((state) => state.personaSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
-  const agentWorkspaceTab = useAppStore((state) => state.agentWorkspaceTab);
-  const setAgentWorkspaceTab = useAppStore((state) => state.setAgentWorkspaceTab);
 
   const messages = (activeSessionKey ? messagesMap[activeSessionKey] : messagesMap[DRAFT_TRANSCRIPT_SESSION_KEY]) || [];
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
@@ -58,6 +53,7 @@ export function ChatWorkspace() {
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
+  const [copiedAction, setCopiedAction] = useState<'chat' | 'chat_activity' | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
@@ -123,7 +119,6 @@ export function ChatWorkspace() {
       errorMessage: null,
       optimistic: false,
     });
-    setAgentWorkspaceTab('messages');
   };
 
   const formatPersonaSummaryReceipt = (summary: Awaited<ReturnType<typeof wsClient.getPersonaSummary>>) => {
@@ -292,8 +287,30 @@ export function ChatWorkspace() {
         modelLabel: runtimeSummary.model,
       });
       await navigator.clipboard.writeText(markdown);
+      setCopiedAction('chat');
+      window.setTimeout(() => setCopiedAction((current) => (current === 'chat' ? null : current)), 1800);
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to copy chat.');
+    }
+  };
+
+  const handleCopyConversationWithToolActivity = async () => {
+    if (!activeSession) return;
+    try {
+      clearAppError();
+      const runs = await wsClient.listSessionRuns(activeSession.key, 200);
+      const markdown = formatConversationWithToolActivityMarkdown({
+        session: activeSession,
+        messages,
+        runs,
+        providerLabel: providerName,
+        modelLabel: runtimeSummary.model,
+      });
+      await navigator.clipboard.writeText(markdown);
+      setCopiedAction('chat_activity');
+      window.setTimeout(() => setCopiedAction((current) => (current === 'chat_activity' ? null : current)), 1800);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to copy chat with tool activity.');
     }
   };
 
@@ -461,6 +478,7 @@ export function ChatWorkspace() {
                 compact={true}
                 onDebugCopy={handleDebugCopy}
                 onCopyConversation={handleCopyConversation}
+                onCopyConversationWithToolActivity={handleCopyConversationWithToolActivity}
                 onExportConversation={handleExportConversation}
                 onCreatePulse={activeSession ? handleCreatePulse : undefined}
                 onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
@@ -492,7 +510,15 @@ export function ChatWorkspace() {
                       className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
                     >
                       <Copy className="w-3.5 h-3.5 shrink-0" />
-                      Copy Chat
+                      {copiedAction === 'chat' ? 'Copied' : 'Copy Chat'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { void handleCopyConversationWithToolActivity(); setActionsOpen(false); }}
+                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
+                    >
+                      <Copy className="w-3.5 h-3.5 shrink-0" />
+                      {copiedAction === 'chat_activity' ? 'Copied' : 'Copy Chat + Tool Activity'}
                     </button>
                     <button
                       type="button"
@@ -577,14 +603,6 @@ export function ChatWorkspace() {
       {/* Working Set — glanceable, pinned above the message stream */}
       {!isMergePrep && <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />}
 
-      <AgentWorkspaceTabs
-        value={agentWorkspaceTab}
-        onChange={setAgentWorkspaceTab}
-        sessionKey={activeSessionKey}
-        isDraft={isDraft}
-      />
-
-      {agentWorkspaceTab === 'messages' && (
       <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-3' : 'px-4 py-4'}`}>
         {messages.length === 0 ? (
           mergeDraft ? (
@@ -756,19 +774,6 @@ export function ChatWorkspace() {
           </div>
         )}
       </div>
-      )}
-
-      {agentWorkspaceTab === 'tool_activity' && (
-        <div className="flex-1 overflow-y-auto">
-          <RunActivityPanel sessionKey={activeSessionKey} isDraft={isDraft} />
-        </div>
-      )}
-
-      {agentWorkspaceTab === 'artifacts' && (
-        <div className="flex-1 overflow-y-auto">
-          <ArtifactsPanel sessionKey={activeSessionKey} isDraft={isDraft} />
-        </div>
-      )}
 
       {/* Composer */}
       <AgentComposer

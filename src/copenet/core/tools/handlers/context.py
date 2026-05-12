@@ -2,7 +2,13 @@
 
 from __future__ import annotations
 
-from copenet.core.tools.contracts import ContextPack, ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
+from copenet.core.tools.contracts import (
+    ContextPack,
+    ToolDescriptor,
+    ToolExecutionContext,
+    ToolExecutionRequest,
+    ToolExecutionResult,
+)
 
 from ._shared import read_guidance
 
@@ -18,7 +24,7 @@ DESCRIPTORS = [
         category="context",
         input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
         capabilities=["session", "guidance", "transcript"],
-    )
+    ),
 ]
 
 
@@ -62,4 +68,6 @@ async def prepare_context(request: ToolExecutionRequest, context: ToolExecutionC
     )
 
 
-HANDLERS = {"context.prepare": prepare_context}
+HANDLERS = {
+    "context.prepare": prepare_context,
+}

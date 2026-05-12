@@ -21,7 +21,6 @@ from copenet.core.tools import (
     ToolDescriptor,
     ToolExecutionRequest,
     ToolExecutionResult,
-    ToolInvocationEnvelope,
     ToolPolicy,
     ToolSpec,
 )
@@ -44,7 +43,6 @@ __all__ = [
     "ToolDescriptor",
     "ToolExecutionRequest",
     "ToolExecutionResult",
-    "ToolInvocationEnvelope",
     "ToolPolicy",
     "ToolSpec",
     "TranscriptStore",

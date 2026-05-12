@@ -18,7 +18,11 @@ from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
-from copenet.core.tools import ToolExecutionContext, policy_for_task_mode
+from copenet.core.tools import (
+    ToolExecutionContext,
+    describe_available_tools,
+    policy_for_task_mode,
+)
 from copenet.core.tracing import RunTraceWriter
 
 if TYPE_CHECKING:
@@ -176,6 +180,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         "personaFlavorId": entry.persona_flavor_id,
         "personaPrivacyTier": entry.persona_privacy_tier,
     }
+    agent_runtime_payload = _build_agent_runtime_payload(
+        session_key=session_key,
+        task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
+        session_state=session_state,
+    )
     effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
     available_tools = [
         tool
@@ -202,8 +211,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 transcript_store=orchestrator._transcript_store,
                 providers=orchestrator._providers,
                 policy=effective_tool_policy,
+                available_tools=available_tools,
                 memory_service=orchestrator._memory_service,
                 profile_service=orchestrator._profile_service,
+                workspace_intel_service=orchestrator._workspace_intel_service,
                 artifact_store=orchestrator._artifact_store,
                 task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
                 run_id=run_id,
@@ -332,6 +343,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             )
 
         assistant_text = "".join(part for part in assistant_parts if part).strip()
+        assistant_message_parts = _normalize_final_message_parts(
+            assistant_message_parts,
+            assistant_text=assistant_text,
+        )
         created_artifact_ids: list[str] = list(persisted_tool_artifact_ids)
         for draft in artifact_drafts:
             created = orchestrator._artifact_store.create(
@@ -409,6 +424,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             assistant_text=assistant_text,
             run_id=run_id,
             plan=plan,
+            task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
             working_set=working_set.metadata,
             tool_execution_payload=tool_execution_payload,
             created_artifact_ids=created_artifact_ids,
@@ -447,6 +463,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "toolCalls": plan.capability_profile.tool_calls,
                     "promptedToolUse": plan.capability_profile.prompted_tool_use,
                 },
+                **agent_runtime_payload,
+                "delegatedTasks": list(agent_runtime_payload.get("delegatedTasks") or []),
+                "toolManifest": describe_available_tools(plan.tools),
+                "toolVisibility": _build_tool_visibility_summary(plan.tools),
+                "policySummary": {
+                    "allowedCategories": sorted(effective_tool_policy.allowed_categories),
+                    "shellAllowlist": list(effective_tool_policy.shell_allowlist),
+                },
                 "workspaceRoot": str(session_workspace_root),
                 "turnState": dict(latest_turn_state),
                 "identityContext": dict(identity_context_payload),
@@ -462,47 +486,65 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "artifactCount": len(run_record.artifact_ids),
             },
         )
-        profile_changes = orchestrator._profile_service.apply_post_run_updates(
-            user_message=message,
-            run_record=run_record,
-        )
-        memory_changes = orchestrator._memory_service.extract_from_run(
-            user_message=message,
-            run_record=run_record,
-        )
-        if memory_changes.created:
+        profile_changes = []
+        try:
+            profile_changes = orchestrator._profile_service.apply_post_run_updates(
+                user_message=message,
+                run_record=run_record,
+            )
+        except Exception as exc:
+            trace.record("post_run_side_effect_failed", {"stage": "profile", "error": str(exc)})
+        memory_created = []
+        try:
+            memory_changes = orchestrator._memory_service.extract_from_run(
+                user_message=message,
+                run_record=run_record,
+            )
+            memory_created = list(memory_changes.created)
+        except Exception as exc:
+            trace.record("post_run_side_effect_failed", {"stage": "memory", "error": str(exc)})
+        if memory_created:
             trace.record(
                 "memory_extracted",
                 {
-                    "count": len(memory_changes.created),
-                    "itemIds": [item.id for item in memory_changes.created],
-                    "categories": [item.category for item in memory_changes.created],
+                    "count": len(memory_created),
+                    "itemIds": [item.id for item in memory_created],
+                    "categories": [item.category for item in memory_created],
                 },
             )
         if emit_event is not None and profile_changes:
-            profile_payload = orchestrator.get_pat_profile()
-            for item in profile_changes:
-                await emit_event(
-                    "profile.changed",
-                    {
-                        "profile": profile_payload,
-                        "change": item.to_json(),
-                    },
-                )
-        if emit_event is not None and memory_changes.created:
-            for item in memory_changes.created:
-                await emit_event(
-                    "memory.changed",
-                    {
-                        "item": item.to_public_dict(),
-                        "reason": "run_extraction",
-                        "sessionKey": session_key,
-                        "runId": run_id,
-                    },
-                )
-        briefing_payload = orchestrator.get_return_briefing()
-        if emit_event is not None and briefing_payload is not None:
-            await emit_event("briefing.ready", {"briefing": briefing_payload})
+            try:
+                profile_payload = orchestrator.get_pat_profile()
+                for item in profile_changes:
+                    await emit_event(
+                        "profile.changed",
+                        {
+                            "profile": profile_payload,
+                            "change": item.to_json(),
+                        },
+                    )
+            except Exception as exc:
+                trace.record("post_run_side_effect_failed", {"stage": "profile_emit", "error": str(exc)})
+        if emit_event is not None and memory_created:
+            try:
+                for item in memory_created:
+                    await emit_event(
+                        "memory.changed",
+                        {
+                            "item": item.to_public_dict(),
+                            "reason": "run_extraction",
+                            "sessionKey": session_key,
+                            "runId": run_id,
+                        },
+                    )
+            except Exception as exc:
+                trace.record("post_run_side_effect_failed", {"stage": "memory_emit", "error": str(exc)})
+        try:
+            briefing_payload = orchestrator.get_return_briefing()
+            if emit_event is not None and briefing_payload is not None:
+                await emit_event("briefing.ready", {"briefing": briefing_payload})
+        except Exception as exc:
+            trace.record("post_run_side_effect_failed", {"stage": "briefing", "error": str(exc)})
 
         seq += 1
         final_payload = {
@@ -528,6 +570,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "toolExecution": tool_execution_payload,
             "turnState": latest_turn_state or None,
             "identityContext": identity_context_payload,
+            "agentContext": agent_runtime_payload,
         }
         await emit(final_payload)
         trace.record(
@@ -573,7 +616,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             tool_results=normalized_tool_results,
             pending_input_count=int(latest_turn_state.get("pendingInputCount") or 0),
             oversized_tool_artifact_ids=list(persisted_tool_artifact_ids),
-            metadata={"workspaceRoot": str(session_workspace_root)} if "session_workspace_root" in locals() else {},
+            metadata=(
+                {
+                    "workspaceRoot": str(session_workspace_root),
+                    **agent_runtime_payload,
+                }
+                if "session_workspace_root" in locals() and "plan" in locals()
+                else ({"workspaceRoot": str(session_workspace_root)} if "session_workspace_root" in locals() else {})
+            ),
         )
         orchestrator._run_store.create(failed_run)
         trace.record(
@@ -611,6 +661,7 @@ def _evolve_session_state(
     assistant_text: str,
     run_id: str,
     plan,
+    task_prompt_id: str | None,
     working_set: dict,
     tool_execution_payload: dict | None,
     created_artifact_ids: list[str],
@@ -641,6 +692,11 @@ def _evolve_session_state(
     goals = list(session_state.goals)
     if session_state.starter_intent and focus:
         goals = _append_unique(goals, [focus])[-6:]
+    agent_runtime = _build_agent_runtime_payload(
+        session_key=session_state.session_key,
+        task_prompt_id=task_prompt_id,
+        session_state=session_state,
+    )
     return SessionStateRecord(
         session_key=session_state.session_key,
         task_summary=focus or session_state.task_summary,
@@ -662,6 +718,9 @@ def _evolve_session_state(
             "runId": run_id,
             "toolExecutionMode": plan.tool_execution_mode,
             "willAttemptToolLoop": plan.will_attempt_tool_loop,
+            "taskPromptId": task_prompt_id,
+            **agent_runtime,
+            "toolManifest": describe_available_tools(plan.tools),
         },
         relevant_asset_ids=list(session_state.relevant_asset_ids),
         relevant_artifact_ids=relevant_artifact_ids,
@@ -686,6 +745,57 @@ def _append_text_part(parts: list[dict], text: str) -> None:
         parts[-1]["text"] = f"{parts[-1].get('text') or ''}{text}"
         return
     parts.append({"kind": "text", "text": text})
+
+
+def _normalize_final_message_parts(parts: list[dict], *, assistant_text: str) -> list[dict]:
+    if not assistant_text:
+        return [dict(part) for part in parts]
+    non_text_parts = [dict(part) for part in parts if part.get("kind") != "text"]
+    if not non_text_parts:
+        return [{"kind": "text", "text": assistant_text}]
+    normalized: list[dict] = []
+    inserted_text = False
+    for part in parts:
+        if part.get("kind") == "text":
+            if inserted_text:
+                continue
+            normalized.append({"kind": "text", "text": assistant_text})
+            inserted_text = True
+            continue
+        normalized.append(dict(part))
+    if not inserted_text:
+        normalized.insert(0, {"kind": "text", "text": assistant_text})
+    return normalized
+
+
+def _build_tool_visibility_summary(tools: list[Any]) -> dict[str, list[str]]:
+    visible = [str(tool.id) for tool in tools]
+    auto_allowed = [str(tool.id) for tool in tools if getattr(tool, "manifest_permission", lambda: "")() == "auto_allowed"]
+    policy_gated = [str(tool.id) for tool in tools if getattr(tool, "manifest_permission", lambda: "")() == "policy_gated"]
+    return {
+        "visibleToolIds": visible,
+        "autoAllowedToolIds": auto_allowed,
+        "policyGatedToolIds": policy_gated,
+    }
+
+
+def _build_agent_runtime_payload(
+    *,
+    session_key: str,
+    task_prompt_id: str | None,
+    session_state: SessionStateRecord,
+) -> dict[str, object]:
+    raw_tasks = session_state.plan_snapshot.get("delegatedTasks") if isinstance(session_state.plan_snapshot, dict) else []
+    delegated_tasks = [dict(item) for item in raw_tasks] if isinstance(raw_tasks, list) else []
+    permission_mode = "workspace_write" if (task_prompt_id or "").strip().lower() == "full-access" else "read_only"
+    return {
+        "agentId": f"lead:{session_key}",
+        "parentAgentId": None,
+        "agentRole": "lead",
+        "permissionMode": permission_mode,
+        "planModeRequired": False,
+        "delegatedTasks": delegated_tasks,
+    }
 
 
 def _normalize_tool_step(tool_payload: dict) -> dict:
@@ -752,12 +862,11 @@ def _build_identity_memory_overlay(
         query=query,
     )
     identity_payload = orchestrator._profile_service.build_identity_prompt_payload(
-        include_briefing=plan.interaction_class in {"agent", "risky"}
+        include_briefing=plan.will_attempt_tool_loop
     )
     memory_payload = orchestrator._memory_service.build_prompt_payload(
         query=query,
-        interaction_class=plan.interaction_class,
-        limit=3 if plan.interaction_class in {"agent", "risky", "advisory"} else 1,
+        limit=3 if plan.will_attempt_tool_loop else 1,
     )
     sink["profileActive"] = bool(identity_payload.stable_identity)
     sink["memoryCount"] = len(memory_payload.memory_items)

@@ -15,9 +15,8 @@ copenet/
 │   │   └── app_store.py               ← external-app registry (bearer tokens, mappings)
 │   ├── harness/
 │   │   ├── capabilities.py            ← capability profiles and routing
-│   │   ├── planning.py                ← turn planning ahead of provider execution
-│   │   ├── final_gate.py              ← final-answer gating heuristics
-│   │   └── tool_loop.py               ← tool invocation loop and TOOL_BATCH split
+│   │   ├── planning.py                ← provider capability plan ahead of execution
+│   │   └── tool_loop.py               ← native provider tool-call loop
 │   ├── media/
 │   │   ├── downloader.py              ← yt-dlp / URL fetch
 │   │   ├── transcriber.py             ← audio transcription
@@ -67,9 +66,14 @@ copenet/
 │   │       ├── shell.py               ← shell.exec
 │   │       ├── context.py             ← context.prepare
 │   │       ├── artifacts.py           ← artifact.create
+│   │       ├── workspace_intel.py     ← repo.map + test.discover
 │   │       └── _shared.py
 │   ├── tracing/
 │   │   └── __init__.py                ← RunTraceWriter
+│   ├── workspace_intel/
+│   │   ├── models.py                  ← workspace intel DTOs
+│   │   ├── service.py                 ← repo mapping + verification discovery
+│   │   └── store.py                   ← durable workspace cache
 │   ├── knowledge_runtime.py           ← knowledge runtime entrypoint (Meme Lab and friends)
 │   ├── meme_ideation.py               ← Meme Lab ideation API
 │   ├── meme_knowledge.py              ← Meme knowledge index
@@ -164,9 +168,9 @@ core/orchestrator/runtime.send_chat
         |
         v
 ChatHarness.run_turn  (core/harness/)
-  - choose capability profile
-  - normalize provider execution path
-  - drive tool loop (capabilities → planning → tool_loop → final_gate)
+  - capability normalization
+  - native tool-loop selection when provider tool calls are available
+  - direct provider passthrough for CLI and non-native providers
         |
         v
 Provider  (providers/)
@@ -212,6 +216,24 @@ Provider responsibilities:
 - (subscription providers) exposing an `auth_service` for the `providerAuth.*` RPCs
 
 The browser UI consumes provider and model catalogs so the user can start a session with a specific runtime/model pair. See [CAPABILITY-MATRIX.md](CAPABILITY-MATRIX.md) for tool-loop and feature support per provider.
+
+## Harness Control Model
+
+CopeNet is moving toward a model-driven harness with runtime-enforced policy. The active design note is [Model-Driven Harness, Policy-Enforced Runtime](roadmaps/model-driven-harness-policy-runtime.md).
+
+The operating rule is:
+
+- **Mode controls context**
+- **Policy controls authority**
+- **Model controls reasoning**
+
+In practice that means:
+
+- the harness exposes the policy-visible capability surface
+- the model decides when repo inspection, planning, or edits are useful
+- the runtime still enforces what is actually allowed
+
+`core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects only between native tool calling and plain provider passthrough.
 
 ## Session Model
 

@@ -218,8 +218,6 @@ class ProbeBundle:
     tool_execution_mode: str = "none"
     tool_protocol: str = "plain_chat"
     oversized_tool_artifact_ids: list[str] = field(default_factory=list)
-    final_rejection_count: int = 0
-    final_gate_reason: str = ""
     evidence_ledger: dict[str, Any] = field(default_factory=dict)
     bundle_dir: str | None = None
     debug_copy_validation: dict[str, Any] | None = None
@@ -254,8 +252,6 @@ class ProbeBundle:
             "tool_execution_mode": self.tool_execution_mode,
             "tool_protocol": self.tool_protocol,
             "oversized_tool_artifact_ids": list(self.oversized_tool_artifact_ids),
-            "final_rejection_count": self.final_rejection_count,
-            "final_gate_reason": self.final_gate_reason,
             "evidence_ledger": dict(self.evidence_ledger),
             "debug_copy_validation": dict(self.debug_copy_validation) if isinstance(self.debug_copy_validation, dict) else None,
         }
@@ -326,7 +322,7 @@ def build_runtime_probe_specs() -> list[ProbeSpec]:
             prompt="Use tools to inspect the repository and explain the setup path, but do not answer until you have at least two meaningful grounded tool steps.",
         ),
         ProbeSpec(
-            name="final_gate_rejection_probe",
+            name="grounded_answer_probe",
             prompt="Give a compact answer quickly if you can, but only after using enough grounded tool evidence to explain the repository architecture and setup path.",
         ),
         ProbeSpec(
@@ -387,8 +383,6 @@ def classify_probe_bundle(
         else ("prompted_tool_use" if tool_execution_mode in {"single", "batch"} else "plain_chat")
     )
     turn_state = _turn_state_metadata(run_record)
-    final_rejection_count = int(turn_state.get("finalRejectionCount") or 0)
-    final_gate_reason = str(turn_state.get("lastFinalGateReasonCode") or "").strip()
     evidence_ledger = dict(turn_state.get("evidenceLedger") or {}) if isinstance(turn_state.get("evidenceLedger"), dict) else {}
     oversized_tool_artifact_ids = [
         str(value).strip()
@@ -402,12 +396,6 @@ def classify_probe_bundle(
     classification = "plain_chat_success"
     if status != "ok":
         classification = "runtime_error"
-    elif final_rejection_count > 0 and status == "ok":
-        classification = "rejected_final_then_recovered"
-    elif final_gate_reason == "missing_verification":
-        classification = "missing_verification"
-    elif final_gate_reason in {"missing_grounding", "missing_file_evidence", "missing_patch_evidence", "finalized_before_threshold", "reconnaissance_saturation"}:
-        classification = final_gate_reason
     elif used_batch:
         classification = "batch_success"
     elif len(tool_ids) > 1:
@@ -492,8 +480,6 @@ def classify_probe_bundle(
         "tool_execution_mode": tool_execution_mode,
         "tool_protocol": tool_protocol,
         "oversized_tool_artifact_ids": oversized_tool_artifact_ids,
-        "final_rejection_count": final_rejection_count,
-        "final_gate_reason": final_gate_reason,
         "evidence_ledger": evidence_ledger,
     }
 
@@ -590,8 +576,6 @@ def write_probe_bundle(root_dir: Path, bundle: ProbeBundle) -> Path:
             "transition_reason": bundle.transition_reason,
             "terminal_reason": bundle.terminal_reason,
             "oversized_tool_artifact_ids": bundle.oversized_tool_artifact_ids,
-            "final_rejection_count": bundle.final_rejection_count,
-            "final_gate_reason": bundle.final_gate_reason,
             "evidence_ledger": bundle.evidence_ledger,
         }
     )

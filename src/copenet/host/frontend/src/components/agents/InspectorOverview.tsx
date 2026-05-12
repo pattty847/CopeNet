@@ -1,6 +1,6 @@
 import type React from 'react';
-import { Brain, FolderOpen, Info, Package, Send, Settings2, ShieldAlert } from 'lucide-react';
-import { useArtifacts, useDestinations, usePendingApproval } from '../../runtime/adapter';
+import { Brain, Info, Network, Send, Settings2 } from 'lucide-react';
+import { useDestinations, usePendingApproval } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
 
@@ -41,12 +41,10 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   const memoryItems = useAppStore((state) => state.memoryItems);
   const lastMemoryChange = useAppStore((state) => state.lastMemoryChange);
   const sessionIdentityUsage = useAppStore((state) => state.sessionIdentityUsage);
-  const setAgentWorkspaceTab = useAppStore((state) => state.setAgentWorkspaceTab);
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
   const messages = activeSessionKey ? messagesMap[activeSessionKey] || [] : [];
   const isDraft = !activeSession;
   const pendingApproval = usePendingApproval(activeSessionKey);
-  const artifactsResource = useArtifacts(isDraft ? null : activeSessionKey);
   const destinations = useDestinations();
   const currentProvider = isDraft ? draftSettings.provider : activeSession?.provider || '';
   const currentProfile = isDraft ? draftSettings.systemPromptId : activeSession?.systemPromptId || '';
@@ -55,7 +53,6 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   const providerName = providers.find((provider) => provider.id === currentProvider)?.displayName || currentProvider || 'None';
   const profileName = profiles.find((profile) => profile.id === currentProfile)?.name || currentProfile || 'Default';
   const taskModeName = taskModes.find((mode) => mode.id === currentTaskMode)?.name || currentTaskMode || 'None';
-  const artifacts = artifactsResource.status === 'ready' && artifactsResource.data ? artifactsResource.data : [];
   const identityUsage = activeSessionKey ? sessionIdentityUsage[activeSessionKey] || null : null;
   const personaLabel = isDraft
     ? draftSettings.personaFlavorId || draftSettings.personaId || 'default'
@@ -66,6 +63,7 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   const sessionMemoryChange = lastMemoryChange && (!activeSessionKey || !lastMemoryChange.sessionKey || lastMemoryChange.sessionKey === activeSessionKey)
     ? lastMemoryChange
     : null;
+  const workspaceIntel = runtimeContext?.workspaceIntel || null;
 
   return (
     <div className={`${overviewOnly ? 'px-3 py-3' : 'px-2.5 pb-2.5'} flex flex-col gap-3 text-[12px]`}>
@@ -134,33 +132,41 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
           <div className="text-[11px] text-operator-muted/85 italic">Identity stays available in the background. Relevant memory appears here after a run uses it.</div>
         )}
       </Section>
-      <Section icon={Package} title={`Artifacts${artifacts.length ? ` · ${artifacts.length}` : ''}`}>
-        {artifacts.length === 0 ? (
-          <div className="text-[11px] text-operator-muted/85 italic">No session artifacts yet.</div>
-        ) : (
-          <div className="space-y-1.5">
-            {artifacts.slice(0, 3).map((artifact) => (
-              <button
-                key={artifact.id}
-                type="button"
-                onClick={() => setAgentWorkspaceTab('artifacts')}
-                className="w-full text-left rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-1.5 transition-colors hover:border-operator-accent/30 hover:bg-operator-panel/55"
-              >
-                <div className="truncate text-[12px] font-medium text-operator-text">{artifact.title}</div>
-                <div className="mt-0.5 truncate text-[10.5px] text-operator-muted/85">{artifact.oneLine}</div>
-              </button>
-            ))}
-            {artifacts.length > 3 && (
-              <button
-                type="button"
-                onClick={() => setAgentWorkspaceTab('artifacts')}
-                className="inline-flex items-center gap-1.5 pt-0.5 text-[11px] font-semibold text-operator-accent transition-colors hover:text-operator-text"
-              >
-                <FolderOpen className="h-3 w-3" />
-                View all {artifacts.length} artifacts
-              </button>
+      <Section icon={Network} title="Workspace Intelligence">
+        {workspaceIntel ? (
+          <div className="space-y-2">
+            <div className="rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="text-[11px] font-medium text-operator-text">Workspace signals detected</div>
+                <div className="text-[10px] text-operator-muted/65">
+                  {workspaceIntel.cacheStatus}
+                </div>
+              </div>
+              <div className="mt-1 break-all font-mono text-[10px] leading-4 text-operator-muted/85">
+                {workspaceIntel.workspaceRoot}
+              </div>
+            </div>
+            <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
+              <dt className="text-operator-muted">Stack</dt>
+              <dd className="text-right text-operator-text">{workspaceIntel.languages.join(', ') || 'Unknown'}</dd>
+              <dt className="text-operator-muted">Packages</dt>
+              <dd className="text-right text-operator-text">{workspaceIntel.packageManagers.join(', ') || 'Unknown'}</dd>
+            </dl>
+            {workspaceIntel.recommendedDefaultChecks.length > 0 ? (
+              <div className="space-y-1.5">
+                {workspaceIntel.recommendedDefaultChecks.slice(0, 3).map((command) => (
+                  <div key={command} className="rounded-lg border border-operator-border bg-operator-panel/20 px-2.5 py-1.5">
+                    <div className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-operator-muted/75">Recommended check</div>
+                    <div className="mt-0.5 break-all font-mono text-[10px] leading-4 text-operator-text/90">{command}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-[11px] text-operator-muted/85 italic">No recommended checks detected yet.</div>
             )}
           </div>
+        ) : (
+          <div className="text-[11px] text-operator-muted/85 italic">Workspace mapping has not been loaded yet for this runtime.</div>
         )}
       </Section>
 
@@ -192,8 +198,6 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
           <dd className="text-right text-operator-text tabular-nums">{timeAgo(activeSession?.updatedAt)}</dd>
           <dt className="text-operator-muted">Messages</dt>
           <dd className="text-right text-operator-text tabular-nums">{messages.length}</dd>
-          <dt className="text-operator-muted">Artifacts</dt>
-          <dd className="text-right text-operator-text tabular-nums">{artifacts.length}</dd>
         </dl>
       </Section>
     </div>

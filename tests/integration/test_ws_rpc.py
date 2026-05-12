@@ -70,6 +70,7 @@ class PromptedToolProvider:
         self.tool_json = tool_json
         self.follow_up = follow_up
         self.prompts: list[str] = []
+        self.native_calls = 0
 
     async def run(
         self,
@@ -87,6 +88,48 @@ class PromptedToolProvider:
         yield ProviderEvent(kind="delta", text=self.follow_up, provider_session_id=provider_session_id or f"{self.name}-session")
         yield ProviderEvent(kind="final")
 
+    async def chat_completion(
+        self,
+        *,
+        messages: list[dict],
+        model: str | None,
+        tools: list[dict] | None = None,
+        tool_choice: str | dict | None = None,
+    ) -> dict:
+        del messages, model, tools, tool_choice
+        self.native_calls += 1
+        if self.native_calls == 1:
+            parsed = json.loads(self.tool_json)
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": "call-1",
+                                    "type": "function",
+                                    "function": {
+                                        "name": parsed["tool_id"],
+                                        "arguments": json.dumps(parsed.get("arguments") or {}),
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        return {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": self.follow_up},
+                }
+            ]
+        }
+
     async def describe(self) -> dict[str, Any]:
         return {
             "id": self.name,
@@ -95,7 +138,7 @@ class PromptedToolProvider:
             "capabilities": {
                 "chat": True,
                 "streaming": True,
-                "toolCalls": False,
+                "toolCalls": True,
                 "promptedToolUse": True,
             },
         }
@@ -400,7 +443,9 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "git.status",
             "memory.read",
             "memory.write",
+            "repo.map",
             "shell.exec",
+            "test.discover",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
 
@@ -420,6 +465,8 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
         runtime_context = socket.recv_response(runtime_context_id)
         assert runtime_context["payload"]["runtimeContext"]["workspaceRoot"] == str(tmp_path)
         assert runtime_context["payload"]["runtimeContext"]["fileToolScope"] == "workspace_home_visible_roaming"
+        assert runtime_context["payload"]["runtimeContext"]["workspaceIntel"]["workspaceRoot"] == str(tmp_path)
+        assert runtime_context["payload"]["runtimeContext"]["workspaceIntel"]["recommendedDefaultChecks"] == []
 
         set_workspace_id = socket.request("runtime.workspace.set", {"workspaceRoot": str(tmp_path)})
         set_workspace_response = socket.recv_response(set_workspace_id)
@@ -799,6 +846,10 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         assert runs[0]["toolSteps"][0]["toolId"] == "files.read"
         assert runs[0]["toolSteps"][0]["scope"] == "inside_workspace"
         assert runs[0]["metadata"]["workspaceRoot"] == str(tmp_path)
+        assert runs[0]["metadata"]["agentRole"] == "lead"
+        assert runs[0]["metadata"]["permissionMode"] == "read_only"
+        assert any(tool["id"] == "repo.map" for tool in runs[0]["metadata"]["toolManifest"])
+        assert all(tool["id"] not in {"tools.describe", "patch.plan"} for tool in runs[0]["metadata"]["toolManifest"])
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})
         run_detail = socket.recv_response(run_detail_id)

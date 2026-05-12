@@ -4,11 +4,11 @@ This is the current provider/runtime capability matrix. It should be updated whe
 
 | Provider        | Model Listing | Model Selection | Streams Deltas              | Resume Support | Tool Loop                | Auth Expectation                                          | Local / Offline | Structured Output Reliability     |
 |-----------------|---------------|-----------------|-----------------------------|----------------|--------------------------|-----------------------------------------------------------|-----------------|-----------------------------------|
-| `codex-cli`     | No            | Provider-managed | Yes                        | Yes            | Yes (native)             | Codex CLI installed and authenticated                     | No              | High for CopeNet prompted tool use |
-| `claude-cli`    | Yes (static)  | Yes             | Yes                         | Yes            | Yes (CLI-managed)        | `claude` CLI on PATH and authenticated                    | No              | High when CLI tool exec is allowed |
+| `codex-cli`     | No            | Provider-managed | Yes                        | Yes            | Provider-managed         | Codex CLI installed and authenticated                     | No              | Provider-managed                   |
+| `claude-cli`    | Yes (static)  | Yes             | Yes                         | Yes            | Provider-managed         | `claude` CLI on PATH and authenticated                    | No              | Provider-managed                   |
 | `openai-codex`  | No            | Provider-managed | Yes                        | Provider-managed | Yes (native)           | OAuth via `uv run copenet auth login --provider openai-codex` | No          | High                              |
-| `lm-studio`     | Yes           | Yes             | Yes                         | No             | Prompted                 | LM Studio local server running                            | Yes             | Medium; model-dependent           |
-| `ollama`        | Yes           | Yes             | Yes, but may batch into one chunk | No       | Prompted                 | Ollama daemon running                                     | Yes             | Medium; model-dependent           |
+| `lm-studio`     | Yes           | Yes             | Yes                         | No             | Yes (native, when exposed) | LM Studio local server running                          | Yes             | Model-dependent                    |
+| `ollama`        | Yes           | Yes             | Yes, but may batch into one chunk | No       | No CopeNet-managed loop  | Ollama daemon running                                     | Yes             | Model-dependent                    |
 
 ## Notes
 
@@ -36,21 +36,22 @@ This is the current provider/runtime capability matrix. It should be updated whe
 - local HTTP runtime using an OpenAI-style API surface
 - can expose both chat and embedding models
 - good fit for private/local interactive use
-- uses CopeNet prompted tool use rather than native runtime tool calls
+- uses CopeNet-managed tools only when the adapter exposes native tool calls
 
 ### `ollama`
 
 - local HTTP runtime
 - model metadata is available through `/api/tags`
 - delta streaming behavior may appear coarser than LM Studio
-- uses CopeNet prompted tool use rather than native runtime tool calls
+- currently streams through provider passthrough for CopeNet-managed turns
 
 ## Meaning Of "Tool Loop"
 
 In this matrix, "Tool Loop" means the provider currently participates in CopeNet's tool-enabled turn path, not just that the underlying model might be able to follow tool instructions in principle.
 
-- `codex-cli`, `claude-cli`, and `openai-codex` route tool execution through the CLI/API itself (native).
-- `lm-studio` and `ollama` use CopeNet's prompted tool path, so reliability depends on whether the selected local model emits the requested JSON invocation cleanly.
+- `openai-codex` and compatible local HTTP runtimes use native tool calls when their adapter exposes `chat_completion`.
+- `codex-cli` and `claude-cli` are provider-managed: CopeNet streams their output and does not run a second tool loop around them.
+- Providers without native tool-call support are plain provider passthrough.
 
 ## Meaning Of "Structured Output Reliability"
 

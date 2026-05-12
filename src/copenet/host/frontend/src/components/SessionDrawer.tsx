@@ -293,7 +293,6 @@ export function SessionDrawer() {
     closeDrawerAndThen(() => {
       setDraftOpen(false);
       setMergeDraft(null);
-      useAppStore.getState().setAgentWorkspaceTab('messages');
       useAppStore.getState().setInspectorTarget(null);
       setActiveSessionKey(sessionKey);
     });
@@ -314,7 +313,6 @@ export function SessionDrawer() {
       setActiveSessionKey(null);
       setSessionSelectMode(false);
       clearSelectedSessionKeys();
-      useAppStore.getState().setAgentWorkspaceTab('messages');
       useAppStore.getState().setInspectorTarget(null);
     });
   };

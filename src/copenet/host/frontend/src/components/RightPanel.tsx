@@ -2,9 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { DraftSettings } from '../types/backend';
-import { Activity, Brain, Info, Inbox, Settings2, ChevronLeft, ChevronRight, Package, Layers, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
-import { ArtifactsPanel } from './runtime/ArtifactsPanel';
-import { RunActivityPanel } from './runtime/RunActivityPanel';
+import { Activity, Brain, Info, Inbox, Settings2, ChevronLeft, ChevronRight, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
 import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { ApprovalQueuePanel } from './ApprovalQueuePanel';
@@ -169,16 +167,14 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
   const tabs: { id: RightPanelTab; label: string; icon: typeof Activity; badge?: number }[] = [
     { id: 'inbox', label: 'Inbox', icon: Inbox, badge: urgentCount || undefined },
     { id: 'runtime', label: 'Runtime', icon: Settings2 },
-    { id: 'artifacts', label: 'Artifacts', icon: Package },
-    { id: 'activity', label: 'Activity', icon: Layers },
     { id: 'approvals', label: 'Approvals', icon: ShieldAlert, badge: pendingCount || undefined },
   ];
 
   const tabLabels = useMemo(() => {
     if (panelWidth > 460) {
-      return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Artifacts', activity: 'Activity', approvals: 'Approvals' } as const;
+      return { inbox: 'Inbox', runtime: 'Runtime', approvals: 'Approvals' } as const;
     }
-    return { inbox: 'Inbox', runtime: 'Runtime', artifacts: 'Files', activity: 'Runs', approvals: 'Queue' } as const;
+    return { inbox: 'Inbox', runtime: 'Runtime', approvals: 'Queue' } as const;
   }, [panelWidth]);
   const compactTabs = !mobile && panelWidth > 0 && panelWidth < 320;
   const iconOnlyTabs = !compactTabs && !mobile && panelWidth > 0 && panelWidth < 430;
@@ -226,8 +222,6 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
         </button>
         {railBtn('inbox', Inbox, 'Inbox')}
         {railBtn('runtime', Settings2, 'Runtime')}
-        {railBtn('artifacts', Package, 'Artifacts')}
-        {railBtn('activity', Layers, 'Activity')}
         {railBtn('approvals', ShieldAlert, 'Approvals')}
         <div className="mt-auto">
           <span className="relative flex h-2 w-2">
@@ -332,12 +326,6 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
       <div className="flex-1 overflow-y-auto">
         {rightPanelTab === 'inbox' && (
           <OperatorActionCenter sessionKey={activeSessionKey} />
-        )}
-        {rightPanelTab === 'artifacts' && (
-          <ArtifactsPanel sessionKey={activeSessionKey} isDraft={isDraft} />
-        )}
-        {rightPanelTab === 'activity' && (
-          <RunActivityPanel sessionKey={activeSessionKey} isDraft={isDraft} />
         )}
         {rightPanelTab === 'approvals' && (
           <ApprovalQueuePanel sessionKey={activeSessionKey} />
@@ -447,17 +435,6 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
                   title={displayedWorkspaceRoot || 'Workspace root unavailable'}
                 >
                   {displayedWorkspaceRoot || 'Workspace root unavailable'}
-                </div>
-                <div className="flex flex-wrap gap-1">
-                  <span className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-muted" title="Reads may roam outside the home workspace.">
-                    roam reads
-                  </span>
-                  <span className="rounded-full border border-operator-error/22 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-error" title="Outside-root writes are blocked in v1.">
-                    writes blocked
-                  </span>
-                  <span className="rounded-full border border-fuchsia-400/22 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-fuchsia-300" title="Shell commands with unclear side effects are surfaced as risk.">
-                    shell risk
-                  </span>
                 </div>
               </div>
 

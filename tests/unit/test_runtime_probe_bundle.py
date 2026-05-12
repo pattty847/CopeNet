@@ -418,10 +418,10 @@ def test_render_probe_report_lists_ungrounded_answers_as_failures() -> None:
     assert "### ungrounded_repo_answer" in report
 
 
-def test_classify_probe_bundle_flags_rejected_final_then_recovered() -> None:
+def test_classify_probe_bundle_uses_tool_steps_after_plain_text_completion() -> None:
     spec = ProbeSpec(name="architecture_setup_probe", prompt="Explain architecture")
 
-    recovered = classify_probe_bundle(
+    classified = classify_probe_bundle(
         probe=spec,
         run_record={
             "status": "ok",
@@ -433,8 +433,6 @@ def test_classify_probe_bundle_flags_rejected_final_then_recovered() -> None:
             "terminalReason": "completed",
             "metadata": {
                 "turnState": {
-                    "finalRejectionCount": 1,
-                    "lastFinalGateReasonCode": "missing_file_evidence",
                     "evidenceLedger": {
                         "groundingActions": ["files.read"],
                     },
@@ -451,13 +449,13 @@ def test_classify_probe_bundle_flags_rejected_final_then_recovered() -> None:
         trace_path=None,
     )
 
-    assert recovered["classification"] == "rejected_final_then_recovered"
+    assert classified["classification"] == "multi_tool_success"
 
 
-def test_classify_probe_bundle_flags_missing_verification() -> None:
+def test_classify_probe_bundle_does_not_infer_missing_verification_from_plain_text() -> None:
     spec = ProbeSpec(name="patch_verify_probe", prompt="Patch and verify the harness behavior")
 
-    missing_verification = classify_probe_bundle(
+    classified = classify_probe_bundle(
         probe=spec,
         run_record={
             "status": "ok",
@@ -469,8 +467,6 @@ def test_classify_probe_bundle_flags_missing_verification() -> None:
             "terminalReason": "completed",
             "metadata": {
                 "turnState": {
-                    "finalRejectionCount": 0,
-                    "lastFinalGateReasonCode": "missing_verification",
                     "evidenceLedger": {
                         "groundingActions": ["files.read"],
                         "visitedTools": ["files.read", "patch.apply"],
@@ -483,4 +479,4 @@ def test_classify_probe_bundle_flags_missing_verification() -> None:
         trace_path=None,
     )
 
-    assert missing_verification["classification"] == "missing_verification"
+    assert classified["classification"] == "multi_tool_success"

@@ -12,6 +12,7 @@ from copenet.core.sessions import SessionStore, TranscriptStore
 if TYPE_CHECKING:
     from copenet.core.memory import MemoryService
     from copenet.core.profile import PatProfileService
+    from copenet.core.workspace_intel import WorkspaceIntelService
 
 
 ToolCategory = Literal["repo-read", "repo-write", "shell-read", "context", "artifact", "mcp"]
@@ -42,6 +43,8 @@ class ToolDescriptor:
             "inputSchema": self.input_schema,
             "safetyLevel": self.safety_level,
             "capabilities": list(self.capabilities),
+            "riskClass": self.manifest_risk(),
+            "approvalMode": self.manifest_permission(),
         }
 
     def to_openai_tool(self) -> dict[str, Any]:
@@ -55,6 +58,26 @@ class ToolDescriptor:
                 "parameters": schema,
             },
         }
+
+    def manifest_risk(self) -> str:
+        """Return a compact risk label for the tool manifest."""
+        if self.category == "repo-read":
+            return "read"
+        if self.category == "context":
+            return "context"
+        if self.category == "shell-read":
+            return "shell"
+        if self.category == "repo-write":
+            return "write"
+        if self.category == "artifact":
+            return "artifact"
+        return "external"
+
+    def manifest_permission(self) -> str:
+        """Return the high-level approval posture for the tool manifest."""
+        if self.category in {"repo-read", "context"} and self.safety_level == "safe":
+            return "auto_allowed"
+        return "policy_gated"
 
 
 ToolSpec = ToolDescriptor
@@ -154,40 +177,6 @@ class ToolExecutionResult:
 
 
 @dataclass(frozen=True)
-class ToolInvocationEnvelope:
-    """Structured model-produced tool invocation envelope."""
-
-    tool_id: str
-    arguments: dict[str, Any] = field(default_factory=dict)
-
-    def to_request(self) -> ToolExecutionRequest:
-        """Normalize into a tool execution request."""
-        return ToolExecutionRequest(tool_id=self.tool_id, arguments=dict(self.arguments))
-
-
-@dataclass(frozen=True)
-class ToolBatchEnvelope:
-    """Structured model-produced batched tool invocation envelope."""
-
-    calls: list[ToolInvocationEnvelope] = field(default_factory=list)
-
-    def to_requests(self) -> list[ToolExecutionRequest]:
-        """Normalize into tool execution requests."""
-        return [call.to_request() for call in self.calls]
-
-
-@dataclass(frozen=True)
-class FinalCandidateEnvelope:
-    """Structured model-produced final answer candidate envelope."""
-
-    state: Literal["FINAL_CANDIDATE"] = "FINAL_CANDIDATE"
-    answer: str = ""
-    evidence: list[str] = field(default_factory=list)
-    done_conditions_met: list[str] = field(default_factory=list)
-    remaining_uncertainty: list[str] = field(default_factory=list)
-
-
-@dataclass(frozen=True)
 class ContextPack:
     """Context payload prepared for safe repo inspection."""
 
@@ -221,8 +210,10 @@ class ToolExecutionContext:
     transcript_store: TranscriptStore
     providers: dict[str, Provider]
     policy: Any
+    available_tools: list[ToolDescriptor] = field(default_factory=list)
     memory_service: MemoryService | None = None
     profile_service: PatProfileService | None = None
+    workspace_intel_service: WorkspaceIntelService | None = None
     artifact_store: Any | None = None
     task_prompt_id: str | None = None
     run_id: str | None = None
@@ -320,217 +311,28 @@ def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:
     return rows
 
 
-def _candidate_json_objects(text: str) -> list[str]:
-    candidate = text.strip()
-    if not candidate:
-        return []
-    if candidate.startswith("```"):
-        lines = candidate.splitlines()
-        if len(lines) >= 3 and lines[-1].strip().startswith("```"):
-            candidate = "\n".join(lines[1:-1]).strip()
-
-    objects: list[str] = []
-    seen: set[str] = set()
-
-    def add(raw: str) -> None:
-        value = raw.strip()
-        if value and value not in seen:
-            seen.add(value)
-            objects.append(value)
-
-    add(candidate)
-
-    decoder = json.JSONDecoder()
-    index = 0
-    length = len(candidate)
-    while index < length:
-        brace_index = candidate.find("{", index)
-        if brace_index < 0:
-            break
-        try:
-            parsed, end_index = decoder.raw_decode(candidate, brace_index)
-        except json.JSONDecodeError:
-            index = brace_index + 1
-            continue
-        if isinstance(parsed, dict):
-            add(candidate[brace_index:end_index])
-        index = end_index
-    return objects
-
-
-def extract_tool_invocation(text: str) -> ToolInvocationEnvelope | None:
-    """Parse a tool invocation JSON object from model output."""
-    for raw in _candidate_json_objects(text):
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-        calls_value = parsed.get("tool_calls") or parsed.get("toolCalls")
-        if isinstance(calls_value, list) and len(calls_value) == 1 and isinstance(calls_value[0], dict):
-            parsed = dict(calls_value[0])
-        tool_id = str(
-            parsed.get("tool_id")
-            or parsed.get("toolId")
-            or parsed.get("tool_name")
-            or parsed.get("toolName")
-            or ""
-        ).strip()
-        arguments = parsed.get("arguments") or parsed.get("args") or {}
-        if tool_id and isinstance(arguments, dict):
-            return ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments)
-    return None
-
-
-def extract_tool_batch_invocation(text: str) -> ToolBatchEnvelope | None:
-    """Parse a batch tool invocation JSON object from model output."""
-    adjacent_calls: list[ToolInvocationEnvelope] = []
-    for raw in _candidate_json_objects(text):
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-        calls_value = parsed.get("tool_calls") or parsed.get("toolCalls") or parsed.get("batch")
-        if isinstance(calls_value, list) and len(calls_value) >= 2:
-            calls: list[ToolInvocationEnvelope] = []
-            for item in calls_value:
-                if not isinstance(item, dict):
-                    calls = []
-                    break
-                tool_id = str(
-                    item.get("tool_id")
-                    or item.get("toolId")
-                    or item.get("tool_name")
-                    or item.get("toolName")
-                    or ""
-                ).strip()
-                arguments = item.get("arguments") or item.get("args") or {}
-                if not tool_id or not isinstance(arguments, dict):
-                    calls = []
-                    break
-                calls.append(ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments))
-            if len(calls) >= 2:
-                return ToolBatchEnvelope(calls=calls)
-        tool_id = str(
-            parsed.get("tool_id")
-            or parsed.get("toolId")
-            or parsed.get("tool_name")
-            or parsed.get("toolName")
-            or ""
-        ).strip()
-        arguments = parsed.get("arguments") or parsed.get("args") or {}
-        if tool_id and isinstance(arguments, dict):
-            adjacent_calls.append(ToolInvocationEnvelope(tool_id=tool_id, arguments=arguments))
-    if len(adjacent_calls) >= 2:
-        return ToolBatchEnvelope(calls=adjacent_calls)
-    return None
-
-
-def extract_final_candidate(text: str) -> FinalCandidateEnvelope | None:
-    """Parse a structured final answer candidate JSON object from model output."""
-    def _unwrap_candidate_payload(parsed: dict[str, Any]) -> dict[str, Any] | None:
-        if (parsed.get("state") or parsed.get("type")) == "FINAL_CANDIDATE":
-            return parsed
-        nested = parsed.get("FINAL_CANDIDATE")
-        if isinstance(nested, dict):
-            merged = dict(nested)
-            merged.setdefault("state", "FINAL_CANDIDATE")
-            return merged
-        return None
-
-    for raw in _candidate_json_objects(text):
-        try:
-            parsed = json.loads(raw)
-        except json.JSONDecodeError:
-            continue
-        if not isinstance(parsed, dict):
-            continue
-        candidate = _unwrap_candidate_payload(parsed)
-        if not isinstance(candidate, dict):
-            continue
-        answer = candidate.get("answer")
-        if not isinstance(answer, str):
-            answer = candidate.get("content")
-        if not isinstance(answer, str):
-            answer = candidate.get("message")
-        if not isinstance(answer, str):
-            answer = candidate.get("response")
-        if not isinstance(answer, str) or not answer.strip():
-            continue
-
-        def _normalize_str_list(value: Any) -> list[str] | None:
-            if value is None:
-                return []
-            if not isinstance(value, list):
-                return None
-            normalized: list[str] = []
-            for item in value:
-                if not isinstance(item, str):
-                    return None
-                stripped = item.strip()
-                if stripped:
-                    normalized.append(stripped)
-            return normalized
-
-        evidence = _normalize_str_list(candidate.get("evidence"))
-        done_conditions_met = _normalize_str_list(candidate.get("done_conditions_met"))
-        remaining_uncertainty = _normalize_str_list(candidate.get("remaining_uncertainty"))
-        if evidence is None or done_conditions_met is None or remaining_uncertainty is None:
-            continue
-        return FinalCandidateEnvelope(
-            answer=answer.strip(),
-            evidence=evidence,
-            done_conditions_met=done_conditions_met,
-            remaining_uncertainty=remaining_uncertainty,
-        )
-    return None
-
-
-def build_tool_prompt_section(tools: list[ToolDescriptor], *, context: ToolExecutionContext | None = None) -> str:
-    """Return instructions for one-step prompted tool use."""
-    if not tools:
-        return ""
-    tool_mode = (context.task_prompt_id or "none").strip() if context is not None else "none"
-    workspace_root = str(context.session_workspace_root) if context is not None else "(unknown)"
-    shell_allowlist = ", ".join(sorted(getattr(context.policy, "shell_allowlist", ()) or ())) if context is not None else "(unknown)"
-    available_ids = ", ".join(tool.id for tool in tools) or "(none)"
-    available_categories = {tool.category for tool in tools}
-    unavailable_categories = [
-        category
-        for category in ("repo-write", "artifact", "shell-read")
-        if category not in available_categories
+def describe_available_tools(
+    tools: list[ToolDescriptor],
+    *,
+    tool_ids: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    """Return structured detail for one or more tools."""
+    requested = {tool_id.strip() for tool_id in tool_ids or [] if tool_id and tool_id.strip()}
+    selected = [tool for tool in tools if not requested or tool.id in requested]
+    return [
+        {
+            "id": tool.id,
+            "name": tool.name,
+            "description": tool.description,
+            "category": tool.category,
+            "riskClass": tool.manifest_risk(),
+            "approvalMode": tool.manifest_permission(),
+            "inputSchema": dict(tool.input_schema),
+            "safetyLevel": tool.safety_level,
+            "capabilities": list(tool.capabilities),
+        }
+        for tool in selected
     ]
-    unavailable_text = ", ".join(unavailable_categories) if unavailable_categories else "(none)"
-    artifact_support = "available via artifact.create" if "artifact.create" in {tool.id for tool in tools} else "not available in this session"
-    lines = [
-        "Respond with exactly one legal JSON action: TOOL_CALL, TOOL_BATCH, or FINAL_CANDIDATE.",
-        "Capability manifest:",
-        f"- Workspace root: {workspace_root}",
-        f"- Tool mode: {tool_mode}",
-        f"- Available tool ids: {available_ids}",
-        f"- Unavailable capability classes: {unavailable_text}",
-        f"- Shell constraints: allowlisted read-only commands only ({shell_allowlist})",
-        f"- Artifact support: {artifact_support}",
-        "- Sequence normal work as: inspect -> edit/write if available -> verify/read shell -> create artifact if asked.",
-        "- Shallow orientation is not enough for repo/code claims: files.list and context.prepare should lead to files.rg or files.read, not to early finalization.",
-        "If a single tool is needed, respond with only a JSON object in this shape:",
-        '{"tool_id":"<tool id>","arguments":{}}',
-        "If multiple independent read-only repo/context tools are needed, respond with only a JSON object in this shape:",
-        '{"tool_calls":[{"tool_id":"<tool id>","arguments":{}},{"tool_id":"<tool id>","arguments":{}}]}',
-        "TOOL_BATCH only supports read-only repo/context work. Request writes, patches, or shell commands as individual TOOL_CALL actions after you inspect the needed files.",
-        "If you are ready to finalize, respond with only a JSON object in this shape:",
-        '{"state":"FINAL_CANDIDATE","answer":"...","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}',
-        "No markdown fences. No prose outside JSON. No extra wrapper keys.",
-        "Available tools:",
-    ]
-    for tool in tools:
-        lines.append(
-            f"- {tool.id}: {tool.description} | category={tool.category} | input={json.dumps(tool.input_schema, ensure_ascii=False)}"
-        )
-    return "\n".join(lines)
 
 
 def build_openai_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:

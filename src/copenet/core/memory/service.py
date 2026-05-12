@@ -97,9 +97,13 @@ class MemoryService:
     def archive_memory(self, memory_id: str, *, archived: bool = True) -> MemoryRecord | None:
         return self._store.archive(memory_id, archived=archived)
 
-    def build_prompt_payload(self, *, query: str, interaction_class: str, limit: int = 3) -> MemoryPromptPayload:
-        resolved_limit = 1 if interaction_class == "casual" else limit
-        rows = self.select_relevant(query=query, limit=resolved_limit)
+    def build_prompt_payload(
+        self,
+        *,
+        query: str,
+        limit: int = 3,
+    ) -> MemoryPromptPayload:
+        rows = self.select_relevant(query=query, limit=limit)
         if not rows:
             return MemoryPromptPayload()
         digest_lines = ["Relevant memory:"]

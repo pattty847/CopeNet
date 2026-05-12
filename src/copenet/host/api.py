@@ -52,6 +52,8 @@ def create_app(
     app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     if (_FRONTEND_DIST_DIR / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST_DIR / "assets"), name="assets")
+    if (_FRONTEND_DIST_DIR / "imgs").is_dir():
+        app.mount("/imgs", StaticFiles(directory=_FRONTEND_DIST_DIR / "imgs"), name="imgs")
 
     @app.get("/")
     def index() -> FileResponse:

@@ -63,9 +63,15 @@ def test_memory_service_selects_relevant_digest_and_ignores_sensitive_input(tmp_
         tags=["frontend"],
     )
 
-    payload = service.build_prompt_payload(query="keep the chat feeling like a friend and polish the theme", interaction_class="advisory")
+    payload = service.build_prompt_payload(query="keep the chat feeling like a friend and polish the theme")
     assert payload.digest is not None
     assert len(payload.memory_items) == 2
+
+    chat_payload = service.build_prompt_payload(
+        query="keep the chat feeling like a friend and polish the theme",
+        limit=1,
+    )
+    assert len(chat_payload.memory_items) == 1
 
     extracted = service.extract_from_run(
         user_message="my api key is abc123 and please remember it forever",

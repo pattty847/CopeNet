@@ -1,126 +1,34 @@
 from copenet.core.tools import (
     ToolDescriptor,
+    ToolRegistry,
     build_openai_tool_schemas,
-    build_tool_prompt_section,
-    extract_final_candidate,
-    extract_tool_batch_invocation,
-    extract_tool_invocation,
+    describe_available_tools,
 )
 
 
-def test_extract_tool_invocation_from_valid_json() -> None:
-    envelope = extract_tool_invocation('{"tool_id":"files.read","arguments":{"path":"README.md"}}')
-    assert envelope is not None
-    assert envelope.tool_id == "files.read"
-    assert envelope.arguments == {"path": "README.md"}
-
-
-def test_extract_tool_invocation_returns_none_for_prose() -> None:
-    assert extract_tool_invocation("I should probably inspect the repo first.") is None
-
-
-def test_extract_tool_invocation_from_fenced_json_block() -> None:
-    envelope = extract_tool_invocation(
-        """```json
-{"toolId":"git.status","arguments":{}}
-```"""
-    )
-    assert envelope is not None
-    assert envelope.tool_id == "git.status"
-    assert envelope.arguments == {}
-
-
-def test_extract_tool_invocation_from_single_tool_calls_wrapper() -> None:
-    envelope = extract_tool_invocation(
-        '{"tool_calls":[{"tool_id":"files.read","arguments":{"path":"README.md"}}]}'
-    )
-    assert envelope is not None
-    assert envelope.tool_id == "files.read"
-    assert envelope.arguments == {"path": "README.md"}
-
-
-def test_extract_tool_batch_invocation_from_valid_json() -> None:
-    envelope = extract_tool_batch_invocation(
-        '{"tool_calls":[{"tool_id":"files.list","arguments":{"path":"."}},{"tool_id":"files.read","arguments":{"path":"README.md"}}]}'
-    )
-    assert envelope is not None
-    requests = envelope.to_requests()
-    assert [request.tool_id for request in requests] == ["files.list", "files.read"]
-
-
-def test_extract_tool_batch_invocation_returns_none_for_single_call() -> None:
-    assert (
-        extract_tool_batch_invocation('{"tool_calls":[{"tool_id":"files.list","arguments":{"path":"."}}]}')
-        is None
-    )
-
-
-def test_extract_tool_batch_invocation_from_adjacent_tool_objects() -> None:
-    envelope = extract_tool_batch_invocation(
-        '{"tool_id":"files.read","arguments":{"path":"README.md"}} '
-        '{"tool_id":"files.read","arguments":{"path":"TODO.md"}} '
-        '{"tool_id":"files.read","arguments":{"path":"AGENTS.md"}}'
-    )
-    assert envelope is not None
-    requests = envelope.to_requests()
-    assert [request.tool_id for request in requests] == ["files.read", "files.read", "files.read"]
-    assert [request.arguments["path"] for request in requests] == ["README.md", "TODO.md", "AGENTS.md"]
-
-
-def test_build_tool_prompt_section_returns_empty_for_no_tools() -> None:
-    assert build_tool_prompt_section([]) == ""
-
-
-def test_extract_final_candidate_from_valid_json() -> None:
-    envelope = extract_final_candidate(
-        '{"state":"FINAL_CANDIDATE","answer":"Done.","evidence":["README.md"],"done_conditions_met":["grounded evidence"],"remaining_uncertainty":[]}'
-    )
-    assert envelope is not None
-    assert envelope.answer == "Done."
-    assert envelope.evidence == ["README.md"]
-
-
-def test_extract_final_candidate_normalizes_missing_list_fields() -> None:
-    envelope = extract_final_candidate('{"state":"FINAL_CANDIDATE","answer":"Done."}')
-    assert envelope is not None
-    assert envelope.evidence == []
-    assert envelope.done_conditions_met == []
-    assert envelope.remaining_uncertainty == []
-
-
-def test_extract_final_candidate_rejects_empty_answer() -> None:
-    assert extract_final_candidate('{"state":"FINAL_CANDIDATE","answer":"   "}') is None
-
-
-def test_extract_final_candidate_accepts_type_and_content_aliases() -> None:
-    envelope = extract_final_candidate(
-        '{"type":"FINAL_CANDIDATE","content":"Done from alias.","evidence":["README.md"]}'
-    )
-    assert envelope is not None
-    assert envelope.answer == "Done from alias."
-    assert envelope.evidence == ["README.md"]
-
-
-def test_extract_final_candidate_accepts_nested_response_alias() -> None:
-    envelope = extract_final_candidate(
-        '{"FINAL_CANDIDATE":{"response":"Nested response works.","evidence":["README.md"]}}'
-    )
-    assert envelope is not None
-    assert envelope.answer == "Nested response works."
-    assert envelope.evidence == ["README.md"]
-
-
-def test_build_tool_prompt_section_lists_all_tool_ids() -> None:
+def test_describe_available_tools_returns_compact_manifest_details() -> None:
     tools = [
         ToolDescriptor(id="files.read", name="Read File", description="Read one file.", category="repo-read"),
-        ToolDescriptor(id="git.status", name="Git Status", description="Read git status.", category="repo-read"),
+        ToolDescriptor(id="files.edit", name="Edit File", description="Edit one file.", category="repo-write"),
     ]
 
-    section = build_tool_prompt_section(tools)
-    assert "files.read" in section
-    assert "git.status" in section
-    assert "tool_calls" in section
-    assert "FINAL_CANDIDATE" in section
+    described = describe_available_tools(tools)
+
+    assert described[0]["id"] == "files.read"
+    assert described[0]["approvalMode"] == "auto_allowed"
+    assert described[1]["id"] == "files.edit"
+    assert described[1]["approvalMode"] == "policy_gated"
+
+
+def test_describe_available_tools_can_filter_by_tool_id() -> None:
+    tools = [
+        ToolDescriptor(id="files.read", name="Read File", description="Read one file.", category="repo-read"),
+        ToolDescriptor(id="files.edit", name="Edit File", description="Edit one file.", category="repo-write"),
+    ]
+
+    described = describe_available_tools(tools, tool_ids=["files.edit"])
+
+    assert [tool["id"] for tool in described] == ["files.edit"]
 
 
 def test_build_openai_tool_schemas_uses_tool_ids_as_function_names() -> None:
@@ -154,3 +62,10 @@ def test_build_openai_tool_schemas_uses_tool_ids_as_function_names() -> None:
             },
         }
     ]
+
+
+def test_tool_registry_does_not_expose_removed_experimental_tools() -> None:
+    tool_ids = {tool.id for tool in ToolRegistry().list_tools()}
+
+    assert "patch.plan" not in tool_ids
+    assert "tools.describe" not in tool_ids

@@ -36,10 +36,11 @@ jq 'select(.event == "harness_planned")' <run-id>.jsonl
 ```
 
 Look at:
-- `willAttemptToolLoop` — if `false`, the capability gate rejected the tool loop
-- `capabilityProfile.promptedToolUse` — this must be `true` for the loop to trigger
-- `capabilityProfile.toolCalls` — the provider model must report tool capability
+- `willAttemptToolLoop` — `true` only when policy-visible tools exist and the provider/model reports native tool-call support
+- `capabilityProfile.toolCalls` — the provider model must report native tool capability
 - `availableToolIds` — write tools (`files.edit`, `files.write`) only appear when the session task mode is **`full-access`** (`policy_for_task_mode` in `core/tools/policy.py`). If the model tries to call writes in another mode you will see **`write tool unavailable in current mode`** in traces / `toolExecution.policyDecision = write_blocked` on the client payload.
+
+CLI providers (`codex-cli`, `claude-cli`) and non-native local providers stream through provider passthrough here. If they use tools internally, that is provider-managed rather than a CopeNet tool loop.
 
 If `willAttemptToolLoop: true` but no `tool_requested` event appeared:
 
@@ -179,8 +180,8 @@ Check whether `run_completed` appears with `toolExecutionAttached: true` while t
 ```
 [ ] Trace file exists?          → if not, provider init failed
 [ ] harness_planned present?    → willAttemptToolLoop + tool ids match task mode (writes need full-access)?
-[ ] batch / split events?       → tool_batch_split explains mixed TOOL_BATCH repairs
-[ ] tool_requested present?     → if expected but missing, model didn't parse JSON
+[ ] Native tool capability?     → toolCalls must be true for CopeNet-managed tools
+[ ] tool_requested present?     → if expected but missing, the model chose plain text or the provider did not expose native tool calls
 [ ] tool_executed or blocked?   → check reason
 [ ] assistant_finalized?        → responseLength and toolExecutionAttached correct?
 [ ] run_completed or failed?    → run_failed.error is primary diagnostic

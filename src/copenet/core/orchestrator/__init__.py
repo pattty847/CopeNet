@@ -57,7 +57,15 @@ from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
-from copenet._paths import default_artifacts_dir, default_pat_profile_dir, default_personas_dir, default_session_state_dir, default_sessions_dir
+from copenet.core.workspace_intel import WorkspaceIntelService, WorkspaceIntelStore
+from copenet._paths import (
+    default_artifacts_dir,
+    default_pat_profile_dir,
+    default_personas_dir,
+    default_session_state_dir,
+    default_sessions_dir,
+    default_workspace_intel_path,
+)
 
 
 ChatEmit = Callable[[dict], Awaitable[None]]
@@ -119,6 +127,9 @@ class Orchestrator:
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         persona_root = default_personas_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "personas"
         self._persona_service = PersonaHomeService(root_dir=persona_root)
+        workspace_intel_path = default_workspace_intel_path() if sessions_dir is None else base / "workspace-intel.json"
+        self._workspace_intel_store = WorkspaceIntelStore(path=workspace_intel_path)
+        self._workspace_intel_service = WorkspaceIntelService(self._workspace_intel_store)
         self._app_store = AppStore(path=base / "apps.json")
         if providers is None:
             self._providers, self._provider_init_errors = build_default_provider_registry()
@@ -619,6 +630,7 @@ class Orchestrator:
             "fileToolScope": "workspace_home_visible_roaming",
             "shellToolScope": "cwd_default",
             "shellAllowlist": list(self._tool_policy.shell_allowlist),
+            "workspaceIntel": self._workspace_intel_service.get_summary(resolved_root),
             "note": (
                 "Repo/file tools default to this home workspace. Reads outside it are allowed but should be visibly marked. "
                 "Allowlisted shell commands run from this root."

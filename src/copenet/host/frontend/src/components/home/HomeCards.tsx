@@ -18,7 +18,7 @@ import { ProfileStatusCard } from '../profile/ProfileStatusCard';
 import type { Session, WsStatus } from '../../types/backend';
 import type { HomeCardId } from './homeLayout';
 
-const HOME_HERO_DARK_URL = new URL('../../../../../../docs/imgs/wallpaper.png', import.meta.url).href;
+const HOME_HERO_DARK_URL = '/imgs/wallpaper.png';
 
 const PINNED_AGENTS = [
   { title: 'Research Scout', subtitle: 'Find patterns across notes, feeds, and docs', accent: 'bg-[#edf2ff] text-[#4c68d7]', darkAccent: 'dark:bg-[#1c2340] dark:text-[#7b93e8]' },
@@ -130,8 +130,7 @@ export function renderHomeCard(id: HomeCardId, ctx: HomeCardContext): ReactEleme
                 )}
               </h1>
               <p className="mt-2 max-w-xl text-[13px] leading-6 text-shell-muted sm:text-[14px]">
-                Shape agentic workspaces, keep every tool call inspectable, and turn useful sessions
-                into repeatable workflows.
+                Shape agentic workspaces, run useful sessions, and turn repeated work into reusable workflows.
               </p>
             </div>
 

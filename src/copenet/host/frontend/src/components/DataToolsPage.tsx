@@ -139,7 +139,7 @@ function DataToolsHub({ openSources, openMessaging, openPersona }: { openSources
       <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
         <HubCard eyebrow="Ground" title="Knowledge Bases" body="Curated context that can refresh, evolve, and stay anchored to the workspace." accent="text-shell-accent" />
         <HubCard eyebrow="Ingest" title="Data Sources" body="Feed media, web pages, APIs, and local files into the workbench." accent="text-shell-accent" onClick={openSources} />
-        <HubCard eyebrow="Operate" title="Tool Catalog" body="Inspectable tool surfaces with safety rules and visible execution history." accent="text-shell-accent" />
+        <HubCard eyebrow="Operate" title="Tool Catalog" body="Available tool surfaces, their safety rules, and recent execution history." accent="text-shell-accent" />
         <HubCard eyebrow="Route" title="Messaging" body="Configure Telegram reachability, default runtimes, and chat-to-session routes." accent="text-shell-accent" onClick={openMessaging} />
         <HubCard eyebrow="Identity" title="Persona Home" body="Inspect identity files, privacy defaults, and model-specific persona flavors." accent="text-shell-accent" onClick={openPersona} />
       </section>

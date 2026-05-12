@@ -11,15 +11,12 @@ from copenet.core.tools import ToolDescriptor, ToolExecutionContext
 
 from .capabilities import ModelCapabilityProfile
 from .planning import HarnessTurnPlan, TraceRecorder, plan_turn
-from .final_gate import FinalGateDecision, TaskContract, final_gate_evaluate
 from .tool_loop import (
     ToolExecutor,
     collect_provider_turn,
-    compose_interaction_system_prompt,
     compose_provider_prompt,
     provider_system_prompt,
     run_with_native_tools,
-    run_with_one_tool,
 )
 
 
@@ -67,27 +64,24 @@ class ChatHarness:
         prompt_context_builder: Callable[[HarnessTurnPlan], str | None] | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
         """Return the normalized plan and provider event stream."""
-        effective_tools = available_tools
-        if available_tools is not None and tool_context is not None:
-            effective_tools = [
-                tool for tool in available_tools if tool.category in tool_context.policy.allowed_categories
-            ]
         plan = await self.plan_turn(
             provider=provider,
             provider_name=getattr(provider, "name", "unknown"),
             model=model,
-            available_tools=effective_tools,
+            available_tools=available_tools,
             prompt=prompt,
             trace=trace,
         )
         context_overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
         combined_system_prompt = "\n\n".join(part for part in (system_prompt, context_overlay) if part)
-        effective_system_prompt = compose_interaction_system_prompt(
-            provider=provider,
-            system_prompt=combined_system_prompt,
-            plan=plan,
-        )
-        if not plan.will_attempt_tool_loop or tool_executor is None or tool_context is None:
+        effective_system_prompt = combined_system_prompt or None
+        if (
+            not plan.will_attempt_tool_loop
+            or plan.tool_execution_mode != "native"
+            or not hasattr(provider, "chat_completion")
+            or tool_executor is None
+            or tool_context is None
+        ):
             stream = provider.run(
                 prompt=compose_provider_prompt(provider, prompt, effective_system_prompt),
                 provider_session_id=provider_session_id,
@@ -97,41 +91,24 @@ class ChatHarness:
             )
             return plan, stream
 
-        if plan.tool_execution_mode == "native" and hasattr(provider, "chat_completion"):
-            stream = run_with_native_tools(
-                provider=provider,  # type: ignore[arg-type]
-                prompt=prompt,
-                provider_session_id=provider_session_id,
-                abort_event=abort_event,
-                model=model,
-                system_prompt=effective_system_prompt,
-                plan=plan,
-                tool_executor=tool_executor,
-                tool_context=tool_context,
-                trace=trace,
-            )
-        else:
-            stream = run_with_one_tool(
-                provider=provider,
-                prompt=prompt,
-                provider_session_id=provider_session_id,
-                abort_event=abort_event,
-                model=model,
-                system_prompt=effective_system_prompt,
-                plan=plan,
-                tool_executor=tool_executor,
-                tool_context=tool_context,
-                trace=trace,
-            )
+        stream = run_with_native_tools(
+            provider=provider,  # type: ignore[arg-type]
+            prompt=prompt,
+            provider_session_id=provider_session_id,
+            abort_event=abort_event,
+            model=model,
+            system_prompt=effective_system_prompt,
+            plan=plan,
+            tool_executor=tool_executor,
+            tool_context=tool_context,
+            trace=trace,
+        )
         return plan, stream
 
 
 __all__ = [
     "ChatHarness",
     "HarnessResult",
-    "FinalGateDecision",
     "HarnessTurnPlan",
     "ModelCapabilityProfile",
-    "TaskContract",
-    "final_gate_evaluate",
 ]

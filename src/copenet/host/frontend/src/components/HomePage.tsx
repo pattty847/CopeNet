@@ -50,7 +50,7 @@ export function HomePage() {
     {
       label: 'Messages Logged',
       value: String(totalMessages || 0),
-      note: 'Append-only history',
+      note: 'Across all sessions',
       icon: Activity,
     },
     {
@@ -62,7 +62,7 @@ export function HomePage() {
     {
       label: 'Tools Available',
       value: String(tools.length || 0),
-      note: 'Inspectable execution',
+      note: tools.length === 1 ? 'tool registered' : 'tools registered',
       icon: WandSparkles,
     },
   ];

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 import re
@@ -31,10 +32,18 @@ DESCRIPTORS = [
         name="Read File",
         description=(
             "Read a text file inside the current workdir. This is the primary grounding tool for "
-            "repo/code claims. Use it when you need direct evidence from a specific file."
+            "repo/code claims. Use it when you need direct evidence from a specific file. "
+            "Supports bounded reads with offset/limit and returns a digest you can reuse for stale-read checks."
         ),
         category="repo-read",
-        input_schema={"type": "object", "properties": {"path": {"type": "string"}}},
+        input_schema={
+            "type": "object",
+            "properties": {
+                "path": {"type": "string"},
+                "offset": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1},
+            },
+        },
         capabilities=["filesystem", "read"],
     ),
     ToolDescriptor(
@@ -65,7 +74,8 @@ DESCRIPTORS = [
         name="Write File",
         description=(
             "Create or overwrite a text file inside the current workspace. "
-            "Use this after inspection when you need to materialize a concrete file change."
+            "Use this after inspection when you need to materialize a concrete file change. "
+            "When available, pass expected_digest from a prior files.read result to guard against stale writes."
         ),
         category="repo-write",
         input_schema={
@@ -73,6 +83,7 @@ DESCRIPTORS = [
             "properties": {
                 "path": {"type": "string"},
                 "content": {"type": "string"},
+                "expected_digest": {"type": "string"},
             },
             "required": ["path", "content"],
         },
@@ -83,7 +94,8 @@ DESCRIPTORS = [
         name="Edit File",
         description=(
             "Apply a targeted text replacement inside an existing text file in the current workspace. "
-            "Prefer this after reading the file when you know the exact text to replace."
+            "Prefer this after reading the file when you know the exact text to replace. "
+            "Use expected_digest from files.read when you want stale-read protection."
         ),
         category="repo-write",
         input_schema={
@@ -93,6 +105,7 @@ DESCRIPTORS = [
                 "old_text": {"type": "string"},
                 "new_text": {"type": "string"},
                 "replace_all": {"type": "boolean"},
+                "expected_digest": {"type": "string"},
             },
             "required": ["path", "old_text", "new_text"],
         },
@@ -143,6 +156,8 @@ async def list_files(request: ToolExecutionRequest, context: ToolExecutionContex
 
 async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
+    offset = max(int(request.arguments.get("offset") or 0), 0)
+    requested_limit = int(request.arguments.get("limit") or 0)
     warning_message, blocked_result = _repeat_response(
         context,
         tool_id=request.tool_id,
@@ -164,9 +179,15 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
     if not path.is_file():
         raise RuntimeError(f"file not found: {path}")
     with path.open("r", encoding="utf-8", errors="replace") as handle:
-        text = handle.read(context.policy.file_output_limit)
+        full_text = handle.read()
+    limit = requested_limit if requested_limit > 0 else context.policy.file_output_limit
+    bounded_limit = min(limit, context.policy.file_output_limit)
+    text = full_text[offset : offset + bounded_limit]
     access = file_access_metadata(path, context)
     target = access["target"]
+    digest = _content_digest(full_text)
+    _remember_file_digest(context, target=target, digest=digest)
+    truncated = offset + len(text) < len(full_text)
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -178,6 +199,12 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
             "path": target,
             **access,
             "content": text,
+            "digest": digest,
+            "offset": offset,
+            "limit": bounded_limit,
+            "totalChars": len(full_text),
+            "truncated": truncated,
+            **({"nextOffset": offset + len(text)} if truncated else {}),
             **({"warning": warning_message} if warning_message else {}),
         },
     )
@@ -348,16 +375,20 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
 async def write_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
     content = request.arguments.get("content")
+    expected_digest = str(request.arguments.get("expected_digest") or "").strip() or None
     if not path.name:
         raise ValueError("path is required")
     if not isinstance(content, str):
         raise ValueError("content is required")
     ensure_write_allowed(path, context)
+    _ensure_expected_digest(path, expected_digest=expected_digest, context=context)
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     access = file_access_metadata(path, context)
     access["accessAction"] = "write"
     access["policySummary"] = "Write stayed inside the home workspace."
+    digest = _content_digest(content)
+    _remember_file_digest(context, target=access["target"], digest=digest)
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -365,6 +396,7 @@ async def write_file(request: ToolExecutionRequest, context: ToolExecutionContex
         output={
             "path": access["target"],
             "bytes": len(content.encode("utf-8")),
+            "digest": digest,
             **access,
         },
     )
@@ -375,6 +407,7 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     old_text = request.arguments.get("old_text")
     new_text = request.arguments.get("new_text")
     replace_all = bool(request.arguments.get("replace_all"))
+    expected_digest = str(request.arguments.get("expected_digest") or "").strip() or None
     if not path.name:
         raise ValueError("path is required")
     if not isinstance(old_text, str) or not old_text:
@@ -384,6 +417,7 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     ensure_write_allowed(path, context)
     if not path.is_file():
         raise RuntimeError(f"file not found: {path}")
+    _ensure_expected_digest(path, expected_digest=expected_digest, context=context)
     text = path.read_text(encoding="utf-8", errors="replace")
     occurrence_count = text.count(old_text)
     if occurrence_count == 0:
@@ -398,6 +432,8 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     access["accessAction"] = "write"
     access["policySummary"] = "Write stayed inside the home workspace."
     replacements = occurrence_count if replace_all else 1
+    digest = _content_digest(next_text)
+    _remember_file_digest(context, target=access["target"], digest=digest)
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -405,6 +441,7 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
         output={
             "path": access["target"],
             "replacements": replacements,
+            "digest": digest,
             **access,
         },
     )
@@ -442,3 +479,29 @@ def _repeat_response(
     if count >= 3:
         return on_warning, None
     return None, None
+
+
+def _content_digest(text: str) -> str:
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _remember_file_digest(context: ToolExecutionContext, *, target: str, digest: str) -> None:
+    state = context.ephemeral.setdefault("file_read_state", {})
+    state[target] = digest
+
+
+def _ensure_expected_digest(
+    path: Path,
+    *,
+    expected_digest: str | None,
+    context: ToolExecutionContext,
+) -> None:
+    if not expected_digest or not path.exists() or not path.is_file():
+        return
+    current_text = path.read_text(encoding="utf-8", errors="replace")
+    current_digest = _content_digest(current_text)
+    if current_digest != expected_digest:
+        display = display_path(path, context)
+        raise RuntimeError(
+            f"stale read detected for {display}; expected digest {expected_digest}, current digest {current_digest}"
+        )

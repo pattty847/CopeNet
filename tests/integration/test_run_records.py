@@ -1,4 +1,5 @@
 import asyncio
+import json
 
 import pytest
 
@@ -30,6 +31,52 @@ class ScriptedPromptedProvider:
         yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "provider-session")
         yield ProviderEvent(kind="final")
 
+    async def chat_completion(
+        self,
+        *,
+        messages: list[dict],
+        model: str | None,
+        tools: list[dict] | None = None,
+        tool_choice: str | dict | None = None,
+    ) -> dict:
+        del messages, model, tools, tool_choice
+        text = self.outputs[self._index]
+        self._index += 1
+        try:
+            parsed = json.loads(text)
+        except json.JSONDecodeError:
+            parsed = None
+        if isinstance(parsed, dict) and parsed.get("tool_id"):
+            return {
+                "choices": [
+                    {
+                        "finish_reason": "tool_calls",
+                        "message": {
+                            "role": "assistant",
+                            "content": "",
+                            "tool_calls": [
+                                {
+                                    "id": f"call-{self._index}",
+                                    "type": "function",
+                                    "function": {
+                                        "name": parsed["tool_id"],
+                                        "arguments": json.dumps(parsed.get("arguments") or {}),
+                                    },
+                                }
+                            ],
+                        },
+                    }
+                ]
+            }
+        return {
+            "choices": [
+                {
+                    "finish_reason": "stop",
+                    "message": {"role": "assistant", "content": text},
+                }
+            ]
+        }
+
     async def describe(self) -> dict:
         return {
             "id": self.name,
@@ -38,7 +85,7 @@ class ScriptedPromptedProvider:
             "capabilities": {
                 "chat": True,
                 "streaming": True,
-                "toolCalls": False,
+                "toolCalls": True,
                 "promptedToolUse": True,
             },
         }

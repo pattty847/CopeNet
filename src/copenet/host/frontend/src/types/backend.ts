@@ -175,6 +175,8 @@ export interface ToolDescriptor {
   inputSchema: Record<string, unknown>;
   safetyLevel: string;
   capabilities: string[];
+  riskClass?: string;
+  approvalMode?: string;
 }
 
 export interface PromptOption {
@@ -245,6 +247,14 @@ export interface PersonaFlavorDraft {
   notesMarkdown: string;
 }
 
+export interface WorkspaceIntelSummary {
+  workspaceRoot: string;
+  cacheStatus: 'cached' | 'fresh' | 'refreshed' | 'stale';
+  languages: string[];
+  packageManagers: string[];
+  recommendedDefaultChecks: string[];
+}
+
 export interface WebExtractDocument {
   url: string;
   title: string;
@@ -259,6 +269,7 @@ export interface RuntimeContext {
   fileToolScope: 'workspace_home_visible_roaming';
   shellToolScope: 'cwd_default';
   shellAllowlist: string[];
+  workspaceIntel?: WorkspaceIntelSummary | null;
   note: string;
 }
 

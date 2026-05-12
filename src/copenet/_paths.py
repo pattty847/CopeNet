@@ -62,3 +62,11 @@ def default_personas_dir() -> Path:
     if base:
         return Path(base).expanduser() / "personas"
     return Path.home() / ".copenet" / "personas"
+
+
+def default_workspace_intel_path() -> Path:
+    """Return default workspace intelligence cache path."""
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "workspace-intel.json"
+    return Path.home() / ".copenet" / "workspace-intel.json"

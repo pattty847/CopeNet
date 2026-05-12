@@ -29,9 +29,7 @@ class TurnState:
     evidence_items: list[dict[str, Any]] = field(default_factory=list)
     open_questions: list[str] = field(default_factory=list)
     failed_actions: list[dict[str, Any]] = field(default_factory=list)
-    final_rejection_count: int = 0
     last_tool_result_summary: str = ""
-    last_final_gate_reason_code: str | None = None
 
 
     def record_tool_step(self, *, tool_id: str, arguments: dict[str, Any], result: ToolExecutionResult) -> None:
@@ -73,12 +71,6 @@ class TurnState:
                 "summary": result.summary,
                 "error": result.error,
             })
-
-    def register_final_rejection(self, *, reason_code: str | None, missing_requirements: list[str]) -> None:
-        self.final_rejection_count += 1
-        self.last_final_gate_reason_code = reason_code
-        self.transition_reason = "final_gate_rejected"
-        self.open_questions = list(missing_requirements)
 
     @property
     def evidence_ledger(self) -> dict[str, Any]:
@@ -123,9 +115,7 @@ class TurnState:
             "evidenceItems": [dict(item) for item in self.evidence_items],
             "openQuestions": list(self.open_questions),
             "failedActions": [dict(item) for item in self.failed_actions],
-            "finalRejectionCount": self.final_rejection_count,
             "lastToolResultSummary": self.last_tool_result_summary,
-            "lastFinalGateReasonCode": self.last_final_gate_reason_code,
             "evidenceLedger": self.evidence_ledger,
         }
 
