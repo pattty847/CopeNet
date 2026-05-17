@@ -14,8 +14,8 @@ class PromptedProvider:
     name = "prompted"
     display_name = "Prompted"
 
-    def __init__(self, text: str) -> None:
-        self.text = text
+    def __init__(self, text: str | list[str]) -> None:
+        self.responses = [text] if isinstance(text, str) else list(text)
         self.prompts: list[str] = []
 
     async def run(
@@ -28,7 +28,8 @@ class PromptedProvider:
     ):
         del abort_event, model, system_prompt
         self.prompts.append(prompt)
-        yield ProviderEvent(kind="delta", text=self.text, provider_session_id=provider_session_id or "provider-session")
+        index = min(len(self.prompts) - 1, len(self.responses) - 1)
+        yield ProviderEvent(kind="delta", text=self.responses[index], provider_session_id=provider_session_id or "provider-session")
         yield ProviderEvent(kind="final")
 
     async def describe(self) -> dict:
@@ -131,9 +132,13 @@ async def _collect(orchestrator: Orchestrator, request: ChatSendRequest) -> tupl
 
 
 @pytest.mark.asyncio
-async def test_orchestrator_does_not_run_prompted_json_tool_loop(monkeypatch, tmp_path: Path) -> None:
+async def test_orchestrator_runs_prompted_json_tool_loop(monkeypatch, tmp_path: Path) -> None:
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
-    provider = PromptedProvider('{"tool_id":"files.read","arguments":{"path":"README.md"}}')
+    (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
+    provider = PromptedProvider([
+        '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+        "I read the README and found Temp Repo.",
+    ])
     orchestrator = Orchestrator(
         session_store=SessionStore(path=tmp_path / "index.json"),
         transcript_store=TranscriptStore(root_dir=tmp_path),
@@ -149,9 +154,10 @@ async def test_orchestrator_does_not_run_prompted_json_tool_loop(monkeypatch, tm
     assert result["status"] == "ok"
     final_event = events[-1]
     assert final_event["state"] == "final"
-    assert final_event["message"]["content"] == '{"tool_id":"files.read","arguments":{"path":"README.md"}}'
-    assert final_event["toolExecution"] is None
-    assert len(provider.prompts) == 1
+    assert final_event["message"]["content"] == "I read the README and found Temp Repo."
+    assert final_event["toolExecution"]["toolId"] == "files.read"
+    assert [event["state"] for event in events] == ["tool_called", "tool_result", "delta", "final"]
+    assert len(provider.prompts) == 2
 
 
 @pytest.mark.asyncio
@@ -239,8 +245,11 @@ async def test_harness_native_tool_loop_executes_provider_tool_call_then_plain_t
 
 
 @pytest.mark.asyncio
-async def test_harness_non_native_provider_passthrough_even_when_tools_exist(tmp_path: Path) -> None:
-    provider = PromptedProvider('{"tool_id":"files.read","arguments":{"path":"README.md"}}')
+async def test_harness_prompted_provider_executes_json_tool_requests(tmp_path: Path) -> None:
+    provider = PromptedProvider([
+        '{"command":"pwd","timeout":120000}',
+        "The command returned the workspace path.",
+    ])
     harness = ChatHarness()
     tool_context = ToolExecutionContext(
         workdir=tmp_path,
@@ -255,8 +264,17 @@ async def test_harness_non_native_provider_passthrough_even_when_tools_exist(tmp
         trace=None,
     )
 
+    executed: list[ToolExecutionRequest] = []
+
     async def tool_executor(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
-        raise AssertionError(f"non-native provider should not execute {request.tool_id}")
+        del context
+        executed.append(request)
+        return ToolExecutionResult(
+            tool_id=request.tool_id,
+            ok=True,
+            summary="Ran shell command: pwd",
+            output={"command": "pwd", "stdout": str(tmp_path), "stderr": "", "exitCode": 0},
+        )
 
     plan, stream = await harness.run_turn(
         provider=provider,
@@ -271,9 +289,12 @@ async def test_harness_non_native_provider_passthrough_even_when_tools_exist(tmp
     events = [event async for event in stream]
     final_text = "".join(event.text or "" for event in events if event.kind == "delta")
 
-    assert plan.tool_execution_mode == "none"
-    assert len(provider.prompts) == 1
-    assert final_text == '{"tool_id":"files.read","arguments":{"path":"README.md"}}'
+    assert plan.tool_execution_mode == "prompted"
+    assert len(provider.prompts) == 2
+    assert executed[0].tool_id == "shell.exec"
+    assert executed[0].arguments == {"command": "pwd"}
+    assert any(event.kind == "meta" and "toolExecution" in (event.metadata or {}) for event in events)
+    assert final_text == "The command returned the workspace path."
 
 
 @pytest.mark.asyncio

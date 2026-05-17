@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { Message, Session, SessionRunRecord } from '../src/types/backend';
-import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown } from '../src/lib/chatExport';
+import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown, formatMessageForClipboard } from '../src/lib/chatExport';
 
 function makeMessage(partial: Partial<Message> & Pick<Message, 'localId' | 'role' | 'content' | 'timestamp'>): Message {
   return {
@@ -101,6 +101,67 @@ test('formatConversationMarkdown skips system messages and empty content', () =>
   assert.doesNotMatch(markdown, /## System —/);
   assert.match(markdown, /^Session: session-1$/m);
   assert.match(markdown, /^Keep only this$/m);
+});
+
+test('formatConversationMarkdown includes structured tool parts for tool-only messages', () => {
+  const message = makeMessage({
+    localId: 'm-tool',
+    role: 'assistant',
+    content: '',
+    timestamp: '2026-05-10T23:14:00.000Z',
+    parts: [
+      { kind: 'tool_call', callId: 'call-1', toolId: 'shell.exec', target: 'pwd', hint: 'pwd', at: '2026-05-10T23:14:00.000Z' },
+      {
+        kind: 'tool_result',
+        callId: 'call-1',
+        toolId: 'shell.exec',
+        ok: true,
+        summary: 'Ran shell command: pwd',
+        target: 'pwd',
+        preview: { type: 'raw', text: '$ pwd\n/home/pepe/CopeNet' },
+        at: '2026-05-10T23:14:01.000Z',
+      },
+    ],
+  });
+
+  const markdown = formatConversationMarkdown({
+    session: makeSession(),
+    messages: [message],
+    providerLabel: 'OpenAI Codex',
+    modelLabel: 'gpt-5.5',
+  });
+
+  assert.match(markdown, /^## Assistant — /m);
+  assert.match(markdown, /\[tool call\] shell\.exec — pwd/);
+  assert.match(markdown, /\[tool result\] shell\.exec — ok — Ran shell command: pwd/);
+  assert.match(markdown, /Preview: \$ pwd\n\/home\/pepe\/CopeNet/);
+});
+
+test('formatMessageForClipboard includes single-response tool calls and results', () => {
+  const copied = formatMessageForClipboard(
+    makeMessage({
+      localId: 'm-copy',
+      role: 'assistant',
+      content: 'Done.',
+      timestamp: '2026-05-10T23:14:00.000Z',
+      parts: [
+        { kind: 'text', content: 'Done.' },
+        { kind: 'tool_call', callId: 'call-1', toolId: 'git.status', target: null, hint: null, at: '2026-05-10T23:14:00.000Z' },
+        {
+          kind: 'tool_result',
+          callId: 'call-1',
+          toolId: 'git.status',
+          ok: true,
+          summary: 'Read git status.',
+          at: '2026-05-10T23:14:01.000Z',
+        },
+      ],
+    })
+  );
+
+  assert.match(copied, /^Done\./);
+  assert.match(copied, /\[tool call\] git\.status/);
+  assert.match(copied, /\[tool result\] git\.status — ok — Read git status\./);
 });
 
 test('formatConversationWithToolActivityMarkdown appends readable tool activity', () => {

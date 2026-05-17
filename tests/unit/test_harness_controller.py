@@ -122,7 +122,7 @@ async def test_plan_turn_uses_native_tool_loop_only_when_provider_supports_tool_
 
 
 @pytest.mark.asyncio
-async def test_plan_turn_does_not_use_prompted_json_tool_loop_without_native_tool_calls() -> None:
+async def test_plan_turn_uses_prompted_tool_loop_when_provider_supports_prompted_tools() -> None:
     provider = PromptedProvider()
 
     plan = await plan_turn(
@@ -133,8 +133,8 @@ async def test_plan_turn_does_not_use_prompted_json_tool_loop_without_native_too
         prompt="Inspect the repository if you can.",
     )
 
-    assert plan.will_attempt_tool_loop is False
-    assert plan.tool_execution_mode == "none"
+    assert plan.will_attempt_tool_loop is True
+    assert plan.tool_execution_mode == "prompted"
 
 
 @pytest.mark.asyncio

@@ -57,6 +57,7 @@ async def prepare_context(request: ToolExecutionRequest, context: ToolExecutionC
             "provider": context.provider_name,
             "model": context.model,
             "workdir": str(context.workdir),
+            "permissions": _permission_manifest(context),
         },
         workdir=str(context.workdir),
     )
@@ -71,3 +72,22 @@ async def prepare_context(request: ToolExecutionRequest, context: ToolExecutionC
 HANDLERS = {
     "context.prepare": prepare_context,
 }
+
+
+def _permission_manifest(context: ToolExecutionContext) -> dict[str, object]:
+    policy = context.policy
+    return {
+        "allowedCategories": sorted(policy.allowed_categories),
+        "repoWriteEnabled": "repo-write" in policy.allowed_categories,
+        "shell": {
+            "enabled": policy.allow_shell,
+            "unrestricted": policy.unrestricted_shell,
+            "allowlist": list(policy.shell_allowlist),
+            "approvalPatterns": list(policy.shell_approval_patterns),
+        },
+        "testCommand": "uv run python scripts/permission_probe_matrix.py",
+        "claimGuidance": (
+            "Do not claim full access from one successful read command. Verify the specific lever: "
+            "repo write tools, unrestricted shell syntax, and approval-gated commands are distinct."
+        ),
+    }

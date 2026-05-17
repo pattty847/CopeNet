@@ -273,6 +273,19 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             return {"matches": preview_matches}
     if "artifactId" in body and "preview" in body:
         return {"artifactId": body.get("artifactId"), "preview": body.get("preview")}
+    if tool_id == "shell.exec":
+        stdout = body.get("stdout")
+        stderr = body.get("stderr")
+        command = body.get("command")
+        parts: list[str] = []
+        if isinstance(command, str) and command.strip():
+            parts.append(f"$ {command.strip()}")
+        if isinstance(stdout, str) and stdout.strip():
+            parts.append(stdout.strip())
+        if isinstance(stderr, str) and stderr.strip():
+            parts.append(stderr.strip())
+        if parts:
+            return {"preview": "\n".join(parts)[:1000]}
     if tool_id == "artifact.create" and isinstance(body.get("title"), str):
         return {
             "artifactId": body.get("artifactId"),

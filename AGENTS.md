@@ -212,7 +212,9 @@ For current behavior, assume:
 ### Tools runtime
 
 - Handlers live under `src/copenet/core/tools/handlers/` (`files.py`, `git.py`, `shell.py`, `context.py`, `artifacts.py`); `builtin_readonly.py` aggregates them (name is historical — write + artifact tools are included).
-- Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: default modes allow read/shell/context/artifact; task mode **`full-access`** adds **`repo-write`** (`files.edit`, `files.write`).
+- Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: default modes allow read/shell/context/artifact; task mode **`full-access`** adds **`repo-write`** (`files.edit`, `files.write`) and unrestricted user-level `shell.exec`.
+- Full-access shell commands run with the current OS user's permissions and may use normal shell syntax (`|`, `&&`, redirects, scripts, etc.). High-risk command patterns return `policyDecision: "approval_required"` instead of executing; wire operator confirmation before allowing those proposal records to resume.
+- Permission claims should be tested with the direct matrix before trusting a live model's self-report: `uv run python scripts/permission_probe_matrix.py`. A model that only proves `pwd` works has proven shell-read, not full-access.
 - **`TOOL_BATCH`** is limited to bundled **read/context** calls; mixed batches split with trace `tool_batch_split` and client-visible repair summaries on `tool.batch`.
 - **`artifact.create`** persists session artifacts when `artifact_store`, `session_key`, and `run_id` are present.
 
@@ -314,6 +316,18 @@ For current integration coverage, also know about:
 - `uv run --extra dev pytest -q`
 - `tests/integration/test_tool_prompt_matrix.py` — deterministic fake-provider prompt/tool-loop matrix
 - `scripts/live_probe_matrix.py` — nondeterministic live provider/model probe runner for real runtimes
+
+For real provider session probing during development, use the CopeNet CLI chat lane. It creates or continues a real
+orchestrator-backed session, uses the same transcript/session stores as the UI, and prints streamed assistant text plus
+tool calls/results:
+
+- `uv run copenet chat send --session 69696469 --provider openai-codex --model gpt-5.5 "Run pwd, then tell me stdout."`
+- `uv run copenet chat send --session 69696469 "What command did you just run?"`
+- `uv run copenet chat history --session 69696469 --limit 12`
+
+Session key `69696469` is the standing local probe session. Reuse it when checking continuity across turns; use a fresh
+session key when you need a clean baseline. The CLI path is for live runtime verification and can spend provider quota
+or execute allowed tools, so prefer targeted prompts and default guarded mode unless a full-access scenario is explicit.
 
 ### Tracing
 

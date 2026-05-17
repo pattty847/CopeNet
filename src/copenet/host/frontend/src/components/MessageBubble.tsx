@@ -6,6 +6,7 @@ import { Copy, Check } from 'lucide-react';
 import { Spinner } from './Spinner';
 import { ChatMarkdown } from './ChatMarkdown';
 import type { MessagePart, ToolBatchPart, ToolCallPart, ToolResultPart } from '../types/backend';
+import { formatMessageForClipboard } from '../lib/chatExport';
 
 function partsShouldCollapseIntoSingleRow(current: ToolCallPart, next: ToolResultPart | ToolBatchPart): boolean {
   if (next.kind === 'tool_result') {
@@ -63,7 +64,7 @@ export function MessageBubble({ message }: { message: Message }) {
   const [copied, setCopied] = useState(false);
 
   const handleCopy = () => {
-    navigator.clipboard.writeText(message.content);
+    navigator.clipboard.writeText(formatMessageForClipboard(message));
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1600);
   };

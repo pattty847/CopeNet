@@ -23,7 +23,7 @@ class HarnessTurnPlan:
     capability_profile: ModelCapabilityProfile
     tools: list[ToolDescriptor] = field(default_factory=list)
     will_attempt_tool_loop: bool = False
-    tool_execution_mode: Literal["none", "native"] = "none"
+    tool_execution_mode: Literal["none", "native", "prompted"] = "none"
 
 
 async def plan_turn(
@@ -60,13 +60,14 @@ async def plan_turn(
         prompted_tool_use=caps.get("promptedToolUse", caps.get("toolCalls", False)),
     )
     use_native_tools = bool(tools and profile.tool_calls)
+    use_prompted_tools = bool(tools and not use_native_tools and profile.prompted_tool_use)
     plan = HarnessTurnPlan(
         provider=provider_name,
         model=model,
         capability_profile=profile,
         tools=tools,
-        will_attempt_tool_loop=use_native_tools,
-        tool_execution_mode="native" if use_native_tools else "none",
+        will_attempt_tool_loop=use_native_tools or use_prompted_tools,
+        tool_execution_mode="native" if use_native_tools else "prompted" if use_prompted_tools else "none",
     )
     if trace is not None:
         trace(

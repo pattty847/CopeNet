@@ -1,0 +1,1 @@
+CopeNet permission probe: write access works.

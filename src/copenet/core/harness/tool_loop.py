@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from copenet.core.runtime import TurnState
 from copenet.core.tools import (
+    ToolDescriptor,
     ToolExecutionContext,
     ToolExecutionRequest,
     ToolExecutionResult,
@@ -253,6 +254,106 @@ async def run_with_native_tools(
     yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
 
 
+async def run_with_prompted_tools(
+    *,
+    provider: Provider,
+    prompt: str,
+    provider_session_id: str | None,
+    abort_event: asyncio.Event,
+    model: str | None,
+    system_prompt: str | None,
+    plan: HarnessTurnPlan,
+    tool_executor: ToolExecutor,
+    tool_context: ToolExecutionContext,
+    trace: TraceRecorder | None,
+) -> AsyncIterator[ProviderEvent]:
+    """Run a bounded text-protocol tool loop for providers without native tools."""
+    discovered_session = provider_session_id
+    current_prompt = prompt
+    current_system_prompt = compose_prompted_tool_system_prompt(
+        provider=provider,
+        system_prompt=system_prompt,
+        tools=plan.tools,
+    )
+
+    for step_index in range(MAX_TOOL_STEPS):
+        events, discovered_session = await collect_provider_turn(
+            provider=provider,
+            prompt=current_prompt,
+            provider_session_id=discovered_session,
+            abort_event=abort_event,
+            model=model,
+            system_prompt=current_system_prompt,
+            trace=trace,
+            phase="prompted_tool",
+        )
+        assistant_text = "".join(event.text or "" for event in events if event.kind == "delta").strip()
+        tool_requests = _extract_prompted_tool_requests(assistant_text)
+        if trace is not None:
+            trace(
+                "prompted_tool_response_interpreted",
+                {
+                    "toolCallCount": len(tool_requests),
+                    "contentLength": len(assistant_text),
+                    "step": step_index + 1,
+                },
+            )
+        if not tool_requests:
+            if assistant_text:
+                yield ProviderEvent(kind="delta", text=assistant_text, provider_session_id=discovered_session)
+            yield ProviderEvent(kind="final", provider_session_id=discovered_session)
+            return
+
+        tool_payloads: list[str] = []
+        for request in tool_requests:
+            if trace is not None:
+                trace(
+                    "tool_requested",
+                    {
+                        "toolId": request.tool_id,
+                        "arguments": request.arguments,
+                        "step": step_index + 1,
+                        "native": False,
+                    },
+                )
+            yield ProviderEvent(
+                kind="meta",
+                metadata={
+                    "toolCall": _tool_call_event_payload(
+                        tool_id=request.tool_id,
+                        arguments=request.arguments,
+                        step=step_index + 1,
+                        native=False,
+                    )
+                },
+            )
+            tool_result = await tool_executor(request, tool_context)
+            tool_result = _with_call_id(tool_result, request.tool_id)
+            tool_result, artifact_draft = _materialize_tool_result_artifact(
+                tool_result=tool_result,
+                tool_context=tool_context,
+                trace=trace,
+            )
+            meta_payload: dict[str, Any] = {
+                "toolExecution": tool_result.to_event_payload(),
+                "toolResult": tool_result.to_runtime_input(),
+            }
+            if artifact_draft is not None:
+                meta_payload["artifactDraft"] = artifact_draft
+            yield ProviderEvent(kind="meta", metadata=meta_payload)
+            tool_payloads.append(tool_result.to_prompt_payload())
+        if step_index >= MAX_TOOL_STEPS - 1:
+            yield ProviderEvent(kind="final", provider_session_id=discovered_session)
+            return
+        current_prompt = _compose_prompted_tool_followup(
+            user_prompt=prompt,
+            assistant_text=assistant_text,
+            tool_payloads=tool_payloads,
+        )
+
+    yield ProviderEvent(kind="final", provider_session_id=discovered_session)
+
+
 def _tool_call_event_payload(
     *,
     tool_id: str,
@@ -350,6 +451,75 @@ def _native_tool_message_content(tool_result: ToolExecutionResult) -> str:
     if isinstance(body, str):
         return body
     return json.dumps(body, ensure_ascii=False, indent=2)
+
+
+def compose_prompted_tool_system_prompt(
+    *,
+    provider: Provider,
+    system_prompt: str | None,
+    tools: list[ToolDescriptor],
+) -> str | None:
+    tool_lines = []
+    for tool in tools:
+        schema = json.dumps(tool.input_schema, ensure_ascii=False, sort_keys=True)
+        tool_lines.append(f"- {tool.id}: {tool.description} Schema: {schema}")
+    extra = (
+        "You may request CopeNet tools by outputting only JSON objects, one object per tool call, when a tool is needed.\n"
+        "Use this shape: {\"tool_id\":\"shell.exec\",\"arguments\":{\"command\":\"pwd\"}}.\n"
+        "For shell commands, use one command per call. Do not use pipes, chaining, redirection, or multiple commands.\n"
+        "If you output {\"command\":\"pwd\"}, CopeNet will treat it as shell.exec.\n"
+        "After tool results are returned, answer using the observed output.\n\n"
+        "Available tools:\n"
+        + "\n".join(tool_lines)
+    )
+    return compose_system_prompt(provider=provider, system_prompt=system_prompt, extra_instructions=extra)
+
+
+def _extract_prompted_tool_requests(text: str) -> list[ToolExecutionRequest]:
+    decoder = json.JSONDecoder()
+    requests: list[ToolExecutionRequest] = []
+    index = 0
+    while index < len(text):
+        start = text.find("{", index)
+        if start == -1:
+            break
+        try:
+            value, end = decoder.raw_decode(text[start:])
+        except json.JSONDecodeError:
+            index = start + 1
+            continue
+        index = start + max(end, 1)
+        request = _coerce_prompted_tool_request(value)
+        if request is not None:
+            requests.append(request)
+    return requests
+
+
+def _coerce_prompted_tool_request(value: Any) -> ToolExecutionRequest | None:
+    if not isinstance(value, dict):
+        return None
+    raw_tool_id = value.get("tool_id") or value.get("toolId") or value.get("name")
+    arguments = value.get("arguments")
+    if raw_tool_id is None and isinstance(value.get("command"), str):
+        return ToolExecutionRequest(tool_id="shell.exec", arguments={"command": str(value["command"])})
+    tool_id = str(raw_tool_id or "").strip()
+    if not tool_id:
+        return None
+    if not isinstance(arguments, dict):
+        arguments = {key: item for key, item in value.items() if key not in {"tool_id", "toolId", "name"}}
+    return ToolExecutionRequest(tool_id=tool_id, arguments=dict(arguments))
+
+
+def _compose_prompted_tool_followup(*, user_prompt: str, assistant_text: str, tool_payloads: list[str]) -> str:
+    return (
+        "Continue the same task using the CopeNet tool results below. "
+        "Do not repeat tool calls whose results are already provided unless another command is necessary.\n\n"
+        f"Original user request:\n{user_prompt}\n\n"
+        f"Assistant tool request text:\n{assistant_text}\n\n"
+        "Tool results:\n"
+        + "\n\n".join(tool_payloads)
+        + "\n\nNow answer the user in plain text, or request one more tool with JSON if still necessary."
+    )
 
 
 def _with_call_id(result: ToolExecutionResult, tool_id: str) -> ToolExecutionResult:

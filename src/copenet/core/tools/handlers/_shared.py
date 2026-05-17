@@ -37,6 +37,34 @@ async def run_command(
         raise RuntimeError(f"command timed out after {timeout_sec}s") from exc
 
 
+async def run_shell_command(
+    command: str,
+    *,
+    cwd: Path,
+    timeout_sec: float,
+    output_limit: int,
+) -> tuple[int, str, str]:
+    def invoke() -> tuple[int, str, str]:
+        proc = subprocess.run(
+            command,
+            cwd=str(cwd),
+            capture_output=True,
+            text=True,
+            timeout=timeout_sec,
+            check=False,
+            shell=True,
+            executable="/bin/bash",
+        )
+        stdout_text = (proc.stdout or "")[:output_limit]
+        stderr_text = (proc.stderr or "")[:output_limit]
+        return proc.returncode, stdout_text, stderr_text
+
+    try:
+        return await asyncio.to_thread(invoke)
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(f"command timed out after {timeout_sec}s") from exc
+
+
 def read_guidance(context: ToolExecutionContext) -> str:
     guidance_path = context.workdir / "AGENTS.md"
     if not guidance_path.is_file():

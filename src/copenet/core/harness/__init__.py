@@ -16,6 +16,7 @@ from .tool_loop import (
     collect_provider_turn,
     compose_provider_prompt,
     provider_system_prompt,
+    run_with_prompted_tools,
     run_with_native_tools,
 )
 
@@ -75,6 +76,21 @@ class ChatHarness:
         context_overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
         combined_system_prompt = "\n\n".join(part for part in (system_prompt, context_overlay) if part)
         effective_system_prompt = combined_system_prompt or None
+        if plan.tool_execution_mode == "prompted" and tool_executor is not None and tool_context is not None:
+            stream = run_with_prompted_tools(
+                provider=provider,
+                prompt=prompt,
+                provider_session_id=provider_session_id,
+                abort_event=abort_event,
+                model=model,
+                system_prompt=effective_system_prompt,
+                plan=plan,
+                tool_executor=tool_executor,
+                tool_context=tool_context,
+                trace=trace,
+            )
+            return plan, stream
+
         if (
             not plan.will_attempt_tool_loop
             or plan.tool_execution_mode != "native"
