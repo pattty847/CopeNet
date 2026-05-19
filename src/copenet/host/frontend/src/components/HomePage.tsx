@@ -1,5 +1,5 @@
 import { Activity, Bot, Database, RefreshCcw, SlidersHorizontal, WandSparkles } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { ReturnBriefing, DEV_SKELETON_FOR_TEST } from './profile/ReturnBriefing';
@@ -7,6 +7,10 @@ import { useReturnBriefing } from '../runtime/adapter';
 import { HomeLayoutCard } from './home/HomeLayoutCard';
 import { isHomeCardVisible, renderHomeCard, type HomeCardContext } from './home/HomeCards';
 import { cycleHomeCardSize, DEFAULT_HOME_LAYOUT, reorderHomeLayout, type HomeCardId } from './home/homeLayout';
+import { MissionControlPanel } from './home/MissionControlPanel';
+import { buildMissionControlItems, type MissionControlItem } from '../lib/missionControl';
+import { wsClient } from '../lib/wsClient';
+import type { SessionRunRecord } from '../types/backend';
 
 export function HomePage() {
   const themeMode = useAppStore((state) => state.themeMode);
@@ -16,7 +20,13 @@ export function HomePage() {
   const tools = useAppStore((state) => state.tools);
   const wsStatus = useAppStore((state) => state.wsStatus);
   const pulses = useAppStore((state) => state.pulses);
+  const sessionStates = useAppStore((state) => state.sessionStates);
+  const upsertSessionState = useAppStore((state) => state.upsertSessionState);
+  const pendingApproval = useAppStore((state) => state.pendingApproval);
+  const approvalHistory = useAppStore((state) => state.approvalHistory);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
+  const setActiveSessionKey = useAppStore((state) => state.setActiveSessionKey);
+  const setDraftOpen = useAppStore((state) => state.setDraftOpen);
   const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
   const setReturnBriefing = useAppStore((state) => state.setReturnBriefing);
   const homeLayout = useAppStore((state) => state.homeLayout);
@@ -28,6 +38,8 @@ export function HomePage() {
   const [customizing, setCustomizing] = useState(false);
   const [draggingId, setDraggingId] = useState<HomeCardId | null>(null);
   const [dropTargetId, setDropTargetId] = useState<HomeCardId | null>(null);
+  const [missionRunsBySession, setMissionRunsBySession] = useState<Record<string, SessionRunRecord[]>>({});
+  const [missionLoading, setMissionLoading] = useState(false);
   const resolvedThemeMode = typeof window === 'undefined' ? useAppStore.getState().themeMode : themeMode;
   const isDark = resolvedThemeMode === 'dark';
 
@@ -35,10 +47,84 @@ export function HomePage() {
     () => Object.values(messages).reduce((count, sessionMessages) => count + sessionMessages.length, 0),
     [messages],
   );
-  const activeSessions = sessions.filter((session) => !session.archived).length;
+  const activeSessionRecords = useMemo(() => sessions.filter((session) => !session.archived), [sessions]);
+  const activeSessions = activeSessionRecords.length;
   const archivedSessions = sessions.filter((session) => session.archived).length;
   const connectedProviders = providers.filter((provider) => provider.available).length;
   const latestSessions = sessions.slice(0, 4);
+  const missionSessionSignature = activeSessionRecords.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (activeSessionRecords.length === 0) {
+      setMissionRunsBySession({});
+      setMissionLoading(false);
+      return;
+    }
+
+    setMissionLoading(true);
+    void Promise.all(
+      activeSessionRecords.map(async (session) => {
+        const [runs, state] = await Promise.all([
+          wsClient.listSessionRuns(session.key, 8).catch(() => [] as SessionRunRecord[]),
+          wsClient.resolveSessionState(session.key).catch(() => null),
+        ]);
+        return { sessionKey: session.key, runs, state };
+      }),
+    )
+      .then((records) => {
+        if (cancelled) return;
+        const nextRuns: Record<string, SessionRunRecord[]> = {};
+        for (const record of records) {
+          nextRuns[record.sessionKey] = record.runs;
+          if (record.state) upsertSessionState(record.state);
+        }
+        setMissionRunsBySession(nextRuns);
+      })
+      .finally(() => {
+        if (!cancelled) setMissionLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeSessionRecords, missionSessionSignature, upsertSessionState]);
+
+  const missionApprovals = useMemo(() => {
+    const byId = new Map(approvalHistory.map((approval) => [approval.approvalId, approval]));
+    if (pendingApproval) byId.set(pendingApproval.approvalId, pendingApproval);
+    return [...byId.values()];
+  }, [approvalHistory, pendingApproval]);
+
+  const missionItems = useMemo(
+    () =>
+      buildMissionControlItems({
+        sessions,
+        sessionStates,
+        runsBySession: missionRunsBySession,
+        approvals: missionApprovals,
+      }),
+    [missionApprovals, missionRunsBySession, sessionStates, sessions],
+  );
+
+  const openMissionSession = (item: MissionControlItem) => {
+    setActiveSessionKey(item.sessionKey);
+    setDraftOpen(false);
+    setCurrentSection('agents');
+  };
+
+  const openMissionRun = (item: MissionControlItem) => {
+    setActiveSessionKey(item.sessionKey);
+    setDraftOpen(false);
+    setCurrentSection('observability');
+  };
+
+  const openMissionWorkflow = (item: MissionControlItem) => {
+    setActiveSessionKey(item.sessionKey);
+    setDraftOpen(false);
+    setWorkflowsRoute('hub');
+    setCurrentSection('workflows');
+  };
 
   const stats = [
     {
@@ -156,6 +242,14 @@ export function HomePage() {
           Drag cards to reorder them. Drag the corner control to resize width or height. Double back here and hit reset if you want the shipped layout again.
         </div>
       )}
+
+      <MissionControlPanel
+        items={missionItems}
+        loading={missionLoading}
+        onOpenSession={openMissionSession}
+        onOpenObservability={openMissionRun}
+        onPromoteWorkflow={openMissionWorkflow}
+      />
 
       <section className="grid grid-cols-1 items-start gap-3 lg:grid-cols-12">
         {visibleLayout.map((item) => (
