@@ -5,6 +5,7 @@ from typing import Any
 import pytest
 
 from copenet.core.harness import ChatHarness
+from copenet.core.harness.planning import HarnessTurnPlan
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
 from copenet.providers import ProviderEvent
@@ -62,7 +63,7 @@ async def _run_harness_turn(
     prompt: str,
     tmp_path: Path,
     provider_session_id: str | None = None,
-) -> tuple[list[ProviderEvent], list[TraceRow], str | None]:
+) -> tuple[HarnessTurnPlan, list[ProviderEvent], list[TraceRow], str | None]:
     traces: list[TraceRow] = []
 
     def trace(event: str, payload: dict[str, Any] | None = None) -> None:
@@ -98,10 +99,8 @@ async def _run_harness_turn(
         provider_session_id,
     )
 
-    assert plan.will_attempt_tool_loop is False
-    assert plan.tool_execution_mode == "none"
     assert any(event == "harness_planned" for event, _ in traces)
-    return events, traces, discovered_session_id
+    return plan, events, traces, discovered_session_id
 
 
 def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]:
@@ -109,40 +108,52 @@ def _find_trace_rows(traces: list[TraceRow], event: str) -> list[dict[str, Any]]
 
 
 @pytest.mark.asyncio
-async def test_prompted_provider_streams_plain_text_without_harness_tool_parsing(tmp_path: Path) -> None:
-    provider = ScriptedPromptProvider(outputs=['{"tool_id":"files.read","arguments":{"path":"README.md"}}'])
+async def test_prompted_provider_executes_json_tool_request_then_follows_up(tmp_path: Path) -> None:
+    (tmp_path / "README.md").write_text("# CopeNet\nLocal agent gateway.\n", encoding="utf-8")
+    provider = ScriptedPromptProvider(
+        outputs=[
+            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            "I read README.md and found that CopeNet is a local agent gateway.",
+        ]
+    )
 
-    events, traces, provider_session_id = await _run_harness_turn(
+    plan, events, traces, provider_session_id = await _run_harness_turn(
         provider=provider,
         prompt="Please use a tool if needed and then answer briefly.",
         tmp_path=tmp_path,
     )
 
+    assert plan.will_attempt_tool_loop is True
+    assert plan.tool_execution_mode == "prompted"
     assert provider_session_id == "provider-session"
-    assert len(provider.prompts) == 1
-    assert provider.system_prompts == [None]
-    assert _find_trace_rows(traces, "tool_requested") == []
-    assert _find_trace_rows(traces, "tool_executed") == []
+    assert len(provider.prompts) == 2
+    assert all(prompt and "Available tools:" in prompt for prompt in provider.system_prompts)
+    assert [row["toolId"] for row in _find_trace_rows(traces, "tool_requested")] == ["files.read"]
+    assert [row["toolId"] for row in _find_trace_rows(traces, "tool_executed")] == ["files.read"]
     delta_events = [event for event in events if event.kind == "delta"]
-    assert delta_events[0].text == '{"tool_id":"files.read","arguments":{"path":"README.md"}}'
+    assert delta_events[-1].text == "I read README.md and found that CopeNet is a local agent gateway."
 
 
 @pytest.mark.asyncio
 async def test_prompted_provider_resume_remains_provider_passthrough(tmp_path: Path) -> None:
     provider = ScriptedPromptProvider(outputs=["First answer.", "Second answer."])
 
-    first_events, _, provider_session_id = await _run_harness_turn(
+    first_plan, first_events, first_traces, provider_session_id = await _run_harness_turn(
         provider=provider,
         prompt="Please answer.",
         tmp_path=tmp_path,
     )
-    second_events, _, resumed_session_id = await _run_harness_turn(
+    second_plan, second_events, second_traces, resumed_session_id = await _run_harness_turn(
         provider=provider,
         prompt="Please answer again.",
         tmp_path=tmp_path,
         provider_session_id=provider_session_id,
     )
 
+    assert first_plan.tool_execution_mode == "prompted"
+    assert second_plan.tool_execution_mode == "prompted"
+    assert _find_trace_rows(first_traces, "tool_requested") == []
+    assert _find_trace_rows(second_traces, "tool_requested") == []
     assert provider_session_id == resumed_session_id == "provider-session"
     assert [event.text for event in first_events if event.kind == "delta"] == ["First answer."]
     assert [event.text for event in second_events if event.kind == "delta"] == ["Second answer."]

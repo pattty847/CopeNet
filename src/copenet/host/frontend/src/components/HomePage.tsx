@@ -1,16 +1,15 @@
-import { Activity, Bot, Database, RefreshCcw, SlidersHorizontal, WandSparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { ReturnBriefing, DEV_SKELETON_FOR_TEST } from './profile/ReturnBriefing';
 import { useReturnBriefing } from '../runtime/adapter';
-import { HomeLayoutCard } from './home/HomeLayoutCard';
-import { isHomeCardVisible, renderHomeCard, type HomeCardContext } from './home/HomeCards';
-import { cycleHomeCardSize, DEFAULT_HOME_LAYOUT, reorderHomeLayout, type HomeCardId } from './home/homeLayout';
+import { renderHomeCard, type HomeCardContext } from './home/HomeCards';
 import { MissionControlPanel } from './home/MissionControlPanel';
 import { buildMissionControlItems, type MissionControlItem } from '../lib/missionControl';
 import { wsClient } from '../lib/wsClient';
 import type { SessionRunRecord } from '../types/backend';
+
+const MISSION_SESSION_LIMIT = 24;
 
 export function HomePage() {
   const themeMode = useAppStore((state) => state.themeMode);
@@ -29,15 +28,9 @@ export function HomePage() {
   const setDraftOpen = useAppStore((state) => state.setDraftOpen);
   const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
   const setReturnBriefing = useAppStore((state) => state.setReturnBriefing);
-  const homeLayout = useAppStore((state) => state.homeLayout);
-  const setHomeLayout = useAppStore((state) => state.setHomeLayout);
-  const resetHomeLayout = useAppStore((state) => state.resetHomeLayout);
   const isMobile = useIsMobile();
   const returnBriefing = useReturnBriefing();
   const [showChangelog, setShowChangelog] = useState(false);
-  const [customizing, setCustomizing] = useState(false);
-  const [draggingId, setDraggingId] = useState<HomeCardId | null>(null);
-  const [dropTargetId, setDropTargetId] = useState<HomeCardId | null>(null);
   const [missionRunsBySession, setMissionRunsBySession] = useState<Record<string, SessionRunRecord[]>>({});
   const [missionLoading, setMissionLoading] = useState(false);
   const resolvedThemeMode = typeof window === 'undefined' ? useAppStore.getState().themeMode : themeMode;
@@ -48,15 +41,15 @@ export function HomePage() {
     [messages],
   );
   const activeSessionRecords = useMemo(() => sessions.filter((session) => !session.archived), [sessions]);
+  const missionSessionRecords = useMemo(() => activeSessionRecords.slice(0, MISSION_SESSION_LIMIT), [activeSessionRecords]);
   const activeSessions = activeSessionRecords.length;
-  const archivedSessions = sessions.filter((session) => session.archived).length;
   const connectedProviders = providers.filter((provider) => provider.available).length;
   const latestSessions = sessions.slice(0, 4);
-  const missionSessionSignature = activeSessionRecords.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|');
+  const missionSessionSignature = missionSessionRecords.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|');
 
   useEffect(() => {
     let cancelled = false;
-    if (activeSessionRecords.length === 0) {
+    if (missionSessionRecords.length === 0) {
       setMissionRunsBySession({});
       setMissionLoading(false);
       return;
@@ -64,7 +57,7 @@ export function HomePage() {
 
     setMissionLoading(true);
     void Promise.all(
-      activeSessionRecords.map(async (session) => {
+      missionSessionRecords.map(async (session) => {
         const [runs, state] = await Promise.all([
           wsClient.listSessionRuns(session.key, 8).catch(() => [] as SessionRunRecord[]),
           wsClient.resolveSessionState(session.key).catch(() => null),
@@ -88,7 +81,7 @@ export function HomePage() {
     return () => {
       cancelled = true;
     };
-  }, [activeSessionRecords, missionSessionSignature, upsertSessionState]);
+  }, [missionSessionRecords, missionSessionSignature, upsertSessionState]);
 
   const missionApprovals = useMemo(() => {
     const byId = new Map(approvalHistory.map((approval) => [approval.approvalId, approval]));
@@ -126,33 +119,6 @@ export function HomePage() {
     setCurrentSection('workflows');
   };
 
-  const stats = [
-    {
-      label: 'Active Sessions',
-      value: String(activeSessions || 0),
-      note: archivedSessions ? `${archivedSessions} archived` : 'Ready for new work',
-      icon: Bot,
-    },
-    {
-      label: 'Messages Logged',
-      value: String(totalMessages || 0),
-      note: 'Across all sessions',
-      icon: Activity,
-    },
-    {
-      label: 'Providers Online',
-      value: `${connectedProviders}/${providers.length || 1}`,
-      note: wsStatus === 'connected' ? 'Gateway connected' : 'Reconnecting',
-      icon: Database,
-    },
-    {
-      label: 'Tools Available',
-      value: String(tools.length || 0),
-      note: tools.length === 1 ? 'tool registered' : 'tools registered',
-      icon: WandSparkles,
-    },
-  ];
-
   const cardContext: HomeCardContext = {
     isMobile,
     isDark,
@@ -163,7 +129,6 @@ export function HomePage() {
     toolCount: tools.length,
     wsStatus,
     latestSessions,
-    stats,
     showChangelog,
     setShowChangelog,
     setCurrentSection,
@@ -171,78 +136,38 @@ export function HomePage() {
     pulseCount: pulses.length,
   };
 
-  const visibleLayout = homeLayout.filter((item) => isHomeCardVisible(item.id, cardContext));
-
-  const applyDrop = (targetId: HomeCardId) => {
-    if (!draggingId || draggingId === targetId) {
-      setDropTargetId(null);
-      return;
-    }
-    setHomeLayout(reorderHomeLayout(homeLayout, draggingId, targetId));
-    setDraggingId(null);
-    setDropTargetId(null);
-  };
-
   return (
-    <div className="animate-fade-in-up space-y-3 px-0.5 sm:px-0">
+    <div className="animate-fade-in-up space-y-4 px-0.5 sm:px-0">
       {returnBriefing ? (
         <ReturnBriefing />
-      ) : null}
-
-      {!returnBriefing && !isMobile && (
-        <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2 text-[11px] text-shell-muted/60">
-          <span className="rounded-full border border-shell-border bg-shell-panel px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-shell-muted">
-            Dev
-          </span>
-          <span>Return Briefing not yet wired to backend.</span>
-          <button
-            type="button"
-            onClick={() => setReturnBriefing(DEV_SKELETON_FOR_TEST)}
-            className="ml-auto rounded-[8px] border border-shell-border bg-shell-panel px-2.5 py-1 text-[10px] font-medium text-shell-text transition-colors duration-150 hover:border-shell-accent/30 hover:text-shell-accent"
-          >
-            Preview briefing
-          </button>
-        </div>
+      ) : (
+        !isMobile && (
+          <div className="flex items-center gap-2 rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2 text-[11px] text-shell-muted/60">
+            <span className="rounded-full border border-shell-border bg-shell-panel px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-shell-muted">
+              Dev
+            </span>
+            <span>Return Briefing not yet wired to backend.</span>
+            <button
+              type="button"
+              onClick={() => setReturnBriefing(DEV_SKELETON_FOR_TEST)}
+              className="ml-auto rounded-[8px] border border-shell-border bg-shell-panel px-2.5 py-1 text-[10px] font-medium text-shell-text transition-colors duration-150 hover:border-shell-accent/30 hover:text-shell-accent"
+            >
+              Preview briefing
+            </button>
+          </div>
+        )
       )}
 
-      <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-        <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Home Layout</div>
-          <p className="mt-1 text-[12px] text-shell-muted">
-            Arrange the cards how you want. We&apos;ll remember it on this browser.
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setCustomizing((value) => !value)}
-            className={`inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-[12px] font-medium transition-colors ${customizing ? 'border-shell-accent/35 bg-shell-accent-soft text-shell-accent' : 'border-shell-border bg-shell-panel text-shell-text hover:border-shell-border-strong'}`}
-          >
-            <SlidersHorizontal className="h-3.5 w-3.5" />
-            {customizing ? 'Done customizing' : 'Customize layout'}
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              resetHomeLayout();
-              setCustomizing(false);
-              setDraggingId(null);
-              setDropTargetId(null);
-            }}
-            className="inline-flex items-center gap-2 rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] font-medium text-shell-text transition-colors hover:border-shell-border-strong"
-          >
-            <RefreshCcw className="h-3.5 w-3.5" />
-            Reset layout
-          </button>
-        </div>
+      {/* 1. Hero — cinematic, greeting + CTAs + workspace signal */}
+      <div>{renderHomeCard('hero', cardContext)}</div>
+
+      {/* 2. Operational overview — recent sessions + system health, flush row */}
+      <div className="grid grid-cols-1 items-stretch gap-3 lg:grid-cols-12">
+        <div className="lg:col-span-8">{renderHomeCard('recent_activity', cardContext)}</div>
+        <div className="lg:col-span-4">{renderHomeCard('system_health', cardContext)}</div>
       </div>
 
-      {customizing && !isMobile && (
-        <div className="rounded-[16px] border border-shell-accent/22 bg-shell-accent-soft px-4 py-3 text-[12px] text-shell-muted">
-          Drag cards to reorder them. Drag the corner control to resize width or height. Double back here and hit reset if you want the shipped layout again.
-        </div>
-      )}
-
+      {/* 3. Mission Control — scan what wants attention */}
       <MissionControlPanel
         items={missionItems}
         loading={missionLoading}
@@ -251,38 +176,8 @@ export function HomePage() {
         onPromoteWorkflow={openMissionWorkflow}
       />
 
-      <section className="grid grid-cols-1 items-start gap-3 lg:grid-cols-12">
-        {visibleLayout.map((item) => (
-          <HomeLayoutCard
-            key={item.id}
-            item={item}
-            customizing={customizing}
-            isMobile={isMobile}
-            draggingId={draggingId}
-            dropTargetId={dropTargetId}
-            onDragStart={(id) => {
-              setDraggingId(id);
-              setDropTargetId(id);
-            }}
-            onDragEnd={() => {
-              setDraggingId(null);
-              setDropTargetId(null);
-            }}
-            onDropOn={applyDrop}
-            onResize={(id, axis, direction) => {
-              setHomeLayout(cycleHomeCardSize(homeLayout, id, direction, axis));
-            }}
-          >
-            {renderHomeCard(item.id, cardContext)}
-          </HomeLayoutCard>
-        ))}
-      </section>
-
-      {!isMobile && homeLayout.length !== DEFAULT_HOME_LAYOUT.length && (
-        <div className="rounded-[16px] border border-shell-border bg-shell-panel px-4 py-3 text-[12px] text-shell-muted">
-          The Home layout registry changed since your last visit. New cards were added safely to the end of your layout.
-        </div>
-      )}
+      {/* 4. Identity & Memory — deepest surface, full width */}
+      {!isMobile && <div>{renderHomeCard('memory_profile', cardContext)}</div>}
     </div>
   );
 }

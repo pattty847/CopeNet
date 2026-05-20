@@ -18,8 +18,7 @@ DESCRIPTORS = [
         id="context.prepare",
         name="Prepare Context",
         description=(
-            "Prepare a compact repo/session overview for orientation. Use this for quick context and prior-session "
-            "guidance, not as a replacement for direct file inspection when making repo/code claims."
+            "Prepare a compact repo/session overview for orientation and prior-session guidance."
         ),
         category="context",
         input_schema={"type": "object", "properties": {"query": {"type": "string"}}},

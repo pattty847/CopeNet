@@ -31,8 +31,7 @@ DESCRIPTORS = [
         id="files.read",
         name="Read File",
         description=(
-            "Read a text file inside the current workdir. This is the primary grounding tool for "
-            "repo/code claims. Use it when you need direct evidence from a specific file. "
+            "Read a text file inside the current workdir. "
             "Supports bounded reads with offset/limit and returns a digest you can reuse for stale-read checks."
         ),
         category="repo-read",

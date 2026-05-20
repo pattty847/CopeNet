@@ -32,6 +32,7 @@ from copenet.probes.runtime_bundle import validate_debug_copy_bundle
 
 DEFAULT_WS_URL = "ws://127.0.0.1:17123/ws"
 DEFAULT_TOKEN = "dev-token"
+DEFAULT_PROVIDERS = "openai-codex,lm-studio"
 
 
 @dataclass(frozen=True)
@@ -320,7 +321,7 @@ async def main() -> None:
     parser = argparse.ArgumentParser(description="Run live CopeNet runtime probes and export durable bundle artifacts.")
     parser.add_argument("--ws-url", default=os.environ.get("COPNET_WS_URL", DEFAULT_WS_URL))
     parser.add_argument("--token", default=os.environ.get("COPNET_TOKEN", DEFAULT_TOKEN))
-    parser.add_argument("--providers", default="codex-cli,lm-studio")
+    parser.add_argument("--providers", default=DEFAULT_PROVIDERS)
     parser.add_argument("--lm-model", default=os.environ.get("COPNET_LM_MODEL"))
     parser.add_argument("--codex-model", default=os.environ.get("COPNET_CODEX_MODEL"))
     parser.add_argument("--output-dir", default=str(REPO_ROOT / "tmp" / "probe_runs"))

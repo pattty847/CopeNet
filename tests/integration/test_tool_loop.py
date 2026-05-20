@@ -278,7 +278,7 @@ async def test_harness_prompted_provider_executes_json_tool_requests(tmp_path: P
 
     plan, stream = await harness.run_turn(
         provider=provider,
-        prompt="Read the README",
+        prompt="Run pwd",
         provider_session_id=None,
         abort_event=asyncio.Event(),
         available_tools=ToolRegistry().list_tools(),

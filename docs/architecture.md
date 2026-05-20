@@ -235,6 +235,8 @@ In practice that means:
 
 `core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects only between native tool calling and plain provider passthrough.
 
+`core/harness/tool_loop.py` owns turn-level tool continuation. It executes provider-native or prompted tool calls under policy, streams normalized events, and lets the model decide when it has enough information to finalize. The harness does not classify prompt text or force a particular tool sequence before accepting a final answer; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+
 ## Session Model
 
 Sessions carry:

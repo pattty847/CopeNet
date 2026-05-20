@@ -120,10 +120,18 @@ async def handle_chat_send(
     )
 
     async def emit_chat(payload: dict[str, Any]) -> None:
-        await send_json(make_chat_event(_chat_event_payload(payload, request.run_id, request.session_key)))
+        try:
+            await send_json(make_chat_event(_chat_event_payload(payload, request.run_id, request.session_key)))
+        except Exception:
+            # Live frames are best-effort after chat.send has been accepted.
+            # The run should still complete and persist if the browser reconnects.
+            return
 
     async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
-        await send_json(make_event_frame(EventFrame(event=event, payload=payload)))
+        try:
+            await send_json(make_event_frame(EventFrame(event=event, payload=payload)))
+        except Exception:
+            return
 
     async def run() -> None:
         try:
@@ -147,15 +155,18 @@ async def handle_chat_send(
                 emit_event=emit_side_event,
             )
         except SessionInFlightError as exc:
-            await send_json(
-                make_response_frame(
-                    ResponseFrame(
-                        id=request_id,
-                        ok=True,
-                        payload={"runId": exc.run_id, "status": "in_flight"},
+            try:
+                await send_json(
+                    make_response_frame(
+                        ResponseFrame(
+                            id=request_id,
+                            ok=True,
+                            payload={"runId": exc.run_id, "status": "in_flight"},
+                        )
                     )
                 )
-            )
+            except Exception:
+                return
         except Exception as exc:
             await emit_chat(
                 {
@@ -169,7 +180,17 @@ async def handle_chat_send(
 
     task = asyncio.create_task(run())
     tasks.add(task)
-    task.add_done_callback(tasks.discard)
+
+    def finalize_task(done: asyncio.Task) -> None:
+        tasks.discard(done)
+        if done.cancelled():
+            return
+        try:
+            done.exception()
+        except Exception:
+            return
+
+    task.add_done_callback(finalize_task)
 
 
 async def handle_chat_abort(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

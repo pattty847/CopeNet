@@ -49,6 +49,8 @@ type PendingRequest = {
 };
 
 const RECONNECT_DELAY_MS = 3000;
+const CONNECT_TIMEOUT_MS = 10000;
+const REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_DEV_TOKEN = 'dev-token';
 const PROVIDER_PRIORITY = ['lm-studio', 'ollama', 'codex-cli'];
 
@@ -796,6 +798,7 @@ class WsClient {
   private connectResolve: (() => void) | null = null;
   private connectReject: ((error: Error) => void) | null = null;
   private connectRequestId: string | null = null;
+  private connectTimeoutTimer: number | null = null;
   private requestCounter = 0;
   private pendingRequests = new Map<string, PendingRequest>();
   private modelLoads = new Map<string, Promise<Model[]>>();
@@ -817,6 +820,18 @@ class WsClient {
       this.connectResolve = resolve;
       this.connectReject = reject;
     });
+    this.connectTimeoutTimer = window.setTimeout(() => {
+      const error = new Error(`WebSocket connect timed out after ${CONNECT_TIMEOUT_MS / 1000}s.`);
+      this.connectReject?.(error);
+      store.setWsStatus('disconnected');
+      store.setAppError(error.message);
+      this.connectPromise = null;
+      this.connectResolve = null;
+      this.connectReject = null;
+      this.connectRequestId = null;
+      this.connectTimeoutTimer = null;
+      this.ws?.close();
+    }, CONNECT_TIMEOUT_MS);
 
     this.ws = new WebSocket(getWsUrl());
     this.ws.onmessage = (event) => {
@@ -851,6 +866,10 @@ class WsClient {
       this.connectResolve = null;
       this.connectReject = null;
       this.connectRequestId = null;
+      if (this.connectTimeoutTimer !== null) {
+        window.clearTimeout(this.connectTimeoutTimer);
+        this.connectTimeoutTimer = null;
+      }
       if (store.wsStatus !== 'auth_failed') {
         this.scheduleReconnect();
       }
@@ -884,9 +903,19 @@ class WsClient {
     await this.connect();
     const requestId = this.nextRequestId(method);
     return await new Promise<T>((resolve, reject) => {
+      const timeoutTimer = window.setTimeout(() => {
+        this.pendingRequests.delete(requestId);
+        reject(new Error(`Request '${method}' timed out after ${REQUEST_TIMEOUT_MS / 1000}s.`));
+      }, REQUEST_TIMEOUT_MS);
       this.pendingRequests.set(requestId, {
-        resolve: (payload) => resolve(payload as T),
-        reject,
+        resolve: (payload) => {
+          window.clearTimeout(timeoutTimer);
+          resolve(payload as T);
+        },
+        reject: (error) => {
+          window.clearTimeout(timeoutTimer);
+          reject(error);
+        },
       });
       try {
         this.sendFrame({
@@ -896,6 +925,7 @@ class WsClient {
           params,
         });
       } catch (error) {
+        window.clearTimeout(timeoutTimer);
         this.pendingRequests.delete(requestId);
         reject(error instanceof Error ? error : new Error(String(error)));
       }
@@ -1025,6 +1055,10 @@ class WsClient {
   private handleResponseFrame(frame: ResponseFrame) {
     if (frame.id === this.connectRequestId) {
       if (frame.ok) {
+        if (this.connectTimeoutTimer !== null) {
+          window.clearTimeout(this.connectTimeoutTimer);
+          this.connectTimeoutTimer = null;
+        }
         if (this.reconnectTimer !== null) {
           window.clearTimeout(this.reconnectTimer);
           this.reconnectTimer = null;
@@ -1046,6 +1080,10 @@ class WsClient {
         this.connectResolve = null;
         this.connectReject = null;
         this.connectRequestId = null;
+        if (this.connectTimeoutTimer !== null) {
+          window.clearTimeout(this.connectTimeoutTimer);
+          this.connectTimeoutTimer = null;
+        }
         this.ws?.close();
       }
       return;
@@ -1670,45 +1708,45 @@ class WsClient {
     const store = useAppStore.getState();
     store.clearAppError();
 
-    let session = store.sessions.find((item) => item.key === store.activeSessionKey) || null;
-    if (!session) {
-      const draft = store.draftSettings;
-      const createPayload = await this.request<{ session: unknown }>('sessions.create', {
-        provider: draft.provider,
-        model: draft.model || undefined,
-        systemPromptId: draft.systemPromptId || undefined,
-        taskPromptId: draft.taskPromptId || undefined,
-        personaId: draft.personaId || undefined,
-        personaFlavorId: draft.personaFlavorId || undefined,
-        personaPrivacyTier: draft.personaPrivacyTier || undefined,
-        workspaceRoot: draft.workspaceRoot || undefined,
-        starterIntentId: store.draftStarterIntent?.id || undefined,
-      });
-      session = normalizeSession(createPayload.session);
-      store.upsertSession(session);
-      store.setActiveSessionKey(session.key);
-      store.setDraftOpen(false);
-      store.setDraftStarterIntent(null);
-    }
-
-    const userMessage: Message = {
-      localId: makeLocalId('user'),
-      sessionKey: session.key,
-      runId: null,
-      role: 'user',
-      content: trimmed,
-      timestamp: new Date().toISOString(),
-      provider: session.provider,
-      model: session.model,
-      providerSessionId: session.providerSessionId,
-      state: 'final',
-      toolExecution: null,
-      errorMessage: null,
-      optimistic: true,
-    };
-    store.addMessage(session.key, userMessage);
-
     try {
+      let session = store.sessions.find((item) => item.key === store.activeSessionKey) || null;
+      if (!session) {
+        const draft = store.draftSettings;
+        const createPayload = await this.request<{ session: unknown }>('sessions.create', {
+          provider: draft.provider,
+          model: draft.model || undefined,
+          systemPromptId: draft.systemPromptId || undefined,
+          taskPromptId: draft.taskPromptId || undefined,
+          personaId: draft.personaId || undefined,
+          personaFlavorId: draft.personaFlavorId || undefined,
+          personaPrivacyTier: draft.personaPrivacyTier || undefined,
+          workspaceRoot: draft.workspaceRoot || undefined,
+          starterIntentId: store.draftStarterIntent?.id || undefined,
+        });
+        session = normalizeSession(createPayload.session);
+        store.upsertSession(session);
+        store.setActiveSessionKey(session.key);
+        store.setDraftOpen(false);
+        store.setDraftStarterIntent(null);
+      }
+
+      const userMessage: Message = {
+        localId: makeLocalId('user'),
+        sessionKey: session.key,
+        runId: null,
+        role: 'user',
+        content: trimmed,
+        timestamp: new Date().toISOString(),
+        provider: session.provider,
+        model: session.model,
+        providerSessionId: session.providerSessionId,
+        state: 'final',
+        toolExecution: null,
+        errorMessage: null,
+        optimistic: true,
+      };
+      store.addMessage(session.key, userMessage);
+
       const payload = await this.request<{ runId?: string; status?: string }>('chat.send', {
         sessionKey: session.key,
         message: trimmed,
@@ -1752,20 +1790,22 @@ class WsClient {
         store.setActiveRunId(runId);
       }
     } catch (error) {
-      store.setAppError(error instanceof Error ? error.message : 'Unable to send message.');
-      store.addMessage(session.key, {
+      const errorMessage = error instanceof Error ? error.message : 'Unable to send message.';
+      const targetSessionKey = store.activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY;
+      store.setAppError(errorMessage);
+      store.addMessage(targetSessionKey, {
         localId: makeLocalId('system'),
-        sessionKey: session.key,
+        sessionKey: targetSessionKey,
         runId: null,
         role: 'system',
-        content: error instanceof Error ? error.message : 'Unable to send message.',
+        content: errorMessage,
         timestamp: new Date().toISOString(),
         provider: null,
         model: null,
         providerSessionId: null,
         state: 'error',
         toolExecution: null,
-        errorMessage: error instanceof Error ? error.message : 'Unable to send message.',
+        errorMessage,
         optimistic: false,
       });
       throw error;

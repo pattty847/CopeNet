@@ -112,7 +112,7 @@ def _requires_file_grounding(probe: ProbeSpec) -> bool:
 
 
 def _has_file_grounding_tool(tool_ids: list[str], artifacts: list[dict[str, Any]]) -> bool:
-    grounding_tools = {"files.read", "files.search"}
+    grounding_tools = {"files.read"}
     if grounding_tools.intersection(tool_ids):
         return True
     return bool(grounding_tools.intersection(_artifact_tool_ids(artifacts)))

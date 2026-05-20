@@ -48,10 +48,14 @@ For real-model behavior, use the live probe runner instead of pytest:
   - `COPNET_TRACE=1 uv run copenet`
 - run the probe matrix:
   - `uv run python scripts/live_probe_matrix.py --lm-model <your-lm-studio-model>`
+- run a focused local-model sweep across LM Studio chat models:
+  - `uv run python scripts/lmstudio_probe_sweep.py --limit 3`
+- compare available frontier lanes on the same focused probes:
+  - `uv run python scripts/live_probe_matrix.py --providers openai-codex,claude-cli --probes repo_inspect_summary,patch_plan_probe`
 
 What it does:
 
-- probes `codex-cli` plus one LM Studio model by default
+- probes `openai-codex` plus one LM Studio model by default
 - runs a compact tool-use matrix in mostly fresh sessions
 - includes one deliberate same-session follow-up pair to expose resume drift
 - writes a JSON artifact under `tmp/live_probe_results/`
@@ -61,7 +65,9 @@ What it is for:
 
 - real provider/model compliance testing
 - tool-use drift and prose-fallback diagnosis
-- comparing Codex behavior to one local model
+- comparing the OAuth OpenAI Codex endpoint to one local model under CopeNet's harness
+- separately sampling external harness lanes such as `codex-cli` and `claude-cli`
+- short-context frontier-vs-local comparisons before deciding whether to tune the harness or wait for stronger local models
 
 What it is not:
 

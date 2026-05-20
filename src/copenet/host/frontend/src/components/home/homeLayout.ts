@@ -1,16 +1,8 @@
 export type HomeCardId =
   | 'hero'
-  | 'glance'
-  | 'quick_starts'
   | 'recent_activity'
-  | 'workspaces'
-  | 'agent_library'
-  | 'playbook_library'
-  | 'whats_new'
-  | 'memory_profile'
-  | 'pinned_agents'
   | 'system_health'
-  | 'performance';
+  | 'memory_profile';
 
 export type HomeCardHeight = 'compact' | 'regular' | 'tall';
 
@@ -33,26 +25,10 @@ export const HOME_CARD_DESCRIPTORS: Record<HomeCardId, HomeCardDescriptor> = {
   hero: {
     id: 'hero',
     title: 'Hero',
-    defaultSpan: 8,
+    defaultSpan: 12,
     defaultHeight: 'tall',
-    allowedSpans: [6, 8, 12],
+    allowedSpans: [8, 12],
     allowedHeights: ['regular', 'tall'],
-  },
-  glance: {
-    id: 'glance',
-    title: 'At a glance',
-    defaultSpan: 8,
-    defaultHeight: 'regular',
-    allowedSpans: [6, 8, 12],
-    allowedHeights: ['compact', 'regular'],
-  },
-  quick_starts: {
-    id: 'quick_starts',
-    title: 'Quick starts',
-    defaultSpan: 4,
-    defaultHeight: 'regular',
-    allowedSpans: [4, 6],
-    allowedHeights: ['compact', 'regular'],
   },
   recent_activity: {
     id: 'recent_activity',
@@ -62,69 +38,21 @@ export const HOME_CARD_DESCRIPTORS: Record<HomeCardId, HomeCardDescriptor> = {
     allowedSpans: [4, 6, 7, 8, 12],
     allowedHeights: ['regular', 'tall'],
   },
-  workspaces: {
-    id: 'workspaces',
-    title: 'Workspaces',
+  system_health: {
+    id: 'system_health',
+    title: 'System health',
     defaultSpan: 5,
     defaultHeight: 'regular',
-    allowedSpans: [4, 5, 6, 8, 12],
+    allowedSpans: [4, 5, 6],
     allowedHeights: ['regular', 'tall'],
-  },
-  agent_library: {
-    id: 'agent_library',
-    title: 'Agent library',
-    defaultSpan: 4,
-    defaultHeight: 'compact',
-    allowedSpans: [4, 6, 8],
-    allowedHeights: ['compact', 'regular'],
-  },
-  playbook_library: {
-    id: 'playbook_library',
-    title: 'Playbook library',
-    defaultSpan: 4,
-    defaultHeight: 'compact',
-    allowedSpans: [4, 6, 8],
-    allowedHeights: ['compact', 'regular'],
-  },
-  whats_new: {
-    id: 'whats_new',
-    title: "What's new",
-    defaultSpan: 4,
-    defaultHeight: 'compact',
-    allowedSpans: [4, 6, 8],
-    allowedHeights: ['compact', 'regular'],
   },
   memory_profile: {
     id: 'memory_profile',
     title: 'Identity & memory',
-    defaultSpan: 4,
+    defaultSpan: 12,
     defaultHeight: 'regular',
-    allowedSpans: [4, 6, 8],
+    allowedSpans: [8, 12],
     allowedHeights: ['regular', 'tall'],
-  },
-  pinned_agents: {
-    id: 'pinned_agents',
-    title: 'Pinned agents',
-    defaultSpan: 4,
-    defaultHeight: 'regular',
-    allowedSpans: [4, 6, 8],
-    allowedHeights: ['regular', 'tall'],
-  },
-  system_health: {
-    id: 'system_health',
-    title: 'System health',
-    defaultSpan: 4,
-    defaultHeight: 'compact',
-    allowedSpans: [4, 6],
-    allowedHeights: ['compact', 'regular'],
-  },
-  performance: {
-    id: 'performance',
-    title: 'Performance',
-    defaultSpan: 4,
-    defaultHeight: 'compact',
-    allowedSpans: [4, 6],
-    allowedHeights: ['compact', 'regular'],
   },
 };
 

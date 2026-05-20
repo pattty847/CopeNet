@@ -40,3 +40,7 @@ knowledge-cache/
 config/knowledge-sources.local.toml
 config/*.local.toml
 .claire/
+
+
+# Keys
+.env

@@ -4,9 +4,9 @@ This is the current provider/runtime capability matrix. It should be updated whe
 
 | Provider        | Model Listing | Model Selection | Streams Deltas              | Resume Support | Tool Loop                | Auth Expectation                                          | Local / Offline | Structured Output Reliability     |
 |-----------------|---------------|-----------------|-----------------------------|----------------|--------------------------|-----------------------------------------------------------|-----------------|-----------------------------------|
-| `codex-cli`     | No            | Provider-managed | Yes                        | Yes            | Provider-managed         | Codex CLI installed and authenticated                     | No              | Provider-managed                   |
-| `claude-cli`    | Yes (static)  | Yes             | Yes                         | Yes            | Provider-managed         | `claude` CLI on PATH and authenticated                    | No              | Provider-managed                   |
-| `openai-codex`  | No            | Provider-managed | Yes                        | Provider-managed | Yes (native)           | OAuth via `uv run copenet auth login --provider openai-codex` | No          | High                              |
+| `openai-codex`  | Yes (static)  | Yes             | Yes                         | No             | CopeNet prompted tools    | OAuth via `uv run copenet auth login --provider openai-codex` | No          | High                              |
+| `codex-cli`     | No            | Provider-managed | Yes                        | Yes            | External Codex harness   | Codex CLI installed and authenticated                     | No              | Provider-managed                   |
+| `claude-cli`    | Yes (static)  | Yes             | Yes                         | Yes            | External Claude Code harness | `claude` CLI on PATH and authenticated                 | No              | Provider-managed                   |
 | `lm-studio`     | Yes           | Yes             | Yes                         | No             | Yes (native, when exposed) | LM Studio local server running                          | Yes             | Model-dependent                    |
 | `ollama`        | Yes           | Yes             | Yes, but may batch into one chunk | No       | No CopeNet-managed loop  | Ollama daemon running                                     | Yes             | Model-dependent                    |
 
@@ -14,21 +14,20 @@ This is the current provider/runtime capability matrix. It should be updated whe
 
 ### `codex-cli`
 
-- richest current execution path
-- reference backend for tool-enabled turns
-- not local-first in the same way as LM Studio / Ollama
-- model selection is not currently exposed through this adapter
+- local subprocess adapter for the headless Codex CLI harness
+- the Codex CLI brings its own large harness/system prompt and tool semantics
+- CopeNet should treat this as a text interface to an external harness, not as the main CopeNet-controlled frontier baseline
 
 ### `claude-cli`
 
-- subprocess adapter against the local `claude` CLI; supported model ids are pinned in `providers/claude_cli.py`
-- the CLI manages its own tool execution; CopeNet treats results as provider events
+- subprocess adapter against Claude Code via `claude -p`; supported model ids are pinned in `providers/claude_cli.py`
+- Claude Code manages its own harness behavior; CopeNet treats results as provider events
 - requires the user to be already authenticated to Claude Code locally
 
 ### `openai-codex`
 
 - OAuth-backed subscription runtime; auth state lives in `core/provider_auth/openai_codex.py`
-- model + session continuity are provider-managed
+- this is the preferred frontier baseline for CopeNet-controlled harness comparisons because it uses the subscription endpoint without the Codex CLI harness wrapped around it
 - exposes an `auth_service` for the `providerAuth.*` RPCs (status / beginLogin / completeLogin / logout)
 
 ### `lm-studio`
@@ -49,8 +48,9 @@ This is the current provider/runtime capability matrix. It should be updated whe
 
 In this matrix, "Tool Loop" means the provider currently participates in CopeNet's tool-enabled turn path, not just that the underlying model might be able to follow tool instructions in principle.
 
-- `openai-codex` and compatible local HTTP runtimes use native tool calls when their adapter exposes `chat_completion`.
-- `codex-cli` and `claude-cli` are provider-managed: CopeNet streams their output and does not run a second tool loop around them.
+- `openai-codex` is the preferred OAuth/subscription frontier lane for CopeNet-controlled prompted tool use.
+- Compatible local HTTP runtimes use native tool calls when their adapter exposes `chat_completion`.
+- `codex-cli` and `claude-cli` are external harness lanes: CopeNet streams their output and should evaluate them separately from CopeNet-controlled tool loops.
 - Providers without native tool-call support are plain provider passthrough.
 
 ## Meaning Of "Structured Output Reliability"

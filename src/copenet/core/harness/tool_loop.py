@@ -275,6 +275,9 @@ async def run_with_prompted_tools(
         system_prompt=system_prompt,
         tools=plan.tools,
     )
+    turn_state = TurnState()
+    if trace is not None:
+        trace("turn_started", turn_state.to_public_dict())
 
     for step_index in range(MAX_TOOL_STEPS):
         events, discovered_session = await collect_provider_turn(
@@ -299,6 +302,9 @@ async def run_with_prompted_tools(
                 },
             )
         if not tool_requests:
+            turn_state.terminal_reason = "completed"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
             if assistant_text:
                 yield ProviderEvent(kind="delta", text=assistant_text, provider_session_id=discovered_session)
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
@@ -324,7 +330,8 @@ async def run_with_prompted_tools(
                         arguments=request.arguments,
                         step=step_index + 1,
                         native=False,
-                    )
+                    ),
+                    "turnState": turn_state.to_public_dict(),
                 },
             )
             tool_result = await tool_executor(request, tool_context)
@@ -334,15 +341,29 @@ async def run_with_prompted_tools(
                 tool_context=tool_context,
                 trace=trace,
             )
+            turn_state.tool_call_count += 1
+            turn_state.record_tool_step(
+                tool_id=tool_result.tool_id,
+                arguments=request.arguments,
+                result=tool_result,
+            )
+            turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
             meta_payload: dict[str, Any] = {
                 "toolExecution": tool_result.to_event_payload(),
                 "toolResult": tool_result.to_runtime_input(),
+                "turnState": turn_state.to_public_dict(),
             }
             if artifact_draft is not None:
                 meta_payload["artifactDraft"] = artifact_draft
             yield ProviderEvent(kind="meta", metadata=meta_payload)
             tool_payloads.append(tool_result.to_prompt_payload())
+            turn_state.drain_pending_input()
+            if trace is not None:
+                trace("turn_transition", turn_state.to_public_dict())
         if step_index >= MAX_TOOL_STEPS - 1:
+            turn_state.terminal_reason = "max_turns"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
             return
         current_prompt = _compose_prompted_tool_followup(
@@ -351,6 +372,9 @@ async def run_with_prompted_tools(
             tool_payloads=tool_payloads,
         )
 
+    turn_state.terminal_reason = "max_turns"
+    if trace is not None:
+        trace("turn_completed", turn_state.to_public_dict())
     yield ProviderEvent(kind="final", provider_session_id=discovered_session)
 
 
@@ -518,7 +542,8 @@ def _compose_prompted_tool_followup(*, user_prompt: str, assistant_text: str, to
         f"Assistant tool request text:\n{assistant_text}\n\n"
         "Tool results:\n"
         + "\n\n".join(tool_payloads)
-        + "\n\nNow answer the user in plain text, or request one more tool with JSON if still necessary."
+        + "\n\nAnswer the user in plain text when you have enough information, "
+        "or request another tool with JSON if you need more."
     )
 
 
@@ -637,7 +662,10 @@ def compose_native_tool_system_prompt(
     return compose_system_prompt(
         provider=provider,
         system_prompt=system_prompt,
-        extra_instructions="Use provider-native tools when they help. Answer in plain text when ready.",
+        extra_instructions=(
+            "Use provider-native tools when they help. "
+            "Answer in plain text when ready."
+        ),
     )
 
 

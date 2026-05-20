@@ -96,14 +96,16 @@ class CopeNetWsServer:
                         await websocket.close(code=1008)
                         return
                     continue
+                if os.environ.get("COPNET_RPC_DEBUG") == "1":
+                    print(f"RPC {req.method} {req.id}", flush=True)
                 await dispatch_rpc(req, send_json, self._orchestrator, tasks)
         except WebSocketDisconnect:
             pass
         finally:
-            for task in list(tasks):
-                task.cancel()
-            if tasks:
-                await asyncio.gather(*tasks, return_exceptions=True)
+            # Accepted chat runs belong to the session/run store, not to a
+            # particular browser socket. Remote/mobile clients can reconnect
+            # during a run; keep background tasks alive so transcripts persist.
+            pass
 
     async def _handle_connect(
         self,

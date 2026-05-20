@@ -4,6 +4,7 @@ import asyncio
 from contextlib import contextmanager
 import json
 from pathlib import Path
+import time
 from typing import Any
 
 import pytest
@@ -23,11 +24,13 @@ class FakeProvider:
         display_name: str = "Fake",
         wait_for_abort: bool = False,
         response_text: str = "hello from fake provider",
+        delay_sec: float = 0.0,
     ) -> None:
         self.name = name
         self.display_name = display_name
         self.wait_for_abort = wait_for_abort
         self.response_text = response_text
+        self.delay_sec = delay_sec
 
     async def run(
         self,
@@ -40,6 +43,8 @@ class FakeProvider:
         if self.wait_for_abort:
             await abort_event.wait()
             return
+        if self.delay_sec:
+            await asyncio.sleep(self.delay_sec)
         yield ProviderEvent(kind="delta", text=self.response_text, provider_session_id=provider_session_id or "fake-session")
         yield ProviderEvent(kind="final")
 
@@ -276,6 +281,7 @@ def rpc_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         sessions_dir=tmp_path,
         providers={
             "fake": FakeProvider(),
+            "slow": FakeProvider(name="slow", display_name="Slow", response_text="slow response persisted", delay_sec=0.05),
             "blocking": FakeProvider(name="blocking", display_name="Blocking", wait_for_abort=True),
             "merge": MergeSummaryProvider(),
             "prompted-success": PromptedToolProvider(
@@ -743,6 +749,42 @@ def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestCli
         mismatch_events = socket.recv_chat_until_terminal(session_key="alpha", run_id=mismatch_started["payload"]["runId"])
         assert mismatch_events[-1]["payload"]["state"] == "error"
         assert "locked to model" in mismatch_events[-1]["payload"]["errorMessage"]
+
+
+def test_chat_run_survives_websocket_disconnect_after_started_response(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        create_id = socket.request(
+            "sessions.create",
+            {
+                "provider": "slow",
+                "key": "remote-drop",
+                "systemPromptId": "default",
+                "taskPromptId": "none",
+            },
+        )
+        socket.recv_response(create_id)
+
+        send_id = socket.request(
+            "chat.send",
+            {
+                "sessionKey": "remote-drop",
+                "message": "Keep running after the socket drops",
+                "provider": "slow",
+                "systemPromptId": "default",
+                "taskPromptId": "none",
+            },
+        )
+        started = socket.recv_response(send_id)
+        assert started["payload"]["status"] == "started"
+
+    time.sleep(0.2)
+
+    with _open_rpc(rpc_client) as socket:
+        history_id = socket.request("chat.history", {"sessionKey": "remote-drop"})
+        history_response = socket.recv_response(history_id)
+        messages = history_response["payload"]["messages"]
+        assert [message["role"] for message in messages] == ["user", "assistant"]
+        assert messages[-1]["content"] == "slow response persisted"
 
 
 def test_chat_abort_returns_run_id_and_final_event(rpc_client: TestClient) -> None:

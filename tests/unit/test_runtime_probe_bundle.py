@@ -242,6 +242,38 @@ def test_classify_probe_bundle_does_not_treat_listed_filenames_as_file_grounding
     assert listing_backed["classification"] == "ungrounded_repo_answer"
 
 
+def test_classify_probe_bundle_requires_read_after_search_for_file_grounding() -> None:
+    spec = ProbeSpec(name="patch_plan_probe", prompt="Use tools to inspect runtime code and produce a patch plan")
+
+    search_only = classify_probe_bundle(
+        probe=spec,
+        run_record={
+            "status": "ok",
+            "toolSteps": [
+                {"toolId": "files.rg", "status": "ok", "ok": True},
+                {"toolId": "files.search", "status": "ok", "ok": True},
+            ],
+            "outputSummary": "The patch should touch src/copenet/core/harness/tool_loop.py.",
+            "terminalReason": "completed",
+        },
+        transcript=[
+            {
+                "role": "assistant",
+                "content": "The patch should touch src/copenet/core/harness/tool_loop.py.",
+            }
+        ],
+        artifacts=[
+            {
+                "artifactId": "search-1",
+                "metadata": {"toolIds": ["files.search"]},
+            }
+        ],
+        trace_path=None,
+    )
+
+    assert search_only["classification"] == "ungrounded_repo_answer"
+
+
 def test_write_probe_bundle_creates_expected_files(tmp_path: Path) -> None:
     trace_path = tmp_path / "original-trace.jsonl"
     trace_path.write_text('{"event":"tool"}\n', encoding="utf-8")

@@ -223,8 +223,8 @@ export function ChatWorkspace() {
     try {
       await wsClient.sendMessage(message);
       setInput('');
-    } catch {
-      // user-visible error is already stored
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to send message.');
     }
   };
 

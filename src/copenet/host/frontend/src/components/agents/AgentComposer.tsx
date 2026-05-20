@@ -351,6 +351,7 @@ export function AgentComposer({
 }) {
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const runtimeRef = useRef<HTMLDivElement | null>(null);
+  const lastDirectSendAtRef = useRef(0);
   const [runtimeOpen, setRuntimeOpen] = useState(false);
   const [workspaceBusy, setWorkspaceBusy] = useState(false);
   const [openDraftMenu, setOpenDraftMenu] = useState<DraftRuntimeField | null>(null);
@@ -498,6 +499,14 @@ export function AgentComposer({
     }
   };
 
+  const triggerDirectSend = () => {
+    if (!value.trim() || disabled) return;
+    const now = Date.now();
+    if (now - lastDirectSendAtRef.current < 700) return;
+    lastDirectSendAtRef.current = now;
+    onSend(value);
+  };
+
   return (
     <>
       <div className="border-t border-operator-border bg-operator-bg px-3 pb-3 pt-2">
@@ -589,10 +598,20 @@ export function AgentComposer({
               </button>
               <button
                 type="button"
-                onClick={() => onSend()}
+                onPointerUp={(event) => {
+                  if (event.pointerType === 'mouse') return;
+                  event.preventDefault();
+                  triggerDirectSend();
+                }}
+                onTouchEnd={(event) => {
+                  event.preventDefault();
+                  triggerDirectSend();
+                }}
+                onClick={triggerDirectSend}
                 disabled={!value.trim() || disabled}
                 className="glow-accent ml-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-accent text-operator-bg disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
                 title="Send"
+                aria-label="Send message"
               >
                 <Send className="h-3.5 w-3.5" />
               </button>

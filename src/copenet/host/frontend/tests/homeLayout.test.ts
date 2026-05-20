@@ -11,19 +11,19 @@ test('normalizeHomeLayout restores missing cards and ignores unknown ones', () =
 
   assert.equal(layout[0]?.id, 'hero');
   assert.ok(layout.length >= DEFAULT_HOME_LAYOUT.length);
-  assert.ok(layout.some((item) => item.id === 'quick_starts'));
+  assert.ok(layout.some((item) => item.id === 'memory_profile'));
 });
 
 test('reorderHomeLayout moves the dragged card before the drop target', () => {
-  const next = reorderHomeLayout(DEFAULT_HOME_LAYOUT, 'performance', 'hero');
-  assert.equal(next[0]?.id, 'performance');
+  const next = reorderHomeLayout(DEFAULT_HOME_LAYOUT, 'system_health', 'hero');
+  assert.equal(next[0]?.id, 'system_health');
   assert.equal(next[1]?.id, 'hero');
 });
 
 test('cycleHomeCardSize snaps width and height to allowed values', () => {
-  const grownSpan = cycleHomeCardSize(DEFAULT_HOME_LAYOUT, 'quick_starts', 'grow', 'span');
-  const quickStarts = grownSpan.find((item) => item.id === 'quick_starts');
-  assert.equal(quickStarts?.span, 6);
+  const grownSpan = cycleHomeCardSize(DEFAULT_HOME_LAYOUT, 'system_health', 'grow', 'span');
+  const systemHealth = grownSpan.find((item) => item.id === 'system_health');
+  assert.equal(systemHealth?.span, 6);
 
   const tallerHero = cycleHomeCardSize(DEFAULT_HOME_LAYOUT, 'hero', 'grow', 'height');
   const hero = tallerHero.find((item) => item.id === 'hero');
