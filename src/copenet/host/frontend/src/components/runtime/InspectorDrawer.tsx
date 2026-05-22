@@ -20,6 +20,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useArtifact, useBatch } from '../../runtime/adapter';
 import type { AsyncResource, BatchResource } from '../../runtime/adapter';
 import type { Artifact } from '../../runtime/types';
+import type { ToolResultPart } from '../../types/backend';
 import { DiffArtifactView } from './DiffArtifactView';
 import { LoadingState } from './ResourceStates';
 import { ChatMarkdown } from '../ChatMarkdown';
@@ -301,6 +302,67 @@ function BatchBody({ batch }: { batch: BatchResource }) {
   );
 }
 
+function ToolBody({ tool }: { tool: ToolResultPart }) {
+  const effect = tool.effect;
+  return (
+    <div className="space-y-3">
+      <div className="rounded-xl border border-operator-border bg-operator-panel/40 px-3 py-2.5">
+        <div className="flex items-center gap-2 mb-1.5">
+          <Terminal className="w-3.5 h-3.5 text-operator-accent" />
+          <span className="text-[9px] font-semibold uppercase tracking-wider text-operator-accent">
+            Tool Effect
+          </span>
+          <span className="ml-auto text-[10px] font-mono text-operator-muted/60 truncate max-w-[180px]">
+            {effect?.effect_id || tool.callId}
+          </span>
+        </div>
+        <div className="font-mono text-[13px] text-operator-text">{tool.toolId}</div>
+        <div className="mt-1 text-[11px] text-operator-muted/80 leading-relaxed">{tool.summary}</div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        {effect?.turn_id && (
+          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">turn</div>
+            <div className="mt-1 font-mono text-[10px] text-operator-text/80 truncate">{effect.turn_id}</div>
+          </div>
+        )}
+        {effect?.decision_id && (
+          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">decision</div>
+            <div className="mt-1 font-mono text-[10px] text-operator-text/80 truncate">{effect.decision_id}</div>
+          </div>
+        )}
+        {effect?.evidence_role && (
+          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">evidence</div>
+            <div className="mt-1 font-mono text-[10px] text-operator-text/80">{effect.evidence_role}</div>
+          </div>
+        )}
+        {effect?.kind && (
+          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">kind</div>
+            <div className="mt-1 font-mono text-[10px] text-operator-text/80">{effect.kind}</div>
+          </div>
+        )}
+      </div>
+
+      {(effect?.target || tool.target) && (
+        <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+          <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">target</div>
+          <div className="mt-1 font-mono text-[10.5px] text-operator-accent/85 break-all">{effect?.target || tool.target}</div>
+        </div>
+      )}
+
+      {(effect?.preview || tool.preview) && (
+        <pre className="overflow-x-auto rounded-xl border border-operator-border bg-operator-bg px-3 py-2 text-[10.5px] font-mono leading-relaxed text-operator-text/75 whitespace-pre-wrap max-h-80">
+          {JSON.stringify(effect?.preview || tool.preview, null, 2)}
+        </pre>
+      )}
+    </div>
+  );
+}
+
 // Inline state views for the drawer body — scoped to this component so we
 // can include a little contextual copy (what was being inspected) without
 // making the shared ResourceStates component juggle drawer-specific props.
@@ -404,9 +466,11 @@ export function InspectorDrawer() {
       ? 'Patch Plan Inspector'
       : target.kind === 'artifact'
       ? 'Artifact Inspector'
+      : target.kind === 'tool'
+      ? 'Tool Inspector'
       : 'Batch Inspector';
 
-  const HeaderIcon = target.kind === 'diff' ? FileDiff : target.kind === 'batch' ? Layers : FileText;
+  const HeaderIcon = target.kind === 'diff' ? FileDiff : target.kind === 'batch' ? Layers : target.kind === 'tool' ? Terminal : FileText;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
@@ -438,7 +502,11 @@ export function InspectorDrawer() {
         </div>
 
         <div className="flex-1 overflow-y-auto px-4 py-4">
-          {target.kind === 'batch' ? renderBatchResource(batchResource) : renderArtifactResource(artifactResource)}
+          {target.kind === 'tool'
+            ? <ToolBody tool={target.tool} />
+            : target.kind === 'batch'
+            ? renderBatchResource(batchResource)
+            : renderArtifactResource(artifactResource)}
         </div>
 
         <div className="px-4 py-2 border-t border-operator-border flex items-center justify-between bg-operator-panel/25">

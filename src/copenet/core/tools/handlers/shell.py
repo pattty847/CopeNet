@@ -35,6 +35,8 @@ DESCRIPTORS = [
         },
         safety_level="guarded",
         capabilities=["shell", "read"],
+        evidence_role="verification",
+        side_effect="external",
     )
 ]
 

@@ -95,7 +95,7 @@ async def run_with_native_tools(
 ) -> AsyncIterator[ProviderEvent]:
     """Run an OpenAI-compatible native tool loop without parsing final text."""
     del abort_event
-    turn_state = TurnState()
+    turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
     tool_schemas = build_openai_tool_schemas(plan.tools)
     current_system_prompt = compose_native_tool_system_prompt(
         provider=provider,
@@ -166,6 +166,8 @@ async def run_with_native_tools(
                         tool_id=request.tool_id,
                         arguments=request.arguments,
                         step=step_index + 1,
+                        turn_id=plan.turn_id,
+                        decision_id=plan.decision_id,
                         native=True,
                     ),
                     "turnState": turn_state.to_public_dict(),
@@ -197,7 +199,11 @@ async def run_with_native_tools(
             )
             turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
             meta_payload: dict[str, Any] = {
-                "toolExecution": tool_result.to_event_payload(),
+                "toolExecution": _tool_result_event_payload(
+                    result=tool_result,
+                    request=request,
+                    plan=plan,
+                ),
                 "toolResult": tool_result.to_runtime_input(),
                 "turnState": turn_state.to_public_dict(),
             }
@@ -275,7 +281,7 @@ async def run_with_prompted_tools(
         system_prompt=system_prompt,
         tools=plan.tools,
     )
-    turn_state = TurnState()
+    turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
     if trace is not None:
         trace("turn_started", turn_state.to_public_dict())
 
@@ -329,6 +335,8 @@ async def run_with_prompted_tools(
                         tool_id=request.tool_id,
                         arguments=request.arguments,
                         step=step_index + 1,
+                        turn_id=plan.turn_id,
+                        decision_id=plan.decision_id,
                         native=False,
                     ),
                     "turnState": turn_state.to_public_dict(),
@@ -349,7 +357,11 @@ async def run_with_prompted_tools(
             )
             turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
             meta_payload: dict[str, Any] = {
-                "toolExecution": tool_result.to_event_payload(),
+                "toolExecution": _tool_result_event_payload(
+                    result=tool_result,
+                    request=request,
+                    plan=plan,
+                ),
                 "toolResult": tool_result.to_runtime_input(),
                 "turnState": turn_state.to_public_dict(),
             }
@@ -383,6 +395,8 @@ def _tool_call_event_payload(
     tool_id: str,
     arguments: dict[str, Any],
     step: int,
+    turn_id: str | None = None,
+    decision_id: str | None = None,
     channel: str = "tool",
     native: bool = False,
 ) -> dict[str, Any]:
@@ -392,7 +406,7 @@ def _tool_call_event_payload(
         if isinstance(value, str) and value.strip():
             hint = value.strip()
             break
-    return {
+    payload = {
         "toolId": tool_id,
         "arguments": dict(arguments),
         "target": hint,
@@ -401,6 +415,26 @@ def _tool_call_event_payload(
         "channel": channel,
         "native": native,
     }
+    if turn_id:
+        payload["turnId"] = turn_id
+    if decision_id:
+        payload["decisionId"] = decision_id
+    return payload
+
+
+def _tool_result_event_payload(
+    *,
+    result: ToolExecutionResult,
+    request: ToolExecutionRequest,
+    plan: HarnessTurnPlan,
+) -> dict[str, Any]:
+    descriptor = next((tool for tool in plan.tools if tool.id == result.tool_id), None)
+    return result.to_event_payload(
+        turn_id=plan.turn_id,
+        decision_id=plan.decision_id,
+        arguments=request.arguments,
+        evidence_role=descriptor.evidence_role if descriptor is not None else "none",
+    )
 
 
 def _extract_native_choice(response: dict[str, Any]) -> tuple[dict[str, Any], str | None]:

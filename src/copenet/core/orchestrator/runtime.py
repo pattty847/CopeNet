@@ -38,7 +38,12 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     if not message:
         raise ValueError("message is required")
 
-    run_id = request.idempotency_key.strip() if request.idempotency_key else str(uuid4())
+    # run_id is ALWAYS a fresh UUID — used as a globally unique trace/abort key.
+    # idempotency_key is separate; it dedupes RETRIES of the same client request
+    # but is scoped per-session so cross-session collisions are impossible.
+    # (Fix per Codex peer review — global f"chat:{run_id}" caused cross-session bleed.)
+    run_id = str(uuid4())
+    idempotency_key = request.idempotency_key.strip() if request.idempotency_key else ""
     provider_name = request.provider.strip() or "codex-cli"
     if provider_name not in orchestrator._providers:
         init_error = orchestrator._provider_init_errors.get(provider_name)
@@ -46,7 +51,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             raise RuntimeError(f"provider unavailable: {provider_name} ({init_error})")
         raise ValueError(f"unsupported provider: {provider_name}")
 
-    dedupe_key = f"chat:{run_id}"
+    dedupe_key = f"chat:{session_key}:{idempotency_key}" if idempotency_key else None
     prior_history = orchestrator.history(session_key=session_key, limit=2)
     working_history = orchestrator.history(session_key=session_key, limit=12)
     is_first_turn = len(prior_history) == 0
@@ -59,9 +64,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         enabled=orchestrator._trace_enabled,
     )
     async with orchestrator._lock:
-        cached = orchestrator._idempotency_cache.get(dedupe_key)
-        if cached is not None:
-            return {"runId": run_id, "status": "cached", "cached": True, "result": cached}
+        if dedupe_key is not None:
+            cached = orchestrator._idempotency_cache.get(dedupe_key)
+            if cached is not None:
+                return {"runId": run_id, "status": "cached", "cached": True, "result": cached}
 
         active_run = orchestrator._active_run_by_session.get(session_key)
         if active_run and active_run != run_id:
@@ -368,6 +374,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "title": created.title,
                 },
             )
+        # Answer artifact only if there's final text to enshrine.
         if assistant_text:
             answer_artifact = orchestrator._artifact_store.create(
                 session_key=session_key,
@@ -387,6 +394,12 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "title": answer_artifact.title,
                 },
             )
+
+        # Transcript append runs whenever the run produced ANY assistant activity —
+        # text, tool calls, or tool results. Without this, max-step / tool-only
+        # turns vanish from transcript and Phase 1 message-history replay loses
+        # their structured parts. (Fix per Codex peer review, PASS-7 followup.)
+        if assistant_text or assistant_message_parts:
             orchestrator._transcript_store.append_message(
                 entry.session_id,
                 TranscriptMessage(
@@ -397,7 +410,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     model=request.model,
                     provider_session_id=entry.provider_session_id,
                     timestamp=transcript_now(),
-                    state="final",
+                    state="final" if assistant_text else "tool_only",
                     tool_execution=tool_execution_payload,
                     parts=[dict(part) for part in assistant_message_parts] if assistant_message_parts else None,
                 ),
@@ -407,16 +420,20 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 {
                     "responseLength": len(assistant_text),
                     "toolExecutionAttached": bool(tool_execution_payload),
+                    "partsCount": len(assistant_message_parts) if assistant_message_parts else 0,
+                    "toolOnly": bool(not assistant_text and assistant_message_parts),
                 },
             )
-            if is_first_turn and not (entry.title or "").strip():
-                orchestrator._schedule_title_generation(
-                    session_key=session_key,
-                    provider_name=provider_name,
-                    model=request.model,
-                    first_user_message=message,
-                    first_assistant_message=assistant_text,
-                )
+
+        # Title generation only if first-turn AND we have final text to title from.
+        if assistant_text and is_first_turn and not (entry.title or "").strip():
+            orchestrator._schedule_title_generation(
+                session_key=session_key,
+                provider_name=provider_name,
+                model=request.model,
+                first_user_message=message,
+                first_assistant_message=assistant_text,
+            )
 
         updated_state = _evolve_session_state(
             session_state=session_state,
@@ -467,6 +484,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "delegatedTasks": list(agent_runtime_payload.get("delegatedTasks") or []),
                 "toolManifest": describe_available_tools(plan.tools),
                 "toolVisibility": _build_tool_visibility_summary(plan.tools),
+                "harnessDecision": dict(plan.harness_decision),
                 "policySummary": {
                     "allowedCategories": sorted(effective_tool_policy.allowed_categories),
                     "shellAllowlist": list(effective_tool_policy.shell_allowlist),
@@ -569,6 +587,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             },
             "toolExecution": tool_execution_payload,
             "turnState": latest_turn_state or None,
+            "harnessDecision": dict(plan.harness_decision),
             "identityContext": identity_context_payload,
             "agentContext": agent_runtime_payload,
         }
@@ -580,8 +599,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "toolExecutionAttached": bool(tool_execution_payload),
             },
         )
-        async with orchestrator._lock:
-            orchestrator._idempotency_cache[dedupe_key] = final_payload
+        if dedupe_key is not None:
+            async with orchestrator._lock:
+                orchestrator._idempotency_cache[dedupe_key] = final_payload
         return {"runId": run_id, "status": "ok"}
     except Exception as exc:
         seq += 1
@@ -619,6 +639,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             metadata=(
                 {
                     "workspaceRoot": str(session_workspace_root),
+                    "harnessDecision": dict(plan.harness_decision),
                     **agent_runtime_payload,
                 }
                 if "session_workspace_root" in locals() and "plan" in locals()
@@ -643,8 +664,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "errorType": exc.__class__.__name__,
             },
         )
-        async with orchestrator._lock:
-            orchestrator._idempotency_cache[dedupe_key] = error_payload
+        if dedupe_key is not None:
+            async with orchestrator._lock:
+                orchestrator._idempotency_cache[dedupe_key] = error_payload
         return {"runId": run_id, "status": "error", "summary": str(exc)}
     finally:
         async with orchestrator._lock:

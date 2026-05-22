@@ -6,13 +6,33 @@ from copenet.core.tools import ToolExecutionResult
 def test_tool_execution_event_payload_includes_files_read_preview() -> None:
     payload = ToolExecutionResult(
         tool_id="files.read",
+        call_id="files.read-abc",
         ok=True,
         summary="Read file README.md.",
         output={"path": "README.md", "content": "# Title\nhello\n"},
         body={"path": "README.md", "content": "# Title\nhello\n"},
-    ).to_event_payload()
+    ).to_event_payload(
+        turn_id="turn-1",
+        decision_id="decision-1",
+        arguments={"path": "README.md"},
+        evidence_role="grounding",
+    )
 
     assert payload["preview"] == {"path": "README.md", "content": "# Title\nhello"}
+    assert payload["turnId"] == "turn-1"
+    assert payload["decisionId"] == "decision-1"
+    assert payload["effect"] == {
+        "schema_version": "tool_effect.v1",
+        "effect_id": "effect-files.read-abc",
+        "decision_id": "decision-1",
+        "turn_id": "turn-1",
+        "tool_id": "files.read",
+        "kind": "file_read",
+        "target": "README.md",
+        "preview": {"path": "README.md", "content": "# Title\nhello"},
+        "artifact_id": None,
+        "evidence_role": "grounding",
+    }
 
 
 def test_tool_execution_event_payload_includes_grouped_batch_members() -> None:
@@ -74,4 +94,3 @@ def test_tool_execution_event_payload_includes_grouped_batch_members() -> None:
             "preview": {"path": "docs/tests/TEST_FILE_2.md", "content": "gamma\ndelta"},
         },
     ]
-

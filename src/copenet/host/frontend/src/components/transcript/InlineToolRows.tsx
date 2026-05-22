@@ -213,7 +213,7 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
   const [expanded, setExpanded] = useState(false);
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
-  const hasExpandable = !!part.preview || (!part.ok && !!part.error);
+  const hasExpandable = !!part.preview || !!part.effect || !!part.artifactId || (!part.ok && !!part.error);
   const verb = operatorVerb(part.toolId);
   const targetLabel = part.target ? shortPath(part.target) : null;
   // Only render a status icon for failures — success is the default, no need to badge it
@@ -262,11 +262,17 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
             </pre>
           )}
           {part.preview && <ToolPreview preview={part.preview} />}
-          {part.artifactId && (
+          {(part.effect || part.artifactId) && (
             <div className="mt-1.5">
               <button
                 type="button"
-                onClick={() => setInspectorTarget({ kind: 'artifact', artifactId: part.artifactId! })}
+                onClick={() => {
+                  if (part.effect) {
+                    setInspectorTarget({ kind: 'tool', tool: part });
+                  } else if (part.artifactId) {
+                    setInspectorTarget({ kind: 'artifact', artifactId: part.artifactId });
+                  }
+                }}
                 className="text-[10.5px] text-operator-muted/70 hover:text-operator-accent transition-colors"
               >
                 Inspect →

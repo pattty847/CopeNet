@@ -1,6 +1,7 @@
 """CopeNet-native tool contracts, policy, and v1 safe tool runtime."""
 
 from .contracts import (
+    build_tool_effect_payload,
     build_openai_tool_schemas,
     ContextPack,
     ToolBlockedError,
@@ -26,6 +27,7 @@ __all__ = [
     "ToolPolicy",
     "ToolRegistry",
     "ToolSpec",
+    "build_tool_effect_payload",
     "build_openai_tool_schemas",
     "describe_available_tools",
     "policy_for_task_mode",

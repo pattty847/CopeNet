@@ -15,10 +15,13 @@ if TYPE_CHECKING:
     from copenet.core.workspace_intel import WorkspaceIntelService
 
 
-ToolCategory = Literal["repo-read", "repo-write", "shell-read", "context", "artifact", "mcp"]
+ToolCategory = Literal["repo-read", "repo-write", "shell-read", "shell-write", "context", "artifact", "browser", "mcp"]
 ToolSafetyLevel = Literal["safe", "guarded", "restricted"]
 ToolAccessAction = Literal["read", "write", "unknown"]
 ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "unsafe_unknown"]
+ToolEvidenceRole = Literal["none", "discovery", "grounding", "mutation", "verification", "context", "artifact"]
+ToolSideEffect = Literal["none", "read", "write", "external"]
+ToolEffectKind = Literal["file_read", "repo_search", "shell_command", "file_write", "file_edit", "artifact", "context", "raw"]
 
 
 @dataclass(frozen=True)
@@ -32,6 +35,9 @@ class ToolDescriptor:
     input_schema: dict[str, Any] = field(default_factory=dict)
     safety_level: ToolSafetyLevel = "safe"
     capabilities: list[str] = field(default_factory=list)
+    evidence_role: ToolEvidenceRole = "none"
+    side_effect: ToolSideEffect = "none"
+    requires_confirmation: bool = False
 
     def to_public_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly descriptor for RPC clients."""
@@ -45,6 +51,9 @@ class ToolDescriptor:
             "capabilities": list(self.capabilities),
             "riskClass": self.manifest_risk(),
             "approvalMode": self.manifest_permission(),
+            "evidenceRole": self.evidence_role,
+            "sideEffect": self.side_effect,
+            "requiresConfirmation": self.requires_confirmation,
         }
 
     def to_openai_tool(self) -> dict[str, Any]:
@@ -67,6 +76,8 @@ class ToolDescriptor:
             return "context"
         if self.category == "shell-read":
             return "shell"
+        if self.category == "shell-write":
+            return "shell-write"
         if self.category == "repo-write":
             return "write"
         if self.category == "artifact":
@@ -124,13 +135,24 @@ class ToolExecutionResult:
             payload["artifactId"] = self.artifact_id
         return json.dumps(payload, ensure_ascii=False, indent=2)
 
-    def to_event_payload(self) -> dict[str, Any]:
+    def to_event_payload(
+        self,
+        *,
+        turn_id: str | None = None,
+        decision_id: str | None = None,
+        arguments: dict[str, Any] | None = None,
+        evidence_role: ToolEvidenceRole = "none",
+    ) -> dict[str, Any]:
         """Return chat-event metadata for observability."""
         payload: dict[str, Any] = {
             "toolId": self.tool_id,
             "ok": self.ok,
             "summary": self.summary,
         }
+        if turn_id:
+            payload["turnId"] = turn_id
+        if decision_id:
+            payload["decisionId"] = decision_id
         if self.call_id:
             payload["callId"] = self.call_id
         if self.channel:
@@ -151,6 +173,15 @@ class ToolExecutionResult:
         members = _batch_member_payloads(self.body if self.body is not None else self.output)
         if members:
             payload["members"] = members
+        if turn_id:
+            payload["effect"] = build_tool_effect_payload(
+                result=self,
+                arguments=arguments or {},
+                descriptor=None,
+                turn_id=turn_id,
+                decision_id=decision_id,
+                evidence_role=evidence_role,
+            )
         return payload
 
     def to_runtime_input(self) -> dict[str, Any]:
@@ -343,6 +374,9 @@ def describe_available_tools(
             "inputSchema": dict(tool.input_schema),
             "safetyLevel": tool.safety_level,
             "capabilities": list(tool.capabilities),
+            "evidenceRole": tool.evidence_role,
+            "sideEffect": tool.side_effect,
+            "requiresConfirmation": tool.requires_confirmation,
         }
         for tool in selected
     ]
@@ -351,3 +385,60 @@ def describe_available_tools(
 def build_openai_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:
     """Return OpenAI-compatible function tool schemas for provider-native tool calling."""
     return [tool.to_openai_tool() for tool in tools]
+
+
+def build_tool_effect_payload(
+    *,
+    result: ToolExecutionResult,
+    arguments: dict[str, Any],
+    descriptor: ToolDescriptor | None,
+    turn_id: str,
+    decision_id: str | None = None,
+    evidence_role: ToolEvidenceRole | None = None,
+) -> dict[str, Any]:
+    """Return versioned UI metadata describing one completed tool effect."""
+    body = result.body if result.body is not None else result.output
+    role = evidence_role or (descriptor.evidence_role if descriptor is not None else "none")
+    return {
+        "schema_version": "tool_effect.v1",
+        "effect_id": f"effect-{result.call_id}" if result.call_id else f"effect-{result.tool_id}",
+        "decision_id": decision_id,
+        "turn_id": turn_id,
+        "tool_id": result.tool_id,
+        "kind": _tool_effect_kind(result.tool_id),
+        "target": _tool_effect_target(arguments=arguments, body=body),
+        "preview": _preview_payload(result.tool_id, body),
+        "artifact_id": result.artifact_id,
+        "evidence_role": role,
+    }
+
+
+def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
+    if tool_id == "files.read":
+        return "file_read"
+    if tool_id in {"files.search", "files.rg", "files.list", "git.status", "git.diff", "repo.map", "test.discover"}:
+        return "repo_search"
+    if tool_id == "shell.exec":
+        return "shell_command"
+    if tool_id == "files.write":
+        return "file_write"
+    if tool_id == "files.edit":
+        return "file_edit"
+    if tool_id == "artifact.create":
+        return "artifact"
+    if tool_id in {"context.prepare", "memory.read", "memory.write"}:
+        return "context"
+    return "raw"
+
+
+def _tool_effect_target(*, arguments: dict[str, Any], body: Any) -> str | None:
+    for key in ("path", "target", "command", "query", "pattern", "title"):
+        value = arguments.get(key)
+        if isinstance(value, str) and value.strip():
+            return value.strip()
+    if isinstance(body, dict):
+        for key in ("path", "target", "command", "query", "pattern", "title"):
+            value = body.get(key)
+            if isinstance(value, str) and value.strip():
+                return value.strip()
+    return None

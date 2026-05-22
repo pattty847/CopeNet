@@ -9,6 +9,7 @@ from copenet.core.tools import ToolDescriptor
 from copenet.providers import Provider
 
 from .capabilities import ModelCapabilityProfile, normalize_capabilities
+from .decision import new_decision_id, new_turn_id
 
 
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
@@ -24,6 +25,9 @@ class HarnessTurnPlan:
     tools: list[ToolDescriptor] = field(default_factory=list)
     will_attempt_tool_loop: bool = False
     tool_execution_mode: Literal["none", "native", "prompted"] = "none"
+    turn_id: str = field(default_factory=new_turn_id)
+    decision_id: str = field(default_factory=new_decision_id)
+    harness_decision: dict[str, Any] = field(default_factory=dict)
 
 
 async def plan_turn(
@@ -86,6 +90,8 @@ async def plan_turn(
                 "willAttemptToolLoop": plan.will_attempt_tool_loop,
                 "toolExecutionMode": plan.tool_execution_mode,
                 "availableToolIds": [tool.id for tool in tools],
+                "turnId": plan.turn_id,
+                "decisionId": plan.decision_id,
             },
         )
     return plan

@@ -37,6 +37,7 @@ import {
   TextPart,
   TelegramSessionRoute,
   ToolDescriptor,
+  ToolEffect,
   ToolExecution,
   ToolResultPreview,
   TurnStateSnapshot,
@@ -87,6 +88,30 @@ function makeLocalId(prefix: string): string {
   return `${prefix}-${crypto.randomUUID()}`;
 }
 
+function normalizeToolEffect(raw: unknown): ToolEffect | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  if (payload.schema_version !== 'tool_effect.v1') return null;
+  const turnId = String(payload.turn_id || '').trim();
+  const toolId = String(payload.tool_id || '').trim();
+  const effectId = String(payload.effect_id || '').trim();
+  if (!turnId || !toolId || !effectId) return null;
+  const kind = String(payload.kind || 'raw') as ToolEffect['kind'];
+  const evidenceRole = String(payload.evidence_role || 'none') as ToolEffect['evidence_role'];
+  return {
+    schema_version: 'tool_effect.v1',
+    effect_id: effectId,
+    decision_id: payload.decision_id ? String(payload.decision_id) : null,
+    turn_id: turnId,
+    tool_id: toolId,
+    kind,
+    target: payload.target ? String(payload.target) : null,
+    preview: payload.preview && typeof payload.preview === 'object' ? payload.preview as Record<string, unknown> : null,
+    artifact_id: payload.artifact_id ? String(payload.artifact_id) : null,
+    evidence_role: evidenceRole,
+  };
+}
+
 function normalizeToolExecution(raw: unknown): ToolExecution | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
@@ -96,6 +121,8 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
     toolId,
     ok: Boolean(payload.ok),
     summary: String(payload.summary || '').trim(),
+    turnId: payload.turnId ? String(payload.turnId) : null,
+    decisionId: payload.decisionId ? String(payload.decisionId) : null,
     callId: payload.callId ? String(payload.callId) : null,
     channel: payload.channel ? String(payload.channel) : null,
     error: payload.error ? String(payload.error) : null,
@@ -113,6 +140,7 @@ function normalizeToolExecution(raw: unknown): ToolExecution | null {
         ? payload.policyDecision
         : null,
     policySummary: payload.policySummary ? String(payload.policySummary) : null,
+    effect: normalizeToolEffect(payload.effect),
   };
 }
 
@@ -242,6 +270,9 @@ function normalizeTool(raw: unknown): ToolDescriptor {
     capabilities: Array.isArray(payload.capabilities) ? payload.capabilities.map(String) : [],
     riskClass: payload.riskClass ? String(payload.riskClass) : undefined,
     approvalMode: payload.approvalMode ? String(payload.approvalMode) : undefined,
+    evidenceRole: payload.evidenceRole ? String(payload.evidenceRole) : undefined,
+    sideEffect: payload.sideEffect ? String(payload.sideEffect) : undefined,
+    requiresConfirmation: Boolean(payload.requiresConfirmation),
   };
 }
 
@@ -702,6 +733,8 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
         kind: 'tool_call',
         callId: String(toolCall.callId ?? payload.callId ?? ''),
         toolId: String(toolCall.toolId ?? payload.toolId ?? ''),
+        turnId: toolCall.turnId ? String(toolCall.turnId) : payload.turnId ? String(payload.turnId) : null,
+        decisionId: toolCall.decisionId ? String(toolCall.decisionId) : payload.decisionId ? String(payload.decisionId) : null,
         hint: toolCall.hint ? String(toolCall.hint) : null,
         target: toolCall.target ? String(toolCall.target) : payload.target ? String(payload.target) : null,
         at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
@@ -725,6 +758,8 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
             return {
               callId: String(member.callId ?? ''),
               toolId: String(member.toolId ?? ''),
+              turnId: member.turnId ? String(member.turnId) : null,
+              decisionId: member.decisionId ? String(member.decisionId) : null,
               ok: Boolean(member.ok),
               summary: String(member.summary ?? ''),
               error: member.error ? String(member.error) : null,
@@ -743,6 +778,7 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
                   : null,
               policySummary: member.policySummary ? String(member.policySummary) : null,
               preview: normalizeToolResultPreview(member.preview),
+              effect: normalizeToolEffect(member.effect),
             };
           }),
           ok: Boolean(toolExecution.ok ?? payload.ok),
@@ -754,6 +790,8 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
           kind: 'tool_result',
           callId: String(toolExecution.callId ?? payload.callId ?? ''),
           toolId: String(toolExecution.toolId ?? payload.toolId ?? ''),
+          turnId: toolExecution.turnId ? String(toolExecution.turnId) : payload.turnId ? String(payload.turnId) : null,
+          decisionId: toolExecution.decisionId ? String(toolExecution.decisionId) : payload.decisionId ? String(payload.decisionId) : null,
           ok: Boolean(toolExecution.ok ?? payload.ok),
           summary: String(toolExecution.summary ?? payload.summary ?? ''),
           error: toolExecution.error ? String(toolExecution.error) : payload.error ? String(payload.error) : null,
@@ -783,6 +821,7 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
                 : null,
           policySummary: toolExecution.policySummary ? String(toolExecution.policySummary) : payload.policySummary ? String(payload.policySummary) : null,
           preview: normalizeToolResultPreview((toolExecution as Record<string, unknown>).preview ?? payload.preview),
+          effect: normalizeToolEffect(toolExecution.effect ?? payload.effect),
           at: typeof payload.at === 'string' ? payload.at : new Date().toISOString(),
         });
       }
@@ -1875,6 +1914,8 @@ class WsClient {
             kind: 'tool_call',
             callId,
             toolId,
+            turnId: rawToolCall.turnId ? String(rawToolCall.turnId) : null,
+            decisionId: rawToolCall.decisionId ? String(rawToolCall.decisionId) : null,
             hint,
             target: rawToolCall.target ? String(rawToolCall.target) : hint,
             at: new Date().toISOString(),
@@ -1917,6 +1958,8 @@ class WsClient {
                 return {
                   callId: String(mb.callId ?? ''),
                   toolId: String(mb.toolId ?? toolExecution.toolId),
+                  turnId: mb.turnId ? String(mb.turnId) : toolExecution.turnId || null,
+                  decisionId: mb.decisionId ? String(mb.decisionId) : toolExecution.decisionId || null,
                   ok: Boolean(mb.ok),
                   summary: String(mb.summary ?? ''),
                   error: mb.error ? String(mb.error) : null,
@@ -1935,6 +1978,7 @@ class WsClient {
                       : null,
                   policySummary: mb.policySummary ? String(mb.policySummary) : null,
                   preview: normalizeToolResultPreview(mb.preview),
+                  effect: normalizeToolEffect(mb.effect),
                 };
               }),
               ok: toolExecution.ok,
@@ -1946,6 +1990,8 @@ class WsClient {
               kind: 'tool_result',
               callId: toolExecution.callId || '',
               toolId: toolExecution.toolId,
+              turnId: toolExecution.turnId || null,
+              decisionId: toolExecution.decisionId || null,
               ok: toolExecution.ok,
               summary: toolExecution.summary,
               error: toolExecution.error ?? null,
@@ -1957,6 +2003,7 @@ class WsClient {
               policyDecision: toolExecution.policyDecision || null,
               policySummary: toolExecution.policySummary || null,
               preview: normalizeToolResultPreview(toolPayloadRecord?.preview),
+              effect: toolExecution.effect || null,
               at: new Date().toISOString(),
             });
           }
@@ -2057,6 +2104,8 @@ class WsClient {
         if (ts && typeof ts === 'object') {
           const t = ts as Record<string, unknown>;
           const snapshot: TurnStateSnapshot = {
+            turnId: t.turnId ? String(t.turnId) : null,
+            decisionId: t.decisionId ? String(t.decisionId) : null,
             toolCallCount: Number(t.toolCallCount ?? 0),
             visitedTools: Array.isArray(t.visitedTools) ? (t.visitedTools as string[]) : [],
             visitedPaths: Array.isArray(t.visitedPaths) ? (t.visitedPaths as string[]) : [],

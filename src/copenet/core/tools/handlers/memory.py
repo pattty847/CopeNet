@@ -25,6 +25,8 @@ DESCRIPTORS = [
             "additionalProperties": False,
         },
         capabilities=["continuity", "preferences", "identity"],
+        evidence_role="context",
+        side_effect="read",
     ),
     ToolDescriptor(
         id="memory.write",
@@ -46,6 +48,8 @@ DESCRIPTORS = [
         },
         safety_level="guarded",
         capabilities=["continuity", "preferences", "identity"],
+        evidence_role="context",
+        side_effect="write",
     ),
 ]
 

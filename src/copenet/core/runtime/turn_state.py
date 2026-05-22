@@ -16,6 +16,8 @@ TerminalReason = str
 class TurnState:
     """Mutable runtime state for one in-flight turn."""
 
+    turn_id: str | None = None
+    decision_id: str | None = None
     pending_input: list[dict[str, Any]] = field(default_factory=list)
     transition_reason: TransitionReason = "start_turn"
     pending_approvals: dict[str, Any] = field(default_factory=dict)
@@ -102,6 +104,8 @@ class TurnState:
     def to_public_dict(self) -> dict[str, Any]:
         """Return a JSON-friendly snapshot for tracing and run records."""
         return {
+            "turnId": self.turn_id,
+            "decisionId": self.decision_id,
             "pendingInputCount": len(self.pending_input),
             "transitionReason": self.transition_reason,
             "pendingApprovalCount": len(self.pending_approvals),

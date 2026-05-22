@@ -119,6 +119,8 @@ Known `state` values:
 - `final`
 - `error`
 - `aborted`
+- `tool_called`
+- `tool_result`
 
 ### Field Meaning
 
@@ -132,6 +134,7 @@ Known `state` values:
 - `model`: request model field as currently surfaced by the orchestrator
 - `capabilities.toolCalls`: whether the harness treated the run as tool-capable
 - `toolExecution`: compact tool metadata attached when a tool ran
+- `harnessDecision`: trace-only `HarnessDecisionRecord` attached to final events when available
 
 ## Ordering Guarantees
 
@@ -190,8 +193,20 @@ When a tool call succeeds or fails in a tool-enabled path, `toolExecution` may b
 ```json
 {
   "toolId": "files.read",
+  "turnId": "turn-...",
+  "decisionId": "decision-...",
   "ok": true,
-  "summary": "Read file src/copenet/tracing.py."
+  "summary": "Read file src/copenet/tracing.py.",
+  "effect": {
+    "schema_version": "tool_effect.v1",
+    "effect_id": "effect-files.read-abc",
+    "turn_id": "turn-...",
+    "decision_id": "decision-...",
+    "tool_id": "files.read",
+    "kind": "file_read",
+    "target": "src/copenet/tracing.py",
+    "evidence_role": "grounding"
+  }
 }
 ```
 
@@ -199,6 +214,7 @@ Possible fields:
 
 - `toolId`
 - `callId`
+- `turnId`, `decisionId` for joining call/result rows to the decision record and run record
 - `channel`
 - `ok`
 - `summary`
@@ -207,8 +223,33 @@ Possible fields:
 - `target`, `workspaceRoot`, `scope`, `accessAction`, `policyDecision`, `policySummary` when present on the normalized tool body/output (writes, shells, blocked paths)
 - `preview` — compact excerpt (reads, rg matches, artifact title preview)
 - `members` — expanded per-call rows when `toolId` is `tool.batch`
+- `effect` — versioned `tool_effect.v1` metadata for inspector displays
 
 This stays user-facing telemetry, not the full raw tool transcript.
+
+## Harness Decision Contract
+
+`HarnessDecisionRecord` is trace-only in v1:
+
+```json
+{
+  "schema_version": "harness_decision_record.v1",
+  "decision_id": "decision-...",
+  "turn_id": "turn-...",
+  "control_mode": "trace_only",
+  "status": "parsed",
+  "decision": {
+    "request_kind": "answer",
+    "route": "direct_response",
+    "next_action": "ANSWER",
+    "risk": "low",
+    "evidence_requirements": ["none"],
+    "trace_note": "No tool needed."
+  }
+}
+```
+
+Clients may display prose fields such as `trace_note`, `user_goal`, `missing`, and `assumptions`, but must not treat them as control instructions.
 
 ## Compatibility Guidance
 

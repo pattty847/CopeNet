@@ -22,10 +22,56 @@ export interface Session {
   inFlightRunId: string | null;
 }
 
+export type ToolEffectKind = 'file_read' | 'repo_search' | 'shell_command' | 'file_write' | 'file_edit' | 'artifact' | 'context' | 'raw';
+export type ToolEvidenceRole = 'none' | 'discovery' | 'grounding' | 'mutation' | 'verification' | 'context' | 'artifact';
+
+export interface ToolEffect {
+  schema_version: 'tool_effect.v1';
+  effect_id: string;
+  decision_id?: string | null;
+  turn_id: string;
+  tool_id: string;
+  kind: ToolEffectKind;
+  target?: string | null;
+  preview?: Record<string, unknown> | null;
+  artifact_id?: string | null;
+  evidence_role: ToolEvidenceRole;
+}
+
+export interface HarnessDecision {
+  user_goal: string;
+  request_kind: string;
+  route: string;
+  next_action: string;
+  risk: string;
+  evidence_requirements: string[];
+  tool_decision: {
+    needed: boolean;
+    candidate_tool_ids: string[];
+    selected_tool_id?: string | null;
+    trace_note: string;
+  };
+  missing: string[];
+  assumptions: string[];
+  trace_note: string;
+}
+
+export interface HarnessDecisionRecord {
+  schema_version: 'harness_decision_record.v1';
+  decision_id: string;
+  turn_id: string;
+  control_mode: 'trace_only';
+  status: 'parsed' | 'repaired' | 'fallback' | 'unavailable';
+  decision: HarnessDecision | null;
+  error_summary?: string;
+}
+
 export interface ToolExecution {
   toolId: string;
   ok: boolean;
   summary: string;
+  turnId?: string | null;
+  decisionId?: string | null;
   callId?: string | null;
   channel?: string | null;
   error?: string | null;
@@ -36,6 +82,7 @@ export interface ToolExecution {
   accessAction?: 'read' | 'write' | 'unknown' | null;
   policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
   policySummary?: string | null;
+  effect?: ToolEffect | null;
 }
 
 export interface Message {
@@ -73,6 +120,8 @@ export interface ToolCallPart {
   kind: 'tool_call';
   callId: string;
   toolId: string;
+  turnId?: string | null;
+  decisionId?: string | null;
   /** One-line hint shown while the tool is in-flight — path, query, etc. */
   hint?: string | null;
   target?: string | null;
@@ -105,6 +154,8 @@ export interface ToolResultPart {
   kind: 'tool_result';
   callId: string;
   toolId: string;
+  turnId?: string | null;
+  decisionId?: string | null;
   ok: boolean;
   summary: string;
   error?: string | null;
@@ -116,12 +167,15 @@ export interface ToolResultPart {
   policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
   policySummary?: string | null;
   preview?: ToolResultPreview | null;
+  effect?: ToolEffect | null;
   at: string; // ISO
 }
 
 export interface ToolBatchMember {
   callId: string;
   toolId: string;
+  turnId?: string | null;
+  decisionId?: string | null;
   ok: boolean;
   summary: string;
   error?: string | null;
@@ -133,6 +187,7 @@ export interface ToolBatchMember {
   policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
   policySummary?: string | null;
   preview?: ToolResultPreview | null;
+  effect?: ToolEffect | null;
 }
 
 /** tool.batch — one collapsed card for N grouped file reads or search passes. */
@@ -177,6 +232,9 @@ export interface ToolDescriptor {
   capabilities: string[];
   riskClass?: string;
   approvalMode?: string;
+  evidenceRole?: ToolEvidenceRole | string;
+  sideEffect?: 'none' | 'read' | 'write' | 'external' | string;
+  requiresConfirmation?: boolean;
 }
 
 export interface PromptOption {
@@ -299,6 +357,7 @@ export interface ChatEventPayload {
   toolExecution?: ToolExecution | null;
   toolCall?: Record<string, unknown> | null;
   turnState?: Record<string, unknown> | null;
+  harnessDecision?: HarnessDecisionRecord | null;
   identityContext?: IdentityContextRuntime | null;
 }
 
@@ -382,6 +441,9 @@ export interface RunStep {
   policyDecision?: 'allowed' | 'read_roam' | 'write_blocked' | 'approval_required' | 'unsafe_unknown' | null;
   policySummary?: string | null;
   members?: ToolBatchMember[];
+  turnId?: string | null;
+  decisionId?: string | null;
+  effect?: ToolEffect | null;
 }
 
 export interface SessionRunRecord {
@@ -873,6 +935,8 @@ export interface ReturnBriefingPayload {
 // Turn-level summary snapshot: extracted from turnState on final events.
 // Mirrors the subset of TurnState.to_public_dict() we care about in the UI.
 export interface TurnStateSnapshot {
+  turnId?: string | null;
+  decisionId?: string | null;
   toolCallCount: number;
   visitedTools: string[];
   visitedPaths: string[];

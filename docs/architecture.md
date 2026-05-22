@@ -235,7 +235,9 @@ In practice that means:
 
 `core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects only between native tool calling and plain provider passthrough.
 
-`core/harness/tool_loop.py` owns turn-level tool continuation. It executes provider-native or prompted tool calls under policy, streams normalized events, and lets the model decide when it has enough information to finalize. The harness does not classify prompt text or force a particular tool sequence before accepting a final answer; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+`core/harness/tool_loop.py` owns turn-level tool continuation. It executes provider-native or prompted tool calls under policy, streams normalized events, and lets the model decide when it has enough information to finalize. The harness does not classify prompt text, keyword-match user intent, or force a particular tool sequence before accepting a final answer; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+
+`core/harness/decision.py` adds a trace-only `HarnessDecisionRecord` for providers that expose an isolated decision hook. The model declares enum fields such as request kind, route, next action, risk, and evidence requirements, plus prose `trace_note` fields for inspector/debug display. In v1 this record never steers execution: normal planning, provider output, tool calls, and final answers continue exactly as they would if the decision were unavailable.
 
 ## Session Model
 
@@ -318,8 +320,8 @@ The harness keeps provider execution normalized and prepares for richer capabili
 - **Task mode drives policy**: `policy_for_task_mode()` in `core/tools/policy.py` builds the effective policy from the persisted session **`task_prompt_id`**. Baseline modes allow **`repo-read`**, **`shell-read`**, **`context`**, **`artifact`**. **`full-access`** adds **`repo-write`** so `files.edit` / `files.write` register in `available_tools` for that run.
 - **Built-in ids** include `context.prepare`, **`files.list`**, **`files.read`**, **`files.search`**, **`files.rg`**, **`files.write`**, **`files.edit`**, `git.diff`, `git.status`, **`shell.exec`**, **`artifact.create`**.
 - **`ToolExecutionContext`** carries **`task_prompt_id`**, **`run_id`**, and optional **`artifact_store`** so prompts and artifact writes stay session-scoped.
-- **TOOL_BATCH** executes only **`repo-read` + `context`** calls together. Writes or shell mixed into the same JSON batch are deferred and repaired (trace `tool_batch_split`; see `core/harness/tool_loop.py`).
-- **`build_tool_prompt_section`** attaches a deterministic **capability manifest** next to the JSON action grammar (workspace root, allowed tool ids, unavailable capability classes, shell allowlist).
+- Prompted tool use accepts exact JSON tool objects such as `{"tool_id":"files.read","arguments":{"path":"README.md"}}`. The current permissive shorthand parser is retained for compatibility, but the target contract is exact tool ids and structured arguments.
+- Tool manifests attach deterministic capability metadata: registered id, JSON schema, category, evidence role, side effect, and confirmation posture. The harness branches on these enum/id fields and policy decisions, not prose explanations.
 
 ## Configuration
 

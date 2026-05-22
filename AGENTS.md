@@ -26,7 +26,7 @@ The current product direction is:
 |----------------|----------------------------------------------|------|
 | Host / RPC     | `src/copenet/host/`                          | FastAPI app, `/ws` JSON-RPC, `/api/v1` REST+SSE, static UI mounting |
 | Orchestrator   | `src/copenet/core/orchestrator/`             | Coordinates sessions, transcripts, provider execution, run lifecycle, merges, pulse, messaging |
-| Harness        | `src/copenet/core/harness/`                  | Capability profiles, turn planning, tool loop, final-answer gating |
+| Harness        | `src/copenet/core/harness/`                  | Capability profiles, trace-only HarnessDecision records, turn planning, tool loop |
 | Sessions       | `src/copenet/core/sessions/`                 | Session index, transcript store, structured session state |
 | Runtime        | `src/copenet/core/runtime/`                  | RunStore (durable run records), ArtifactStore, per-turn state |
 | Tools          | `src/copenet/core/tools/`                    | Tool contracts, policy (`policy_for_task_mode`), registry, built-in handlers |
@@ -207,7 +207,8 @@ For current behavior, assume:
 - Add shared capability logic here before touching providers or UI.
 - Keep the abstractions practical.
 - Do not commit to one vendor’s tool-calling shape as the system architecture.
-- **`build_tool_prompt_section`** injects the capability manifest; keep it aligned with `policy_for_task_mode` and registered tool ids.
+- Tool manifests expose exact registered tool ids plus category, schema, side-effect, confirmation, and evidence-role metadata. The model chooses exact ids; the harness validates structure and policy authority.
+- `HarnessDecisionRecord` is trace-only in v1. The model may declare request kind, route, next action, evidence requirements, and `trace_note`, but production control flow must not branch on prose fields or keyword matching.
 
 ### Tools runtime
 
@@ -215,7 +216,6 @@ For current behavior, assume:
 - Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: default modes allow read/shell/context/artifact; task mode **`full-access`** adds **`repo-write`** (`files.edit`, `files.write`) and unrestricted user-level `shell.exec`.
 - Full-access shell commands run with the current OS user's permissions and may use normal shell syntax (`|`, `&&`, redirects, scripts, etc.). High-risk command patterns return `policyDecision: "approval_required"` instead of executing; wire operator confirmation before allowing those proposal records to resume.
 - Permission claims should be tested with the direct matrix before trusting a live model's self-report: `uv run python scripts/permission_probe_matrix.py`. A model that only proves `pwd` works has proven shell-read, not full-access.
-- **`TOOL_BATCH`** is limited to bundled **read/context** calls; mixed batches split with trace `tool_batch_split` and client-visible repair summaries on `tool.batch`.
 - **`artifact.create`** persists session artifacts when `artifact_store`, `session_key`, and `run_id` are present.
 
 ### WebSocket / RPC
@@ -340,8 +340,8 @@ Known gaps and past findings: [docs/TRACE-FINDINGS.md](docs/TRACE-FINDINGS.md)
 **Triage order for a bad run:**
 
 1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`? Does `availableToolIds` match task mode expectations (**write tools only with `full-access`**)?
-2. Check mixed batch traces when debugging bad batches — `tool_batch_split` / `batch_planned`.
-3. Check `tool_requested` — did the model invoke the expected tool with correct arguments?
+2. Check `harness_decision_recorded` when present — it is trace/UI data only, not a steering gate.
+3. Check `tool_requested` — did the model invoke an exact registered tool id with correct structured arguments?
 4. Check `tool_executed` or `tool_blocked` — was this a policy rejection or a real failure?
 5. Check `assistant_finalized` — was `toolExecutionAttached` as expected?
 6. Check `run_failed` — the `error` field is the primary diagnostic.

@@ -26,6 +26,8 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {"path": {"type": "string"}}},
         capabilities=["filesystem", "read"],
+        evidence_role="discovery",
+        side_effect="read",
     ),
     ToolDescriptor(
         id="files.read",
@@ -44,6 +46,8 @@ DESCRIPTORS = [
             },
         },
         capabilities=["filesystem", "read"],
+        evidence_role="grounding",
+        side_effect="read",
     ),
     ToolDescriptor(
         id="files.search",
@@ -56,6 +60,8 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
         capabilities=["filesystem", "search"],
+        evidence_role="discovery",
+        side_effect="read",
     ),
     ToolDescriptor(
         id="files.rg",
@@ -67,6 +73,8 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
         capabilities=["filesystem", "search", "ripgrep"],
+        evidence_role="discovery",
+        side_effect="read",
     ),
     ToolDescriptor(
         id="files.write",
@@ -87,6 +95,8 @@ DESCRIPTORS = [
             "required": ["path", "content"],
         },
         capabilities=["filesystem", "write"],
+        evidence_role="mutation",
+        side_effect="write",
     ),
     ToolDescriptor(
         id="files.edit",
@@ -109,6 +119,8 @@ DESCRIPTORS = [
             "required": ["path", "old_text", "new_text"],
         },
         capabilities=["filesystem", "write", "edit"],
+        evidence_role="mutation",
+        side_effect="write",
     ),
 ]
 

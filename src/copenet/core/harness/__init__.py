@@ -3,13 +3,14 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from typing import AsyncIterator, Callable
 
 from copenet.providers import Provider, ProviderEvent
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext
 
 from .capabilities import ModelCapabilityProfile
+from .decision import resolve_harness_decision_record
 from .planning import HarnessTurnPlan, TraceRecorder, plan_turn
 from .tool_loop import (
     ToolExecutor,
@@ -76,6 +77,17 @@ class ChatHarness:
         context_overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
         combined_system_prompt = "\n\n".join(part for part in (system_prompt, context_overlay) if part)
         effective_system_prompt = combined_system_prompt or None
+        decision_record = await resolve_harness_decision_record(
+            provider=provider,
+            prompt=prompt,
+            model=model,
+            system_prompt=effective_system_prompt,
+            tools=plan.tools,
+            turn_id=plan.turn_id,
+            decision_id=plan.decision_id,
+            trace=trace,
+        )
+        plan = replace(plan, harness_decision=decision_record.to_public_dict())
         if plan.tool_execution_mode == "prompted" and tool_executor is not None and tool_context is not None:
             stream = run_with_prompted_tools(
                 provider=provider,

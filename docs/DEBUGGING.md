@@ -45,10 +45,10 @@ CLI providers (`codex-cli`, `claude-cli`) and non-native local providers stream 
 If `willAttemptToolLoop: true` but no `tool_requested` event appeared:
 
 ```bash
-jq 'select(.event == "provider_turn_completed" and .payload.phase == "tool-attempt")' <run-id>.jsonl
+jq 'select(.event == "provider_turn_completed" and .payload.phase == "prompted_tool")' <run-id>.jsonl
 ```
 
-Check `toolRequested: false` — the model ran but did not emit a parseable JSON invocation.
+Check the provider text around that pass — the model either answered directly or did not emit a parseable JSON invocation.
 
 **Common causes:**
 - Model doesn't report `toolCalls: true` in its capabilities (LM Studio/Ollama model config issue)
@@ -69,22 +69,6 @@ Then use the JSON artifact in `tmp/live_probe_results/` plus the trace files nam
 - expected tool block
 - prose fallback / no tool requested
 - resumed-session drift
-
----
-
-## Symptom: Mixed TOOL_BATCH — reads ran but writes/shell were deferred
-
-**Cause:** `TOOL_BATCH` is intentionally limited to **`repo-read` + `context`** tools. If the model mixes e.g. `files.read` + `files.write` in one batch, the harness executes the safe reads, synthesizes failed members for deferred tools, and emits trace `tool_batch_split` with `executedToolIds` vs `deferredToolIds`.
-
-**What to check:**
-
-```bash
-jq 'select(.event == "tool_batch_split" or .event == "batch_planned")' <run-id>.jsonl
-```
-
-Then inspect the `tool.batch` result in the UI or transcript: `policySummary` explains the repair; the model should retry deferred tools as individual **`TOOL_CALL`** actions.
-
----
 
 ## Symptom: Tool was blocked
 
@@ -142,14 +126,13 @@ jq 'select(.event == "run_failed")' <run-id>.jsonl
 
 ## Symptom: Latency looks wrong
 
-Tool-assisted runs often make **multiple** provider calls (tool attempt, follow-up, and any additional tool-loop steps). Compare timestamps:
+Prompted tool-assisted runs often make **multiple** provider calls. Compare timestamps:
 
 ```bash
 jq 'select(.event | startswith("provider_turn"))' <run-id>.jsonl | jq -r '[.timestamp, .event, .payload.phase] | @tsv'
 ```
 
-- `tool-attempt` — first loop pass (or first pass after idle) where the model proposes tools
-- `tool-follow-up` — pass that ingests tool results; there may be several `tool-follow-up` phases if the harness continues the loop
+- `prompted_tool` — one tool-loop pass where the model may propose tools or answer using previous results
 
 If a follow-up turn is very slow, the tool result may have been large. Check `tool_executed.summary` for output size hints.
 

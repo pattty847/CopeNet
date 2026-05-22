@@ -15,6 +15,8 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {}},
         capabilities=["git", "read"],
+        evidence_role="discovery",
+        side_effect="read",
     ),
     ToolDescriptor(
         id="git.diff",
@@ -23,6 +25,8 @@ DESCRIPTORS = [
         category="repo-read",
         input_schema={"type": "object", "properties": {"target": {"type": "string"}}},
         capabilities=["git", "read"],
+        evidence_role="grounding",
+        side_effect="read",
     ),
 ]
 

@@ -68,6 +68,7 @@ Every line is a JSON object:
 run_started
 session_resolved
 harness_planned          willAttemptToolLoop: false
+harness_decision_recorded status: "parsed" | "fallback" | "unavailable" (optional)
 provider_turn_started    phase: "provider"
 provider_session_updated (optional — provider assigned or changed session id)
 provider_turn_completed  phase: "provider", deltaCount: N
@@ -77,25 +78,26 @@ run_completed
 
 ### Tool-Assisted Run (model emits a tool invocation)
 
-The harness makes **two or more provider turns** on the default path (first turn proposes a tool or batch; later turns ingest tool results and either finalize or loop again).
+The prompted harness makes **two or more provider turns** on the default path: each pass lets the model either emit exact JSON tool calls or answer in plain text. Native tool-call providers may use `chat_completion` instead of `provider_turn_*` trace pairs.
 
 ```
 run_started
 session_resolved
 harness_planned          willAttemptToolLoop: true
-provider_turn_started    phase: "tool-attempt"
-provider_turn_completed  phase: "tool-attempt"
+harness_decision_recorded status: "parsed" | "fallback" | "unavailable" (optional)
+provider_turn_started    phase: "prompted_tool"
+provider_turn_completed  phase: "prompted_tool"
 tool_requested           toolId, arguments
 tool_executed            toolId, ok, summary      ← or tool_blocked
-provider_turn_started    phase: "tool-follow-up"
-provider_turn_completed  phase: "tool-follow-up"
+provider_turn_started    phase: "prompted_tool"
+provider_turn_completed  phase: "prompted_tool"
 tool_loop_continued      step, optional lastToolId, transitionReason
 …                        (repeat turns while the tool loop stays active)
 assistant_finalized
 run_completed
 ```
 
-**Batched reads:** If the model returns `TOOL_BATCH` with multiple read-only repo/context calls, you may see `batch_planned` (safe subset actually executed). If that batch also contained writes or shell tools, trace `tool_batch_split` (`executedToolIds` vs `deferredToolIds`) — deferred calls are synthesized as failed batch members so the harness can instruct the model to re-request them as single `TOOL_CALL`s.
+Tool calls are normalized as exact registered tool ids plus structured arguments. Tool results also carry `turnId`, `decisionId`, and versioned `effect` metadata for UI inspection.
 
 ### Tool Loop Planned But Not Triggered
 
@@ -105,8 +107,9 @@ run_completed
 run_started
 session_resolved
 harness_planned          willAttemptToolLoop: true
-provider_turn_started    phase: "tool-attempt"
-provider_turn_completed  phase: "tool-attempt", toolRequested: false
+harness_decision_recorded status: "parsed" | "fallback" | "unavailable" (optional)
+provider_turn_started    phase: "prompted_tool"
+provider_turn_completed  phase: "prompted_tool"
 assistant_finalized
 run_completed
 ```
@@ -135,6 +138,8 @@ run_failed               phase: "send_chat", error: "..."
     "promptedToolUse": true
   },
   "willAttemptToolLoop": true,
+  "turnId": "turn-...",
+  "decisionId": "decision-...",
   "availableToolIds": [
     "artifact.create",
     "context.prepare",
@@ -155,6 +160,26 @@ run_failed               phase: "send_chat", error: "..."
 
 **Concrete tool list:** Registered built-ins live in `core/tools/handlers/` and `builtin_readonly.py`. **Write tools (`files.edit`, `files.write`) only appear here when task mode policy allows category `repo-write`** (currently `full-access`). **Artifact tooling (`artifact.create`)** stays available under default policy whenever tools are enabled; it still requires a live session, `run_id`, and `artifact_store` or the handler blocks with its own diagnostic.
 
+### `harness_decision_recorded`
+
+```json
+{
+  "schema_version": "harness_decision_record.v1",
+  "decision_id": "decision-...",
+  "turn_id": "turn-...",
+  "control_mode": "trace_only",
+  "status": "parsed",
+  "decision": {
+    "request_kind": "code",
+    "route": "call_tool",
+    "next_action": "SEARCH_FILES",
+    "trace_note": "Start by locating the implementation."
+  }
+}
+```
+
+This record is for trace continuity and UI inspection only. V1 does not steer, suppress, or force tool execution from `HarnessDecision`; normal provider output remains authoritative.
+
 ### `provider_turn_started` / `provider_turn_completed`
 
 `phase` values and what they mean:
@@ -162,8 +187,7 @@ run_failed               phase: "send_chat", error: "..."
 | phase | when |
 |---|---|
 | `"provider"` | chat-only path, single provider turn |
-| `"tool-attempt"` | first turn in tool loop — model decides whether to call a tool |
-| `"tool-follow-up"` | second turn in tool loop — model synthesizes answer using tool result |
+| `"prompted_tool"` | one prompted tool-loop pass; the model may call a tool or answer |
 
 `provider_turn_completed` includes `deltaCount`. A value of `1` is normal for Ollama, which often returns the entire response in one chunk.
 
@@ -176,7 +200,7 @@ run_failed               phase: "send_chat", error: "..."
 }
 ```
 
-Emitted when the model's output parses as a valid tool invocation JSON object. If this event is missing despite `willAttemptToolLoop: true`, the model did not produce parseable JSON — check `provider_turn_completed` for `toolRequested: false`.
+Emitted when the model's output parses as a valid tool invocation JSON object with an exact registered tool id. If this event is missing despite `willAttemptToolLoop: true`, the model answered directly or did not produce parseable tool JSON.
 
 ### `tool_executed`
 
@@ -209,10 +233,6 @@ Known `reason` values:
 | `unknown tool` | tool id not in the registry |
 | `write tool unavailable in current mode` | Registry-level block: `repo-write` category not allowed for this session’s task mode (not `full-access`) |
 | `artifact tool unavailable in current mode` | Registry-level block: `artifact` category not allowed (reserved for narrowed policies) |
-| `unsafe or unsupported batch request` | `TOOL_BATCH` had no runnable read/context subset — model must retry as individual calls |
-
-Many batch “repairs” also surface inside the synthesized `tool.batch` execution body (`policySummary`, per-member summaries) rather than always as standalone `tool_blocked` lines after the partial read batch runs.
-
 Default shell allowlist: `git`, `rg`, `ls`, `pwd`, `find`.
 
 ### `assistant_finalized`
@@ -244,7 +264,7 @@ Quick order for an unexpected run:
 1. **Find the trace** — newest file in `~/.copenet/logs/runs/`
 2. **`harness_planned`** — was the tool loop planned? Was `promptedToolUse: true`? Do `availableToolIds` reflect the session task mode (**`full-access` needed for write tools**)?
 3. **`tool_requested`** — did the model call the expected tool with correct arguments?
-4. **`tool_executed`, `tool_blocked`, or mixed batch traces** (`batch_planned`, `tool_batch_split`) — policy rejection, execution failure, or deferred batch calls?
+4. **`tool_executed` or `tool_blocked`** — policy rejection or execution failure?
 5. **`assistant_finalized`** — was `toolExecutionAttached` as expected? Is `responseLength` plausible?
 6. **`run_failed`** — if present, the error message is the primary diagnostic
 

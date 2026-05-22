@@ -23,6 +23,8 @@ DESCRIPTORS = [
             },
         },
         capabilities=['workspace', 'repo_map', 'verification'],
+        evidence_role='discovery',
+        side_effect='read',
     ),
     ToolDescriptor(
         id='test.discover',
@@ -37,6 +39,8 @@ DESCRIPTORS = [
             },
         },
         capabilities=['workspace', 'verification', 'tests'],
+        evidence_role='verification',
+        side_effect='read',
     ),
 ]
 

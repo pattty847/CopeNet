@@ -70,7 +70,41 @@ SendJson = Callable[[dict[str, Any]], Awaitable[None]]
 
 
 async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None:
-    """Route one already-authenticated RPC request."""
+    """Route one already-authenticated RPC request.
+
+    Wrapped in a generic exception boundary so a malformed param (e.g. int("lol"))
+    inside a handler returns an INVALID_REQUEST response instead of bubbling out
+    and killing the WebSocket. Per Codex peer review round 2.
+    """
+    try:
+        await _route_rpc(req, send_json, orchestrator, tasks)
+    except ValueError as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=req.id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message=str(exc) or "invalid request"),
+                )
+            )
+        )
+    except Exception as exc:  # noqa: BLE001 — last-resort socket-saver
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=req.id,
+                    ok=False,
+                    error=RpcError(
+                        code="INTERNAL_ERROR",
+                        message=f"{exc.__class__.__name__}: {exc}",
+                    ),
+                )
+            )
+        )
+
+
+async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None:
+    """Inner dispatch — original method table. Errors bubble to dispatch_rpc."""
     if req.method == "chat.send":
         await handle_chat_send(req.id, req.params, send_json, tasks, orchestrator)
     elif req.method == "chat.abort":

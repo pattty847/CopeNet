@@ -24,6 +24,8 @@ DESCRIPTORS = [
             "required": ["title", "body"],
         },
         capabilities=["artifact", "write"],
+        evidence_role="artifact",
+        side_effect="write",
     ),
 ]
 

@@ -37,7 +37,9 @@ export type {
   ProviderAuthLoginInfo,
   LiveToolCall,
   ToolExecutionState,
+  ToolEffect,
   TurnStateSnapshot,
+  HarnessDecisionRecord,
   // Pat Profile + Return Briefing
   PatProfile,
   PatProfileSource,
@@ -227,4 +229,5 @@ export interface RunActivity {
 export type InspectorTarget =
   | { kind: 'artifact'; artifactId: string }
   | { kind: 'diff'; artifactId: string }
-  | { kind: 'batch'; batchId: string };
+  | { kind: 'batch'; batchId: string }
+  | { kind: 'tool'; tool: import('../types/backend').ToolResultPart };

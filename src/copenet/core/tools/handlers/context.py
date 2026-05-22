@@ -23,6 +23,8 @@ DESCRIPTORS = [
         category="context",
         input_schema={"type": "object", "properties": {"query": {"type": "string"}}},
         capabilities=["session", "guidance", "transcript"],
+        evidence_role="context",
+        side_effect="none",
     ),
 ]
 
