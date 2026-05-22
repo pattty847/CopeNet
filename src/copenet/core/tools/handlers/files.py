@@ -34,7 +34,8 @@ DESCRIPTORS = [
         name="Read File",
         description=(
             "Read a text file inside the current workdir. "
-            "Supports bounded reads with offset/limit and returns a digest you can reuse for stale-read checks."
+            "Supports offset (0-based char) and limit (char count). "
+            "Returns content with an English continuation hint if truncated."
         ),
         category="repo-read",
         input_schema={
@@ -68,10 +69,19 @@ DESCRIPTORS = [
         name="Ripgrep Search",
         description=(
             "Search file contents under the current workdir with ripgrep. "
-            "Prefer this for repository discovery before choosing files.read when the exact path is not already known."
+            "Supports offset and limit for paging through large match sets; "
+            "returns an English continuation hint when matches are truncated."
         ),
         category="repo-read",
-        input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
+        input_schema={
+            "type": "object",
+            "properties": {
+                "pattern": {"type": "string"},
+                "path": {"type": "string"},
+                "offset": {"type": "integer", "minimum": 0},
+                "limit": {"type": "integer", "minimum": 1},
+            },
+        },
         capabilities=["filesystem", "search", "ripgrep"],
         evidence_role="discovery",
         side_effect="read",
@@ -165,6 +175,9 @@ async def list_files(request: ToolExecutionRequest, context: ToolExecutionContex
     return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary=summary, output=output)
 
 
+FILE_READ_ABSOLUTE_MAX = 500_000  # ~500KB safety guard; honors explicit limit up to here.
+
+
 async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
     offset = max(int(request.arguments.get("offset") or 0), 0)
@@ -191,14 +204,26 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
         raise RuntimeError(f"file not found: {path}")
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         full_text = handle.read()
-    limit = requested_limit if requested_limit > 0 else context.policy.file_output_limit
-    bounded_limit = min(limit, context.policy.file_output_limit)
-    text = full_text[offset : offset + bounded_limit]
+    # Phase 0.2: honor explicit limit up to FILE_READ_ABSOLUTE_MAX. When limit
+    # is omitted, default to adaptive paging using the policy's file_output_limit
+    # as the page size — and emit an English continuation hint on truncation.
+    if requested_limit > 0:
+        effective_limit = min(requested_limit, FILE_READ_ABSOLUTE_MAX)
+    else:
+        effective_limit = context.policy.file_output_limit
+    text = full_text[offset : offset + effective_limit]
     access = file_access_metadata(path, context)
     target = access["target"]
     digest = _content_digest(full_text)
     _remember_file_digest(context, target=target, digest=digest)
-    truncated = offset + len(text) < len(full_text)
+    next_offset = offset + len(text)
+    truncated = next_offset < len(full_text)
+    if truncated:
+        kb_read = max(len(text) // 1024, 1)
+        text = (
+            f"{text}\n\n[Read truncated at char {next_offset} (~{kb_read}KB). "
+            f"Use offset={next_offset} to continue.]"
+        )
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -212,10 +237,10 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
             "content": text,
             "digest": digest,
             "offset": offset,
-            "limit": bounded_limit,
+            "limit": effective_limit,
             "totalChars": len(full_text),
             "truncated": truncated,
-            **({"nextOffset": offset + len(text)} if truncated else {}),
+            **({"nextOffset": next_offset} if truncated else {}),
             **({"warning": warning_message} if warning_message else {}),
         },
     )
@@ -299,6 +324,9 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         return blocked_result
     if not pattern:
         raise ValueError("pattern is required")
+    offset = max(int(request.arguments.get("offset") or 0), 0)
+    requested_limit = int(request.arguments.get("limit") or 0)
+    effective_limit = requested_limit if requested_limit > 0 else context.policy.search_result_limit
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
     if not root.exists():
         raise RuntimeError(f"path not found: {root}")
@@ -324,7 +352,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     except FileNotFoundError as exc:
         raise RuntimeError("ripgrep (rg) is not installed or not available on PATH") from exc
 
-    hits: list[dict[str, object]] = []
+    all_hits: list[dict[str, object]] = []
     stderr = completed.stderr.strip()
     if completed.returncode not in (0, 1):
         message = stderr or f"ripgrep exited with status {completed.returncode}"
@@ -357,7 +385,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         if submatches and isinstance(submatches, list):
             first = submatches[0] if isinstance(submatches[0], dict) else {}
             column = int(first.get("start") or 0) + 1
-        hits.append(
+        all_hits.append(
             {
                 "path": display_hit_path,
                 "line": line_number,
@@ -365,18 +393,27 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
                 "text": snippet[:240],
             }
         )
-        if len(hits) >= context.policy.search_result_limit:
-            break
 
+    total_matches = len(all_hits)
+    hits = all_hits[offset : offset + effective_limit]
+    next_offset = offset + len(hits)
+    truncated = next_offset < total_matches
+    summary = f"Found {total_matches} matches for pattern via ripgrep; returning {len(hits)}."
+    if truncated:
+        summary += f" [Showing matches {offset + 1}-{next_offset}. Total found: {total_matches}. Use offset={next_offset} to continue.]"
+    if warning_message:
+        summary += f" Warning: {warning_message}"
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
-        summary=(
-            f"Found {len(hits)} matches for pattern via ripgrep."
-            + (f" Warning: {warning_message}" if warning_message else "")
-        ),
+        summary=summary,
         output={
             "matches": hits,
+            "totalMatches": total_matches,
+            "offset": offset,
+            "limit": effective_limit,
+            "truncated": truncated,
+            **({"nextOffset": next_offset} if truncated else {}),
             **access,
             **({"warning": warning_message} if warning_message else {}),
         },

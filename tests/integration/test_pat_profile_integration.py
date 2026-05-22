@@ -90,6 +90,11 @@ class ProfileAwareProvider:
 @pytest.mark.asyncio
 async def test_send_chat_injects_pat_profile_context_and_emits_profile_events(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COPNET_DATA_DIR", str(tmp_path / "data"))
+    # Phase 0.4: auto-extraction is OFF by default. This test pre-dates that
+    # gate and exercises the profile/memory post-run mutation path explicitly,
+    # so opt back in here. The new default (off) is verified separately.
+    monkeypatch.setenv("COPNET_AUTO_PROFILE_EXTRACTION", "1")
+    monkeypatch.setenv("COPNET_AUTO_MEMORY_EXTRACTION", "1")
     _write_overlay(tmp_path / "data")
 
     provider = ProfileAwareProvider()

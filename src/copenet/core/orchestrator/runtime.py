@@ -7,6 +7,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from copenet.core._config import (
+    auto_memory_extraction_enabled,
+    auto_profile_extraction_enabled,
+)
 from copenet.core.orchestrator.personal_history import (
     extract_personal_questions,
     extract_resume_decisions,
@@ -504,23 +508,33 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "artifactCount": len(run_record.artifact_ids),
             },
         )
+        # Phase 0.4: auto-extraction is OFF by default. The previous behavior
+        # keyword-scraped user text for "i like / do not / we should" and
+        # re-injected those into next-turn prompts, polluting context. Enable
+        # via COPNET_AUTO_PROFILE_EXTRACTION / COPNET_AUTO_MEMORY_EXTRACTION.
         profile_changes = []
-        try:
-            profile_changes = orchestrator._profile_service.apply_post_run_updates(
-                user_message=message,
-                run_record=run_record,
-            )
-        except Exception as exc:
-            trace.record("post_run_side_effect_failed", {"stage": "profile", "error": str(exc)})
+        if auto_profile_extraction_enabled():
+            try:
+                profile_changes = orchestrator._profile_service.apply_post_run_updates(
+                    user_message=message,
+                    run_record=run_record,
+                )
+            except Exception as exc:
+                trace.record("post_run_side_effect_failed", {"stage": "profile", "error": str(exc)})
+        else:
+            trace.record("post_run_side_effect_skipped", {"stage": "profile", "reason": "auto_extraction_disabled"})
         memory_created = []
-        try:
-            memory_changes = orchestrator._memory_service.extract_from_run(
-                user_message=message,
-                run_record=run_record,
-            )
-            memory_created = list(memory_changes.created)
-        except Exception as exc:
-            trace.record("post_run_side_effect_failed", {"stage": "memory", "error": str(exc)})
+        if auto_memory_extraction_enabled():
+            try:
+                memory_changes = orchestrator._memory_service.extract_from_run(
+                    user_message=message,
+                    run_record=run_record,
+                )
+                memory_created = list(memory_changes.created)
+            except Exception as exc:
+                trace.record("post_run_side_effect_failed", {"stage": "memory", "error": str(exc)})
+        else:
+            trace.record("post_run_side_effect_skipped", {"stage": "memory", "reason": "auto_extraction_disabled"})
         if memory_created:
             trace.record(
                 "memory_extracted",

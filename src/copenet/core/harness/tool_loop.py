@@ -22,8 +22,17 @@ from .planning import HarnessTurnPlan
 
 ToolExecutor = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[ToolExecutionResult]]
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
-MAX_TOOL_STEPS = 4
+# Frontier harnesses leave step-count to the model. 100 is high enough that
+# real work never hits it, low enough that runaway loops eventually stop.
+MAX_TOOL_STEPS = 100
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
+
+
+def _max_step_explanation() -> str:
+    return (
+        f"[Stopped after MAX_TOOL_STEPS={MAX_TOOL_STEPS} tool calls. "
+        "Returning what was produced so far.]"
+    )
 
 
 class NativeToolProvider(Protocol):
@@ -252,8 +261,12 @@ async def run_with_native_tools(
                     },
                 )
                 trace("turn_completed", turn_state.to_public_dict())
-            if latest_content:
-                yield ProviderEvent(kind="delta", text=latest_content, provider_session_id=provider_session_id)
+            cap_hint = _max_step_explanation()
+            yield ProviderEvent(
+                kind="delta",
+                text=(latest_content + "\n\n" + cap_hint) if latest_content else cap_hint,
+                provider_session_id=provider_session_id,
+            )
             yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
             return
 
@@ -376,6 +389,11 @@ async def run_with_prompted_tools(
             turn_state.terminal_reason = "max_turns"
             if trace is not None:
                 trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(
+                kind="delta",
+                text=_max_step_explanation(),
+                provider_session_id=discovered_session,
+            )
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
             return
         current_prompt = _compose_prompted_tool_followup(
