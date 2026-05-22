@@ -15,6 +15,7 @@ from pathlib import Path
 
 import pytest
 
+from copenet.core.harness import tool_loop as harness_tool_loop
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.rpc_dispatch import dispatch_rpc
@@ -227,3 +228,168 @@ async def test_dispatch_rpc_unknown_method_still_returns_clean_error(tmp_path: P
     frame = sent[-1]
     assert frame.get("ok") is False
     assert (frame.get("error") or {}).get("code") == "METHOD_NOT_FOUND"
+
+
+# -- Group 3: baseline characterization tests (Phase -1.5) ----------------------
+#
+# These pin the CURRENT broken behavior. They are expected to invert during the
+# rebuild — flag them when reviewing diffs:
+#
+#   * test_tool_loop_caps_at_max_tool_steps:
+#       After Phase 0.1 lifts MAX_TOOL_STEPS from 4 → 100, the assertion inverts
+#       from "only 4 executed" to "all N executed" (for small N up to 100).
+#
+#   * test_cross_turn_amnesia_in_provider_prompt:
+#       After Phase 1 replaces the synthetic working_set with a real messages[]
+#       array, the second turn's provider input should contain turn-1 USER+
+#       ASSISTANT messages — not the working_set blob. The assertion inverts to
+#       multi-message input.
+
+
+class CountingPromptedProvider:
+    """Provider that emits N tool-call requests across N+1 turns.
+
+    Each request asks for a different file path so the in-policy duplicate-call
+    suppressor (`_repeat_response`) never trips. We want this test to be
+    bounded purely by MAX_TOOL_STEPS, not by repetition heuristics.
+    """
+
+    name = "counting"
+    display_name = "Counting"
+
+    def __init__(self, *, total_calls: int) -> None:
+        self.total_calls = total_calls
+        self.calls_emitted = 0
+        self.prompts: list[str] = []
+
+    async def run(self, prompt, provider_session_id, abort_event, model=None, system_prompt=None):
+        del abort_event, model, system_prompt
+        self.prompts.append(prompt)
+        if self.calls_emitted < self.total_calls:
+            self.calls_emitted += 1
+            text = (
+                '{"tool_id":"files.read","arguments":{"path":"FILE_'
+                + str(self.calls_emitted)
+                + '.md"}}'
+            )
+            yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "ps")
+            yield ProviderEvent(kind="final")
+            return
+        yield ProviderEvent(
+            kind="delta",
+            text=f"All done after {self.total_calls} tool calls.",
+            provider_session_id=provider_session_id or "ps",
+        )
+        yield ProviderEvent(kind="final")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {
+                "chat": True,
+                "streaming": True,
+                "toolCalls": False,
+                "promptedToolUse": True,
+            },
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
+@pytest.mark.asyncio
+async def test_tool_loop_caps_at_max_tool_steps(tmp_path: Path) -> None:
+    """Provider keeps requesting tools; loop caps execution at MAX_TOOL_STEPS.
+
+    BASELINE (Phase -1): MAX_TOOL_STEPS=4. Even if the provider would happily
+    keep going, the harness stops after the 4th tool execution and returns
+    whatever final text exists (or nothing).
+
+    PHASE 0.1 EXPECTED INVERSION: cap rises to 100. With total_calls=5, all
+    five tool calls execute and a final assistant message follows.
+    """
+    # Pre-populate distinct files so each files.read call resolves successfully.
+    for i in range(1, 11):
+        (tmp_path / f"FILE_{i}.md").write_text(f"contents of FILE_{i}\n", encoding="utf-8")
+    provider = CountingPromptedProvider(total_calls=5)
+    orchestrator = _build_orchestrator(tmp_path, {"counting": provider})
+
+    result, events = await _collect_events(
+        orchestrator,
+        ChatSendRequest(
+            session_key="alpha",
+            message="loop please",
+            provider="counting",
+            task_prompt_id="full-access",
+        ),
+    )
+
+    assert result["status"] == "ok"
+    tool_executions = [ev for ev in events if ev.get("state") == "tool_result"]
+    cap = harness_tool_loop.MAX_TOOL_STEPS
+    assert cap in (4, 100), (
+        f"unexpected MAX_TOOL_STEPS={cap}; "
+        "this test understands both pre-Phase-0 (4) and post-Phase-0 (100) regimes."
+    )
+    if cap == 4:
+        assert len(tool_executions) == 4, (
+            f"BASELINE: expected exactly 4 tool calls under MAX_TOOL_STEPS=4, got {len(tool_executions)}"
+        )
+    else:
+        assert len(tool_executions) == 5, (
+            f"POST-PHASE-0: expected all 5 tool calls to execute, got {len(tool_executions)}"
+        )
+
+
+@pytest.mark.asyncio
+async def test_cross_turn_amnesia_in_provider_prompt(tmp_path: Path) -> None:
+    """Two-turn session — the second turn's outgoing prompt should NOT carry
+    prior assistant text in any structured multi-message way.
+
+    BASELINE (Phase -1): the provider receives ONE synthetic prompt string per
+    turn (built by `assemble_working_set`). Past assistant text is omitted from
+    that blob entirely. We assert this by checking the second-turn prompt does
+    NOT contain the first turn's assistant final text.
+
+    PHASE 1 EXPECTED INVERSION: provider is invoked with a structured `messages[]`
+    array containing past user AND assistant turns. This test should be replaced
+    with a new test that asserts the second turn's outgoing input[] contains
+    the turn-1 user message + turn-1 assistant message.
+    """
+    provider = FakeProvider()
+    orchestrator = _build_orchestrator(tmp_path, {"fake": provider})
+
+    prompts_seen: list[str] = []
+    original_run = provider.run
+
+    async def capturing_run(prompt, provider_session_id, abort_event, model=None, system_prompt=None):
+        prompts_seen.append(prompt)
+        async for event in original_run(prompt, provider_session_id, abort_event, model=model, system_prompt=system_prompt):
+            yield event
+
+    provider.run = capturing_run  # type: ignore[assignment]
+
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="turn-one question", provider="fake"),
+    )
+    await _collect_events(
+        orchestrator,
+        ChatSendRequest(session_key="alpha", message="turn-two question", provider="fake"),
+    )
+
+    assert len(prompts_seen) == 2, f"expected 2 provider invocations, got {len(prompts_seen)}"
+    second_prompt = prompts_seen[1]
+    # Turn 1's assistant response was "hello". In the working-set model, that
+    # final-assistant text is NOT replayed in the next-turn prompt. The day
+    # Phase 1 lands and replaces working_set with a messages[] array containing
+    # prior user+assistant items, this assertion flips.
+    assert "turn-two question" in second_prompt
+    # Baseline: model is amnesiac about its own prior reply.
+    assert "hello" not in second_prompt, (
+        "BASELINE INVALIDATED: prior assistant text appeared in next-turn prompt. "
+        "If Phase 1 has landed (build_chat_messages replaces assemble_working_set), "
+        "delete this test and replace with a messages[] structural assertion."
+    )
