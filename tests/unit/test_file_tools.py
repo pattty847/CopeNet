@@ -49,7 +49,10 @@ async def test_files_rg_returns_bounded_matches(monkeypatch: pytest.MonkeyPatch,
     )
 
     assert result.ok is True
-    assert result.summary == "Found 2 matches for pattern via ripgrep."
+    # Phase 0.2: summary now reports both total and returned page counts.
+    assert result.summary == "Found 2 matches for pattern via ripgrep; returning 2."
+    assert result.output["totalMatches"] == 2
+    assert result.output["truncated"] is False
     assert result.output["scope"] == "inside_workspace"
     assert result.output["workspaceRoot"] == str(tmp_path)
     assert result.output["matches"] == [

@@ -189,7 +189,11 @@ async def test_files_read_returns_digest_and_bounded_window(tmp_path: Path) -> N
     )
 
     assert result.ok is True
-    assert result.output['content'] == 'abcdefgh'
+    # Phase 0.2: when truncated, files.read appends an English continuation
+    # hint to the returned `content` so the model knows how to paginate.
+    assert result.output['content'].startswith('abcdefgh')
+    assert '[Read truncated at char 18' in result.output['content']
+    assert 'Use offset=18 to continue' in result.output['content']
     assert result.output['offset'] == 10
     assert result.output['limit'] == 8
     assert result.output['truncated'] is True

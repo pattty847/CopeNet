@@ -42,12 +42,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     if not message:
         raise ValueError("message is required")
 
-    # run_id is ALWAYS a fresh UUID — used as a globally unique trace/abort key.
-    # idempotency_key is separate; it dedupes RETRIES of the same client request
-    # but is scoped per-session so cross-session collisions are impossible.
-    # (Fix per Codex peer review — global f"chat:{run_id}" caused cross-session bleed.)
-    run_id = str(uuid4())
+    # Per Phase -1.2 (HARNESS_REBUILD_V2.md): use idempotency_key as run_id
+    # when provided so callers (rpc_chat etc.) keep round-trip identity between
+    # the chat.send response runId and the abort/trace key. Fall back to a
+    # fresh UUID when no idempotency_key is supplied. The dedupe cache is
+    # scoped per-session below to prevent cross-session bleed of cached
+    # results (the original Codex peer-review finding).
     idempotency_key = request.idempotency_key.strip() if request.idempotency_key else ""
+    run_id = idempotency_key or str(uuid4())
     provider_name = request.provider.strip() or "codex-cli"
     if provider_name not in orchestrator._providers:
         init_error = orchestrator._provider_init_errors.get(provider_name)
