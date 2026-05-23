@@ -1,5 +1,5 @@
 export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'auth_failed';
-export type ChatState = 'delta' | 'final' | 'error' | 'aborted' | 'tool_called' | 'tool_result';
+export type ChatState = 'delta' | 'reasoning_delta' | 'final' | 'error' | 'aborted' | 'tool_called' | 'tool_result';
 export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface Session {
@@ -99,6 +99,9 @@ export interface Message {
   toolExecution: ToolExecution | null;
   errorMessage: string | null;
   optimistic: boolean;
+  /** Set while the socket is down but the run is believed still in-flight server-side.
+   *  The UI shows "reconnecting…" instead of a false "aborted" (Phase 4.6). */
+  reconnecting?: boolean;
   /** Structured part array — populated when a run emits tool_called events.
    *  The content field is kept in sync for backward compat and export.
    *  Render parts[] when present; fall back to content + toolExecution otherwise. */
@@ -114,6 +117,12 @@ export interface Message {
 export interface TextPart {
   kind: 'text';
   content: string;
+}
+
+/** Inline reasoning-summary narration streamed between tool calls (Phase 2/4). */
+export interface ThinkingPart {
+  kind: 'thinking';
+  text: string;
 }
 
 export interface ToolCallPart {
@@ -201,7 +210,7 @@ export interface ToolBatchPart {
   at: string; // ISO
 }
 
-export type MessagePart = TextPart | ToolCallPart | ToolResultPart | ToolBatchPart;
+export type MessagePart = TextPart | ThinkingPart | ToolCallPart | ToolResultPart | ToolBatchPart;
 
 export interface Provider {
   id: string;
@@ -351,6 +360,8 @@ export interface ChatEventPayload {
   state: ChatState;
   message?: PublicMessagePayload | null;
   errorMessage?: string | null;
+  /** Present on reasoning_delta events: one chunk of inline thinking text. */
+  text?: string | null;
   provider?: string | null;
   model?: string | null;
   capabilities?: Record<string, unknown> | null;

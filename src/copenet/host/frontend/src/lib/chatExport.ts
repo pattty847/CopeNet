@@ -48,6 +48,9 @@ function formatMessagePartLines(part: MessagePart): string[] {
   if (part.kind === 'text') {
     return part.content.trim() ? [part.content.trim()] : [];
   }
+  if (part.kind === 'thinking') {
+    return part.text.trim() ? [`[thinking] ${part.text.trim()}`] : [];
+  }
   if (part.kind === 'tool_call') {
     const target = part.target || part.hint;
     return [`[tool call] ${part.toolId}${target ? ` — ${target}` : ''}`];

@@ -727,6 +727,11 @@ function normalizeMessageParts(raw: unknown): MessagePart[] | null {
       if (normalized) parts.push({ kind: 'text', content: normalized } as TextPart);
       continue;
     }
+    if (kind === 'thinking') {
+      const text = typeof payload.text === 'string' ? payload.text : typeof payload.content === 'string' ? payload.content : '';
+      if (text) parts.push({ kind: 'thinking', text });
+      continue;
+    }
     if (kind === 'tool_call') {
       const toolCall = payload.toolCall && typeof payload.toolCall === 'object' ? payload.toolCall as Record<string, unknown> : payload;
       parts.push({
@@ -887,19 +892,18 @@ class WsClient {
         store.setWsStatus('disconnected');
       }
       this.rejectAllPending(new Error('connection closed'));
-      // Mark any in-flight assistant messages as aborted so the UI doesn't show a stuck spinner.
+      // Phase 4.6: the backend keeps in-flight runs alive across a socket drop,
+      // so do NOT false-abort pending assistants here. Mark them "reconnecting"
+      // and KEEP them tracked + keep activeRunId, so bootstrap() can reattach /
+      // reconcile against the persisted run on reconnect. A run is only marked
+      // aborted when the backend confirms it (chat.aborted) or its final record.
       const pending = store.pendingAssistants;
       for (const runId of Object.keys(pending)) {
         const target = pending[runId];
         store.updateMessage(target.sessionKey, target.localId, {
-          state: 'aborted',
-          errorMessage: 'Connection lost.',
-          optimistic: false,
+          reconnecting: true,
+          errorMessage: null,
         });
-        store.clearPendingAssistant(runId);
-      }
-      if (store.activeRunId) {
-        store.setActiveRunId(null);
       }
       this.connectPromise = null;
       this.connectResolve = null;
@@ -1234,8 +1238,48 @@ class WsClient {
         store.setDraftOpen(false);
         await this.loadHistory(nextKey);
       }
+      // Phase 4.6: reconcile any runs that were in-flight when the socket dropped.
+      await this.reconcilePendingRuns(sessions);
     } catch (error) {
       useAppStore.getState().setAppError(error instanceof Error ? error.message : 'Bootstrap failed.');
+    }
+  }
+
+  /**
+   * After a reconnect, reconcile pending assistant messages against server state.
+   * A run that finished while we were disconnected is finalized from persisted
+   * history; one still in-flight stays marked "reconnecting" (its session's
+   * inFlightRunId still points at it) and keeps streaming once events resume.
+   * Per HARNESS_REBUILD_V2 Phase 4.6.
+   */
+  private async reconcilePendingRuns(sessions: Session[]) {
+    const store = useAppStore.getState();
+    const pending = store.pendingAssistants;
+    const pendingRunIds = Object.keys(pending);
+    if (pendingRunIds.length === 0) return;
+    const inFlightByRun = new Set(
+      sessions.map((s) => s.inFlightRunId).filter((id): id is string => Boolean(id)),
+    );
+    for (const runId of pendingRunIds) {
+      const target = pending[runId];
+      if (inFlightByRun.has(runId)) {
+        // Still running server-side — keep the reconnecting marker; events resume.
+        store.updateMessage(target.sessionKey, target.localId, { reconnecting: true });
+        continue;
+      }
+      // Run is no longer in-flight: it completed (or aborted) while we were away.
+      // Re-load the session history so the persisted assistant message replaces
+      // the optimistic pending one, then drop the pending tracker.
+      try {
+        await this.loadHistory(target.sessionKey);
+      } catch {
+        // best-effort; leave the message as-is if history reload fails
+      }
+      store.updateMessage(target.sessionKey, target.localId, { reconnecting: false });
+      store.clearPendingAssistant(runId);
+      if (store.activeRunId === runId) {
+        store.setActiveRunId(null);
+      }
     }
   }
 
@@ -1887,6 +1931,17 @@ class WsClient {
     const runId = payload.runId ? String(payload.runId) : null;
     const sessionKey = payload.sessionKey;
     const toolExecution = normalizeToolExecution(payload.toolExecution);
+
+    if (payload.state === 'reasoning_delta') {
+      // Phase 4: native reasoning-summary deltas render as inline "thinking"
+      // narration between tool calls (Claude Code-style).
+      const text = typeof payload.text === 'string' ? payload.text : '';
+      const target = runId ? store.pendingAssistants[runId] : undefined;
+      if (target && text) {
+        store.appendMessagePart(target.sessionKey, target.localId, { kind: 'thinking', text });
+      }
+      return;
+    }
 
     if (payload.state === 'tool_called') {
       const rawToolCall = payload.toolCall as Record<string, unknown> | null | undefined;

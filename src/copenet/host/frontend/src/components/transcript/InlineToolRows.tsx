@@ -422,6 +422,16 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
 // isLive: true while the owning message is still streaming (optimistic delta).
 // ---------------------------------------------------------------------------
 
+// ThinkingRow — muted, italic inline reasoning narration (Phase 4).
+function ThinkingRow({ part }: { part: { kind: 'thinking'; text: string } }) {
+  if (!part.text.trim()) return null;
+  return (
+    <div className="border-l-2 border-operator-muted/30 pl-3 text-[12px] italic leading-relaxed text-operator-muted/80 whitespace-pre-wrap">
+      {part.text}
+    </div>
+  );
+}
+
 export function InlineToolPart({
   part,
   isLive,
@@ -431,6 +441,10 @@ export function InlineToolPart({
   isLive?: boolean;
 }) {
   if (part.kind === 'text') return null; // rendered by parent as markdown
+
+  if (part.kind === 'thinking') {
+    return <ThinkingRow part={part} />;
+  }
 
   if (part.kind === 'tool_call') {
     return <ToolCallRow part={part} isLive={isLive} />;

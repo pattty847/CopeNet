@@ -2,7 +2,6 @@ import React, { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'reac
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
-import { WorkingSetCard } from './runtime/WorkingSetCard';
 import { PausedRunBanner } from './PausedRunBanner';
 import { Archive, ArrowDown, ArrowUp, Copy, CopyPlus, Download, Ellipsis, GitMerge, Sparkles, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
@@ -600,8 +599,10 @@ export function ChatWorkspace() {
         </div>
       )}
 
-      {/* Working Set — glanceable, pinned above the message stream */}
-      {!isMergePrep && <WorkingSetCard sessionKey={activeSessionKey} isDraft={isDraft} />}
+      {/* Phase 4 (HARNESS_REBUILD_V2): WorkingSetCard removed. The synthetic
+          working-set it rendered is gone (Phase 1) — the transcript is the
+          context now. The component file + dead adapter hooks are swept in
+          Phase 5. */}
 
       <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-3' : 'px-4 py-4'}`}>
         {messages.length === 0 ? (
