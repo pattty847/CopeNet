@@ -11,13 +11,11 @@ from copenet.core._config import (
     auto_memory_extraction_enabled,
     auto_profile_extraction_enabled,
 )
-from copenet.core.orchestrator.personal_history import (
-    extract_personal_questions,
-    extract_resume_decisions,
-    normalize_personal_focus,
-    starter_intent_tags,
+from copenet.core.orchestrator.messages import (
+    build_chat_messages,
+    estimate_input_tokens,
+    flatten_messages_to_prompt,
 )
-from copenet.core.orchestrator.working_set import assemble_working_set
 from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
@@ -163,15 +161,29 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         },
     )
     effective_system_prompt = request.system_prompt
-    working_set = assemble_working_set(
-        user_message=message,
-        session_state=session_state,
-        transcript_window=working_history,
-        artifact_store=orchestrator._artifact_store,
-        system_prompt=effective_system_prompt,
-        session_key=session_key,
+    # Phase 1 (HARNESS_REBUILD_V2): real multi-turn message history. `chat_history`
+    # is read BEFORE the current user message was appended above — wait, the user
+    # message IS already appended. So drop the trailing user row and let
+    # build_chat_messages re-append `message` as the live request. This produces a
+    # proper Responses messages[] array (used directly by the Phase 2 native loop)
+    # and a clean flattened prompt for prompt-only providers (CLI / LM Studio).
+    full_history = orchestrator.history(session_key=session_key, limit=400)
+    history_for_replay = _history_excluding_current(full_history, run_id=run_id)
+    chat_messages = build_chat_messages(
+        transcript_messages=history_for_replay,
+        current_user_message=message,
     )
-    trace.record("working_set_assembled", working_set.metadata)
+    chat_prompt = flatten_messages_to_prompt(chat_messages)
+    input_token_estimate = estimate_input_tokens(chat_messages)
+    message_count = len(chat_messages)
+    trace.record(
+        "chat_messages_built",
+        {
+            "messageCount": message_count,
+            "inputTokenEstimate": input_token_estimate,
+            "historyTurns": len(history_for_replay),
+        },
+    )
 
     provider = orchestrator._providers[provider_name]
     seq = 0
@@ -206,7 +218,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     try:
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
-            prompt=working_set.prompt,
+            prompt=chat_prompt,
+            messages=chat_messages,
             provider_session_id=entry.provider_session_id,
             abort_event=abort_event,
             model=request.model,
@@ -443,13 +456,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
 
         updated_state = _evolve_session_state(
             session_state=session_state,
-            message=message,
-            assistant_text=assistant_text,
             run_id=run_id,
             plan=plan,
             task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
-            working_set=working_set.metadata,
-            tool_execution_payload=tool_execution_payload,
             created_artifact_ids=created_artifact_ids,
         )
         orchestrator._session_state_store.save(updated_state)
@@ -458,7 +467,6 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             {
                 "sessionKey": session_key,
                 "relevantArtifactCount": len(updated_state.relevant_artifact_ids),
-                "activeEntityCount": len(updated_state.active_entities),
             },
         )
         run_record = RunRecord(
@@ -472,7 +480,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             will_attempt_tool_loop=plan.will_attempt_tool_loop,
             started_at=run_started_at,
             completed_at=transcript_now(),
-            working_set=dict(working_set.metadata),
+            working_set={},
+            message_count=message_count,
+            input_token_estimate=input_token_estimate,
             tool_steps=tool_steps,
             artifact_ids=created_artifact_ids,
             output_summary=_summarize_output(assistant_text),
@@ -642,7 +652,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             will_attempt_tool_loop=plan.will_attempt_tool_loop if "plan" in locals() else False,
             started_at=run_started_at,
             completed_at=transcript_now(),
-            working_set=dict(working_set.metadata) if "working_set" in locals() else {},
+            working_set={},
+            message_count=message_count if "message_count" in locals() else 0,
+            input_token_estimate=input_token_estimate if "input_token_estimate" in locals() else 0,
             tool_steps=tool_steps,
             artifact_ids=list(persisted_tool_artifact_ids),
             output_summary="",
@@ -695,41 +707,28 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
 def _evolve_session_state(
     *,
     session_state: SessionStateRecord,
-    message: str,
-    assistant_text: str,
     run_id: str,
     plan,
     task_prompt_id: str | None,
-    working_set: dict,
-    tool_execution_payload: dict | None,
     created_artifact_ids: list[str],
 ) -> SessionStateRecord:
+    """Update durable session state after a run.
+
+    Phase 1 (HARNESS_REBUILD_V2) killed the keyword auto-mutation that used to
+    synthesize task_summary / goals / active_entities / unresolved_questions /
+    prior_decisions / topical_tags from conversation text. The transcript IS the
+    context now (replayed via build_chat_messages), so we only track concrete
+    artifact references plus a plan snapshot for the inspector.
+
+    The remaining SessionStateRecord text fields are preserved as-is (not
+    narrowed away yet) so Pulse / Merge — which still read and write them and
+    are scheduled for a later rewire per the plan's deferral list — keep working
+    and degrade gracefully rather than crashing on a removed attribute.
+    """
     relevant_artifact_ids = _append_unique(
         session_state.relevant_artifact_ids,
         created_artifact_ids,
     )[-10:]
-    focus = normalize_personal_focus(message)
-    active_entities = list(session_state.active_entities)
-    tool_id = str((tool_execution_payload or {}).get("toolId") or "").strip()
-    if tool_id:
-        active_entities = _append_unique(active_entities, [tool_id])[-10:]
-    unresolved_questions = _append_unique(
-        list(session_state.unresolved_questions),
-        extract_personal_questions(message, assistant_text),
-    )[-10:]
-    prior_decisions = list(session_state.prior_decisions)
-    if tool_id:
-        prior_decisions = _append_unique(
-            prior_decisions,
-            [f"Run {run_id} completed with tool mode {plan.tool_execution_mode}"],
-        )[-10:]
-    personal_decisions = extract_resume_decisions(assistant_text)
-    if personal_decisions:
-        prior_decisions = _append_unique(prior_decisions, personal_decisions)[-10:]
-    topical_tags = _append_unique(list(session_state.topical_tags), starter_intent_tags(session_state.starter_intent))[-8:]
-    goals = list(session_state.goals)
-    if session_state.starter_intent and focus:
-        goals = _append_unique(goals, [focus])[-6:]
     agent_runtime = _build_agent_runtime_payload(
         session_key=session_state.session_key,
         task_prompt_id=task_prompt_id,
@@ -737,21 +736,15 @@ def _evolve_session_state(
     )
     return SessionStateRecord(
         session_key=session_state.session_key,
-        task_summary=focus or session_state.task_summary,
-        goals=goals,
-        active_entities=active_entities,
-        working_set_refs=_append_unique(
-            list(session_state.working_set_refs),
-            [
-                *list(working_set.get("artifactIds") or []),
-                *list(working_set.get("assetIds") or []),
-            ],
-        )[-10:],
+        task_summary=session_state.task_summary,
+        goals=list(session_state.goals),
+        active_entities=list(session_state.active_entities),
+        working_set_refs=list(session_state.working_set_refs),
         constraints=list(session_state.constraints),
-        unresolved_questions=unresolved_questions,
-        prior_decisions=prior_decisions,
+        unresolved_questions=list(session_state.unresolved_questions),
+        prior_decisions=list(session_state.prior_decisions),
         starter_intent=session_state.starter_intent,
-        topical_tags=topical_tags,
+        topical_tags=list(session_state.topical_tags),
         plan_snapshot={
             "runId": run_id,
             "toolExecutionMode": plan.tool_execution_mode,
@@ -762,9 +755,27 @@ def _evolve_session_state(
         },
         relevant_asset_ids=list(session_state.relevant_asset_ids),
         relevant_artifact_ids=relevant_artifact_ids,
+        merge_state=dict(session_state.merge_state),
+        pulse_state=dict(session_state.pulse_state),
         created_at=session_state.created_at,
         updated_at=transcript_now(),
     )
+
+
+def _history_excluding_current(history: list[dict], *, run_id: str) -> list[dict]:
+    """Return transcript history with the just-appended current user row removed.
+
+    send_chat appends the user message to the transcript before building the
+    replay array. build_chat_messages re-appends the live message itself, so we
+    strip the trailing user row for this run_id to avoid duplicating it.
+    """
+    if not history:
+        return []
+    trimmed = list(history)
+    last = trimmed[-1]
+    if last.get("role") == "user" and str(last.get("runId") or last.get("run_id") or "") == run_id:
+        trimmed = trimmed[:-1]
+    return trimmed
 
 
 def _append_unique(existing: list[str], incoming: list[str]) -> list[str]:

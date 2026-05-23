@@ -915,7 +915,11 @@ def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None
         state_response = socket.recv_response(state_id)
         state = state_response["payload"]["state"]
         assert state["session_key"] == "tool-success"
-        assert state["task_summary"] == "Read the README"
+        # Phase 1 (HARNESS_REBUILD_V2): task_summary is no longer keyword-synthesized
+        # from the user message. The state RPC still exposes the runtime state shape;
+        # the summary stays null and the transcript carries the context instead.
+        assert state["task_summary"] is None
+        assert "plan_snapshot" in state
 
 
 def test_sessions_create_can_seed_personal_starter_intent(rpc_client: TestClient, tmp_path: Path) -> None:

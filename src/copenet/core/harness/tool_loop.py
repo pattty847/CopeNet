@@ -158,6 +158,7 @@ async def run_with_native_tools(
             tool_id = native_call["function"]["name"]
             arguments = _parse_native_tool_arguments(native_call["function"].get("arguments"))
             request = ToolExecutionRequest(tool_id=tool_id, arguments=arguments)
+            call_id = str(native_call.get("id") or "").strip() or _new_call_id(request.tool_id)
             if trace is not None:
                 trace(
                     "tool_requested",
@@ -166,6 +167,7 @@ async def run_with_native_tools(
                         "arguments": request.arguments,
                         "step": step_index + 1,
                         "native": True,
+                        "callId": call_id,
                     },
                 )
             yield ProviderEvent(
@@ -178,23 +180,13 @@ async def run_with_native_tools(
                         turn_id=plan.turn_id,
                         decision_id=plan.decision_id,
                         native=True,
+                        call_id=call_id,
                     ),
                     "turnState": turn_state.to_public_dict(),
                 },
             )
             tool_result = await tool_executor(request, tool_context)
-            tool_result = _with_call_id(tool_result, request.tool_id)
-            tool_result = ToolExecutionResult(
-                tool_id=tool_result.tool_id,
-                call_id=native_call.get("id") or tool_result.call_id,
-                channel=tool_result.channel,
-                ok=tool_result.ok,
-                summary=tool_result.summary,
-                body=tool_result.body,
-                output=dict(tool_result.output),
-                error=tool_result.error,
-                artifact_id=tool_result.artifact_id,
-            )
+            tool_result = _force_call_id(tool_result, call_id)
             tool_result, artifact_draft = _materialize_tool_result_artifact(
                 tool_result=tool_result,
                 tool_context=tool_context,
@@ -235,7 +227,7 @@ async def run_with_native_tools(
             messages.append(
                 {
                     "role": "tool",
-                    "tool_call_id": native_call["id"],
+                    "tool_call_id": call_id,
                     "content": _native_tool_message_content(tool_result),
                 }
             )
@@ -331,6 +323,7 @@ async def run_with_prompted_tools(
 
         tool_payloads: list[str] = []
         for request in tool_requests:
+            call_id = _new_call_id(request.tool_id)
             if trace is not None:
                 trace(
                     "tool_requested",
@@ -339,6 +332,7 @@ async def run_with_prompted_tools(
                         "arguments": request.arguments,
                         "step": step_index + 1,
                         "native": False,
+                        "callId": call_id,
                     },
                 )
             yield ProviderEvent(
@@ -351,12 +345,13 @@ async def run_with_prompted_tools(
                         turn_id=plan.turn_id,
                         decision_id=plan.decision_id,
                         native=False,
+                        call_id=call_id,
                     ),
                     "turnState": turn_state.to_public_dict(),
                 },
             )
             tool_result = await tool_executor(request, tool_context)
-            tool_result = _with_call_id(tool_result, request.tool_id)
+            tool_result = _force_call_id(tool_result, call_id)
             tool_result, artifact_draft = _materialize_tool_result_artifact(
                 tool_result=tool_result,
                 tool_context=tool_context,
@@ -417,6 +412,7 @@ def _tool_call_event_payload(
     decision_id: str | None = None,
     channel: str = "tool",
     native: bool = False,
+    call_id: str | None = None,
 ) -> dict[str, Any]:
     hint = None
     for key in ("path", "query", "pattern", "file", "dir", "uri"):
@@ -433,6 +429,11 @@ def _tool_call_event_payload(
         "channel": channel,
         "native": native,
     }
+    # callId is stamped at request time (pre-execution) so the tool_call
+    # transcript part shares an id with its paired tool_result. This is what
+    # lets responses_items pair function_call <-> function_call_output on replay.
+    if call_id:
+        payload["callId"] = call_id
     if turn_id:
         payload["turnId"] = turn_id
     if decision_id:
@@ -599,12 +600,13 @@ def _compose_prompted_tool_followup(*, user_prompt: str, assistant_text: str, to
     )
 
 
-def _with_call_id(result: ToolExecutionResult, tool_id: str) -> ToolExecutionResult:
-    if result.call_id:
+def _force_call_id(result: ToolExecutionResult, call_id: str) -> ToolExecutionResult:
+    """Stamp a pre-generated call_id so the tool_call/tool_result parts pair up."""
+    if result.call_id == call_id:
         return result
     return ToolExecutionResult(
         tool_id=result.tool_id,
-        call_id=f"{tool_id}-{uuid4().hex[:10]}",
+        call_id=call_id,
         channel=result.channel,
         ok=result.ok,
         summary=result.summary,
@@ -613,6 +615,10 @@ def _with_call_id(result: ToolExecutionResult, tool_id: str) -> ToolExecutionRes
         error=result.error,
         artifact_id=result.artifact_id,
     )
+
+
+def _new_call_id(tool_id: str) -> str:
+    return f"{tool_id}-{uuid4().hex[:10]}"
 
 
 def _materialize_tool_result_artifact(

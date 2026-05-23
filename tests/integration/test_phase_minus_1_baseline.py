@@ -346,29 +346,23 @@ async def test_tool_loop_caps_at_max_tool_steps(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cross_turn_working_set_blob_not_structured_messages(tmp_path: Path) -> None:
-    """Two-turn session — provider gets ONE synthesized prompt string per turn.
+async def test_cross_turn_history_replayed_into_next_turn(tmp_path: Path) -> None:
+    """Phase 1 INVERSION of the old amnesia baseline.
 
-    BASELINE (Phase -1): the orchestrator builds a working_set blob via
-    `assemble_working_set` and hands the provider a single `prompt: str`. Past
-    turns may be smuggled in as text inside that blob (a "Recent relevant
-    transcript" section), but the wire shape is one string per turn — not a
-    structured user/assistant/user array.
-
-    PHASE 1 EXPECTED INVERSION: provider is invoked with a structured
-    `messages[]` array. The two assertions below — exactly ONE prompt string
-    per call, and a "Current task" header marker characteristic of the
-    working_set blob — should both fail. Delete this test and replace with
-    a structural messages[] assertion when Phase 1 lands.
+    Pre-Phase-1, the working_set blob omitted prior assistant text — the model
+    was amnesiac about its own replies. After Phase 1, build_chat_messages
+    replays the full transcript: turn 2's outgoing prompt contains BOTH turn 1's
+    user message AND turn 1's assistant reply, under a "Conversation so far"
+    history section, with the live ask under "Current user request".
     """
     provider = FakeProvider()
     orchestrator = _build_orchestrator(tmp_path, {"fake": provider})
 
-    invocations: list[dict[str, Any]] = []  # type: ignore[name-defined]
+    prompts_seen: list[str] = []
     original_run = provider.run
 
     async def capturing_run(prompt, provider_session_id, abort_event, model=None, system_prompt=None):
-        invocations.append({"prompt": prompt, "system_prompt": system_prompt})
+        prompts_seen.append(prompt)
         async for event in original_run(prompt, provider_session_id, abort_event, model=model, system_prompt=system_prompt):
             yield event
 
@@ -383,18 +377,14 @@ async def test_cross_turn_working_set_blob_not_structured_messages(tmp_path: Pat
         ChatSendRequest(session_key="alpha", message="turn-two question", provider="fake"),
     )
 
-    assert len(invocations) == 2, f"expected 2 provider invocations, got {len(invocations)}"
-    second_prompt = invocations[1]["prompt"]
-    assert isinstance(second_prompt, str), (
-        "BASELINE INVALIDATED: provider received non-string input on turn 2. "
-        "If Phase 1 has landed (build_chat_messages), the orchestrator should "
-        "now hand the provider a structured messages[] array — delete this test "
-        "and replace with a structural assertion on that array."
-    )
-    # The working_set blob is a synthesized text prompt with a recognizable
-    # "Current user request" header. This marker disappears in Phase 1.
-    assert "Current user request" in second_prompt, (
-        "BASELINE INVALIDATED: working_set blob header missing. Likely Phase 1 "
-        "has replaced assemble_working_set — rewrite this test."
-    )
+    assert len(prompts_seen) == 2
+    second_prompt = prompts_seen[1]
+    # Turn 1's user message AND assistant reply ("hello") are replayed.
+    assert "turn-one question" in second_prompt
+    assert "hello" in second_prompt
+    # The live ask is the current request.
     assert "turn-two question" in second_prompt
+    assert "Current user request" in second_prompt
+    assert "Conversation so far" in second_prompt
+    # Turn 1's prompt had no prior history section (first turn).
+    assert "Conversation so far" not in prompts_seen[0]

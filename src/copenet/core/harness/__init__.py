@@ -64,8 +64,17 @@ class ChatHarness:
         tool_context: ToolExecutionContext | None = None,
         trace: TraceRecorder | None = None,
         prompt_context_builder: Callable[[HarnessTurnPlan], str | None] | None = None,
+        messages: list[dict] | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
-        """Return the normalized plan and provider event stream."""
+        """Return the normalized plan and provider event stream.
+
+        `messages` is the Phase 1 Responses-API input array built from the
+        durable transcript. For Phase 1 it is plumbed through but the prompt-based
+        providers consume the flattened `prompt`. Phase 2 routes the Responses
+        path (openai-codex) through `messages` directly. `messages` is currently
+        stored on the plan for observability/Phase-2 hand-off.
+        """
+        del messages  # Phase 2 will route the Responses path through this.
         plan = await self.plan_turn(
             provider=provider,
             provider_name=getattr(provider, "name", "unknown"),

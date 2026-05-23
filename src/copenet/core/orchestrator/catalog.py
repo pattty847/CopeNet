@@ -7,7 +7,7 @@ import json
 from typing import Any
 from typing import TYPE_CHECKING
 
-from copenet.core.orchestrator.personal_history import normalize_starter_intent, starter_intent_tags
+from copenet.core.orchestrator.starter_intent import normalize_starter_intent, starter_intent_tags
 from copenet.core.sessions import SessionStateRecord
 from copenet.providers import ClaudeCliProvider, CodexCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 

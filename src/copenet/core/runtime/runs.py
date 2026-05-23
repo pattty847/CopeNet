@@ -51,7 +51,12 @@ class RunRecord:
     will_attempt_tool_loop: bool
     started_at: str = field(default_factory=utc_now_iso)
     completed_at: str | None = None
+    # working_set is retained on the wire (emitted empty) until the Phase 4
+    # frontend cleanup removes the consumer. message_count / input_token_estimate
+    # replace its inspector value (Phase 1, HARNESS_REBUILD_V2 §1.4).
     working_set: dict[str, Any] = field(default_factory=dict)
+    message_count: int = 0
+    input_token_estimate: int = 0
     tool_steps: list[dict[str, Any]] = field(default_factory=list)
     artifact_ids: list[str] = field(default_factory=list)
     output_summary: str = ""
@@ -78,6 +83,8 @@ class RunRecord:
             started_at=str(raw.get("started_at") or utc_now_iso()),
             completed_at=str(raw.get("completed_at")).strip() if raw.get("completed_at") is not None else None,
             working_set=_dict_value(raw.get("working_set")),
+            message_count=int(raw.get("message_count") or 0),
+            input_token_estimate=int(raw.get("input_token_estimate") or 0),
             tool_steps=_step_list(raw.get("tool_steps")),
             artifact_ids=_string_list(raw.get("artifact_ids")),
             output_summary=str(raw.get("output_summary") or ""),
@@ -108,6 +115,8 @@ class RunRecord:
             "startedAt": self.started_at,
             "completedAt": self.completed_at,
             "workingSet": dict(self.working_set),
+            "messageCount": self.message_count,
+            "inputTokenEstimate": self.input_token_estimate,
             "toolSteps": [dict(step) for step in self.tool_steps],
             "artifactIds": list(self.artifact_ids),
             "outputSummary": self.output_summary,
@@ -160,6 +169,8 @@ class RunStore:
                 started_at=record.started_at,
                 completed_at=record.completed_at,
                 working_set=dict(record.working_set),
+                message_count=record.message_count,
+                input_token_estimate=record.input_token_estimate,
                 tool_steps=[dict(step) for step in record.tool_steps],
                 artifact_ids=list(record.artifact_ids),
                 output_summary=record.output_summary,

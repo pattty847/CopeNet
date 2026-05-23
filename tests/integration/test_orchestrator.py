@@ -326,7 +326,9 @@ async def test_send_chat_persists_state_and_answer_artifact(fake_orchestrator: O
 
     state = fake_orchestrator._session_state_store.get("alpha")
     assert state is not None
-    assert state.task_summary == "Inspect the runtime"
+    # Phase 1 (HARNESS_REBUILD_V2): the keyword auto-mutation that synthesized
+    # task_summary from the user message is gone. The transcript IS the context.
+    assert state.task_summary is None
     assert state.plan_snapshot["willAttemptToolLoop"] is False
     assert state.relevant_artifact_ids
 
@@ -375,7 +377,15 @@ class PersonalSummaryProvider:
 
 
 @pytest.mark.asyncio
-async def test_send_chat_enriches_personal_history_state(tmp_path) -> None:
+async def test_send_chat_no_longer_keyword_mutates_session_state(tmp_path) -> None:
+    """Phase 1 (HARNESS_REBUILD_V2): the keyword auto-mutation is dead.
+
+    Previously the runtime scraped the assistant text for "Key decisions" /
+    "Open questions" bullets and the user message for goals, then injected those
+    into session_state. That synthetic-state thicket is gone — the transcript is
+    the context now. The creation-time starter_intent (an explicit user signal)
+    is preserved; everything else stays empty.
+    """
     orchestrator = Orchestrator(
         session_store=SessionStore(path=tmp_path / "index.json"),
         transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
@@ -402,15 +412,14 @@ async def test_send_chat_enriches_personal_history_state(tmp_path) -> None:
 
     state = orchestrator._session_state_store.get("alpha")
     assert state is not None
+    # Creation-time starter intent survives (set by catalog, not auto-mutation).
     assert state.starter_intent == "plan_my_next_steps"
     assert state.topical_tags == ["planning", "execution"]
-    assert state.goals == ["How should I sequence the launch tasks for next week?"]
-    assert "How should I sequence the launch tasks for next week?" in state.unresolved_questions
-    assert "Who needs to review the note?" in state.unresolved_questions
-    assert state.prior_decisions[:2] == [
-        "Start with the customer update.",
-        "Keep the plan to three steps.",
-    ]
+    # No keyword scraping into goals / questions / decisions anymore.
+    assert state.goals == []
+    assert state.unresolved_questions == []
+    assert state.prior_decisions == []
+    assert state.task_summary is None
 
 
 @pytest.mark.asyncio
@@ -498,7 +507,9 @@ async def test_debug_copy_session_clones_history_state_and_artifacts(fake_orches
 
     copied_state = fake_orchestrator._session_state_store.get(copied["key"])
     assert copied_state is not None
-    assert copied_state.task_summary == "Inspect the runtime"
+    # Phase 1: task_summary is no longer keyword-synthesized, so the cloned
+    # state carries no summary. Concrete artifact references still clone.
+    assert copied_state.task_summary is None
     assert copied_state.relevant_artifact_ids
 
     copied_artifacts = fake_orchestrator._artifact_store.list_for_session(copied["key"])
