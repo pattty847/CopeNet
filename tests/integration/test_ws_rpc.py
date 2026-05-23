@@ -436,21 +436,15 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
         tools_id = socket.request("tools.list")
         tools = socket.recv_response(tools_id)
         tool_rows = tools["payload"]["tools"]
+        # Phase 3 (HARNESS_REBUILD_V2): the model-facing manifest is the five
+        # primitives. git.* / repo.map / test.discover / files.list / files.search
+        # are dropped from the manifest; memory.* / artifact.create are deferred.
         assert {tool["id"] for tool in tool_rows} == {
-            "artifact.create",
             "files.edit",
-            "files.list",
             "files.read",
             "files.rg",
-            "files.search",
             "files.write",
-            "git.diff",
-            "git.status",
-            "memory.read",
-            "memory.write",
-            "repo.map",
             "shell.exec",
-            "test.discover",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
 
@@ -889,8 +883,11 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         assert runs[0]["metadata"]["workspaceRoot"] == str(tmp_path)
         assert runs[0]["metadata"]["agentRole"] == "lead"
         assert runs[0]["metadata"]["permissionMode"] == "read_only"
-        assert any(tool["id"] == "repo.map" for tool in runs[0]["metadata"]["toolManifest"])
-        assert all(tool["id"] not in {"tools.describe", "patch.plan"} for tool in runs[0]["metadata"]["toolManifest"])
+        # Phase 3: the run's tool manifest is the five primitives.
+        manifest_ids = {tool["id"] for tool in runs[0]["metadata"]["toolManifest"]}
+        assert "files.read" in manifest_ids
+        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec"}
+        assert "repo.map" not in manifest_ids
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})
         run_detail = socket.recv_response(run_detail_id)

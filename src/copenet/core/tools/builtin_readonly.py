@@ -11,9 +11,38 @@ from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_
 from .handlers.workspace_intel import DESCRIPTORS as WORKSPACE_INTEL_DESCRIPTORS, HANDLERS as WORKSPACE_INTEL_HANDLERS
 
 
-# context.prepare was retired in Phase 0.3 per HARNESS_REBUILD_V2.md — the
-# transcript IS the context once Phase 1 lands the messages[] replay.
-ALL_DESCRIPTORS = FILE_DESCRIPTORS + GIT_DESCRIPTORS + SHELL_DESCRIPTORS + ARTIFACT_DESCRIPTORS + MEMORY_DESCRIPTORS + WORKSPACE_INTEL_DESCRIPTORS
+# Phase 3 (HARNESS_REBUILD_V2): trim the MODEL-FACING tool manifest to the five
+# primitives. The model now sees exactly: files.read, files.write, files.edit,
+# files.rg, shell.exec. context.prepare was retired in Phase 0.3.
+#
+# git.* (use shell.exec git), repo.map / test.discover (explore via primitives),
+# files.list (shell.exec ls) and files.search (duplicate of files.rg) are dropped
+# from the manifest. memory.* and artifact.create are DEFERRED per §3.6 — they
+# come back when redesigned with explicit opt-in.
+#
+# Handlers for the dropped tools are intentionally still registered so internal
+# callers and the probe/characterization test suite keep working; the dead
+# handler files themselves are deleted in the Phase 5 sweep, where subtraction
+# is explicitly safe. ALL_HANDLERS therefore stays a superset of MANIFEST_TOOL_IDS.
+MANIFEST_TOOL_IDS = {
+    "files.read",
+    "files.write",
+    "files.edit",
+    "files.rg",
+    "shell.exec",
+}
+
+# ALL_DESCRIPTORS stays the full set so the registry can still ROUTE + policy-check
+# every handler (internal callers, the probe suite, and direct tests). The
+# model-facing manifest is filtered to MANIFEST_TOOL_IDS by ToolRegistry.list_tools().
+ALL_DESCRIPTORS = (
+    FILE_DESCRIPTORS
+    + GIT_DESCRIPTORS
+    + SHELL_DESCRIPTORS
+    + ARTIFACT_DESCRIPTORS
+    + MEMORY_DESCRIPTORS
+    + WORKSPACE_INTEL_DESCRIPTORS
+)
 ALL_HANDLERS = {
     **FILE_HANDLERS,
     **GIT_HANDLERS,

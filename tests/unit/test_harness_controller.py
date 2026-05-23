@@ -97,7 +97,11 @@ async def test_plan_turn_keeps_policy_visible_tools_without_prompt_classificatio
     )
 
     visible_ids = {tool.id for tool in plan.tools}
-    assert {"repo.map", "files.rg", "files.read", "test.discover"}.issubset(visible_ids)
+    # Phase 3: the model-facing manifest is the five primitives; the read-only
+    # subset visible under the default policy is files.read / files.rg / shell.exec.
+    assert {"files.rg", "files.read"}.issubset(visible_ids)
+    assert "repo.map" not in visible_ids
+    assert "test.discover" not in visible_ids
     assert "patch.plan" not in visible_ids
     assert "tools.describe" not in visible_ids
     assert not hasattr(plan, "soft_posture")

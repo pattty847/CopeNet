@@ -68,9 +68,9 @@ DESCRIPTORS = [
         id="files.rg",
         name="Ripgrep Search",
         description=(
-            "Search file contents under the current workdir with ripgrep. "
-            "Supports offset and limit for paging through large match sets; "
-            "returns an English continuation hint when matches are truncated."
+            "Search file contents under the current workdir with ripgrep (regex pattern). "
+            "Supports offset/limit paging and context_lines (lines of context around each match); "
+            "returns a continuation hint when matches are truncated."
         ),
         category="repo-read",
         input_schema={
@@ -80,6 +80,7 @@ DESCRIPTORS = [
                 "path": {"type": "string"},
                 "offset": {"type": "integer", "minimum": 0},
                 "limit": {"type": "integer", "minimum": 1},
+                "context_lines": {"type": "integer", "minimum": 0},
             },
         },
         capabilities=["filesystem", "search", "ripgrep"],
@@ -90,9 +91,8 @@ DESCRIPTORS = [
         id="files.write",
         name="Write File",
         description=(
-            "Create or overwrite a text file inside the current workspace. "
-            "Use this after inspection when you need to materialize a concrete file change. "
-            "When available, pass expected_digest from a prior files.read result to guard against stale writes."
+            "Create or overwrite a text file inside the current workdir. "
+            "Pass expected_digest from a prior files.read to guard against stale overwrites."
         ),
         category="repo-write",
         input_schema={
@@ -112,9 +112,8 @@ DESCRIPTORS = [
         id="files.edit",
         name="Edit File",
         description=(
-            "Apply a targeted text replacement inside an existing text file in the current workspace. "
-            "Prefer this after reading the file when you know the exact text to replace. "
-            "Use expected_digest from files.read when you want stale-read protection."
+            "Replace an exact text span in an existing file inside the current workdir. "
+            "Set replace_all to change every occurrence; pass expected_digest from files.read for stale-write protection."
         ),
         category="repo-write",
         input_schema={
@@ -327,23 +326,19 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     offset = max(int(request.arguments.get("offset") or 0), 0)
     requested_limit = int(request.arguments.get("limit") or 0)
     effective_limit = requested_limit if requested_limit > 0 else context.policy.search_result_limit
+    context_lines = max(int(request.arguments.get("context_lines") or 0), 0)
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
     if not root.exists():
         raise RuntimeError(f"path not found: {root}")
     access = file_access_metadata(root, context)
     target = access["target"]
+    rg_argv = ["rg", "--json", "--line-number", "--column", "--color", "never"]
+    if context_lines:
+        rg_argv += ["--context", str(context_lines)]
+    rg_argv += [pattern, str(root)]
     try:
         completed = subprocess.run(
-            [
-                "rg",
-                "--json",
-                "--line-number",
-                "--column",
-                "--color",
-                "never",
-                pattern,
-                str(root),
-            ],
+            rg_argv,
             cwd=context.workdir,
             capture_output=True,
             text=True,

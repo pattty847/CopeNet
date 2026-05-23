@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
-from .builtin_readonly import BuiltinReadonlyTools
+from .builtin_readonly import MANIFEST_TOOL_IDS, BuiltinReadonlyTools
 from .contracts import ToolBlockedError, ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 from .policy import ToolPolicy
 
@@ -26,7 +26,20 @@ class ToolRegistry:
         return self._policy
 
     def list_tools(self) -> list[ToolDescriptor]:
-        """Return all registered tools."""
+        """Return the model-facing tool manifest (Phase 3: the five primitives).
+
+        Every handler stays registered for execution/policy routing (see
+        get_descriptor / execute), but only the manifest subset is offered to the
+        model and exposed over the tools.list RPC.
+        """
+        return [
+            self._descriptors[key]
+            for key in sorted(self._descriptors)
+            if key in MANIFEST_TOOL_IDS
+        ]
+
+    def list_registered_tools(self) -> list[ToolDescriptor]:
+        """Return every registered tool descriptor (including non-manifest handlers)."""
         return [self._descriptors[key] for key in sorted(self._descriptors)]
 
     def list_public_tools(self) -> list[dict[str, Any]]:
