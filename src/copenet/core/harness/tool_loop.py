@@ -14,10 +14,30 @@ from copenet.core.tools import (
     ToolExecutionRequest,
     ToolExecutionResult,
     build_openai_tool_schemas,
+    build_responses_tool_schemas,
 )
 from copenet.providers import Provider, ProviderEvent
 
+from . import responses_items
 from .planning import HarnessTurnPlan
+
+
+class ResponsesProvider(Protocol):
+    name: str
+
+    def stream_responses(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        model: str | None,
+        instructions: str | None,
+        prompt_cache_key: str | None,
+        reasoning: dict[str, Any] | None,
+        parallel_tool_calls: bool,
+        abort_event: asyncio.Event,
+    ) -> AsyncIterator[ProviderEvent]:
+        """Stream one Responses-API turn over a pre-built input[] array."""
 
 
 ToolExecutor = Callable[[ToolExecutionRequest, ToolExecutionContext], Awaitable[ToolExecutionResult]]
@@ -263,6 +283,171 @@ async def run_with_native_tools(
             return
 
     yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+
+
+async def run_with_responses_tools(
+    *,
+    provider: ResponsesProvider,
+    messages: list[dict[str, Any]],
+    abort_event: asyncio.Event,
+    model: str | None,
+    instructions: str | None,
+    plan: HarnessTurnPlan,
+    tool_executor: ToolExecutor,
+    tool_context: ToolExecutionContext,
+    session_id: str | None,
+    reasoning: dict[str, Any] | None = None,
+    trace: TraceRecorder | None = None,
+) -> AsyncIterator[ProviderEvent]:
+    """Native Responses-API tool loop (Phase 2, HARNESS_REBUILD_V2).
+
+    Owns the input[] array. Streams a response; collects function_call items via
+    the provider's responsesFunctionCall meta events; executes each tool; appends
+    function_call + function_call_output items to the array; re-POSTs. Emits the
+    same toolCall / toolExecution meta + delta events as the other loops so the
+    runtime's transcript-part assembly is unchanged. Reasoning summary deltas pass
+    through as reasoning_delta events for the Phase 4 inline-thinking UX.
+    """
+    turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
+    tool_schemas = build_responses_tool_schemas(plan.tools)
+    working_messages: list[dict[str, Any]] = [dict(item) for item in messages]
+    if trace is not None:
+        trace("turn_started", turn_state.to_public_dict())
+
+    for step_index in range(MAX_TOOL_STEPS):
+        function_calls: list[dict[str, Any]] = []
+        assistant_text_chunks: list[str] = []
+        async for event in provider.stream_responses(
+            messages=working_messages,
+            tools=tool_schemas or None,
+            model=model,
+            instructions=instructions,
+            prompt_cache_key=session_id,
+            reasoning=reasoning,
+            parallel_tool_calls=True,
+            abort_event=abort_event,
+        ):
+            if event.kind == "delta":
+                if event.text:
+                    assistant_text_chunks.append(event.text)
+                yield event
+            elif event.kind == "reasoning_delta":
+                yield event
+            elif event.kind == "meta" and isinstance(event.metadata, dict):
+                fc = event.metadata.get("responsesFunctionCall")
+                if isinstance(fc, dict) and str(fc.get("name") or "").strip():
+                    function_calls.append(fc)
+        assistant_text = "".join(assistant_text_chunks).strip()
+        if trace is not None:
+            trace(
+                "responses_turn_interpreted",
+                {
+                    "step": step_index + 1,
+                    "functionCallCount": len(function_calls),
+                    "contentLength": len(assistant_text),
+                },
+            )
+
+        if not function_calls:
+            turn_state.terminal_reason = "completed"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(kind="final")
+            return
+
+        # Append assistant text item (if any) so the model sees its own narration
+        # on the next replay, then each function_call item.
+        if assistant_text:
+            working_messages.append(
+                responses_items.assistant_message_item(
+                    message_id=f"msg_{plan.turn_id}_{step_index}", text=assistant_text
+                )
+            )
+        for call in function_calls:
+            call_id = str(call.get("call_id") or "").strip() or _new_call_id(str(call.get("name") or "tool"))
+            name = str(call.get("name") or "").strip()
+            arguments_json = str(call.get("arguments") or "").strip() or "{}"
+            arguments = _parse_native_tool_arguments(arguments_json)
+            working_messages.append(
+                responses_items.function_call_item(
+                    item_id=str(call.get("id") or "") or f"fc_{call_id}",
+                    call_id=call_id,
+                    name=name,
+                    arguments=arguments_json,
+                )
+            )
+            request = ToolExecutionRequest(tool_id=name, arguments=arguments)
+            if trace is not None:
+                trace(
+                    "tool_requested",
+                    {
+                        "toolId": name,
+                        "arguments": arguments,
+                        "step": step_index + 1,
+                        "responses": True,
+                        "callId": call_id,
+                    },
+                )
+            yield ProviderEvent(
+                kind="meta",
+                metadata={
+                    "toolCall": _tool_call_event_payload(
+                        tool_id=name,
+                        arguments=arguments,
+                        step=step_index + 1,
+                        turn_id=plan.turn_id,
+                        decision_id=plan.decision_id,
+                        native=True,
+                        call_id=call_id,
+                    ),
+                    "turnState": turn_state.to_public_dict(),
+                },
+            )
+            tool_result = await tool_executor(request, tool_context)
+            tool_result = _force_call_id(tool_result, call_id)
+            tool_result, artifact_draft = _materialize_tool_result_artifact(
+                tool_result=tool_result,
+                tool_context=tool_context,
+                trace=trace,
+            )
+            turn_state.tool_call_count += 1
+            turn_state.record_tool_step(
+                tool_id=tool_result.tool_id,
+                arguments=arguments,
+                result=tool_result,
+            )
+            turn_state.queue_input(tool_result.to_runtime_input(), reason="tool_followup")
+            meta_payload: dict[str, Any] = {
+                "toolExecution": _tool_result_event_payload(
+                    result=tool_result,
+                    request=request,
+                    plan=plan,
+                ),
+                "toolResult": tool_result.to_runtime_input(),
+                "turnState": turn_state.to_public_dict(),
+            }
+            if artifact_draft is not None:
+                meta_payload["artifactDraft"] = artifact_draft
+            yield ProviderEvent(kind="meta", metadata=meta_payload)
+            working_messages.append(
+                responses_items.function_call_output_item(
+                    call_id=call_id,
+                    output=_native_tool_message_content(tool_result),
+                )
+            )
+            turn_state.drain_pending_input()
+            if trace is not None:
+                trace("turn_transition", turn_state.to_public_dict())
+
+        if step_index >= MAX_TOOL_STEPS - 1:
+            turn_state.terminal_reason = "max_turns"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(kind="delta", text=_max_step_explanation())
+            yield ProviderEvent(kind="final")
+            return
+
+    yield ProviderEvent(kind="final")
 
 
 async def run_with_prompted_tools(

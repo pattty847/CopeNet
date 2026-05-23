@@ -19,6 +19,7 @@ from .tool_loop import (
     provider_system_prompt,
     run_with_prompted_tools,
     run_with_native_tools,
+    run_with_responses_tools,
 )
 
 
@@ -65,16 +66,15 @@ class ChatHarness:
         trace: TraceRecorder | None = None,
         prompt_context_builder: Callable[[HarnessTurnPlan], str | None] | None = None,
         messages: list[dict] | None = None,
+        session_id: str | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
         """Return the normalized plan and provider event stream.
 
-        `messages` is the Phase 1 Responses-API input array built from the
-        durable transcript. For Phase 1 it is plumbed through but the prompt-based
-        providers consume the flattened `prompt`. Phase 2 routes the Responses
-        path (openai-codex) through `messages` directly. `messages` is currently
-        stored on the plan for observability/Phase-2 hand-off.
+        `messages` is the Responses-API input array built from the durable
+        transcript (Phase 1). Prompt-based providers consume the flattened
+        `prompt`; the Phase 2 Responses path (openai-codex) consumes `messages`
+        directly. `session_id` feeds prompt_cache_key on the Responses path.
         """
-        del messages  # Phase 2 will route the Responses path through this.
         plan = await self.plan_turn(
             provider=provider,
             provider_name=getattr(provider, "name", "unknown"),
@@ -97,6 +97,26 @@ class ChatHarness:
             trace=trace,
         )
         plan = replace(plan, harness_decision=decision_record.to_public_dict())
+        if (
+            plan.tool_execution_mode == "responses"
+            and tool_executor is not None
+            and tool_context is not None
+            and hasattr(provider, "stream_responses")
+        ):
+            stream = run_with_responses_tools(
+                provider=provider,  # type: ignore[arg-type]
+                messages=list(messages or []),
+                abort_event=abort_event,
+                model=model,
+                instructions=effective_system_prompt,
+                plan=plan,
+                tool_executor=tool_executor,
+                tool_context=tool_context,
+                session_id=session_id or provider_session_id,
+                trace=trace,
+            )
+            return plan, stream
+
         if plan.tool_execution_mode == "prompted" and tool_executor is not None and tool_context is not None:
             stream = run_with_prompted_tools(
                 provider=provider,

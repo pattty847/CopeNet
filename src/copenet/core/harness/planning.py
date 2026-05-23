@@ -24,7 +24,7 @@ class HarnessTurnPlan:
     capability_profile: ModelCapabilityProfile
     tools: list[ToolDescriptor] = field(default_factory=list)
     will_attempt_tool_loop: bool = False
-    tool_execution_mode: Literal["none", "native", "prompted"] = "none"
+    tool_execution_mode: Literal["none", "native", "prompted", "responses"] = "none"
     turn_id: str = field(default_factory=new_turn_id)
     decision_id: str = field(default_factory=new_decision_id)
     harness_decision: dict[str, Any] = field(default_factory=dict)
@@ -62,16 +62,31 @@ async def plan_turn(
         streaming=caps.get("streaming", True),
         resume=caps.get("resume", False),
         prompted_tool_use=caps.get("promptedToolUse", caps.get("toolCalls", False)),
+        responses_api=caps.get("responsesApi", False),
     )
-    use_native_tools = bool(tools and profile.tool_calls)
-    use_prompted_tools = bool(tools and not use_native_tools and profile.prompted_tool_use)
+    # Phase 2 routing: prefer the native Responses-API loop when the provider
+    # declares it. Otherwise fall back to the legacy native (Chat Completions)
+    # path, then the prompted path (LM Studio / Ollama), then none.
+    use_responses_tools = bool(tools and profile.responses_api)
+    use_native_tools = bool(tools and not use_responses_tools and profile.tool_calls)
+    use_prompted_tools = bool(
+        tools and not use_responses_tools and not use_native_tools and profile.prompted_tool_use
+    )
+    if use_responses_tools:
+        tool_execution_mode = "responses"
+    elif use_native_tools:
+        tool_execution_mode = "native"
+    elif use_prompted_tools:
+        tool_execution_mode = "prompted"
+    else:
+        tool_execution_mode = "none"
     plan = HarnessTurnPlan(
         provider=provider_name,
         model=model,
         capability_profile=profile,
         tools=tools,
-        will_attempt_tool_loop=use_native_tools or use_prompted_tools,
-        tool_execution_mode="native" if use_native_tools else "prompted" if use_prompted_tools else "none",
+        will_attempt_tool_loop=use_responses_tools or use_native_tools or use_prompted_tools,
+        tool_execution_mode=tool_execution_mode,
     )
     if trace is not None:
         trace(

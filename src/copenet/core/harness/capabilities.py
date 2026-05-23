@@ -18,6 +18,9 @@ class ModelCapabilityProfile:
     streaming: bool = True
     resume: bool = False
     prompted_tool_use: bool = False
+    # Phase 2 (HARNESS_REBUILD_V2): provider speaks the native Responses API
+    # (streaming function_call lifecycle + function_call_output replay).
+    responses_api: bool = False
 
 
 def normalize_capabilities(provider_meta: dict[str, Any]) -> dict[str, bool]:
@@ -32,4 +35,5 @@ def normalize_capabilities(provider_meta: dict[str, Any]) -> dict[str, bool]:
         "streaming": bool(raw.get("streaming", True)),
         "resume": bool(raw.get("resume", False)),
         "promptedToolUse": bool(raw.get("promptedToolUse", raw.get("toolCalls", False))),
+        "responsesApi": bool(raw.get("responsesApi", False)),
     }

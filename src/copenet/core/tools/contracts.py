@@ -57,7 +57,7 @@ class ToolDescriptor:
         }
 
     def to_openai_tool(self) -> dict[str, Any]:
-        """Return an OpenAI-compatible function tool schema."""
+        """Return an OpenAI-compatible (Chat Completions) function tool schema."""
         schema = dict(self.input_schema) if isinstance(self.input_schema, dict) else {}
         return {
             "type": "function",
@@ -66,6 +66,23 @@ class ToolDescriptor:
                 "description": self.description,
                 "parameters": schema,
             },
+        }
+
+    def to_responses_tool(self) -> dict[str, Any]:
+        """Return a Responses-API function tool schema (flat shape, per PASS-7).
+
+        The Responses endpoint expects {type, name, description, parameters} at
+        the top level (not nested under "function" like Chat Completions). We do
+        NOT set strict=True: our tools carry optional params (offset/limit/...)
+        and strict mode requires every property to be required + additionalProperties
+        false, which would reject those calls.
+        """
+        schema = dict(self.input_schema) if isinstance(self.input_schema, dict) else {"type": "object", "properties": {}}
+        return {
+            "type": "function",
+            "name": self.id,
+            "description": self.description,
+            "parameters": schema,
         }
 
     def manifest_risk(self) -> str:
@@ -385,6 +402,11 @@ def describe_available_tools(
 def build_openai_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:
     """Return OpenAI-compatible function tool schemas for provider-native tool calling."""
     return [tool.to_openai_tool() for tool in tools]
+
+
+def build_responses_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:
+    """Return Responses-API function tool schemas (flat shape, per PASS-7)."""
+    return [tool.to_responses_tool() for tool in tools]
 
 
 def build_tool_effect_payload(

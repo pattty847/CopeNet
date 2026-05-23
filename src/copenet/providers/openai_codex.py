@@ -46,6 +46,8 @@ class OpenAICodexProvider:
                 "promptedToolUse": True,
                 "streaming": True,
                 "resume": False,
+                # Phase 2 (HARNESS_REBUILD_V2): native Responses-API tool loop.
+                "responsesApi": True,
             },
         }
 
@@ -63,6 +65,7 @@ class OpenAICodexProvider:
                     "toolCalls": False,
                     "promptedToolUse": True,
                     "resume": False,
+                    "responsesApi": True,
                 },
                 recommended_for=["chat", "agentic-work"],
                 metadata={"ownedBy": "OpenAI", "transport": "openai-codex-responses"},
@@ -118,6 +121,74 @@ class OpenAICodexProvider:
             await task
         yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
 
+    async def stream_responses(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None,
+        model: str | None,
+        instructions: str | None,
+        prompt_cache_key: str | None = None,
+        reasoning: dict[str, Any] | None = None,
+        parallel_tool_calls: bool = True,
+        abort_event: asyncio.Event,
+    ) -> AsyncIterator[ProviderEvent]:
+        """Stream one Responses-API turn over a pre-built input[] array.
+
+        Yields the Phase 2 event vocabulary (verified against PASS-7):
+          - kind="delta"            assistant output_text deltas
+          - kind="reasoning_delta"  reasoning_summary deltas
+          - kind="meta" metadata={"responsesFunctionCall": {id, call_id, name, arguments}}
+              one per completed function_call output item
+          - kind="meta" metadata={"responsesCompleted": True}  at response.completed
+
+        The harness tool loop owns the messages[] array, executes the calls, and
+        re-invokes this method with function_call / function_call_output items
+        appended. This method does NOT loop — it streams a single response.
+        """
+        if abort_event.is_set():
+            return
+        profile = await asyncio.to_thread(self.auth_service.ensure_valid_profile)
+        payload = _build_responses_payload(
+            model=_resolve_model(model),
+            messages=messages,
+            instructions=instructions,
+            tools=tools,
+            prompt_cache_key=prompt_cache_key,
+            reasoning=reasoning,
+            parallel_tool_calls=parallel_tool_calls,
+        )
+        loop = asyncio.get_running_loop()
+        queue: asyncio.Queue[ProviderEvent | Exception | object] = asyncio.Queue()
+        done_marker = object()
+
+        def worker() -> None:
+            try:
+                for event in _stream_responses_tool_events(
+                    url=f"{self._base_url}/responses",
+                    payload=payload,
+                    access_token=profile.access_token,
+                    account_id=profile.account_id,
+                    abort_event=abort_event,
+                ):
+                    loop.call_soon_threadsafe(queue.put_nowait, event)
+            except Exception as exc:
+                loop.call_soon_threadsafe(queue.put_nowait, exc)
+            finally:
+                loop.call_soon_threadsafe(queue.put_nowait, done_marker)
+
+        task = asyncio.create_task(asyncio.to_thread(worker))
+        try:
+            while True:
+                item = await queue.get()
+                if item is done_marker:
+                    break
+                if isinstance(item, Exception):
+                    raise item
+                yield item
+        finally:
+            await task
+
 
 
 def _resolve_model(model: str | None) -> str:
@@ -127,6 +198,161 @@ def _resolve_model(model: str | None) -> str:
         raise ValueError(f"unsupported openai-codex model: {normalized}. Supported models: {supported}")
     return normalized
 
+
+
+def _build_responses_payload(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    instructions: str | None,
+    tools: list[dict[str, Any]] | None,
+    prompt_cache_key: str | None,
+    reasoning: dict[str, Any] | None,
+    parallel_tool_calls: bool,
+) -> dict[str, Any]:
+    payload: dict[str, Any] = {
+        "model": model,
+        "input": list(messages) if messages else [{"role": "user", "content": [{"type": "input_text", "text": " "}]}],
+        "store": False,
+        "stream": True,
+    }
+    payload["instructions"] = (instructions or "").strip() or OPENAI_CODEX_DEFAULT_INSTRUCTIONS
+    if tools:
+        payload["tools"] = list(tools)
+        payload["parallel_tool_calls"] = bool(parallel_tool_calls)
+        payload["tool_choice"] = "auto"
+    if prompt_cache_key:
+        payload["prompt_cache_key"] = prompt_cache_key
+    if reasoning:
+        payload["reasoning"] = dict(reasoning)
+        payload["include"] = ["reasoning.encrypted_content"]
+    return payload
+
+
+def _stream_responses_tool_events(
+    *,
+    url: str,
+    payload: dict[str, Any],
+    access_token: str,
+    account_id: str | None,
+    abort_event: asyncio.Event,
+) -> Iterator[ProviderEvent]:
+    """POST one Responses turn and yield the Phase 2 tool-loop event vocabulary."""
+    body = json.dumps(payload).encode("utf-8")
+    headers = _build_openai_codex_headers(access_token=access_token, accept="text/event-stream")
+    if account_id:
+        headers["ChatGPT-Account-Id"] = account_id
+    req = request.Request(url, data=body, headers=headers, method="POST")
+    try:
+        with request.urlopen(req, timeout=180.0) as response:
+            content_type = str(response.headers.get("Content-Type") or "")
+            if "text/event-stream" not in content_type.lower():
+                raw_body = response.read().decode("utf-8", errors="replace")
+                data = _decode_openai_codex_response_body(raw_body=raw_body, content_type=content_type)
+                text = _extract_response_text(data)
+                if text:
+                    yield ProviderEvent(kind="delta", text=text)
+                yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
+                return
+            yield from _parse_responses_sse(response=response, abort_event=abort_event)
+    except error.HTTPError as exc:
+        detail = exc.read().decode("utf-8", errors="replace").strip()
+        if exc.code in {401, 403}:
+            raise RuntimeError(
+                "openai-codex authentication failed. Re-run `uv run copenet auth login --provider openai-codex`."
+            ) from exc
+        raise RuntimeError(f"openai-codex request failed ({exc.code}): {detail or exc.reason}") from exc
+    except error.URLError as exc:
+        raise RuntimeError(f"openai-codex transport error: {exc.reason}") from exc
+
+
+def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterator[ProviderEvent]:
+    """Parse the Responses SSE stream into harness ProviderEvents.
+
+    Tracks the function_call lifecycle:
+      response.output_item.added (item.type=function_call) -> register by item id
+      response.function_call_arguments.delta                -> accumulate arguments
+      response.output_item.done (item.type=function_call)   -> emit responsesFunctionCall
+    """
+    pending_calls: dict[str, dict[str, str]] = {}
+    completed = False
+    for raw in _iter_sse_lines(response):
+        if abort_event.is_set():
+            break
+        if not raw.startswith("data:"):
+            continue
+        data = raw[5:].strip()
+        if not data or data == "[DONE]":
+            continue
+        try:
+            event = json.loads(data)
+        except json.JSONDecodeError:
+            continue
+        if not isinstance(event, dict):
+            continue
+        event_type = str(event.get("type") or "").strip()
+
+        if event_type == "response.output_text.delta":
+            delta = str(event.get("delta") or "")
+            if delta:
+                yield ProviderEvent(kind="delta", text=delta)
+            continue
+        if event_type in {"response.reasoning_summary.delta", "response.reasoning_summary_text.delta"}:
+            delta = str(event.get("delta") or "")
+            if delta:
+                yield ProviderEvent(kind="reasoning_delta", text=delta)
+            continue
+        if event_type == "response.output_item.added":
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "function_call":
+                item_id = str(item.get("id") or "").strip()
+                pending_calls[item_id] = {
+                    "id": item_id,
+                    "call_id": str(item.get("call_id") or "").strip(),
+                    "name": str(item.get("name") or "").strip(),
+                    "arguments": str(item.get("arguments") or ""),
+                }
+            continue
+        if event_type == "response.function_call_arguments.delta":
+            item_id = str(event.get("item_id") or "").strip()
+            tracked = pending_calls.get(item_id)
+            if tracked is not None:
+                tracked["arguments"] = (tracked.get("arguments") or "") + str(event.get("delta") or "")
+            continue
+        if event_type == "response.output_item.done":
+            item = event.get("item")
+            if isinstance(item, dict) and item.get("type") == "function_call":
+                item_id = str(item.get("id") or "").strip()
+                tracked = pending_calls.pop(item_id, None) or {}
+                final_args = str(item.get("arguments") or "").strip() or tracked.get("arguments") or ""
+                call = {
+                    "id": item_id or tracked.get("id") or "",
+                    "call_id": str(item.get("call_id") or "").strip() or tracked.get("call_id") or item_id,
+                    "name": str(item.get("name") or "").strip() or tracked.get("name") or "",
+                    "arguments": final_args,
+                }
+                if call["name"]:
+                    yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": call})
+            continue
+        if event_type in {"response.failed", "error"}:
+            raise RuntimeError(_openai_codex_failure_message(event))
+        if event_type == "response.completed":
+            completed = True
+            break
+
+    # Flush any function_call that streamed added+deltas but no explicit done.
+    for call in pending_calls.values():
+        if call.get("name"):
+            yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": dict(call)})
+    yield ProviderEvent(kind="meta", metadata={"responsesCompleted": completed})
+
+
+def _iter_sse_lines(response: Any) -> Iterator[str]:
+    for raw in response:
+        if isinstance(raw, (bytes, bytearray)):
+            yield raw.decode("utf-8", errors="replace").strip()
+        else:
+            yield str(raw).strip()
 
 
 def _build_payload(*, model: str, prompt: str, system_prompt: str | None) -> dict[str, Any]:

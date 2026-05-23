@@ -220,6 +220,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             provider=provider,
             prompt=chat_prompt,
             messages=chat_messages,
+            session_id=session_key,
             provider_session_id=entry.provider_session_id,
             abort_event=abort_event,
             model=request.model,
@@ -277,6 +278,24 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     {
                         "providerSessionId": event.provider_session_id,
                     },
+                )
+
+            if event.kind == "reasoning_delta" and event.text:
+                # Phase 2: native reasoning summary deltas. Captured as a
+                # "thinking" part + streamed over WS so the Phase 4 chat UX can
+                # render inline thinking. Not folded into assistant_text.
+                _append_thinking_part(assistant_message_parts, event.text)
+                seq += 1
+                await emit(
+                    {
+                        "runId": run_id,
+                        "sessionKey": session_key,
+                        "seq": seq,
+                        "state": "reasoning_delta",
+                        "provider": provider_name,
+                        "model": request.model,
+                        "text": event.text,
+                    }
                 )
 
             if event.kind == "meta" and isinstance(event.metadata, dict):
@@ -794,6 +813,15 @@ def _append_text_part(parts: list[dict], text: str) -> None:
         parts[-1]["text"] = f"{parts[-1].get('text') or ''}{text}"
         return
     parts.append({"kind": "text", "text": text})
+
+
+def _append_thinking_part(parts: list[dict], text: str) -> None:
+    if not text:
+        return
+    if parts and parts[-1].get("kind") == "thinking":
+        parts[-1]["text"] = f"{parts[-1].get('text') or ''}{text}"
+        return
+    parts.append({"kind": "thinking", "text": text})
 
 
 def _normalize_final_message_parts(parts: list[dict], *, assistant_text: str) -> list[dict]:

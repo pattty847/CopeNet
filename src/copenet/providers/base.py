@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Literal, Protocol
 import asyncio
 
 
-ProviderEventKind = Literal["delta", "meta", "final"]
+ProviderEventKind = Literal["delta", "reasoning_delta", "meta", "final"]
 
 
 @dataclass(frozen=True)
