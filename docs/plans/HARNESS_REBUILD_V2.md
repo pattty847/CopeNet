@@ -650,3 +650,55 @@ The persona/identity/memory/profile layers are dormant but preserved. When they 
 Pulse, Merge, Meme Lab, Web Ingest, Telegram routing, external `/api/v1` — all currently live, mostly orthogonal to the harness, degraded but not broken through the rebuild. Each gets its own future pass when it's worth attention.
 
 This is the foundation. After this, every new feature builds on a harness that actually works.
+
+---
+
+## Implementation status (as built)
+
+Phases −1 → 5 implemented on branch `codex/pre-harnessdecision-checkpoint`. Full
+backend suite (294 tests) green; frontend `tsc` clean; frontend unit suite green
+(2 pre-existing unrelated `agentsShellState` failures).
+
+**Landed:**
+- **−1** transcript persistence gate, per-session idempotency scoping, RPC error
+  boundary, `responses_items.py`, baseline characterization tests.
+- **0** `MAX_TOOL_STEPS` 4→100 (+ explicit stop note), file/search clamps killed
+  with English continuation hints, `context.prepare` retired, memory/profile
+  auto-extraction gated behind `COPNET_AUTO_*` env flags (default off).
+- **1** `messages.py` (`build_chat_messages` + `flatten_messages_to_prompt`),
+  real multi-turn history, keyword auto-mutation removed, `RunRecord.message_count`
+  + `input_token_estimate`. tool_call/tool_result parts now share a `callId`.
+- **2** `run_with_responses_tools` + openai-codex `stream_responses` (native
+  Responses function_call lifecycle, prompt_cache_key, reasoning, parallel calls),
+  `responses` tool-execution mode, `reasoning_delta` event.
+- **3** model-facing manifest trimmed to five primitives via
+  `ToolRegistry.list_tools()` (handlers still registered for routing);
+  `files.rg` gained `context_lines`.
+- **4** inline thinking parts (backend emit → wsClient → renderer), reconnect
+  reconciliation (no more false-abort), WorkingSetCard removed from chat.
+- **5** docs (architecture.md, AGENTS.md, V1 superseded), `docs/TARGET.md`.
+
+**Documented deviations (deliberate, see commit messages):**
+- `SessionStateRecord` was NOT narrowed. Pulse/Merge still read+write its text
+  fields and are on the deferred-rewire list; narrowing now would crash them
+  rather than degrade. The auto-mutation (the actual disease) is gone.
+- `run_with_native_tools` was NOT deleted — it is the live LM Studio/Ollama path
+  (declares `toolCalls`, driven via `chat_completion`, 6 test files). The plan's
+  "dead code" premise was wrong for this codebase. The Responses path was added
+  alongside it.
+- Phase 3 trimmed the *manifest* (what the model sees) rather than deleting
+  handler files; physical deletion is deferred to keep the probe/characterization
+  suite stable.
+
+**Remaining sweep (low-risk follow-ups):**
+- Physically delete off-manifest handlers (`git.py`, `workspace_intel.py`,
+  `files.list`/`files.search`) + the `_repeat_response` nag, reworking the probe
+  classification suite (`probes/runtime_bundle.py`) and characterization tests in
+  one focused pass.
+- Delete remaining dead frontend (`useWorkingSet`/`mapSessionStateToWorkingSet`
+  in `runtime/adapter.ts`, `runtime/mocks.ts` `workingSetByKey`, `WorkingSet`
+  types) and the `taskSummary` reads in `SessionSidebar`/`SessionDrawer`.
+- Narrow `SessionStateRecord` together with the Pulse/Merge rewire.
+- **Live-verify Phase 2** against the real `chatgpt.com/backend-api/codex/responses`
+  endpoint (`scripts/codex_responses_probe.py`) — needs OAuth + network.
+- Manual browser pass for Phase 4 UX.

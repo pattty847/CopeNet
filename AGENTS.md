@@ -26,7 +26,7 @@ The current product direction is:
 |----------------|----------------------------------------------|------|
 | Host / RPC     | `src/copenet/host/`                          | FastAPI app, `/ws` JSON-RPC, `/api/v1` REST+SSE, static UI mounting |
 | Orchestrator   | `src/copenet/core/orchestrator/`             | Coordinates sessions, transcripts, provider execution, run lifecycle, merges, pulse, messaging |
-| Harness        | `src/copenet/core/harness/`                  | Capability profiles, trace-only HarnessDecision records, turn planning, tool loop |
+| Harness        | `src/copenet/core/harness/`                  | Capability profiles, turn planning, tool loops (native Responses / Chat Completions / prompted), `responses_items` replay shapes. See `docs/plans/HARNESS_REBUILD_V2.md` for the current architecture. |
 | Sessions       | `src/copenet/core/sessions/`                 | Session index, transcript store, structured session state |
 | Runtime        | `src/copenet/core/runtime/`                  | RunStore (durable run records), ArtifactStore, per-turn state |
 | Tools          | `src/copenet/core/tools/`                    | Tool contracts, policy (`policy_for_task_mode`), registry, built-in handlers |

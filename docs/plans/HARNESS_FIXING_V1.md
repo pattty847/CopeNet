@@ -1,5 +1,12 @@
 # HarnessDecision + Tool Display Contract V1
 
+> **SUPERSEDED by [`HARNESS_REBUILD_V2.md`](./HARNESS_REBUILD_V2.md).** V1 was a
+> trace-only HarnessDecision patch layered on the old broken loop. V2 rebuilt the
+> loop: real multi-turn message history (Phase 1), a native Responses-API tool
+> loop (Phase 2), a five-tool model-facing surface (Phase 3), and inline-thinking
+> chat UX (Phase 4). The HarnessDecision record described below still exists but
+> stays dormant/trace-only — do not extend it. Kept for history.
+
 ## Summary
 
 Implement trace-only `HarnessDecision` and richer tool effect metadata without changing runtime behavior. The model declares semantics through schema/enums/exact tool ids; the harness validates, records, executes existing flow, and exposes structured data for chat/inspector displays.

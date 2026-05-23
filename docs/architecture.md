@@ -35,9 +35,9 @@ copenet/
 │   │   ├── titles.py                  ← async title generation
 │   │   ├── merge.py                   ← merged-session creation/hydration
 │   │   ├── messaging.py               ← messaging config / route helpers
-│   │   ├── personal_history.py        ← starter intent + tag normalization
-│   │   ├── pulse.py                   ← Inbox Pulse helpers
-│   │   └── working_set.py             ← session working set helpers
+│   │   ├── messages.py                ← build_chat_messages: transcript → Responses input[] (Phase 1)
+│   │   ├── starter_intent.py          ← starter intent + tag normalization (was personal_history.py)
+│   │   └── pulse.py                   ← Inbox Pulse helpers
 │   ├── profile/
 │   │   ├── __init__.py                ← Pat Profile public exports
 │   │   ├── service.py                 ← layered profile loader, changelog, briefing builder
@@ -61,13 +61,14 @@ copenet/
 │   │   ├── registry.py                ← ToolRegistry
 │   │   ├── builtin_readonly.py        ← registers all built-ins (read + write + artifact; name is historical)
 │   │   └── handlers/                  ← built-in tool implementations
-│   │       ├── files.py               ← files.list/read/search/rg/write/edit
-│   │       ├── git.py                 ← git.diff/status
+│   │       ├── files.py               ← files.read/rg/write/edit (manifest); list/search registered but off-manifest
+│   │       ├── git.py                 ← git.diff/status (off-manifest; use shell.exec git)
 │   │       ├── shell.py               ← shell.exec
-│   │       ├── context.py             ← context.prepare
-│   │       ├── artifacts.py           ← artifact.create
-│   │       ├── workspace_intel.py     ← repo.map + test.discover
+│   │       ├── artifacts.py           ← artifact.create (off-manifest, deferred)
+│   │       ├── workspace_intel.py     ← repo.map + test.discover (off-manifest)
 │   │       └── _shared.py
+│   │   (context.py / context.prepare removed in Phase 0.3.
+│   │    Model-facing manifest is 5 tools: files.read/write/edit/rg + shell.exec.)
 │   ├── tracing/
 │   │   └── __init__.py                ← RunTraceWriter
 │   ├── workspace_intel/
@@ -233,9 +234,11 @@ In practice that means:
 - the model decides when repo inspection, planning, or edits are useful
 - the runtime still enforces what is actually allowed
 
-`core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects only between native tool calling and plain provider passthrough.
+`core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects the tool-execution mode: `responses` (native Responses API, when the provider declares `responsesApi` — openai-codex), `native` (Chat Completions tool calls — LM Studio/Ollama), `prompted` (text-protocol fallback), or `none`.
 
-`core/harness/tool_loop.py` owns turn-level tool continuation. It executes provider-native or prompted tool calls under policy, streams normalized events, and lets the model decide when it has enough information to finalize. The harness does not classify prompt text, keyword-match user intent, or force a particular tool sequence before accepting a final answer; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+`core/harness/tool_loop.py` owns turn-level tool continuation across three loops: `run_with_responses_tools` (Phase 2: streams the native function_call lifecycle, appends `function_call`/`function_call_output` items to the input[] array, re-POSTs), `run_with_native_tools` (Chat Completions), and `run_with_prompted_tools`. All stream normalized events and let the model decide when to finalize (cap: `MAX_TOOL_STEPS=100`, with an explicit stop note when hit). The harness does not classify prompt text, keyword-match intent, or force a tool sequence; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+
+`core/orchestrator/messages.py` builds the real multi-turn message history (Phase 1): `build_chat_messages` walks the durable transcript into a Responses-API `input[]` array (used directly by the responses loop) and `flatten_messages_to_prompt` renders it as a transcript-style string for prompt-only providers. This replaced the synthetic `working_set` blob and the keyword auto-mutation of session state.
 
 `core/harness/decision.py` adds a trace-only `HarnessDecisionRecord` for providers that expose an isolated decision hook. The model declares enum fields such as request kind, route, next action, risk, and evidence requirements, plus prose `trace_note` fields for inspector/debug display. In v1 this record never steers execution: normal planning, provider output, tool calls, and final answers continue exactly as they would if the decision were unavailable.
 
@@ -318,7 +321,7 @@ The harness keeps provider execution normalized and prepares for richer capabili
 
 - **Categories** (`ToolCategory` in `core/tools/contracts.py`): `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, and reserved `mcp`.
 - **Task mode drives policy**: `policy_for_task_mode()` in `core/tools/policy.py` builds the effective policy from the persisted session **`task_prompt_id`**. Baseline modes allow **`repo-read`**, **`shell-read`**, **`context`**, **`artifact`**. **`full-access`** adds **`repo-write`** so `files.edit` / `files.write` register in `available_tools` for that run.
-- **Built-in ids** include `context.prepare`, **`files.list`**, **`files.read`**, **`files.search`**, **`files.rg`**, **`files.write`**, **`files.edit`**, `git.diff`, `git.status`, **`shell.exec`**, **`artifact.create`**.
+- **Model-facing manifest (Phase 3)** is five primitives: **`files.read`**, **`files.write`**, **`files.edit`**, **`files.rg`**, **`shell.exec`**. Other handlers (`files.list`, `files.search`, `git.*`, `repo.map`, `test.discover`, `memory.*`, `artifact.create`) remain registered for execution/probe routing but are off-manifest, so the model is not offered them. `ToolRegistry.list_tools()` returns the manifest; `list_registered_tools()` returns the full set.
 - **`ToolExecutionContext`** carries **`task_prompt_id`**, **`run_id`**, and optional **`artifact_store`** so prompts and artifact writes stay session-scoped.
 - Prompted tool use accepts exact JSON tool objects such as `{"tool_id":"files.read","arguments":{"path":"README.md"}}`. The current permissive shorthand parser is retained for compatibility, but the target contract is exact tool ids and structured arguments.
 - Tool manifests attach deterministic capability metadata: registered id, JSON schema, category, evidence role, side effect, and confirmation posture. The harness branches on these enum/id fields and policy decisions, not prose explanations.
