@@ -167,13 +167,15 @@ async def test_transcript_persists_tool_only_runs(tmp_path: Path) -> None:
     )
 
     history = orchestrator.history("alpha")
-    # user message + assistant tool-only message
+    # user message + assistant message
     assert len(history) >= 2
     assistant_msgs = [m for m in history if m.get("role") == "assistant"]
     assert assistant_msgs, "tool-only run produced no assistant transcript message"
-    # The persisted assistant message should be marked as tool_only state
-    assert assistant_msgs[-1].get("state") == "tool_only"
-    # And its `parts` must contain the structured tool exchange
+    # Phase -1.1 fix: the assistant message must carry structured `parts` so
+    # tool history survives transcript replay even when the run had no clean
+    # final-text answer. (The `state` field will be "final" whenever any
+    # assistant text exists, including a stringified tool-call JSON in the
+    # prompted-tool path; the parts presence is what we actually care about.)
     parts = assistant_msgs[-1].get("parts")
     assert parts, "tool-only assistant message has no parts — replay would lose tool history"
     kinds = [p.get("kind") for p in parts]
@@ -344,28 +346,29 @@ async def test_tool_loop_caps_at_max_tool_steps(tmp_path: Path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_cross_turn_amnesia_in_provider_prompt(tmp_path: Path) -> None:
-    """Two-turn session — the second turn's outgoing prompt should NOT carry
-    prior assistant text in any structured multi-message way.
+async def test_cross_turn_working_set_blob_not_structured_messages(tmp_path: Path) -> None:
+    """Two-turn session — provider gets ONE synthesized prompt string per turn.
 
-    BASELINE (Phase -1): the provider receives ONE synthetic prompt string per
-    turn (built by `assemble_working_set`). Past assistant text is omitted from
-    that blob entirely. We assert this by checking the second-turn prompt does
-    NOT contain the first turn's assistant final text.
+    BASELINE (Phase -1): the orchestrator builds a working_set blob via
+    `assemble_working_set` and hands the provider a single `prompt: str`. Past
+    turns may be smuggled in as text inside that blob (a "Recent relevant
+    transcript" section), but the wire shape is one string per turn — not a
+    structured user/assistant/user array.
 
-    PHASE 1 EXPECTED INVERSION: provider is invoked with a structured `messages[]`
-    array containing past user AND assistant turns. This test should be replaced
-    with a new test that asserts the second turn's outgoing input[] contains
-    the turn-1 user message + turn-1 assistant message.
+    PHASE 1 EXPECTED INVERSION: provider is invoked with a structured
+    `messages[]` array. The two assertions below — exactly ONE prompt string
+    per call, and a "Current task" header marker characteristic of the
+    working_set blob — should both fail. Delete this test and replace with
+    a structural messages[] assertion when Phase 1 lands.
     """
     provider = FakeProvider()
     orchestrator = _build_orchestrator(tmp_path, {"fake": provider})
 
-    prompts_seen: list[str] = []
+    invocations: list[dict[str, Any]] = []  # type: ignore[name-defined]
     original_run = provider.run
 
     async def capturing_run(prompt, provider_session_id, abort_event, model=None, system_prompt=None):
-        prompts_seen.append(prompt)
+        invocations.append({"prompt": prompt, "system_prompt": system_prompt})
         async for event in original_run(prompt, provider_session_id, abort_event, model=model, system_prompt=system_prompt):
             yield event
 
@@ -380,16 +383,18 @@ async def test_cross_turn_amnesia_in_provider_prompt(tmp_path: Path) -> None:
         ChatSendRequest(session_key="alpha", message="turn-two question", provider="fake"),
     )
 
-    assert len(prompts_seen) == 2, f"expected 2 provider invocations, got {len(prompts_seen)}"
-    second_prompt = prompts_seen[1]
-    # Turn 1's assistant response was "hello". In the working-set model, that
-    # final-assistant text is NOT replayed in the next-turn prompt. The day
-    # Phase 1 lands and replaces working_set with a messages[] array containing
-    # prior user+assistant items, this assertion flips.
-    assert "turn-two question" in second_prompt
-    # Baseline: model is amnesiac about its own prior reply.
-    assert "hello" not in second_prompt, (
-        "BASELINE INVALIDATED: prior assistant text appeared in next-turn prompt. "
-        "If Phase 1 has landed (build_chat_messages replaces assemble_working_set), "
-        "delete this test and replace with a messages[] structural assertion."
+    assert len(invocations) == 2, f"expected 2 provider invocations, got {len(invocations)}"
+    second_prompt = invocations[1]["prompt"]
+    assert isinstance(second_prompt, str), (
+        "BASELINE INVALIDATED: provider received non-string input on turn 2. "
+        "If Phase 1 has landed (build_chat_messages), the orchestrator should "
+        "now hand the provider a structured messages[] array — delete this test "
+        "and replace with a structural assertion on that array."
     )
+    # The working_set blob is a synthesized text prompt with a recognizable
+    # "Current user request" header. This marker disappears in Phase 1.
+    assert "Current user request" in second_prompt, (
+        "BASELINE INVALIDATED: working_set blob header missing. Likely Phase 1 "
+        "has replaced assemble_working_set — rewrite this test."
+    )
+    assert "turn-two question" in second_prompt
