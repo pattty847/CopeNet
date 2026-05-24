@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
@@ -318,7 +319,16 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool_payload = event.metadata.get("toolExecution")
                 if isinstance(tool_payload, dict):
                     tool_execution_payload = tool_payload
-                    assistant_message_parts.append({"kind": "tool_result", "toolExecution": dict(tool_payload)})
+                    # Persist the actual tool output (not just the summary/preview)
+                    # onto the transcript part so cross-turn replay re-feeds the
+                    # model what it saw — otherwise multi-turn coding loses every
+                    # file it read. The body is already bounded by the artifact
+                    # mechanism (>4KB becomes an artifact preview dict).
+                    stored_execution = dict(tool_payload)
+                    replay_output = _replay_output_from_runtime_input(event.metadata.get("toolResult"))
+                    if replay_output:
+                        stored_execution["replayOutput"] = replay_output
+                    assistant_message_parts.append({"kind": "tool_result", "toolExecution": stored_execution})
                     tool_steps.append(_normalize_tool_step(tool_payload))
                     artifact_id = str(tool_payload.get("artifactId") or "").strip()
                     if artifact_id and artifact_id not in persisted_tool_artifact_ids:
@@ -813,6 +823,27 @@ def _append_text_part(parts: list[dict], text: str) -> None:
         parts[-1]["text"] = f"{parts[-1].get('text') or ''}{text}"
         return
     parts.append({"kind": "text", "text": text})
+
+
+def _replay_output_from_runtime_input(runtime_input: object) -> str:
+    """Extract the model-facing tool output string from a tool's runtime input.
+
+    Used to persist `replayOutput` on the transcript tool_result part so a later
+    turn replays the real output (file contents, command stdout, ...) rather than
+    just the one-line summary. Bounded already by the artifact mechanism.
+    """
+    if not isinstance(runtime_input, dict):
+        return ""
+    body = runtime_input.get("body")
+    if isinstance(body, str):
+        return body
+    if isinstance(body, (dict, list)):
+        try:
+            return json.dumps(body, ensure_ascii=False, indent=2)
+        except (TypeError, ValueError):
+            return str(body)
+    summary = runtime_input.get("summary")
+    return str(summary) if isinstance(summary, str) else ""
 
 
 def _append_thinking_part(parts: list[dict], text: str) -> None:

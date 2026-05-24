@@ -222,6 +222,12 @@ def _tool_output_for_replay(tool_execution: dict[str, Any]) -> str:
     The UI consumes the rich ToolExecutionResult (summary, body, output dict, etc.);
     the model needs a single string. Prefer body, fall back to summary, then output.
     """
+    # replayOutput is the actual tool output (file contents, stdout, ...) the
+    # runtime persisted specifically for cross-turn replay. Prefer it over the
+    # one-line summary so the model keeps what it saw in earlier turns.
+    replay_output = tool_execution.get("replayOutput")
+    if isinstance(replay_output, str) and replay_output.strip():
+        return replay_output
     body = tool_execution.get("body")
     if isinstance(body, str) and body.strip():
         return body

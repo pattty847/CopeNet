@@ -56,6 +56,36 @@ def test_build_chat_messages_replays_prior_turns_with_tool_exchange() -> None:
     assert messages[-1]["content"][0]["text"] == "And bar.txt?"
 
 
+def test_replay_carries_real_tool_output_not_just_summary() -> None:
+    """A prior tool result's actual output (replayOutput) must survive into the
+    next turn's function_call_output, so multi-turn coding keeps what it read."""
+    transcript = [
+        {"role": "user", "content": "what is in foo.txt?"},
+        {
+            "role": "assistant",
+            "runId": "r1",
+            "parts": [
+                {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {"path": "foo.txt"}}},
+                {
+                    "kind": "tool_result",
+                    "toolExecution": {
+                        "callId": "c1",
+                        "toolId": "files.read",
+                        "summary": "Read file foo.txt.",  # terse — must NOT be what replays
+                        "replayOutput": "line one\nline two\nimportant config value = 42",
+                    },
+                },
+                {"kind": "text", "text": "foo.txt has a config value."},
+            ],
+            "content": "foo.txt has a config value.",
+        },
+    ]
+    messages = build_chat_messages(transcript_messages=transcript, current_user_message="what was the config value?")
+    fco = next(m for m in messages if m.get("type") == "function_call_output")
+    assert "important config value = 42" in fco["output"]
+    assert fco["output"] != "Read file foo.txt."
+
+
 def test_flatten_messages_to_prompt_separates_history_from_live_request() -> None:
     transcript = [
         {"role": "user", "content": "first question"},
