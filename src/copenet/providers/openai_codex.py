@@ -224,8 +224,16 @@ def _build_responses_payload(
     if prompt_cache_key:
         payload["prompt_cache_key"] = prompt_cache_key
     if reasoning:
-        payload["reasoning"] = dict(reasoning)
-        payload["include"] = ["reasoning.encrypted_content"]
+        # Strip our internal control key before sending to the API.
+        reasoning_payload = {k: v for k, v in reasoning.items() if k != "include_encrypted"}
+        payload["reasoning"] = reasoning_payload
+        # Only request encrypted reasoning content when explicitly opted in. With
+        # store=false + a multi-step tool loop, requesting it creates an
+        # obligation to replay reasoning items on each re-POST (which the loop
+        # does not do). Default off: we still get reasoning_summary deltas for the
+        # thinking UX, and the model simply re-reasons per step.
+        if reasoning.get("include_encrypted"):
+            payload["include"] = ["reasoning.encrypted_content"]
     return payload
 
 

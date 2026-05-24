@@ -61,6 +61,7 @@ class ScriptedResponsesProvider:
         self.seen_messages: list[list[dict[str, Any]]] = []
         self.seen_tools: list[list[dict[str, Any]] | None] = []
         self.seen_cache_keys: list[str | None] = []
+        self.seen_reasoning: list[dict[str, Any] | None] = []
 
     async def stream_responses(
         self,
@@ -77,10 +78,22 @@ class ScriptedResponsesProvider:
         self.seen_messages.append([dict(m) for m in messages])
         self.seen_tools.append([dict(t) for t in tools] if tools else None)
         self.seen_cache_keys.append(prompt_cache_key)
+        self.seen_reasoning.append(dict(reasoning) if reasoning else None)
         events = self._turns[min(self._index, len(self._turns) - 1)]
         self._index += 1
         for event in events:
             yield event
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": "Scripted Responses",
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False, "responsesApi": True},
+        }
+
+    async def list_models(self) -> list:
+        return []
 
 
 def _make_plan() -> HarnessTurnPlan:
@@ -272,3 +285,35 @@ async def test_responses_loop_finalizes_immediately_when_no_tools(tmp_path: Path
     assert any(e.kind == "delta" and e.text == "just an answer" for e in events)
     assert events[-1].kind == "final"
     assert len(provider.seen_messages) == 1
+
+
+@pytest.mark.asyncio
+async def test_harness_enables_reasoning_on_responses_path(tmp_path: Path) -> None:
+    """Regression guard: ChatHarness must request reasoning summaries on the
+    Responses path, otherwise the Phase 4 inline-thinking UX produces nothing."""
+    from copenet.core.harness import ChatHarness, DEFAULT_RESPONSES_REASONING
+
+    (tmp_path / "foo.txt").write_text("hi", encoding="utf-8")
+    provider = ScriptedResponsesProvider(turns=[[ProviderEvent(kind="delta", text="hello"), _COMPLETED]])
+
+    async def tool_executor(request, context):  # pragma: no cover - no tools here
+        raise AssertionError("no tool expected")
+
+    harness = ChatHarness()
+    tools = _make_plan().tools
+    plan, stream = await harness.run_turn(
+        provider=provider,
+        prompt="hi",
+        messages=[{"role": "user", "content": [{"type": "input_text", "text": "hi"}]}],
+        session_id="sess-1",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        model="gpt-5.5",
+        available_tools=tools,
+        tool_executor=tool_executor,
+        tool_context=_make_context(tmp_path),
+    )
+    assert plan.tool_execution_mode == "responses"
+    _ = [event async for event in stream]
+    assert provider.seen_reasoning[0] == DEFAULT_RESPONSES_REASONING
+    assert provider.seen_reasoning[0]["summary"] == "auto"

@@ -13,6 +13,7 @@ from .capabilities import ModelCapabilityProfile
 from .decision import resolve_harness_decision_record
 from .planning import HarnessTurnPlan, TraceRecorder, plan_turn
 from .tool_loop import (
+    DEFAULT_RESPONSES_REASONING,
     ToolExecutor,
     collect_provider_turn,
     compose_provider_prompt,
@@ -113,6 +114,7 @@ class ChatHarness:
                 tool_executor=tool_executor,
                 tool_context=tool_context,
                 session_id=session_id or provider_session_id,
+                reasoning=DEFAULT_RESPONSES_REASONING,
                 trace=trace,
             )
             return plan, stream

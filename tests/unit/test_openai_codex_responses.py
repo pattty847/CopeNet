@@ -31,7 +31,24 @@ def test_build_responses_payload_includes_tools_cache_key_and_reasoning() -> Non
     assert payload["tool_choice"] == "auto"
     assert payload["prompt_cache_key"] == "session-69"
     assert payload["reasoning"] == {"effort": "high", "summary": "auto"}
+    # Encrypted reasoning content is NOT requested by default (would require
+    # replaying reasoning items across the tool loop's re-POSTs).
+    assert "include" not in payload
+
+
+def test_build_responses_payload_requests_encrypted_reasoning_only_on_opt_in() -> None:
+    payload = _build_responses_payload(
+        model="gpt-5.5",
+        messages=[],
+        instructions=None,
+        tools=None,
+        prompt_cache_key=None,
+        reasoning={"effort": "high", "summary": "auto", "include_encrypted": True},
+        parallel_tool_calls=True,
+    )
     assert payload["include"] == ["reasoning.encrypted_content"]
+    # The internal control key is stripped from what we send to the API.
+    assert "include_encrypted" not in payload["reasoning"]
 
 
 def test_build_responses_payload_omits_tools_when_none() -> None:

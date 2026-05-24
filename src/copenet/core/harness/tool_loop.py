@@ -47,6 +47,13 @@ TraceRecorder = Callable[[str, dict[str, Any] | None], None]
 MAX_TOOL_STEPS = 100
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 
+# Default reasoning config for the native Responses path. summary="auto" is what
+# makes the endpoint stream reasoning_summary deltas — i.e. what powers the
+# Phase 4 inline-thinking UX. Without this, no thinking ever renders.
+# NOTE: verified shape per scripts/codex_responses_probe.py scenario C; needs a
+# live run to confirm the endpoint accepts it for the active model.
+DEFAULT_RESPONSES_REASONING: dict[str, Any] = {"effort": "medium", "summary": "auto"}
+
 
 def _max_step_explanation() -> str:
     return (
