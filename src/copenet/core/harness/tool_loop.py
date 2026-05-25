@@ -322,6 +322,12 @@ async def run_with_responses_tools(
         trace("turn_started", turn_state.to_public_dict())
 
     for step_index in range(MAX_TOOL_STEPS):
+        if abort_event.is_set():
+            turn_state.terminal_reason = "aborted"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(kind="final")
+            return
         function_calls: list[dict[str, Any]] = []
         assistant_text_chunks: list[str] = []
         async for event in provider.stream_responses(
@@ -371,6 +377,15 @@ async def run_with_responses_tools(
                 )
             )
         for call in function_calls:
+            if abort_event.is_set():
+                # Stop before running any more tools — they have real side effects
+                # (shell.exec, files.write). Already-appended function_call items
+                # without an output are fine; the loop terminates below.
+                turn_state.terminal_reason = "aborted"
+                if trace is not None:
+                    trace("turn_completed", turn_state.to_public_dict())
+                yield ProviderEvent(kind="final")
+                return
             call_id = str(call.get("call_id") or "").strip() or _new_call_id(str(call.get("name") or "tool"))
             name = str(call.get("name") or "").strip()
             arguments_json = str(call.get("arguments") or "").strip() or "{}"
