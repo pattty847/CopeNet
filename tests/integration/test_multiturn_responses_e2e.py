@@ -181,3 +181,57 @@ async def test_responses_turn_persists_tool_exchange_to_transcript(monkeypatch: 
     # The persisted tool_result carries the real output for future replay.
     tool_result = next(p for p in parts if p.get("kind") == "tool_result")
     assert "hello bar" in (tool_result["toolExecution"].get("replayOutput") or "")
+
+
+class ResumingCliProvider:
+    """Mimics claude-cli/codex-cli: resumes a server-side thread, records prompts."""
+
+    display_name = "Resuming CLI"
+
+    def __init__(self, name: str) -> None:
+        self.name = name
+        self.prompts: list[str] = []
+
+    async def run(self, prompt, provider_session_id, abort_event, model=None, system_prompt=None):
+        del abort_event, model, system_prompt
+        self.prompts.append(prompt)
+        # Always surface a (stable) session id so subsequent turns resume.
+        yield ProviderEvent(kind="delta", text="ok", provider_session_id=provider_session_id or "cli-session-1")
+        yield ProviderEvent(kind="final", provider_session_id=provider_session_id or "cli-session-1")
+
+    async def describe(self) -> dict:
+        return {
+            "id": self.name,
+            "displayName": self.display_name,
+            "available": True,
+            "capabilities": {"chat": True, "streaming": True, "toolCalls": False, "promptedToolUse": False, "resume": True},
+        }
+
+    async def list_models(self) -> list:
+        return []
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("provider_name", ["claude-cli", "codex-cli"])
+async def test_resuming_cli_gets_only_new_message_not_full_history(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, provider_name: str
+) -> None:
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    provider = ResumingCliProvider(provider_name)
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        sessions_dir=tmp_path,
+        providers={provider_name: provider},
+    )
+
+    await _collect(orchestrator, ChatSendRequest(session_key="a", message="first turn question", provider=provider_name))
+    await _collect(orchestrator, ChatSendRequest(session_key="a", message="second turn question", provider=provider_name))
+
+    assert len(provider.prompts) == 2
+    # Turn 2 resumes the CLI thread, so it must receive ONLY the new message
+    # (the CLI path may wrap it with system instructions, hence containment) —
+    # NOT the prior turn re-stated, which would double the CLI's own context.
+    assert "second turn question" in provider.prompts[1]
+    assert "first turn question" not in provider.prompts[1]
+    assert "Conversation so far" not in provider.prompts[1]

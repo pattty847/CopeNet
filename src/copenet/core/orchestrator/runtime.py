@@ -28,6 +28,10 @@ from copenet.core.tools import (
 )
 from copenet.core.tracing import RunTraceWriter
 
+# Providers that maintain their own conversation thread and resume it via
+# provider_session_id — they must NOT be re-fed the flattened transcript.
+_RESUME_CLI_PROVIDERS = {"claude-cli", "codex-cli"}
+
 if TYPE_CHECKING:
     from . import ChatSendRequest, Orchestrator
 
@@ -174,7 +178,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         transcript_messages=history_for_replay,
         current_user_message=message,
     )
-    chat_prompt = flatten_messages_to_prompt(chat_messages)
+    # CLI providers (claude-cli / codex-cli) keep their OWN conversation thread
+    # server-side and resume it via provider_session_id. Re-sending the full
+    # flattened transcript to a resuming CLI would double its context, so when we
+    # can resume we send only the new user message. Everyone else (Responses path,
+    # LM Studio, Ollama, or a CLI with no session to resume) gets the full
+    # multi-turn replay.
+    cli_resume = provider_name in _RESUME_CLI_PROVIDERS and bool(entry.provider_session_id)
+    chat_prompt = message if cli_resume else flatten_messages_to_prompt(chat_messages)
     input_token_estimate = estimate_input_tokens(chat_messages)
     message_count = len(chat_messages)
     trace.record(
@@ -183,6 +194,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "messageCount": message_count,
             "inputTokenEstimate": input_token_estimate,
             "historyTurns": len(history_for_replay),
+            "cliResume": cli_resume,
         },
     )
 
