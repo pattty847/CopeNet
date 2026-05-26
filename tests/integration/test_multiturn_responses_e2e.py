@@ -146,6 +146,9 @@ async def test_two_turn_responses_replay_carries_tool_output(monkeypatch: pytest
     # function_call and its output share a call_id (so the API can pair them).
     fc = next(item for item in turn2_input if item.get("type") == "function_call")
     assert fc["call_id"] == fco["call_id"]
+    # The messages array carries the canonical (dotted) id; the real provider
+    # sanitizes it to files_read only at the API boundary (see the
+    # _build_responses_payload tests). The fake records what the loop passed.
     assert fc["name"] == "files.read"
 
 

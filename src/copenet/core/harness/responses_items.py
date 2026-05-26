@@ -78,6 +78,9 @@ def assistant_message_item(message_id: str, text: str) -> dict[str, Any]:
 def function_call_item(*, item_id: str, call_id: str, name: str, arguments: dict[str, Any] | str) -> dict[str, Any]:
     """One assistant-emitted tool call. `arguments` is serialized to JSON string."""
     args_str = arguments if isinstance(arguments, str) else json.dumps(arguments, ensure_ascii=False)
+    # Keep the canonical (dotted) tool id here so the flattened-prompt path and
+    # transcript-derived display stay accurate. The Responses provider sanitizes
+    # function names (dots are illegal there) at the API boundary on send.
     return {
         "type": "function_call",
         "id": item_id,

@@ -4,6 +4,7 @@ from .contracts import (
     build_tool_effect_payload,
     build_openai_tool_schemas,
     build_responses_tool_schemas,
+    responses_safe_tool_name,
     ContextPack,
     ToolBlockedError,
     ToolCallRequest,
@@ -31,6 +32,7 @@ __all__ = [
     "build_tool_effect_payload",
     "build_openai_tool_schemas",
     "build_responses_tool_schemas",
+    "responses_safe_tool_name",
     "describe_available_tools",
     "policy_for_task_mode",
 ]

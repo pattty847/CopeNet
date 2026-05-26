@@ -15,6 +15,7 @@ from copenet.core.tools import (
     ToolExecutionResult,
     build_openai_tool_schemas,
     build_responses_tool_schemas,
+    responses_safe_tool_name,
 )
 from copenet.providers import Provider, ProviderEvent
 
@@ -317,6 +318,9 @@ async def run_with_responses_tools(
     """
     turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
     tool_schemas = build_responses_tool_schemas(plan.tools)
+    # The provider sees Responses-safe (dot-free) function names; map them back to
+    # the real dotted tool ids when the model calls them.
+    safe_name_to_tool_id = {responses_safe_tool_name(tool.id): tool.id for tool in plan.tools}
     working_messages: list[dict[str, Any]] = [dict(item) for item in messages]
     if trace is not None:
         trace("turn_started", turn_state.to_public_dict())
@@ -387,7 +391,10 @@ async def run_with_responses_tools(
                 yield ProviderEvent(kind="final")
                 return
             call_id = str(call.get("call_id") or "").strip() or _new_call_id(str(call.get("name") or "tool"))
-            name = str(call.get("name") or "").strip()
+            raw_name = str(call.get("name") or "").strip()
+            # Reverse the name sanitization: the model emits the safe name; we
+            # execute and record the real dotted tool id.
+            name = safe_name_to_tool_id.get(raw_name, raw_name)
             arguments_json = str(call.get("arguments") or "").strip() or "{}"
             arguments = _parse_native_tool_arguments(arguments_json)
             working_messages.append(

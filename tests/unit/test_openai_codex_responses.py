@@ -26,7 +26,8 @@ def test_build_responses_payload_includes_tools_cache_key_and_reasoning() -> Non
     assert payload["stream"] is True
     assert payload["store"] is False
     assert payload["instructions"] == "be terse"
-    assert payload["tools"][0]["name"] == "files.read"
+    # Provider sanitizes dotted tool names at the API boundary.
+    assert payload["tools"][0]["name"] == "files_read"
     assert payload["parallel_tool_calls"] is True
     assert payload["tool_choice"] == "auto"
     assert payload["prompt_cache_key"] == "session-69"
@@ -49,6 +50,30 @@ def test_build_responses_payload_requests_encrypted_reasoning_only_on_opt_in() -
     assert payload["include"] == ["reasoning.encrypted_content"]
     # The internal control key is stripped from what we send to the API.
     assert "include_encrypted" not in payload["reasoning"]
+
+
+def test_build_responses_payload_sanitizes_dotted_function_names() -> None:
+    """Live API rejects dotted function names (HTTP 400). The payload builder must
+    sanitize both tools[] and input[] function_call names to ^[a-zA-Z0-9_-]+$."""
+    payload = _build_responses_payload(
+        model="gpt-5.5",
+        messages=[
+            {"role": "user", "content": [{"type": "input_text", "text": "read it"}]},
+            {"type": "function_call", "id": "fc0", "call_id": "c0", "name": "files.read", "arguments": "{}"},
+            {"type": "function_call_output", "call_id": "c0", "output": "data"},
+        ],
+        instructions=None,
+        tools=[{"type": "function", "name": "shell.exec", "description": "d", "parameters": {}}],
+        prompt_cache_key=None,
+        reasoning=None,
+        parallel_tool_calls=True,
+    )
+    fc = next(item for item in payload["input"] if item.get("type") == "function_call")
+    assert fc["name"] == "files_read"
+    assert payload["tools"][0]["name"] == "shell_exec"
+    # function_call_output pairs by call_id (no name to sanitize).
+    fco = next(item for item in payload["input"] if item.get("type") == "function_call_output")
+    assert fco["call_id"] == "c0"
 
 
 def test_build_responses_payload_omits_tools_when_none() -> None:

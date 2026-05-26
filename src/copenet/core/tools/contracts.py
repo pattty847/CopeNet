@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 import json
+import re
 from typing import TYPE_CHECKING, Any, Awaitable, Callable, Literal
 
 from copenet.providers import Provider
@@ -80,7 +81,8 @@ class ToolDescriptor:
         schema = dict(self.input_schema) if isinstance(self.input_schema, dict) else {"type": "object", "properties": {}}
         return {
             "type": "function",
-            "name": self.id,
+            # Responses function names must match ^[a-zA-Z0-9_-]+$ (no dots).
+            "name": responses_safe_tool_name(self.id),
             "description": self.description,
             "parameters": schema,
         }
@@ -397,6 +399,22 @@ def describe_available_tools(
         }
         for tool in selected
     ]
+
+
+_RESPONSES_NAME_INVALID = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def responses_safe_tool_name(name: str) -> str:
+    """Map a CopeNet tool id to a Responses-API-legal function name.
+
+    The Responses API requires function names to match ^[a-zA-Z0-9_-]+$ — dots
+    are rejected (confirmed live: HTTP 400 'input[k].name does not match
+    pattern'). CopeNet ids are dotted (files.read, shell.exec, ...), so we
+    replace any illegal char with '_'. The reverse map back to the real tool id
+    is rebuilt from the active tool descriptors at the responses tool loop, so
+    this need not be invertible on its own.
+    """
+    return _RESPONSES_NAME_INVALID.sub("_", name)
 
 
 def build_openai_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:

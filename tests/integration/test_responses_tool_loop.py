@@ -215,9 +215,42 @@ async def test_responses_loop_executes_tool_then_finalizes(tmp_path: Path) -> No
     assert fco_item["output"] == "Hello, world!"
     # prompt_cache_key threaded through.
     assert provider.seen_cache_keys[0] == "s1"
-    # tools schema is the flat Responses shape (name at top level).
-    assert provider.seen_tools[0][0]["name"] == "files.read"
+    # tools schema is the flat Responses shape (name at top level), with the
+    # dot-free Responses-safe name (the live API rejects dotted names).
+    assert provider.seen_tools[0][0]["name"] == "files_read"
     assert "function" not in provider.seen_tools[0][0]
+
+
+@pytest.mark.asyncio
+async def test_responses_loop_reverse_maps_sanitized_tool_name(tmp_path: Path) -> None:
+    """The model calls the Responses-safe name (files_read); the loop must
+    execute the real dotted tool id (files.read)."""
+    executed: list[str] = []
+
+    async def tool_executor(request, context):
+        executed.append(request.tool_id)
+        return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary="ok", body="x")
+
+    provider = ScriptedResponsesProvider(
+        turns=[
+            [_fc("call_1", "files_read", {"path": "foo.txt"}), _COMPLETED],  # sanitized name, as the real API returns
+            [ProviderEvent(kind="delta", text="done"), _COMPLETED],
+        ]
+    )
+    await _drain(
+        run_with_responses_tools(
+            provider=provider,
+            messages=[{"role": "user", "content": [{"type": "input_text", "text": "read it"}]}],
+            abort_event=asyncio.Event(),
+            model="gpt-5.5",
+            instructions=None,
+            plan=_make_plan(),
+            tool_executor=tool_executor,
+            tool_context=_make_context(tmp_path),
+            session_id="s1",
+        )
+    )
+    assert executed == ["files.read"]  # reverse-mapped to the real id
 
 
 @pytest.mark.asyncio
