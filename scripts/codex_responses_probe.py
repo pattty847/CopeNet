@@ -248,6 +248,84 @@ def scenario_c_payload() -> dict:
     }
 
 
+def scenario_d_payload() -> dict:
+    """CopeNet's EXACT outgoing payload, built by the real harness code.
+
+    Confirms the live endpoint accepts the params CopeNet adds that scenarios
+    A-C did not test: parallel_tool_calls, tool_choice, prompt_cache_key,
+    tools WITHOUT strict, and the default reasoning block. If this scenario
+    fails where B/C pass, the offending field is one of those.
+    """
+    from copenet.core.harness.tool_loop import DEFAULT_RESPONSES_REASONING
+    from copenet.core.tools import ToolDescriptor, build_responses_tool_schemas
+    from copenet.providers.openai_codex import _build_responses_payload
+
+    tools = build_responses_tool_schemas(
+        [
+            ToolDescriptor(
+                id="files.read",
+                name="Read File",
+                description="Read a text file inside the current workdir.",
+                category="repo-read",
+                input_schema={
+                    "type": "object",
+                    "properties": {
+                        "path": {"type": "string"},
+                        "offset": {"type": "integer", "minimum": 0},
+                        "limit": {"type": "integer", "minimum": 1},
+                    },
+                },
+                capabilities=["filesystem", "read"],
+                evidence_role="grounding",
+                side_effect="read",
+            ),
+            ToolDescriptor(
+                id="shell.exec",
+                name="Shell Exec",
+                description="Run a shell command in the current workdir.",
+                category="shell-read",
+                input_schema={
+                    "type": "object",
+                    "properties": {"command": {"type": "string"}},
+                    "required": ["command"],
+                    "additionalProperties": False,
+                },
+                capabilities=["shell", "read"],
+                evidence_role="verification",
+                side_effect="external",
+            ),
+        ]
+    )
+    messages = [
+        {"role": "user", "content": [{"type": "input_text", "text": "What's in foo.txt?"}]},
+        {
+            "type": "function_call",
+            "id": "fc_probe_d_0",
+            "call_id": "call_probe_d_0",
+            "name": "files.read",
+            "arguments": "{\"path\":\"foo.txt\"}",
+        },
+        {"type": "function_call_output", "call_id": "call_probe_d_0", "output": "FILE CONTENTS: hello world"},
+        {
+            "type": "message",
+            "role": "assistant",
+            "id": "msg_probe_d_0",
+            "content": [{"type": "output_text", "text": "foo.txt says hello world.", "annotations": []}],
+            "status": "completed",
+        },
+        {"role": "user", "content": [{"type": "input_text", "text": "Now read bar.txt and tell me what changed."}]},
+    ]
+    return _build_responses_payload(
+        model=MODEL,
+        messages=messages,
+        instructions="You are CopeNet's coding assistant.",
+        tools=tools,
+        prompt_cache_key="probe-session-d",
+        reasoning=DEFAULT_RESPONSES_REASONING,
+        parallel_tool_calls=True,
+    )
+
+
 def print_scenario_result(label: str, result: dict, sink_path: Path) -> None:
     status = result.get("status")
     if status == "http_error":
@@ -310,6 +388,7 @@ def main() -> int:
         ("A", "Multi-turn input array (no tools, no reasoning)", scenario_a_payload()),
         ("B", "Single user + tools array (native function calling)", scenario_b_payload()),
         ("C", "Multi-turn w/ prior function_call + function_call_output + reasoning", scenario_c_payload()),
+        ("D", "CopeNet's EXACT payload (parallel_tool_calls, tool_choice, prompt_cache_key, no-strict tools, reasoning)", scenario_d_payload()),
     ]
 
     summary: dict[str, dict] = {}

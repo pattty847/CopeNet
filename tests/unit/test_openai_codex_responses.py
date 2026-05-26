@@ -68,6 +68,20 @@ def test_build_responses_payload_omits_tools_when_none() -> None:
     assert payload["input"]
 
 
+def test_parse_responses_sse_matches_reasoning_delta_name_variants() -> None:
+    """Reasoning summary deltas are matched name-agnostically (live event name
+    for summaries is not pinned down)."""
+    for ev_type in (
+        "response.reasoning_summary.delta",
+        "response.reasoning_summary_text.delta",
+        "response.reasoning_text.delta",
+        "response.reasoning.delta",
+    ):
+        events = _sse([{"type": ev_type, "delta": "mid-thought"}, {"type": "response.completed", "response": {}}])
+        out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+        assert any(e.kind == "reasoning_delta" and e.text == "mid-thought" for e in out), ev_type
+
+
 def test_parse_responses_sse_emits_text_reasoning_and_function_call() -> None:
     events = _sse(
         [

@@ -305,7 +305,12 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
             if delta:
                 yield ProviderEvent(kind="delta", text=delta)
             continue
-        if event_type in {"response.reasoning_summary.delta", "response.reasoning_summary_text.delta"}:
+        # Reasoning summary deltas: be name-agnostic. The live codex endpoint did
+        # not emit reasoning events for trivial probe turns, and the exact event
+        # name for summaries is not pinned down, so match any reasoning delta
+        # variant (reasoning_summary.delta / reasoning_summary_text.delta /
+        # reasoning_text.delta / reasoning.delta).
+        if event_type.startswith("response.reasoning") and event_type.endswith(".delta"):
             delta = str(event.get("delta") or "")
             if delta:
                 yield ProviderEvent(kind="reasoning_delta", text=delta)
