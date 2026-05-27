@@ -189,3 +189,71 @@ def test_parse_responses_sse_raises_on_failure_event() -> None:
 
     with pytest.raises(RuntimeError, match="boom"):
         list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+
+
+def test_classify_responses_body_sniffs_sse_when_header_missing() -> None:
+    """Live codex backend sometimes returns SSE bodies with an empty
+    Content-Type header. The classifier must sniff the first non-blank line
+    and dispatch to the SSE parser so function_call events aren't dropped.
+    Regression for the "openai-codex returned no assistant text" failure mode.
+    """
+    from io import BytesIO
+    from copenet.providers.openai_codex import _classify_responses_body, _parse_responses_sse
+
+    body = (
+        b"\n"
+        b"event: response.output_item.done\n"
+        b"data: " + json.dumps({
+            "type": "response.output_item.done",
+            "item": {
+                "type": "function_call",
+                "id": "fc_1",
+                "call_id": "call_1",
+                "name": "files_read",
+                "arguments": "{\"path\":\"README.md\"}",
+            },
+        }).encode("utf-8") + b"\n"
+        b"event: response.completed\n"
+        b"data: " + json.dumps({"type": "response.completed"}).encode("utf-8") + b"\n"
+    )
+
+    class _LineStream:
+        def __init__(self, raw: bytes) -> None:
+            self._buf = BytesIO(raw)
+        def readline(self) -> bytes:
+            return self._buf.readline()
+        def read(self) -> bytes:
+            return self._buf.read()
+        def __iter__(self):
+            for line in self._buf:
+                yield line
+
+    kind, payload = _classify_responses_body(_LineStream(body), content_type="")
+    assert kind == "sse"
+    events = list(_parse_responses_sse(response=payload, abort_event=asyncio.Event()))
+    assert any(
+        e.kind == "meta" and e.metadata and isinstance(e.metadata.get("responsesFunctionCall"), dict)
+        and e.metadata["responsesFunctionCall"].get("name") == "files_read"
+        for e in events
+    )
+
+
+def test_classify_responses_body_returns_json_for_non_sse() -> None:
+    from io import BytesIO
+    from copenet.providers.openai_codex import _classify_responses_body
+
+    class _LineStream:
+        def __init__(self, raw: bytes) -> None:
+            self._buf = BytesIO(raw)
+        def readline(self) -> bytes:
+            return self._buf.readline()
+        def read(self) -> bytes:
+            return self._buf.read()
+        def __iter__(self):
+            for line in self._buf:
+                yield line
+
+    body = b'{"output_text":"hi"}'
+    kind, payload = _classify_responses_body(_LineStream(body), content_type="application/json")
+    assert kind == "json"
+    assert "output_text" in payload

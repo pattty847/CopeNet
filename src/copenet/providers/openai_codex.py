@@ -313,15 +313,14 @@ def _stream_responses_tool_events(
     try:
         with request.urlopen(req, timeout=180.0) as response:
             content_type = str(response.headers.get("Content-Type") or "")
-            if "text/event-stream" not in content_type.lower():
-                raw_body = response.read().decode("utf-8", errors="replace")
-                data = _decode_openai_codex_response_body(raw_body=raw_body, content_type=content_type)
-                text = _extract_response_text(data)
-                if text:
-                    yield ProviderEvent(kind="delta", text=text)
-                yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
+            kind, payload = _classify_responses_body(response, content_type)
+            if kind == "sse":
+                yield from _parse_responses_sse(response=payload, abort_event=abort_event)
                 return
-            yield from _parse_responses_sse(response=response, abort_event=abort_event)
+            # Non-SSE (JSON or empty) — emit text + function_call from the parsed body.
+            data = _decode_openai_codex_response_body(raw_body=payload, content_type=content_type) if payload else {}
+            yield from _emit_responses_nonstream_events(data)
+            yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
     except error.HTTPError as exc:
         detail = exc.read().decode("utf-8", errors="replace").strip()
         if exc.code in {401, 403}:
@@ -426,6 +425,102 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
         if call.get("name"):
             yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": dict(call)})
     yield ProviderEvent(kind="meta", metadata={"responsesCompleted": completed})
+
+
+def _classify_responses_body(response: Any, content_type: str) -> tuple[str, Any]:
+    """Decide whether the body should be streamed as SSE or parsed as JSON.
+
+    Returns ``("sse", iterable_of_lines)`` for SSE bodies and
+    ``("json", raw_text)`` otherwise. The live codex backend sometimes returns
+    SSE bodies with a missing or non-event-stream Content-Type header, so we
+    sniff the first non-blank line when the header is ambiguous.
+    """
+    if "text/event-stream" in content_type.lower():
+        return "sse", response
+    buffered: list[Any] = []
+    while True:
+        line = response.readline()
+        if not line:
+            break
+        text_line = line.decode("utf-8", errors="replace") if isinstance(line, (bytes, bytearray)) else str(line)
+        buffered.append(line)
+        if text_line.strip():
+            stripped = text_line.lstrip()
+            if stripped.startswith("event:") or stripped.startswith("data:"):
+                return "sse", _ChainedLines(buffered, response)
+            # Not SSE — fall through and assemble JSON body below.
+            break
+    remaining = response.read() if hasattr(response, "read") else b""
+    full = _join_lines(buffered + [remaining]) if remaining else _join_lines(buffered)
+    if isinstance(full, (bytes, bytearray)):
+        return "json", full.decode("utf-8", errors="replace")
+    return "json", str(full)
+
+
+def _join_lines(parts: list[Any]) -> Any:
+    if not parts:
+        return b""
+    if any(isinstance(p, (bytes, bytearray)) for p in parts):
+        return b"".join(p if isinstance(p, (bytes, bytearray)) else str(p).encode("utf-8") for p in parts)
+    return "".join(str(p) for p in parts)
+
+
+class _ChainedLines:
+    """Iterates the buffered prelude lines then the remaining lines of ``response``."""
+
+    def __init__(self, buffered: list[Any], response: Any) -> None:
+        self._buffered = list(buffered)
+        self._response = response
+
+    def __iter__(self) -> Iterator[Any]:
+        for line in self._buffered:
+            yield line
+        self._buffered = []
+        for line in self._response:
+            yield line
+
+
+def _emit_responses_nonstream_events(data: dict[str, Any]) -> Iterator[ProviderEvent]:
+    """Emit text + function_call events from a non-streamed Responses payload.
+
+    Mirrors what ``_parse_responses_sse`` would yield: ``delta`` for assistant
+    text, ``meta.responsesFunctionCall`` for each function_call output item.
+    """
+    output = data.get("output")
+    if isinstance(output, list):
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            item_type = str(item.get("type") or "").strip()
+            if item_type == "message":
+                content = item.get("content")
+                if isinstance(content, list):
+                    parts: list[str] = []
+                    for block in content:
+                        if isinstance(block, dict) and str(block.get("type") or "") == "output_text":
+                            text = str(block.get("text") or "")
+                            if text:
+                                parts.append(text)
+                    joined = "".join(parts)
+                    if joined:
+                        yield ProviderEvent(kind="delta", text=joined)
+            elif item_type == "function_call":
+                call = {
+                    "id": str(item.get("id") or "").strip(),
+                    "call_id": str(item.get("call_id") or "").strip() or str(item.get("id") or ""),
+                    "name": str(item.get("name") or "").strip(),
+                    "arguments": str(item.get("arguments") or ""),
+                }
+                if call["name"]:
+                    yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": call})
+            elif item_type == "reasoning":
+                summary_text = _reasoning_item_text(item)
+                if summary_text:
+                    yield ProviderEvent(kind="reasoning_delta", text=summary_text)
+        return
+    direct_text = data.get("output_text")
+    if isinstance(direct_text, str) and direct_text.strip():
+        yield ProviderEvent(kind="delta", text=direct_text.strip())
 
 
 def _iter_sse_lines(response: Any) -> Iterator[str]:
