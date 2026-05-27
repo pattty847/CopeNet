@@ -158,6 +158,31 @@ def test_parse_responses_sse_flushes_function_call_without_done() -> None:
     assert json.loads(fcs[0]["arguments"]) == {"command": "ls"}
 
 
+def test_parse_responses_sse_surfaces_reasoning_output_item() -> None:
+    """The live endpoint delivers reasoning as an output item (not *.delta events),
+    so output_item.done with type=reasoning must surface its summary as thinking."""
+    events = _sse(
+        [
+            {
+                "type": "response.output_item.done",
+                "item": {
+                    "type": "reasoning",
+                    "id": "rs_0",
+                    "summary": [{"type": "summary_text", "text": "First I'll read the file."}],
+                },
+            },
+            {
+                "type": "response.output_item.done",
+                "item": {"type": "function_call", "id": "fc_0", "call_id": "c0", "name": "files_read", "arguments": "{}"},
+            },
+            {"type": "response.completed", "response": {}},
+        ]
+    )
+    out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    assert any(e.kind == "reasoning_delta" and "read the file" in (e.text or "") for e in out)
+    assert any(e.kind == "meta" and e.metadata and e.metadata.get("responsesFunctionCall") for e in out)
+
+
 def test_parse_responses_sse_raises_on_failure_event() -> None:
     events = _sse([{"type": "response.failed", "error": {"message": "boom"}}])
     import pytest

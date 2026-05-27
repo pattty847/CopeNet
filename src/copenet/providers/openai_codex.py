@@ -226,6 +226,31 @@ def _sanitize_input_function_names(messages: list[dict[str, Any]]) -> list[dict[
     return out
 
 
+def _reasoning_item_text(item: dict[str, Any]) -> str:
+    """Extract human-readable summary text from a Responses reasoning output item.
+
+    Standard shape is {type: "reasoning", summary: [{type: "summary_text",
+    text: ...}, ...]}. Some variants use `content` or plain `text`. Best-effort
+    across them; needs confirmation against a real substantive turn (the trivial
+    probe turns produced a reasoning item but its summary may be empty).
+    """
+    for key in ("summary", "content"):
+        blocks = item.get(key)
+        if isinstance(blocks, list):
+            parts: list[str] = []
+            for block in blocks:
+                if isinstance(block, dict):
+                    text = block.get("text")
+                    if isinstance(text, str) and text.strip():
+                        parts.append(text.strip())
+                elif isinstance(block, str) and block.strip():
+                    parts.append(block.strip())
+            if parts:
+                return "\n".join(parts)
+    text = item.get("text")
+    return text.strip() if isinstance(text, str) and text.strip() else ""
+
+
 def _build_responses_payload(
     *,
     model: str,
@@ -380,6 +405,15 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
                 }
                 if call["name"]:
                     yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": call})
+            elif isinstance(item, dict) and item.get("type") == "reasoning":
+                # The live endpoint delivers reasoning as an output ITEM (no
+                # streamed *.delta events for it — confirmed via probe scenario D,
+                # which showed a 2nd output_item but zero reasoning_summary.delta).
+                # Surface its summary text as a single reasoning_delta for the
+                # inline-thinking UX.
+                summary_text = _reasoning_item_text(item)
+                if summary_text:
+                    yield ProviderEvent(kind="reasoning_delta", text=summary_text)
             continue
         if event_type in {"response.failed", "error"}:
             raise RuntimeError(_openai_codex_failure_message(event))
