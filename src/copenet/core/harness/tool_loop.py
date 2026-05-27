@@ -48,12 +48,20 @@ TraceRecorder = Callable[[str, dict[str, Any] | None], None]
 MAX_TOOL_STEPS = 100
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 
-# Default reasoning config for the native Responses path. summary="auto" is what
-# makes the endpoint stream reasoning_summary deltas — i.e. what powers the
-# Phase 4 inline-thinking UX. Without this, no thinking ever renders.
-# NOTE: verified shape per scripts/codex_responses_probe.py scenario C; needs a
-# live run to confirm the endpoint accepts it for the active model.
-DEFAULT_RESPONSES_REASONING: dict[str, Any] = {"effort": "medium", "summary": "auto"}
+# Default reasoning config for the native Responses path. Effort drives the
+# model's internal thinking depth; summary would, in principle, surface a
+# human-readable trace of that thinking for the Phase 4 inline-thinking UX.
+#
+# Live finding (2026-05-27, gpt-5.5 via chatgpt.com/backend-api/codex): on a
+# 10-step substantive tool-using turn the endpoint emitted zero reasoning
+# events — neither response.reasoning*.delta nor an output_item with
+# type=reasoning. The request payload was echoed back with summary
+# (server-upgraded from "auto" to "detailed"), so the endpoint accepts the
+# shape but does not deliver summaries on this backend. The SSE parser
+# remains name-agnostic + handles both delivery styles, so adding `summary`
+# back is harmless if the endpoint starts emitting; for now we omit it to
+# avoid asking for work that won't be returned.
+DEFAULT_RESPONSES_REASONING: dict[str, Any] = {"effort": "medium"}
 
 
 def _max_step_explanation() -> str:

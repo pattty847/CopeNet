@@ -401,7 +401,7 @@ async def test_harness_enables_reasoning_on_responses_path(tmp_path: Path) -> No
     assert plan.tool_execution_mode == "responses"
     _ = [event async for event in stream]
     assert provider.seen_reasoning[0] == DEFAULT_RESPONSES_REASONING
-    assert provider.seen_reasoning[0]["summary"] == "auto"
+    assert provider.seen_reasoning[0]["effort"] == "medium"
 
 
 @pytest.mark.asyncio
