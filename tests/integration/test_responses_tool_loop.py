@@ -320,6 +320,58 @@ async def test_responses_loop_finalizes_immediately_when_no_tools(tmp_path: Path
     assert len(provider.seen_messages) == 1
 
 
+def test_compose_responses_tool_instructions_tells_model_to_use_tools() -> None:
+    from copenet.core.harness.tool_loop import compose_responses_tool_instructions
+
+    text = compose_responses_tool_instructions(
+        system_prompt="Be terse.",
+        workdir="/work/repo",
+        tools=_make_plan().tools,
+    )
+    assert "Be terse." in text
+    assert "/work/repo" in text
+    assert "files.read" in text
+    # The directive must actively push the model to act, not hedge.
+    assert "do NOT claim" in text.lower() or "do not claim" in text.lower()
+
+
+@pytest.mark.asyncio
+async def test_harness_sends_agent_instructions_on_responses_path(tmp_path: Path) -> None:
+    """The responses path must hand the provider agent instructions that tell the
+    model to USE its tools — without them gpt-5.5 hedges instead of calling them."""
+    from copenet.core.harness import ChatHarness
+
+    captured: dict[str, str | None] = {}
+
+    class InstrCapturingProvider(ScriptedResponsesProvider):
+        async def stream_responses(self, *, instructions, **kwargs):
+            captured["instructions"] = instructions
+            async for event in super().stream_responses(instructions=instructions, **kwargs):
+                yield event
+
+    provider = InstrCapturingProvider(turns=[[ProviderEvent(kind="delta", text="hi"), _COMPLETED]])
+
+    async def tool_executor(request, context):  # pragma: no cover
+        raise AssertionError("no tool expected")
+
+    _, stream = await ChatHarness().run_turn(
+        provider=provider,
+        prompt="read it",
+        messages=[{"role": "user", "content": [{"type": "input_text", "text": "read it"}]}],
+        session_id="s1",
+        provider_session_id=None,
+        abort_event=asyncio.Event(),
+        model="gpt-5.5",
+        available_tools=_make_plan().tools,
+        tool_executor=tool_executor,
+        tool_context=_make_context(tmp_path),
+    )
+    _ = [e async for e in stream]
+    assert captured["instructions"]
+    assert "files.read" in captured["instructions"]
+    assert "REAL workspace" in captured["instructions"]
+
+
 @pytest.mark.asyncio
 async def test_harness_enables_reasoning_on_responses_path(tmp_path: Path) -> None:
     """Regression guard: ChatHarness must request reasoning summaries on the

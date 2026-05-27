@@ -941,6 +941,33 @@ def compose_native_tool_system_prompt(
     )
 
 
+def compose_responses_tool_instructions(
+    *,
+    system_prompt: str | None,
+    workdir: str | None,
+    tools: list[ToolDescriptor],
+) -> str:
+    """Agent instructions for the native Responses tool loop.
+
+    The native `tools` array alone isn't enough: without an explicit agent
+    directive, gpt-5.5 hedges ("I can't read files / I'm constrained not to call
+    them") instead of calling the tools it was given (observed live). This tells
+    the model it operates in a REAL workspace and must use its tools to act.
+    """
+    tool_ids = ", ".join(tool.id for tool in tools) or "(none)"
+    location = f" rooted at {workdir}" if workdir else ""
+    directive = (
+        f"You are CopeNet's coding agent operating in a REAL workspace{location}. "
+        f"You have working tools: {tool_ids}. Use them to do the task yourself — "
+        "read files with files.read, search with files.rg, run commands with "
+        "shell.exec. Do NOT ask the user to paste file contents and do NOT claim "
+        "you lack file access or are constrained from calling tools; call the "
+        "tools directly, gather what you need, then give your answer."
+    )
+    base = (system_prompt or "").strip()
+    return f"{base}\n\n{directive}" if base else directive
+
+
 def provider_system_prompt(provider: Provider, system_prompt: str | None) -> str | None:
     if getattr(provider, "name", "") in {"claude-cli", "codex-cli"}:
         return None
