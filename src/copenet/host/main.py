@@ -139,7 +139,7 @@ def _event_line(event: dict[str, Any]) -> str | None:
     if state == "final":
         return "[final]"
     if state == "error":
-        return f"[error] {event.get('error') or event.get('message') or ''}".strip()
+        return f"[error] {event.get('errorMessage') or event.get('error') or event.get('message') or ''}".strip()
     return None
 
 

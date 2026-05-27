@@ -671,6 +671,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 orchestrator._idempotency_cache[dedupe_key] = final_payload
         return {"runId": run_id, "status": "ok"}
     except Exception as exc:
+        import traceback as _tb
+        tb_text = _tb.format_exc()
         seq += 1
         error_payload = {
             "runId": run_id,
@@ -731,6 +733,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "phase": "send_chat",
                 "error": str(exc),
                 "errorType": exc.__class__.__name__,
+                "traceback": tb_text,
             },
         )
         if dedupe_key is not None:
