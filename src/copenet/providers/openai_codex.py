@@ -13,7 +13,7 @@ from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuth
 from copenet.providers.base import ProviderEvent, ProviderModel
 
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
-OPENAI_CODEX_MODELS = ("gpt-5.4", "gpt-5.5")
+OPENAI_CODEX_MODELS = ("gpt-5.5", "gpt-5.4")
 OPENAI_CODEX_DEFAULT_MODEL = OPENAI_CODEX_MODELS[0]
 OPENAI_CODEX_ORIGINATOR = "copenet"
 OPENAI_CODEX_DEFAULT_INSTRUCTIONS = "You are CopeNet's coding assistant. Follow the user's request carefully."

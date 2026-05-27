@@ -326,6 +326,108 @@ def scenario_d_payload() -> dict:
     )
 
 
+def scenario_e_payload() -> dict:
+    """E: substantive prompt + summary='auto' (no include). Tests whether
+    summary alone unlocks streamed reasoning_summary_text.delta events."""
+    from copenet.providers.openai_codex import _build_responses_payload
+    messages = [{
+        "role": "user",
+        "content": [{"type": "input_text", "text": "Write three sentences explaining the tradeoffs of quicksort vs mergesort. Think carefully first."}],
+    }]
+    return _build_responses_payload(
+        model=MODEL,
+        messages=messages,
+        instructions="You are a careful technical writer.",
+        tools=None,
+        prompt_cache_key="probe-session-e",
+        reasoning={"effort": "medium", "summary": "auto"},
+        parallel_tool_calls=True,
+    )
+
+
+def scenario_f_payload() -> dict:
+    """F: scenario E + include=['reasoning.encrypted_content']. Mirrors what
+    OpenClaw sends. If E shows no reasoning events but F does, the include
+    field is the gate."""
+    from copenet.providers.openai_codex import _build_responses_payload
+    messages = [{
+        "role": "user",
+        "content": [{"type": "input_text", "text": "Write three sentences explaining the tradeoffs of quicksort vs mergesort. Think carefully first."}],
+    }]
+    return _build_responses_payload(
+        model=MODEL,
+        messages=messages,
+        instructions="You are a careful technical writer.",
+        tools=None,
+        prompt_cache_key="probe-session-f",
+        reasoning={"effort": "medium", "summary": "auto", "include_encrypted": True},
+        parallel_tool_calls=True,
+    )
+
+
+def scenario_g_payload() -> dict:
+    """G: scenario F with summary='detailed' (what OpenClaw's most verbose mode
+    uses). If F is empty but G has events, the value matters too."""
+    from copenet.providers.openai_codex import _build_responses_payload
+    messages = [{
+        "role": "user",
+        "content": [{"type": "input_text", "text": "Write three sentences explaining the tradeoffs of quicksort vs mergesort. Think carefully first."}],
+    }]
+    return _build_responses_payload(
+        model=MODEL,
+        messages=messages,
+        instructions="You are a careful technical writer.",
+        tools=None,
+        prompt_cache_key="probe-session-g",
+        reasoning={"effort": "high", "summary": "detailed", "include_encrypted": True},
+        parallel_tool_calls=True,
+    )
+
+
+def scenario_h_payload() -> dict:
+    """H: substantive prompt + tools + summary=auto. Does the presence of
+    tools suppress reasoning summary deltas at the auto tier?"""
+    from copenet.core.tools import ToolDescriptor, build_responses_tool_schemas
+    from copenet.providers.openai_codex import _build_responses_payload
+    tools = build_responses_tool_schemas([
+        ToolDescriptor(
+            id="files.read", name="Read", description="Read a file",
+            category="repo-read", input_schema={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            capabilities=["filesystem"], evidence_role="grounding", side_effect="read",
+        ),
+    ])
+    return _build_responses_payload(
+        model=MODEL,
+        messages=[{"role": "user", "content": [{"type": "input_text", "text": "Plan how you would read README.md and summarize CopeNet's architecture. Think first."}]}],
+        instructions="You are a careful coding assistant.",
+        tools=tools, prompt_cache_key="probe-session-h",
+        reasoning={"effort": "medium", "summary": "auto"},
+        parallel_tool_calls=True,
+    )
+
+
+def scenario_i_payload() -> dict:
+    """I: substantive prompt + tools + summary=detailed. If H is empty but
+    I has reasoning, tools-mode requires detailed."""
+    from copenet.core.tools import ToolDescriptor, build_responses_tool_schemas
+    from copenet.providers.openai_codex import _build_responses_payload
+    tools = build_responses_tool_schemas([
+        ToolDescriptor(
+            id="files.read", name="Read", description="Read a file",
+            category="repo-read", input_schema={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"]},
+            capabilities=["filesystem"], evidence_role="grounding", side_effect="read",
+        ),
+    ])
+    return _build_responses_payload(
+        model=MODEL,
+        messages=[{"role": "user", "content": [{"type": "input_text", "text": "Plan how you would read README.md and summarize CopeNet's architecture. Think first."}]}],
+        instructions="You are a careful coding assistant.",
+        tools=tools, prompt_cache_key="probe-session-i",
+        reasoning={"effort": "medium", "summary": "detailed"},
+        parallel_tool_calls=True,
+    )
+
+
 def print_scenario_result(label: str, result: dict, sink_path: Path) -> None:
     status = result.get("status")
     if status == "http_error":
@@ -389,6 +491,11 @@ def main() -> int:
         ("B", "Single user + tools array (native function calling)", scenario_b_payload()),
         ("C", "Multi-turn w/ prior function_call + function_call_output + reasoning", scenario_c_payload()),
         ("D", "CopeNet's EXACT payload (parallel_tool_calls, tool_choice, prompt_cache_key, no-strict tools, reasoning)", scenario_d_payload()),
+        ("E", "Substantive prompt + summary='auto' (no include)", scenario_e_payload()),
+        ("F", "Substantive prompt + summary='auto' + include=encrypted_content", scenario_f_payload()),
+        ("G", "Substantive prompt + summary='detailed' + effort='high' + include=encrypted_content", scenario_g_payload()),
+        ("H", "Substantive prompt + tools + summary='auto'", scenario_h_payload()),
+        ("I", "Substantive prompt + tools + summary='detailed'", scenario_i_payload()),
     ]
 
     summary: dict[str, dict] = {}

@@ -48,20 +48,16 @@ TraceRecorder = Callable[[str, dict[str, Any] | None], None]
 MAX_TOOL_STEPS = 100
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 
-# Default reasoning config for the native Responses path. Effort drives the
-# model's internal thinking depth; summary would, in principle, surface a
-# human-readable trace of that thinking for the Phase 4 inline-thinking UX.
-#
-# Live finding (2026-05-27, gpt-5.5 via chatgpt.com/backend-api/codex): on a
-# 10-step substantive tool-using turn the endpoint emitted zero reasoning
-# events — neither response.reasoning*.delta nor an output_item with
-# type=reasoning. The request payload was echoed back with summary
-# (server-upgraded from "auto" to "detailed"), so the endpoint accepts the
-# shape but does not deliver summaries on this backend. The SSE parser
-# remains name-agnostic + handles both delivery styles, so adding `summary`
-# back is harmless if the endpoint starts emitting; for now we omit it to
-# avoid asking for work that won't be returned.
-DEFAULT_RESPONSES_REASONING: dict[str, Any] = {"effort": "medium"}
+# Default reasoning config for the native Responses path. summary="auto" is
+# the gate that makes the endpoint stream response.reasoning_summary_text.delta
+# events — the Phase 4 inline-thinking UX. Verified live against
+# chatgpt.com/backend-api/codex (gpt-5.5) via scripts/codex_responses_probe.py
+# scenario E: 68 reasoning deltas on a substantive prompt. Counter-intuitively,
+# adding include=["reasoning.encrypted_content"] SUPPRESSES streamed summaries
+# at the "auto" level (probe scenario F: zero deltas) — only "detailed"
+# overrides that suppression. We want lightweight thinking ticks, not richer
+# rationales, so we stay on auto + omit include.
+DEFAULT_RESPONSES_REASONING: dict[str, Any] = {"effort": "medium", "summary": "auto"}
 
 
 def _max_step_explanation() -> str:

@@ -136,6 +136,9 @@ def _event_line(event: dict[str, Any]) -> str | None:
         message = event.get("message") if isinstance(event.get("message"), dict) else {}
         content = str(message.get("content") or "").strip()
         return f"[assistant]\n{content}" if content else None
+    if state == "reasoning_delta":
+        text = str(event.get("text") or "").strip()
+        return f"[thinking] {text}" if text else None
     if state == "final":
         return "[final]"
     if state == "error":

@@ -87,7 +87,7 @@ async def test_openai_codex_list_models_exposes_static_catalog() -> None:
 
     models = await provider.list_models()
 
-    assert [model.id for model in models] == ["gpt-5.4", "gpt-5.5"]
+    assert [model.id for model in models] == ["gpt-5.5", "gpt-5.4"]
     assert models[0].capabilities["toolCalls"] is False
     assert models[0].capabilities["promptedToolUse"] is True
 

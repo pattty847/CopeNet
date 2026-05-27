@@ -298,6 +298,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 # "thinking" part + streamed over WS so the Phase 4 chat UX can
                 # render inline thinking. Not folded into assistant_text.
                 _append_thinking_part(assistant_message_parts, event.text)
+                trace.record("reasoning_delta", {"chars": len(event.text)})
                 seq += 1
                 await emit(
                     {
