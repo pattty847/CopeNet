@@ -342,6 +342,13 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
     """
     pending_calls: dict[str, dict[str, str]] = {}
     completed = False
+    # Track whether this response streamed any reasoning_summary_text.delta
+    # events. gpt-5.5 streams the summary token-by-token AND then re-delivers
+    # the same text as a terminal output_item.done (type=reasoning). The
+    # output-item path is only a fallback for turns that send the item with no
+    # deltas (e.g. trivial turns) — if we already streamed deltas, re-emitting
+    # the item duplicates the entire thinking block in the UI.
+    saw_reasoning_delta = False
     for raw in _iter_sse_lines(response):
         if abort_event.is_set():
             break
@@ -371,6 +378,7 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
         if event_type.startswith("response.reasoning") and event_type.endswith(".delta"):
             delta = str(event.get("delta") or "")
             if delta:
+                saw_reasoning_delta = True
                 yield ProviderEvent(kind="reasoning_delta", text=delta)
             continue
         if event_type == "response.output_item.added":
@@ -405,14 +413,14 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
                 if call["name"]:
                     yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": call})
             elif isinstance(item, dict) and item.get("type") == "reasoning":
-                # The live endpoint delivers reasoning as an output ITEM (no
-                # streamed *.delta events for it — confirmed via probe scenario D,
-                # which showed a 2nd output_item but zero reasoning_summary.delta).
-                # Surface its summary text as a single reasoning_delta for the
-                # inline-thinking UX.
-                summary_text = _reasoning_item_text(item)
-                if summary_text:
-                    yield ProviderEvent(kind="reasoning_delta", text=summary_text)
+                # Fallback only: emit the reasoning summary from the terminal
+                # output_item when NO *.delta events streamed it. On substantive
+                # gpt-5.5 turns the summary streams as deltas AND repeats here —
+                # re-emitting would duplicate the whole thinking block, so skip.
+                if not saw_reasoning_delta:
+                    summary_text = _reasoning_item_text(item)
+                    if summary_text:
+                        yield ProviderEvent(kind="reasoning_delta", text=summary_text)
             continue
         if event_type in {"response.failed", "error"}:
             raise RuntimeError(_openai_codex_failure_message(event))

@@ -183,6 +183,34 @@ def test_parse_responses_sse_surfaces_reasoning_output_item() -> None:
     assert any(e.kind == "meta" and e.metadata and e.metadata.get("responsesFunctionCall") for e in out)
 
 
+def test_parse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:
+    """gpt-5.5 streams the summary as reasoning_summary_text.delta AND repeats
+    the same text in a terminal output_item.done (type=reasoning). The parser
+    must emit it once — the output-item path is a fallback only for turns that
+    send the item with no deltas. Regression for duplicated thinking blocks in
+    the chat UI."""
+    events = _sse(
+        [
+            {"type": "response.reasoning_summary_text.delta", "delta": "First I'll "},
+            {"type": "response.reasoning_summary_text.delta", "delta": "read the file."},
+            {
+                "type": "response.output_item.done",
+                "item": {
+                    "type": "reasoning",
+                    "id": "rs_0",
+                    "summary": [{"type": "summary_text", "text": "First I'll read the file."}],
+                },
+            },
+            {"type": "response.completed", "response": {}},
+        ]
+    )
+    out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    reasoning = [e for e in out if e.kind == "reasoning_delta"]
+    # Two streamed deltas, and the redundant output_item must be suppressed.
+    assert len(reasoning) == 2
+    assert "".join(e.text or "" for e in reasoning) == "First I'll read the file."
+
+
 def test_parse_responses_sse_raises_on_failure_event() -> None:
     events = _sse([{"type": "response.failed", "error": {"message": "boom"}}])
     import pytest
