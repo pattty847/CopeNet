@@ -41,6 +41,12 @@ function formatToolPreview(preview: ToolResultPreview | null | undefined): strin
       ...preview.matches.slice(0, 8).map((match) => `    ${match.path}:${match.line}: ${match.snippet}`),
     ];
   }
+  if (preview.type === 'diff') {
+    return [
+      `  - Diff: \`${preview.path}\` (+${preview.linesAdded}/-${preview.linesRemoved})`,
+      ...preview.diff.split('\n').slice(0, 40).map((line) => `    ${line}`),
+    ];
+  }
   return preview.text.trim() ? [`  - Preview: ${preview.text.trim()}`] : [];
 }
 

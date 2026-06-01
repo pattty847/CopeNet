@@ -305,6 +305,18 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
         content = body.get("content")
         if isinstance(path, str) and isinstance(content, str):
             return {"path": path, "content": content.rstrip()[:240]}
+    if tool_id in {"files.write", "files.edit"}:
+        diff = body.get("diff")
+        if isinstance(diff, str) and diff.strip():
+            return {
+                "type": "diff",
+                "path": str(body.get("path") or body.get("target") or ""),
+                "diff": diff,
+                "linesAdded": int(body.get("linesAdded") or 0),
+                "linesRemoved": int(body.get("linesRemoved") or 0),
+                "truncated": bool(body.get("diffTruncated")),
+                "created": bool(body.get("created")),
+            }
     if tool_id in {"files.search", "files.rg"}:
         matches = body.get("matches")
         if isinstance(matches, list):

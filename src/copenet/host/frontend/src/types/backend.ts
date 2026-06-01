@@ -156,8 +156,18 @@ export interface RawPreview {
   type: 'raw';
   text: string;            // truncated summary
 }
+/** files.write / files.edit — unified diff of the change, rendered green/red. */
+export interface DiffPreview {
+  type: 'diff';
+  path: string;
+  diff: string;            // unified diff text (bounded by the backend)
+  linesAdded: number;
+  linesRemoved: number;
+  truncated?: boolean;
+  created?: boolean;       // true when the write created a new file
+}
 
-export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview;
+export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview | DiffPreview;
 
 export interface ToolResultPart {
   kind: 'tool_result';

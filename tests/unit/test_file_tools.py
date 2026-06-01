@@ -137,6 +137,46 @@ async def test_files_edit_replaces_targeted_text_inside_workspace(tmp_path: Path
 
 
 @pytest.mark.asyncio
+async def test_files_edit_emits_unified_diff(tmp_path: Path) -> None:
+    registry = ToolRegistry()
+    context = _tool_context(tmp_path, policy=ToolPolicy(allowed_categories={"repo-read", "repo-write", "shell-read", "context", "artifact"}))
+    path = tmp_path / "README.md"
+    path.write_text("line one\nreplace me\nline three\n", encoding="utf-8")
+
+    result = await registry.execute(
+        ToolExecutionRequest(
+            tool_id="files.edit",
+            arguments={"path": "README.md", "old_text": "replace me", "new_text": "replaced"},
+        ),
+        context,
+    )
+
+    assert result.ok is True
+    assert "-replace me" in result.output["diff"]
+    assert "+replaced" in result.output["diff"]
+    assert result.output["linesAdded"] == 1
+    assert result.output["linesRemoved"] == 1
+    assert result.output["diffTruncated"] is False
+
+
+@pytest.mark.asyncio
+async def test_files_write_new_file_emits_diff_and_created_flag(tmp_path: Path) -> None:
+    registry = ToolRegistry()
+    context = _tool_context(tmp_path, policy=ToolPolicy(allowed_categories={"repo-read", "repo-write", "shell-read", "context", "artifact"}))
+
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="files.write", arguments={"path": "new.md", "content": "alpha\nbeta\n"}),
+        context,
+    )
+
+    assert result.ok is True
+    assert result.output["created"] is True
+    assert result.output["linesAdded"] == 2
+    assert result.output["linesRemoved"] == 0
+    assert "+alpha" in result.output["diff"]
+
+
+@pytest.mark.asyncio
 async def test_repo_write_tools_are_blocked_when_policy_disallows_writes(tmp_path: Path) -> None:
     registry = ToolRegistry()
 

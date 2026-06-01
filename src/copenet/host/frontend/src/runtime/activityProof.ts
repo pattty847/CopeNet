@@ -51,6 +51,9 @@ function previewSummary(preview: SessionRunRecord['toolSteps'][number]['members'
       .map((match) => `${match.path}:${match.line} ${match.snippet}`)
       .join('\n');
   }
+  if (preview.type === 'diff') {
+    return preview.diff || null;
+  }
   return preview.text || null;
 }
 

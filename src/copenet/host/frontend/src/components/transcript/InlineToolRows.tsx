@@ -14,6 +14,7 @@ import {
   XCircle,
   Loader2,
   File,
+  FileDiff,
   Search,
   Sparkles,
 } from 'lucide-react';
@@ -177,9 +178,58 @@ function RawPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { ty
   );
 }
 
+// DiffPreviewBlock — unified diff for files.write / files.edit, rendered
+// green (added) / red (removed) like Codex / Claude Code.
+function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
+  const displayPath = shortPath(preview.path);
+  const lines = preview.diff.split('\n');
+  return (
+    <div className="mt-1.5">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] text-operator-muted/60">
+        <FileDiff className="h-2.5 w-2.5 shrink-0" />
+        <span className="font-mono truncate">{displayPath}</span>
+        {preview.created && (
+          <span className="shrink-0 rounded bg-operator-success/15 px-1 text-[9px] uppercase tracking-wide text-operator-success/80">
+            new
+          </span>
+        )}
+        <span className="ml-auto shrink-0 pl-2 font-mono tabular-nums">
+          <span className="text-operator-success/80">+{preview.linesAdded}</span>{' '}
+          <span className="text-operator-error/80">-{preview.linesRemoved}</span>
+        </span>
+      </div>
+      <pre className="overflow-x-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] max-h-72">
+        {lines.map((line, i) => {
+          // Skip the file headers (---/+++) — the path is already in the header row.
+          if (line.startsWith('+++') || line.startsWith('---')) return null;
+          const isAdd = line.startsWith('+');
+          const isDel = line.startsWith('-');
+          const isHunk = line.startsWith('@@');
+          const cls = isAdd
+            ? 'bg-operator-success/10 text-operator-success/90'
+            : isDel
+              ? 'bg-operator-error/10 text-operator-error/90'
+              : isHunk
+                ? 'text-operator-accent/70 bg-operator-accent/5'
+                : 'text-operator-text/55';
+          return (
+            <div key={i} className={`whitespace-pre px-2.5 ${cls}`}>
+              {line || ' '}
+            </div>
+          );
+        })}
+      </pre>
+      {preview.truncated && (
+        <div className="mt-0.5 px-1 text-[10px] text-operator-muted/50">Diff truncated — large change.</div>
+      )}
+    </div>
+  );
+}
+
 function ToolPreview({ preview }: { preview: ToolResultPreview }) {
   if (preview.type === 'file_read') return <FileReadPreviewBlock preview={preview} />;
   if (preview.type === 'repo_search') return <RepoSearchPreviewBlock preview={preview} />;
+  if (preview.type === 'diff') return <DiffPreviewBlock preview={preview} />;
   return <RawPreviewBlock preview={preview} />;
 }
 
@@ -212,7 +262,9 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 // ---------------------------------------------------------------------------
 
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
-  const [expanded, setExpanded] = useState(false);
+  // Diffs are the change the model just made — show them open by default,
+  // like Codex / Claude Code. Everything else stays collapsed.
+  const [expanded, setExpanded] = useState(part.preview?.type === 'diff');
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const hasExpandable = !!part.preview || !!part.effect || !!part.artifactId || (!part.ok && !!part.error);
   const verb = operatorVerb(part.toolId);

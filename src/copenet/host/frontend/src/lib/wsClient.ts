@@ -172,6 +172,17 @@ function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
       totalMatches: payload.totalMatches != null ? Number(payload.totalMatches) : null,
     };
   }
+  if (type === 'diff') {
+    return {
+      type: 'diff',
+      path: String(payload.path || ''),
+      diff: String(payload.diff || ''),
+      linesAdded: Number(payload.linesAdded || 0),
+      linesRemoved: Number(payload.linesRemoved || 0),
+      truncated: Boolean(payload.truncated),
+      created: Boolean(payload.created),
+    };
+  }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
     const lines = String(payload.content).split('\n').slice(0, 20);
     return {

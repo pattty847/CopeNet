@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import difflib
 import hashlib
 import json
 from pathlib import Path
@@ -425,6 +426,8 @@ async def write_file(request: ToolExecutionRequest, context: ToolExecutionContex
         raise ValueError("content is required")
     ensure_write_allowed(path, context)
     _ensure_expected_digest(path, expected_digest=expected_digest, context=context)
+    existed = path.is_file()
+    before = path.read_text(encoding="utf-8", errors="replace") if existed else ""
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(content, encoding="utf-8")
     access = file_access_metadata(path, context)
@@ -432,14 +435,18 @@ async def write_file(request: ToolExecutionRequest, context: ToolExecutionContex
     access["policySummary"] = "Write stayed inside the home workspace."
     digest = _content_digest(content)
     _remember_file_digest(context, target=access["target"], digest=digest)
+    diff_fields = _unified_diff_fields(before=before, after=content, path=access["target"])
+    verb = "Wrote" if existed else "Created"
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
-        summary=f"Wrote file {access['target']}.",
+        summary=f"{verb} file {access['target']} (+{diff_fields['linesAdded']}/-{diff_fields['linesRemoved']}).",
         output={
             "path": access["target"],
             "bytes": len(content.encode("utf-8")),
             "digest": digest,
+            "created": not existed,
+            **diff_fields,
             **access,
         },
     )
@@ -477,14 +484,20 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     replacements = occurrence_count if replace_all else 1
     digest = _content_digest(next_text)
     _remember_file_digest(context, target=access["target"], digest=digest)
+    diff_fields = _unified_diff_fields(before=text, after=next_text, path=access["target"])
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
-        summary=f"Edited file {access['target']} ({replacements} replacement{'s' if replacements != 1 else ''}).",
+        summary=(
+            f"Edited file {access['target']} "
+            f"({replacements} replacement{'s' if replacements != 1 else ''}, "
+            f"+{diff_fields['linesAdded']}/-{diff_fields['linesRemoved']})."
+        ),
         output={
             "path": access["target"],
             "replacements": replacements,
             "digest": digest,
+            **diff_fields,
             **access,
         },
     )
@@ -526,6 +539,50 @@ def _repeat_response(
 
 def _content_digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+# Diffs are surfaced inline in the chat (operator sees what the model changed) and
+# also fed back to the model as its tool result. Keep them bounded well under the
+# 4000-char artifact threshold (tool_loop.LARGE_TOOL_RESULT_CHAR_LIMIT) so they
+# stay inline-renderable instead of being collapsed into an artifact preview.
+DIFF_MAX_LINES = 160
+DIFF_MAX_CHARS = 3200
+
+
+def _unified_diff_fields(*, before: str, after: str, path: str) -> dict:
+    """Build a bounded unified diff + line counts for a write/edit result.
+
+    Field names are the contract the frontend diff renderer consumes:
+      diff           unified-diff text (truncated if oversized)
+      linesAdded     count of added lines (excludes the +++ header)
+      linesRemoved   count of removed lines (excludes the --- header)
+      diffTruncated  true when the diff was clipped for size
+    """
+    diff_lines = list(
+        difflib.unified_diff(
+            before.splitlines(),
+            after.splitlines(),
+            fromfile=f"a/{path}",
+            tofile=f"b/{path}",
+            lineterm="",
+        )
+    )
+    added = sum(1 for line in diff_lines if line.startswith("+") and not line.startswith("+++"))
+    removed = sum(1 for line in diff_lines if line.startswith("-") and not line.startswith("---"))
+    truncated = False
+    if len(diff_lines) > DIFF_MAX_LINES:
+        diff_lines = diff_lines[:DIFF_MAX_LINES]
+        truncated = True
+    diff_text = "\n".join(diff_lines)
+    if len(diff_text) > DIFF_MAX_CHARS:
+        diff_text = diff_text[:DIFF_MAX_CHARS].rstrip()
+        truncated = True
+    return {
+        "diff": diff_text,
+        "linesAdded": added,
+        "linesRemoved": removed,
+        "diffTruncated": truncated,
+    }
 
 
 def _remember_file_digest(context: ToolExecutionContext, *, target: str, digest: str) -> None:
