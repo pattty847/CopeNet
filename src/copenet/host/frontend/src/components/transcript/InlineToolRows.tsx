@@ -15,6 +15,7 @@ import {
   Loader2,
   File,
   Search,
+  Sparkles,
 } from 'lucide-react';
 import type {
   ToolCallPart,
@@ -422,12 +423,57 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
 // isLive: true while the owning message is still streaming (optimistic delta).
 // ---------------------------------------------------------------------------
 
-// ThinkingRow — muted, italic inline reasoning narration (Phase 4).
-function ThinkingRow({ part }: { part: { kind: 'thinking'; text: string } }) {
-  if (!part.text.trim()) return null;
+// ThinkingRow — collapsible inline reasoning narration, Claude Code / Codex style.
+//
+//   active  (reasoning is still streaming, this is the trailing live part):
+//           pulsing "Thinking…" header, body shown live, no toggle.
+//   settled (reasoning burst finished — the model moved on to a tool or the
+//           answer): collapses to a single "Thought process" line with a
+//           chevron; click to re-expand the reasoning text.
+//
+// The backend coalesces consecutive reasoning deltas into one thinking part per
+// burst (see _append_thinking_part), so each row is one self-contained thought.
+function ThinkingRow({ part, active }: { part: { kind: 'thinking'; text: string }; active?: boolean }) {
+  const text = part.text.trim();
+  const [expanded, setExpanded] = useState(false);
+
+  // While actively streaming, before any text has arrived, show just the header
+  // so the operator sees the model start thinking immediately.
+  if (!text) {
+    if (!active) return null;
+    return (
+      <div className="flex items-center gap-1.5 px-1 py-0.5 text-[11px] text-operator-accent/80">
+        <Sparkles className="h-3 w-3 shrink-0 animate-pulse text-operator-accent/70" />
+        <span>Thinking…</span>
+      </div>
+    );
+  }
+
+  const open = active || expanded;
   return (
-    <div className="border-l-2 border-operator-muted/30 pl-3 text-[12px] italic leading-relaxed text-operator-muted/80 whitespace-pre-wrap">
-      {part.text}
+    <div className="overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        disabled={active}
+        className="flex w-full items-center gap-1.5 px-1 py-0.5 text-left text-[11px] text-operator-muted/70 hover:text-operator-muted transition-colors duration-100 disabled:cursor-default"
+      >
+        <Sparkles
+          className={`h-3 w-3 shrink-0 ${active ? 'animate-pulse text-operator-accent/70' : 'text-operator-muted/45'}`}
+        />
+        <span className={active ? 'text-operator-accent/80' : ''}>{active ? 'Thinking…' : 'Thought process'}</span>
+        {!active &&
+          (open ? (
+            <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/45" />
+          ) : (
+            <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/45" />
+          ))}
+      </button>
+      {open && (
+        <div className="mt-1 ml-1 border-l-2 border-operator-muted/25 pl-3 text-[12px] italic leading-relaxed text-operator-muted/75 whitespace-pre-wrap">
+          {text}
+        </div>
+      )}
     </div>
   );
 }
@@ -435,15 +481,18 @@ function ThinkingRow({ part }: { part: { kind: 'thinking'; text: string } }) {
 export function InlineToolPart({
   part,
   isLive,
+  active,
 }: {
   part: import('../../types/backend').MessagePart;
   /** True while the message is still streaming (spinner state for tool_call rows). */
   isLive?: boolean;
+  /** True when this is the trailing part of a still-streaming message (live thinking). */
+  active?: boolean;
 }) {
   if (part.kind === 'text') return null; // rendered by parent as markdown
 
   if (part.kind === 'thinking') {
-    return <ThinkingRow part={part} />;
+    return <ThinkingRow part={part} active={active} />;
   }
 
   if (part.kind === 'tool_call') {

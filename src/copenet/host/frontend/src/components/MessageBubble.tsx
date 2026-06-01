@@ -41,6 +41,10 @@ export function collapseRenderedMessageParts(parts: MessagePart[]): MessagePart[
 // PartsBody — renders a structured parts array with interleaved tool rows.
 function PartsBody({ parts, isLive }: { parts: NonNullable<Message['parts']>; isLive?: boolean }) {
   const renderParts = collapseRenderedMessageParts(parts);
+  // A thinking part is "active" (live, auto-expanded) only while it is the
+  // trailing part of a still-streaming message. As soon as a tool row or the
+  // answer text streams in after it, it settles and collapses to one line.
+  const lastIndex = renderParts.length - 1;
   return (
     <div className="space-y-2">
       {renderParts.map((part, i) => {
@@ -48,7 +52,9 @@ function PartsBody({ parts, isLive }: { parts: NonNullable<Message['parts']>; is
           if (!part.content) return null;
           return <ChatMarkdown key={i} content={part.content} />;
         }
-        return <InlineToolPart key={i} part={part} isLive={isLive} />;
+        return (
+          <InlineToolPart key={i} part={part} isLive={isLive} active={!!isLive && i === lastIndex} />
+        );
       })}
     </div>
   );
