@@ -28,7 +28,7 @@ rendering. The mock layer is small and concentrated in three vision-critical pla
 | 1b | Diff + read-preview syntax highlighting | M | none | open |
 | 2 | Wire approval/send actions to real RPCs (kill `simulate*`) | M | `resolveApproval` + `messaging.send` RPC | open |
 | 3 | Diff apply/reject affordance (inline buttons first, context-menu later) | L | patch-resolution RPC | open |
-| 4 | `RunActivityPanel` — complete the live→history collapse seam | M | none (uses `SessionRunRecord.toolSteps`) | open |
+| 4 | `RunActivityPanel` — complete the live→history collapse seam | M | none (uses `SessionRunRecord.toolSteps`) | ✅ shipped `b297ff5` |
 | 5 | Per-tool live event stream (queued/running chips in `LiveToolFeed`) | M | `tool:called`/`tool:result` deltas | open |
 | 6 | Line numbers + syntax on read previews (`FileReadPreviewBlock` etc.) | M | none | open |
 | 7 | Wire `ReturnBriefing` to real data (drop `DEV_SKELETON_FOR_TEST`) | S | `briefing:ready` push | open |
