@@ -347,6 +347,7 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
           </section>
         )}
 
+
         <div className="px-2.5 pb-2.5 flex flex-col gap-3">
           {/* 3. Session Info */}
           <section>

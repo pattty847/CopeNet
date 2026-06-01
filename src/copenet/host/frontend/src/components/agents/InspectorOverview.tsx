@@ -3,6 +3,7 @@ import { Brain, Info, Network, Send, Settings2 } from 'lucide-react';
 import { useDestinations, usePendingApproval } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
+import { RunActivityPanel } from '../runtime/RunActivityPanel';
 
 function timeAgo(dateString?: string | null) {
   if (!dateString) return '--';
@@ -68,6 +69,11 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   return (
     <div className={`${overviewOnly ? 'px-3 py-3' : 'px-2.5 pb-2.5'} flex flex-col gap-3 text-[12px]`}>
       {pendingApproval && <ApprovalRequestCard approval={pendingApproval} />}
+
+      {/* Post-run breadcrumbs — collapses the run's tool steps into grouped
+          history ("Read 2 files", "Edited 1 file"). Self-hides while a run is
+          live (it shows inline in chat) and when the run had no activity. */}
+      <RunActivityPanel sessionKey={activeSessionKey} />
 
       <Section icon={Settings2} title="Runtime">
         <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
