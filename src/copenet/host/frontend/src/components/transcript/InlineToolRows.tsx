@@ -26,6 +26,7 @@ import type {
   ToolResultPreview,
 } from '../../types/backend';
 import { useAppStore } from '../../store/useAppStore';
+import { parseUnifiedDiff, diffGutterWidth } from '../../lib/diff';
 
 // ---------------------------------------------------------------------------
 // Operator-verb labels — replace protocol tool ids with English verbs in the UI.
@@ -178,11 +179,16 @@ function RawPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { ty
   );
 }
 
-// DiffPreviewBlock — unified diff for files.write / files.edit, rendered
-// green (added) / red (removed) like Codex / Claude Code.
+// DiffPreviewBlock — unified diff for files.write / files.edit, rendered like an
+// editor: GitHub-style old/new line-number gutters parsed from the @@ hunk
+// headers, green (added) / red (removed) bodies, monospace. The mini-IDE feel
+// applied to the surface the operator already loves.
 function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
   const displayPath = shortPath(preview.path);
-  const lines = preview.diff.split('\n');
+  const rows = parseUnifiedDiff(preview.diff);
+  const gutter = diffGutterWidth(rows);
+  // ch-based gutter widths keep the two number columns aligned in monospace.
+  const numStyle = { width: `${gutter}ch` } as const;
   return (
     <div className="mt-1.5">
       <div className="mb-1 flex items-center gap-1.5 text-[10px] text-operator-muted/60">
@@ -198,27 +204,43 @@ function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { t
           <span className="text-operator-error/80">-{preview.linesRemoved}</span>
         </span>
       </div>
-      <pre className="overflow-x-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] max-h-72">
-        {lines.map((line, i) => {
-          // Skip the file headers (---/+++) — the path is already in the header row.
-          if (line.startsWith('+++') || line.startsWith('---')) return null;
-          const isAdd = line.startsWith('+');
-          const isDel = line.startsWith('-');
-          const isHunk = line.startsWith('@@');
-          const cls = isAdd
-            ? 'bg-operator-success/10 text-operator-success/90'
-            : isDel
-              ? 'bg-operator-error/10 text-operator-error/90'
-              : isHunk
-                ? 'text-operator-accent/70 bg-operator-accent/5'
-                : 'text-operator-text/55';
+      <div className="overflow-x-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.65] max-h-72">
+        {rows.map((row, i) => {
+          if (row.kind === 'hunk') {
+            return (
+              <div key={i} className="bg-operator-accent/5 px-2 py-0.5 text-operator-accent/65 whitespace-pre">
+                {row.text}
+              </div>
+            );
+          }
+          const tone =
+            row.kind === 'add'
+              ? 'bg-operator-success/10 text-operator-success/90'
+              : row.kind === 'del'
+                ? 'bg-operator-error/10 text-operator-error/90'
+                : 'text-operator-text/60';
+          const marker = row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' ';
+          const gutterTone = row.kind === 'context' ? 'text-operator-muted/35' : 'text-operator-muted/50';
           return (
-            <div key={i} className={`whitespace-pre px-2.5 ${cls}`}>
-              {line || ' '}
+            <div key={i} className={`flex ${tone}`}>
+              <span
+                className={`shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums ${gutterTone}`}
+                style={numStyle}
+              >
+                {row.oldNo ?? ''}
+              </span>
+              <span
+                className={`shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums ${gutterTone}`}
+                style={numStyle}
+              >
+                {row.newNo ?? ''}
+              </span>
+              <span className="shrink-0 select-none px-1 opacity-50">{marker}</span>
+              <span className="whitespace-pre pr-2">{row.text || ' '}</span>
             </div>
           );
         })}
-      </pre>
+      </div>
       {preview.truncated && (
         <div className="mt-0.5 px-1 text-[10px] text-operator-muted/50">Diff truncated — large change.</div>
       )}
