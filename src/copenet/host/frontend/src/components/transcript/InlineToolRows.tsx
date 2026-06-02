@@ -17,6 +17,8 @@ import {
   FileDiff,
   Search,
   Sparkles,
+  Undo2,
+  Check,
 } from 'lucide-react';
 import type {
   ToolCallPart,
@@ -27,6 +29,7 @@ import type {
 } from '../../types/backend';
 import { useAppStore } from '../../store/useAppStore';
 import { parseUnifiedDiff, diffGutterWidth } from '../../lib/diff';
+import { wsClient } from '../../lib/wsClient';
 
 // ---------------------------------------------------------------------------
 // Operator-verb labels — replace protocol tool ids with English verbs in the UI.
@@ -243,6 +246,82 @@ function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { t
       </div>
       {preview.truncated && (
         <div className="mt-0.5 px-1 text-[10px] text-operator-muted/50">Diff truncated — large change.</div>
+      )}
+      <DiffActionBar preview={preview} />
+    </div>
+  );
+}
+
+// DiffActionBar — Keep / Revert affordance for an applied edit. Edits apply
+// immediately (the agent reads the file back), so this is review-after: Keep
+// acknowledges, Revert restores the recorded pre-edit content via the backend
+// (only if the file is still in this exact state — else it fails clearly).
+type RevertState = 'idle' | 'reverting' | 'reverted' | 'kept' | 'error';
+
+function DiffActionBar({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
+  const activeSessionKey = useAppStore((s) => s.activeSessionKey);
+  const [state, setState] = useState<RevertState>('idle');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  // Revert needs a digest to key on, a session, and (for now) an existing file
+  // — reverting a freshly-created file to empty content is left out of v1.
+  if (!preview.afterDigest || !activeSessionKey || preview.created) return null;
+
+  if (state === 'reverted') {
+    return (
+      <div className="mt-1 flex items-center gap-1.5 px-1 text-[10.5px] text-operator-muted/70">
+        <Undo2 className="h-3 w-3 shrink-0 text-operator-accent/70" />
+        Reverted — file restored to its previous content.
+      </div>
+    );
+  }
+  if (state === 'kept') {
+    return (
+      <div className="mt-1 flex items-center gap-1.5 px-1 text-[10.5px] text-operator-muted/55">
+        <Check className="h-3 w-3 shrink-0 text-operator-success/70" />
+        Kept.
+      </div>
+    );
+  }
+
+  const onRevert = async () => {
+    setState('reverting');
+    setErrorMsg(null);
+    try {
+      const res = await wsClient.revertEdit(activeSessionKey, preview.path, preview.afterDigest!);
+      if (res.ok) {
+        setState('reverted');
+      } else {
+        setState('error');
+        setErrorMsg(res.error || 'Revert failed.');
+      }
+    } catch (err) {
+      setState('error');
+      setErrorMsg(err instanceof Error ? err.message : String(err));
+    }
+  };
+
+  return (
+    <div className="mt-1.5 flex items-center gap-2 px-1">
+      <button
+        type="button"
+        onClick={onRevert}
+        disabled={state === 'reverting'}
+        className="inline-flex items-center gap-1 rounded border border-operator-border/70 px-2 py-0.5 text-[10.5px] text-operator-muted/85 transition-colors hover:border-operator-error/40 hover:text-operator-error disabled:opacity-50"
+      >
+        {state === 'reverting' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
+        {state === 'reverting' ? 'Reverting…' : 'Revert'}
+      </button>
+      <button
+        type="button"
+        onClick={() => setState('kept')}
+        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10.5px] text-operator-muted/70 transition-colors hover:text-operator-success"
+      >
+        <Check className="h-3 w-3" />
+        Keep
+      </button>
+      {state === 'error' && errorMsg && (
+        <span className="text-[10px] text-operator-error/85 truncate" title={errorMsg}>{errorMsg}</span>
       )}
     </div>
   );

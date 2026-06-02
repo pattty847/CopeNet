@@ -183,6 +183,7 @@ class CopeNetWsServer:
                                 "sessions.rename",
                                 "sessions.archive",
                                 "sessions.artifacts",
+                                "sessions.revertEdit",
                                 "sessions.runs",
                                 "sessions.run",
                                 "sessions.state",

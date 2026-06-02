@@ -265,6 +265,7 @@ class ToolExecutionContext:
     profile_service: PatProfileService | None = None
     workspace_intel_service: WorkspaceIntelService | None = None
     artifact_store: Any | None = None
+    edit_backup_store: Any | None = None
     task_prompt_id: str | None = None
     run_id: str | None = None
     trace: Callable[[str, dict[str, Any] | None], None] | None = None
@@ -316,6 +317,9 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
                 "linesRemoved": int(body.get("linesRemoved") or 0),
                 "truncated": bool(body.get("diffTruncated")),
                 "created": bool(body.get("created")),
+                # Digest the edit left the file at — the revert key (operator can
+                # undo this exact edit while the file is still in this state).
+                "afterDigest": str(body.get("digest") or ""),
             }
     if tool_id in {"files.search", "files.rg"}:
         matches = body.get("matches")

@@ -165,6 +165,7 @@ export interface DiffPreview {
   linesRemoved: number;
   truncated?: boolean;
   created?: boolean;       // true when the write created a new file
+  afterDigest?: string;    // digest the edit left the file at — the revert key
 }
 
 export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview | DiffPreview;

@@ -435,6 +435,7 @@ async def write_file(request: ToolExecutionRequest, context: ToolExecutionContex
     access["policySummary"] = "Write stayed inside the home workspace."
     digest = _content_digest(content)
     _remember_file_digest(context, target=access["target"], digest=digest)
+    _record_edit_backup(context, target=access["target"], after_digest=digest, before=before)
     diff_fields = _unified_diff_fields(before=before, after=content, path=access["target"])
     verb = "Wrote" if existed else "Created"
     return ToolExecutionResult(
@@ -484,6 +485,7 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     replacements = occurrence_count if replace_all else 1
     digest = _content_digest(next_text)
     _remember_file_digest(context, target=access["target"], digest=digest)
+    _record_edit_backup(context, target=access["target"], after_digest=digest, before=text)
     diff_fields = _unified_diff_fields(before=text, after=next_text, path=access["target"])
     return ToolExecutionResult(
         tool_id=request.tool_id,
@@ -539,6 +541,27 @@ def _repeat_response(
 
 def _content_digest(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def _record_edit_backup(context: ToolExecutionContext, *, target: str, after_digest: str, before: str) -> None:
+    """Snapshot pre-edit content so the operator can revert from the UI diff.
+
+    Best-effort: keyed by (session_key, path, after_digest); never fails the edit.
+    """
+    store = getattr(context, "edit_backup_store", None)
+    session_key = getattr(context, "session_key", None)
+    if store is None or not session_key:
+        return
+    try:
+        store.record(
+            session_key=session_key,
+            path=target,
+            after_digest=after_digest,
+            before_content=before,
+            run_id=getattr(context, "run_id", None),
+        )
+    except Exception:
+        pass
 
 
 # Diffs are surfaced inline in the chat (operator sees what the model changed) and

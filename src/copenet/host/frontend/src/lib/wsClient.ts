@@ -181,6 +181,7 @@ function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
       linesRemoved: Number(payload.linesRemoved || 0),
       truncated: Boolean(payload.truncated),
       created: Boolean(payload.created),
+      afterDigest: payload.afterDigest ? String(payload.afterDigest) : undefined,
     };
   }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
@@ -1750,6 +1751,14 @@ class WsClient {
   async listSessionArtifacts(key: string, limit = 50): Promise<SessionArtifactRecord[]> {
     const payload = await this.request<{ artifacts?: SessionArtifactRecord[] }>('sessions.artifacts', { key, limit });
     return Array.isArray(payload.artifacts) ? payload.artifacts : [];
+  }
+
+  /** Undo a model's file write/edit by restoring the recorded pre-edit content. */
+  async revertEdit(key: string, path: string, afterDigest: string): Promise<{ ok: boolean; error?: string; path?: string; newDigest?: string }> {
+    return this.request<{ ok: boolean; error?: string; path?: string; newDigest?: string }>(
+      'sessions.revertEdit',
+      { key, path, afterDigest },
+    );
   }
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {

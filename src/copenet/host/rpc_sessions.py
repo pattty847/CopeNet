@@ -301,6 +301,35 @@ async def handle_sessions_artifacts(request_id: str, params: dict[str, Any] | No
     )
 
 
+async def handle_sessions_revert_edit(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Undo a model's file write/edit by restoring the recorded pre-edit content."""
+    raw = params or {}
+    key = _required_text(raw, "key")
+    path = _optional_text(raw, "path")
+    after_digest = _optional_text(raw, "afterDigest")
+    if not key or not path or not after_digest:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="key, path, and afterDigest are required"),
+                )
+            )
+        )
+        return
+    result = orchestrator.revert_file_edit(session_key=key, path=path, after_digest=after_digest)
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=result,
+            )
+        )
+    )
+
+
 async def handle_sessions_debug_copy(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     key = _required_text(params or {}, "key")
     if not key:

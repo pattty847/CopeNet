@@ -54,7 +54,7 @@ from copenet.core.orchestrator.titles import generate_title as generate_title_im
 from copenet.core.profile import PatProfileService
 from copenet.prompts.optimizer import optimize_prompt_variants
 from copenet.providers import Provider
-from copenet.core.runtime import ArtifactStore, RunStore
+from copenet.core.runtime import ArtifactStore, EditBackupStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
 from copenet.core.workspace_intel import WorkspaceIntelService, WorkspaceIntelStore
@@ -117,6 +117,7 @@ class Orchestrator:
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
         self._session_state_store = SessionStateStore(root_dir=default_session_state_dir() if sessions_dir is None else base / "state")
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
+        self._edit_backup_store = EditBackupStore(root_dir=None if sessions_dir is None else base / "edit-backups")
         self._run_store = RunStore(root_dir=base / "runs")
         self._pulse_store = PulseStore(path=base / "pulses.json")
         self._messaging_store = MessagingConfigStore(path=base / "messaging.json")
@@ -649,6 +650,50 @@ class Orchestrator:
     def list_session_artifacts(self, session_key: str, limit: int = 50) -> list[dict]:
         """List recent durable artifacts for one session."""
         return [record.to_public_dict() for record in self._artifact_store.list_for_session(session_key.strip(), limit=limit)]
+
+    def revert_file_edit(self, *, session_key: str, path: str, after_digest: str) -> dict:
+        """Undo a model's write/edit by restoring the recorded pre-edit content.
+
+        Operator-initiated (not a model tool), keyed by (session_key, path,
+        after_digest). Refuses unless the file is still in the exact state the
+        edit left it, so a newer change is never silently clobbered.
+        """
+        import hashlib
+
+        session_key = session_key.strip()
+        rel_path = path.strip()
+        after_digest = after_digest.strip()
+        if not session_key or not rel_path or not after_digest:
+            return {"ok": False, "error": "session_key, path, and after_digest are required"}
+
+        entry = self._session_store.get(session_key)
+        selected_root = entry.workspace_root if entry is not None and entry.workspace_root else None
+        root = Path(self.validate_workspace_root(selected_root) if selected_root else str(self._workdir))
+        target = (root / rel_path).resolve()
+        try:
+            target.relative_to(root.resolve())
+        except ValueError:
+            return {"ok": False, "error": "path is outside the session workspace"}
+        if not target.is_file():
+            return {"ok": False, "error": f"file not found: {rel_path}"}
+
+        current = target.read_text(encoding="utf-8", errors="replace")
+        current_digest = hashlib.sha256(current.encode("utf-8")).hexdigest()[:16]
+        if current_digest != after_digest:
+            return {
+                "ok": False,
+                "error": "file changed since this edit; not reverting",
+                "path": rel_path,
+            }
+
+        record = self._edit_backup_store.find(session_key=session_key, path=rel_path, after_digest=after_digest)
+        if record is None:
+            return {"ok": False, "error": "no backup found for this edit", "path": rel_path}
+
+        target.write_text(record.before_content, encoding="utf-8")
+        self._edit_backup_store.mark_reverted(session_key=session_key, path=rel_path, after_digest=after_digest)
+        new_digest = hashlib.sha256(record.before_content.encode("utf-8")).hexdigest()[:16]
+        return {"ok": True, "path": rel_path, "newDigest": new_digest}
 
     def list_session_runs(self, session_key: str, limit: int = 50) -> list[dict]:
         """List recent durable run records for one session."""

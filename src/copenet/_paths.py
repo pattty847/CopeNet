@@ -40,6 +40,11 @@ def default_artifacts_dir() -> Path:
     return default_sessions_dir() / "artifacts"
 
 
+def default_edit_backups_dir() -> Path:
+    """Return default edit-backup root (pre-edit file content for revert)."""
+    return default_sessions_dir() / "edit-backups"
+
+
 def default_provider_auth_dir() -> Path:
     """Return default provider auth root: COPNET_DATA_DIR/providers/auth or ~/.copenet/providers/auth."""
     base = os.environ.get("COPNET_DATA_DIR", "").strip()
