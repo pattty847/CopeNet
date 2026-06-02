@@ -27,7 +27,7 @@ rendering. The mock layer is small and concentrated in three vision-critical pla
 | 1 | Diff line-number gutters | M | none | ✅ shipped `6dcba66` |
 | 1b | Diff + read-preview syntax highlighting | M | none | open |
 | 2 | Wire approval/send actions to real RPCs (kill `simulate*`) | M | `resolveApproval` + `messaging.send` RPC | open |
-| 3 | Diff apply/reject affordance (inline buttons first, context-menu later) | L | patch-resolution RPC | open |
+| 3 | Diff Keep/Revert affordance (inline buttons) | L | `sessions.revertEdit` RPC | ✅ shipped `0d396e0` (revert = undo applied edit; backend store + RPC built) |
 | 4 | `RunActivityPanel` — complete the live→history collapse seam | M | none (uses `SessionRunRecord.toolSteps`) | ✅ shipped `b297ff5` |
 | 5 | Per-tool live event stream (queued/running chips in `LiveToolFeed`) | M | `tool:called`/`tool:result` deltas | open |
 | 6 | Line numbers + syntax on read previews (`FileReadPreviewBlock` etc.) | M | none | open |
