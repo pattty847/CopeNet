@@ -32,7 +32,7 @@ rendering. The mock layer is small and concentrated in three vision-critical pla
 | 5 | Per-tool live event stream (queued/running chips in `LiveToolFeed`) | M | `tool:called`/`tool:result` deltas | open |
 | 6 | Line numbers + syntax on read previews (`FileReadPreviewBlock`) | M | none | ✅ shipped `084ebc6` (folded into 1b) |
 | 7 | Wire `ReturnBriefing` to real data (drop `DEV_SKELETON_FOR_TEST`) | S | `briefing:ready` push | open |
-| 8 | Tool Inspector drawer — color + formatting (currently a raw JSON dump) | M | none | open (owner-requested; reuse diff/syntax primitives) |
+| 8 | Tool Inspector drawer — color + formatting | M | none | ✅ shipped (visual pending) |
 
 **No-backend wins (drive these solo):** 1 ✅, 1b, 4, 6.
 **Need backend (I own these now too):** 2, 3, 5, 7 — 2 & 3 build on `docs/plans/APPROVAL_FLOW.md`.
