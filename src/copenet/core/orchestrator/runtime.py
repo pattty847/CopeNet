@@ -36,6 +36,51 @@ if TYPE_CHECKING:
     from . import ChatSendRequest, Orchestrator
 
 
+def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, session_key, run_id, abort_event):
+    """Wrap a tool executor so a high-risk result pauses for operator approval.
+
+    When a tool returns policyDecision == "approval_required", the run parks
+    (await_tool_approval) until the operator decides via the decide RPC. On
+    approve the exact command is re-run with the gate bypassed; on reject or
+    timeout the blocked result is returned so the model adapts. With no
+    emit_event side channel (e.g. CLI) there's no operator to ask, so the
+    blocked result is returned as before.
+    """
+
+    async def execute(request, context):
+        result = await base_executor(request, context)
+        output = result.output if isinstance(result.output, dict) else {}
+        if result.ok or output.get("policyDecision") != "approval_required" or emit_event is None:
+            return result
+
+        approval_id = f"appr-{uuid4().hex[:12]}"
+        command = str(output.get("command") or output.get("target") or "")
+        decision, _note = await orchestrator.await_tool_approval(
+            session_key=session_key,
+            run_id=run_id,
+            approval_id=approval_id,
+            request_payload={
+                "toolId": result.tool_id,
+                "description": f"Run shell command: {command}" if command else f"Run {result.tool_id}",
+                "target": command,
+                "payload": {"command": command},
+                "rationale": output.get("policySummary"),
+            },
+            emit_event=emit_event,
+            abort_event=abort_event,
+        )
+        if decision == "approved" and command:
+            approved = context.ephemeral.setdefault("approved_commands", set())
+            if isinstance(approved, set):
+                approved.add(command)
+            else:
+                context.ephemeral["approved_commands"] = {command}
+            return await base_executor(request, context)
+        return result
+
+    return execute
+
+
 async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", emit, *, emit_event=None) -> dict:
     """Start one chat run and stream events through `emit` callback."""
     session_key = request.session_key.strip()
@@ -239,7 +284,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             model=request.model,
             system_prompt=effective_system_prompt,
             available_tools=available_tools,
-            tool_executor=orchestrator._tool_registry.execute,
+            tool_executor=_make_approval_gated_executor(
+                orchestrator._tool_registry.execute,
+                orchestrator=orchestrator,
+                emit_event=emit_event,
+                session_key=session_key,
+                run_id=run_id,
+                abort_event=abort_event,
+            ),
             tool_context=ToolExecutionContext(
                 workdir=session_workspace_root,
                 session_workspace_root=session_workspace_root,

@@ -1,5 +1,6 @@
 import { useAppStore } from '../store/useAppStore';
 import {
+  ApprovalRequest,
   ChatEventPayload,
   EventFrame,
   IncomingFrame,
@@ -220,6 +221,39 @@ function buildBatchLabel(toolId: string, count: number): string {
   if (toolId.includes('read') || toolId === 'files.read') return `Read ${count} files`;
   if (toolId.includes('search') || toolId.includes('rg')) return `Search ${count} paths`;
   return `${count} tool calls`;
+}
+
+function normalizeApprovalRequest(raw: unknown): ApprovalRequest | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const p = raw as Record<string, unknown>;
+  const approvalId = String(p.approvalId || '');
+  if (!approvalId) return null;
+  const action = (p.proposedAction || {}) as Record<string, unknown>;
+  const validStatus = ['pending', 'approved', 'rejected', 'modified', 'expired'];
+  const validClass = [
+    'external_communication',
+    'filesystem_write',
+    'process_execution',
+    'network_side_effect',
+    'credential_or_sensitive_target',
+  ];
+  return {
+    approvalId,
+    runId: String(p.runId || ''),
+    sessionKey: String(p.sessionKey || ''),
+    status: (validStatus.includes(String(p.status)) ? String(p.status) : 'pending') as ApprovalRequest['status'],
+    actionClass: (validClass.includes(String(p.actionClass)) ? String(p.actionClass) : 'process_execution') as ApprovalRequest['actionClass'],
+    toolId: String(p.toolId || ''),
+    proposedAction: {
+      description: String(action.description || ''),
+      target: action.target != null ? String(action.target) : null,
+      payload: (action.payload && typeof action.payload === 'object' ? action.payload : {}) as Record<string, unknown>,
+    },
+    rationale: p.rationale != null ? String(p.rationale) : null,
+    createdAt: String(p.createdAt || new Date().toISOString()),
+    resolvedAt: p.resolvedAt != null ? String(p.resolvedAt) : null,
+    outcome: (p.outcome as ApprovalRequest['outcome']) ?? null,
+  };
 }
 
 function normalizeSession(raw: unknown): Session {
@@ -1105,6 +1139,25 @@ class WsClient {
         }
       }
     }
+
+    if (frame.event === 'approval.pending') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const approval = normalizeApprovalRequest(payload.approval);
+      if (approval) {
+        const store = useAppStore.getState();
+        store.setPendingApproval(approval);
+        store.setRunPausedReason('awaiting_approval');
+        store.upsertApprovalInHistory(approval);
+      }
+      return;
+    }
+
+    if (frame.event === 'approval.resolved') {
+      const store = useAppStore.getState();
+      store.setPendingApproval(null);
+      store.setRunPausedReason(null);
+      return;
+    }
   }
 
   private handleResponseFrame(frame: ResponseFrame) {
@@ -1759,6 +1812,11 @@ class WsClient {
       'sessions.revertEdit',
       { key, path, afterDigest },
     );
+  }
+
+  /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run. */
+  async decideApproval(approvalId: string, decision: 'approved' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
+    return this.request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
   }
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {

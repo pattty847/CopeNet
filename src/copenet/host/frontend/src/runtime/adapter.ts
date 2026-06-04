@@ -368,7 +368,8 @@ export function useMockTransitions() {
       note: note ?? null,
       decidedAt: new Date().toISOString(),
     };
-    resolveApproval(approvalId, outcome);
+    resolveApproval(approvalId, outcome); // optimistic local update
+    void wsClient.decideApproval(approvalId, 'approved', note); // wake the parked run
   };
 
   const simulateReject = (approvalId: string, note?: string) => {
@@ -377,7 +378,8 @@ export function useMockTransitions() {
       note: note ?? 'Rejected by operator',
       decidedAt: new Date().toISOString(),
     };
-    resolveApproval(approvalId, outcome);
+    resolveApproval(approvalId, outcome); // optimistic local update
+    void wsClient.decideApproval(approvalId, 'rejected', note); // wake the parked run
   };
 
   const simulateModify = (approvalId: string, newMessage: string, note?: string) => {

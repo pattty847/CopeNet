@@ -184,6 +184,7 @@ class CopeNetWsServer:
                                 "sessions.archive",
                                 "sessions.artifacts",
                                 "sessions.revertEdit",
+                                "chat.decideApproval",
                                 "sessions.runs",
                                 "sessions.run",
                                 "sessions.state",
@@ -193,7 +194,7 @@ class CopeNetWsServer:
                                 "pulse.save",
                                 "pulse.dismiss",
                             ],
-                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "memory.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated"],
+                            "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "memory.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated", "approval.pending", "approval.resolved"],
                         },
                     },
                 )

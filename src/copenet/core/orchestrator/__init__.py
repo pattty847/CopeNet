@@ -148,6 +148,9 @@ class Orchestrator:
         self._idempotency_cache: dict[str, dict] = {}
         self._background_tasks: set[asyncio.Task] = set()
         self._lock = asyncio.Lock()
+        # Pending tool approvals awaiting an operator decision. Keyed by
+        # approvalId -> {"event": asyncio.Event, "decision": str|None, "note": str|None}.
+        self._pending_approvals: dict[str, dict] = {}
 
     async def send_chat(self, request: ChatSendRequest, emit: ChatEmit, emit_event: SideEventEmit | None = None) -> dict:
         """Start one chat run and stream events through `emit` callback."""
@@ -650,6 +653,89 @@ class Orchestrator:
     def list_session_artifacts(self, session_key: str, limit: int = 50) -> list[dict]:
         """List recent durable artifacts for one session."""
         return [record.to_public_dict() for record in self._artifact_store.list_for_session(session_key.strip(), limit=limit)]
+
+    async def await_tool_approval(
+        self,
+        *,
+        session_key: str,
+        run_id: str,
+        approval_id: str,
+        request_payload: dict,
+        emit_event,
+        abort_event: "asyncio.Event",
+        timeout_sec: float = 300.0,
+    ) -> tuple[str, str | None]:
+        """Park until the operator decides on a high-risk tool, or timeout/abort.
+
+        Emits `approval.pending` with the ApprovalRequest, registers an event the
+        decide RPC fires, and returns (decision, note). decision is one of
+        'approved' | 'rejected' | 'timeout' | 'aborted'. The run stays alive
+        (parked on this await) — no persist/reconstruct.
+        """
+        from copenet.core.sessions.transcript_store import utc_now_iso
+
+        event = asyncio.Event()
+        self._pending_approvals[approval_id] = {"event": event, "decision": None, "note": None}
+        approval = {
+            "approvalId": approval_id,
+            "runId": run_id,
+            "sessionKey": session_key,
+            "status": "pending",
+            "actionClass": "process_execution",
+            "toolId": str(request_payload.get("toolId") or "shell.exec"),
+            "proposedAction": {
+                "description": str(request_payload.get("description") or ""),
+                "target": request_payload.get("target"),
+                "payload": request_payload.get("payload") or {},
+            },
+            "rationale": request_payload.get("rationale"),
+            "createdAt": utc_now_iso(),
+            "resolvedAt": None,
+            "outcome": None,
+        }
+        if emit_event is not None:
+            await emit_event("approval.pending", {"approval": approval})
+
+        decision = "timeout"
+        note: str | None = None
+        try:
+            abort_wait = asyncio.create_task(abort_event.wait())
+            decide_wait = asyncio.create_task(event.wait())
+            done, pending = await asyncio.wait(
+                {abort_wait, decide_wait}, timeout=timeout_sec, return_when=asyncio.FIRST_COMPLETED
+            )
+            for task in pending:
+                task.cancel()
+            if abort_wait in done and not event.is_set():
+                decision = "aborted"
+            elif event.is_set():
+                entry = self._pending_approvals.get(approval_id) or {}
+                decision = str(entry.get("decision") or "rejected")
+                note = entry.get("note")
+        finally:
+            self._pending_approvals.pop(approval_id, None)
+
+        if emit_event is not None:
+            await emit_event(
+                "approval.resolved",
+                {"approvalId": approval_id, "runId": run_id, "sessionKey": session_key, "decision": decision},
+            )
+        return decision, note
+
+    def decide_approval(self, *, approval_id: str, decision: str, note: str | None = None) -> dict:
+        """Record an operator's decision on a pending tool approval and wake the run."""
+        entry = self._pending_approvals.get(approval_id.strip())
+        if entry is None:
+            return {"ok": False, "error": "no pending approval with that id"}
+        normalized = decision.strip().lower()
+        if normalized not in {"approved", "rejected"}:
+            return {"ok": False, "error": "decision must be 'approved' or 'rejected'"}
+        entry["decision"] = normalized
+        entry["note"] = note
+        event = entry.get("event")
+        if isinstance(event, asyncio.Event):
+            event.set()
+        return {"ok": True, "approvalId": approval_id, "decision": normalized}
 
     def revert_file_edit(self, *, session_key: str, path: str, after_digest: str) -> dict:
         """Undo a model's write/edit by restoring the recorded pre-edit content.

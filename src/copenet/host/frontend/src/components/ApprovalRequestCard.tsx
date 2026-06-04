@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { wsClient } from '../lib/wsClient';
 import type { ApprovalRequest } from '../runtime/types';
 
 const ACTION_CLASS_LABELS: Record<string, { label: string; icon: typeof ShieldAlert; tone: string }> = {
@@ -44,6 +45,7 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
 
   const decide = (decision: 'approved' | 'rejected' | 'modified') => {
     const now = new Date().toISOString();
+    // Optimistic local update so the card reflects the choice immediately.
     resolveApproval(approval.approvalId, {
       decision,
       note: note || null,
@@ -57,6 +59,11 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
           }
         : {}),
     });
+    // Tell the backend to wake the parked run. (modified is message-only; the
+    // tool-approval backend treats anything non-approved as rejected.)
+    if (decision === 'approved' || decision === 'rejected') {
+      void wsClient.decideApproval(approval.approvalId, decision, note || undefined);
+    }
   };
 
   const statusBadge = () => {

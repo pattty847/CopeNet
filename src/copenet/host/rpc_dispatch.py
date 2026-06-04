@@ -58,6 +58,7 @@ from .rpc_sessions import (
     handle_sessions_list,
     handle_sessions_merge_create,
     handle_sessions_merge_state,
+    handle_chat_decide_approval,
     handle_sessions_rename,
     handle_sessions_revert_edit,
     handle_sessions_run,
@@ -201,6 +202,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None
         await handle_sessions_artifacts(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.revertEdit":
         await handle_sessions_revert_edit(req.id, req.params, send_json, orchestrator)
+    elif req.method == "chat.decideApproval":
+        await handle_chat_decide_approval(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.debugCopy":
         await handle_sessions_debug_copy(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.export":

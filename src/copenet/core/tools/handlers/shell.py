@@ -141,6 +141,10 @@ def _shell_access_metadata(argv: list[str], context: ToolExecutionContext) -> di
 
 
 def _approval_required(command: str, context: ToolExecutionContext) -> ToolExecutionResult | None:
+    # Operator pre-approved this exact command via the approval flow — run it.
+    approved = context.ephemeral.get("approved_commands") if isinstance(context.ephemeral, dict) else None
+    if isinstance(approved, (set, frozenset, list, tuple)) and command in approved:
+        return None
     normalized = " ".join(command.lower().split())
     for pattern in context.policy.shell_approval_patterns:
         if pattern.lower() in normalized:

@@ -330,6 +330,35 @@ async def handle_sessions_revert_edit(request_id: str, params: dict[str, Any] | 
     )
 
 
+async def handle_chat_decide_approval(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Record an operator's decision on a pending high-risk tool approval."""
+    raw = params or {}
+    approval_id = _optional_text(raw, "approvalId")
+    decision = _optional_text(raw, "decision")
+    note = _optional_text(raw, "note")
+    if not approval_id or not decision:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="approvalId and decision are required"),
+                )
+            )
+        )
+        return
+    result = orchestrator.decide_approval(approval_id=approval_id, decision=decision, note=note)
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=result,
+            )
+        )
+    )
+
+
 async def handle_sessions_debug_copy(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     key = _required_text(params or {}, "key")
     if not key:
