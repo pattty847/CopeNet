@@ -252,11 +252,15 @@ function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { t
   );
 }
 
-// DiffActionBar — Keep / Revert affordance for an applied edit. Edits apply
-// immediately (the agent reads the file back), so this is review-after: Keep
-// acknowledges, Revert restores the recorded pre-edit content via the backend
-// (only if the file is still in this exact state — else it fails clearly).
-type RevertState = 'idle' | 'reverting' | 'reverted' | 'kept' | 'error';
+// DiffActionBar — auto-accept + Revert for an applied edit.
+//
+// In full-access mode (the only mode where the model can write), edits apply
+// immediately — like Claude Code's auto-accept. So there's no "keep" decision
+// to make: the change is shown as a receipt marked "Auto-applied", with a quiet
+// Revert as the undo. Revert restores the recorded pre-edit content via the
+// backend, but only if the file is still in this exact state — else it fails
+// with a clear message instead of clobbering a newer change.
+type RevertState = 'idle' | 'reverting' | 'reverted' | 'error';
 
 function DiffActionBar({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
   const activeSessionKey = useAppStore((s) => s.activeSessionKey);
@@ -272,14 +276,6 @@ function DiffActionBar({ preview }: { preview: Extract<ToolResultPreview, { type
       <div className="mt-1 flex items-center gap-1.5 px-1 text-[10.5px] text-operator-muted/70">
         <Undo2 className="h-3 w-3 shrink-0 text-operator-accent/70" />
         Reverted — file restored to its previous content.
-      </div>
-    );
-  }
-  if (state === 'kept') {
-    return (
-      <div className="mt-1 flex items-center gap-1.5 px-1 text-[10.5px] text-operator-muted/55">
-        <Check className="h-3 w-3 shrink-0 text-operator-success/70" />
-        Kept.
       </div>
     );
   }
@@ -302,23 +298,19 @@ function DiffActionBar({ preview }: { preview: Extract<ToolResultPreview, { type
   };
 
   return (
-    <div className="mt-1.5 flex items-center gap-2 px-1">
+    <div className="mt-1.5 flex items-center gap-2 px-1 text-[10.5px]">
+      <span className="inline-flex items-center gap-1 text-operator-muted/55">
+        <Check className="h-3 w-3 shrink-0 text-operator-success/70" />
+        Auto-applied
+      </span>
       <button
         type="button"
         onClick={onRevert}
         disabled={state === 'reverting'}
-        className="inline-flex items-center gap-1 rounded border border-operator-border/70 px-2 py-0.5 text-[10.5px] text-operator-muted/85 transition-colors hover:border-operator-error/40 hover:text-operator-error disabled:opacity-50"
+        className="ml-auto inline-flex items-center gap-1 rounded px-2 py-0.5 text-operator-muted/70 transition-colors hover:text-operator-error disabled:opacity-50"
       >
         {state === 'reverting' ? <Loader2 className="h-3 w-3 animate-spin" /> : <Undo2 className="h-3 w-3" />}
         {state === 'reverting' ? 'Reverting…' : 'Revert'}
-      </button>
-      <button
-        type="button"
-        onClick={() => setState('kept')}
-        className="inline-flex items-center gap-1 rounded px-2 py-0.5 text-[10.5px] text-operator-muted/70 transition-colors hover:text-operator-success"
-      >
-        <Check className="h-3 w-3" />
-        Keep
       </button>
       {state === 'error' && errorMsg && (
         <span className="text-[10px] text-operator-error/85 truncate" title={errorMsg}>{errorMsg}</span>
