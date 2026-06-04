@@ -208,6 +208,58 @@ SCENARIOS: list[Scenario] = [
             file_contains("summary.txt", "5"),
         ],
     ),
+    Scenario(
+        id="debug_failing_test",
+        title="Debug a failing test (read test, find bug, make it green)",
+        prompt=(
+            "The tests in test_stack.py are failing. Run them to see the failure, then find and fix the "
+            "bug in stack.py so the tests pass. Do not modify test_stack.py — only fix stack.py. "
+            "Re-run the tests to confirm they pass."
+        ),
+        setup=_seed({
+            "stack.py": (
+                "class Stack:\n"
+                "    def __init__(self):\n"
+                "        self._items = []\n\n"
+                "    def push(self, x):\n"
+                "        self._items.append(x)\n\n"
+                "    def pop(self):\n"
+                "        return self._items.pop(0)  # bug: pops the oldest, not the newest\n\n"
+                "    def is_empty(self):\n"
+                "        return len(self._items) == 0\n"
+            ),
+            "test_stack.py": (
+                "from stack import Stack\n\n"
+                "s = Stack()\n"
+                "s.push(1)\n"
+                "s.push(2)\n"
+                "s.push(3)\n"
+                "assert s.pop() == 3, 'expected LIFO order (newest first)'\n"
+                "assert s.pop() == 2\n"
+                "assert s.pop() == 1\n"
+                "assert s.is_empty()\n"
+                "print('ok')\n"
+            ),
+        }),
+        checks=[
+            command_succeeds(["python", "test_stack.py"]),
+            file_absent_regex("stack.py", r"pop\(0\)"),
+        ],
+    ),
+    Scenario(
+        id="build_cli_tool",
+        title="Build a CLI tool that takes an argument",
+        prompt=(
+            "Create wordcount.py that takes a single filename as a command-line argument and prints just "
+            "the number of whitespace-separated words in that file (one integer, nothing else). "
+            "For example, `python wordcount.py sample.txt` should print the word count of sample.txt."
+        ),
+        setup=_seed({"sample.txt": "one two three four five six seven\n"}),
+        checks=[
+            file_exists("wordcount.py"),
+            runs_with_output(["python", "wordcount.py", "sample.txt"], "7"),
+        ],
+    ),
 ]
 
 
