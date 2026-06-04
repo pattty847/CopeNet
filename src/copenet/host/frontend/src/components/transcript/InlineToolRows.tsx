@@ -28,9 +28,9 @@ import type {
   ToolResultPreview,
 } from '../../types/backend';
 import { useAppStore } from '../../store/useAppStore';
-import { parseUnifiedDiff, diffGutterWidth } from '../../lib/diff';
-import { tokenizeLine, langFromPath, SYNTAX_CLASS } from '../../lib/syntax';
+import { langFromPath } from '../../lib/syntax';
 import { wsClient } from '../../lib/wsClient';
+import { HighlightedCode, DiffView } from '../runtime/CodeViews';
 
 // ---------------------------------------------------------------------------
 // Operator-verb labels — replace protocol tool ids with English verbs in the UI.
@@ -197,102 +197,14 @@ function RawPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { ty
   );
 }
 
-// DiffPreviewBlock — unified diff for files.write / files.edit, rendered like an
-// editor: GitHub-style old/new line-number gutters parsed from the @@ hunk
-// headers, green (added) / red (removed) bodies, monospace. The mini-IDE feel
-// applied to the surface the operator already loves.
-function HighlightedCode({ text, lang }: { text: string; lang: string }) {
-  if (!text) return <>{' '}</>;
-  const tokens = tokenizeLine(text, lang);
+// DiffPreviewBlock — the shared line-numbered, syntax-highlighted DiffView plus
+// the auto-applied/Revert action bar (the inline transcript form).
+function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
   return (
     <>
-      {tokens.map((tok, i) =>
-        tok.cls === 'plain' ? (
-          <span key={i}>{tok.text}</span>
-        ) : (
-          <span key={i} className={SYNTAX_CLASS[tok.cls]}>
-            {tok.text}
-          </span>
-        ),
-      )}
-    </>
-  );
-}
-
-function DiffPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
-  const displayPath = shortPath(preview.path);
-  const rows = parseUnifiedDiff(preview.diff);
-  const gutter = diffGutterWidth(rows);
-  const lang = langFromPath(preview.path);
-  // ch-based gutter widths keep the two number columns aligned in monospace.
-  const numStyle = { width: `${gutter}ch` } as const;
-  return (
-    <div className="mt-1.5">
-      <div className="mb-1 flex items-center gap-1.5 text-[10px] text-operator-muted/60">
-        <FileDiff className="h-2.5 w-2.5 shrink-0" />
-        <span className="font-mono truncate">{displayPath}</span>
-        {preview.created && (
-          <span className="shrink-0 rounded bg-operator-success/15 px-1 text-[9px] uppercase tracking-wide text-operator-success/80">
-            new
-          </span>
-        )}
-        <span className="ml-auto shrink-0 pl-2 font-mono tabular-nums">
-          <span className="text-operator-success/80">+{preview.linesAdded}</span>{' '}
-          <span className="text-operator-error/80">-{preview.linesRemoved}</span>
-        </span>
-      </div>
-      <div className="overflow-x-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.65] max-h-72">
-        {rows.map((row, i) => {
-          if (row.kind === 'hunk') {
-            return (
-              <div key={i} className="bg-operator-accent/5 px-2 py-0.5 text-operator-accent/65 whitespace-pre">
-                {row.text}
-              </div>
-            );
-          }
-          // Background carries the add/remove signal; the text is syntax-
-          // highlighted (GitHub style). Plain text stays neutral and readable.
-          const rowBg =
-            row.kind === 'add'
-              ? 'bg-operator-success/12'
-              : row.kind === 'del'
-                ? 'bg-operator-error/12'
-                : '';
-          const marker = row.kind === 'add' ? '+' : row.kind === 'del' ? '-' : ' ';
-          const markerTone =
-            row.kind === 'add'
-              ? 'text-operator-success/80'
-              : row.kind === 'del'
-                ? 'text-operator-error/80'
-                : 'text-operator-muted/40';
-          const gutterTone = row.kind === 'context' ? 'text-operator-muted/35' : 'text-operator-muted/55';
-          return (
-            <div key={i} className={`flex text-operator-text/80 ${rowBg}`}>
-              <span
-                className={`shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums ${gutterTone}`}
-                style={numStyle}
-              >
-                {row.oldNo ?? ''}
-              </span>
-              <span
-                className={`shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums ${gutterTone}`}
-                style={numStyle}
-              >
-                {row.newNo ?? ''}
-              </span>
-              <span className={`shrink-0 select-none px-1 font-semibold ${markerTone}`}>{marker}</span>
-              <span className="whitespace-pre pr-2">
-                <HighlightedCode text={row.text} lang={lang} />
-              </span>
-            </div>
-          );
-        })}
-      </div>
-      {preview.truncated && (
-        <div className="mt-0.5 px-1 text-[10px] text-operator-muted/50">Diff truncated — large change.</div>
-      )}
+      <DiffView preview={preview} />
       <DiffActionBar preview={preview} />
-    </div>
+    </>
   );
 }
 

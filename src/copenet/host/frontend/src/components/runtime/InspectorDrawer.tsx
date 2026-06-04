@@ -24,6 +24,7 @@ import type { ToolResultPart } from '../../types/backend';
 import { DiffArtifactView } from './DiffArtifactView';
 import { LoadingState } from './ResourceStates';
 import { ChatMarkdown } from '../ChatMarkdown';
+import { DiffView, JsonView } from './CodeViews';
 
 function ArtifactBody({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'patch_plan' || artifact.kind === 'diff') {
@@ -354,11 +355,11 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
         </div>
       )}
 
-      {(effect?.preview || tool.preview) && (
-        <pre className="overflow-x-auto rounded-xl border border-operator-border bg-operator-bg px-3 py-2 text-[10.5px] font-mono leading-relaxed text-operator-text/75 whitespace-pre-wrap max-h-80">
-          {JSON.stringify(effect?.preview || tool.preview, null, 2)}
-        </pre>
-      )}
+      {tool.preview?.type === 'diff' ? (
+        <DiffView preview={tool.preview} />
+      ) : (effect?.preview || tool.preview) ? (
+        <JsonView value={effect?.preview || tool.preview} />
+      ) : null}
     </div>
   );
 }
