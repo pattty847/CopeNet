@@ -26,12 +26,13 @@ rendering. The mock layer is small and concentrated in three vision-critical pla
 |---|------|--------|-------------|--------|
 | 1 | Diff line-number gutters | M | none | ✅ shipped `6dcba66` |
 | 1b | Diff + read-preview syntax highlighting | M | none | ✅ shipped `084ebc6` (visual pass pending) |
-| 2 | Wire approval/send actions to real RPCs (kill `simulate*`) | M | `resolveApproval` + `messaging.send` RPC | open |
+| 2 | Wire approval actions to real RPCs (kill `simulate*`) | M | `chat.decideApproval` RPC + run pause/resume | ✅ shipped `6d3713c` (tool approvals; message-send still mock) |
 | 3 | Diff Keep/Revert affordance (inline buttons) | L | `sessions.revertEdit` RPC | ✅ shipped `0d396e0` (revert = undo applied edit; backend store + RPC built) |
 | 4 | `RunActivityPanel` — complete the live→history collapse seam | M | none (uses `SessionRunRecord.toolSteps`) | ✅ shipped `b297ff5` |
 | 5 | Per-tool live event stream (queued/running chips in `LiveToolFeed`) | M | `tool:called`/`tool:result` deltas | open |
 | 6 | Line numbers + syntax on read previews (`FileReadPreviewBlock`) | M | none | ✅ shipped `084ebc6` (folded into 1b) |
 | 7 | Wire `ReturnBriefing` to real data (drop `DEV_SKELETON_FOR_TEST`) | S | `briefing:ready` push | open |
+| 8 | Tool Inspector drawer — color + formatting (currently a raw JSON dump) | M | none | open (owner-requested; reuse diff/syntax primitives) |
 
 **No-backend wins (drive these solo):** 1 ✅, 1b, 4, 6.
 **Need backend (I own these now too):** 2, 3, 5, 7 — 2 & 3 build on `docs/plans/APPROVAL_FLOW.md`.
