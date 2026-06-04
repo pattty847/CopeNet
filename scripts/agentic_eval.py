@@ -108,6 +108,73 @@ def command_succeeds(argv: list[str], timeout: float = 20.0) -> Check:
     return check
 
 
+def cli_sequence(steps: list[list[str]], expect_in_last_output: list[str], timeout: float = 20.0) -> Check:
+    """Run a sequence of CLI commands (stateful app), then assert the LAST output."""
+    def check(workdir: Path) -> tuple[bool, str]:
+        last = ""
+        for argv in steps:
+            try:
+                proc = subprocess.run(argv, cwd=workdir, capture_output=True, text=True, timeout=timeout)
+            except Exception as exc:  # noqa: BLE001
+                return False, f"`{' '.join(argv)}` raised {exc}"
+            last = (proc.stdout or "") + (proc.stderr or "")
+        missing = [s for s in expect_in_last_output if s not in last]
+        ok = not missing
+        detail = "final output has all expected lines" if ok else f"MISSING {missing} (got: {last.strip()[:140]!r})"
+        return ok, detail
+    return check
+
+
+def json_file_equals(name: str, expected: dict) -> Check:
+    """Assert a JSON file's parsed content equals expected (ints coerced)."""
+    def check(workdir: Path) -> tuple[bool, str]:
+        path = workdir / name
+        if not path.is_file():
+            return False, f"{name} missing"
+        try:
+            data = json.loads(path.read_text(encoding="utf-8"))
+        except Exception as exc:  # noqa: BLE001
+            return False, f"{name} not valid JSON: {exc}"
+        norm = {str(k): int(v) for k, v in data.items()} if isinstance(data, dict) else data
+        ok = norm == expected
+        return ok, f"{name} {'==' if ok else '!='} {expected} (got {norm})"
+    return check
+
+
+def http_server_check(launch: list[str], probes: list[tuple[str, Callable[[str], bool], str]], boot_wait: float = 2.5) -> Check:
+    """Launch the produced server as a subprocess, hit each URL, validate the body, kill it."""
+    import urllib.request
+
+    def check(workdir: Path) -> tuple[bool, str]:
+        proc = subprocess.Popen(launch, cwd=workdir, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        try:
+            time.sleep(boot_wait)
+            for url, validator, label in probes:
+                try:
+                    body = urllib.request.urlopen(url, timeout=5).read().decode("utf-8", errors="replace")
+                except Exception as exc:  # noqa: BLE001
+                    return False, f"{label} ({url}) failed: {exc}"
+                if not validator(body):
+                    return False, f"{label} ({url}) wrong body: {body[:100]!r}"
+            return True, f"server passed {len(probes)} request(s)"
+        finally:
+            proc.terminate()
+            try:
+                proc.wait(timeout=3)
+            except Exception:  # noqa: BLE001
+                proc.kill()
+    return check
+
+
+def _json_field_eq(field: str, value) -> Callable[[str], bool]:
+    def validate(body: str) -> bool:
+        try:
+            return json.loads(body).get(field) == value
+        except Exception:  # noqa: BLE001
+            return False
+    return validate
+
+
 # ---------------------------------------------------------------------------
 # Scenarios
 # ---------------------------------------------------------------------------
@@ -120,6 +187,7 @@ class Scenario:
     prompt: str
     checks: list[Check]
     setup: Callable[[Path], None] = field(default=lambda _d: None)
+    tier: str = "core"
 
 
 def _seed(files: dict[str, str]) -> Callable[[Path], None]:
@@ -260,6 +328,107 @@ SCENARIOS: list[Scenario] = [
             runs_with_output(["python", "wordcount.py", "sample.txt"], "7"),
         ],
     ),
+    # ----------------------------------------------------------------------
+    # PRODUCT tier — build something that actually does a job, end to end,
+    # checked by running it (stateful CLI, a live HTTP server, a data
+    # pipeline, a feature added without regressing existing tests).
+    # ----------------------------------------------------------------------
+    Scenario(
+        id="todo_cli_app",
+        title="Build a stateful todo CLI that persists between runs",
+        tier="product",
+        prompt=(
+            "Build a command-line todo app in todo.py that persists tasks to todos.json in the current "
+            "directory. It must support exactly these commands:\n"
+            '  python todo.py add "<text>"   — append a new open task\n'
+            "  python todo.py done <N>        — mark task number N (1-based) as done\n"
+            "  python todo.py list            — print every task, one per line, numbered from 1 in the "
+            "order they were added, as `N. [ ] <text>` for open tasks and `N. [x] <text>` for done tasks\n"
+            "Tasks MUST persist across separate invocations (store them in todos.json)."
+        ),
+        checks=[
+            file_exists("todo.py"),
+            cli_sequence(
+                steps=[
+                    ["python", "todo.py", "add", "buy milk"],
+                    ["python", "todo.py", "add", "write code"],
+                    ["python", "todo.py", "add", "ship it"],
+                    ["python", "todo.py", "done", "2"],
+                    ["python", "todo.py", "list"],
+                ],
+                expect_in_last_output=["1. [ ] buy milk", "2. [x] write code", "3. [ ] ship it"],
+            ),
+        ],
+    ),
+    Scenario(
+        id="http_api_server",
+        title="Build a working HTTP API (stdlib only)",
+        tier="product",
+        prompt=(
+            "Build app.py — an HTTP server using ONLY the Python standard library (no Flask, FastAPI, or "
+            "any external dependency). When run with `python app.py` it must listen on port 8099 and handle:\n"
+            '  GET /health        -> 200, JSON body {"status": "ok"}\n'
+            '  GET /sum?a=<int>&b=<int>  -> 200, JSON body {"result": <a+b>}\n'
+            "When started, the server should keep running (block) so it can serve requests."
+        ),
+        checks=[
+            file_exists("app.py"),
+            http_server_check(
+                ["python", "app.py"],
+                [
+                    ("http://localhost:8099/health", _json_field_eq("status", "ok"), "GET /health"),
+                    ("http://localhost:8099/sum?a=2&b=3", _json_field_eq("result", 5), "GET /sum"),
+                ],
+            ),
+        ],
+    ),
+    Scenario(
+        id="data_pipeline",
+        title="Build a data pipeline: CSV -> aggregated report",
+        tier="product",
+        prompt=(
+            "Write pipeline.py that reads sales.csv (header: product,amount) from the current directory, "
+            "computes the total amount per product, and:\n"
+            "  1) writes report.json mapping each product name to its integer total, and\n"
+            "  2) prints the name of the single top-selling product (highest total) to stdout.\n"
+            "Then run it once."
+        ),
+        setup=_seed({"sales.csv": "product,amount\napple,3\nbanana,5\napple,2\ncherry,10\nbanana,1\n"}),
+        checks=[
+            file_exists("pipeline.py"),
+            json_file_equals("report.json", {"apple": 5, "banana": 6, "cherry": 10}),
+            runs_with_output(["python", "pipeline.py"], "cherry"),
+        ],
+    ),
+    Scenario(
+        id="feature_no_regression",
+        title="Add a feature with edge-case handling, no regressions",
+        tier="product",
+        prompt=(
+            "Add a divide(a, b) function to calculator.py that returns a / b, but raises ValueError when b "
+            "is 0. Then ADD tests for divide to test_calculator.py — including the divide-by-zero case "
+            "(which should raise ValueError) — WITHOUT removing or breaking any existing test. "
+            "Run `python test_calculator.py` and make sure everything passes."
+        ),
+        setup=_seed({
+            "calculator.py": "def add(a, b):\n    return a + b\n\n\ndef subtract(a, b):\n    return a - b\n",
+            "test_calculator.py": (
+                "from calculator import add, subtract\n\n"
+                "assert add(2, 3) == 5\n"
+                "assert subtract(5, 2) == 3\n"
+                "print('ok')\n"
+            ),
+        }),
+        checks=[
+            command_succeeds(["python", "test_calculator.py"]),
+            file_contains("test_calculator.py", "add(2, 3)"),  # existing test preserved
+            runs_with_output(["python", "-c", "import calculator; print(calculator.divide(6, 2))"], "3"),
+            runs_with_output(
+                ["python", "-c", "import calculator\ntry:\n calculator.divide(1, 0)\n print('NOPE')\nexcept ValueError:\n print('RAISED')"],
+                "RAISED",
+            ),
+        ],
+    ),
 ]
 
 
@@ -344,6 +513,8 @@ def print_result(res: ScenarioResult) -> None:
 
 async def main_async(args: argparse.Namespace) -> int:
     scenarios = SCENARIOS
+    if args.tier:
+        scenarios = [s for s in scenarios if s.tier == args.tier]
     if args.only:
         scenarios = [s for s in SCENARIOS if s.id in set(args.only)]
         if not scenarios:
@@ -405,6 +576,7 @@ def main() -> int:
     parser.add_argument("--provider", default="openai-codex")
     parser.add_argument("--model", default="gpt-5.5")
     parser.add_argument("--only", nargs="*", help="Scenario id(s) to run")
+    parser.add_argument("--tier", choices=["core", "product"], help="Run only one tier")
     parser.add_argument("--out", default="docs/investigations/agentic-eval/last-run.json")
     args = parser.parse_args()
     try:
