@@ -577,8 +577,15 @@ def main() -> int:
     parser.add_argument("--model", default="gpt-5.5")
     parser.add_argument("--only", nargs="*", help="Scenario id(s) to run")
     parser.add_argument("--tier", choices=["core", "product"], help="Run only one tier")
+    parser.add_argument("--list", action="store_true", help="List available scenarios and exit")
     parser.add_argument("--out", default="docs/investigations/agentic-eval/last-run.json")
     args = parser.parse_args()
+    if args.list:
+        id_width = max(len(s.id) for s in SCENARIOS)
+        tier_width = max(len(s.tier) for s in SCENARIOS)
+        for scenario in SCENARIOS:
+            print(f"{scenario.id:<{id_width}}  {scenario.tier:<{tier_width}}  {scenario.title}")
+        return 0
     try:
         return asyncio.run(main_async(args))
     except KeyboardInterrupt:
