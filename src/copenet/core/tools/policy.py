@@ -12,7 +12,7 @@ class ToolPolicy:
     """Safety policy for the v1 tool runtime."""
 
     allowed_categories: set[ToolCategory] = field(
-        default_factory=lambda: {"repo-read", "shell-read", "context", "artifact"}
+        default_factory=lambda: {"repo-read", "shell-read", "context", "artifact", "web"}
     )
     allow_shell: bool = True
     unrestricted_shell: bool = False
@@ -48,7 +48,7 @@ class ToolPolicy:
 def policy_for_task_mode(task_prompt_id: str | None) -> ToolPolicy:
     """Return the effective tool policy for one task mode."""
     normalized = (task_prompt_id or "none").strip().lower() or "none"
-    base = {"repo-read", "shell-read", "context", "artifact"}
+    base = {"repo-read", "shell-read", "context", "artifact", "web"}
     if normalized == "full-access":
         return ToolPolicy(
             allowed_categories={*base, "repo-write"},

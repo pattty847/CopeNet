@@ -57,6 +57,12 @@ function previewSummary(preview: SessionRunRecord['toolSteps'][number]['members'
   if (preview.type === 'plan') {
     return preview.items.map((it) => `[${it.status === 'completed' ? 'x' : ' '}] ${it.content}`).join('\n') || null;
   }
+  if (preview.type === 'web_search') {
+    return preview.results.map((r) => `${r.title} — ${r.url}`).join('\n') || null;
+  }
+  if (preview.type === 'web_doc') {
+    return preview.text || `${preview.title} (${preview.url})` || null;
+  }
   return preview.text || null;
 }
 

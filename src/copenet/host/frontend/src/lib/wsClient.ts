@@ -200,6 +200,30 @@ function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
       }),
     };
   }
+  if (type === 'web_search') {
+    const rawResults = Array.isArray(payload.results) ? payload.results.slice(0, 8) : [];
+    return {
+      type: 'web_search',
+      query: String(payload.query || ''),
+      results: rawResults.map((r: unknown) => {
+        const row = (r || {}) as Record<string, unknown>;
+        return {
+          title: String(row.title || ''),
+          url: String(row.url || ''),
+          snippet: String(row.snippet || ''),
+        };
+      }),
+    };
+  }
+  if (type === 'web_doc') {
+    return {
+      type: 'web_doc',
+      url: String(payload.url || ''),
+      title: String(payload.title || ''),
+      wordCount: Number(payload.wordCount || 0),
+      text: String(payload.text || ''),
+    };
+  }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
     const lines = String(payload.content).split('\n').slice(0, 20);
     return {

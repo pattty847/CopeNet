@@ -19,6 +19,8 @@ import {
   Sparkles,
   Undo2,
   Check,
+  Globe,
+  ExternalLink,
 } from 'lucide-react';
 import type {
   ToolCallPart,
@@ -48,6 +50,8 @@ const TOOL_VERB: Record<string, string> = {
   'context.prepare': 'Prepared context',
   'shell.exec': 'Ran command',
   'plan.write': 'Planned',
+  'web.search': 'Searched web',
+  'web.fetch': 'Fetched page',
   'git.diff': 'Read diff',
   'git.status': 'Read git status',
   'artifact.create': 'Saved artifact',
@@ -116,6 +120,16 @@ function shortPath(path: string): string {
   const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
   if (parts.length <= 2) return path;
   return `…/${parts.slice(-2).join('/')}`;
+}
+
+// hostOf — the bare hostname for a result URL ("docs.python.org"), for the
+// quiet source line under each web result. Falls back to the raw string.
+function hostOf(url: string): string {
+  try {
+    return new URL(url).hostname.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
 }
 
 function isFileReadMember(member: ToolBatchMember): boolean {
@@ -276,11 +290,68 @@ function DiffActionBar({ preview }: { preview: Extract<ToolResultPreview, { type
   );
 }
 
+// WebSearchPreviewBlock — ranked live-web results, each a clickable source row.
+function WebSearchPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'web_search' }> }) {
+  return (
+    <div className="mt-1.5">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] text-operator-muted/60">
+        <Globe className="h-2.5 w-2.5 shrink-0" />
+        <span className="font-mono truncate">{preview.query}</span>
+        <span className="shrink-0 ml-auto pl-2">{preview.results.length} result{preview.results.length === 1 ? '' : 's'}</span>
+      </div>
+      <div className="rounded-lg border border-operator-border bg-operator-bg divide-y divide-operator-border/40">
+        {preview.results.map((r, i) => (
+          <a
+            key={i}
+            href={r.url}
+            target="_blank"
+            rel="noreferrer noopener"
+            className="group block px-2.5 py-1.5 transition-colors hover:bg-operator-border/20"
+          >
+            <div className="flex items-center gap-1.5 min-w-0">
+              <span className="flex-1 truncate text-[11px] text-operator-accent group-hover:underline">{r.title}</span>
+              <ExternalLink className="h-2.5 w-2.5 shrink-0 text-operator-muted/40 group-hover:text-operator-accent" />
+            </div>
+            <div className="truncate text-[9.5px] font-mono text-operator-muted/45">{hostOf(r.url)}</div>
+            {r.snippet && <div className="mt-0.5 line-clamp-2 text-[10px] text-operator-text/55">{r.snippet}</div>}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// WebDocPreviewBlock — readable text pulled from one fetched URL.
+function WebDocPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'web_doc' }> }) {
+  return (
+    <div className="mt-1.5">
+      <div className="mb-1 flex items-center gap-1.5 text-[10px] text-operator-muted/60">
+        <Globe className="h-2.5 w-2.5 shrink-0" />
+        <a
+          href={preview.url}
+          target="_blank"
+          rel="noreferrer noopener"
+          className="font-mono truncate text-operator-accent hover:underline"
+          title={preview.url}
+        >
+          {preview.title || hostOf(preview.url)}
+        </a>
+        {preview.wordCount > 0 && <span className="shrink-0 ml-auto pl-2">{preview.wordCount} words</span>}
+      </div>
+      <div className="overflow-y-auto rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2 text-[10.5px] leading-[1.55] text-operator-text/70 whitespace-pre-wrap break-words max-h-44">
+        {preview.text}
+      </div>
+    </div>
+  );
+}
+
 function ToolPreview({ preview }: { preview: ToolResultPreview }) {
   if (preview.type === 'file_read') return <FileReadPreviewBlock preview={preview} />;
   if (preview.type === 'repo_search') return <RepoSearchPreviewBlock preview={preview} />;
   if (preview.type === 'diff') return <DiffPreviewBlock preview={preview} />;
   if (preview.type === 'plan') return <PlanView preview={preview} />;
+  if (preview.type === 'web_search') return <WebSearchPreviewBlock preview={preview} />;
+  if (preview.type === 'web_doc') return <WebDocPreviewBlock preview={preview} />;
   return <RawPreviewBlock preview={preview} />;
 }
 
@@ -315,7 +386,9 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
   // Diffs are the change the model just made — show them open by default,
   // like Codex / Claude Code. Everything else stays collapsed.
-  const [expanded, setExpanded] = useState(part.preview?.type === 'diff' || part.preview?.type === 'plan');
+  const [expanded, setExpanded] = useState(
+    part.preview?.type === 'diff' || part.preview?.type === 'plan' || part.preview?.type === 'web_search',
+  );
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const hasExpandable = !!part.preview || !!part.effect || !!part.artifactId || (!part.ok && !!part.error);
   const verb = operatorVerb(part.toolId);

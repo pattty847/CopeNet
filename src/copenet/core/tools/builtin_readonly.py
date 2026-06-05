@@ -9,6 +9,7 @@ from .handlers.git import DESCRIPTORS as GIT_DESCRIPTORS, HANDLERS as GIT_HANDLE
 from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMORY_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
+from .handlers.web import DESCRIPTORS as WEB_DESCRIPTORS, HANDLERS as WEB_HANDLERS
 from .handlers.workspace_intel import DESCRIPTORS as WORKSPACE_INTEL_DESCRIPTORS, HANDLERS as WORKSPACE_INTEL_HANDLERS
 
 
@@ -32,6 +33,8 @@ MANIFEST_TOOL_IDS = {
     "files.rg",
     "shell.exec",
     "plan.write",
+    "web.search",
+    "web.fetch",
 }
 
 # ALL_DESCRIPTORS stays the full set so the registry can still ROUTE + policy-check
@@ -45,6 +48,7 @@ ALL_DESCRIPTORS = (
     + MEMORY_DESCRIPTORS
     + WORKSPACE_INTEL_DESCRIPTORS
     + PLAN_DESCRIPTORS
+    + WEB_DESCRIPTORS
 )
 ALL_HANDLERS = {
     **FILE_HANDLERS,
@@ -54,6 +58,7 @@ ALL_HANDLERS = {
     **ARTIFACT_HANDLERS,
     **WORKSPACE_INTEL_HANDLERS,
     **PLAN_HANDLERS,
+    **WEB_HANDLERS,
 }
 
 

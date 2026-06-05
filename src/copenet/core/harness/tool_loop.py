@@ -975,6 +975,12 @@ def compose_responses_tool_instructions(
             "in_progress and completed as you work. Keep exactly one step in_progress at a time. Skip "
             "planning for trivial single-step requests."
         )
+    if any(tool.id == "web.search" for tool in tools):
+        directive += (
+            " When a question depends on facts outside this repository (current docs, library APIs, "
+            "errors, recent events), use web.search to find sources and web.fetch to read the most "
+            "relevant page — ground your answer in what you actually fetched rather than guessing."
+        )
     base = (system_prompt or "").strip()
     return f"{base}\n\n{directive}" if base else directive
 

@@ -16,13 +16,13 @@ if TYPE_CHECKING:
     from copenet.core.workspace_intel import WorkspaceIntelService
 
 
-ToolCategory = Literal["repo-read", "repo-write", "shell-read", "shell-write", "context", "artifact", "browser", "mcp"]
+ToolCategory = Literal["repo-read", "repo-write", "shell-read", "shell-write", "context", "artifact", "browser", "web", "mcp"]
 ToolSafetyLevel = Literal["safe", "guarded", "restricted"]
 ToolAccessAction = Literal["read", "write", "unknown"]
 ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "unsafe_unknown"]
 ToolEvidenceRole = Literal["none", "discovery", "grounding", "mutation", "verification", "context", "artifact"]
 ToolSideEffect = Literal["none", "read", "write", "external"]
-ToolEffectKind = Literal["file_read", "repo_search", "shell_command", "file_write", "file_edit", "artifact", "context", "raw"]
+ToolEffectKind = Literal["file_read", "repo_search", "shell_command", "file_write", "file_edit", "artifact", "context", "web_search", "web_fetch", "raw"]
 
 
 @dataclass(frozen=True)
@@ -105,7 +105,7 @@ class ToolDescriptor:
 
     def manifest_permission(self) -> str:
         """Return the high-level approval posture for the tool manifest."""
-        if self.category in {"repo-read", "context"} and self.safety_level == "safe":
+        if self.category in {"repo-read", "context", "web"} and self.safety_level == "safe":
             return "auto_allowed"
         return "policy_gated"
 
@@ -311,6 +311,29 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             ]
             if clean:
                 return {"type": "plan", "items": clean}
+    if tool_id == "web.search":
+        results = body.get("results")
+        if isinstance(results, list):
+            clean = [
+                {
+                    "title": str(r.get("title") or ""),
+                    "url": str(r.get("url") or ""),
+                    "snippet": str(r.get("snippet") or ""),
+                }
+                for r in results
+                if isinstance(r, dict) and r.get("url")
+            ]
+            return {"type": "web_search", "query": str(body.get("query") or ""), "results": clean[:8]}
+    if tool_id == "web.fetch":
+        text = body.get("text")
+        if isinstance(text, str):
+            return {
+                "type": "web_doc",
+                "url": str(body.get("url") or ""),
+                "title": str(body.get("title") or ""),
+                "wordCount": int(body.get("wordCount") or 0),
+                "text": text.rstrip()[:600],
+            }
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")
@@ -375,6 +398,12 @@ def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:
         return []
     results = body.get("results")
     if not isinstance(results, list):
+        return []
+    # Only a real tool batch — where each row is itself a tool result — should
+    # expand into members. Other tools (e.g. web.search) legitimately return a
+    # "results" list of plain data rows; those carry no "toolId" and must NOT be
+    # mistaken for failed sub-tools.
+    if not any(isinstance(item, dict) and item.get("toolId") for item in results):
         return []
     rows: list[dict[str, Any]] = []
     for item in results:
@@ -492,18 +521,22 @@ def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
         return "file_edit"
     if tool_id == "artifact.create":
         return "artifact"
+    if tool_id == "web.search":
+        return "web_search"
+    if tool_id == "web.fetch":
+        return "web_fetch"
     if tool_id in {"context.prepare", "memory.read", "memory.write"}:
         return "context"
     return "raw"
 
 
 def _tool_effect_target(*, arguments: dict[str, Any], body: Any) -> str | None:
-    for key in ("path", "target", "command", "query", "pattern", "title"):
+    for key in ("path", "target", "command", "query", "url", "pattern", "title"):
         value = arguments.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
     if isinstance(body, dict):
-        for key in ("path", "target", "command", "query", "pattern", "title"):
+        for key in ("path", "target", "command", "query", "url", "pattern", "title"):
             value = body.get(key)
             if isinstance(value, str) and value.strip():
                 return value.strip()

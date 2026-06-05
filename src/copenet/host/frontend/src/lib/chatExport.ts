@@ -51,6 +51,15 @@ function formatToolPreview(preview: ToolResultPreview | null | undefined): strin
     const mark = (s: string) => (s === 'completed' ? '[x]' : s === 'in_progress' ? '[~]' : '[ ]');
     return ['  - Plan:', ...preview.items.map((it) => `    ${mark(it.status)} ${it.content}`)];
   }
+  if (preview.type === 'web_search') {
+    return [
+      `  - Web search: ${preview.query}`,
+      ...preview.results.slice(0, 8).map((r) => `    ${r.title} — ${r.url}`),
+    ];
+  }
+  if (preview.type === 'web_doc') {
+    return [`  - Web page: ${preview.title || preview.url} (${preview.url})`];
+  }
   return preview.text.trim() ? [`  - Preview: ${preview.text.trim()}`] : [];
 }
 

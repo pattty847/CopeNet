@@ -174,7 +174,30 @@ export interface PlanPreview {
   items: { content: string; status: 'pending' | 'in_progress' | 'completed' }[];
 }
 
-export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview | DiffPreview | PlanPreview;
+/** web.search — ranked live-web results. */
+export interface WebSearchPreview {
+  type: 'web_search';
+  query: string;
+  results: Array<{ title: string; url: string; snippet: string }>;
+}
+
+/** web.fetch — readable text pulled from one URL. */
+export interface WebDocPreview {
+  type: 'web_doc';
+  url: string;
+  title: string;
+  wordCount: number;
+  text: string;            // truncated readable excerpt
+}
+
+export type ToolResultPreview =
+  | FileReadPreview
+  | RepoSearchPreview
+  | RawPreview
+  | DiffPreview
+  | PlanPreview
+  | WebSearchPreview
+  | WebDocPreview;
 
 export interface ToolResultPart {
   kind: 'tool_result';
