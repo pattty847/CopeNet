@@ -1,128 +1,159 @@
-# HANDOVER — finish the harness live-verification (run locally)
+# HANDOVER — state of CopeNet + how to continue
 
-**You are a local coding agent (Claude Code / Cursor) on the user's Mac.** You
-have what the cloud agent that built this lacks: the repo on disk, **Codex OAuth
-creds**, **localhost**, and a **browser**. The user has authorized you to run
-everything below autonomously, in a loop, committing small checkpoints, until an
-openai-codex tool-using chat turn works end-to-end and the suite is green. Don't
-wait for confirmation between steps — just keep going and leave a clear trail.
+**For:** the next Claude session (or Patrick). Read this first. It's the
+"you're caught up" doc. Trust it — it reflects deliberate decisions and a lot of
+verified work.
 
-**Branch:** `codex/pre-harnessdecision-checkpoint`
+**Branch:** `codex/pre-harnessdecision-checkpoint` — and it's been merged to
+**`main`** (both at `c141e63` as of this writing). main is current, the default
+branch, all commits authored by Patrick (`pattty847@gmail.com`).
+
 ```bash
 cd ~/Programming/CopeNet
-git fetch origin && git checkout codex/pre-harnessdecision-checkpoint && git pull
-uv run --extra dev pytest -q            # expect ~324 passing; if not, stop & read failures
+git checkout main && git pull
+uv run --extra dev pytest -q          # expect 338 green
+cd src/copenet/host/frontend && npx tsc --noEmit   # EXIT:0
 ```
-
-## Context (read these for the full picture)
-- `docs/plans/HARNESS_REBUILD_V2.md` — the rebuild + "Implementation status (as built)".
-- `docs/TARGET.md` — north star. `docs/plans/MULTI_AGENT_ORCHESTRATOR.md` — next layer.
-- `docs/architecture.md` — current subsystem map.
-
-The chat harness was rebuilt in 6 phases: real multi-turn message history
-(`core/orchestrator/messages.py`), a native Responses-API tool loop
-(`core/harness/tool_loop.py::run_with_responses_tools` +
-`providers/openai_codex.py::stream_responses`), a 5-tool model-facing manifest,
-inline-thinking + reconnect UX, and a multi-agent foundation (`core/multiagent/`).
-
-## What's ALREADY live-verified (via scripts/codex_responses_probe.py)
-Confirmed against the real `chatgpt.com/backend-api/codex/responses` (gpt-5.5):
-- Native function calling (output_item.added/function_call_arguments.delta/done/completed).
-- Multi-turn structured `input[]` (prior function_call + function_call_output + assistant).
-- CopeNet's EXACT payload — `parallel_tool_calls`, `tool_choice`, `prompt_cache_key`,
-  no-`strict` tools, `reasoning` block, and **dot-free tool names** (`files.read`
-  → `files_read`, reverse-mapped on the way back). Scenario D returns a clean
-  `function_call`.
-
-## KNOWN gotchas already fixed (don't re-break these)
-- Responses function names must match `^[a-zA-Z0-9_-]+$` — dotted ids are
-  sanitized at the provider boundary and reverse-mapped in the loop.
-- Resuming CLI providers (claude-cli/codex-cli) get ONLY the new message, not
-  the full transcript (they keep their own thread).
-- Reasoning is requested by default but the endpoint delivers it as an
-  `output_item` (type=reasoning), not `*.delta` — parser handles both.
-- The model needs an AGENT directive to actually call tools (see below).
 
 ---
 
-## IMMEDIATE TASK — get a real tool-using turn working, then loop
+## Where CopeNet is right now
 
-### Step 0: reproduce the error the user just hit
-The user ran this and got "a straight error" (text unknown to the cloud agent):
-```bash
-COPNET_TRACE=1 uv run copenet chat send \
-  "Read README.md and explain the architecture in 3 bullets, then suggest one improvement." \
-  --provider openai-codex --session think-live1
-```
-Run it. **Capture the full stderr/traceback.** Likely candidates:
-- A traceback in `run_with_responses_tools` / `stream_responses` / `_parse_responses_sse`
-  (e.g. an SSE shape the parser mishandles on a real multi-step turn).
-- An HTTP 4xx from the live API on the multi-step re-POST (the first POST works
-  per Scenario D; the SECOND POST — with function_call + function_call_output +
-  the appended assistant message — may have an ordering/shape the endpoint
-  rejects. Check the error body for `input[k]`).
-- The new agent-instructions change (commit f6fcfa0) — unlikely (imports clean,
-  tests pass) but rule it out by checking the traceback origin.
+**The harness rebuild (HARNESS_REBUILD_V2) is DONE, merged, and PROVEN.** Not
+"we think it works" — there's a live eval that runs real coding tasks end-to-end
+and checks the results by running them. What remains of the old rebuild plan is
+only optional dead-code deletion (see HARNESS_REBUILD_V2.md "Remaining sweep") —
+nothing functional.
 
-Then read the trace: `cat "$(ls -t ~/.copenet/logs/runs/*.jsonl | head -1)"`.
-The `harness_planned` event should show `toolExecutionMode: "responses"` and the
-3 tools; find where it stops (which event is last before the error).
+CopeNet is now a real agentic coding harness with a real cockpit:
+- **Native Responses-API tool loop** (openai-codex / gpt-5.5), real multi-turn
+  history, 6-tool manifest (files.read/write/edit/rg, shell.exec, plan.write).
+- **Full-access mode** with write tools + unrestricted shell, gated by a real
+  **approval flow** (high-risk commands pause for the operator).
+- A **cockpit** that makes the work inspectable: line-numbered syntax-highlighted
+  diffs, Keep/Revert (undo an edit from chat), a live-thinking display, a
+  live→history activity panel, a formatted tool inspector, and a **live plan
+  checklist**.
+- An **agentic eval** (`scripts/agentic_eval.py`) proving it can build.
 
-### Step 1: diagnose + fix, smallest change that works
-- If it's a parser/loop crash: fix `_parse_responses_sse` or
-  `run_with_responses_tools` to handle the real event/shape; add a unit test in
-  `tests/unit/test_openai_codex_responses.py` or
-  `tests/integration/test_responses_tool_loop.py` that reproduces it with a
-  scripted provider.
-- If it's an HTTP 4xx on the multi-step re-POST: read the error body. The likely
-  issue is the order/shape of replayed items. The canonical Responses replay is:
-  for each tool-calling response, append the assistant items THEN the
-  `function_call` item(s) THEN the matching `function_call_output`(s). Adjust
-  `run_with_responses_tools`' append order if needed. Capture the working shape
-  by extending `scripts/codex_responses_probe.py` with a scenario that mirrors
-  the second POST, and iterate against the live endpoint until it returns 200.
-- Keep the cloud agent's design intact: canonical dotted ids internally,
-  sanitize only at the provider boundary; don't delete run_with_native_tools or
-  narrow SessionStateRecord (see V2 deviations).
-
-### Step 2: confirm the full multi-step loop end-to-end
-Re-run Step 0 against a FRESH session each attempt (`think-live2`, `3`, …) so
-stale transcript hedging doesn't bias the model. Success looks like, in the trace:
-- `tool_requested` / a `responsesFunctionCall` for `files.read`,
-- a SECOND `responses_turn_interpreted` (step 2) after the tool ran,
-- `assistant_finalized` with a real README-grounded answer (not the "I can't
-  read files" hedge).
-
-### Step 3: answer the reasoning/thinking question
-On that successful substantive turn, `grep -i reason` the trace. If reasoning
-text appears → inline-thinking works; note the exact event/field shape in
-`providers/openai_codex.py::_parse_responses_sse` / `_reasoning_item_text` and
-tighten if needed. If reasoning is always empty → the endpoint doesn't surface
-summaries; lower or drop `DEFAULT_RESPONSES_REASONING` in
-`core/harness/tool_loop.py` to save latency, and note it.
-
-### Step 4 (optional, if time): browser pass
-Start backend + `cd src/copenet/host/frontend && npm install && npm run dev`.
-Verify a tool-using turn renders tool chips → answer; mid-run disconnect +
-reconnect does NOT false-abort (reconciles to the real result). The 5-tool
-manifest only.
+### Run it / verify it
+- Backend + UI: `uv run copenet` (serves on `127.0.0.1:17123`; UI is the built
+  `src/copenet/host/frontend/dist` — run `npm run build` in the frontend after
+  frontend changes). Browser-verify with the Claude-in-Chrome MCP.
+- One-shot live turn: `uv run copenet chat send "<task>" --provider openai-codex
+  --model gpt-5.5 --task-mode full-access --workspace-root <dir> --session <key>`
+- Tracing: `COPNET_TRACE=1` → `~/.copenet/logs/runs/<run-id>.jsonl`.
+- Eval: `uv run python scripts/agentic_eval.py [--tier core|product] [--list]`
 
 ---
 
-## Loop discipline
-- After each fix: `uv run --extra dev pytest -q` must stay green (~324+).
-  Frontend: `cd src/copenet/host/frontend && npx tsc --noEmit` clean.
-- Commit each logical fix as its own checkpoint with a clear message; push to
-  `codex/pre-harnessdecision-checkpoint`.
-- If a live API shape needs discovery, extend `codex_responses_probe.py`, run
-  it, read `docs/investigations/harness-rebuild/probe-results/*.jsonl`, encode
-  the finding as a test, then fix the code.
-- Stop when: Step 0 prompt completes with a real tool-using, README-grounded
-  answer; tests green; reasoning question answered. Write a short summary of
-  what the error was, what fixed it, and the reasoning verdict.
+## What shipped this session (newest first)
 
-## Rules
-- Small reversible commits. Never skip hooks. Keep the suite green.
-- Don't regress the documented deviations in V2 (run_with_native_tools stays;
-  SessionStateRecord not narrowed; off-manifest handlers stay registered).
-- The branch is not in production; fix-forward or revert freely.
+All on main. Each is verified (tests + usually a live browser pass).
+
+| Feature | Commit |
+|---|---|
+| **Plan/TODO mode** — `plan.write` tool + live checklist UI | `c141e63` |
+| `--list` flag **built BY CopeNet** (dogfood: gpt-5.5 edited its own repo) | `c7d168c` |
+| Agentic eval: **product tier** (todo CLI, HTTP server, data pipeline, feature+tests) | `4f31713` |
+| Agentic eval: debug-loop + CLI scenarios | `06a5b84` |
+| Agentic eval: the harness itself (proves the model can build) | `8064bad` |
+| Formatted Tool Inspector (diffs + color JSON, no raw dump) | `cf1deae` |
+| **Real tool-approval flow** (pause → approve → run) | `6d3713c` |
+| Syntax highlighting on diffs + file reads (mini-IDE) | `084ebc6` |
+| Full-access edits auto-accept (Claude Code style) | `bc83198` |
+| Diff Keep/Revert (undo an applied edit from chat) | `0d396e0` |
+| RunActivityPanel (live→history breadcrumbs) | `b297ff5` |
+| Editor line-number gutters on diffs | `6dcba66` |
+| Unified diffs for write/edit tools | `66325e6` |
+| Collapsible Claude-Code-style thinking display | `a1876df` |
+| Harness fixes: dedup reasoning, gpt-5.5 default, SSE-header sniff | `6485d0f`, `1285ffb`, `b0e65fd` |
+
+Design docs worth reading: `docs/plans/UI_ROADMAP.md` (the mock-vs-wired audit +
+build order, several items now ✅), `docs/plans/APPROVAL_FLOW.md` (the approval
+design, now built), `docs/investigations/agentic-eval/README.md` (the eval +
+cross-model data — gitignored, lives on disk locally).
+
+---
+
+## Key decisions + learnings (don't relitigate without reason)
+
+1. **Frontier-first, full stop.** We ran the agentic eval across models:
+   gpt-5.5 **7/7**, gpt-5.4 **7/7**, local gemma-4-e4b (7.5B) **7/7** on the core
+   tier (matched frontier!), local nemotron-4b **5/7**. On the harder *product*
+   tier: gpt-5.5 4/4, gemma 3/4. **The decision: build for frontier.** Local
+   models are a parked option (privacy/offline), not the priority. They
+   hallucinate grounding (gemma confidently wrote a report from data it never
+   read) — fine for self-contained tasks, risky for anything that must read real
+   input. To run a local model: `lms server start && lms load <model>`, then
+   `--provider lm-studio --model <id>`. The Mac mini has 16GB — close
+   Chrome/Codex/Atlas to make room for a 6GB model.
+
+2. **The checker must be the test, not a model.** The eval's strongest result:
+   small models produce confident, well-formed, *wrong* output. Only running the
+   code against ground truth catches it. This is why the eval runs everything.
+
+3. **Equip, don't coerce.** The whole rebuild thesis: the old harness was too
+   controlling and would overwhelm models. The new one gives capable models real
+   tools and gets out of the way — which is *why* even a 7.5B can drive the loop.
+
+4. **gpt-5.5 reasoning** streams as `response.reasoning_summary_text.delta` with
+   `reasoning.summary: "auto"`; gpt-5.4 emits none. The codex endpoint sometimes
+   returns SSE with an empty Content-Type header (we sniff the body).
+
+---
+
+## How Patrick + Claude work (the rhythm — keep it)
+
+- Patrick is the director/idea-man; he scopes, Claude implements end-to-end. He's
+  often on his phone (shift supervisor + school) and may be away — **work
+  autonomously**, propose the next move, build it, verify it, commit it, keep
+  momentum. Don't sit idle waiting for permission.
+- **Verify before claiming done.** Tests green after every change. Browser-verify
+  UI work with the Claude-in-Chrome MCP. The eval is the capability check.
+- **Commit each logical change** (small, clean, `Co-Authored-By` trailer), push,
+  and **fast-forward main** when a feature is verified (Patrick likes a current
+  main + the green squares — commits are authored by him).
+- Honest empty states over phantom data. Document contracts at the boundary.
+- Claude owns the **full stack** now (CLAUDE.md was updated to reflect this —
+  Patrick promoted Claude to full peer; the old "frontend lane / backstage
+  helper" framing is retired). Editing the orchestrator/harness/providers is
+  normal work. Only flag destructive/irreversible risk or genuine architectural
+  forks.
+
+---
+
+## What's next — the must-have shortlist (Patrick picks)
+
+CopeNet has the foundation; these separate a toy agent from a serious one:
+
+1. **Sub-agents (delegation)** — spawn a bounded sub-agent for a scoped task,
+   get back just the result. "Go investigate X while I do Y." `core/multiagent/`
+   has provider-selection/fallback scaffolding to build on. The most "cracked" one.
+2. **Context compaction** — auto-summarize long conversations so all-day runs
+   don't die at the context window. Foundational for sustained agentic work.
+3. **Web search + fetch tool** — break the "only knows the repo" ceiling; ground
+   to live docs/errors/APIs.
+4. **MCP client** — plug into the external-tool ecosystem.
+
+Plus optional cleanup: the HARNESS_REBUILD_V2 "remaining sweep" (delete dead
+handlers/frontend, narrow `SessionStateRecord` with the Pulse/Merge rewire), and
+the message-send half of the approval flow (Telegram outbound).
+
+---
+
+## The vision (the why)
+
+CopeNet is a **Jarvis-class personal continuity engine** — it runs in the
+background, maintains context, surfaces the right thing at the right time for
+Patrick specifically. North-star quote: *"I want CopeNet to be able to build
+CopeNet."* We crossed that threshold this session — gpt-5.5, through CopeNet's
+own harness, shipped a commit to CopeNet's own repo (`c7d168c`). The loop is
+real now: hand CopeNet a bounded, verifiable task in its own codebase, it does
+it, the tests judge it, Patrick reviews the diff. From here it's about widening
+the leash with trust.
+
+Build the smallest thing that keeps product semantics clear. Favor trustworthy
+session behavior, transparent UI state, and straightforward architecture over
+cleverness. And — per Patrick — have fun with it. This is a good project with a
+good human. 🚀
