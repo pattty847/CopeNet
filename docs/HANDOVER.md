@@ -27,7 +27,8 @@ nothing functional.
 
 CopeNet is now a real agentic coding harness with a real cockpit:
 - **Native Responses-API tool loop** (openai-codex / gpt-5.5), real multi-turn
-  history, 6-tool manifest (files.read/write/edit/rg, shell.exec, plan.write).
+  history, 8-tool manifest (files.read/write/edit/rg, shell.exec, plan.write,
+  web.search, web.fetch).
 - **Full-access mode** with write tools + unrestricted shell, gated by a real
   **approval flow** (high-risk commands pause for the operator).
 - A **cockpit** that makes the work inspectable: line-numbered syntax-highlighted
@@ -53,6 +54,7 @@ All on main. Each is verified (tests + usually a live browser pass).
 
 | Feature | Commit |
 |---|---|
+| **Web search + fetch** — `web.search`/`web.fetch` tools + clickable source cards | `28e1d69` |
 | **Plan/TODO mode** — `plan.write` tool + live checklist UI | `c141e63` |
 | `--list` flag **built BY CopeNet** (dogfood: gpt-5.5 edited its own repo) | `c7d168c` |
 | Agentic eval: **product tier** (todo CLI, HTTP server, data pipeline, feature+tests) | `4f31713` |
@@ -132,9 +134,11 @@ CopeNet has the foundation; these separate a toy agent from a serious one:
    has provider-selection/fallback scaffolding to build on. The most "cracked" one.
 2. **Context compaction** — auto-summarize long conversations so all-day runs
    don't die at the context window. Foundational for sustained agentic work.
-3. **Web search + fetch tool** — break the "only knows the repo" ceiling; ground
-   to live docs/errors/APIs.
-4. **MCP client** — plug into the external-tool ecosystem.
+3. **MCP client** — plug into the external-tool ecosystem.
+
+   ✅ **Web search + fetch** shipped (`28e1d69`) — `web.search` (keyless DuckDuckGo)
+   + `web.fetch` (readable extraction), new auto-allowed `web` category, clickable
+   source cards in the cockpit. The "only knows the repo" ceiling is broken.
 
 Plus optional cleanup: the HARNESS_REBUILD_V2 "remaining sweep" (delete dead
 handlers/frontend, narrow `SessionStateRecord` with the Pulse/Merge rewire), and
