@@ -3,7 +3,7 @@
 // transcript (InlineToolRows) and the Tool Inspector drawer so a diff/payload
 // looks the same — like an editor — wherever it's shown.
 
-import { FileDiff } from 'lucide-react';
+import { FileDiff, CheckCircle2, Circle, Loader2, ListChecks } from 'lucide-react';
 import type { ToolResultPreview } from '../../types/backend';
 import { parseUnifiedDiff, diffGutterWidth } from '../../lib/diff';
 import { tokenizeLine, langFromPath, SYNTAX_CLASS } from '../../lib/syntax';
@@ -96,6 +96,54 @@ export function DiffView({ preview }: { preview: Extract<ToolResultPreview, { ty
       {preview.truncated && (
         <div className="mt-0.5 px-1 text-[10px] text-operator-muted/50">Diff truncated — large change.</div>
       )}
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// PlanView — the agent's live task checklist (plan.write). Completed items
+// check off, the in-progress one pulses, pending ones wait. Lets the operator
+// watch the agent work the plan and never lose the thread.
+// ---------------------------------------------------------------------------
+
+export function PlanView({ preview }: { preview: Extract<ToolResultPreview, { type: 'plan' }> }) {
+  const items = preview.items || [];
+  const done = items.filter((i) => i.status === 'completed').length;
+  return (
+    <div className="mt-1.5 rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+      <div className="mb-1.5 flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-wider text-operator-muted/70">
+        <ListChecks className="h-3 w-3 shrink-0 text-operator-accent/70" />
+        <span>Plan</span>
+        <span className="ml-auto font-mono tabular-nums text-operator-muted/55">
+          {done}/{items.length}
+        </span>
+      </div>
+      <ul className="space-y-0.5">
+        {items.map((item, i) => {
+          if (item.status === 'completed') {
+            return (
+              <li key={i} className="flex items-start gap-1.5 text-[11.5px] leading-snug">
+                <CheckCircle2 className="mt-0.5 h-3 w-3 shrink-0 text-operator-success/80" />
+                <span className="text-operator-muted/55 line-through">{item.content}</span>
+              </li>
+            );
+          }
+          if (item.status === 'in_progress') {
+            return (
+              <li key={i} className="flex items-start gap-1.5 text-[11.5px] leading-snug">
+                <Loader2 className="mt-0.5 h-3 w-3 shrink-0 animate-spin text-operator-accent/80" />
+                <span className="font-medium text-operator-text">{item.content}</span>
+              </li>
+            );
+          }
+          return (
+            <li key={i} className="flex items-start gap-1.5 text-[11.5px] leading-snug">
+              <Circle className="mt-0.5 h-3 w-3 shrink-0 text-operator-muted/40" />
+              <span className="text-operator-text/75">{item.content}</span>
+            </li>
+          );
+        })}
+      </ul>
     </div>
   );
 }

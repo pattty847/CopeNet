@@ -168,7 +168,13 @@ export interface DiffPreview {
   afterDigest?: string;    // digest the edit left the file at — the revert key
 }
 
-export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview | DiffPreview;
+/** plan.write — the agent's live task checklist. */
+export interface PlanPreview {
+  type: 'plan';
+  items: { content: string; status: 'pending' | 'in_progress' | 'completed' }[];
+}
+
+export type ToolResultPreview = FileReadPreview | RepoSearchPreview | RawPreview | DiffPreview | PlanPreview;
 
 export interface ToolResultPart {
   kind: 'tool_result';

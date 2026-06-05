@@ -301,6 +301,16 @@ class ToolBlockedError(RuntimeError):
 def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
     if not isinstance(body, dict):
         return None
+    if tool_id == "plan.write":
+        items = body.get("items")
+        if isinstance(items, list):
+            clean = [
+                {"content": str(i.get("content") or ""), "status": str(i.get("status") or "pending")}
+                for i in items
+                if isinstance(i, dict) and i.get("content")
+            ]
+            if clean:
+                return {"type": "plan", "items": clean}
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")

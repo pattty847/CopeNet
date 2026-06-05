@@ -54,6 +54,9 @@ function previewSummary(preview: SessionRunRecord['toolSteps'][number]['members'
   if (preview.type === 'diff') {
     return preview.diff || null;
   }
+  if (preview.type === 'plan') {
+    return preview.items.map((it) => `[${it.status === 'completed' ? 'x' : ' '}] ${it.content}`).join('\n') || null;
+  }
   return preview.text || null;
 }
 

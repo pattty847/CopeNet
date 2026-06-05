@@ -185,6 +185,21 @@ function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
       afterDigest: payload.afterDigest ? String(payload.afterDigest) : undefined,
     };
   }
+  if (type === 'plan') {
+    const rawItems = Array.isArray(payload.items) ? payload.items : [];
+    const valid = ['pending', 'in_progress', 'completed'];
+    return {
+      type: 'plan',
+      items: rawItems.map((it: unknown) => {
+        const item = (it || {}) as Record<string, unknown>;
+        const status = String(item.status || 'pending');
+        return {
+          content: String(item.content || ''),
+          status: (valid.includes(status) ? status : 'pending') as 'pending' | 'in_progress' | 'completed',
+        };
+      }),
+    };
+  }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
     const lines = String(payload.content).split('\n').slice(0, 20);
     return {

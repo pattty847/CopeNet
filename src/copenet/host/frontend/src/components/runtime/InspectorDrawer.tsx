@@ -24,7 +24,7 @@ import type { ToolResultPart } from '../../types/backend';
 import { DiffArtifactView } from './DiffArtifactView';
 import { LoadingState } from './ResourceStates';
 import { ChatMarkdown } from '../ChatMarkdown';
-import { DiffView, JsonView } from './CodeViews';
+import { DiffView, JsonView, PlanView } from './CodeViews';
 
 function ArtifactBody({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'patch_plan' || artifact.kind === 'diff') {
@@ -357,6 +357,8 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
 
       {tool.preview?.type === 'diff' ? (
         <DiffView preview={tool.preview} />
+      ) : tool.preview?.type === 'plan' ? (
+        <PlanView preview={tool.preview} />
       ) : (effect?.preview || tool.preview) ? (
         <JsonView value={effect?.preview || tool.preview} />
       ) : null}

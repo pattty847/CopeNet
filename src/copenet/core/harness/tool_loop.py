@@ -968,6 +968,13 @@ def compose_responses_tool_instructions(
         "you lack file access or are constrained from calling tools; call the "
         "tools directly, gather what you need, then give your answer."
     )
+    if any(tool.id == "plan.write" for tool in tools):
+        directive += (
+            " For any non-trivial, multi-step task (roughly 3+ steps), call plan.write FIRST to lay out "
+            "your plan as a checklist, then update it (send the full list each time) to mark steps "
+            "in_progress and completed as you work. Keep exactly one step in_progress at a time. Skip "
+            "planning for trivial single-step requests."
+        )
     base = (system_prompt or "").strip()
     return f"{base}\n\n{directive}" if base else directive
 

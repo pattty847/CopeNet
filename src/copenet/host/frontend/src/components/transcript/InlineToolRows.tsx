@@ -30,7 +30,7 @@ import type {
 import { useAppStore } from '../../store/useAppStore';
 import { langFromPath } from '../../lib/syntax';
 import { wsClient } from '../../lib/wsClient';
-import { HighlightedCode, DiffView } from '../runtime/CodeViews';
+import { HighlightedCode, DiffView, PlanView } from '../runtime/CodeViews';
 
 // ---------------------------------------------------------------------------
 // Operator-verb labels — replace protocol tool ids with English verbs in the UI.
@@ -47,6 +47,7 @@ const TOOL_VERB: Record<string, string> = {
   'test.discover': 'Discovered tests',
   'context.prepare': 'Prepared context',
   'shell.exec': 'Ran command',
+  'plan.write': 'Planned',
   'git.diff': 'Read diff',
   'git.status': 'Read git status',
   'artifact.create': 'Saved artifact',
@@ -279,6 +280,7 @@ function ToolPreview({ preview }: { preview: ToolResultPreview }) {
   if (preview.type === 'file_read') return <FileReadPreviewBlock preview={preview} />;
   if (preview.type === 'repo_search') return <RepoSearchPreviewBlock preview={preview} />;
   if (preview.type === 'diff') return <DiffPreviewBlock preview={preview} />;
+  if (preview.type === 'plan') return <PlanView preview={preview} />;
   return <RawPreviewBlock preview={preview} />;
 }
 
@@ -313,7 +315,7 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
   // Diffs are the change the model just made — show them open by default,
   // like Codex / Claude Code. Everything else stays collapsed.
-  const [expanded, setExpanded] = useState(part.preview?.type === 'diff');
+  const [expanded, setExpanded] = useState(part.preview?.type === 'diff' || part.preview?.type === 'plan');
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const hasExpandable = !!part.preview || !!part.effect || !!part.artifactId || (!part.ok && !!part.error);
   const verb = operatorVerb(part.toolId);

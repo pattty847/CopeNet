@@ -47,6 +47,10 @@ function formatToolPreview(preview: ToolResultPreview | null | undefined): strin
       ...preview.diff.split('\n').slice(0, 40).map((line) => `    ${line}`),
     ];
   }
+  if (preview.type === 'plan') {
+    const mark = (s: string) => (s === 'completed' ? '[x]' : s === 'in_progress' ? '[~]' : '[ ]');
+    return ['  - Plan:', ...preview.items.map((it) => `    ${mark(it.status)} ${it.content}`)];
+  }
   return preview.text.trim() ? [`  - Preview: ${preview.text.trim()}`] : [];
 }
 
