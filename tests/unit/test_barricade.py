@@ -119,6 +119,32 @@ async def test_egress_guard_blocks_private_host(tmp_path: Path, monkeypatch: pyt
 
 
 @pytest.mark.asyncio
+async def test_egress_allowlist_permits_private_host_but_keeps_secret_checks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enable(monkeypatch)
+    monkeypatch.setenv("COPENET_BARRICADE_FETCH_ALLOWLIST", "127.0.0.1")
+
+    async def fake_extract(self, *, url: str, max_chars: int = 20000):  # noqa: ANN001
+        from copenet.core.web_ingest import WebExtractResult
+
+        return WebExtractResult(url=url, title="T", text="body", markdown="b", excerpt="b", word_count=1)
+
+    monkeypatch.setattr("copenet.core.web_ingest.WebIngestionService.extract_url", fake_extract)
+    reg = ToolRegistry()
+    ctx = _ctx(tmp_path)
+    # allowlisted private host fetch is permitted (operator-trusted internal host)
+    ok = await reg.execute(ToolExecutionRequest("web.fetch", {"url": "http://127.0.0.1:8777/guide.html"}), ctx)
+    assert ok.ok is True
+    # ...but the secret-param check still applies even to an allowlisted host
+    bad = await reg.execute(
+        ToolExecutionRequest("web.fetch", {"url": "http://127.0.0.1:8777/c?token=abc123"}),
+        ctx,
+    )
+    assert bad.ok is False
+
+
+@pytest.mark.asyncio
 async def test_egress_guard_catches_canary_from_prior_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _enable(monkeypatch)
     (tmp_path / "creds.env").write_text("API_TOKEN=supersecret_canary_123456\n", encoding="utf-8")

@@ -70,6 +70,19 @@ def barricade_enabled() -> bool:
     return os.environ.get("COPENET_BARRICADE", "").strip().lower() in {"1", "true", "yes", "on"}
 
 
+def _fetch_host_allowlist() -> set[str]:
+    """Operator-trusted hosts the egress guard may fetch despite being private.
+
+    Real operators sometimes need the agent to reach a specific internal host
+    (a docs server, an intranet wiki). `COPENET_BARRICADE_FETCH_ALLOWLIST` is a
+    comma-separated host allowlist that exempts ONLY the private-address check —
+    the secret-parameter and canary-value checks still apply, so an allowlisted
+    host still can't be used to smuggle a freshly-read secret.
+    """
+    raw = os.environ.get("COPENET_BARRICADE_FETCH_ALLOWLIST", "")
+    return {host.strip().lower() for host in raw.split(",") if host.strip()}
+
+
 @dataclass
 class SecurityEvent:
     """One entry in the run's security timeline."""
@@ -195,10 +208,11 @@ def _egress_guard(
     parsed = urlparse(candidate)
     state = get_security_state(context)
 
+    allowlisted = (parsed.hostname or "").lower() in _fetch_host_allowlist()
     reason: str | None = None
     if parsed.scheme not in {"http", "https"}:
         reason = f"non-web scheme '{parsed.scheme or '?'}' is blocked"
-    elif _is_private_host(parsed.hostname):
+    elif _is_private_host(parsed.hostname) and not allowlisted:
         reason = f"refusing fetch to private/loopback/metadata host '{parsed.hostname}'"
     else:
         leaked = _leaked_secret(candidate, state)
