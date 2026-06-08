@@ -155,18 +155,26 @@ Defense-in-depth means naming what still bites:
 
 ## 7. Recommended hardening (in priority order)
 
-1. **Taint-tracking on side effects** *(the headline fix for gap #1)*. When a
-   turn ingests untrusted external content (any `web.*` or roamed read), set a
-   per-turn `untrusted_context` flag. While set, **escalate the approval posture
-   of side-effectful tools**: `files.write` / `files.edit` / non-allowlisted
-   `shell.exec` move from auto-applied to `approval_required` for the rest of that
-   turn. Untrusted-in raises the bar for dangerous-out. Bounded, deterministic,
-   and the single highest-leverage change. (~an afternoon.)
+> **Shipped: the CopeNet Barricade** (`COPENET_BARRICADE=1`,
+> `core/tools/barricade.py`). Items 1 and 2 below are built and tested behind a
+> toggle; see `docs/redteam-demo/` for a runnable before/after proof. They are
+> opt-in today and should graduate to default-on after broader soak.
 
-2. **Egress guard on `web.fetch`** *(gap #2/#3)*. Refuse URLs pointing at private
-   / link-local / loopback ranges by default; flag fetches whose query string
-   contains data that looks like it came from a prior file read; optionally an
-   operator-configurable domain allowlist for sensitive sessions.
+1. ✅ **Taint-tracking on side effects** *(the headline fix for gap #1)*. When a
+   run ingests untrusted external content (`web.search` / `web.fetch`), an
+   `untrusted_context` flag is set on the run's `RunSecurityState`. While set,
+   side-effectful tools (`files.write` / `files.edit` / `shell.exec` /
+   `artifact.create`) return `approval_required` instead of executing — **even in
+   full-access mode** — until the operator approves that exact action. Untrusted-in
+   raises the bar for dangerous-out. *(Gated pre-dispatch in `ToolRegistry.execute`
+   so the side effect never happens; verified by `tests/unit/test_barricade.py`.)*
+
+2. ✅ **Egress guard on `web.fetch`** *(gap #2/#3)*. Refuses non-http(s) schemes
+   and private / loopback / link-local / metadata hosts, blocks URLs whose query
+   carries secret-like parameters (`token=`, `api_key=`, …), and — the strong
+   check — blocks any URL that embeds a value previously read from a sensitive
+   file (`.env`, `*secret*`, keys), so a fetched page can't trick the agent into
+   smuggling a canary it just read. *(`barricade._egress_guard`.)*
 
 3. **Provenance envelope on tool results** *(reinforces §2)*. Wrap web/file tool
    output fed back to the model in an explicit `<untrusted-data source=...>` frame

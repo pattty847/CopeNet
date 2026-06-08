@@ -69,12 +69,19 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
             emit_event=emit_event,
             abort_event=abort_event,
         )
-        if decision == "approved" and command:
-            approved = context.ephemeral.setdefault("approved_commands", set())
-            if isinstance(approved, set):
-                approved.add(command)
-            else:
-                context.ephemeral["approved_commands"] = {command}
+        if decision == "approved":
+            # Re-run the exact call with the gate bypassed. Track the approved
+            # target by both keys: shell uses the command string; non-shell tools
+            # (files.write under the Barricade) use the target/path. The Barricade
+            # side-effect gate checks `barricade_approved`, the shell pattern gate
+            # checks `approved_commands` — record in both so the re-run passes.
+            target_key = command or str(output.get("target") or result.tool_id)
+            for key_name in ("approved_commands", "barricade_approved"):
+                approved = context.ephemeral.setdefault(key_name, set())
+                if isinstance(approved, set):
+                    approved.add(target_key)
+                else:
+                    context.ephemeral[key_name] = {target_key}
             return await base_executor(request, context)
         return result
 

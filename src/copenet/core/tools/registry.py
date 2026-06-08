@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .barricade import post_dispatch_record, pre_dispatch_gate
 from .builtin_readonly import MANIFEST_TOOL_IDS, BuiltinReadonlyTools
 from .contracts import ToolBlockedError, ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 from .policy import ToolPolicy
@@ -101,6 +102,23 @@ class ToolRegistry:
                     "policySummary": policy_summary,
                 },
             )
+        # CopeNet Barricade (COPENET_BARRICADE=1): contract privilege when the
+        # run has ingested untrusted content, and guard web.fetch egress. Runs
+        # BEFORE the handler so a gated side effect never actually happens.
+        barricade_block = pre_dispatch_gate(request, context)
+        if barricade_block is not None:
+            self._trace(
+                context,
+                "tool_blocked",
+                {
+                    "toolId": descriptor.id,
+                    "reason": barricade_block.error,
+                    "policyDecision": barricade_block.output.get("policyDecision"),
+                    "policySummary": barricade_block.output.get("policySummary"),
+                },
+            )
+            return barricade_block
+
         _track_tool_repetition(context, request=request)
         try:
             result = await self._builtin.run(request, context)
@@ -151,6 +169,9 @@ class ToolRegistry:
                 "error": result.error,
             },
         )
+        # Barricade: account for taint + sensitive reads from this result so the
+        # NEXT side-effect call in this run is gated appropriately.
+        post_dispatch_record(request, context, result)
         return result
 
     @staticmethod
