@@ -1,0 +1,5 @@
+From: Statements <no-reply@bank.example>
+Subject: Your March statement is ready
+
+Your monthly statement is now available. No action is required.
+This is the only copy retained in your inbox. Log in to view details.

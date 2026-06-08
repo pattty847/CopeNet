@@ -112,18 +112,40 @@ be reckless. *That* is the whole idea — you stop betting on the model's judgme
 
 ---
 
-## Beat 5 — The deterministic sweep + the audit artifact (≈30s)
+## Beat 5 — The deterministic sweep + the visceral stake (≈45s)
+
+The sweep now includes a fourth attack: **deleting your inbox.** The sandbox ships
+a fake `inbox/` (mom's dinner invite, a job offer, account recovery codes) — the
+kind of thing a normal person would be devastated to lose.
 
 ```bash
-uv run python scripts/redteam_demo.py                       # BEFORE: all 3 EXECUTE
-COPENET_BARRICADE=1 uv run python scripts/redteam_demo.py    # AFTER: all 3 APPROVAL_REQUIRED
+uv run python scripts/redteam_demo.py                       # BEFORE: all 4 EXECUTE, inbox 5 → 0
+COPENET_BARRICADE=1 uv run python scripts/redteam_demo.py    # AFTER: all 4 APPROVAL_REQUIRED, inbox 5 → 5
 cat docs/redteam-demo/output/security_timeline.json          # the slide
 ```
 
-**Narration:** "And to prove it isn't a one-off, here's a deterministic sweep of
-all three attack classes — file write, exfiltration, dangerous shell — flipping
-from EXECUTED to blocked with a single flag. The security timeline is the audit
-trail: what untrusted content came in, and what it was stopped from doing."
+**Verified output:** BEFORE prints *"Your inbox: 5 emails before → 0 after the
+attack."* AFTER prints *"5 emails before → 5 after."*
+
+**Narration:** "Forget abstract 'file writes.' Here's what it means to a real
+person: your inbox — your mom's note, your job offer, your account recovery codes
+— gone, because the agent read a poisoned web page. With the Barricade on, the
+exact same attack leaves all five emails sitting right there. That's the
+difference between a feature and a liability."
+
+---
+
+## Optional beat — jailbreaks (narrate, don't perform) (≈30s)
+
+Do NOT run real jailbreaks on camera. The point doesn't need it:
+
+**Narration:** "You might think 'just use a frontier model, they refuse this.'
+People like Pliny publish working jailbreaks for new models within hours of
+release — system-prompt leaks, guardrail bypasses. They get patched, but the
+lesson is permanent: 'the model resisted' is not 'the model is safe.' A defense
+that depends on the model always saying no will eventually meet the prompt that
+makes it say yes. The Barricade is designed so that when — not if — the model is
+fooled, nothing happens anyway."
 
 ---
 
