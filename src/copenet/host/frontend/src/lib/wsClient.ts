@@ -42,6 +42,8 @@ import {
   ToolExecution,
   ToolResultPreview,
   TurnStateSnapshot,
+  WorkspaceFile,
+  WorkspaceFileContent,
 } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 
@@ -1856,6 +1858,16 @@ class WsClient {
   /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run. */
   async decideApproval(approvalId: string, decision: 'approved' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
     return this.request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
+  }
+
+  /** List viewable files under a session's workspace root (read-only file viewer). */
+  async listWorkspaceFiles(key: string): Promise<{ root: string; files: WorkspaceFile[] }> {
+    return this.request<{ root: string; files: WorkspaceFile[] }>('workspace.listFiles', { key });
+  }
+
+  /** Read one file under a session's workspace root, rendered by the file viewer. */
+  async readWorkspaceFile(key: string, path: string): Promise<WorkspaceFileContent> {
+    return this.request<WorkspaceFileContent & Record<string, unknown>>('workspace.readFile', { key, path });
   }
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {

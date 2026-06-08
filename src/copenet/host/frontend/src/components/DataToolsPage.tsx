@@ -28,6 +28,7 @@ import { DataToolsRoute, MediaAsset, MediaAssetDetail, WebExtractDocument } from
 import { MessagingSettingsPanel } from './MessagingSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
 import { PersonaHomePanel } from './persona/PersonaHomePanel';
+import { WorkspaceFileViewer } from './WorkspaceFileViewer';
 
 function formatRelative(timestamp: string): string {
   const then = new Date(timestamp).getTime();
@@ -1089,7 +1090,12 @@ export function DataToolsPage() {
   return (
     <div className="space-y-3">
       <SectionBreadcrumb route={route} onBack={handleBack} />
-      {route === 'hub' && <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} openPersona={() => setRoute('persona')} />}
+      {route === 'hub' && (
+        <>
+          <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} openPersona={() => setRoute('persona')} />
+          <WorkspaceFileViewer />
+        </>
+      )}
       {route === 'sources' && <DataSourcesPage openMedia={() => setRoute('media')} openWeb={() => setRoute('web')} />}
       {route === 'media' && <MediaImportsPage />}
       {route === 'web' && <WebPageImportsPage />}

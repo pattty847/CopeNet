@@ -66,6 +66,10 @@ from .rpc_sessions import (
     handle_sessions_resolve,
     handle_sessions_state,
 )
+from copenet.host.rpc_workspace import (
+    handle_workspace_list_files,
+    handle_workspace_read_file,
+)
 
 
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
@@ -202,6 +206,10 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None
         await handle_sessions_artifacts(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.revertEdit":
         await handle_sessions_revert_edit(req.id, req.params, send_json, orchestrator)
+    elif req.method == "workspace.listFiles":
+        await handle_workspace_list_files(req.id, req.params, send_json, orchestrator)
+    elif req.method == "workspace.readFile":
+        await handle_workspace_read_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "chat.decideApproval":
         await handle_chat_decide_approval(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.debugCopy":

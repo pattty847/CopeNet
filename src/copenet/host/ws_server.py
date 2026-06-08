@@ -184,6 +184,8 @@ class CopeNetWsServer:
                                 "sessions.archive",
                                 "sessions.artifacts",
                                 "sessions.revertEdit",
+                                "workspace.listFiles",
+                                "workspace.readFile",
                                 "chat.decideApproval",
                                 "sessions.runs",
                                 "sessions.run",

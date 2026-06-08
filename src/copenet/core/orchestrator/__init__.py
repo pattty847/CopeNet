@@ -737,6 +737,26 @@ class Orchestrator:
             event.set()
         return {"ok": True, "approvalId": approval_id, "decision": normalized}
 
+    def _resolve_session_workspace_root(self, session_key: str) -> Path:
+        """Return the on-disk workspace root for a session (falls back to workdir)."""
+        entry = self._session_store.get(session_key.strip())
+        selected_root = entry.workspace_root if entry is not None and entry.workspace_root else None
+        return Path(self.validate_workspace_root(selected_root) if selected_root else str(self._workdir))
+
+    def list_session_workspace_files(self, *, session_key: str) -> dict:
+        """List viewable files under a session's workspace root (read-only viewer)."""
+        from copenet.core.workspace_files import list_workspace_files
+
+        root = self._resolve_session_workspace_root(session_key)
+        return {"root": str(root), "files": list_workspace_files(root)}
+
+    def read_session_workspace_file(self, *, session_key: str, path: str) -> dict:
+        """Read one file under a session's workspace root (scoped, size-capped)."""
+        from copenet.core.workspace_files import read_workspace_file
+
+        root = self._resolve_session_workspace_root(session_key)
+        return read_workspace_file(root, path)
+
     def revert_file_edit(self, *, session_key: str, path: str, after_digest: str) -> dict:
         """Undo a model's write/edit by restoring the recorded pre-edit content.
 

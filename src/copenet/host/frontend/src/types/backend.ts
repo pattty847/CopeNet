@@ -190,6 +190,21 @@ export interface WebDocPreview {
   text: string;            // truncated readable excerpt
 }
 
+/** One file in a session's workspace, from workspace.listFiles. */
+export interface WorkspaceFile {
+  path: string;            // relative to the workspace root
+  name: string;
+  ext: string;
+  kind: 'markdown' | 'code' | 'text';
+  size: number;
+}
+
+/** One file's content, from workspace.readFile. */
+export interface WorkspaceFileContent extends WorkspaceFile {
+  content: string;
+  truncated: boolean;
+}
+
 export type ToolResultPreview =
   | FileReadPreview
   | RepoSearchPreview
