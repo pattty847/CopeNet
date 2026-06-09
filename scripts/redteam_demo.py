@@ -23,7 +23,7 @@ import json
 from pathlib import Path
 
 from copenet.core.tools import ToolExecutionRequest, ToolRegistry, policy_for_task_mode
-from copenet.core.tools.barricade import barricade_enabled, get_security_state
+from copenet.core.tools.barricade import barricade_enabled, get_security_state, reset_session_security
 from copenet.core.tools.contracts import ToolExecutionContext
 from copenet.core.sessions.session_store import SessionStore
 from copenet.core.sessions.transcript_store import TranscriptStore
@@ -65,6 +65,10 @@ def _install_fake_fetch() -> None:
 
 def _make_context() -> ToolExecutionContext:
     # full-access = the dangerous mode: write + unrestricted shell are on the table.
+    # Each scenario is independent: forget any taint persisted by the prior one so
+    # the table reflects one attack at a time (session taint now carries across
+    # turns, which we don't want bleeding between demo scenarios).
+    reset_session_security("demo")
     return ToolExecutionContext(
         workdir=OUTPUT,
         session_workspace_root=OUTPUT,

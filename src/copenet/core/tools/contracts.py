@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 ToolCategory = Literal["repo-read", "repo-write", "shell-read", "shell-write", "context", "artifact", "browser", "web", "mcp"]
 ToolSafetyLevel = Literal["safe", "guarded", "restricted"]
 ToolAccessAction = Literal["read", "write", "unknown"]
-ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "unsafe_unknown"]
+ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "egress_blocked", "unsafe_unknown"]
 ToolEvidenceRole = Literal["none", "discovery", "grounding", "mutation", "verification", "context", "artifact"]
 ToolSideEffect = Literal["none", "read", "write", "external"]
 ToolEffectKind = Literal["file_read", "repo_search", "shell_command", "file_write", "file_edit", "artifact", "context", "web_search", "web_fetch", "raw"]

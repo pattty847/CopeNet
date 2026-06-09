@@ -70,18 +70,21 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
             abort_event=abort_event,
         )
         if decision == "approved":
-            # Re-run the exact call with the gate bypassed. Track the approved
-            # target by both keys: shell uses the command string; non-shell tools
-            # (files.write under the Barricade) use the target/path. The Barricade
-            # side-effect gate checks `barricade_approved`, the shell pattern gate
-            # checks `approved_commands` — record in both so the re-run passes.
-            target_key = command or str(output.get("target") or result.tool_id)
-            for key_name in ("approved_commands", "barricade_approved"):
-                approved = context.ephemeral.setdefault(key_name, set())
-                if isinstance(approved, set):
-                    approved.add(target_key)
-                else:
-                    context.ephemeral[key_name] = {target_key}
+            # Re-run the exact call with the gate bypassed. The shell pattern gate
+            # checks `approved_commands` by command string; the Barricade side-
+            # effect gate checks `barricade_approved` by an argument-DIGEST key, so
+            # approving one write doesn't bless a different write to the same path.
+            from copenet.core.tools.barricade import approval_key
+
+            command_key = command or str(output.get("target") or result.tool_id)
+            shell_approved = context.ephemeral.setdefault("approved_commands", set())
+            (shell_approved if isinstance(shell_approved, set) else set()).add(command_key)
+            if not isinstance(shell_approved, set):
+                context.ephemeral["approved_commands"] = {command_key}
+            barricade_approved = context.ephemeral.setdefault("barricade_approved", set())
+            (barricade_approved if isinstance(barricade_approved, set) else set()).add(approval_key(request))
+            if not isinstance(barricade_approved, set):
+                context.ephemeral["barricade_approved"] = {approval_key(request)}
             return await base_executor(request, context)
         return result
 

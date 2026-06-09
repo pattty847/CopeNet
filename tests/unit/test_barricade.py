@@ -11,11 +11,20 @@ from pathlib import Path
 import pytest
 
 from copenet.core.tools import ToolExecutionRequest, ToolRegistry, policy_for_task_mode
-from copenet.core.tools.barricade import get_security_state
+from copenet.core.tools.barricade import approval_key, get_security_state, reset_session_security
 from copenet.core.tools.contracts import ToolExecutionContext
 from copenet.core.tools.handlers import web as web_handler
 from copenet.core.sessions.session_store import SessionStore
 from copenet.core.sessions.transcript_store import TranscriptStore
+
+
+@pytest.fixture(autouse=True)
+def _clean_session_taint():
+    # Session taint now persists across runs in a module-global registry; clear it
+    # before and after each test so cases don't bleed into one another.
+    reset_session_security()
+    yield
+    reset_session_security()
 
 
 def _ctx(tmp_path: Path) -> ToolExecutionContext:
@@ -83,14 +92,30 @@ async def test_write_allowed_when_enabled_but_no_untrusted_content(tmp_path: Pat
 
 
 @pytest.mark.asyncio
-async def test_barricade_approved_target_bypasses_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_barricade_approved_exact_call_bypasses_gate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     _enable(monkeypatch)
     reg = ToolRegistry()
     ctx = _ctx(tmp_path)
     await reg.execute(ToolExecutionRequest("web.search", {"query": "anything"}), ctx)
-    ctx.ephemeral["barricade_approved"] = {"out.txt"}  # operator approved earlier
-    res = await reg.execute(ToolExecutionRequest("files.write", {"path": "out.txt", "content": "x"}), ctx)
+    write = ToolExecutionRequest("files.write", {"path": "out.txt", "content": "x"})
+    ctx.ephemeral["barricade_approved"] = {approval_key(write)}  # operator approved THIS call
+    res = await reg.execute(write, ctx)
     assert res.ok is True
+
+
+@pytest.mark.asyncio
+async def test_approval_is_bound_to_exact_arguments(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Codex P1: approving one write must NOT bless a different write to the same path.
+    _enable(monkeypatch)
+    reg = ToolRegistry()
+    ctx = _ctx(tmp_path)
+    await reg.execute(ToolExecutionRequest("web.search", {"query": "anything"}), ctx)
+    approved = ToolExecutionRequest("files.write", {"path": "out.txt", "content": "benign"})
+    ctx.ephemeral["barricade_approved"] = {approval_key(approved)}
+    # same path, DIFFERENT content -> still gated
+    res = await reg.execute(ToolExecutionRequest("files.write", {"path": "out.txt", "content": "PAYLOAD"}), ctx)
+    assert res.ok is False
+    assert res.output["policyDecision"] == "approval_required"
 
 
 @pytest.mark.asyncio
@@ -103,7 +128,8 @@ async def test_egress_guard_blocks_secret_param(tmp_path: Path, monkeypatch: pyt
         ctx,
     )
     assert res.ok is False
-    assert res.output["policyDecision"] == "approval_required"
+    # egress is a HARD block now (not approvable) so the run can't park forever
+    assert res.output["policyDecision"] == "egress_blocked"
     assert "exfiltration" in res.output["policySummary"].lower()
 
 
@@ -174,3 +200,77 @@ async def test_egress_guard_allows_normal_url(tmp_path: Path, monkeypatch: pytes
     ctx = _ctx(tmp_path)
     res = await reg.execute(ToolExecutionRequest("web.fetch", {"url": "https://docs.python.org/3/"}), ctx)
     assert res.ok is True
+
+
+@pytest.mark.asyncio
+async def test_taint_persists_across_turns_in_a_session(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Codex P1 (headline): a poisoned page in turn N must keep turn N+1 tainted,
+    # because the hostile output is replayed into the next turn's model context.
+    _enable(monkeypatch)
+    reg = ToolRegistry()
+
+    # Turn 1: fetch untrusted content (taints the session). Fresh context = a run.
+    ctx1 = _ctx(tmp_path)
+    await reg.execute(ToolExecutionRequest("web.search", {"query": "anything"}), ctx1)
+
+    # Turn 2: a BRAND NEW context (no web.* call this turn) — same session key.
+    ctx2 = _ctx(tmp_path)
+    assert get_security_state(ctx2).untrusted_context is True  # taint carried forward
+    res = await reg.execute(ToolExecutionRequest("files.write", {"path": "out.txt", "content": "x"}), ctx2)
+    assert res.ok is False
+    assert res.output["policyDecision"] == "approval_required"
+    assert not (tmp_path / "out.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_fresh_session_is_not_tainted(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Persistence must be per-session: a different session is clean.
+    _enable(monkeypatch)
+    reg = ToolRegistry()
+    ctx1 = _ctx(tmp_path)
+    await reg.execute(ToolExecutionRequest("web.search", {"query": "anything"}), ctx1)
+
+    other = ToolExecutionContext(
+        workdir=tmp_path, session_workspace_root=tmp_path, session_key="OTHER",
+        provider_name="t", model="t",
+        session_store=SessionStore(path=tmp_path / "i.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path), providers={},
+        policy=policy_for_task_mode("full-access"),
+    )
+    assert get_security_state(other).untrusted_context is False
+
+
+@pytest.mark.asyncio
+async def test_web_search_query_cannot_exfiltrate_a_read_secret(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Codex P1: web.search is an egress channel too — block a query that smuggles
+    # out a value just read from a sensitive file.
+    _enable(monkeypatch)
+    (tmp_path / "creds.env").write_text("API_TOKEN=supersecret_canary_778899\n", encoding="utf-8")
+    reg = ToolRegistry()
+    ctx = _ctx(tmp_path)
+    await reg.execute(ToolExecutionRequest("files.read", {"path": "creds.env"}), ctx)
+    res = await reg.execute(
+        ToolExecutionRequest("web.search", {"query": "what is supersecret_canary_778899"}),
+        ctx,
+    )
+    assert res.ok is False
+    assert res.output["policyDecision"] == "egress_blocked"
+    assert "secret value" in res.output["policySummary"].lower()
+
+
+@pytest.mark.asyncio
+async def test_descriptor_derived_gating_catches_artifact_create(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # Codex P2: gating is descriptor-derived, so a mutating tool not in the legacy
+    # literal set (here artifact.create, side_effect="write") is still gated.
+    _enable(monkeypatch)
+    reg = ToolRegistry()
+    ctx = _ctx(tmp_path)
+    await reg.execute(ToolExecutionRequest("web.search", {"query": "anything"}), ctx)
+    res = await reg.execute(
+        ToolExecutionRequest("artifact.create", {"title": "x", "body": "y"}),
+        ctx,
+    )
+    # blocked either by taint gate (approval_required) — the point is it is NOT
+    # silently executed despite the tainted context.
+    assert res.ok is False
+    assert res.output.get("policyDecision") in {"approval_required", "egress_blocked"}

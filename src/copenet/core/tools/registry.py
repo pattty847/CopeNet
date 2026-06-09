@@ -105,7 +105,7 @@ class ToolRegistry:
         # CopeNet Barricade (COPENET_BARRICADE=1): contract privilege when the
         # run has ingested untrusted content, and guard web.fetch egress. Runs
         # BEFORE the handler so a gated side effect never actually happens.
-        barricade_block = pre_dispatch_gate(request, context)
+        barricade_block = pre_dispatch_gate(request, context, descriptor)
         if barricade_block is not None:
             self._trace(
                 context,
