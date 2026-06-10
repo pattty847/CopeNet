@@ -18,6 +18,39 @@ import uvicorn
 
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuthService
+
+
+def _resolve_bind_host(raw: str) -> str:
+    """Resolve the uvicorn bind host, with a ``tailscale`` convenience value.
+
+    ``COPNET_HOST=tailscale`` binds to this machine's Tailscale IPv4 so the agent
+    is reachable from your phone/laptop anywhere on the tailnet — and ONLY the
+    tailnet (unlike ``0.0.0.0``, which also exposes it to local wifi). Any other
+    value (an explicit IP, ``0.0.0.0``, the default ``127.0.0.1``) passes through.
+    """
+    value = (raw or "").strip()
+    if value.lower() != "tailscale":
+        return value or "127.0.0.1"
+
+    import shutil
+    import subprocess
+
+    candidates = ["tailscale", "/Applications/Tailscale.app/Contents/MacOS/Tailscale"]
+    for exe in candidates:
+        path = exe if exe.startswith("/") else shutil.which(exe)
+        if not path:
+            continue
+        try:
+            out = subprocess.run([path, "ip", "-4"], capture_output=True, text=True, timeout=5, check=False)
+        except (OSError, subprocess.SubprocessError):
+            continue
+        for line in (out.stdout or "").splitlines():
+            ip = line.strip()
+            if ip:
+                return ip
+    raise SystemExit(
+        "COPNET_HOST=tailscale: could not resolve a Tailscale IPv4 — is Tailscale running and logged in?"
+    )
 from copenet.host.api import create_app
 
 
@@ -219,10 +252,20 @@ def main() -> None:
         _run_chat_command(args)
         return
 
-    host = os.environ.get("COPNET_HOST", "127.0.0.1")
+    host = _resolve_bind_host(os.environ.get("COPNET_HOST", "127.0.0.1"))
     port = int(os.environ.get("COPNET_PORT", "17123"))
 
     app = create_app()
+    if host != "127.0.0.1":
+        # Reachable beyond loopback — print the URL and a security reminder, since
+        # CopeNet has no auth and (in full-access) real shell power.
+        scope = "your tailnet" if host.startswith("100.") else "this network"
+        print(f"\n  CopeNet is reachable from {scope} at:  http://{host}:{port}")
+        if host == "0.0.0.0":
+            print("  WARNING: 0.0.0.0 exposes CopeNet on ALL interfaces (incl. local wifi).")
+            print("  Prefer COPNET_HOST=tailscale to keep it private to your tailnet.\n")
+        else:
+            print("  (only devices on your tailnet can reach it — keep it that way)\n")
     uvicorn.run(app, host=host, port=port, log_level="info")
 
 
