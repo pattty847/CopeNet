@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from typing import Any, AsyncIterator, Awaitable, Callable, Protocol
 from uuid import uuid4
 
@@ -46,7 +47,30 @@ TraceRecorder = Callable[[str, dict[str, Any] | None], None]
 # Frontier harnesses leave step-count to the model. 100 is high enough that
 # real work never hits it, low enough that runaway loops eventually stop.
 MAX_TOOL_STEPS = 100
+# Above this size, a tool result is also persisted as an artifact (for the UI).
 LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
+
+# How much ACTUAL tool-output text the MODEL receives when a result is persisted.
+# The full output is always saved as an artifact for the UI; this caps only what
+# is fed back into the model's context, so a huge file can't blow the token
+# budget — while still being REAL content, not a 280-char receipt the agent
+# can't act on (the friction a phone-driven self-inspection surfaced). The tool
+# handlers already truncate their own output (files.read ~12KB, shell ~8-20KB),
+# so this is mostly a backstop. Override with COPNET_MODEL_TOOL_RESULT_CHARS.
+_DEFAULT_MODEL_FACING_RESULT_CHARS = 16000
+
+
+def model_facing_result_char_limit() -> int:
+    """Max chars of a persisted tool result fed back to the model (env-overridable)."""
+    raw = os.environ.get("COPNET_MODEL_TOOL_RESULT_CHARS", "").strip()
+    if raw:
+        try:
+            value = int(raw)
+        except ValueError:
+            value = 0
+        if value > 0:
+            return value
+    return _DEFAULT_MODEL_FACING_RESULT_CHARS
 
 # Default reasoning config for the native Responses path. summary="auto" is
 # the gate that makes the endpoint stream response.reasoning_summary_text.delta
@@ -886,14 +910,28 @@ def _materialize_tool_result_artifact(
             "persistedOutput": True,
         },
     )
-    preview = payload_text[:280].strip()
-    if len(payload_text) > 280:
-        preview += "..."
-    persisted_body = {
-        "artifactId": artifact.artifact_id,
-        "preview": preview,
-        "persistedOutput": True,
-    }
+    # Hand the MODEL real content (up to the budget), not a 280-char receipt. The
+    # full output is in the artifact above; the model gets the actual text so it
+    # can actually use the result. Keep the structured body when it fits; only
+    # clip (to a string + continuation pointer) when it genuinely exceeds budget.
+    model_limit = model_facing_result_char_limit()
+    if len(payload_text) <= model_limit:
+        base = dict(body) if isinstance(body, dict) else {"content": body}
+        persisted_body = {**base, "artifactId": artifact.artifact_id, "persistedOutput": True}
+    else:
+        clipped = payload_text[:model_limit].rstrip()
+        persisted_body = {
+            "content": clipped,
+            "artifactId": artifact.artifact_id,
+            "persistedOutput": True,
+            "truncatedForModel": True,
+            "fullChars": len(payload_text),
+            "continuationHint": (
+                f"Showing the first {model_limit} of {len(payload_text)} characters. The full output is "
+                f"saved as artifact {artifact.artifact_id}. For a file read, call files.read again with a "
+                f"higher offset to continue from where this left off."
+            ),
+        }
     persisted = ToolExecutionResult(
         tool_id=tool_result.tool_id,
         call_id=tool_result.call_id,
