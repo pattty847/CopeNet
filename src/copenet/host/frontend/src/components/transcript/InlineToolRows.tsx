@@ -161,7 +161,7 @@ function FileReadPreviewBlock({ preview }: { preview: Extract<ToolResultPreview,
         <span className="font-mono truncate">{displayPath}</span>
         {more != null && <span className="shrink-0 ml-auto pl-2">+{more} lines</span>}
       </div>
-      <div className="overflow-x-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] max-h-48">
+      <div className="overflow-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] max-h-[32rem]">
         {preview.lines.map((line, i) => (
           <div key={i} className="flex text-operator-text/75">
             <span
