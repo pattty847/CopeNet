@@ -338,10 +338,10 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
         path = body.get("path")
         content = body.get("content")
         if isinstance(path, str) and isinstance(content, str):
-            # Show the operator what the MODEL actually read, not a 240-char teaser.
-            # Bounded generously (the read is already capped at file_output_limit);
-            # the frontend renders it in a scrollable, line-numbered viewer.
-            return {"path": path, "content": content.rstrip()[:16000]}
+            # Carry what the MODEL actually read (bounded by file_output_limit) so
+            # the Inspect drawer can show the full read; the inline transcript caps
+            # the DISPLAY to a 200-line teaser. Not a 240-char receipt anymore.
+            return {"path": path, "content": content.rstrip()[:24000]}
     if tool_id in {"files.write", "files.edit"}:
         diff = body.get("diff")
         if isinstance(diff, str) and diff.strip():

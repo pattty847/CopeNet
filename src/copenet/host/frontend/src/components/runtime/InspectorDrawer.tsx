@@ -24,7 +24,8 @@ import type { ToolResultPart } from '../../types/backend';
 import { DiffArtifactView } from './DiffArtifactView';
 import { LoadingState } from './ResourceStates';
 import { ChatMarkdown } from '../ChatMarkdown';
-import { DiffView, JsonView, PlanView } from './CodeViews';
+import { DiffView, FileLinesView, JsonView, PlanView } from './CodeViews';
+import { langFromPath } from '../../lib/syntax';
 
 function ArtifactBody({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'patch_plan' || artifact.kind === 'diff') {
@@ -359,6 +360,8 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
         <DiffView preview={tool.preview} />
       ) : tool.preview?.type === 'plan' ? (
         <PlanView preview={tool.preview} />
+      ) : tool.preview?.type === 'file_read' ? (
+        <FileLinesView lines={tool.preview.lines} lang={langFromPath(tool.preview.path)} maxHeightClass="max-h-[60vh]" />
       ) : (effect?.preview || tool.preview) ? (
         <JsonView value={effect?.preview || tool.preview} />
       ) : null}

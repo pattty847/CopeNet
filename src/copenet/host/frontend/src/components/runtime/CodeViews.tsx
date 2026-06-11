@@ -32,6 +32,38 @@ export function HighlightedCode({ text, lang }: { text: string; lang: string }) 
   );
 }
 
+// FileLinesView — line-numbered, syntax-highlighted file content with WORD WRAP
+// on by default (long lines wrap instead of forcing an ugly horizontal scroll).
+// Shared by the inline transcript preview (capped) and the Inspect drawer (full).
+export function FileLinesView({
+  lines,
+  lang,
+  maxHeightClass = 'max-h-[22rem]',
+}: {
+  lines: string[];
+  lang: string;
+  maxHeightClass?: string;
+}) {
+  const gutterWidth = String(lines.length || 1).length;
+  return (
+    <div className={`overflow-y-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] ${maxHeightClass}`}>
+      {lines.map((line, i) => (
+        <div key={i} className="flex text-operator-text/75">
+          <span
+            className="shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums text-operator-muted/35"
+            style={{ width: `${gutterWidth}ch` }}
+          >
+            {i + 1}
+          </span>
+          <span className="min-w-0 flex-1 whitespace-pre-wrap break-words px-2">
+            <HighlightedCode text={line || ' '} lang={lang} />
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /** Line-numbered, syntax-highlighted unified diff (no action bar). */
 export function DiffView({ preview }: { preview: Extract<ToolResultPreview, { type: 'diff' }> }) {
   const displayPath = shortPath(preview.path);

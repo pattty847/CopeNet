@@ -175,7 +175,7 @@ function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
     return {
       type: 'file_read',
       path: String(payload.path || ''),
-      lines: Array.isArray(payload.lines) ? payload.lines.slice(0, 400).map(String) : [],
+      lines: Array.isArray(payload.lines) ? payload.lines.slice(0, 600).map(String) : [],
       totalLines: payload.totalLines != null ? Number(payload.totalLines) : null,
     };
   }
@@ -247,7 +247,7 @@ function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
     };
   }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
-    const lines = String(payload.content).split('\n').slice(0, 400);
+    const lines = String(payload.content).split('\n').slice(0, 600);
     return {
       type: 'file_read',
       path: String(payload.path),

@@ -32,7 +32,7 @@ import type {
 import { useAppStore } from '../../store/useAppStore';
 import { langFromPath } from '../../lib/syntax';
 import { wsClient } from '../../lib/wsClient';
-import { HighlightedCode, DiffView, PlanView } from '../runtime/CodeViews';
+import { FileLinesView, DiffView, PlanView } from '../runtime/CodeViews';
 
 // ---------------------------------------------------------------------------
 // Operator-verb labels — replace protocol tool ids with English verbs in the UI.
@@ -147,35 +147,22 @@ function fileReadLabel(member: ToolBatchMember): string {
 // Preview rendering
 // ---------------------------------------------------------------------------
 
+// Inline preview: a capped 200-line teaser (word-wrapped). For the rest, the
+// operator opens Inspect — which renders the full read in the drawer.
+const INLINE_FILE_PREVIEW_LINES = 200;
+
 function FileReadPreviewBlock({ preview }: { preview: Extract<ToolResultPreview, { type: 'file_read' }> }) {
-  const displayPath = shortPath(preview.path);
-  const more = preview.totalLines != null && preview.totalLines > preview.lines.length
-    ? preview.totalLines - preview.lines.length
-    : null;
-  const lang = langFromPath(preview.path);
-  const gutterWidth = String(preview.lines.length).length;
+  const displayLines = preview.lines.slice(0, INLINE_FILE_PREVIEW_LINES);
+  const total = preview.totalLines ?? preview.lines.length;
+  const hidden = total - displayLines.length;
   return (
     <div className="mt-1.5">
       <div className="mb-1 flex items-center gap-1.5 text-[10px] text-operator-muted/60">
         <File className="h-2.5 w-2.5 shrink-0" />
-        <span className="font-mono truncate">{displayPath}</span>
-        {more != null && <span className="shrink-0 ml-auto pl-2">+{more} lines</span>}
+        <span className="font-mono truncate">{shortPath(preview.path)}</span>
+        {hidden > 0 && <span className="shrink-0 ml-auto pl-2">+{hidden} more lines · Inspect to read</span>}
       </div>
-      <div className="overflow-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] max-h-[32rem]">
-        {preview.lines.map((line, i) => (
-          <div key={i} className="flex text-operator-text/75">
-            <span
-              className="shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums text-operator-muted/35"
-              style={{ width: `${gutterWidth}ch` }}
-            >
-              {i + 1}
-            </span>
-            <span className="whitespace-pre px-2">
-              <HighlightedCode text={line} lang={lang} />
-            </span>
-          </div>
-        ))}
-      </div>
+      <FileLinesView lines={displayLines} lang={langFromPath(preview.path)} maxHeightClass="max-h-[22rem]" />
     </div>
   );
 }
