@@ -34,17 +34,23 @@ DESCRIPTORS = [
         id="files.read",
         name="Read File",
         description=(
-            "Read a text file inside the current workdir. "
-            "Supports offset (0-based char) and limit (char count). "
-            "Returns content with an English continuation hint if truncated."
+            "Read a text file inside the current workdir. Two ways to choose what to read:\n"
+            "- BY LINE (preferred for code): pass start_line and/or end_line (1-indexed, inclusive). "
+            "This is the natural follow-up to files.rg — it gives you a line number, you read that range. "
+            "e.g. read a function by giving its def line as start_line and the next def's line as end_line.\n"
+            "- BY CHARACTER: pass offset (0-based char) and limit (char count) for raw paging.\n"
+            "Either way the result is capped at the output size limit; if it's truncated you're told exactly "
+            "where it stopped and how to continue (a higher offset, or the next start_line)."
         ),
         category="repo-read",
         input_schema={
             "type": "object",
             "properties": {
                 "path": {"type": "string"},
-                "offset": {"type": "integer", "minimum": 0},
-                "limit": {"type": "integer", "minimum": 1},
+                "start_line": {"type": "integer", "minimum": 1, "description": "1-indexed first line to read (inclusive)."},
+                "end_line": {"type": "integer", "minimum": 1, "description": "1-indexed last line to read (inclusive)."},
+                "offset": {"type": "integer", "minimum": 0, "description": "0-based character offset (char-paging mode)."},
+                "limit": {"type": "integer", "minimum": 1, "description": "Max characters to return."},
             },
         },
         capabilities=["filesystem", "read"],
@@ -204,33 +210,38 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
         raise RuntimeError(f"file not found: {path}")
     with path.open("r", encoding="utf-8", errors="replace") as handle:
         full_text = handle.read()
-    # Phase 0.2: honor explicit limit up to FILE_READ_ABSOLUTE_MAX. When limit
-    # is omitted, default to adaptive paging using the policy's file_output_limit
-    # as the page size — and emit an English continuation hint on truncation.
+    access = file_access_metadata(path, context)
+    target = access["target"]
+    digest = _content_digest(full_text)
+    _remember_file_digest(context, target=target, digest=digest)
+
+    # Line-based read — the natural move after files.rg hands you a line number.
+    # start_line/end_line are 1-indexed and inclusive; the char cap still applies.
+    if request.arguments.get("start_line") is not None or request.arguments.get("end_line") is not None:
+        return _read_by_lines(
+            request, context, full_text=full_text, target=target, access=access, digest=digest,
+            warning_message=warning_message, requested_limit=requested_limit,
+        )
+
+    # Char-based read (raw paging). Honor explicit limit up to FILE_READ_ABSOLUTE_MAX;
+    # otherwise page by the policy's file_output_limit with a continuation hint.
     if requested_limit > 0:
         effective_limit = min(requested_limit, FILE_READ_ABSOLUTE_MAX)
     else:
         effective_limit = context.policy.file_output_limit
     text = full_text[offset : offset + effective_limit]
-    access = file_access_metadata(path, context)
-    target = access["target"]
-    digest = _content_digest(full_text)
-    _remember_file_digest(context, target=target, digest=digest)
     next_offset = offset + len(text)
     truncated = next_offset < len(full_text)
     if truncated:
         kb_read = max(len(text) // 1024, 1)
         text = (
             f"{text}\n\n[Read truncated at char {next_offset} (~{kb_read}KB). "
-            f"Use offset={next_offset} to continue.]"
+            f"Use offset={next_offset} to continue, or pass start_line/end_line to read by line.]"
         )
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
-        summary=(
-            f"Read file {target}."
-            + (f" Warning: {warning_message}" if warning_message else "")
-        ),
+        summary=(f"Read file {target}." + (f" Warning: {warning_message}" if warning_message else "")),
         output={
             "path": target,
             **access,
@@ -239,8 +250,77 @@ async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext
             "offset": offset,
             "limit": effective_limit,
             "totalChars": len(full_text),
+            "totalLines": full_text.count("\n") + 1,
             "truncated": truncated,
             **({"nextOffset": next_offset} if truncated else {}),
+            **({"warning": warning_message} if warning_message else {}),
+        },
+    )
+
+
+def _read_by_lines(
+    request: ToolExecutionRequest,
+    context: ToolExecutionContext,
+    *,
+    full_text: str,
+    target: str,
+    access: dict,
+    digest: str,
+    warning_message: str | None,
+    requested_limit: int,
+) -> ToolExecutionResult:
+    """Read a 1-indexed, inclusive line range, capped by the char budget."""
+
+    def _as_int(value: object, default: int) -> int:
+        try:
+            return int(value)  # type: ignore[arg-type]
+        except (TypeError, ValueError):
+            return default
+
+    lines = full_text.splitlines()
+    total_lines = len(lines)
+    start = max(1, _as_int(request.arguments.get("start_line"), 1))
+    end_arg = request.arguments.get("end_line")
+    end = _as_int(end_arg, total_lines) if end_arg is not None else total_lines
+    end = min(total_lines, max(start, end))
+    selected = lines[start - 1 : end]  # inclusive
+
+    char_cap = min(requested_limit, FILE_READ_ABSOLUTE_MAX) if requested_limit > 0 else context.policy.file_output_limit
+    text = "\n".join(selected)
+    last_line = end
+    truncated = False
+    if len(text) > char_cap:
+        clipped = text[:char_cap]
+        complete = clipped.count("\n")
+        if complete >= 1:
+            selected = selected[:complete]
+            text = "\n".join(selected)
+            last_line = start + complete - 1
+        else:
+            text = clipped  # one giant line: return the partial slice
+            last_line = start
+        truncated = True
+
+    if truncated:
+        text = (
+            f"{text}\n\n[Returned lines {start}-{last_line} of {total_lines} (hit the {char_cap}-char limit). "
+            f"Continue with start_line={last_line + 1}.]"
+        )
+    return ToolExecutionResult(
+        tool_id=request.tool_id,
+        ok=True,
+        summary=(f"Read file {target} lines {start}-{last_line}." + (f" Warning: {warning_message}" if warning_message else "")),
+        output={
+            "path": target,
+            **access,
+            "content": text,
+            "digest": digest,
+            "startLine": start,
+            "endLine": last_line,
+            "totalLines": total_lines,
+            "totalChars": len(full_text),
+            "truncated": truncated,
+            **({"nextStartLine": last_line + 1} if truncated else {}),
             **({"warning": warning_message} if warning_message else {}),
         },
     )
