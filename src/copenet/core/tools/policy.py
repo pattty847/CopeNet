@@ -37,8 +37,12 @@ class ToolPolicy:
         "wget ",
     )
     shell_timeout_sec: float = 5.0
-    shell_output_limit: int = 8000
-    file_output_limit: int = 12000
+    # Per-tool output caps. Sized to fill (and stay under) the harness's
+    # model-facing budget (tool_loop._DEFAULT_MODEL_FACING_RESULT_CHARS, 30K,
+    # matching Claude Code's Bash-output default) so a single read/command
+    # returns a substantial chunk instead of a tiny slice.
+    shell_output_limit: int = 16000
+    file_output_limit: int = 24000
     search_result_limit: int = 80
     list_result_limit: int = 200
     transcript_limit: int = 8
@@ -54,6 +58,6 @@ def policy_for_task_mode(task_prompt_id: str | None) -> ToolPolicy:
             allowed_categories={*base, "repo-write"},
             unrestricted_shell=True,
             shell_timeout_sec=120.0,
-            shell_output_limit=20000,
+            shell_output_limit=30000,  # match Claude Code's Bash-output default
         )
     return ToolPolicy(allowed_categories=base)

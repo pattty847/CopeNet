@@ -57,7 +57,12 @@ LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 # can't act on (the friction a phone-driven self-inspection surfaced). The tool
 # handlers already truncate their own output (files.read ~12KB, shell ~8-20KB),
 # so this is mostly a backstop. Override with COPNET_MODEL_TOOL_RESULT_CHARS.
-_DEFAULT_MODEL_FACING_RESULT_CHARS = 16000
+#
+# Default chosen to match Claude Code's Bash-output default (30,000 chars; their
+# hard ceiling via BASH_MAX_OUTPUT_LENGTH is 150,000). Their file Read is
+# token-aware (no char cap) — set COPNET_MODEL_TOOL_RESULT_CHARS higher if you
+# want to lean that way; lower it on a phone to save tokens.
+_DEFAULT_MODEL_FACING_RESULT_CHARS = 30000
 
 
 def model_facing_result_char_limit() -> int:
