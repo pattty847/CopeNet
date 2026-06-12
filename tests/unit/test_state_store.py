@@ -14,7 +14,7 @@ def test_session_state_store_creates_and_roundtrips(tmp_dir) -> None:
         SessionStateRecord(
             session_key="alpha",
             task_summary="Inspect archive restore flow",
-            active_entities=["files.list"],
+            active_entities=["shell.exec"],
             relevant_artifact_ids=["artifact-1"],
         )
     )
@@ -22,7 +22,7 @@ def test_session_state_store_creates_and_roundtrips(tmp_dir) -> None:
 
     assert loaded is not None
     assert loaded.task_summary == "Inspect archive restore flow"
-    assert loaded.active_entities == ["files.list"]
+    assert loaded.active_entities == ["shell.exec"]
     assert loaded.relevant_artifact_ids == ["artifact-1"]
 
     payload = json.loads((tmp_dir / "state" / "alpha.json").read_text(encoding="utf-8"))

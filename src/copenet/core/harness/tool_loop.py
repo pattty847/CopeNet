@@ -1013,10 +1013,10 @@ def compose_responses_tool_instructions(
     )
     if any(tool.id == "plan.write" for tool in tools):
         directive += (
-            " For any non-trivial, multi-step task (roughly 3+ steps), call plan.write FIRST to lay out "
-            "your plan as a checklist, then update it (send the full list each time) to mark steps "
-            "in_progress and completed as you work. Keep exactly one step in_progress at a time. Skip "
-            "planning for trivial single-step requests."
+            " Use plan.write when a task is genuinely complex and tracking steps helps — lay out the "
+            "plan first, then update it to mark steps in_progress and completed as you work. Keep exactly "
+            "one step in_progress at a time. Skip it when the task is straightforward enough that a "
+            "checklist adds no value."
         )
     if any(tool.id == "web.search" for tool in tools):
         directive += (

@@ -52,12 +52,11 @@ DESCRIPTORS = [
         id="plan.write",
         name="Write Plan",
         description=(
-            "Record or update your step-by-step plan as a checklist. Use this for any non-trivial, "
-            "multi-step task (roughly 3+ steps): lay out the steps first, then call it again to update "
-            "statuses as you go. Send the FULL current plan each time (not a delta). Each item is "
-            "{content, status} where status is 'pending', 'in_progress', or 'completed'. Keep exactly ONE "
-            "item 'in_progress' at a time, and mark an item 'completed' as soon as it is actually done. "
-            "Skip this for trivial single-step requests."
+            "Record or update your step-by-step plan as a checklist. Use this when a task is complex "
+            "enough that tracking progress helps — not for simple requests where the steps are obvious. "
+            "Send the FULL current plan each time (not a delta). Each item is {content, status} where "
+            "status is 'pending', 'in_progress', or 'completed'. Keep exactly ONE item 'in_progress' at "
+            "a time, and mark an item 'completed' as soon as it is actually done."
         ),
         category="context",
         input_schema={

@@ -6,7 +6,6 @@ import difflib
 import hashlib
 import json
 from pathlib import Path
-import re
 import subprocess
 
 from copenet.core.tools.contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
@@ -15,21 +14,6 @@ from ._shared import display_path, ensure_write_allowed, file_access_metadata, r
 
 
 DESCRIPTORS = [
-    ToolDescriptor(
-        id="files.list",
-        name="List Files",
-        description=(
-            "List files or directories under the current workdir. "
-            "Use this for reconnaissance only. A directory listing usually is not enough evidence for "
-            "architecture, bug, or patch answers; follow it with files.read for direct grounding or "
-            "files.search for broader discovery."
-        ),
-        category="repo-read",
-        input_schema={"type": "object", "properties": {"path": {"type": "string"}}},
-        capabilities=["filesystem", "read"],
-        evidence_role="discovery",
-        side_effect="read",
-    ),
     ToolDescriptor(
         id="files.read",
         name="Read File",
@@ -55,20 +39,6 @@ DESCRIPTORS = [
         },
         capabilities=["filesystem", "read"],
         evidence_role="grounding",
-        side_effect="read",
-    ),
-    ToolDescriptor(
-        id="files.search",
-        name="Search Files",
-        description=(
-            "Search file contents under the current workdir using a regex pattern. "
-            "Use this for directional discovery to find relevant files, symbols, or text, then follow "
-            "up with files.read on the most relevant files."
-        ),
-        category="repo-read",
-        input_schema={"type": "object", "properties": {"pattern": {"type": "string"}, "path": {"type": "string"}}},
-        capabilities=["filesystem", "search"],
-        evidence_role="discovery",
         side_effect="read",
     ),
     ToolDescriptor(
@@ -139,46 +109,6 @@ DESCRIPTORS = [
         side_effect="write",
     ),
 ]
-
-
-async def list_files(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
-    root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
-    warning_message, blocked_result = _repeat_response(
-        context,
-        tool_id=request.tool_id,
-        on_warning=(
-            "Repeated identical files.list calls are low value. Use files.read for direct evidence or "
-            "files.search for broader discovery."
-        ),
-        on_block=(
-            "Blocked repeated identical files.list call. Stop repeating the same directory listing and use "
-            "existing information to choose files.read or files.search."
-        ),
-    )
-    if blocked_result is not None:
-        return blocked_result
-    if not root.exists():
-        raise RuntimeError(f"path not found: {root}")
-    access = file_access_metadata(root, context)
-    target = access["target"]
-    rows = []
-    for file_path in sorted(root.iterdir())[: context.policy.list_result_limit]:
-        rows.append(
-            {
-                "path": display_path(file_path, context),
-                "name": file_path.name,
-                "isDir": file_path.is_dir(),
-            }
-        )
-    summary = f"Listed {len(rows)} entries under {target if target != str(context.workdir) else '.'}."
-    output = {
-        "entries": rows,
-        **access,
-    }
-    if warning_message:
-        summary = f"{summary} Warning: {warning_message}"
-        output["warning"] = warning_message
-    return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary=summary, output=output)
 
 
 FILE_READ_ABSOLUTE_MAX = 500_000  # ~500KB safety guard; honors explicit limit up to here.
@@ -321,66 +251,6 @@ def _read_by_lines(
             "totalChars": len(full_text),
             "truncated": truncated,
             **({"nextStartLine": last_line + 1} if truncated else {}),
-            **({"warning": warning_message} if warning_message else {}),
-        },
-    )
-
-
-async def search_files(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
-    pattern = str(request.arguments.get("pattern") or "").strip()
-    warning_message, blocked_result = _repeat_response(
-        context,
-        tool_id=request.tool_id,
-        on_warning=(
-            "You have repeated the same files.search call several times. Use the current matches to choose a file "
-            "for files.read or change the search."
-        ),
-        on_block=(
-            "Blocked repeated identical files.search call. Stop repeating the same search and either read one of the "
-            "matches or change the pattern/path."
-        ),
-    )
-    if blocked_result is not None:
-        return blocked_result
-    if not pattern:
-        raise ValueError("pattern is required")
-    root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
-    access = file_access_metadata(root, context)
-    target = access["target"]
-    regex = re.compile(pattern, re.MULTILINE)
-    hits = []
-    for file_path in root.rglob("*"):
-        if len(hits) >= context.policy.search_result_limit:
-            break
-        if not file_path.is_file():
-            continue
-        try:
-            text = file_path.read_text(encoding="utf-8")
-        except (OSError, UnicodeDecodeError):
-            continue
-        lines = text.splitlines()
-        for match in regex.finditer(text):
-            line_no = text.count("\n", 0, match.start()) + 1
-            line = lines[line_no - 1] if lines else ""
-            hits.append(
-                {
-                    "path": display_path(file_path, context),
-                    "line": line_no,
-                    "text": line[:240],
-                }
-            )
-            if len(hits) >= context.policy.search_result_limit:
-                break
-    return ToolExecutionResult(
-        tool_id=request.tool_id,
-        ok=True,
-        summary=(
-            f"Found {len(hits)} matches for pattern."
-            + (f" Warning: {warning_message}" if warning_message else "")
-        ),
-        output={
-            "matches": hits,
-            **access,
             **({"warning": warning_message} if warning_message else {}),
         },
     )
@@ -586,9 +456,7 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
 
 
 HANDLERS = {
-    "files.list": list_files,
     "files.read": read_file,
-    "files.search": search_files,
     "files.rg": ripgrep_files,
     "files.write": write_file,
     "files.edit": edit_file,

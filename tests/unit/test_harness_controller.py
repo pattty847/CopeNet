@@ -161,14 +161,13 @@ def test_turn_state_records_evidence_categories() -> None:
     state = TurnState()
 
     state.record_tool_step(
-        tool_id="files.list",
-        arguments={"path": "."},
+        tool_id="shell.exec",
+        arguments={"command": "ls ."},
         result=ToolExecutionResult(
-            tool_id="files.list",
+            tool_id="shell.exec",
             ok=True,
             summary="Listed root.",
-            output={"entries": [{"path": "README.md"}]},
-            body={"entries": [{"path": "README.md"}]},
+            output={"stdout": "README.md\nsrc/"},
         ),
     )
     state.record_tool_step(
@@ -194,8 +193,7 @@ def test_turn_state_records_evidence_categories() -> None:
         ),
     )
 
-    assert state.visited_tools == ["files.list", "files.rg", "files.read"]
-    assert "README.md" in state.visited_paths
+    assert state.visited_tools == ["shell.exec", "files.rg", "files.read"]
     assert "src/copenet/core/harness/tool_loop.py" in state.visited_paths
     assert state.grounding_actions == ["files.read"]
     assert [item["category"] for item in state.evidence_items] == ["reconnaissance", "directional", "grounding"]
@@ -203,7 +201,8 @@ def test_turn_state_records_evidence_categories() -> None:
 
 
 @pytest.mark.asyncio
-async def test_tool_registry_warns_then_blocks_repeated_identical_files_list(tmp_path) -> None:
+async def test_tool_registry_warns_then_blocks_repeated_identical_files_read(tmp_path) -> None:
+    (tmp_path / "README.md").write_text("hello")
     registry = ToolRegistry()
     context = ToolExecutionContext(
         workdir=tmp_path,
@@ -217,11 +216,11 @@ async def test_tool_registry_warns_then_blocks_repeated_identical_files_list(tmp
         policy=registry.policy,
         trace=None,
     )
-    request = ToolExecutionRequest(tool_id="files.list", arguments={"path": "."})
+    request = ToolExecutionRequest(tool_id="files.read", arguments={"path": "README.md"})
 
     results = [await registry.execute(request, context) for _ in range(4)]
 
     assert results[2].ok is True
-    assert "Repeated identical files.list calls are low value" in results[2].summary
+    assert "You have read the same file repeatedly" in results[2].summary
     assert results[3].ok is False
-    assert "Blocked repeated identical files.list call" in (results[3].error or "")
+    assert "Blocked repeated identical files.read call" in (results[3].error or "")

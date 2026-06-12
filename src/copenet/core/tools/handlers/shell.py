@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shlex
 from pathlib import Path
 
@@ -16,6 +17,11 @@ from ._shared import (
     run_shell_command,
     scope_for_path,
 )
+
+# Tokens that can hide write effects — always blocked in default mode.
+_HARD_BLOCKED_TOKENS = ("|", ">")
+# Pattern that splits a command on safe chaining operators.
+_CHAIN_SPLIT_RE = re.compile(r"\s*(?:&&|;)\s*")
 
 
 DESCRIPTORS = [
@@ -213,15 +219,21 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
             summary="Ran full-access shell command.",
             output=output,
         )
-    if any(token in command for token in ("|", "&&", "||", ";", ">")):
+    # Pipes and redirection can hide write effects — always blocked in default mode.
+    if any(t in command for t in _HARD_BLOCKED_TOKENS):
         raise ToolBlockedError(
-            "shell.exec accepts one allowlisted command only; do not use pipes, chaining, or redirection",
+            "shell.exec does not allow pipes or redirection in default mode",
             target=command,
             workspace_root=str(context.session_workspace_root),
             access_action="unknown",
             policy_decision="unsafe_unknown",
-            policy_summary="Shell syntax can hide file effects, so this form is blocked.",
+            policy_summary="Pipes and redirection can hide file write effects.",
         )
+
+    has_chain = "&&" in command or ";" in command
+    if has_chain:
+        return await _run_chain(command, request, context)
+
     argv = expand_shell_argv(shlex.split(command))
     if not argv:
         raise ValueError("command is required")
@@ -261,6 +273,85 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
         tool_id=request.tool_id,
         ok=True,
         summary=f"Ran shell command: {argv[0]}",
+        output=output,
+    )
+
+
+async def _run_chain(
+    command: str,
+    request: ToolExecutionRequest,
+    context: ToolExecutionContext,
+) -> ToolExecutionResult:
+    """Run a &&/; chained command where every segment is individually allowlisted."""
+    segments = [s for s in _CHAIN_SPLIT_RE.split(command) if s.strip()]
+    for seg in segments:
+        try:
+            seg_argv = expand_shell_argv(shlex.split(seg))
+        except ValueError as exc:
+            raise ToolBlockedError(
+                f"could not parse chain segment: {exc}",
+                target=command,
+                workspace_root=str(context.session_workspace_root),
+                access_action="unknown",
+                policy_decision="unsafe_unknown",
+                policy_summary="Chain segment could not be parsed.",
+            ) from exc
+        if not seg_argv or seg_argv[0] not in context.policy.shell_allowlist:
+            blocked = seg_argv[0] if seg_argv else seg.strip()
+            raise ToolBlockedError(
+                f"chain blocked: '{blocked}' is not in the shell allowlist",
+                target=command,
+                workspace_root=str(context.session_workspace_root),
+                access_action="unknown",
+                policy_decision="unsafe_unknown",
+                policy_summary=f"'{blocked}' is outside the shell allowlist; only allowlisted commands may be chained.",
+            )
+
+    stdout_parts: list[str] = []
+    stderr_parts: list[str] = []
+    final_code = 0
+    for seg in segments:
+        seg_argv = expand_shell_argv(shlex.split(seg))
+        code, stdout_text, stderr_text = await run_command(
+            seg_argv,
+            cwd=context.workdir,
+            timeout_sec=context.policy.shell_timeout_sec,
+            output_limit=context.policy.shell_output_limit,
+        )
+        if stdout_text:
+            stdout_parts.append(stdout_text)
+        if stderr_text:
+            stderr_parts.append(stderr_text)
+        if code != 0:
+            final_code = code
+            break
+
+    combined_stdout = "\n".join(stdout_parts)
+    combined_stderr = "\n".join(stderr_parts)
+    output = {
+        "command": command,
+        "exitCode": final_code,
+        "stdout": combined_stdout,
+        "stderr": combined_stderr,
+        "target": command,
+        "workspaceRoot": str(context.session_workspace_root),
+        "scope": "inside_workspace",
+        "accessAction": "read",
+        "policyDecision": "allowed",
+        "policySummary": "Chained shell commands stayed within the allowlist.",
+    }
+    if final_code != 0:
+        return ToolExecutionResult(
+            tool_id=request.tool_id,
+            ok=False,
+            summary=f"Chained shell command failed with exit {final_code}.",
+            error=combined_stderr or combined_stdout or f"command failed with exit {final_code}",
+            output=output,
+        )
+    return ToolExecutionResult(
+        tool_id=request.tool_id,
+        ok=True,
+        summary=f"Ran chained shell command ({len(segments)} segments).",
         output=output,
     )
 

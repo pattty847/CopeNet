@@ -15,7 +15,7 @@ def test_run_store_create_list_and_get(tmp_dir) -> None:
             will_attempt_tool_loop=True,
             working_set={"artifactIds": ["artifact-1"]},
             tool_steps=[
-                {"toolId": "files.list", "ok": True, "summary": "Listed entries", "error": None},
+                {"toolId": "shell.exec", "ok": True, "summary": "Listed entries", "error": None},
                 {"toolId": "files.read", "ok": True, "summary": "Read README", "error": None},
             ],
             artifact_ids=["artifact-1"],
@@ -31,7 +31,7 @@ def test_run_store_create_list_and_get(tmp_dir) -> None:
     listed = store.list_for_session("alpha")
     assert len(listed) == 1
     assert listed[0].run_id == created.run_id
-    assert listed[0].tool_steps[0]["toolId"] == "files.list"
+    assert listed[0].tool_steps[0]["toolId"] == "shell.exec"
     assert listed[0].working_set["artifactIds"] == ["artifact-1"]
     assert listed[0].transition_reason == "tool_followup"
     assert listed[0].terminal_reason == "completed"

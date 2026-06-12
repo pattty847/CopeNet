@@ -114,7 +114,7 @@ async def test_send_chat_persists_run_record_for_multi_step_repo_exploration(tmp
         providers={
             "prompted": ScriptedPromptedProvider(
                 outputs=[
-                    '{"tool_id":"files.list","arguments":{"path":"."}}',
+                    '{"tool_id":"shell.exec","arguments":{"command":"ls ."}}',
                     '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
                     "I inspected the repo and the README after listing files.",
                 ]
@@ -132,6 +132,6 @@ async def test_send_chat_persists_run_record_for_multi_step_repo_exploration(tmp
     runs = orchestrator._run_store.list_for_session("alpha")
     assert len(runs) == 1
     assert runs[0].status == "ok"
-    assert [step["toolId"] for step in runs[0].tool_steps] == ["files.list", "files.read"]
+    assert [step["toolId"] for step in runs[0].tool_steps] == ["shell.exec", "files.read"]
     assert runs[0].artifact_ids
     assert "README" in runs[0].output_summary

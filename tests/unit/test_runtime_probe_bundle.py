@@ -21,7 +21,7 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
         probe=spec,
         run_record={
             "status": "ok",
-            "toolSteps": [{"toolId": "files.list", "status": "blocked"}],
+            "toolSteps": [{"toolId": "shell.exec", "status": "blocked"}],
             "terminalReason": "tool_error_terminal",
             "outputSummary": "blocked",
         },
@@ -37,7 +37,7 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
             "status": "ok",
             "toolExecutionMode": "native",
             "toolSteps": [
-                {"toolId": "files.list", "status": "ok"},
+                {"toolId": "shell.exec", "status": "ok"},
                 {"toolId": "files.read", "status": "ok"},
             ],
             "outputSummary": "two reads",
@@ -55,7 +55,7 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
             "status": "ok",
             "toolExecutionMode": "batch",
             "toolSteps": [
-                {"toolId": "files.list", "status": "ok", "batched": True},
+                {"toolId": "shell.exec", "status": "ok", "batched": True},
                 {"toolId": "files.read", "status": "ok", "batched": True},
             ],
             "outputSummary": "batched reads",
@@ -121,7 +121,7 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
         run_record={
             "status": "ok",
             "toolSteps": [
-                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "shell.exec", "status": "ok", "ok": True},
                 {"toolId": "files.read", "status": "blocked", "ok": False},
             ],
             "outputSummary": "partial success",
@@ -156,8 +156,8 @@ def test_classify_probe_bundle_flags_ungrounded_repo_answer() -> None:
         run_record={
             "status": "ok",
             "toolSteps": [
-                {"toolId": "files.list", "status": "ok", "ok": True},
-                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "shell.exec", "status": "ok", "ok": True},
+                {"toolId": "shell.exec", "status": "ok", "ok": True},
                 {"toolId": "tool.batch", "status": "ok", "ok": True, "batched": True},
             ],
             "outputSummary": "The repo probably keeps the main logic in src/copenet and uses docs for setup.",
@@ -185,7 +185,7 @@ def test_classify_probe_bundle_requires_file_grounding_for_architecture_probe() 
             "status": "ok",
             "toolSteps": [
                 {"toolId": "context.prepare", "status": "ok", "ok": True},
-                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "shell.exec", "status": "ok", "ok": True},
                 {"toolId": "tool.batch", "status": "ok", "ok": True, "batched": True},
             ],
             "outputSummary": "CopeNet looks like a modular Python app with code under src/copenet.",
@@ -200,7 +200,7 @@ def test_classify_probe_bundle_requires_file_grounding_for_architecture_probe() 
         artifacts=[
             {
                 "artifactId": "bundle-1",
-                "metadata": {"toolIds": ["files.list", "git.status"]},
+                "metadata": {"toolIds": ["shell.exec", "git.status"]},
             }
         ],
         trace_path=None,
@@ -218,7 +218,7 @@ def test_classify_probe_bundle_does_not_treat_listed_filenames_as_file_grounding
             "status": "ok",
             "toolSteps": [
                 {"toolId": "context.prepare", "status": "ok", "ok": True},
-                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "shell.exec", "status": "ok", "ok": True},
                 {"toolId": "tool.batch", "status": "ok", "ok": True, "batched": True},
             ],
             "outputSummary": "Read README.md and pyproject.toml for a patch plan.",
@@ -233,7 +233,7 @@ def test_classify_probe_bundle_does_not_treat_listed_filenames_as_file_grounding
         artifacts=[
             {
                 "artifactId": "bundle-1",
-                "metadata": {"toolIds": ["files.list", "git.status"]},
+                "metadata": {"toolIds": ["shell.exec", "git.status"]},
             }
         ],
         trace_path=None,
@@ -251,7 +251,7 @@ def test_classify_probe_bundle_requires_read_after_search_for_file_grounding() -
             "status": "ok",
             "toolSteps": [
                 {"toolId": "files.rg", "status": "ok", "ok": True},
-                {"toolId": "files.search", "status": "ok", "ok": True},
+                {"toolId": "files.rg", "status": "ok", "ok": True},
             ],
             "outputSummary": "The patch should touch src/copenet/core/harness/tool_loop.py.",
             "terminalReason": "completed",
@@ -265,7 +265,7 @@ def test_classify_probe_bundle_requires_read_after_search_for_file_grounding() -
         artifacts=[
             {
                 "artifactId": "search-1",
-                "metadata": {"toolIds": ["files.search"]},
+                "metadata": {"toolIds": ["files.rg"]},
             }
         ],
         trace_path=None,
@@ -386,7 +386,7 @@ def test_render_probe_report_separates_recoveries_from_failures() -> None:
         classification="partial_tool_success_with_block",
         final_state="ok",
         tool_step_count=3,
-        tool_ids=["files.list", "files.read", "tool.batch"],
+        tool_ids=["shell.exec", "files.read", "tool.batch"],
     )
     failed = ProbeBundle(
         provider="codex-cli",
@@ -435,7 +435,7 @@ def test_render_probe_report_lists_ungrounded_answers_as_failures() -> None:
         classification="ungrounded_repo_answer",
         final_state="ok",
         tool_step_count=3,
-        tool_ids=["files.list", "files.list", "tool.batch"],
+        tool_ids=["shell.exec", "shell.exec", "tool.batch"],
     )
     summary = ProbeSummary(
         generated_at="2026-01-01T00:00:02+00:00",
@@ -458,7 +458,7 @@ def test_classify_probe_bundle_uses_tool_steps_after_plain_text_completion() -> 
         run_record={
             "status": "ok",
             "toolSteps": [
-                {"toolId": "files.list", "status": "ok", "ok": True},
+                {"toolId": "shell.exec", "status": "ok", "ok": True},
                 {"toolId": "files.read", "status": "ok", "ok": True},
             ],
             "outputSummary": "README.md explains the architecture.",

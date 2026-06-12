@@ -133,12 +133,14 @@ class ForkSnapshot:
 
 
 def _classify_evidence_category(tool_id: str) -> str:
-    if tool_id == "files.list":
+    if tool_id in {"shell.exec", "web.search"}:
         return "reconnaissance"
-    if tool_id in {"files.search", "files.rg"}:
+    if tool_id in {"files.rg", "web.fetch"}:
         return "directional"
     if tool_id == "files.read":
         return "grounding"
+    if tool_id in {"files.write", "files.edit"}:
+        return "mutation"
     if tool_id == "context.prepare":
         return "contextual"
     if tool_id == "patch.apply":

@@ -293,7 +293,7 @@ def rpc_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
             "prompted-blocked": PromptedToolProvider(
                 name="prompted-blocked",
                 display_name="Prompted Blocked",
-                tool_json=f'{{"tool_id":"files.list","arguments":{{"path":"{outside_root}"}}}}',
+                tool_json=f'{{"tool_id":"shell.exec","arguments":{{"command":"ls {outside_root}"}}}}',
                 follow_up="I inspected a directory outside the home workspace and marked it clearly.",
             ),
         },
@@ -854,7 +854,7 @@ def test_chat_transport_exposes_tool_execution_shapes(rpc_client: TestClient, tm
         blocked_final = blocked_events[-1]["payload"]
         assert blocked_events[0]["payload"]["state"] == "tool_called"
         assert blocked_events[1]["payload"]["state"] == "tool_result"
-        assert blocked_final["toolExecution"]["toolId"] == "files.list"
+        assert blocked_final["toolExecution"]["toolId"] == "shell.exec"
         assert blocked_final["toolExecution"]["ok"] is True
         assert blocked_final["toolExecution"]["scope"] == "outside_workspace"
         assert blocked_final["toolExecution"]["workspaceRoot"] == str(tmp_path)

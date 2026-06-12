@@ -57,16 +57,44 @@ async def test_shell_exec_failed_command_preserves_stdout_stderr(tmp_path: Path)
 
 
 @pytest.mark.asyncio
-async def test_shell_exec_blocks_chained_shell_syntax(tmp_path: Path) -> None:
+async def test_shell_exec_allows_allowlisted_chain(tmp_path: Path) -> None:
+    # Both pwd and git are in the default shell_allowlist — chain should succeed.
     registry = ToolRegistry()
     result = await registry.execute(
-        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "pwd && git status --short"}),
-        _context(tmp_path),
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "pwd && pwd"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+
+    assert result.ok is True
+    assert result.output["policyDecision"] == "allowed"
+    assert str(tmp_path) in result.output["stdout"]
+
+
+@pytest.mark.asyncio
+async def test_shell_exec_blocks_chain_with_non_allowlisted_command(tmp_path: Path) -> None:
+    # curl is not in the default shell_allowlist — chain must be blocked.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "git status && curl http://example.com"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
     )
 
     assert result.ok is False
     assert result.output["policyDecision"] == "unsafe_unknown"
-    assert "one allowlisted command only" in result.error
+    assert "chain blocked" in result.error
+
+
+@pytest.mark.asyncio
+async def test_shell_exec_blocks_pipes_in_default_mode(tmp_path: Path) -> None:
+    # Pipes are hard-blocked even when all commands are individually safe.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "git log | grep fix"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+
+    assert result.ok is False
+    assert result.output["policyDecision"] == "unsafe_unknown"
 
 
 @pytest.mark.asyncio

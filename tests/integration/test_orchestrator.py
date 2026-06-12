@@ -432,7 +432,7 @@ async def test_send_chat_can_continue_repo_exploration_after_first_read(tmp_path
         providers={
             "prompted": ScriptedPromptedProvider(
                 outputs=[
-                    '{"tool_id":"files.list","arguments":{"path":"."}}',
+                    '{"tool_id":"shell.exec","arguments":{"command":"ls ."}}',
                     '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
                     "I inspected the repo and the README after listing files.",
                 ]

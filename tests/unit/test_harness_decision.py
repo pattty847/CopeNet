@@ -22,8 +22,8 @@ def test_parse_harness_decision_record_preserves_trace_only_prose_fields() -> No
             "evidence_requirements": ["direct_file_grounding", "verify_before_done"],
             "tool_decision": {
                 "needed": True,
-                "candidate_tool_ids": ["files.search", "files.read"],
-                "selected_tool_id": "files.search",
+                "candidate_tool_ids": ["files.rg", "files.read"],
+                "selected_tool_id": "files.rg",
                 "trace_note": "Need to locate the reconnect implementation first.",
             },
             "missing": ["current reconnect implementation"],
@@ -36,7 +36,7 @@ def test_parse_harness_decision_record_preserves_trace_only_prose_fields() -> No
         raw,
         turn_id="turn-1",
         decision_id="decision-1",
-        available_tool_ids={"files.search", "files.read"},
+        available_tool_ids={"files.rg", "files.read"},
     )
 
     assert record.to_public_dict() == {
@@ -54,8 +54,8 @@ def test_parse_harness_decision_record_preserves_trace_only_prose_fields() -> No
             "evidence_requirements": ["direct_file_grounding", "verify_before_done"],
             "tool_decision": {
                 "needed": True,
-                "candidate_tool_ids": ["files.search", "files.read"],
-                "selected_tool_id": "files.search",
+                "candidate_tool_ids": ["files.rg", "files.read"],
+                "selected_tool_id": "files.rg",
                 "trace_note": "Need to locate the reconnect implementation first.",
             },
             "missing": ["current reconnect implementation"],

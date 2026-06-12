@@ -711,3 +711,29 @@ html[data-theme='dark'] .shell-workbench-feature {
   0%, 100% { opacity: 0.22; transform: translateY(12px) scaleX(0.62); }
   50% { opacity: 0.7; transform: translateY(10px) scaleX(1); }
 }
+
+/* ── Custom scrollbars ── */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--color-shell-border-strong);
+  border-radius: 999px;
+  transition: background 150ms ease;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-shell-muted);
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-shell-border-strong) transparent;
+}
