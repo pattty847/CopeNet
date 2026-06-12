@@ -1,25 +1,17 @@
 import { useEffect, useMemo, useState } from 'react';
 import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
-import type { SessionArtifactRecord, SessionRunRecord, SessionStateRecord } from '../types/backend';
-import {
-  buildInboxItems,
-  getArtifactById,
-  getArtifacts,
-  getBatchById as getMockBatchById,
-  getWorkingSet,
-} from './mocks';
+import type { SessionArtifactRecord } from '../types/backend';
+import { buildInboxItems } from './inboxItems';
 import { mapRunToActivity } from './activityProof';
-import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, TurnStateSnapshot } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
-  ActivityToolCall,
   ApprovalRequest,
   ApprovalOutcome,
   Artifact,
   RunActivity,
-  WorkingSet,
 } from './types';
 
 export type ResourceStatus = 'loading' | 'ready' | 'empty' | 'error';
@@ -48,80 +40,6 @@ function loading<T>(): AsyncResource<T> {
   return { status: 'loading', data: null, error: null };
 }
 
-export function useWorkingSet(sessionKey: string | null): AsyncResource<WorkingSet> {
-  const activeRunId = useAppStore((state) => state.activeRunId);
-  const [resource, setResource] = useState<AsyncResource<WorkingSet>>(sessionKey ? loading() : empty());
-
-  useEffect(() => {
-    if (!sessionKey) {
-      setResource(empty());
-      return;
-    }
-
-    let cancelled = false;
-    setResource(loading());
-    void Promise.all([
-      wsClient.resolveSessionState(sessionKey),
-      wsClient.listSessionRuns(sessionKey, 1),
-    ])
-      .then(([state, runs]) => {
-        if (cancelled) return;
-        if (state) {
-          setResource(ready(mapSessionStateToWorkingSet(state, runs[0] ?? null, activeRunId)));
-          return;
-        }
-        setResource(ready(withRuntimeStatus(getWorkingSet(sessionKey), activeRunId)));
-      })
-      .catch((error) => {
-        if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeRunId, sessionKey]);
-
-  return resource;
-}
-
-export function useArtifacts(sessionKey: string | null): AsyncResource<Artifact[]> {
-  const activeRunId = useAppStore((state) => state.activeRunId);
-  const sessionUpdatedAt = useAppStore(
-    (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
-  );
-  const [resource, setResource] = useState<AsyncResource<Artifact[]>>(sessionKey ? loading() : empty());
-
-  useEffect(() => {
-    if (!sessionKey) {
-      setResource(empty());
-      return;
-    }
-
-    let cancelled = false;
-    setResource(loading());
-    void wsClient
-      .listSessionArtifacts(sessionKey, 100)
-      .then((records) => {
-        if (cancelled) return;
-        if (records.length > 0) {
-          setResource(ready(records.map(mapSessionArtifact)));
-          return;
-        }
-        const artifacts = getArtifacts(sessionKey);
-        setResource(artifacts.length === 0 ? empty() : ready(artifacts));
-      })
-      .catch((error) => {
-        if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
-      });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [activeRunId, sessionKey, sessionUpdatedAt]);
-
-  return resource;
-}
-
 export function useArtifact(sessionKey: string | null, id: string | null): AsyncResource<Artifact> {
   const activeRunId = useAppStore((state) => state.activeRunId);
   const sessionUpdatedAt = useAppStore(
@@ -142,12 +60,7 @@ export function useArtifact(sessionKey: string | null, id: string | null): Async
       .then((records) => {
         if (cancelled) return;
         const record = records.find((item) => item.artifactId === id);
-        if (record) {
-          setResource(ready(mapSessionArtifact(record)));
-          return;
-        }
-        const artifact = getArtifactById(sessionKey, id);
-        setResource(artifact ? ready(artifact) : empty());
+        setResource(record ? ready(mapSessionArtifact(record)) : empty());
       })
       .catch((error) => {
         if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
@@ -184,7 +97,7 @@ export function useRunActivity(sessionKey: string | null): AsyncResource<RunActi
           setResource(empty());
           return;
         }
-        setResource(ready(mapRunToActivity(runs[runs.length - 1], getArtifacts(sessionKey))));
+        setResource(ready(mapRunToActivity(runs[runs.length - 1], [])));
       })
       .catch((error) => {
         if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
@@ -217,8 +130,7 @@ export function useBatch(sessionKey: string | null, id: string | null): AsyncRes
       .listSessionRuns(sessionKey, 10)
       .then((runs) => {
         if (cancelled) return;
-        const artifacts = getArtifacts(sessionKey);
-        const activity = [...runs].reverse().map((run) => mapRunToActivity(run, artifacts));
+        const activity = [...runs].reverse().map((run) => mapRunToActivity(run, []));
         for (const run of activity) {
           for (const item of run.items) {
             if ((item.kind === 'read_batch' || item.kind === 'bundle') && item.id === id) {
@@ -227,8 +139,7 @@ export function useBatch(sessionKey: string | null, id: string | null): AsyncRes
             }
           }
         }
-        const fallback = getMockBatchById(sessionKey, id);
-        setResource(fallback ? ready(fallback) : empty());
+        setResource(empty());
       })
       .catch((error) => {
         if (!cancelled) setResource(errored(error instanceof Error ? error.message : String(error)));
@@ -242,33 +153,6 @@ export function useBatch(sessionKey: string | null, id: string | null): AsyncRes
   return resource;
 }
 
-
-function mapSessionStateToWorkingSet(
-  state: SessionStateRecord,
-  run: SessionRunRecord | null,
-  activeRunId: string | null,
-): WorkingSet {
-  return {
-    taskSummary: state.task_summary?.trim() || run?.userMessage?.trim() || 'Session runtime state',
-    status: activeRunId && run?.runId === activeRunId ? 'thinking' : 'awaiting_input',
-    updatedAt: state.updated_at || run?.completedAt || run?.startedAt || new Date().toISOString(),
-    entities: state.active_entities.map((value, index) => ({
-      id: `entity-${index}`,
-      kind: inferEntityKind(value),
-      label: value,
-    })),
-    constraints: state.constraints.map((value, index) => ({
-      id: `constraint-${index}`,
-      text: value,
-      severity: 'block',
-    })),
-    questions: state.unresolved_questions.map((value, index) => ({
-      id: `question-${index}`,
-      text: value,
-    })),
-    referencedArtifactIds: state.relevant_artifact_ids,
-  };
-}
 
 function mapSessionArtifact(record: SessionArtifactRecord): Artifact {
   const normalizedKind = (() => {
@@ -297,13 +181,6 @@ function mapSessionArtifact(record: SessionArtifactRecord): Artifact {
     producedAt: record.updatedAt || record.createdAt,
     runId: record.runId || null,
     bodyMarkdown: compactBody || undefined,
-  };
-}
-
-function withRuntimeStatus(workingSet: WorkingSet, activeRunId: string | null): WorkingSet {
-  return {
-    ...workingSet,
-    status: activeRunId ? 'thinking' : 'awaiting_input',
   };
 }
 
@@ -496,14 +373,6 @@ export function useRunTimeline(_sessionKey: string | null): RunTimeline | null {
   return storeTimeline;
 }
 
-function inferEntityKind(value: string): WorkingSet['entities'][number]['kind'] {
-  if (value.includes('/') || value.endsWith('.py') || value.endsWith('.ts') || value.endsWith('.tsx') || value.endsWith('.md')) {
-    return 'file';
-  }
-  if (value.includes('.')) return 'symbol';
-  return 'note';
-}
-
 function mapPulsesToInboxItems(pulses: PulseRecord[]): InboxItem[] {
   return pulses.map((pulse) => ({
     id: `pulse:${pulse.pulseId}`,
@@ -527,12 +396,6 @@ function mapPulsesToInboxItems(pulses: PulseRecord[]): InboxItem[] {
 // Empty when no run is active (components should switch to RunActivityPanel).
 export function useLiveToolCalls(): LiveToolCall[] {
   return useAppStore((s) => s.liveToolCalls);
-}
-
-// Returns the most recent completed turn's state snapshot.
-// Available after the final event; null while a run is in progress.
-export function useLastTurnState(): TurnStateSnapshot | null {
-  return useAppStore((s) => s.lastTurnState);
 }
 
 // Returns the auth status for a provider, fetching from the backend on mount.
