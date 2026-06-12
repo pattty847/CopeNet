@@ -212,7 +212,7 @@ For current behavior, assume:
 
 ### Tools runtime
 
-- Handlers live under `src/copenet/core/tools/handlers/` (`files.py`, `git.py`, `shell.py`, `context.py`, `artifacts.py`); `builtin_readonly.py` aggregates them (name is historical — write + artifact tools are included).
+- Handlers live under `src/copenet/core/tools/handlers/` (`files.py`, `git.py`, `shell.py`, `plan.py`, `artifacts.py`); `builtin_readonly.py` aggregates them (name is historical — write + artifact tools are included). `context.py` / `context.prepare` were retired in Phase 0.3. The model-facing manifest (`MANIFEST_TOOL_IDS`) is 8 tools: `files.read`, `files.write`, `files.edit`, `files.rg`, `shell.exec`, `plan.write`, `web.search`, `web.fetch` (`files.list`/`files.search` were consolidated into `files.rg`; `artifact.create` is registered but deferred out of the manifest).
 - Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: default modes allow read/shell/context/artifact; task mode **`full-access`** adds **`repo-write`** (`files.edit`, `files.write`) and unrestricted user-level `shell.exec`.
 - Full-access shell commands run with the current OS user's permissions and may use normal shell syntax (`|`, `&&`, redirects, scripts, etc.). High-risk command patterns return `policyDecision: "approval_required"` instead of executing; wire operator confirmation before allowing those proposal records to resume.
 - Permission claims should be tested with the direct matrix before trusting a live model's self-report: `uv run python scripts/permission_probe_matrix.py`. A model that only proves `pwd` works has proven shell-read, not full-access.
