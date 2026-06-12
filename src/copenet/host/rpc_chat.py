@@ -98,7 +98,12 @@ async def handle_chat_send(
     send_json: SendJson,
     tasks: set[asyncio.Task],
     orchestrator,
+    broadcast: SendJson | None = None,
 ) -> None:
+    # Stream chat + side events to EVERY connected client (the originating socket
+    # is in that set too), so a reconnected socket or a second device keeps
+    # receiving live frames. The direct request response stays point-to-point.
+    emit_to = broadcast or send_json
     raw = params or {}
     request = _normalize_chat_send_params(raw)
     if not request.session_key or not request.message:
@@ -121,7 +126,7 @@ async def handle_chat_send(
 
     async def emit_chat(payload: dict[str, Any]) -> None:
         try:
-            await send_json(make_chat_event(_chat_event_payload(payload, request.run_id, request.session_key)))
+            await emit_to(make_chat_event(_chat_event_payload(payload, request.run_id, request.session_key)))
         except Exception:
             # Live frames are best-effort after chat.send has been accepted.
             # The run should still complete and persist if the browser reconnects.
@@ -129,7 +134,7 @@ async def handle_chat_send(
 
     async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
         try:
-            await send_json(make_event_frame(EventFrame(event=event, payload=payload)))
+            await emit_to(make_event_frame(EventFrame(event=event, payload=payload)))
         except Exception:
             return
 

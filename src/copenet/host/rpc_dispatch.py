@@ -46,6 +46,7 @@ from .rpc_catalog import (
 )
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
 from .rpc_sessions import (
+    handle_approvals_list,
     handle_pulse_create_from_session,
     handle_pulse_dismiss,
     handle_pulse_list,
@@ -75,15 +76,19 @@ from copenet.host.rpc_workspace import (
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
 
 
-async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None:
+async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadcast: SendJson | None = None) -> None:
     """Route one already-authenticated RPC request.
 
     Wrapped in a generic exception boundary so a malformed param (e.g. int("lol"))
     inside a handler returns an INVALID_REQUEST response instead of bubbling out
     and killing the WebSocket. Per Codex peer review round 2.
+
+    `broadcast` (when provided) fans an event payload out to every connected
+    client; chat streaming uses it so a reconnected socket or second device
+    receives live frames. Falls back to the per-connection `send_json`.
     """
     try:
-        await _route_rpc(req, send_json, orchestrator, tasks)
+        await _route_rpc(req, send_json, orchestrator, tasks, broadcast or send_json)
     except ValueError as exc:
         await send_json(
             make_response_frame(
@@ -109,10 +114,10 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> No
         )
 
 
-async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None:
+async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadcast: SendJson) -> None:
     """Inner dispatch — original method table. Errors bubble to dispatch_rpc."""
     if req.method == "chat.send":
-        await handle_chat_send(req.id, req.params, send_json, tasks, orchestrator)
+        await handle_chat_send(req.id, req.params, send_json, tasks, orchestrator, broadcast=broadcast)
     elif req.method == "chat.abort":
         await handle_chat_abort(req.id, req.params, send_json, orchestrator)
     elif req.method == "chat.history":
@@ -212,6 +217,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set) -> None
         await handle_workspace_read_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "chat.decideApproval":
         await handle_chat_decide_approval(req.id, req.params, send_json, orchestrator)
+    elif req.method == "approvals.list":
+        await handle_approvals_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.debugCopy":
         await handle_sessions_debug_copy(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.export":

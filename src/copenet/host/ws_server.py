@@ -27,10 +27,27 @@ class CopeNetWsServer:
     def __init__(self, orchestrator: Orchestrator | None = None) -> None:
         self._orchestrator = orchestrator or Orchestrator()
         self._token = os.environ.get("COPNET_TOKEN", "dev-token").strip()
+        # Every authenticated connection's send_json, so chat/approval events can
+        # fan out to all of them (reconnected socket, second device) instead of
+        # only the socket that started the run.
+        self._connections: set[Any] = set()
 
     @property
     def orchestrator(self) -> Orchestrator:
         return self._orchestrator
+
+    async def broadcast(self, payload: dict[str, Any]) -> None:
+        """Send one event payload to every connected client, best-effort.
+
+        Iterates a snapshot so a client disconnecting mid-broadcast (and removing
+        itself from the set) can't break the loop; a dead socket's send just
+        raises and is skipped.
+        """
+        for send in list(self._connections):
+            try:
+                await send(payload)
+            except Exception:
+                continue
 
     async def handle(self, websocket: WebSocket) -> None:
         """Accept and serve one websocket session."""
@@ -95,17 +112,19 @@ class CopeNetWsServer:
                     if not connected:
                         await websocket.close(code=1008)
                         return
+                    self._connections.add(send_json)
                     continue
                 if os.environ.get("COPNET_RPC_DEBUG") == "1":
                     print(f"RPC {req.method} {req.id}", flush=True)
-                await dispatch_rpc(req, send_json, self._orchestrator, tasks)
+                await dispatch_rpc(req, send_json, self._orchestrator, tasks, self.broadcast)
         except WebSocketDisconnect:
             pass
         finally:
-            # Accepted chat runs belong to the session/run store, not to a
-            # particular browser socket. Remote/mobile clients can reconnect
-            # during a run; keep background tasks alive so transcripts persist.
-            pass
+            # Stop fanning events to this socket once it's gone. Accepted chat
+            # runs belong to the session/run store, not to a particular browser
+            # socket — remote/mobile clients can reconnect during a run and the
+            # run keeps streaming to whatever connections remain.
+            self._connections.discard(send_json)
 
     async def _handle_connect(
         self,
@@ -187,6 +206,7 @@ class CopeNetWsServer:
                                 "workspace.listFiles",
                                 "workspace.readFile",
                                 "chat.decideApproval",
+                                "approvals.list",
                                 "sessions.runs",
                                 "sessions.run",
                                 "sessions.state",

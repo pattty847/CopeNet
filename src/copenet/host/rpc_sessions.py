@@ -359,6 +359,20 @@ async def handle_chat_decide_approval(request_id: str, params: dict[str, Any] | 
     )
 
 
+async def handle_approvals_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Return high-risk tool approvals still awaiting a decision (reconnect recovery)."""
+    result = orchestrator.list_pending_approvals()
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload=result,
+            )
+        )
+    )
+
+
 async def handle_sessions_debug_copy(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     key = _required_text(params or {}, "key")
     if not key:

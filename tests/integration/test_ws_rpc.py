@@ -339,9 +339,18 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "messaging.routes.upsert" in response["payload"]["features"]["methods"]
         assert "messaging.routes.delete" in response["payload"]["features"]["methods"]
         assert "messaging.routes.resolve" in response["payload"]["features"]["methods"]
+        assert "approvals.list" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
         assert "sessions.merge.updated" in response["payload"]["features"]["events"]
         assert "messaging.updated" in response["payload"]["features"]["events"]
+
+
+def test_approvals_list_rpc_returns_recovery_shape(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        request_id = socket.request("approvals.list", {})
+        response = socket.recv_response(request_id)
+        assert response["ok"] is True
+        assert response["payload"] == {"approvals": []}
 
     with rpc_client.websocket_connect("/ws") as websocket:
         socket = RpcSocket(websocket)

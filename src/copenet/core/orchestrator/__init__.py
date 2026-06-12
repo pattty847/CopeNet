@@ -728,7 +728,6 @@ class Orchestrator:
         from copenet.core.sessions.transcript_store import utc_now_iso
 
         event = asyncio.Event()
-        self._pending_approvals[approval_id] = {"event": event, "decision": None, "note": None}
         approval = {
             "approvalId": approval_id,
             "runId": run_id,
@@ -746,6 +745,9 @@ class Orchestrator:
             "resolvedAt": None,
             "outcome": None,
         }
+        # Keep the full approval payload so a reconnecting/reloaded client can
+        # recover it via approvals.list — approval.pending is a one-shot push.
+        self._pending_approvals[approval_id] = {"event": event, "decision": None, "note": None, "approval": approval}
         if emit_event is not None:
             await emit_event("approval.pending", {"approval": approval})
 
@@ -774,6 +776,21 @@ class Orchestrator:
                 {"approvalId": approval_id, "runId": run_id, "sessionKey": session_key, "decision": decision},
             )
         return decision, note
+
+    def list_pending_approvals(self) -> dict:
+        """Return approvals still awaiting an operator decision.
+
+        Bootstrap/reconnect recovery path: approval.pending is a one-shot push,
+        so a client that reloads or connects mid-approval would otherwise never
+        see the parked run. The run itself stays alive on its await; this just
+        re-surfaces the card.
+        """
+        approvals = [
+            entry["approval"]
+            for entry in self._pending_approvals.values()
+            if isinstance(entry, dict) and entry.get("approval")
+        ]
+        return {"approvals": approvals}
 
     def decide_approval(self, *, approval_id: str, decision: str, note: str | None = None) -> dict:
         """Record an operator's decision on a pending tool approval and wake the run."""

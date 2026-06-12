@@ -1303,7 +1303,7 @@ class WsClient {
 
   private async bootstrap() {
     try {
-      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, personaPayload, personaSettingsPayload, identityPayload, memoryPayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload] = await Promise.all([
+      const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, personaPayload, personaSettingsPayload, identityPayload, memoryPayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload, approvalsPayload] = await Promise.all([
         this.request<{ providers: unknown[] }>('providers.list', {}),
         this.request<{ tools: unknown[] }>('tools.list', {}),
         this.request<{ profiles?: unknown[]; taskModes?: unknown[] }>('prompts.list', {}),
@@ -1318,6 +1318,7 @@ class WsClient {
         this.request<{ runtimeContext?: unknown | null }>('runtime.context', {}),
         this.request<{ pulses?: unknown[] }>('pulse.list', {}),
         this.request<{ config?: unknown | null }>('messaging.config.get', {}),
+        this.request<{ approvals?: unknown[] }>('approvals.list', {}),
       ]);
 
       const store = useAppStore.getState();
@@ -1353,6 +1354,18 @@ class WsClient {
       if (messagingConfig) {
         store.setMessagingConfig(messagingConfig);
         store.setDestinations(messagingConfig.destinations);
+      }
+      // Recover any approval still awaiting a decision (approval.pending is a
+      // one-shot push, so a reload/reconnect mid-approval would otherwise lose
+      // the card while the run stays parked on the backend).
+      const pendingApprovals = Array.isArray(approvalsPayload.approvals)
+        ? approvalsPayload.approvals.map(normalizeApprovalRequest).filter((item): item is ApprovalRequest => item != null)
+        : [];
+      const recoveredApproval = pendingApprovals[0] || null;
+      if (recoveredApproval) {
+        store.setPendingApproval(recoveredApproval);
+        store.setRunPausedReason('awaiting_approval');
+        store.upsertApprovalInHistory(recoveredApproval);
       }
       this.ensureDraftDefaults();
 
