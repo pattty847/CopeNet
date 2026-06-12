@@ -105,8 +105,10 @@ async def test_high_risk_command_stays_blocked_on_reject(tmp_path: Path) -> None
         _full_access_context(tmp_path),
     )
     output = result.output if isinstance(result.output, dict) else {}
-    # Rejected → the model sees the original blocked result, command never ran.
-    assert output.get("policyDecision") == "approval_required"
+    # Rejected → the model is told a human said no (so it adapts instead of
+    # retrying), and the command never ran.
+    assert output.get("policyDecision") == "rejected_by_operator"
+    assert output.get("operatorDecision") == "rejected"
     assert "exitCode" not in output
 
 

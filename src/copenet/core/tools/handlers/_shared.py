@@ -11,6 +11,18 @@ import subprocess
 from copenet.core.tools.contracts import ToolBlockedError, ToolExecutionContext
 
 
+def _clip_with_marker(text: str, limit: int, stream: str) -> str:
+    """Clip a stream to `limit` chars, appending a visible marker when truncated.
+
+    Silent truncation makes a model treat a clipped `git log`/test run as
+    complete. The marker rides the existing stdout/stderr fields to every loop
+    path (native, Responses, prompted), so the model knows there is more.
+    """
+    if len(text) <= limit:
+        return text
+    return text[:limit] + f"\n[{stream} truncated at {limit} chars; {len(text)} total]"
+
+
 async def run_command(
     argv: list[str],
     *,
@@ -27,8 +39,8 @@ async def run_command(
             timeout=timeout_sec,
             check=False,
         )
-        stdout_text = (proc.stdout or "")[:output_limit]
-        stderr_text = (proc.stderr or "")[:output_limit]
+        stdout_text = _clip_with_marker(proc.stdout or "", output_limit, "stdout")
+        stderr_text = _clip_with_marker(proc.stderr or "", output_limit, "stderr")
         return proc.returncode, stdout_text, stderr_text
 
     try:
@@ -55,8 +67,8 @@ async def run_shell_command(
             shell=True,
             executable="/bin/bash",
         )
-        stdout_text = (proc.stdout or "")[:output_limit]
-        stderr_text = (proc.stderr or "")[:output_limit]
+        stdout_text = _clip_with_marker(proc.stdout or "", output_limit, "stdout")
+        stderr_text = _clip_with_marker(proc.stderr or "", output_limit, "stderr")
         return proc.returncode, stdout_text, stderr_text
 
     try:

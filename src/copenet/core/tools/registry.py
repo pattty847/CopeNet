@@ -158,6 +158,10 @@ class ToolRegistry:
                 ok=False,
                 summary=f"Tool failed: {descriptor.id}",
                 error=str(exc),
+                # Put the error in output too: the native/Responses loops feed the
+                # model only result.output, so without this a frontier model that
+                # passes a bad argument sees literally "{}" and has to guess.
+                output={"error": str(exc), "policyDecision": "tool_error"},
             )
         self._trace(
             context,

@@ -23,6 +23,7 @@ from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import (
     ToolExecutionContext,
+    ToolExecutionResult,
     describe_available_tools,
     policy_for_task_mode,
 )
@@ -55,7 +56,7 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
 
         approval_id = f"appr-{uuid4().hex[:12]}"
         command = str(output.get("command") or output.get("target") or "")
-        decision, _note = await orchestrator.await_tool_approval(
+        decision, note = await orchestrator.await_tool_approval(
             session_key=session_key,
             run_id=run_id,
             approval_id=approval_id,
@@ -86,7 +87,27 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
             if not isinstance(barricade_approved, set):
                 context.ephemeral["barricade_approved"] = {approval_key(request)}
             return await base_executor(request, context)
-        return result
+        # Rejected / timed out / aborted. Without this the model gets back the
+        # original approval_required payload — indistinguishable from the pending
+        # state — and plausibly re-issues the same command, re-paging the operator.
+        # Tell it a human decided, so it adapts instead of retrying.
+        rejected_output = {
+            **output,
+            "policyDecision": "rejected_by_operator",
+            "operatorDecision": decision,
+            "operatorNote": note,
+            "policySummary": (
+                f"The operator {decision} this command. Do not retry it; "
+                "choose a different approach or ask the user."
+            ),
+        }
+        return ToolExecutionResult(
+            tool_id=result.tool_id,
+            ok=False,
+            summary=f"Operator {decision} the command.",
+            error=f"operator {decision} the command",
+            output=rejected_output,
+        )
 
     return execute
 

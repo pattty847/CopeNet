@@ -194,3 +194,27 @@ async def test_guarded_find_delete_blocked_inside_chain(tmp_path: Path) -> None:
     )
     assert result.ok is False
     assert result.output["policyDecision"] == "write_blocked"
+
+
+def test_clip_with_marker_flags_truncation() -> None:
+    from copenet.core.tools.handlers._shared import _clip_with_marker
+
+    assert _clip_with_marker("short", 100, "stdout") == "short"
+    clipped = _clip_with_marker("x" * 50, 10, "stdout")
+    assert clipped.startswith("x" * 10)
+    assert "[stdout truncated at 10 chars; 50 total]" in clipped
+
+
+@pytest.mark.asyncio
+async def test_tool_error_is_surfaced_in_output_not_just_error(tmp_path: Path) -> None:
+    # files.rg with no pattern raises ValueError; the native/Responses loops feed
+    # the model only result.output, so the error must live there too (not just .error).
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="files.rg", arguments={}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert isinstance(result.output, dict)
+    assert result.output.get("policyDecision") == "tool_error"
+    assert "pattern" in str(result.output.get("error", "")).lower()
