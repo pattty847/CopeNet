@@ -56,7 +56,7 @@ const RECONNECT_DELAY_MS = 3000;
 const CONNECT_TIMEOUT_MS = 10000;
 const REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_DEV_TOKEN = 'dev-token';
-const PROVIDER_PRIORITY = ['lm-studio', 'ollama', 'codex-cli'];
+const PROVIDER_PRIORITY = ['lm-studio', 'ollama', 'openai-codex'];
 
 function getEnvString(name: 'VITE_COPNET_WS_URL' | 'VITE_COPNET_TOKEN'): string {
   const meta = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: Record<string, unknown> }) : undefined;
@@ -84,7 +84,7 @@ function pickPreferredProvider(providers: Provider[]): string {
   for (const id of PROVIDER_PRIORITY) {
     if (providers.some((provider) => provider.id === id && provider.available !== false)) return id;
   }
-  return providers.find((provider) => provider.available !== false)?.id || providers[0]?.id || 'codex-cli';
+  return providers.find((provider) => provider.available !== false)?.id || providers[0]?.id || 'openai-codex';
 }
 
 // crypto.randomUUID only exists in SECURE contexts (https or localhost). When

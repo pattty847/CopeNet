@@ -7,7 +7,7 @@ import json
 from dataclasses import dataclass, field
 from typing import Protocol
 
-from copenet.providers import CodexCliProvider, LmStudioProvider, OllamaProvider, Provider
+from copenet.providers import LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 
 from .models import ActionDecision, BROWSER_ACTION_JSON_SCHEMA, BrowserAction, PageState
 
@@ -151,8 +151,8 @@ def provider_from_name(name: str) -> Provider:
     normalized = name.strip().lower()
     if normalized == "copenet":
         return LmStudioProvider()
-    if normalized in {"codex", "codex-cli"}:
-        return CodexCliProvider()
+    if normalized in {"codex", "openai-codex"}:
+        return OpenAICodexProvider()
     if normalized in {"lmstudio", "lm-studio"}:
         return LmStudioProvider()
     if normalized == "ollama":

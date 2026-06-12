@@ -17,7 +17,7 @@ function item(overrides: Partial<MissionControlItem>): MissionControlItem {
     meta: '2m ago',
     sessionKey: 'session-1',
     runId: 'run-1',
-    provider: 'codex-cli',
+    provider: 'openai-codex',
     model: 'gpt-5.4',
     at: '2026-05-15T15:40:00.000Z',
     ...overrides,

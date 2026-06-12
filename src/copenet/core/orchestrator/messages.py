@@ -9,7 +9,7 @@ Two outputs:
   by the Phase 2 Responses-native tool loop, and as the source for the prompt
   flattener below.
 - `flatten_messages_to_prompt(...)` -> a clean transcript-style prompt string for
-  providers that still take a single `prompt: str` (claude-cli / codex-cli /
+  providers that still take a single `prompt: str` (claude-cli / openai-codex /
   LM Studio / Ollama prompted path). This preserves true multi-turn continuity
   for those providers too, instead of the old amnesiac working-set blob.
 

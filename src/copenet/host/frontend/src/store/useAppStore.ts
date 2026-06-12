@@ -44,22 +44,22 @@ function persistPinnedSessionKeys(keys: string[]) {
 
 function readStoredDraftRuntime(): Pick<DraftSettings, 'provider' | 'model'> {
   if (typeof window === 'undefined') {
-    return { provider: 'codex-cli', model: 'gpt-5.4' };
+    return { provider: 'openai-codex', model: 'gpt-5.5' };
   }
   try {
     const raw = window.localStorage.getItem(DRAFT_RUNTIME_STORAGE_KEY);
     if (!raw) {
-      return { provider: 'codex-cli', model: 'gpt-5.4' };
+      return { provider: 'openai-codex', model: 'gpt-5.5' };
     }
     const parsed = JSON.parse(raw) as { provider?: unknown; model?: unknown };
-    const provider = typeof parsed.provider === 'string' && parsed.provider.trim() ? parsed.provider.trim() : 'codex-cli';
+    const provider = typeof parsed.provider === 'string' && parsed.provider.trim() ? parsed.provider.trim() : 'openai-codex';
     const model = typeof parsed.model === 'string' ? parsed.model.trim() : '';
     return {
       provider,
       model: model || 'gpt-5.4',
     };
   } catch {
-    return { provider: 'codex-cli', model: 'gpt-5.4' };
+    return { provider: 'openai-codex', model: 'gpt-5.5' };
   }
 }
 
@@ -68,7 +68,7 @@ function persistDraftRuntime(settings: Pick<DraftSettings, 'provider' | 'model'>
   window.localStorage.setItem(
     DRAFT_RUNTIME_STORAGE_KEY,
     JSON.stringify({
-      provider: settings.provider || 'codex-cli',
+      provider: settings.provider || 'openai-codex',
       model: settings.model || '',
     }),
   );

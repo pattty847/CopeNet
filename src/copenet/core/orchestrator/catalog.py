@@ -9,7 +9,7 @@ from typing import TYPE_CHECKING
 
 from copenet.core.orchestrator.starter_intent import normalize_starter_intent, starter_intent_tags
 from copenet.core.sessions import SessionStateRecord
-from copenet.providers import ClaudeCliProvider, CodexCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
+from copenet.providers import ClaudeCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 
 if TYPE_CHECKING:
     from . import Orchestrator
@@ -17,7 +17,6 @@ if TYPE_CHECKING:
 
 _PROVIDER_CLASSES: tuple[type, ...] = (
     ClaudeCliProvider,
-    CodexCliProvider,
     OpenAICodexProvider,
     LmStudioProvider,
     OllamaProvider,
@@ -25,12 +24,11 @@ _PROVIDER_CLASSES: tuple[type, ...] = (
 
 
 def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, str]]:
+    # codex-cli was removed: now that OpenAI Codex OAuth works, running CopeNet's
+    # harness *inside* the codex-cli harness was redundant and confusing for the
+    # model. openai-codex is the canonical Codex lane.
     providers: dict[str, Provider] = {}
     init_errors: dict[str, str] = {}
-    try:
-        providers["codex-cli"] = CodexCliProvider()
-    except Exception as exc:
-        init_errors["codex-cli"] = str(exc)
     try:
         providers["claude-cli"] = ClaudeCliProvider()
     except Exception as exc:

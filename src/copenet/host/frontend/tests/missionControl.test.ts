@@ -11,7 +11,7 @@ function session(overrides: Partial<Session>): Session {
     key: 'session-1',
     sessionId: 'session-1',
     title: 'CopeNet Core',
-    provider: 'codex-cli',
+    provider: 'openai-codex',
     model: 'gpt-5.4',
     systemPromptId: 'default',
     taskPromptId: 'full-access',
@@ -33,7 +33,7 @@ function run(overrides: Partial<SessionRunRecord>): SessionRunRecord {
   return {
     runId: 'run-1',
     sessionKey: 'session-1',
-    provider: 'codex-cli',
+    provider: 'openai-codex',
     model: 'gpt-5.4',
     status: 'completed',
     userMessage: 'Improve the console',

@@ -109,7 +109,7 @@ export function syncModelSelect() {
   if (!list.length) {
     const opt = document.createElement('option');
     opt.value = '';
-    opt.textContent = providerId === 'codex-cli' ? 'Managed by provider' : 'No chat models available';
+    opt.textContent = providerId === 'openai-codex' ? 'Managed by provider' : 'No chat models available';
     draftModelSelectEl.appendChild(opt);
     draftModelSelectEl.dataset.noModels = '1';
     draftModelSelectEl.value = '';

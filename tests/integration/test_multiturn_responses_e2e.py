@@ -187,7 +187,7 @@ async def test_responses_turn_persists_tool_exchange_to_transcript(monkeypatch: 
 
 
 class ResumingCliProvider:
-    """Mimics claude-cli/codex-cli: resumes a server-side thread, records prompts."""
+    """Mimics claude-cli: resumes a server-side thread, records prompts."""
 
     display_name = "Resuming CLI"
 
@@ -215,7 +215,7 @@ class ResumingCliProvider:
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("provider_name", ["claude-cli", "codex-cli"])
+@pytest.mark.parametrize("provider_name", ["claude-cli"])
 async def test_resuming_cli_gets_only_new_message_not_full_history(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, provider_name: str
 ) -> None:

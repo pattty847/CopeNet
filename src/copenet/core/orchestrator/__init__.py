@@ -79,7 +79,7 @@ class ChatSendRequest:
     session_key: str
     message: str
     idempotency_key: str | None = None
-    provider: str = "codex-cli"
+    provider: str = "openai-codex"
     model: str | None = None
     system_prompt_id: str | None = None
     task_prompt_id: str | None = None

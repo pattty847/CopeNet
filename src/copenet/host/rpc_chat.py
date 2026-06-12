@@ -62,7 +62,7 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
         session_key=session_key,
         message=message,
         run_id=run_id,
-        provider=_optional_text(raw, "provider") or "codex-cli",
+        provider=_optional_text(raw, "provider") or "openai-codex",
         model=_optional_text(raw, "model"),
         system_prompt_id=system_prompt_id,
         task_prompt_id=task_prompt_id,

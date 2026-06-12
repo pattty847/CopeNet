@@ -460,7 +460,7 @@ export const MOCK_MESSAGING_CONFIG: MessagingConfig = {
     hardlineBlocklist: [],
   },
   telegramDefaults: {
-    provider: 'codex-cli',
+    provider: 'openai-codex',
     model: 'gpt-5.4',
     systemPromptId: 'default',
     taskPromptId: 'none',

@@ -11,7 +11,7 @@ function makeSession(overrides: Partial<Session>): Session {
     key: overrides.key || 'sess',
     sessionId: overrides.sessionId || `session-${overrides.key || 'sess'}`,
     title: overrides.title || 'Untitled',
-    provider: overrides.provider || 'codex-cli',
+    provider: overrides.provider || 'openai-codex',
     model: overrides.model || 'gpt-5.4',
     systemPromptId: overrides.systemPromptId || 'default',
     taskPromptId: overrides.taskPromptId || 'none',

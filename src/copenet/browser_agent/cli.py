@@ -114,7 +114,7 @@ def main() -> None:
     parser.add_argument("--start-url", help="Initial URL", required=True)
     parser.add_argument("--max-steps", type=int, default=8, help="Maximum browser-agent steps")
     parser.add_argument("--scripted-demo", help="Use a scripted decision provider demo")
-    parser.add_argument("--provider", help="Decision provider name (copenet/codex-cli/lm-studio/ollama)")
+    parser.add_argument("--provider", help="Decision provider name (copenet/openai-codex/lm-studio/ollama)")
     parser.add_argument("--model", help="Explicit provider model id")
     parser.add_argument("--headed", action="store_true", help="Run Chromium with a visible window")
     args = parser.parse_args()

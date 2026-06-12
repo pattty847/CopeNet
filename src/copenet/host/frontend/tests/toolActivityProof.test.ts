@@ -9,7 +9,7 @@ function makeRun(): SessionRunRecord {
   return {
     runId: 'run-proof-1',
     sessionKey: 'session-1',
-    provider: 'codex-cli',
+    provider: 'openai-codex',
     model: 'gpt-5.4',
     status: 'completed',
     userMessage: 'Inspect and patch the provider adapter files',

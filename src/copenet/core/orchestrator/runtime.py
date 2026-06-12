@@ -31,7 +31,7 @@ from copenet.core.tracing import RunTraceWriter
 
 # Providers that maintain their own conversation thread and resume it via
 # provider_session_id — they must NOT be re-fed the flattened transcript.
-_RESUME_CLI_PROVIDERS = {"claude-cli", "codex-cli"}
+_RESUME_CLI_PROVIDERS = {"claude-cli"}
 
 if TYPE_CHECKING:
     from . import ChatSendRequest, Orchestrator
@@ -129,7 +129,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     # results (the original Codex peer-review finding).
     idempotency_key = request.idempotency_key.strip() if request.idempotency_key else ""
     run_id = idempotency_key or str(uuid4())
-    provider_name = request.provider.strip() or "codex-cli"
+    provider_name = request.provider.strip() or "openai-codex"
     if provider_name not in orchestrator._providers:
         init_error = orchestrator._provider_init_errors.get(provider_name)
         if init_error:
@@ -270,7 +270,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             transcript_messages=history_for_replay,
             current_user_message=message,
         )
-        # CLI providers (claude-cli / codex-cli) keep their OWN conversation thread
+        # CLI providers (claude-cli / openai-codex) keep their OWN conversation thread
         # server-side and resume it via provider_session_id. Re-sending the full
         # flattened transcript to a resuming CLI would double its context, so when we
         # can resume we send only the new user message. Everyone else (Responses path,

@@ -5,7 +5,7 @@
  * everywhere because JS objects are shared by reference.
  */
 
-export const DEFAULT_CHAT_PROVIDER_ID = 'codex-cli';
+export const DEFAULT_CHAT_PROVIDER_ID = 'openai-codex';
 export const DEFAULT_PROFILE_ID = 'default';
 export const DEFAULT_TASK_MODE_ID = 'none';
 
@@ -77,7 +77,7 @@ export function labelForProviderId(id) {
 
 export function labelForModel(providerId, modelId) {
   if (!modelId) {
-    return providerId === 'codex-cli' ? 'Managed by provider' : 'No model selected';
+    return providerId === 'openai-codex' ? 'Managed by provider' : 'No model selected';
   }
   const list = modelCatalog[providerId] || [];
   const row = list.find((item) => item.id === modelId);
@@ -117,7 +117,7 @@ export function taskModeForUi() {
 }
 
 export function preferredProviderId() {
-  const ranked = ['lm-studio', 'ollama', 'codex-cli'];
+  const ranked = ['lm-studio', 'ollama', 'openai-codex'];
   for (const id of ranked) {
     const row = providerCatalog[id];
     if (row && row.available !== false) return id;

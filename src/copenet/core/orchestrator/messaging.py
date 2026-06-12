@@ -213,8 +213,8 @@ def _resolve_telegram_provider(orchestrator: "Orchestrator", preferred_provider:
     provider_id = str(preferred_provider or "").strip()
     if provider_id and provider_id in orchestrator._providers:
         return provider_id
-    if "codex-cli" in orchestrator._providers:
-        return "codex-cli"
+    if "openai-codex" in orchestrator._providers:
+        return "openai-codex"
     provider_ids = sorted(orchestrator._providers)
     if provider_ids:
         return provider_ids[0]

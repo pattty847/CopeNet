@@ -266,7 +266,7 @@ def create_app_router(
         idempotency_key: str | None,
     ) -> tuple[dict[str, Any], list[dict[str, Any]]]:
         mapping = _mapping_for(app, app_session_id)
-        effective_provider = (provider or app.default_provider or "codex-cli").strip()
+        effective_provider = (provider or app.default_provider or "openai-codex").strip()
         effective_model = (model or app.default_model or "").strip() or None
         events: list[dict[str, Any]] = []
 
@@ -309,7 +309,7 @@ def create_app_router(
                 session_key=session_key,
                 message=content,
                 idempotency_key=idempotency_key,
-                provider=(provider or "codex-cli").strip(),
+                provider=(provider or "openai-codex").strip(),
                 model=(model or "").strip() or None,
                 system_prompt_id=system_prompt_id,
                 task_prompt_id=task_prompt_id,
@@ -350,7 +350,7 @@ def create_app_router(
             if not session:
                 raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="session mapping is stale")
             return {"session": _public_session(app_session_id, session)}
-        provider = (body.provider or app.default_provider or "codex-cli").strip()
+        provider = (body.provider or app.default_provider or "openai-codex").strip()
         model = (body.model or app.default_model or "").strip() or None
         internal_key = f"app-{app.app_id}-{uuid4().hex[:12]}"
         session = orchestrator.create_session_with_profile(
@@ -607,7 +607,7 @@ def create_app_router(
                         session_key=mapping.internal_session_key,
                         message=content,
                         idempotency_key=idempotency_key,
-                        provider=(provider or app.default_provider or "codex-cli").strip(),
+                        provider=(provider or app.default_provider or "openai-codex").strip(),
                         model=(model or app.default_model or "").strip() or None,
                         system_prompt_id=system_prompt_id,
                         task_prompt_id=task_prompt_id,
