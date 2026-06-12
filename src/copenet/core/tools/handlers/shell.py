@@ -77,6 +77,77 @@ _WRITE_LIKE_GIT_SUBCOMMANDS = {
     "tag",
 }
 
+# Action predicates that make `find` write or execute. `find` is allowlisted as a
+# read tool, but the allowlist only inspects argv[0] — so `find . -delete` and
+# `find . -exec rm {} +` would pass straight through. Block them in guarded mode.
+_FIND_WRITE_PREDICATES = frozenset({
+    "-delete",
+    "-exec",
+    "-execdir",
+    "-ok",
+    "-okdir",
+    "-fprint",
+    "-fprintf",
+    "-fprint0",
+    "-fls",
+})
+
+# `git branch` is on the read safelist (listing branches is read-only), but these
+# flags — or any positional branch-name argument — create, delete, rename, move,
+# or re-point refs. Block those forms in guarded mode; plain listing still passes.
+_GIT_BRANCH_WRITE_FLAGS = frozenset({
+    "-d",
+    "-D",
+    "--delete",
+    "-m",
+    "-M",
+    "--move",
+    "-c",
+    "-C",
+    "--copy",
+    "-f",
+    "--force",
+    "-u",
+    "--set-upstream-to",
+    "--unset-upstream",
+    "--edit-description",
+})
+
+
+def _assert_no_write_predicates(argv: list[str], command: str, context: ToolExecutionContext) -> None:
+    """Block write/exec forms of otherwise-allowlisted commands in guarded mode.
+
+    The shell allowlist only checks argv[0], so write-capable flags on read
+    binaries slip through. This is the second gate (after the allowlist) that
+    keeps guarded mode actually read-only. Full-access mode never reaches here —
+    it runs via the unrestricted branch above.
+    """
+    cmd = argv[0]
+    if cmd == "find":
+        for token in argv[1:]:
+            base = token.split("=", 1)[0]
+            if base in _FIND_WRITE_PREDICATES:
+                raise ToolBlockedError(
+                    f"find predicate '{base}' can write or execute and is blocked in guarded mode",
+                    target=command,
+                    workspace_root=str(context.session_workspace_root),
+                    access_action="write",
+                    policy_decision="write_blocked",
+                    policy_summary="find write/exec predicates require full-access.",
+                )
+    elif cmd == "git" and len(argv) > 1 and argv[1] == "branch":
+        for token in argv[2:]:
+            base = token.split("=", 1)[0]
+            if base in _GIT_BRANCH_WRITE_FLAGS or not token.startswith("-"):
+                raise ToolBlockedError(
+                    "git branch with a write flag or branch-name argument is blocked in guarded mode",
+                    target=command,
+                    workspace_root=str(context.session_workspace_root),
+                    access_action="write",
+                    policy_decision="write_blocked",
+                    policy_summary="Only read-only `git branch` listing is allowed outside full-access.",
+                )
+
 
 def _path_candidate(token: str) -> bool:
     if not token or token.startswith("-"):
@@ -246,6 +317,7 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
             policy_decision="unsafe_unknown",
             policy_summary="Command is outside the shell allowlist.",
         )
+    _assert_no_write_predicates(argv, command, context)
 
     access = _shell_access_metadata(argv, context)
     code, stdout_text, stderr_text = await run_command(
@@ -306,6 +378,7 @@ async def _run_chain(
                 policy_decision="unsafe_unknown",
                 policy_summary=f"'{blocked}' is outside the shell allowlist; only allowlisted commands may be chained.",
             )
+        _assert_no_write_predicates(seg_argv, command, context)
 
     stdout_parts: list[str] = []
     stderr_parts: list[str] = []

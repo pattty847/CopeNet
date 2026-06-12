@@ -122,3 +122,75 @@ async def test_full_access_shell_exec_requires_approval_for_high_risk_commands(t
     assert result.ok is False
     assert result.output["policyDecision"] == "approval_required"
     assert "approval required" in result.error
+
+
+@pytest.mark.asyncio
+async def test_guarded_find_delete_is_blocked(tmp_path: Path) -> None:
+    # `find` is allowlisted, but -delete writes — guarded mode must block it.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "find . -delete"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "write_blocked"
+    assert "find predicate" in result.error
+
+
+@pytest.mark.asyncio
+async def test_guarded_find_exec_is_blocked(tmp_path: Path) -> None:
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "find . -exec rm {} +"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "write_blocked"
+
+
+@pytest.mark.asyncio
+async def test_guarded_find_readonly_still_allowed(tmp_path: Path) -> None:
+    # Read-only find predicates must still pass the guard (exit 0, no matches).
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "find . -name nonexistent.py"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is True
+    assert result.output["policyDecision"] != "write_blocked"
+
+
+@pytest.mark.asyncio
+async def test_guarded_git_branch_delete_is_blocked(tmp_path: Path) -> None:
+    # `git branch` is read-safelisted, but -D deletes a ref.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "git branch -D main"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "write_blocked"
+
+
+@pytest.mark.asyncio
+async def test_guarded_git_branch_create_is_blocked(tmp_path: Path) -> None:
+    # A bare positional branch name creates a ref — also a write.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "git branch newbranch"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "write_blocked"
+
+
+@pytest.mark.asyncio
+async def test_guarded_find_delete_blocked_inside_chain(tmp_path: Path) -> None:
+    # The guard must also run on each chain segment, not just single commands.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "pwd && find . -delete"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "write_blocked"

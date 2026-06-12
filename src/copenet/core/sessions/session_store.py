@@ -32,6 +32,19 @@ def utc_now_iso() -> str:
     return datetime.now(UTC).isoformat()
 
 
+def _effective_task_mode(task_prompt_id: str | None) -> str:
+    """Canonical task-mode id for lock comparison.
+
+    Mirrors ``policy_for_task_mode``: a missing/blank task mode is "none"
+    (guarded). The binding lock must compare EFFECTIVE modes, because task mode
+    gates tool policy — full-access grants repo-write + unrestricted shell. A
+    session created with a null task mode must not be silently escalated to
+    full-access on a later send, which a raw ``if entry.task_prompt_id and ...``
+    check (skipped when the stored value is null) would have allowed.
+    """
+    return (task_prompt_id or "none").strip().lower() or "none"
+
+
 def _required_str(raw: dict[str, Any], key: str) -> str:
     value = raw.get(key)
     return str(value).strip() if value is not None else ""
@@ -275,9 +288,10 @@ class SessionStore:
                 raise RuntimeError(
                     f"session is locked to profile {entry.system_prompt_id}; requested {normalized_system_prompt_id or 'none'}"
                 )
-            if entry.task_prompt_id and entry.task_prompt_id != normalized_task_prompt_id:
+            if _effective_task_mode(entry.task_prompt_id) != _effective_task_mode(normalized_task_prompt_id):
                 raise RuntimeError(
-                    f"session is locked to task mode {entry.task_prompt_id}; requested {normalized_task_prompt_id or 'none'}"
+                    f"session is locked to task mode {entry.task_prompt_id or 'none'}; "
+                    f"requested {normalized_task_prompt_id or 'none'}"
                 )
             if entry.persona_id and entry.persona_id != normalized_persona_id:
                 raise RuntimeError(

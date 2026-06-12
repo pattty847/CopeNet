@@ -184,3 +184,35 @@ def test_clear_stale_in_flight_unblocks_future_sends(session_store: SessionStore
     # After the sweep, the session accepts a fresh run again.
     entry = session_store.mark_run_started(session_key="beta", run_id="new-run")
     assert entry.in_flight_run_id == "new-run"
+
+
+def test_null_task_mode_session_cannot_escalate_to_full_access(session_store: SessionStore) -> None:
+    # First send with no task mode -> stored null. A later full-access send must
+    # NOT be allowed to silently escalate the session's tool policy.
+    session_store.create_session(session_key="gamma", provider="fake", task_prompt_id=None)
+    with pytest.raises(RuntimeError, match="locked to task mode none"):
+        session_store.assert_session_binding(
+            session_key="gamma", provider="fake", task_prompt_id="full-access"
+        )
+
+
+def test_null_task_mode_continuation_still_works(session_store: SessionStore) -> None:
+    # A none/none continuation must keep working (None == "none").
+    session_store.create_session(session_key="delta", provider="fake", task_prompt_id=None)
+    entry = session_store.assert_session_binding(
+        session_key="delta", provider="fake", task_prompt_id=None
+    )
+    assert entry.session_key == "delta"
+
+
+def test_full_access_session_locks_and_continues(session_store: SessionStore) -> None:
+    session_store.create_session(session_key="epsilon", provider="fake", task_prompt_id="full-access")
+    # Same mode continues fine.
+    session_store.assert_session_binding(
+        session_key="epsilon", provider="fake", task_prompt_id="full-access"
+    )
+    # Cannot silently downgrade either.
+    with pytest.raises(RuntimeError, match="locked to task mode full-access"):
+        session_store.assert_session_binding(
+            session_key="epsilon", provider="fake", task_prompt_id=None
+        )
