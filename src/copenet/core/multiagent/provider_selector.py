@@ -20,15 +20,15 @@ ProviderRole = Literal["heavy_lifting", "thinking", "breadth"]
 # The routes are the HarnessDecision `route` enum (core/harness/decision.py).
 # Each maps to an ordered preference of roles. Unknown routes use _DEFAULT_ROLES.
 _ROUTE_ROLE_PREFERENCE: dict[str, tuple[ProviderRole, ...]] = {
-    # Fast turnarounds: breadth first (Gemini), then accuracy (Claude), then Codex.
+    # Fast turnarounds: breadth first, then accuracy (Claude), then heavy lifting.
     "direct_response": ("breadth", "thinking", "heavy_lifting"),
     # Clarifying questions: Claude is strong here; breadth as backup.
     "ask_clarifying_question": ("thinking", "breadth"),
-    # Native tool calls: Codex first (best native tool calling), Claude fallback.
+    # Native tool calls: heavy lifting first (best native tool calling), Claude fallback.
     "call_tool": ("heavy_lifting", "thinking"),
-    # Multi-step agent work: chain Codex -> Claude (review) -> Gemini (alternatives).
+    # Multi-step agent work: chain heavy lifting -> Claude (review) -> breadth (alternatives).
     "multi_step_agent_loop": ("heavy_lifting", "thinking", "breadth"),
-    # Artifact creation: Codex first, Claude fallback.
+    # Artifact creation: heavy lifting first, Claude fallback.
     "create_or_update_artifact": ("heavy_lifting", "thinking"),
     # Refusals/redirects: Claude.
     "refuse_or_redirect": ("thinking",),
@@ -40,14 +40,15 @@ _DEFAULT_ROLES: tuple[ProviderRole, ...] = ("heavy_lifting", "thinking", "breadt
 class ProviderRoleMap:
     """Maps abstract orchestration roles to concrete CopeNet provider ids.
 
-    Defaults reflect the spec: Codex for heavy lifting, Claude for thinking,
-    Gemini for breadth. `breadth` defaults to "gemini", which is not in the
-    default registry yet — selection filters it out gracefully when absent.
+    Heavy lifting -> openai-codex, thinking -> claude-cli, breadth -> a local
+    model for cheap alternatives. (The original spec named Gemini for breadth,
+    but no Gemini provider exists in CopeNet — selection still filters out any
+    role whose provider isn't registered, so callers can override freely.)
     """
 
     heavy_lifting: str = "openai-codex"
     thinking: str = "claude-cli"
-    breadth: str = "gemini"
+    breadth: str = "lm-studio"
 
     def provider_for(self, role: ProviderRole) -> str:
         return getattr(self, role)

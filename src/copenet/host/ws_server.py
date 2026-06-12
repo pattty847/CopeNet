@@ -207,6 +207,8 @@ class CopeNetWsServer:
                                 "workspace.readFile",
                                 "chat.decideApproval",
                                 "approvals.list",
+                                "sessions.export",
+                                "sessions.debugCopy",
                                 "sessions.runs",
                                 "sessions.run",
                                 "sessions.state",

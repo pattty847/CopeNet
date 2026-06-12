@@ -38,22 +38,22 @@ def test_call_tool_route_prefers_codex_then_claude() -> None:
 
 
 def test_direct_response_route_prefers_breadth_then_thinking() -> None:
-    # Gemini ("breadth") absent -> falls to Claude ("thinking"), Codex last.
+    # breadth provider (lm-studio) absent -> falls to Claude ("thinking"), heavy last.
     selection = select_provider_chain(
         route="direct_response",
         available_provider_ids={"openai-codex", "claude-cli"},
     )
     assert selection.primary == "claude-cli"
     assert selection.chain == ("claude-cli", "openai-codex")
-    assert "gemini" in selection.unavailable
+    assert "lm-studio" in selection.unavailable
 
 
 def test_multi_step_route_chains_three_roles_when_available() -> None:
     selection = select_provider_chain(
         route="multi_step_agent_loop",
-        available_provider_ids={"openai-codex", "claude-cli", "gemini"},
+        available_provider_ids={"openai-codex", "claude-cli", "lm-studio"},
     )
-    assert selection.chain == ("openai-codex", "claude-cli", "gemini")
+    assert selection.chain == ("openai-codex", "claude-cli", "lm-studio")
 
 
 def test_unknown_route_uses_default_role_order() -> None:
@@ -73,7 +73,7 @@ def test_no_available_providers_yields_no_primary() -> None:
 
 
 def test_custom_role_map_is_honored() -> None:
-    role_map = ProviderRoleMap(heavy_lifting="codex-cli", thinking="claude-cli", breadth="gemini")
+    role_map = ProviderRoleMap(heavy_lifting="codex-cli", thinking="claude-cli", breadth="nonexistent-provider")
     selection = select_provider_chain(
         route="call_tool",
         available_provider_ids={"codex-cli", "claude-cli"},
@@ -149,15 +149,15 @@ async def test_should_retry_rejects_uncertain_result_and_falls_through() -> None
     async def run_one(provider_id: str) -> dict:
         if provider_id == "claude-cli":
             return {"text": "I'm not sure", "uncertain": True}
-        return {"text": "definitive answer from gemini", "uncertain": False}
+        return {"text": "definitive answer from lm-studio", "uncertain": False}
 
     outcome = await execute_with_fallback(
-        chain=("claude-cli", "gemini"),
+        chain=("claude-cli", "lm-studio"),
         run_one=run_one,
         should_retry=lambda value: bool(value.get("uncertain")),
     )
     assert outcome.ok
-    assert outcome.provider_id == "gemini"
+    assert outcome.provider_id == "lm-studio"
     # Claude's uncertain result was rejected (soft failure).
     assert outcome.attempts[0].provider_id == "claude-cli"
     assert outcome.attempts[0].rejected is True

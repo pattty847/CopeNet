@@ -237,13 +237,15 @@ export class MemeIdeationError extends Error {
 }
 
 export interface IdeateOptions {
-  /** Allow local mock fallback on 404/network. Defaults true so UI is always usable. */
+  /** Opt-in local mock fallback (dev only). Defaults FALSE: the /memes/ideate
+   *  endpoint is live, so a 404/network/5xx is a real failure to surface, not a
+   *  reason to fake a successful generation. */
   allowMock?: boolean;
   signal?: AbortSignal;
 }
 
 export async function ideateMemes(brief: MemeBrief, options: IdeateOptions = {}): Promise<MemeGeneration> {
-  const allowMock = options.allowMock ?? true;
+  const allowMock = options.allowMock ?? false;
   const body = {
     topic: brief.topic,
     trendSummary: brief.trendSummary,

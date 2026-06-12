@@ -254,22 +254,27 @@ def test_messaging_platform(orchestrator: "Orchestrator", *, platform: str) -> d
             },
         }
 
-    verified_at = utc_now_iso()
+    # We do NOT contact api.telegram.org here (the raw token is only stored
+    # masked, and there is no delivery lane yet), so we must not claim the bot is
+    # "connected" — that was a dishonest always-passes Test. Report the truth:
+    # a token is present but unverified against Telegram.
+    checked_at = utc_now_iso()
     refreshed = TelegramBotConfigRecord(
         bot_username=telegram.bot_username,
         token_masked=telegram.token_masked,
-        connection_status="connected",
-        last_verified_at=verified_at,
+        connection_status="disconnected",
+        last_verified_at=None,
         error_message=None,
     )
-    persisted = orchestrator._messaging_store.update_telegram(refreshed)
+    orchestrator._messaging_store.update_telegram(refreshed)
     return {
         "platform": "telegram",
         "config": get_messaging_config(orchestrator),
         "result": {
             "ok": True,
-            "connectionStatus": "connected",
-            "message": "Telegram bot configuration looks ready.",
-            "verifiedAt": verified_at,
+            "connectionStatus": "disconnected",
+            "message": "Token is configured but not verified — CopeNet does not perform a live Telegram check yet.",
+            "verifiedAt": None,
+            "checkedAt": checked_at,
         },
     }
