@@ -15,6 +15,12 @@ See docs/plans/MULTI_AGENT_ORCHESTRATOR.md.
 
 from __future__ import annotations
 
+from .delegation import (
+    SubAgentResult,
+    SubAgentTask,
+    build_subagent_prompt,
+    delegate_subagent_task,
+)
 from .fallback_executor import (
     FallbackAttempt,
     FallbackOutcome,
@@ -40,5 +46,9 @@ __all__ = [
     "ProviderRole",
     "ProviderRoleMap",
     "ProviderSelection",
+    "SubAgentResult",
+    "SubAgentTask",
+    "build_subagent_prompt",
+    "delegate_subagent_task",
     "select_provider_chain",
 ]

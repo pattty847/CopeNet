@@ -16,6 +16,9 @@ import pytest
 from copenet.core.multiagent import (
     MultiAgentOrchestrator,
     ProviderRoleMap,
+    SubAgentTask,
+    build_subagent_prompt,
+    delegate_subagent_task,
     execute_with_fallback,
     select_provider_chain,
 )
@@ -241,3 +244,80 @@ async def test_orchestrator_reports_failure_when_no_providers() -> None:
     result = await orch.run_turn(route="call_tool", run_on_provider=run_on_provider)
     assert not result.ok
     assert result.provider_id is None
+
+
+# -- sub-agent delegation -------------------------------------------------------
+
+
+def test_subagent_task_requires_objective() -> None:
+    with pytest.raises(ValueError, match="objective is required"):
+        SubAgentTask(objective="   ")
+
+
+def test_build_subagent_prompt_defines_bounded_handoff() -> None:
+    task = SubAgentTask(
+        objective="Inspect the session store API",
+        context="Parent is wiring archive restore UX.",
+        deliverables=("Relevant methods", "Known risks"),
+        constraints=("Do not edit files",),
+        max_response_chars=1200,
+    )
+
+    prompt = build_subagent_prompt(task)
+
+    assert "bounded CopeNet sub-agent" in prompt
+    assert "## Objective\nInspect the session store API" in prompt
+    assert "## Context\nParent is wiring archive restore UX." in prompt
+    assert "- Relevant methods" in prompt
+    assert "- Do not edit files" in prompt
+    assert "Keep the response under 1200 characters" in prompt
+
+
+@pytest.mark.asyncio
+async def test_delegate_subagent_task_runs_through_orchestrator_selection() -> None:
+    providers = {"openai-codex": object(), "claude-cli": object()}
+    orch = MultiAgentOrchestrator(providers=providers)
+    task = SubAgentTask(objective="Summarize the TODO file", route="call_tool")
+    calls: list[tuple[str, str]] = []
+
+    async def run_subagent(provider, provider_id: str, prompt: str) -> str:
+        assert provider is providers[provider_id]
+        calls.append((provider_id, prompt))
+        return "Summary: root TODO has backend/testing/frontend/product sections."
+
+    result = await delegate_subagent_task(
+        orchestrator=orch,
+        task=task,
+        run_subagent=run_subagent,
+    )
+
+    assert result.ok
+    assert result.provider_id == "openai-codex"
+    assert result.response == "Summary: root TODO has backend/testing/frontend/product sections."
+    assert calls == [("openai-codex", result.prompt)]
+    assert "Summarize the TODO file" in result.prompt
+
+
+@pytest.mark.asyncio
+async def test_delegate_subagent_task_falls_back_and_trims_response() -> None:
+    providers = {"openai-codex": object(), "claude-cli": object()}
+    orch = MultiAgentOrchestrator(providers=providers)
+    task = SubAgentTask(objective="Investigate", route="call_tool", max_response_chars=220)
+
+    async def run_subagent(provider, provider_id: str, prompt: str) -> str:
+        if provider_id == "openai-codex":
+            raise RuntimeError("primary unavailable")
+        return "x" * 500
+
+    result = await delegate_subagent_task(
+        orchestrator=orch,
+        task=task,
+        run_subagent=run_subagent,
+    )
+
+    assert result.ok
+    assert result.provider_id == "claude-cli"
+    assert result.response is not None
+    assert len(result.response) <= 220
+    assert "truncated by CopeNet sub-agent boundary" in result.response
+    assert result.turn.outcome.used_fallback
