@@ -8,8 +8,6 @@ import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { ApprovalQueuePanel } from './ApprovalQueuePanel';
 import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
-import { RunTimeline } from './RunTimeline';
-import { SendMessageComposer } from './SendMessageComposer';
 import { InspectorOverview } from './agents/InspectorOverview';
 import { usePendingApproval, useApprovalHistory, useInboxItems, usePatProfile } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
@@ -205,7 +203,6 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
             <InspectorOverview overviewOnly />
           </div>
         </aside>
-        <SendMessageComposer />
       </>
     );
   }
@@ -539,20 +536,7 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
             </section>
           )}
 
-          {/* 6. Run Timeline — visible when a run is paused */}
-          {pendingApproval && (
-            <section>
-              <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
-                <Activity className="w-3.5 h-3.5" />
-                <h3 className="font-semibold text-[10px] uppercase tracking-wider">Run Timeline</h3>
-              </div>
-              <div className="overflow-hidden">
-                <RunTimeline sessionKey={activeSessionKey} />
-              </div>
-            </section>
-          )}
-
-          {/* 7. Profile indicator — subtle, single line, honest about wiring state */}
+          {/* 6. Profile indicator — subtle, single line, honest about wiring state */}
           <section>
             <div className="flex items-center gap-1.5 mb-1 text-operator-muted">
               <Brain className="w-3 h-3" />
@@ -577,8 +561,6 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
         )}
       </div>
     </aside>
-    {/* Composer portal — always mounted, renders when composerOpen */}
-    <SendMessageComposer />
     </>
   );
 }

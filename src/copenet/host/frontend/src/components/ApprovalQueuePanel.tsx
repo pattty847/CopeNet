@@ -10,7 +10,7 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
-import { useApprovalHistory, useMockTransitions } from '../runtime/adapter';
+import { useApprovalHistory, useApprovalActions } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
 import type { ApprovalRequest, ApprovalStatus } from '../runtime/types';
 
@@ -71,7 +71,7 @@ const STATUS_META: Record<
 
 function ApprovalRow({ approval, defaultExpanded = false }: { approval: ApprovalRequest; defaultExpanded?: boolean }) {
   const [expanded, setExpanded] = useState(defaultExpanded);
-  const { simulateApprove, simulateReject } = useMockTransitions();
+  const { approve, reject } = useApprovalActions();
   const meta = STATUS_META[approval.status];
   const StatusIcon = meta.icon;
   const isPending = approval.status === 'pending';
@@ -173,14 +173,14 @@ function ApprovalRow({ approval, defaultExpanded = false }: { approval: Approval
             <div className="flex gap-1.5 pt-1">
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); simulateApprove(approval.approvalId); }}
+                onClick={(e) => { e.stopPropagation(); approve(approval.approvalId); }}
                 className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-semibold bg-operator-success/10 text-operator-success border border-operator-success/25 hover:bg-operator-success/20 transition-colors"
               >
                 <Check className="w-3 h-3" /> Approve
               </button>
               <button
                 type="button"
-                onClick={(e) => { e.stopPropagation(); simulateReject(approval.approvalId); }}
+                onClick={(e) => { e.stopPropagation(); reject(approval.approvalId); }}
                 className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-semibold bg-operator-error/8 text-operator-error border border-operator-error/20 hover:bg-operator-error/15 transition-colors"
               >
                 <X className="w-3 h-3" /> Reject

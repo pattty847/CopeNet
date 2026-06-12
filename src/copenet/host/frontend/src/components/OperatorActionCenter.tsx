@@ -16,7 +16,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { wsClient } from '../lib/wsClient';
-import { useInboxItems, useMockTransitions } from '../runtime/adapter';
+import { useInboxItems, useApprovalActions } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
 import type { InboxItem, InboxItemPriority } from '../runtime/types';
 
@@ -72,7 +72,7 @@ function InboxItemRow({
 }) {
   const [expanded, setExpanded] = useState(item.priority === 'urgent' || item.kind === 'pulse');
   const [pulseBusy, setPulseBusy] = useState<'save' | 'dismiss' | null>(null);
-  const { simulateApprove, simulateReject } = useMockTransitions();
+  const { approve, reject } = useApprovalActions();
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab);
   const style = PRIORITY_META[item.priority];
 
@@ -287,7 +287,7 @@ function InboxItemRow({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  simulateApprove(item.approvalData!.approvalId);
+                  approve(item.approvalData!.approvalId);
                 }}
                 className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-semibold bg-operator-success/10 text-operator-success border border-operator-success/25 hover:bg-operator-success/20 transition-colors"
               >
@@ -297,7 +297,7 @@ function InboxItemRow({
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  simulateReject(item.approvalData!.approvalId);
+                  reject(item.approvalData!.approvalId);
                 }}
                 className="flex-1 inline-flex items-center justify-center gap-1 py-1.5 rounded-lg text-[11px] font-semibold bg-operator-error/8 text-operator-error border border-operator-error/20 hover:bg-operator-error/15 transition-colors"
               >

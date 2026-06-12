@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import type { SessionArtifactRecord } from '../types/backend';
 import { buildInboxItems } from './inboxItems';
 import { mapRunToActivity } from './activityProof';
-import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, OutboundMessageRecord, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -203,43 +203,14 @@ export function useDestinations(): MessageDestination[] {
 }
 
 // ---------------------------------------------------------------------------
-// Mock event/state transitions
-// Lets UI demo components drive realistic state progressions without a backend.
+// Operator approval actions — REAL: optimistic local update + the decideApproval
+// RPC that wakes the parked run. (Formerly useMockTransitions, which also carried
+// fabricated simulate* demos that were deleted in the Tier 4 mock purge.)
 // ---------------------------------------------------------------------------
-export function useMockTransitions() {
-  const setPendingApproval = useAppStore((s) => s.setPendingApproval);
+export function useApprovalActions() {
   const resolveApproval = useAppStore((s) => s.resolveApproval);
-  const upsertApprovalInHistory = useAppStore((s) => s.upsertApprovalInHistory);
-  const setRunPausedReason = useAppStore((s) => s.setRunPausedReason);
-  const setRightPanelTab = useAppStore((s) => s.setRightPanelTab);
-  const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
-  const resetComposer = useAppStore((s) => s.resetComposer);
 
-  const simulateApprovalRequested = (partial?: Partial<ApprovalRequest>) => {
-    const req: ApprovalRequest = {
-      approvalId: `appr_sim_${Date.now()}`,
-      runId: `run_sim_${Date.now()}`,
-      sessionKey: '__fallback__',
-      status: 'pending',
-      actionClass: 'external_communication',
-      toolId: 'send_message',
-      proposedAction: {
-        description: 'Send a message to the configured Telegram destination.',
-        target: 'telegram:@copenet_ops',
-        payload: { message: 'Simulated outbound message from demo transition.' },
-      },
-      rationale: 'Simulated approval request for demo purposes.',
-      createdAt: new Date().toISOString(),
-      resolvedAt: null,
-      outcome: null,
-      ...partial,
-    };
-    setPendingApproval(req);
-    setRightPanelTab('approvals');
-    setRightPanelOpen(true);
-  };
-
-  const simulateApprove = (approvalId: string, note?: string) => {
+  const approve = (approvalId: string, note?: string) => {
     const outcome: ApprovalOutcome = {
       decision: 'approved',
       note: note ?? null,
@@ -249,7 +220,7 @@ export function useMockTransitions() {
     void wsClient.decideApproval(approvalId, 'approved', note); // wake the parked run
   };
 
-  const simulateReject = (approvalId: string, note?: string) => {
+  const reject = (approvalId: string, note?: string) => {
     const outcome: ApprovalOutcome = {
       decision: 'rejected',
       note: note ?? 'Rejected by operator',
@@ -259,59 +230,7 @@ export function useMockTransitions() {
     void wsClient.decideApproval(approvalId, 'rejected', note); // wake the parked run
   };
 
-  const simulateModify = (approvalId: string, newMessage: string, note?: string) => {
-    const outcome: ApprovalOutcome = {
-      decision: 'modified',
-      modifiedPayload: { message: newMessage },
-      note: note ?? 'Operator modified message',
-      decidedAt: new Date().toISOString(),
-    };
-    resolveApproval(approvalId, outcome);
-  };
-
-  const simulateRunResumed = () => {
-    setRunPausedReason(null);
-  };
-
-  const simulateSendMessageComposed = (target: string, message: string): OutboundMessageRecord => {
-    const dest = useAppStore.getState().destinations.find((d) => d.target === target);
-    const needsApproval = dest?.requiresApproval ?? true;
-    const record: OutboundMessageRecord = {
-      messageId: `msg_sim_${Date.now()}`,
-      runId: `run_sim_${Date.now()}`,
-      sessionKey: '__fallback__',
-      platform: target.split(':')[0],
-      target,
-      targetDisplayName: dest?.displayName ?? null,
-      messageText: message,
-      status: needsApproval ? 'pending_approval' : 'sent',
-      approvalId: needsApproval ? `appr_sim_${Date.now()}` : null,
-      sentAt: needsApproval ? null : new Date().toISOString(),
-      failureReason: null,
-      createdAt: new Date().toISOString(),
-    };
-    if (needsApproval) {
-      simulateApprovalRequested({
-        proposedAction: {
-          description: `Send message to ${dest?.displayName ?? target}`,
-          target,
-          payload: { message },
-        },
-        approvalId: record.approvalId!,
-      });
-    }
-    resetComposer();
-    return record;
-  };
-
-  return {
-    simulateApprovalRequested,
-    simulateApprove,
-    simulateReject,
-    simulateModify,
-    simulateRunResumed,
-    simulateSendMessageComposed,
-  };
+  return { approve, reject };
 }
 
 // ---------------------------------------------------------------------------
@@ -354,23 +273,6 @@ export function useInboxItems(sessionKey: string | null): InboxItem[] {
 // Null until the backend pushes a real config.
 export function useMessagingConfig(): MessagingConfig | null {
   return useAppStore((s) => s.messagingConfig);
-}
-
-// Returns the paused-run timeline for the current session.
-// Populated by the backend when a run pauses; cleared when the run resumes.
-export function useRunTimeline(_sessionKey: string | null): RunTimeline | null {
-  const storeTimeline = useAppStore((s) => s.runTimeline);
-  const runPausedReason = useAppStore((s) => s.runPausedReason);
-  const setRunTimeline = useAppStore((s) => s.setRunTimeline);
-
-  useEffect(() => {
-    if (!runPausedReason) {
-      // Clear timeline when run resumes so stale data doesn't persist
-      setRunTimeline(null);
-    }
-  }, [runPausedReason, setRunTimeline]);
-
-  return storeTimeline;
 }
 
 function mapPulsesToInboxItems(pulses: PulseRecord[]): InboxItem[] {
