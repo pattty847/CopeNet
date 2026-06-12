@@ -127,6 +127,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         model=request.model,
         enabled=orchestrator._trace_enabled,
     )
+    # Pre-init the error-path accumulators so the except/finally below can
+    # reference them even if we fail in the setup gap before the main body runs.
+    seq = 0
+    latest_turn_state: dict = {}
+    normalized_tool_results: list[dict] = []
+    tool_steps: list[dict] = []
+    persisted_tool_artifact_ids: list[str] = []
+
     async with orchestrator._lock:
         if dedupe_key is not None:
             cached = orchestrator._idempotency_cache.get(dedupe_key)
@@ -134,7 +142,14 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 return {"runId": run_id, "status": "cached", "cached": True, "result": cached}
 
         active_run = orchestrator._active_run_by_session.get(session_key)
-        if active_run and active_run != run_id:
+        if active_run:
+            if active_run == run_id:
+                # Same run already in flight: the client retried chat.send with
+                # the same idempotency_key before the first attempt finished.
+                # Admit a run id exactly once — do NOT fall through and start a
+                # second execution (which would double-append the user turn and
+                # let whichever finishes first clear the lock mid-stream).
+                return {"runId": run_id, "status": "in_flight"}
             from . import SessionInFlightError
 
             raise SessionInFlightError(active_run)
@@ -181,109 +196,109 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         orchestrator._active_abort_by_run[run_id] = abort_event
         orchestrator._active_run_by_session[session_key] = run_id
 
-    trace.record(
-        "run_started",
-        {
-            "messagePreview": message[:200],
-            "profile": request.system_prompt_id,
-            "taskMode": request.task_prompt_id,
-            "workdir": str(session_workspace_root),
-        },
-    )
-    trace.record(
-        "session_resolved",
-        {
-            "providerSessionId": entry.provider_session_id,
-            "sessionId": entry.session_id,
-        },
-    )
-
-    orchestrator._transcript_store.append_message(
-        entry.session_id,
-        TranscriptMessage(
-            run_id=run_id,
-            role="user",
-            content=message,
-            provider=provider_name,
-            model=request.model,
-            provider_session_id=entry.provider_session_id,
-            timestamp=transcript_now(),
-        ),
-    )
-    session_state = orchestrator._session_state_store.get_or_create(session_key)
-    trace.record(
-        "state_loaded",
-        {
-            "sessionKey": session_key,
-            "relevantArtifactCount": len(session_state.relevant_artifact_ids),
-            "relevantAssetCount": len(session_state.relevant_asset_ids),
-            "workingSetRefCount": len(session_state.working_set_refs),
-        },
-    )
-    effective_system_prompt = request.system_prompt
-    # Phase 1 (HARNESS_REBUILD_V2): real multi-turn message history. `chat_history`
-    # is read BEFORE the current user message was appended above — wait, the user
-    # message IS already appended. So drop the trailing user row and let
-    # build_chat_messages re-append `message` as the live request. This produces a
-    # proper Responses messages[] array (used directly by the Phase 2 native loop)
-    # and a clean flattened prompt for prompt-only providers (CLI / LM Studio).
-    full_history = orchestrator.history(session_key=session_key, limit=400)
-    history_for_replay = _history_excluding_current(full_history, run_id=run_id)
-    chat_messages = build_chat_messages(
-        transcript_messages=history_for_replay,
-        current_user_message=message,
-    )
-    # CLI providers (claude-cli / codex-cli) keep their OWN conversation thread
-    # server-side and resume it via provider_session_id. Re-sending the full
-    # flattened transcript to a resuming CLI would double its context, so when we
-    # can resume we send only the new user message. Everyone else (Responses path,
-    # LM Studio, Ollama, or a CLI with no session to resume) gets the full
-    # multi-turn replay.
-    cli_resume = provider_name in _RESUME_CLI_PROVIDERS and bool(entry.provider_session_id)
-    chat_prompt = message if cli_resume else flatten_messages_to_prompt(chat_messages)
-    input_token_estimate = estimate_input_tokens(chat_messages)
-    message_count = len(chat_messages)
-    trace.record(
-        "chat_messages_built",
-        {
-            "messageCount": message_count,
-            "inputTokenEstimate": input_token_estimate,
-            "historyTurns": len(history_for_replay),
-            "cliResume": cli_resume,
-        },
-    )
-
-    provider = orchestrator._providers[provider_name]
-    seq = 0
-    assistant_parts: list[str] = []
-    assistant_message_parts: list[dict] = []
-    tool_execution_payload: dict | None = None
-    latest_turn_state: dict = {}
-    normalized_tool_results: list[dict] = []
-    artifact_drafts: list[dict] = []
-    tool_steps: list[dict] = []
-    persisted_tool_artifact_ids: list[str] = []
-    identity_context_payload: dict[str, object] = {
-        "profileActive": False,
-        "memoryCount": 0,
-        "memoryItemIds": [],
-        "personaActive": False,
-        "personaId": entry.persona_id,
-        "personaFlavorId": entry.persona_flavor_id,
-        "personaPrivacyTier": entry.persona_privacy_tier,
-    }
-    agent_runtime_payload = _build_agent_runtime_payload(
-        session_key=session_key,
-        task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
-        session_state=session_state,
-    )
-    effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
-    available_tools = [
-        tool
-        for tool in orchestrator._tool_registry.list_tools()
-        if tool.category in effective_tool_policy.allowed_categories
-    ] if request.allow_tools else []
     try:
+        trace.record(
+            "run_started",
+            {
+                "messagePreview": message[:200],
+                "profile": request.system_prompt_id,
+                "taskMode": request.task_prompt_id,
+                "workdir": str(session_workspace_root),
+            },
+        )
+        trace.record(
+            "session_resolved",
+            {
+                "providerSessionId": entry.provider_session_id,
+                "sessionId": entry.session_id,
+            },
+        )
+
+        orchestrator._transcript_store.append_message(
+            entry.session_id,
+            TranscriptMessage(
+                run_id=run_id,
+                role="user",
+                content=message,
+                provider=provider_name,
+                model=request.model,
+                provider_session_id=entry.provider_session_id,
+                timestamp=transcript_now(),
+            ),
+        )
+        session_state = orchestrator._session_state_store.get_or_create(session_key)
+        trace.record(
+            "state_loaded",
+            {
+                "sessionKey": session_key,
+                "relevantArtifactCount": len(session_state.relevant_artifact_ids),
+                "relevantAssetCount": len(session_state.relevant_asset_ids),
+                "workingSetRefCount": len(session_state.working_set_refs),
+            },
+        )
+        effective_system_prompt = request.system_prompt
+        # Phase 1 (HARNESS_REBUILD_V2): real multi-turn message history. `chat_history`
+        # is read BEFORE the current user message was appended above — wait, the user
+        # message IS already appended. So drop the trailing user row and let
+        # build_chat_messages re-append `message` as the live request. This produces a
+        # proper Responses messages[] array (used directly by the Phase 2 native loop)
+        # and a clean flattened prompt for prompt-only providers (CLI / LM Studio).
+        full_history = orchestrator.history(session_key=session_key, limit=400)
+        history_for_replay = _history_excluding_current(full_history, run_id=run_id)
+        chat_messages = build_chat_messages(
+            transcript_messages=history_for_replay,
+            current_user_message=message,
+        )
+        # CLI providers (claude-cli / codex-cli) keep their OWN conversation thread
+        # server-side and resume it via provider_session_id. Re-sending the full
+        # flattened transcript to a resuming CLI would double its context, so when we
+        # can resume we send only the new user message. Everyone else (Responses path,
+        # LM Studio, Ollama, or a CLI with no session to resume) gets the full
+        # multi-turn replay.
+        cli_resume = provider_name in _RESUME_CLI_PROVIDERS and bool(entry.provider_session_id)
+        chat_prompt = message if cli_resume else flatten_messages_to_prompt(chat_messages)
+        input_token_estimate = estimate_input_tokens(chat_messages)
+        message_count = len(chat_messages)
+        trace.record(
+            "chat_messages_built",
+            {
+                "messageCount": message_count,
+                "inputTokenEstimate": input_token_estimate,
+                "historyTurns": len(history_for_replay),
+                "cliResume": cli_resume,
+            },
+        )
+
+        provider = orchestrator._providers[provider_name]
+        seq = 0
+        assistant_parts: list[str] = []
+        assistant_message_parts: list[dict] = []
+        tool_execution_payload: dict | None = None
+        latest_turn_state: dict = {}
+        normalized_tool_results: list[dict] = []
+        artifact_drafts: list[dict] = []
+        tool_steps: list[dict] = []
+        persisted_tool_artifact_ids: list[str] = []
+        identity_context_payload: dict[str, object] = {
+            "profileActive": False,
+            "memoryCount": 0,
+            "memoryItemIds": [],
+            "personaActive": False,
+            "personaId": entry.persona_id,
+            "personaFlavorId": entry.persona_flavor_id,
+            "personaPrivacyTier": entry.persona_privacy_tier,
+        }
+        agent_runtime_payload = _build_agent_runtime_payload(
+            session_key=session_key,
+            task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
+            session_state=session_state,
+        )
+        effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
+        available_tools = [
+            tool
+            for tool in orchestrator._tool_registry.list_tools()
+            if tool.category in effective_tool_policy.allowed_categories
+        ] if request.allow_tools else []
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
             prompt=chat_prompt,

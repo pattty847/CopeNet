@@ -133,3 +133,54 @@ def test_load_map_ignores_camel_case_storage_entries(tmp_dir) -> None:
     )
 
     assert store.get("legacy-key") is None
+
+
+def test_corrupt_index_fails_loud_and_backs_up(tmp_dir) -> None:
+    """A corrupt index must raise, not silently load empty (which would let the
+    next save atomically overwrite the real index with an empty one)."""
+    from copenet.core.sessions.session_store import SessionIndexError
+
+    store = SessionStore(path=tmp_dir / "index.json")
+    store.path.write_text("{ this is not valid json", encoding="utf-8")
+
+    with pytest.raises(SessionIndexError):
+        store.get("anything")
+
+    backup = store.path.with_suffix(store.path.suffix + ".corrupt")
+    assert backup.exists(), "corrupt bytes should be preserved for forensics"
+    assert backup.read_text(encoding="utf-8") == "{ this is not valid json"
+
+
+def test_empty_index_file_is_treated_as_no_sessions(tmp_dir) -> None:
+    store = SessionStore(path=tmp_dir / "index.json")
+    store.path.write_text("", encoding="utf-8")
+    assert store.get("anything") is None  # benign, no raise
+
+
+def test_clear_stale_in_flight_clears_and_reports(session_store: SessionStore) -> None:
+    session_store.create_session(session_key="alpha", provider="fake", model="m1")
+    session_store.mark_run_started(session_key="alpha", run_id="run-123")
+
+    # Simulate a crash: the marker is on disk and never cleared.
+    assert session_store.get("alpha").in_flight_run_id == "run-123"
+
+    stuck = session_store.clear_stale_in_flight()
+    assert stuck == [("alpha", "run-123", "fake", "m1")]
+    assert session_store.get("alpha").in_flight_run_id is None
+
+    # A second sweep finds nothing and writes nothing new.
+    assert session_store.clear_stale_in_flight() == []
+
+
+def test_clear_stale_in_flight_unblocks_future_sends(session_store: SessionStore) -> None:
+    session_store.create_session(session_key="beta", provider="fake")
+    session_store.mark_run_started(session_key="beta", run_id="dead-run")
+
+    # Before the sweep, a new run id is rejected as in-flight.
+    with pytest.raises(RuntimeError, match="session is in flight"):
+        session_store.mark_run_started(session_key="beta", run_id="new-run")
+
+    session_store.clear_stale_in_flight()
+    # After the sweep, the session accepts a fresh run again.
+    entry = session_store.mark_run_started(session_key="beta", run_id="new-run")
+    assert entry.in_flight_run_id == "new-run"

@@ -152,6 +152,59 @@ class Orchestrator:
         # approvalId -> {"event": asyncio.Event, "decision": str|None, "note": str|None}.
         self._pending_approvals: dict[str, dict] = {}
 
+        # Crash recovery: clear any in_flight markers stranded by a previous
+        # crash/kill so they can't brick the session forever, and record each as
+        # an interrupted run so history isn't silently missing a turn.
+        self._recover_interrupted_runs()
+
+    def _recover_interrupted_runs(self) -> None:
+        """Sweep stale in_flight markers at startup; log + record each one.
+
+        A fresh process owns no live runs. We catch errors here so a corrupt
+        index can't make the host unbootable — `_load_map` still fails loud on
+        the first real session operation, with the corrupt copy already backed
+        up, so the catastrophe (silent overwrite) stays closed either way.
+        """
+        import logging
+
+        logger = logging.getLogger("copenet.orchestrator")
+        try:
+            stuck = self._session_store.clear_stale_in_flight()
+        except Exception as exc:  # noqa: BLE001 — startup must not hard-crash here
+            logger.warning("startup in-flight recovery skipped: %s", exc)
+            return
+        if not stuck:
+            return
+
+        from copenet.core.runtime import RunRecord
+        from copenet.core.sessions.transcript_store import utc_now_iso
+
+        logger.warning(
+            "recovered %d session(s) stuck in_flight after an unclean shutdown: %s",
+            len(stuck),
+            ", ".join(key for key, *_ in stuck),
+        )
+        for session_key, run_id, provider, model in stuck:
+            try:
+                self._run_store.create(
+                    RunRecord(
+                        run_id=run_id,
+                        session_key=session_key,
+                        provider=provider,
+                        model=model,
+                        status="interrupted",
+                        user_message="",
+                        tool_execution_mode="none",
+                        will_attempt_tool_loop=False,
+                        completed_at=utc_now_iso(),
+                        error="Run interrupted: process exited before it completed.",
+                        transition_reason="process_interrupted",
+                        terminal_reason="process_interrupted",
+                    )
+                )
+            except Exception as exc:  # noqa: BLE001 — best-effort observability record
+                logger.warning("could not record interrupted run %s: %s", run_id, exc)
+
     async def send_chat(self, request: ChatSendRequest, emit: ChatEmit, emit_event: SideEventEmit | None = None) -> dict:
         """Start one chat run and stream events through `emit` callback."""
         return await send_chat_impl(self, request, emit, emit_event=emit_event)

@@ -5,6 +5,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import threading
 from typing import Any
@@ -14,6 +15,16 @@ from copenet._paths import default_sessions_dir
 
 
 UTC = timezone.utc
+
+
+class SessionIndexError(RuntimeError):
+    """Raised when the session index exists but cannot be parsed.
+
+    We fail loud rather than treating a corrupt index as empty, because every
+    mutator does load->modify->save: a silent empty load would let the next
+    write atomically overwrite the real index with a near-empty file, orphaning
+    every session. The corrupt file is backed up before we raise.
+    """
 
 
 def utc_now_iso() -> str:
@@ -386,18 +397,61 @@ class SessionStore:
             self._save_map(sessions)
             return entry
 
+    def clear_stale_in_flight(self) -> list[tuple[str, str, str, str | None]]:
+        """Clear every persisted in_flight_run_id at process startup.
+
+        A freshly started process owns no live runs, so any in_flight marker on
+        disk is a leftover from a crash or kill mid-run. Without this sweep a
+        stuck marker bricks the session forever: every future send raises
+        "session is in flight" and abort can't help (it only consults in-memory
+        state). Returns (session_key, run_id, provider, model) for each session
+        that was stuck, so the caller can record synthetic 'interrupted' runs.
+        """
+        with self._lock:
+            sessions = self._load_map()
+            stuck: list[tuple[str, str, str, str | None]] = []
+            for key, entry in sessions.items():
+                if entry.in_flight_run_id:
+                    stuck.append((key, entry.in_flight_run_id, entry.provider, entry.model))
+                    entry.in_flight_run_id = None
+                    entry.updated_at = utc_now_iso()
+            if stuck:
+                self._save_map(sessions)
+            return stuck
+
     def _load_map(self) -> dict[str, SessionIndexEntry]:
         if not self._path.exists():
             return {}
 
         try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+            text = self._path.read_text(encoding="utf-8")
+        except OSError as exc:
+            raise SessionIndexError(f"could not read session index {self._path}: {exc}") from exc
+
+        # An empty file is the benign "no sessions yet" case (e.g. a fresh touch).
+        if not text.strip():
             return {}
+
+        try:
+            raw = json.loads(text)
+        except json.JSONDecodeError as exc:
+            # Preserve the corrupt bytes for forensics instead of letting the
+            # next load->modify->save silently overwrite the real index.
+            backup = self._path.with_suffix(self._path.suffix + ".corrupt")
+            try:
+                backup.write_text(text, encoding="utf-8")
+            except OSError:
+                backup = None  # best-effort; still fail loud below
+            raise SessionIndexError(
+                f"session index {self._path} is corrupt and was not parseable"
+                + (f"; corrupt copy saved to {backup}" if backup else "")
+            ) from exc
 
         items = raw.get("sessions") if isinstance(raw, dict) else None
         if not isinstance(items, list):
-            return {}
+            raise SessionIndexError(
+                f"session index {self._path} is malformed (missing 'sessions' list)"
+            )
 
         result: dict[str, SessionIndexEntry] = {}
         for item in items:
@@ -414,5 +468,10 @@ class SessionStore:
             "sessions": [entry.to_json() for entry in sessions.values()],
         }
         tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
+        # flush + fsync before the atomic rename so a power loss can't leave a
+        # zero-length index behind (which _load_map would then refuse to parse).
+        with open(tmp_path, "w", encoding="utf-8") as fh:
+            json.dump(payload, fh, ensure_ascii=False, indent=2)
+            fh.flush()
+            os.fsync(fh.fileno())
         tmp_path.replace(self._path)

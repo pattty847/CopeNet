@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, FolderOpen, Mic, Paperclip, Plus, Send, Sparkles, X } from 'lucide-react';
+import { Check, ChevronDown, FolderOpen, Mic, Paperclip, Plus, Send, Sparkles, Square, X } from 'lucide-react';
 import { wsClient } from '../../lib/wsClient';
 import { useAppStore } from '../../store/useAppStore';
 import type { DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
@@ -371,6 +371,22 @@ export function AgentComposer({
   const draftSettings = useAppStore((state) => state.draftSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
   const patchDraftSettings = useAppStore((state) => state.patchDraftSettings);
+  const activeRunId = useAppStore((state) => state.activeRunId);
+
+  const [aborting, setAborting] = useState(false);
+  const isRunning = Boolean(activeRunId);
+
+  const handleStop = async () => {
+    if (aborting) return;
+    setAborting(true);
+    try {
+      await wsClient.abortActiveRun();
+    } catch (error) {
+      useAppStore.getState().setAppError(error instanceof Error ? error.message : 'Unable to stop the run.');
+    } finally {
+      setAborting(false);
+    }
+  };
 
   const isDraft = !runtimeSummary.locked && runtimeSummary.statusLabel.toLowerCase() === 'draft';
   const availableModels = draftSettings.provider ? modelsByProvider[draftSettings.provider] || [] : [];
@@ -596,25 +612,38 @@ export function AgentComposer({
               >
                 <Sparkles className="h-3.5 w-3.5" />
               </button>
-              <button
-                type="button"
-                onPointerUp={(event) => {
-                  if (event.pointerType === 'mouse') return;
-                  event.preventDefault();
-                  triggerDirectSend();
-                }}
-                onTouchEnd={(event) => {
-                  event.preventDefault();
-                  triggerDirectSend();
-                }}
-                onClick={triggerDirectSend}
-                disabled={!value.trim() || disabled}
-                className="glow-accent ml-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-accent text-operator-bg disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
-                title="Send"
-                aria-label="Send message"
-              >
-                <Send className="h-3.5 w-3.5" />
-              </button>
+              {isRunning ? (
+                <button
+                  type="button"
+                  onClick={() => void handleStop()}
+                  disabled={aborting}
+                  className="ml-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-error text-white transition-colors hover:bg-operator-error/90 disabled:cursor-not-allowed disabled:opacity-40"
+                  title={aborting ? 'Stopping…' : 'Stop run'}
+                  aria-label="Stop run"
+                >
+                  <Square className="h-3 w-3 fill-current" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onPointerUp={(event) => {
+                    if (event.pointerType === 'mouse') return;
+                    event.preventDefault();
+                    triggerDirectSend();
+                  }}
+                  onTouchEnd={(event) => {
+                    event.preventDefault();
+                    triggerDirectSend();
+                  }}
+                  onClick={triggerDirectSend}
+                  disabled={!value.trim() || disabled}
+                  className="glow-accent ml-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-accent text-operator-bg disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
+                  title="Send"
+                  aria-label="Send message"
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           </div>
 
