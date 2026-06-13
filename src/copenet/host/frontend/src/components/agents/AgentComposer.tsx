@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Check, ChevronDown, FolderOpen, Mic, Paperclip, Plus, Send, Sparkles, Square, X } from 'lucide-react';
+import { Check, ChevronDown, FolderOpen, Loader2, Mic, Paperclip, Plus, Send, Sparkles, Square, X } from 'lucide-react';
 import { wsClient } from '../../lib/wsClient';
+import { useVoiceToText } from '../../lib/useVoiceToText';
 import { useAppStore } from '../../store/useAppStore';
 import type { DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 
@@ -388,6 +389,16 @@ export function AgentComposer({
     }
   };
 
+  // Voice-to-text: dictate into the composer. Appends the transcript to whatever
+  // is already typed (Whisper runs locally via /api/v1/media/transcribe).
+  const voice = useVoiceToText((text) => {
+    const needsSpace = value.length > 0 && !/\s$/.test(value);
+    onChange(value + (needsSpace ? ' ' : '') + text);
+  });
+  useEffect(() => {
+    if (voice.error) useAppStore.getState().setAppError(voice.error);
+  }, [voice.error]);
+
   const isDraft = !runtimeSummary.locked && runtimeSummary.statusLabel.toLowerCase() === 'draft';
   const availableModels = draftSettings.provider ? modelsByProvider[draftSettings.provider] || [] : [];
   const currentWorkspaceRoot = draftSettings.workspaceRoot || runtimeContext?.workspaceRoot || '';
@@ -600,8 +611,29 @@ export function AgentComposer({
               <button disabled={disabled} className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-text disabled:opacity-40" title="Attach file">
                 <Paperclip className="h-3.5 w-3.5" />
               </button>
-              <button disabled={disabled} className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-text disabled:opacity-40" title="Voice input">
-                <Mic className="h-3.5 w-3.5" />
+              <button
+                type="button"
+                onClick={() => voice.toggle()}
+                disabled={disabled || voice.state === 'transcribing'}
+                className={`rounded-lg p-2 transition-colors disabled:opacity-40 ${
+                  voice.state === 'recording'
+                    ? 'text-operator-error animate-pulse'
+                    : 'text-operator-muted/80 hover:bg-operator-panel hover:text-operator-accent'
+                }`}
+                title={
+                  voice.state === 'recording'
+                    ? 'Stop & transcribe'
+                    : voice.state === 'transcribing'
+                      ? 'Transcribing…'
+                      : 'Voice input (dictate)'
+                }
+                aria-label="Voice input"
+              >
+                {voice.state === 'transcribing' ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Mic className="h-3.5 w-3.5" />
+                )}
               </button>
               <button
                 type="button"

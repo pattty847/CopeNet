@@ -60,6 +60,15 @@ class MediaIngestionService:
             whisper_model=whisper_model,
         )
 
+    async def transcribe_file(self, *, source_path: Path, whisper_model: str = "base") -> str:
+        """Transcribe one local media file to text WITHOUT persisting an asset.
+
+        Used by the composer voice-to-text mic: a throwaway dictation clip should
+        become text in the composer, not a stored media asset.
+        """
+        transcriber = WhisperTranscriber(model_name=whisper_model)
+        return await transcriber.transcribe(source_path)
+
     async def download_url(
         self,
         *,

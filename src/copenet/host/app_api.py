@@ -705,6 +705,34 @@ def create_app_router(
                 pass
         return {"asset": asset.to_public_dict()}
 
+    @router.post("/media/transcribe")
+    async def transcribe_media(
+        file: UploadFile = File(...),
+        app: AuthenticatedApp = Depends(require_media_access),
+        whisper_model: str = Query(default="base", alias="whisperModel"),
+    ) -> dict[str, Any]:
+        """Transcribe one uploaded audio clip to text without persisting an asset.
+
+        Powers the composer voice-to-text mic: record -> upload -> Whisper -> text.
+        """
+        safe_name = (file.filename or "voice-clip").strip() or "voice-clip"
+        tmp_dir = media.store.downloads_dir / "transcribe"
+        tmp_dir.mkdir(parents=True, exist_ok=True)
+        tmp_path = tmp_dir / f"clip-{uuid4().hex[:12]}-{safe_name}"
+        try:
+            content = await file.read()
+            tmp_path.write_bytes(content)
+            text = await media.transcribe_file(source_path=tmp_path, whisper_model=whisper_model)
+        except Exception as exc:
+            raise _media_error(exc) from exc
+        finally:
+            await file.close()
+            try:
+                tmp_path.unlink(missing_ok=True)
+            except OSError:
+                pass
+        return {"text": text}
+
     @router.post("/web/extract")
     async def extract_web_page(body: WebExtractRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
         try:
