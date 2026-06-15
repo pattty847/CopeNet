@@ -2,7 +2,14 @@
 
 ![CopeNet Showcase](docs/imgs/copenet-showcase.gif)
 
+<img src="docs/imgs/copenet-custodian-mascot.png" align="right" width="240" alt="CopeNet Custodian — ACCESS EVERYWHERE, DON'T WRITE, DELETE" />
+
 CopeNet is a *continuity engine* agent operator for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
+
+> **Meet the Custodian** — badge says `ACCESS EVERYWHERE`, patch says `DON'T WRITE. DELETE.` He's got the keys to every session, a rubber duck for the hard bugs, and a mop that's seen things. He keeps the transcripts append-only and the worktrees swept. The harness is the building; he's the night shift.
+
+<br clear="right" />
+
 
 ## Product Tour
 
