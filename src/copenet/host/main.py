@@ -57,8 +57,32 @@ from copenet.host.api import create_app
 SUPPORTED_AUTH_PROVIDERS = {OPENAI_CODEX_PROVIDER_ID}
 
 
+_HOST_EPILOG = """\
+running the host + UI (no subcommand):
+  copenet                          serve on 127.0.0.1:17123 (open http://localhost:17123)
+  COPNET_HOST=tailscale copenet    serve privately on your tailnet IP (not local wifi)
+  COPNET_PORT=17124 copenet        use a custom port
+  COPNET_WORKDIR=/path copenet     set the workspace root for full-access file/shell tools
+
+environment variables:
+  COPNET_HOST      bind host: 127.0.0.1 (default) | tailscale | 0.0.0.0 | explicit IP
+  COPNET_PORT      bind port (default 17123)
+  COPNET_WORKDIR   workspace root for tools (default: current directory)
+  COPNET_TOKEN     gateway auth token (default: dev-token)
+  COPNET_TRACE     set to 1 to write per-run JSONL traces to ~/.copenet/logs/runs/
+
+tailnet HTTPS (needed for mic / getUserMedia from other devices):
+  enable Serve in the Tailscale admin, then: tailscale serve --bg --https=443 17123
+  (bind CopeNet to 127.0.0.1 first so only the tailnet-scoped proxy reaches it)
+"""
+
+
 def _build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(description="Run the CopeNet host or provider auth helpers")
+    parser = argparse.ArgumentParser(
+        description="Run the CopeNet host or provider auth helpers",
+        epilog=_HOST_EPILOG,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     subparsers = parser.add_subparsers(dest="command")
 
     auth = subparsers.add_parser("auth", help="Manage provider-backed auth")
