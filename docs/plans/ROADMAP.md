@@ -61,9 +61,8 @@ KEYSTONE — partially shipped 2026-06-18.
   outgrow plain text.
 - ✅ **WorkspaceFileViewer** — Edit button on an open file; save round-trips + refreshes.
   Verified end to end in the browser (disk persist + revert backup + traversal blocked).
-- ⬜ **Persona Home** — reuse FileEditor to edit loaded persona files in place. Needs a
-  persona-root-scoped write RPC (persona files live under ~/.copenet, NOT a session
-  workspace root, so `workspace.writeFile` can't reach them).
+- ✅ **Persona Home** — pencil on each loaded file opens the same FileEditor inline.
+  `persona.readFile` / `persona.writeFile` scoped to the persona root; revertible. Verified.
 - ⬜ **InspectorDrawer artifact popout** — mount FileEditor for artifact/Read-More editing
   (`components/runtime/InspectorDrawer.tsx`). Artifacts are a different data path than
   workspace files — settle where an edited artifact writes back.
