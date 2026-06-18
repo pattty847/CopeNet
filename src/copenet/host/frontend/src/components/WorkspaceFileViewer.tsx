@@ -3,7 +3,7 @@
 // in Data & Tools. Read-only; backed by the workspace.listFiles / readFile RPCs.
 
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Mail, RefreshCw, Folder, Pencil } from 'lucide-react';
+import { FileText, Mail, RefreshCw, Folder, Pencil, ChevronDown, ChevronRight } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { ChatMarkdown } from './ChatMarkdown';
@@ -76,6 +76,15 @@ export function WorkspaceFileViewer() {
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [collapsedDirs, setCollapsedDirs] = useState<Set<string>>(new Set());
+
+  const toggleDir = (dir: string) =>
+    setCollapsedDirs((prev) => {
+      const next = new Set(prev);
+      if (next.has(dir)) next.delete(dir);
+      else next.add(dir);
+      return next;
+    });
 
   const refresh = useCallback(async () => {
     if (!activeSessionKey) return;
@@ -158,42 +167,54 @@ export function WorkspaceFileViewer() {
       </header>
 
       <div className="grid gap-3 md:grid-cols-[minmax(180px,260px)_minmax(0,1fr)]">
-        <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-shell-border bg-shell-bg p-1.5 md:max-h-none">
+        <div className="max-h-[60vh] min-w-0 overflow-y-auto rounded-xl border border-shell-border bg-shell-bg p-1.5 md:max-h-[34rem]">
           {files.length === 0 && !loading && (
             <div className="px-2 py-4 text-center text-[12px] text-shell-muted">No viewable files.</div>
           )}
-          {groupByDir(files).map(([dir, dirFiles]) => (
-            <div key={dir || '/'} className="mb-1.5 last:mb-0">
-              <div className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-shell-muted/70">
-                <Folder className="h-3 w-3 shrink-0 opacity-60" />
-                <span className="min-w-0 truncate">{dir || '/'}</span>
+          {groupByDir(files).map(([dir, dirFiles]) => {
+            const collapsed = collapsedDirs.has(dir);
+            return (
+              <div key={dir || '/'} className="mb-1.5 last:mb-0">
+                <button
+                  type="button"
+                  onClick={() => toggleDir(dir)}
+                  title={dir || '/'}
+                  className="flex w-full items-center gap-1 rounded-md px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-shell-muted/70 transition-colors hover:bg-shell-border/20 hover:text-shell-muted"
+                >
+                  {collapsed ? <ChevronRight className="h-3 w-3 shrink-0 opacity-60" /> : <ChevronDown className="h-3 w-3 shrink-0 opacity-60" />}
+                  <Folder className="h-3 w-3 shrink-0 opacity-60" />
+                  <span className="min-w-0 flex-1 truncate text-left">{dir || '/'}</span>
+                  <span className="shrink-0 tabular-nums text-shell-muted/40">{dirFiles.length}</span>
+                </button>
+                {!collapsed && (
+                  <ul className="space-y-0.5">
+                    {dirFiles.map((file) => {
+                      const Icon = iconFor(file);
+                      const isSel = file.path === selected;
+                      return (
+                        <li key={file.path}>
+                          <button
+                            type="button"
+                            onClick={() => openFile(file.path)}
+                            title={file.path}
+                            className={`flex w-full items-center gap-2 rounded-lg py-1.5 pl-4 pr-2 text-left text-[12px] transition-colors ${
+                              isSel ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-text hover:bg-shell-border/30'
+                            }`}
+                          >
+                            <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                            <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
               </div>
-              <ul className="space-y-0.5">
-                {dirFiles.map((file) => {
-                  const Icon = iconFor(file);
-                  const isSel = file.path === selected;
-                  return (
-                    <li key={file.path}>
-                      <button
-                        type="button"
-                        onClick={() => openFile(file.path)}
-                        title={file.path}
-                        className={`flex w-full items-center gap-2 rounded-lg py-1.5 pl-4 pr-2 text-left text-[12px] transition-colors ${
-                          isSel ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-text hover:bg-shell-border/30'
-                        }`}
-                      >
-                        <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                        <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
-        <div className="min-h-[220px]">
+        <div className="min-h-[220px] min-w-0">
           {error && <div className="rounded-lg border border-red-500/40 bg-red-500/5 px-3 py-2 text-[12px] text-red-400">{error}</div>}
           {!selected && !error && (
             <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-shell-border text-[12px] text-shell-muted">
@@ -218,20 +239,20 @@ export function WorkspaceFileViewer() {
           ) : doc ? (
             <div>
               <div className="mb-2 flex items-center gap-2 text-[11px] text-shell-muted">
-                <span className="font-mono text-shell-text">{doc.name}</span>
-                <span>· {doc.kind}</span>
-                {doc.truncated && <span className="text-amber-400">· truncated</span>}
+                <span className="min-w-0 flex-1 truncate font-mono text-shell-text" title={doc.name}>{doc.name}</span>
+                <span className="shrink-0 whitespace-nowrap">· {doc.kind}</span>
+                {doc.truncated && <span className="shrink-0 text-amber-400">· truncated</span>}
                 {!doc.truncated && (
                   <button
                     type="button"
                     onClick={() => setEditing(true)}
-                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-shell-border px-2 py-1 text-[11px] text-shell-muted transition-colors hover:text-shell-accent"
+                    className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-shell-border px-2 py-1 text-[11px] text-shell-muted transition-colors hover:text-shell-accent"
                   >
                     <Pencil className="h-3 w-3" /> Edit
                   </button>
                 )}
                 {doc.truncated && (
-                  <span className="ml-auto text-[10px] text-shell-muted/60">too large to edit</span>
+                  <span className="shrink-0 text-[10px] text-shell-muted/60">too large to edit</span>
                 )}
               </div>
               <FileBody doc={doc} />

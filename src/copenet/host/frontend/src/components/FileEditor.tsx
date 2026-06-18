@@ -74,7 +74,8 @@ export function FileEditor({
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
         spellCheck={false}
-        className="min-h-[300px] w-full resize-y rounded-xl border border-shell-border bg-shell-bg px-4 py-3 font-mono text-[12px] leading-[1.6] text-shell-text outline-none focus:border-shell-accent/40"
+        wrap="soft"
+        className="min-h-[55vh] w-full resize-y whitespace-pre-wrap break-words rounded-xl border border-shell-border bg-shell-bg px-4 py-3 font-mono text-[12px] leading-[1.6] text-shell-text outline-none focus:border-shell-accent/40"
       />
       <div className="text-right text-[10px] text-shell-muted/60">⌘/Ctrl+S to save</div>
     </div>
