@@ -17,6 +17,10 @@ Authoritative for *what shipped* is git log; this is for *what's next + why*.
 - NASA APOD image caching — image bytes cached to `~/.copenet/sessions/nasa-apod-images/`
   and served via `GET /nasa/apod/image/{date}` (lazy + eager warm); card falls back to
   NASA on a cache miss. No more broken card when apod.nasa.gov 503s.
+- Inline file editor keystone (`workspace.writeFile` + `FileEditor` in WorkspaceFileViewer)
+  — see the Inline File Editor theme below for what's shipped vs. pending.
+- WORKSPACE INTELLIGENCE section cut from the inspector overview.
+- Committed on branch `feat/apod-cli-mobile-inspector-editor` (8 commits).
 
 ---
 
@@ -48,19 +52,21 @@ checks) · DESTINATIONS · SESSION INFO.
 
 ## 🔵 Theme: Inline File Editor
 
-We have a **read-only** viewer today (no `workspace.writeFile` RPC). Build editing once,
-reuse everywhere.
+KEYSTONE — partially shipped 2026-06-18.
 
-- New `workspace.writeFile` RPC (append-only-safe? no — real edit; guard with workspace
-  scope + the existing edit-backup store so it's revertible).
-- Editable surface reachable from:
-  - Agents tab — the artifact/tool **popout drawer** is `components/runtime/InspectorDrawer.tsx`
-    (createPortal drawer, opens on artifact/Read-More click). The editor mounts here.
-  - **Persona Home** — edit the loaded persona files (SOUL.md, IDENTITY.md, USER.md, …) in place.
-- Library decision (Patrick asked): lean **textarea-based editor for v1** — zero new deps,
-  ships fast, fine for plain unformatted markdown; bundle is already 1.2MB so keep it lean.
-  Upgrade to **CodeMirror 6** later only if we want line numbers / find / soft-wrap / syntax.
-  (Monaco is overkill — megabytes.)
+- ✅ **`workspace.writeFile` RPC** — guarded operator write (root-scoped, text-only, 1MB cap,
+  atomic), records a pre-edit backup so it's revertible via the existing `sessions.revertEdit`.
+- ✅ **`FileEditor.tsx`** — reusable, no-library plain `<textarea>` (dirty tracking, Cmd/Ctrl+S,
+  Save/Cancel). Decision settled: roll our own, textarea-based; CodeMirror only if we ever
+  outgrow plain text.
+- ✅ **WorkspaceFileViewer** — Edit button on an open file; save round-trips + refreshes.
+  Verified end to end in the browser (disk persist + revert backup + traversal blocked).
+- ⬜ **Persona Home** — reuse FileEditor to edit loaded persona files in place. Needs a
+  persona-root-scoped write RPC (persona files live under ~/.copenet, NOT a session
+  workspace root, so `workspace.writeFile` can't reach them).
+- ⬜ **InspectorDrawer artifact popout** — mount FileEditor for artifact/Read-More editing
+  (`components/runtime/InspectorDrawer.tsx`). Artifacts are a different data path than
+  workspace files — settle where an edited artifact writes back.
 
 ---
 
