@@ -85,6 +85,8 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     subparsers = parser.add_subparsers(dest="command")
 
+    subparsers.add_parser("help", help="Show the self-describing feature guide (run, tailnet, test prompts, auth)")
+
     auth = subparsers.add_parser("auth", help="Manage provider-backed auth")
     auth_subparsers = auth.add_subparsers(dest="auth_command", required=True)
 
@@ -267,8 +269,19 @@ def _run_chat_command(args: argparse.Namespace) -> None:
 
 
 def main() -> None:
+    # Load `.env` first so secrets like NASA_API_KEY are present before any
+    # Orchestrator (and its provider/store init) is constructed below.
+    from copenet._env import load_project_env
+
+    load_project_env()
+
     parser = _build_parser()
     args = parser.parse_args()
+    if args.command == "help":
+        from copenet.host.cli_help import render_guide
+
+        print(render_guide(parser))
+        return
     if args.command == "auth":
         _run_auth_command(args)
         return
