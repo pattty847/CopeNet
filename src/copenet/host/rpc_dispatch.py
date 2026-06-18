@@ -71,6 +71,7 @@ from .rpc_sessions import (
 from copenet.host.rpc_workspace import (
     handle_workspace_list_files,
     handle_workspace_read_file,
+    handle_workspace_write_file,
 )
 
 
@@ -216,6 +217,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_workspace_list_files(req.id, req.params, send_json, orchestrator)
     elif req.method == "workspace.readFile":
         await handle_workspace_read_file(req.id, req.params, send_json, orchestrator)
+    elif req.method == "workspace.writeFile":
+        await handle_workspace_write_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "chat.decideApproval":
         await handle_chat_decide_approval(req.id, req.params, send_json, orchestrator)
     elif req.method == "approvals.list":

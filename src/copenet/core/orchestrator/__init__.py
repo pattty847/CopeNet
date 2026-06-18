@@ -853,6 +853,31 @@ class Orchestrator:
         root = self._resolve_session_workspace_root(session_key)
         return read_workspace_file(root, path)
 
+    def write_session_workspace_file(self, *, session_key: str, path: str, content: str) -> dict:
+        """Operator inline-edit: write a file under a session's workspace root.
+
+        Records a pre-edit backup keyed by the new content's digest so the change
+        is revertible through the same `revert_file_edit` path as a model edit.
+        """
+        import hashlib
+        from copenet.core.workspace_files import write_workspace_file
+
+        root = self._resolve_session_workspace_root(session_key)
+        result = write_workspace_file(root, path, content)
+        before_content = result.pop("beforeContent", "")
+        existed = result.pop("existed", False)
+        after_digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+        if existed:
+            self._edit_backup_store.record(
+                session_key=session_key.strip(),
+                path=result["path"],
+                after_digest=after_digest,
+                before_content=before_content,
+            )
+        result["digest"] = after_digest
+        result["revertible"] = existed
+        return result
+
     def revert_file_edit(self, *, session_key: str, path: str, after_digest: str) -> dict:
         """Undo a model's write/edit by restoring the recorded pre-edit content.
 

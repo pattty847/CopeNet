@@ -54,3 +54,26 @@ async def handle_workspace_read_file(request_id: str, params: dict[str, Any] | N
         )
         return
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result)))
+
+
+async def handle_workspace_write_file(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    key = _text(raw, "key")
+    path = _text(raw, "path")
+    if not key or not path:
+        await _fail(request_id, "key and path are required", send_json)
+        return
+    content = raw.get("content")
+    if not isinstance(content, str):
+        await _fail(request_id, "content must be a string", send_json)
+        return
+    try:
+        result = orchestrator.write_session_workspace_file(session_key=key, path=path, content=content)
+    except (FileNotFoundError, ValueError) as exc:
+        await send_json(
+            make_response_frame(
+                ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc) or "could not write file"))
+            )
+        )
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result)))

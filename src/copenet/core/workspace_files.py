@@ -1,8 +1,10 @@
-"""Read-only workspace file browsing for the operator file viewer.
+"""Workspace file browsing + operator editing for the file viewer.
 
 Powers the UI's "open a file and see it rendered" surface. Strictly scoped to a
 session's workspace root — path traversal is rejected, hidden/heavy directories
-are skipped, and reads are size-capped. Read-only: there is no write path here.
+are skipped, and reads are size-capped. `write_workspace_file` adds a guarded
+operator write path (same root-scoping, text-only, size-capped, atomic) used by
+the inline editor; the model's own file tools live elsewhere.
 """
 
 from __future__ import annotations
@@ -20,6 +22,7 @@ _VIEWABLE_EXTS = _MARKDOWN_EXTS | _CODE_EXTS | _TEXT_EXTS
 _SKIP_DIRS = {".git", "node_modules", "__pycache__", ".venv", "venv", "dist", "build", ".mypy_cache", ".pytest_cache", ".idea"}
 _MAX_FILES = 500
 _MAX_READ_BYTES = 200_000
+_MAX_WRITE_BYTES = 1_000_000
 
 
 def _kind_for(path: Path) -> str:
@@ -82,4 +85,46 @@ def read_workspace_file(root: Path, rel_path: str) -> dict[str, Any]:
         "content": content,
         "truncated": truncated,
         "size": len(raw),
+    }
+
+
+def write_workspace_file(root: Path, rel_path: str, content: str) -> dict[str, Any]:
+    """Write `content` to a text file under `root`, scoped and size-capped (atomic).
+
+    Returns the prior content (for revert backups), whether the file already
+    existed, and the new file metadata. Rejects path traversal, non-text
+    extensions, oversized content, and a missing parent directory.
+    """
+    root = root.resolve()
+    target = (root / (rel_path or "").strip()).resolve()
+    try:
+        target.relative_to(root)
+    except ValueError as exc:
+        raise ValueError("path escapes the workspace root") from exc
+    if target.suffix.lower() not in _VIEWABLE_EXTS:
+        raise ValueError(f"refusing to write a non-text file type: {target.suffix or '(none)'}")
+    if len(content.encode("utf-8")) > _MAX_WRITE_BYTES:
+        raise ValueError("content exceeds the maximum writable size")
+    if target.exists() and not target.is_file():
+        raise ValueError("target exists and is not a file")
+    if not target.parent.is_dir():
+        raise FileNotFoundError(f"parent directory does not exist: {rel_path}")
+
+    existed = target.is_file()
+    before_content = target.read_text(encoding="utf-8", errors="replace") if existed else ""
+
+    tmp = target.with_suffix(target.suffix + ".tmp")
+    tmp.write_text(content, encoding="utf-8")
+    tmp.replace(target)
+
+    return {
+        "path": str(target.relative_to(root)),
+        "name": target.name,
+        "ext": target.suffix.lower().lstrip("."),
+        "kind": _kind_for(target),
+        "content": content,
+        "truncated": False,
+        "size": len(content.encode("utf-8")),
+        "existed": existed,
+        "beforeContent": before_content,
     }

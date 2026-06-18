@@ -3,10 +3,11 @@
 // in Data & Tools. Read-only; backed by the workspace.listFiles / readFile RPCs.
 
 import { useCallback, useEffect, useState } from 'react';
-import { FileText, Mail, RefreshCw, Folder } from 'lucide-react';
+import { FileText, Mail, RefreshCw, Folder, Pencil } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { ChatMarkdown } from './ChatMarkdown';
+import { FileEditor } from './FileEditor';
 import { HighlightedCode } from './runtime/CodeViews';
 import type { WorkspaceFile, WorkspaceFileContent } from '../types/backend';
 
@@ -72,6 +73,9 @@ export function WorkspaceFileViewer() {
   const [doc, setDoc] = useState<WorkspaceFileContent | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const refresh = useCallback(async () => {
     if (!activeSessionKey) return;
@@ -100,6 +104,8 @@ export function WorkspaceFileViewer() {
       setSelected(path);
       setDoc(null);
       setError(null);
+      setEditing(false);
+      setSaveError(null);
       try {
         setDoc(await wsClient.readWorkspaceFile(activeSessionKey, path));
       } catch (err) {
@@ -107,6 +113,24 @@ export function WorkspaceFileViewer() {
       }
     },
     [activeSessionKey],
+  );
+
+  const saveFile = useCallback(
+    async (content: string) => {
+      if (!activeSessionKey || !selected) return;
+      setSaving(true);
+      setSaveError(null);
+      try {
+        const updated = await wsClient.writeWorkspaceFile(activeSessionKey, selected, content);
+        setDoc(updated);
+        setEditing(false);
+      } catch (err) {
+        setSaveError(err instanceof Error ? err.message : String(err));
+      } finally {
+        setSaving(false);
+      }
+    },
+    [activeSessionKey, selected],
   );
 
   if (!activeSessionKey) {
@@ -179,16 +203,40 @@ export function WorkspaceFileViewer() {
           {selected && !doc && !error && (
             <div className="flex h-full items-center justify-center text-[12px] text-shell-muted">Loading…</div>
           )}
-          {doc && (
+          {doc && editing ? (
+            <FileEditor
+              name={doc.path}
+              initialContent={doc.content}
+              onSave={saveFile}
+              onCancel={() => {
+                setEditing(false);
+                setSaveError(null);
+              }}
+              saving={saving}
+              error={saveError}
+            />
+          ) : doc ? (
             <div>
               <div className="mb-2 flex items-center gap-2 text-[11px] text-shell-muted">
                 <span className="font-mono text-shell-text">{doc.name}</span>
                 <span>· {doc.kind}</span>
                 {doc.truncated && <span className="text-amber-400">· truncated</span>}
+                {!doc.truncated && (
+                  <button
+                    type="button"
+                    onClick={() => setEditing(true)}
+                    className="ml-auto inline-flex items-center gap-1 rounded-lg border border-shell-border px-2 py-1 text-[11px] text-shell-muted transition-colors hover:text-shell-accent"
+                  >
+                    <Pencil className="h-3 w-3" /> Edit
+                  </button>
+                )}
+                {doc.truncated && (
+                  <span className="ml-auto text-[10px] text-shell-muted/60">too large to edit</span>
+                )}
               </div>
               <FileBody doc={doc} />
             </div>
-          )}
+          ) : null}
         </div>
       </div>
     </section>

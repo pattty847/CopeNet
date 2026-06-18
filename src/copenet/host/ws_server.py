@@ -205,6 +205,7 @@ class CopeNetWsServer:
                                 "sessions.revertEdit",
                                 "workspace.listFiles",
                                 "workspace.readFile",
+                                "workspace.writeFile",
                                 "chat.decideApproval",
                                 "approvals.list",
                                 "sessions.export",

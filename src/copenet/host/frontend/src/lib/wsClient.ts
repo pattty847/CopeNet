@@ -1916,6 +1916,11 @@ class WsClient {
     return this.request<WorkspaceFileContent & Record<string, unknown>>('workspace.readFile', { key, path });
   }
 
+  /** Operator inline-edit: write a file under a session's workspace root (revertible). */
+  async writeWorkspaceFile(key: string, path: string, content: string): Promise<WorkspaceFileContent & { digest: string; revertible: boolean }> {
+    return this.request<WorkspaceFileContent & { digest: string; revertible: boolean } & Record<string, unknown>>('workspace.writeFile', { key, path, content });
+  }
+
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     const payload = await this.request<{ run?: SessionRunRecord | null }>('sessions.run', { key, runId });
     return payload.run ?? null;
