@@ -1,9 +1,10 @@
-import { Copy, FolderTree, LoaderCircle, Shield, Sparkles } from 'lucide-react';
+import { Copy, FolderTree, LoaderCircle, Pencil, Shield, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { wsClient } from '../../lib/wsClient';
 import { resolvePersonaRuntime } from '../../lib/personaCommands';
 import { useAppStore } from '../../store/useAppStore';
+import { FileEditor } from '../FileEditor';
 import type { PersonaPrivacyTier, Session } from '../../types/backend';
 
 function groupLoadedFiles(paths: string[]) {
@@ -47,10 +48,12 @@ function FileGroup({
   title,
   paths,
   rootDir,
+  onEdit,
 }: {
   title: string;
   paths: string[];
   rootDir?: string | null;
+  onEdit: (path: string) => void;
 }) {
   if (paths.length === 0) return null;
   return (
@@ -68,6 +71,14 @@ function FileGroup({
                 </span>
                 {dir && <span className="block truncate text-[11px] text-shell-muted">{dir}/</span>}
               </span>
+              <button
+                type="button"
+                onClick={() => onEdit(path)}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-shell-muted transition hover:bg-shell-panel hover:text-shell-accent"
+                title="Edit file"
+              >
+                <Pencil className="h-3.5 w-3.5" />
+              </button>
               <button
                 type="button"
                 onClick={() => void navigator.clipboard.writeText(path)}
@@ -96,6 +107,33 @@ export function PersonaHomePanel() {
   const setAppError = useAppStore((state) => state.setAppError);
   const [loading, setLoading] = useState(false);
   const [savingTier, setSavingTier] = useState<PersonaPrivacyTier | null>(null);
+  const [editFile, setEditFile] = useState<{ path: string; name: string; content: string } | null>(null);
+  const [savingFile, setSavingFile] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const openPersonaFile = async (path: string) => {
+    setEditError(null);
+    try {
+      const doc = await wsClient.readPersonaFile(path);
+      setEditFile({ path, name: doc.name, content: doc.content });
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to open persona file.');
+    }
+  };
+
+  const savePersonaFile = async (content: string) => {
+    if (!editFile) return;
+    setSavingFile(true);
+    setEditError(null);
+    try {
+      await wsClient.writePersonaFile(editFile.path, content);
+      setEditFile(null);
+    } catch (error) {
+      setEditError(error instanceof Error ? error.message : 'Unable to save persona file.');
+    } finally {
+      setSavingFile(false);
+    }
+  };
 
   const runtime = useMemo(
     () => resolvePersonaRuntime(currentSession(sessions, activeSessionKey), draftSettings),
@@ -230,21 +268,39 @@ export function PersonaHomePanel() {
           <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
             <div className="mb-4 flex items-center gap-2">
               <Shield className="h-4 w-4 text-shell-accent" />
-              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Loaded files</div>
+              <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">
+                {editFile ? 'Editing persona file' : 'Loaded files'}
+              </div>
             </div>
-            <div className="space-y-4">
-              <FileGroup title="Shared core" paths={loadedGroups.sharedCore} rootDir={personaHome?.rootDir} />
-              <FileGroup title="Private user & environment" paths={loadedGroups.privateContext} rootDir={personaHome?.rootDir} />
-              <FileGroup title="Memory" paths={loadedGroups.memory} rootDir={personaHome?.rootDir} />
-              <FileGroup title="Model flavor" paths={loadedGroups.modelFlavor} rootDir={personaHome?.rootDir} />
-              <FileGroup title="Other" paths={loadedGroups.other} rootDir={personaHome?.rootDir} />
-            </div>
-            <details className="mt-5 rounded-[20px] border border-shell-border bg-shell-bg px-4 py-3">
-              <summary className="cursor-pointer text-sm font-medium text-shell-text">Prompt preview</summary>
-              <pre className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-shell-muted">
-                {personaContext?.prompt || 'No prompt payload loaded yet.'}
-              </pre>
-            </details>
+            {editFile ? (
+              <FileEditor
+                name={editFile.name}
+                initialContent={editFile.content}
+                onSave={savePersonaFile}
+                onCancel={() => {
+                  setEditFile(null);
+                  setEditError(null);
+                }}
+                saving={savingFile}
+                error={editError}
+              />
+            ) : (
+              <>
+                <div className="space-y-4">
+                  <FileGroup title="Shared core" paths={loadedGroups.sharedCore} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
+                  <FileGroup title="Private user & environment" paths={loadedGroups.privateContext} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
+                  <FileGroup title="Memory" paths={loadedGroups.memory} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
+                  <FileGroup title="Model flavor" paths={loadedGroups.modelFlavor} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
+                  <FileGroup title="Other" paths={loadedGroups.other} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
+                </div>
+                <details className="mt-5 rounded-[20px] border border-shell-border bg-shell-bg px-4 py-3">
+                  <summary className="cursor-pointer text-sm font-medium text-shell-text">Prompt preview</summary>
+                  <pre className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-shell-muted">
+                    {personaContext?.prompt || 'No prompt payload loaded yet.'}
+                  </pre>
+                </details>
+              </>
+            )}
           </div>
         </div>
 

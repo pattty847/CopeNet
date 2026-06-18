@@ -171,6 +171,8 @@ class CopeNetWsServer:
                                 "persona.context",
                                 "persona.flavor.draft",
                                 "persona.flavor.save",
+                                "persona.readFile",
+                                "persona.writeFile",
                                 "profile.changelog",
                                 "briefing.get",
                                 "memory.list",

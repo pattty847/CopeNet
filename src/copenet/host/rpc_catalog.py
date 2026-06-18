@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
-from copenet.host.rpc_schema import EventFrame, ResponseFrame, make_event_frame, make_response_frame
+from copenet.host.rpc_schema import EventFrame, ResponseFrame, RpcError, make_event_frame, make_response_frame
 from copenet.prompts import list_profiles, list_task_modes
 
 
@@ -189,6 +189,35 @@ async def handle_persona_context_get(request_id: str, params: dict[str, Any] | N
             )
         )
     )
+
+
+async def handle_persona_read_file(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    path = str(raw.get("path") or "").strip()
+    if not path:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message="path is required"))))
+        return
+    try:
+        result = orchestrator.read_persona_file(path=path)
+    except (FileNotFoundError, ValueError) as exc:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="NOT_FOUND", message=str(exc) or "file not found"))))
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result)))
+
+
+async def handle_persona_write_file(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    path = str(raw.get("path") or "").strip()
+    content = raw.get("content")
+    if not path or not isinstance(content, str):
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message="path and string content are required"))))
+        return
+    try:
+        result = orchestrator.write_persona_file(path=path, content=content)
+    except (FileNotFoundError, ValueError) as exc:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc) or "could not write file"))))
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result)))
 
 
 async def handle_persona_flavor_draft(

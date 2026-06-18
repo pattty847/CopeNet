@@ -878,6 +878,52 @@ class Orchestrator:
         result["revertible"] = existed
         return result
 
+    def _persona_root_rel(self, path: str) -> tuple[Path, str]:
+        """Validate an absolute persona file path is under the persona root.
+
+        Persona ``loadedFiles`` are absolute paths under the persona root; returns
+        (root, rel_path) for reuse with the workspace file read/write helpers.
+        """
+        root = Path(self._persona_service.root_dir).resolve()
+        candidate = Path((path or "").strip()).expanduser().resolve()
+        try:
+            rel = str(candidate.relative_to(root))
+        except ValueError as exc:
+            raise ValueError("path is outside the persona root") from exc
+        return root, rel
+
+    def read_persona_file(self, *, path: str) -> dict:
+        """Read one persona file (scoped to the persona root, size-capped)."""
+        from copenet.core.workspace_files import read_workspace_file
+
+        root, rel = self._persona_root_rel(path)
+        return read_workspace_file(root, rel)
+
+    def write_persona_file(self, *, path: str, content: str) -> dict:
+        """Operator inline-edit of a persona file (scoped to the persona root).
+
+        Records a pre-edit backup under a persona-scoped key so the change is
+        revertible through the same machinery as workspace edits.
+        """
+        import hashlib
+        from copenet.core.workspace_files import write_workspace_file
+
+        root, rel = self._persona_root_rel(path)
+        result = write_workspace_file(root, rel, content)
+        before_content = result.pop("beforeContent", "")
+        existed = result.pop("existed", False)
+        after_digest = hashlib.sha256(content.encode("utf-8")).hexdigest()[:16]
+        if existed:
+            self._edit_backup_store.record(
+                session_key="__persona__",
+                path=rel,
+                after_digest=after_digest,
+                before_content=before_content,
+            )
+        result["digest"] = after_digest
+        result["revertible"] = existed
+        return result
+
     def revert_file_edit(self, *, session_key: str, path: str, after_digest: str) -> dict:
         """Undo a model's write/edit by restoring the recorded pre-edit content.
 

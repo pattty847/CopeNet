@@ -27,8 +27,10 @@ from .rpc_catalog import (
     handle_persona_flavor_draft,
     handle_persona_flavor_save,
     handle_persona_get,
+    handle_persona_read_file,
     handle_persona_settings_get,
     handle_persona_settings_update,
+    handle_persona_write_file,
     handle_profile_changelog,
     handle_profile_get,
     handle_prompts_list,
@@ -152,6 +154,10 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_persona_flavor_draft(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.flavor.save":
         await handle_persona_flavor_save(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.readFile":
+        await handle_persona_read_file(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.writeFile":
+        await handle_persona_write_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "profile.changelog":
         await handle_profile_changelog(req.id, req.params, send_json, orchestrator)
     elif req.method == "briefing.get":

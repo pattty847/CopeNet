@@ -1921,6 +1921,16 @@ class WsClient {
     return this.request<WorkspaceFileContent & { digest: string; revertible: boolean } & Record<string, unknown>>('workspace.writeFile', { key, path, content });
   }
 
+  /** Read one persona file (scoped to the persona root) for the inline editor. */
+  async readPersonaFile(path: string): Promise<WorkspaceFileContent> {
+    return this.request<WorkspaceFileContent & Record<string, unknown>>('persona.readFile', { path });
+  }
+
+  /** Operator inline-edit: write a persona file (scoped to the persona root, revertible). */
+  async writePersonaFile(path: string, content: string): Promise<WorkspaceFileContent & { digest: string; revertible: boolean }> {
+    return this.request<WorkspaceFileContent & { digest: string; revertible: boolean } & Record<string, unknown>>('persona.writeFile', { path, content });
+  }
+
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     const payload = await this.request<{ run?: SessionRunRecord | null }>('sessions.run', { key, runId });
     return payload.run ?? null;
