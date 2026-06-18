@@ -189,7 +189,23 @@ function JsonValue({ value, indent }: { value: unknown; indent: number }) {
   const pad = '  '.repeat(indent);
   const padInner = '  '.repeat(indent + 1);
   if (value === null) return <span className="text-operator-muted/60">null</span>;
-  if (typeof value === 'string') return <span className="text-amber-300/90">"{value}"</span>;
+  if (typeof value === 'string') {
+    if (value.includes('\n')) {
+      const lines = value.split('\n');
+      // Trim lone trailing empty line from a trailing \n
+      const displayLines = lines.length > 1 && lines[lines.length - 1] === '' ? lines.slice(0, -1) : lines;
+      return (
+        <>
+          <span className="text-amber-300/40">"</span>
+          {displayLines.map((line, i) => (
+            <div key={i}>{padInner}<span className="text-amber-300/85">{line}</span></div>
+          ))}
+          <div>{pad}<span className="text-amber-300/40">"</span></div>
+        </>
+      );
+    }
+    return <span className="text-amber-300/90">"{value}"</span>;
+  }
   if (typeof value === 'number') return <span className="text-sky-300/90">{String(value)}</span>;
   if (typeof value === 'boolean') return <span className="text-violet-300">{String(value)}</span>;
   if (Array.isArray(value)) {

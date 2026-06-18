@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
@@ -6,6 +7,7 @@ import {
   CheckCircle2,
   ChevronDown,
   ChevronRight,
+  ClipboardCopy,
   FileDiff,
   FileText,
   FolderOpen,
@@ -304,10 +306,53 @@ function BatchBody({ batch }: { batch: BatchResource }) {
   );
 }
 
+function CopyButton({ getValue }: { getValue: () => string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = () => {
+    navigator.clipboard.writeText(getValue()).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  return (
+    <button
+      onClick={handleCopy}
+      title="Copy to clipboard"
+      className="flex items-center gap-1 rounded-md border border-operator-border/50 bg-operator-panel/30 px-1.5 py-0.5 text-[9.5px] font-medium text-operator-muted/70 transition-colors duration-100 hover:border-operator-border hover:text-operator-text"
+    >
+      <ClipboardCopy className="w-2.5 h-2.5" />
+      {copied ? 'copied' : 'copy'}
+    </button>
+  );
+}
+
+function previewText(value: unknown): string {
+  if (typeof value === 'string') return value;
+  return JSON.stringify(value, null, 2);
+}
+
 function ToolBody({ tool }: { tool: ToolResultPart }) {
   const effect = tool.effect;
+  const scope = tool.scope;
+  const policyDecision = tool.policyDecision;
+  const accessAction = tool.accessAction;
+  const previewValue = effect?.preview || tool.preview;
+
+  // Build the 4-cell metadata grid from meaningful fields
+  type MetaCell = { label: string; content: React.ReactNode };
+  const cells: MetaCell[] = [];
+  if (effect?.kind) cells.push({ label: 'kind', content: <span className="font-mono text-[10px] text-operator-text/80">{effect.kind}</span> });
+  if (effect?.evidence_role) cells.push({ label: 'evidence', content: <span className="font-mono text-[10px] text-operator-text/80">{effect.evidence_role}</span> });
+  if (scope) cells.push({ label: 'scope', content: <ScopeBadge scope={scope} /> });
+  if (policyDecision && policyDecision !== 'allowed') {
+    cells.push({ label: 'policy', content: <PolicyBadge decision={policyDecision} /> });
+  } else if (accessAction) {
+    cells.push({ label: 'access', content: <span className="font-mono text-[10px] text-operator-text/80">{accessAction}</span> });
+  }
+
   return (
     <div className="space-y-3">
+      {/* Header */}
       <div className="rounded-xl border border-operator-border bg-operator-panel/40 px-3 py-2.5">
         <div className="flex items-center gap-2 mb-1.5">
           <Terminal className="w-3.5 h-3.5 text-operator-accent" />
@@ -320,35 +365,36 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
         </div>
         <div className="font-mono text-[13px] text-operator-text">{tool.toolId}</div>
         <div className="mt-1 text-[11px] text-operator-muted/80 leading-relaxed">{tool.summary}</div>
-      </div>
-
-      <div className="grid grid-cols-2 gap-2">
-        {effect?.turn_id && (
-          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
-            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">turn</div>
-            <div className="mt-1 font-mono text-[10px] text-operator-text/80 truncate">{effect.turn_id}</div>
-          </div>
-        )}
-        {effect?.decision_id && (
-          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
-            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">decision</div>
-            <div className="mt-1 font-mono text-[10px] text-operator-text/80 truncate">{effect.decision_id}</div>
-          </div>
-        )}
-        {effect?.evidence_role && (
-          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
-            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">evidence</div>
-            <div className="mt-1 font-mono text-[10px] text-operator-text/80">{effect.evidence_role}</div>
-          </div>
-        )}
-        {effect?.kind && (
-          <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
-            <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">kind</div>
-            <div className="mt-1 font-mono text-[10px] text-operator-text/80">{effect.kind}</div>
+        {/* Trace IDs — dim, for debugging */}
+        {(effect?.turn_id || effect?.decision_id) && (
+          <div className="mt-2 flex items-center gap-3">
+            {effect.turn_id && (
+              <span className="font-mono text-[9px] text-operator-muted/30 truncate" title={effect.turn_id}>
+                turn·{effect.turn_id.slice(-10)}
+              </span>
+            )}
+            {effect.decision_id && (
+              <span className="font-mono text-[9px] text-operator-muted/30 truncate" title={effect.decision_id}>
+                dec·{effect.decision_id.slice(-10)}
+              </span>
+            )}
           </div>
         )}
       </div>
 
+      {/* Metadata grid — useful fields only */}
+      {cells.length > 0 && (
+        <div className="grid grid-cols-2 gap-2">
+          {cells.map(({ label, content }) => (
+            <div key={label} className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
+              <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">{label}</div>
+              <div className="mt-1">{content}</div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Target */}
       {(effect?.target || tool.target) && (
         <div className="rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2">
           <div className="text-[9px] uppercase tracking-wider text-operator-muted/50">target</div>
@@ -356,14 +402,34 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
         </div>
       )}
 
+      {/* Policy summary */}
+      {tool.policySummary && (
+        <div className="rounded-lg border border-amber-400/20 bg-amber-400/5 px-2.5 py-2 text-[11px] leading-relaxed text-amber-200/80">
+          {tool.policySummary}
+        </div>
+      )}
+
+      {/* Preview */}
       {tool.preview?.type === 'diff' ? (
         <DiffView preview={tool.preview} />
       ) : tool.preview?.type === 'plan' ? (
         <PlanView preview={tool.preview} />
       ) : tool.preview?.type === 'file_read' ? (
-        <FileLinesView lines={tool.preview.lines} lang={langFromPath(tool.preview.path)} maxHeightClass="max-h-[60vh]" />
-      ) : (effect?.preview || tool.preview) ? (
-        <JsonView value={effect?.preview || tool.preview} />
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">output</span>
+            <CopyButton getValue={() => tool.preview?.type === 'file_read' ? tool.preview.lines.join('\n') : ''} />
+          </div>
+          <FileLinesView lines={tool.preview.lines} lang={langFromPath(tool.preview.path)} maxHeightClass="max-h-[60vh]" />
+        </div>
+      ) : previewValue ? (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">output</span>
+            <CopyButton getValue={() => previewText(previewValue)} />
+          </div>
+          <JsonView value={previewValue} />
+        </div>
       ) : null}
     </div>
   );
