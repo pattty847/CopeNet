@@ -217,6 +217,8 @@ class CopeNetWsServer:
                                 "pulse.create_from_session",
                                 "pulse.save",
                                 "pulse.dismiss",
+                                "nasa.apod",
+                                "nasa.apod.list",
                             ],
                             "events": ["connect.challenge", "chat", "profile.changed", "briefing.ready", "memory.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated", "approval.pending", "approval.resolved"],
                         },

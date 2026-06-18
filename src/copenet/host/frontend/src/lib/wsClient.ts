@@ -15,6 +15,7 @@ import {
   Model,
   PatProfile,
   PersonaContextPayload,
+  ApodResult,
   PersonaFlavorDraft,
   PersonaHomeSummary,
   PersonaSettings,
@@ -1563,6 +1564,18 @@ class WsClient {
     return {
       session: normalizeSession(payload.session),
       mergeState: normalizeMergeState(payload.mergeState),
+    };
+  }
+
+  async fetchApod(opts?: { date?: string; refresh?: boolean }): Promise<ApodResult> {
+    const payload = await this.request<Partial<ApodResult>>('nasa.apod', {
+      date: opts?.date,
+      refresh: opts?.refresh ?? false,
+    });
+    return {
+      configured: Boolean(payload.configured),
+      apod: payload.apod ?? null,
+      error: payload.error ?? null,
     };
   }
 

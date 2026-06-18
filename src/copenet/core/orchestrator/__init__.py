@@ -14,6 +14,12 @@ from copenet.core.apps import AppStore
 from copenet.core.harness import ChatHarness
 from copenet.core.memory import MemoryService, MemoryStore
 from copenet.core.messaging import MessagingConfigStore, TelegramSessionRouteStore
+from copenet.core.nasa import NasaApodImageCache, NasaApodService, NasaApodStore
+from copenet.core.orchestrator.nasa import (
+    apod_image_path as apod_image_path_record,
+    fetch_apod as fetch_apod_record,
+    list_apods as list_apods_record,
+)
 from copenet.core.orchestrator.catalog import (
     archive_session as archive_session_record,
     build_default_provider_registry,
@@ -124,6 +130,9 @@ class Orchestrator:
         self._route_store = TelegramSessionRouteStore(path=base / "telegram-routes.json")
         self._memory_store = MemoryStore(path=base / "memory.json")
         self._memory_service = MemoryService(self._memory_store)
+        self._nasa_store = NasaApodStore(path=base / "nasa-apod.json")
+        self._nasa_service = NasaApodService()
+        self._nasa_image_cache = NasaApodImageCache(root_dir=base / "nasa-apod-images")
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
         persona_root = default_personas_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "personas"
@@ -451,6 +460,23 @@ class Orchestrator:
     def list_pulses(self) -> list[dict]:
         """List active Inbox pulses."""
         return list_pulses_record(self)
+
+    def fetch_apod(self, *, date: str | None = None, refresh: bool = False) -> dict:
+        """Fetch one NASA Astronomy Picture of the Day, persist it, and return it."""
+        return fetch_apod_record(self, date=date, refresh=refresh)
+
+    def list_apods(self, *, limit: int = 60) -> list[dict]:
+        """List collected NASA APOD records, newest day first."""
+        return list_apods_record(self, limit=limit)
+
+    def nasa_image_path(self, date: str):
+        """Return a local cached image path for an APOD date (lazily caching), or None."""
+        return apod_image_path_record(self, date)
+
+    @property
+    def nasa_configured(self) -> bool:
+        """True when NASA_API_KEY is present so the APOD surface can fetch."""
+        return self._nasa_service.configured
 
     async def create_pulse_from_session(
         self,

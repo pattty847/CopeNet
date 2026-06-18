@@ -4,6 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import { ReturnBriefing, DEV_SKELETON_FOR_TEST } from './profile/ReturnBriefing';
 import { useReturnBriefing } from '../runtime/adapter';
 import { renderHomeCard, type HomeCardContext } from './home/HomeCards';
+import { ApodCard } from './home/ApodCard';
 import { MissionControlPanel } from './home/MissionControlPanel';
 import { buildMissionControlItems, type MissionControlItem } from '../lib/missionControl';
 import { wsClient } from '../lib/wsClient';
@@ -166,6 +167,9 @@ export function HomePage() {
         <div className="lg:col-span-8">{renderHomeCard('recent_activity', cardContext)}</div>
         <div className="lg:col-span-4">{renderHomeCard('system_health', cardContext)}</div>
       </div>
+
+      {/* 2b. Ambient orientation — NASA Picture of the Day */}
+      <ApodCard isMobile={isMobile} />
 
       {/* 3. Mission Control — scan what wants attention */}
       <MissionControlPanel

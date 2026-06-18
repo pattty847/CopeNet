@@ -45,6 +45,7 @@ from .rpc_catalog import (
     handle_tools_list,
 )
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
+from .rpc_nasa import handle_nasa_apod, handle_nasa_apod_list
 from .rpc_sessions import (
     handle_approvals_list,
     handle_pulse_create_from_session,
@@ -239,6 +240,10 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_pulse_save(req.id, req.params, send_json, orchestrator)
     elif req.method == "pulse.dismiss":
         await handle_pulse_dismiss(req.id, req.params, send_json, orchestrator)
+    elif req.method == "nasa.apod":
+        await handle_nasa_apod(req.id, req.params, send_json, orchestrator)
+    elif req.method == "nasa.apod.list":
+        await handle_nasa_apod_list(req.id, req.params, send_json, orchestrator)
     else:
         await send_json(
             make_response_frame(

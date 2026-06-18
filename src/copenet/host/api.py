@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from fastapi import FastAPI, WebSocket
+from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -54,6 +54,15 @@ def create_app(
         app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST_DIR / "assets"), name="assets")
     if (_FRONTEND_DIST_DIR / "imgs").is_dir():
         app.mount("/imgs", StaticFiles(directory=_FRONTEND_DIST_DIR / "imgs"), name="imgs")
+
+    @app.get("/nasa/apod/image/{date}")
+    def nasa_apod_image(date: str) -> FileResponse:
+        # Serve the locally cached APOD image (lazily caching on first request) so the
+        # Home card doesn't break when apod.nasa.gov is flaky.
+        path = ws_server.orchestrator.nasa_image_path(date)
+        if path is None:
+            raise HTTPException(status_code=404, detail="APOD image not available")
+        return FileResponse(path)
 
     @app.get("/")
     def index() -> FileResponse:

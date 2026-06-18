@@ -998,6 +998,29 @@ export interface ReturnBriefingPayload {
 }
 
 // ---------------------------------------------------------------------------
+// NASA Astronomy Picture of the Day — one record per day (date is the key).
+export interface ApodRecord {
+  date: string;            // YYYY-MM-DD
+  title: string;
+  explanation: string;
+  url: string;
+  hdUrl: string | null;
+  thumbnailUrl: string | null;
+  cachedUrl: string | null;   // CopeNet-served cached image path; falls back to url on miss
+  mediaType: 'image' | 'video';
+  copyright: string | null;
+  serviceVersion: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ApodResult {
+  configured: boolean;     // false when NASA_API_KEY is unset
+  apod: ApodRecord | null;
+  error: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Turn-level summary snapshot: extracted from turnState on final events.
 // Mirrors the subset of TurnState.to_public_dict() we care about in the UI.
 export interface TurnStateSnapshot {
