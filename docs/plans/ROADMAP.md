@@ -130,6 +130,18 @@ implementation. Touches the global shell padding/gutters, so scope it carefully.
 
 ---
 
+## 🌌 North-star vision (Patrick) — directional, not yet scoped
+
+CopeNet is becoming the "everything app." Directional bets to keep in view:
+
+- **Domain workspaces** — first-class OSINT and Cybersecurity workspaces (curated tools,
+  data sources, layouts, prompts per domain). The persona/memory/editor primitives we're
+  building are the substrate for these.
+- **AI-built workspaces** — the agent builds the user a custom workspace from a described
+  intent ("I want an OSINT workspace for X"): assembles the right tools, data sources,
+  persona, and memory scaffolding. The editor + personas + memory arcs are prerequisites;
+  this is the payoff that ties them together.
+
 ## 🔭 NASA APOD — later phases
 
 - Phase 2: Data & Tools "NASA" page (featured image + slider of collected days).
