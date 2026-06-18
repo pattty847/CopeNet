@@ -69,12 +69,17 @@ uv run copenet
 ## Useful commands
 
 ```bash
-# Full app
+# Build the React UI first (the host serves frontend/dist; without it you
+# silently get the legacy vanilla fallback UI from host/static/).
+cd src/copenet/host/frontend && npm install && npm run build && cd -
+
+# Full app (only `copenet` and `copenet-browser-demo` entry points exist)
 uv run copenet
 
-# Backend only
-uv run copenet-host
-
-# Run with custom port
+# Run with a custom port
 COPNET_PORT=17124 uv run copenet
+
+# Point full-access file/shell tools at a specific workspace root
+# (defaults to the directory you launched from)
+COPNET_WORKDIR=/path/to/project uv run copenet
 ```
