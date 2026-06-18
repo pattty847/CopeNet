@@ -113,6 +113,13 @@ Make persona files first-class and user-managed.
 
 ---
 
+## 🟣 Parked: mobile density / spacing pass (own brainstorm session)
+
+Patrick's observation: on mobile there's too much padding on objects (e.g. the left
+gutter eats horizontal space). Wants a deliberate pass across ALL mobile objects to
+reclaim space — not a one-off tweak. Gets its own planning/brainstorm session before
+implementation. Touches the global shell padding/gutters, so scope it carefully.
+
 ## 🟡 From the tab audit (medium-value, backend data exists)
 
 - **Paused-run timeline** in the right panel — breadcrumb (started → tool ok → *awaiting you*)
