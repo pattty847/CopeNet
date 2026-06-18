@@ -1,5 +1,5 @@
 import type React from 'react';
-import { Brain, Info, Network, Send, Settings2 } from 'lucide-react';
+import { Brain, Info, Send, Settings2 } from 'lucide-react';
 import { useDestinations, usePendingApproval } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
@@ -64,7 +64,6 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   const sessionMemoryChange = lastMemoryChange && (!activeSessionKey || !lastMemoryChange.sessionKey || lastMemoryChange.sessionKey === activeSessionKey)
     ? lastMemoryChange
     : null;
-  const workspaceIntel = runtimeContext?.workspaceIntel || null;
 
   return (
     <div className={`${overviewOnly ? 'px-3 py-3' : 'px-2.5 pb-2.5'} flex flex-col gap-3 text-[12px]`}>
@@ -138,44 +137,6 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
           <div className="text-[11px] text-operator-muted/85 italic">Identity stays available in the background. Relevant memory appears here after a run uses it.</div>
         )}
       </Section>
-      <Section icon={Network} title="Workspace Intelligence">
-        {workspaceIntel ? (
-          <div className="space-y-2">
-            <div className="rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="text-[11px] font-medium text-operator-text">Workspace signals detected</div>
-                <div className="text-[10px] text-operator-muted/65">
-                  {workspaceIntel.cacheStatus}
-                </div>
-              </div>
-              <div className="mt-1 break-all font-mono text-[10px] leading-4 text-operator-muted/85">
-                {workspaceIntel.workspaceRoot}
-              </div>
-            </div>
-            <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
-              <dt className="text-operator-muted">Stack</dt>
-              <dd className="text-right text-operator-text">{workspaceIntel.languages.join(', ') || 'Unknown'}</dd>
-              <dt className="text-operator-muted">Packages</dt>
-              <dd className="text-right text-operator-text">{workspaceIntel.packageManagers.join(', ') || 'Unknown'}</dd>
-            </dl>
-            {workspaceIntel.recommendedDefaultChecks.length > 0 ? (
-              <div className="space-y-1.5">
-                {workspaceIntel.recommendedDefaultChecks.slice(0, 3).map((command) => (
-                  <div key={command} className="rounded-lg border border-operator-border bg-operator-panel/20 px-2.5 py-1.5">
-                    <div className="text-[9.5px] font-semibold uppercase tracking-[0.14em] text-operator-muted/75">Recommended check</div>
-                    <div className="mt-0.5 break-all font-mono text-[10px] leading-4 text-operator-text/90">{command}</div>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-[11px] text-operator-muted/85 italic">No recommended checks detected yet.</div>
-            )}
-          </div>
-        ) : (
-          <div className="text-[11px] text-operator-muted/85 italic">Workspace mapping has not been loaded yet for this runtime.</div>
-        )}
-      </Section>
-
       <Section icon={Send} title="Destinations">
         {destinations.length === 0 ? (
           <div className="text-[11px] text-operator-muted/85 italic">No configured destinations yet.</div>
