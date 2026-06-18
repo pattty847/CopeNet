@@ -28,34 +28,57 @@ function currentSession(sessions: Session[], activeSessionKey: string | null) {
   return sessions.find((session) => session.key === activeSessionKey) || null;
 }
 
+function baseName(path: string) {
+  const i = path.lastIndexOf('/');
+  return i === -1 ? path : path.slice(i + 1);
+}
+
+// Display the path relative to the persona root (and its parent folder), so the
+// list shows readable filenames instead of long absolute paths on mobile.
+function relativeDir(path: string, rootDir: string | null | undefined) {
+  let rel = path;
+  if (rootDir && rel.startsWith(rootDir)) rel = rel.slice(rootDir.length);
+  rel = rel.replace(/^\/+/, '');
+  const i = rel.lastIndexOf('/');
+  return i === -1 ? '' : rel.slice(0, i);
+}
+
 function FileGroup({
   title,
   paths,
+  rootDir,
 }: {
   title: string;
   paths: string[];
+  rootDir?: string | null;
 }) {
   if (paths.length === 0) return null;
   return (
     <section className="space-y-2">
       <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">{title}</div>
       <div className="space-y-2">
-        {paths.map((path) => (
-          <div key={path} className="flex items-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-3 py-2 text-sm text-shell-text">
-            <FolderTree className="h-3.5 w-3.5 shrink-0 text-shell-accent" />
-            <span className="min-w-0 flex-1 truncate" title={path}>
-              {path}
-            </span>
-            <button
-              type="button"
-              onClick={() => void navigator.clipboard.writeText(path)}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-xl text-shell-muted transition hover:bg-shell-panel hover:text-shell-text"
-              title="Copy path"
-            >
-              <Copy className="h-3.5 w-3.5" />
-            </button>
-          </div>
-        ))}
+        {paths.map((path) => {
+          const dir = relativeDir(path, rootDir);
+          return (
+            <div key={path} className="flex items-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-3 py-2 text-sm text-shell-text">
+              <FolderTree className="h-3.5 w-3.5 shrink-0 text-shell-accent" />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-medium" title={path}>
+                  {baseName(path)}
+                </span>
+                {dir && <span className="block truncate text-[11px] text-shell-muted">{dir}/</span>}
+              </span>
+              <button
+                type="button"
+                onClick={() => void navigator.clipboard.writeText(path)}
+                className="inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-xl text-shell-muted transition hover:bg-shell-panel hover:text-shell-text"
+                title="Copy path"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
     </section>
   );
@@ -210,11 +233,11 @@ export function PersonaHomePanel() {
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Loaded files</div>
             </div>
             <div className="space-y-4">
-              <FileGroup title="Shared core" paths={loadedGroups.sharedCore} />
-              <FileGroup title="Private user & environment" paths={loadedGroups.privateContext} />
-              <FileGroup title="Memory" paths={loadedGroups.memory} />
-              <FileGroup title="Model flavor" paths={loadedGroups.modelFlavor} />
-              <FileGroup title="Other" paths={loadedGroups.other} />
+              <FileGroup title="Shared core" paths={loadedGroups.sharedCore} rootDir={personaHome?.rootDir} />
+              <FileGroup title="Private user & environment" paths={loadedGroups.privateContext} rootDir={personaHome?.rootDir} />
+              <FileGroup title="Memory" paths={loadedGroups.memory} rootDir={personaHome?.rootDir} />
+              <FileGroup title="Model flavor" paths={loadedGroups.modelFlavor} rootDir={personaHome?.rootDir} />
+              <FileGroup title="Other" paths={loadedGroups.other} rootDir={personaHome?.rootDir} />
             </div>
             <details className="mt-5 rounded-[20px] border border-shell-border bg-shell-bg px-4 py-3">
               <summary className="cursor-pointer text-sm font-medium text-shell-text">Prompt preview</summary>

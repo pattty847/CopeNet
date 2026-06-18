@@ -15,6 +15,29 @@ function iconFor(file: WorkspaceFile) {
   return FileText;
 }
 
+function fileName(path: string) {
+  const i = path.lastIndexOf('/');
+  return i === -1 ? path : path.slice(i + 1);
+}
+
+function dirName(path: string) {
+  const i = path.lastIndexOf('/');
+  return i === -1 ? '' : path.slice(0, i);
+}
+
+// Group files by their parent folder so the list reads as folders, not a flat
+// wall of full paths. Root-level files land under '' (rendered as "/").
+function groupByDir(files: WorkspaceFile[]) {
+  const groups = new Map<string, WorkspaceFile[]>();
+  for (const file of files) {
+    const dir = dirName(file.path);
+    const bucket = groups.get(dir);
+    if (bucket) bucket.push(file);
+    else groups.set(dir, [file]);
+  }
+  return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
+}
+
 function FileBody({ doc }: { doc: WorkspaceFileContent }) {
   if (doc.kind === 'markdown') {
     return (
@@ -98,43 +121,52 @@ export function WorkspaceFileViewer() {
   return (
     <section className="rounded-[20px] border border-shell-border bg-shell-panel p-4">
       <header className="mb-3 flex items-center gap-2">
-        <Folder className="h-4 w-4 text-shell-accent" />
-        <h3 className="text-sm font-semibold text-shell-text">Workspace Files</h3>
-        <code className="ml-1 truncate text-[10px] text-shell-muted" title={root}>{root}</code>
+        <Folder className="h-4 w-4 shrink-0 text-shell-accent" />
+        <h3 className="shrink-0 text-sm font-semibold text-shell-text">Workspace Files</h3>
+        <code className="ml-1 min-w-0 flex-1 truncate text-[10px] text-shell-muted" title={root}>{root}</code>
         <button
           type="button"
           onClick={refresh}
-          className="ml-auto inline-flex items-center gap-1 rounded-lg border border-shell-border px-2 py-1 text-[11px] text-shell-muted transition-colors hover:text-shell-accent"
+          className="inline-flex shrink-0 items-center gap-1 rounded-lg border border-shell-border px-2 py-1 text-[11px] text-shell-muted transition-colors hover:text-shell-accent"
         >
-          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> Refresh
+          <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} /> <span className="hidden sm:inline">Refresh</span>
         </button>
       </header>
 
       <div className="grid gap-3 md:grid-cols-[minmax(180px,260px)_minmax(0,1fr)]">
-        <div className="rounded-xl border border-shell-border bg-shell-bg p-1.5">
+        <div className="max-h-[60vh] overflow-y-auto rounded-xl border border-shell-border bg-shell-bg p-1.5 md:max-h-none">
           {files.length === 0 && !loading && (
             <div className="px-2 py-4 text-center text-[12px] text-shell-muted">No viewable files.</div>
           )}
-          <ul className="space-y-0.5">
-            {files.map((file) => {
-              const Icon = iconFor(file);
-              const isSel = file.path === selected;
-              return (
-                <li key={file.path}>
-                  <button
-                    type="button"
-                    onClick={() => openFile(file.path)}
-                    className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-[12px] transition-colors ${
-                      isSel ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-text hover:bg-shell-border/30'
-                    }`}
-                  >
-                    <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
-                    <span className="truncate">{file.path}</span>
-                  </button>
-                </li>
-              );
-            })}
-          </ul>
+          {groupByDir(files).map(([dir, dirFiles]) => (
+            <div key={dir || '/'} className="mb-1.5 last:mb-0">
+              <div className="flex items-center gap-1 px-2 py-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-shell-muted/70">
+                <Folder className="h-3 w-3 shrink-0 opacity-60" />
+                <span className="min-w-0 truncate">{dir || '/'}</span>
+              </div>
+              <ul className="space-y-0.5">
+                {dirFiles.map((file) => {
+                  const Icon = iconFor(file);
+                  const isSel = file.path === selected;
+                  return (
+                    <li key={file.path}>
+                      <button
+                        type="button"
+                        onClick={() => openFile(file.path)}
+                        title={file.path}
+                        className={`flex w-full items-center gap-2 rounded-lg py-1.5 pl-4 pr-2 text-left text-[12px] transition-colors ${
+                          isSel ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-text hover:bg-shell-border/30'
+                        }`}
+                      >
+                        <Icon className="h-3.5 w-3.5 shrink-0 opacity-70" />
+                        <span className="min-w-0 flex-1 truncate">{fileName(file.path)}</span>
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          ))}
         </div>
 
         <div className="min-h-[220px]">
