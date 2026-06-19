@@ -69,16 +69,20 @@ KEYSTONE — partially shipped 2026-06-18.
 
 ---
 
-## 🔵 Theme: Personas (next big arc)
+## 🔵 Theme: Personas (in progress)
 
 Make persona files first-class and user-managed.
 
-- **Two scopes:**
-  - **Root / global** personas → stored in `~/.copenet` (user-level, cross-project).
-  - **Project** personas → stored in the project (repo-local).
-- **Persona picker** — a button (right panel + Persona Home) to choose/add a persona.
-- Click to add root or project personas into the active runtime.
-- Hooking the picker up to the runtime is part of this journey.
+- ✅ **Brick 1 — picker (list / create / switch).** `persona.list` / `persona.create` +
+  a Personas picker card in Persona Home (chips, active-first, "+ New" create). Selecting
+  sets `default_persona_id`. Personas carry a `scope` field ("global" for now). Verified.
+- ⬜ **Brick 2 — two scopes.** Root/global (`~/.copenet`) + project-local personas;
+  scope-aware discovery + resolution. The DTO already has `scope` so this is additive.
+- ⬜ **Per-model override reconciliation.** A saved per-model flavor override currently wins
+  over `default_persona_id`, so switching the picker doesn't visibly change the *resolved*
+  persona for a model that has an override. Decide: switching clears/sets the override, or
+  the picker edits the override directly. (Surfaced by Brick 1's "Active persona" card.)
+- ⬜ **Picker in the right panel too** (not just Persona Home), for in-session switching.
 
 ---
 
