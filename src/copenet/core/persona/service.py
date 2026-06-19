@@ -297,19 +297,63 @@ class PersonaHomeService:
             display_name=_text(draft.get("displayName")) or None,
         )
 
+    def list_personas(self) -> list[dict[str, Any]]:
+        """List available personas under this root, marking the active one."""
+        self._ensure_scaffold()
+        active = self.load_settings().default_persona_id
+        personas: list[dict[str, Any]] = []
+        for child in sorted(self._root_dir.iterdir()):
+            if not child.is_dir() or child.name.startswith("."):
+                continue
+            personas.append(self._persona_public(child.name))
+        # Active first, then alphabetical, so the picker leads with the current one.
+        personas.sort(key=lambda item: (not item["active"], item["id"]))
+        return personas
+
+    def create_persona(self, *, persona_id: str, display_name: str | None = None) -> dict[str, Any]:
+        """Scaffold a new persona under this root (no-op if it already exists)."""
+        safe = _safe_segment(persona_id)
+        self._scaffold_persona(safe, display_name=display_name)
+        return self._persona_public(safe)
+
+    def _persona_public(self, persona_id: str) -> dict[str, Any]:
+        persona_dir = self._persona_dir(persona_id)
+        active = self.load_settings().default_persona_id
+        return {
+            "id": persona_id,
+            "displayName": self._persona_display_name(persona_dir) or persona_id,
+            "active": persona_id == active,
+            "scope": "global",
+            "fileCount": sum(1 for _ in persona_dir.rglob("*.md")),
+        }
+
+    def _persona_display_name(self, persona_dir: Path) -> str:
+        for line in _read_text(persona_dir / "core" / "IDENTITY.md").splitlines():
+            stripped = line.strip()
+            if stripped.startswith("# "):
+                return stripped[2:].strip()
+        return ""
+
     def _ensure_scaffold(self) -> None:
-        persona_root = self._persona_dir("default")
+        self._scaffold_persona("default", display_name="CopeNet Identity")
+        if not self._settings_path().exists():
+            _write_json(self._settings_path(), PersonaSettings().to_json())
+
+    def _scaffold_persona(self, persona_id: str, *, display_name: str | None = None) -> None:
+        safe = _safe_segment(persona_id)
+        persona_root = self._persona_dir(safe)
+        title = _text(display_name) or (safe if safe != "default" else "CopeNet Identity")
         _write_text_if_missing(
             persona_root / "core" / "SOUL.md",
-            "# CopeNet Home\n\nBe genuinely helpful, practical, warm, and careful with private context.",
+            f"# {title}\n\nBe genuinely helpful, practical, warm, and careful with private context.",
         )
         _write_text_if_missing(
             persona_root / "core" / "IDENTITY.md",
-            "# CopeNet Identity\n\nThis is CopeNet's shared persona home. Individual models may layer their own flavor on top.",
+            f"# {title}\n\nThis is the {safe} persona home. Individual models may layer their own flavor on top.",
         )
         _write_text_if_missing(
             persona_root / "core" / "AGENTS.md",
-            "# CopeNet Persona Operating Notes\n\nUse shared memory responsibly. Keep private context out of shared or public channels.",
+            "# Persona Operating Notes\n\nUse shared memory responsibly. Keep private context out of shared or public channels.",
         )
         _write_text_if_missing(
             persona_root / "user" / "USER.md",
@@ -319,11 +363,8 @@ class PersonaHomeService:
             persona_root / "environment" / "TOOLS.md",
             "# TOOLS.md\n\nLocal machine and environment notes belong here.",
         )
-        memory_dir = persona_root / "memory" / "daily"
-        memory_dir.mkdir(parents=True, exist_ok=True)
+        (persona_root / "memory" / "daily").mkdir(parents=True, exist_ok=True)
         _write_text_if_missing(persona_root / "memory" / "PUBLIC.md", "# Public Memory\n\nPublic-safe collaboration notes.")
-        if not self._settings_path().exists():
-            _write_json(self._settings_path(), PersonaSettings().to_json())
 
     def _settings_path(self) -> Path:
         return self._root_dir / "settings.json"

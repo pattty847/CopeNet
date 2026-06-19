@@ -1,11 +1,11 @@
-import { Copy, FolderTree, LoaderCircle, Pencil, Shield, Sparkles } from 'lucide-react';
+import { Check, Copy, FolderTree, LoaderCircle, Pencil, Plus, Shield, Sparkles, Users } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 
 import { wsClient } from '../../lib/wsClient';
 import { resolvePersonaRuntime } from '../../lib/personaCommands';
 import { useAppStore } from '../../store/useAppStore';
 import { FileEditor } from '../FileEditor';
-import type { PersonaPrivacyTier, Session } from '../../types/backend';
+import type { PersonaListItem, PersonaPrivacyTier, Session } from '../../types/backend';
 
 function groupLoadedFiles(paths: string[]) {
   const groups = {
@@ -110,6 +110,36 @@ export function PersonaHomePanel() {
   const [editFile, setEditFile] = useState<{ path: string; name: string; content: string } | null>(null);
   const [savingFile, setSavingFile] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
+  const [personas, setPersonas] = useState<PersonaListItem[]>([]);
+  const [newPersonaName, setNewPersonaName] = useState('');
+  const [showCreate, setShowCreate] = useState(false);
+  const [creatingPersona, setCreatingPersona] = useState(false);
+
+  const selectPersona = async (personaId: string) => {
+    if (!personaSettings) return;
+    try {
+      await wsClient.updatePersonaSettings({ ...personaSettings, defaultPersonaId: personaId });
+      await refresh();
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to switch persona.');
+    }
+  };
+
+  const createPersona = async () => {
+    const name = newPersonaName.trim();
+    if (!name) return;
+    setCreatingPersona(true);
+    try {
+      await wsClient.createPersona(name, name);
+      setNewPersonaName('');
+      setShowCreate(false);
+      await refresh();
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to create persona.');
+    } finally {
+      setCreatingPersona(false);
+    }
+  };
 
   const openPersonaFile = async (path: string) => {
     setEditError(null);
@@ -144,7 +174,7 @@ export function PersonaHomePanel() {
   const refresh = async () => {
     setLoading(true);
     try {
-      await Promise.all([
+      const [, , personaList] = await Promise.all([
         wsClient.getPersonaSummary({
           provider: runtime.provider,
           model: runtime.model,
@@ -155,7 +185,9 @@ export function PersonaHomePanel() {
           model: runtime.model,
           privacyTier: runtime.personaPrivacyTier,
         }),
+        wsClient.listPersonas(),
       ]);
+      setPersonas(personaList);
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to load Persona Home.');
     } finally {
@@ -238,6 +270,63 @@ export function PersonaHomePanel() {
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_360px]">
         <div className="space-y-3">
+          <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <Users className="h-4 w-4 text-shell-accent" />
+                <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Personas</div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCreate((v) => !v)}
+                className="inline-flex items-center gap-1 rounded-xl border border-shell-border bg-shell-bg px-2.5 py-1 text-[11px] font-medium text-shell-muted transition hover:border-shell-accent/40 hover:text-shell-accent"
+              >
+                <Plus className="h-3 w-3" /> New
+              </button>
+            </div>
+            {showCreate && (
+              <div className="mb-3 flex gap-2">
+                <input
+                  value={newPersonaName}
+                  onChange={(e) => setNewPersonaName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void createPersona(); }}
+                  placeholder="Persona name (e.g. OSINT Recon)"
+                  className="min-w-0 flex-1 rounded-xl border border-shell-border bg-shell-bg px-3 py-2 text-sm text-shell-text outline-none focus:border-shell-accent/40"
+                />
+                <button
+                  type="button"
+                  onClick={() => void createPersona()}
+                  disabled={creatingPersona || !newPersonaName.trim()}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-xl border border-shell-border bg-shell-accent-soft px-3 py-2 text-sm font-medium text-shell-accent transition hover:border-shell-accent/40 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {creatingPersona ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : 'Create'}
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-2">
+              {personas.length === 0 && (
+                <span className="text-sm text-shell-muted">No personas yet.</span>
+              )}
+              {personas.map((persona) => (
+                <button
+                  key={persona.id}
+                  type="button"
+                  onClick={() => void selectPersona(persona.id)}
+                  title={`${persona.fileCount} files · ${persona.scope}`}
+                  className={`inline-flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-sm transition ${
+                    persona.active
+                      ? 'border-shell-accent bg-shell-accent-soft text-shell-text'
+                      : 'border-shell-border bg-shell-bg text-shell-text hover:border-shell-border-strong'
+                  }`}
+                >
+                  {persona.active && <Check className="h-3.5 w-3.5 text-shell-accent" />}
+                  <span className="font-medium">{persona.displayName}</span>
+                  <span className="text-[10px] uppercase tracking-wide text-shell-muted/60">{persona.scope}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+
           <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-shell-border bg-shell-bg px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">

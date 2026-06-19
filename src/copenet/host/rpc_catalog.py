@@ -191,6 +191,25 @@ async def handle_persona_context_get(request_id: str, params: dict[str, Any] | N
     )
 
 
+async def handle_persona_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"personas": orchestrator.list_personas()})))
+
+
+async def handle_persona_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    persona_id = str(raw.get("personaId") or raw.get("id") or "").strip()
+    display_name = str(raw.get("displayName") or "").strip() or None
+    if not persona_id:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message="personaId is required"))))
+        return
+    try:
+        result = orchestrator.create_persona(persona_id=persona_id, display_name=display_name)
+    except ValueError as exc:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc) or "could not create persona"))))
+        return
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"persona": result})))
+
+
 async def handle_persona_read_file(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     path = str(raw.get("path") or "").strip()

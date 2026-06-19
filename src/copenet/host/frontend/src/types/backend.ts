@@ -348,6 +348,14 @@ export interface PersonaSettingsOverride {
   flavorId: string | null;
 }
 
+export interface PersonaListItem {
+  id: string;
+  displayName: string;
+  active: boolean;
+  scope: 'global' | 'project';   // project scope arrives in a later brick
+  fileCount: number;
+}
+
 export interface PersonaSettings {
   defaultPersonaId: string;
   defaultPrivacyTier: PersonaPrivacyTier;

@@ -18,6 +18,7 @@ import {
   ApodResult,
   PersonaFlavorDraft,
   PersonaHomeSummary,
+  PersonaListItem,
   PersonaSettings,
   PromptOptimizationResult,
   PromptOptimizationVariant,
@@ -1824,6 +1825,18 @@ class WsClient {
     const normalized = normalizePersonaSettings(payload.settings);
     useAppStore.getState().setPersonaSettings(normalized);
     return normalized;
+  }
+
+  /** List available personas (active one first) for the picker. */
+  async listPersonas(): Promise<PersonaListItem[]> {
+    const payload = await this.request<{ personas?: PersonaListItem[] }>('persona.list', {});
+    return Array.isArray(payload.personas) ? payload.personas : [];
+  }
+
+  /** Create a new persona scaffold. */
+  async createPersona(personaId: string, displayName?: string): Promise<PersonaListItem | null> {
+    const payload = await this.request<{ persona?: PersonaListItem | null }>('persona.create', { personaId, displayName });
+    return payload.persona ?? null;
   }
 
   async getPersonaSummary(options?: {
