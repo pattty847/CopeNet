@@ -135,7 +135,12 @@ class Orchestrator:
         self._nasa_image_cache = NasaApodImageCache(root_dir=base / "nasa-apod-images")
         profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
         self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
-        persona_root = default_personas_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "personas"
+        # Personas are user-level identity, NOT session data — they live at the canonical
+        # global root (~/.copenet/personas, or COPNET_DATA_DIR/personas), never under
+        # sessions/. Only a test that passes an explicit sessions_dir WITHOUT a COPNET_DATA_DIR
+        # keeps them isolated under that dir.
+        persona_isolated = sessions_dir is not None and not os.environ.get("COPNET_DATA_DIR", "").strip()
+        persona_root = base / "personas" if persona_isolated else default_personas_dir()
         self._persona_service = PersonaHomeService(root_dir=persona_root)
         workspace_intel_path = default_workspace_intel_path() if sessions_dir is None else base / "workspace-intel.json"
         self._workspace_intel_store = WorkspaceIntelStore(path=workspace_intel_path)

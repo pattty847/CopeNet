@@ -402,25 +402,35 @@ class PersonaHomeService:
         return ""
 
     def _ensure_scaffold(self) -> None:
-        self._scaffold_persona("default", display_name="CopeNet Identity")
+        self._scaffold_persona("default")
         if not self._settings_path().exists():
             _write_json(self._settings_path(), PersonaSettings().to_json())
 
     def _scaffold_persona(self, persona_id: str, *, display_name: str | None = None) -> None:
         safe = _safe_segment(persona_id)
         persona_root = self._persona_dir(safe)
-        title = _text(display_name) or (safe if safe != "default" else "CopeNet Identity")
+        if safe == "default":
+            # The default persona keeps its original, stable content (relied on by tests
+            # and existing installs); only NEW personas get title-derived headings.
+            soul_title, identity_title = "CopeNet Home", "CopeNet Identity"
+            agents_title = "CopeNet Persona Operating Notes"
+            identity_body = "This is CopeNet's shared persona home. Individual models may layer their own flavor on top."
+        else:
+            name = _text(display_name) or safe
+            soul_title = identity_title = name
+            agents_title = f"{name} — Operating Notes"
+            identity_body = f"This is the {safe} persona home. Individual models may layer their own flavor on top."
         _write_text_if_missing(
             persona_root / "core" / "SOUL.md",
-            f"# {title}\n\nBe genuinely helpful, practical, warm, and careful with private context.",
+            f"# {soul_title}\n\nBe genuinely helpful, practical, warm, and careful with private context.",
         )
         _write_text_if_missing(
             persona_root / "core" / "IDENTITY.md",
-            f"# {title}\n\nThis is the {safe} persona home. Individual models may layer their own flavor on top.",
+            f"# {identity_title}\n\n{identity_body}",
         )
         _write_text_if_missing(
             persona_root / "core" / "AGENTS.md",
-            "# Persona Operating Notes\n\nUse shared memory responsibly. Keep private context out of shared or public channels.",
+            f"# {agents_title}\n\nUse shared memory responsibly. Keep private context out of shared or public channels.",
         )
         _write_text_if_missing(
             persona_root / "user" / "USER.md",
