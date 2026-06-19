@@ -1827,9 +1827,12 @@ class WsClient {
     return normalized;
   }
 
-  /** List available personas (active one first) for the picker. */
-  async listPersonas(): Promise<PersonaListItem[]> {
-    const payload = await this.request<{ personas?: PersonaListItem[] }>('persona.list', {});
+  /** List personas, marking the one resolved for the given runtime (override-honest). */
+  async listPersonas(runtime?: { provider?: string | null; model?: string | null }): Promise<PersonaListItem[]> {
+    const payload = await this.request<{ personas?: PersonaListItem[] }>('persona.list', {
+      provider: runtime?.provider || undefined,
+      model: runtime?.model || undefined,
+    });
     return Array.isArray(payload.personas) ? payload.personas : [];
   }
 
@@ -1837,6 +1840,18 @@ class WsClient {
   async createPersona(personaId: string, displayName?: string): Promise<PersonaListItem | null> {
     const payload = await this.request<{ persona?: PersonaListItem | null }>('persona.create', { personaId, displayName });
     return payload.persona ?? null;
+  }
+
+  /** Activate a persona for the current runtime (repoints a per-model override if present). */
+  async selectPersona(personaId: string, runtime?: { provider?: string | null; model?: string | null }): Promise<PersonaSettings | null> {
+    const payload = await this.request<{ settings?: unknown | null }>('persona.select', {
+      personaId,
+      provider: runtime?.provider || undefined,
+      model: runtime?.model || undefined,
+    });
+    const normalized = normalizePersonaSettings(payload.settings);
+    useAppStore.getState().setPersonaSettings(normalized);
+    return normalized;
   }
 
   async getPersonaSummary(options?: {

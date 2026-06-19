@@ -307,15 +307,22 @@ class PersonaHomeService:
             display_name=_text(draft.get("displayName")) or None,
         )
 
-    def list_personas(self) -> list[dict[str, Any]]:
-        """List available personas under this root, marking the active one."""
+    def list_personas(self, *, provider: str | None = None, model: str | None = None) -> list[dict[str, Any]]:
+        """List personas, marking the one actually resolved for the current runtime.
+
+        With a provider/model, "active" reflects the resolved persona (per-model
+        override honored), not just the global default — so the picker never lies.
+        """
         self._ensure_scaffold()
-        active = self.load_settings().default_persona_id
+        if provider:
+            active = self.build_prompt_context(provider=provider, model=model, privacy_tier="off", query="").persona_id
+        else:
+            active = self.load_settings().default_persona_id
         personas: list[dict[str, Any]] = []
         for child in sorted(self._root_dir.iterdir()):
             if not child.is_dir() or child.name.startswith("."):
                 continue
-            personas.append(self._persona_public(child.name))
+            personas.append(self._persona_public(child.name, active_id=active))
         # Active first, then alphabetical, so the picker leads with the current one.
         personas.sort(key=lambda item: (not item["active"], item["id"]))
         return personas
@@ -325,6 +332,28 @@ class PersonaHomeService:
         safe = _safe_segment(persona_id)
         self._scaffold_persona(safe, display_name=display_name)
         return self._persona_public(safe)
+
+    def select_persona(self, *, persona_id: str, provider: str | None = None, model: str | None = None) -> PersonaSettings:
+        """Make a persona active, honoring (not shadowed by) per-model overrides.
+
+        Sets the global default, AND — if the current runtime has a per-model
+        override pinning a different persona — repoints that override at the chosen
+        persona (keeping its flavor). Without this, a saved flavor override would
+        silently win over a picker selection.
+        """
+        safe = _safe_segment(persona_id)
+        current = self.load_settings()
+        overrides: dict[str, PersonaSettingsOverride] = dict(current.model_overrides)
+        if provider:
+            key = _model_key(provider, model)
+            existing = overrides.get(key)
+            if existing is not None and existing.persona_id != safe:
+                overrides[key] = PersonaSettingsOverride(persona_id=safe, flavor_id=existing.flavor_id)
+        return self.update_settings(
+            default_persona_id=safe,
+            default_privacy_tier=current.default_privacy_tier,
+            model_overrides=overrides,
+        )
 
     def author_persona(
         self,
@@ -354,9 +383,9 @@ class PersonaHomeService:
             written.append(f"{rel[0]}/{rel[1]}")
         return {**self._persona_public(safe), "writtenFiles": written}
 
-    def _persona_public(self, persona_id: str) -> dict[str, Any]:
+    def _persona_public(self, persona_id: str, *, active_id: str | None = None) -> dict[str, Any]:
         persona_dir = self._persona_dir(persona_id)
-        active = self.load_settings().default_persona_id
+        active = active_id if active_id is not None else self.load_settings().default_persona_id
         return {
             "id": persona_id,
             "displayName": self._persona_display_name(persona_dir) or persona_id,

@@ -30,6 +30,7 @@ from .rpc_catalog import (
     handle_persona_get,
     handle_persona_list,
     handle_persona_read_file,
+    handle_persona_select,
     handle_persona_settings_get,
     handle_persona_settings_update,
     handle_persona_write_file,
@@ -160,6 +161,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_persona_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.create":
         await handle_persona_create(req.id, req.params, send_json, orchestrator)
+    elif req.method == "persona.select":
+        await handle_persona_select(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.readFile":
         await handle_persona_read_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.writeFile":

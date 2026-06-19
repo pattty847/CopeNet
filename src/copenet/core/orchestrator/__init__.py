@@ -543,13 +543,17 @@ class Orchestrator:
         """Return Persona Home defaults and provider/model overrides."""
         return self._persona_service.load_settings().to_public_dict()
 
-    def list_personas(self) -> list[dict]:
+    def list_personas(self, *, provider: str | None = None, model: str | None = None) -> list[dict]:
         """List available personas (active one first) for the persona picker."""
-        return self._persona_service.list_personas()
+        return self._persona_service.list_personas(provider=provider, model=model)
 
     def create_persona(self, *, persona_id: str, display_name: str | None = None) -> dict:
         """Create a new persona scaffold and return its public record."""
         return self._persona_service.create_persona(persona_id=persona_id, display_name=display_name)
+
+    def select_persona(self, *, persona_id: str, provider: str | None = None, model: str | None = None) -> dict:
+        """Activate a persona for the current runtime (overrides honored)."""
+        return self._persona_service.select_persona(persona_id=persona_id, provider=provider, model=model).to_public_dict()
 
     def update_persona_settings(
         self,

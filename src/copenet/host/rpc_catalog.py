@@ -192,7 +192,12 @@ async def handle_persona_context_get(request_id: str, params: dict[str, Any] | N
 
 
 async def handle_persona_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"personas": orchestrator.list_personas()})))
+    raw = params or {}
+    personas = orchestrator.list_personas(
+        provider=str(raw.get("provider") or "").strip() or None,
+        model=str(raw.get("model") or "").strip() or None,
+    )
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"personas": personas})))
 
 
 async def handle_persona_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
@@ -208,6 +213,20 @@ async def handle_persona_create(request_id: str, params: dict[str, Any] | None, 
         await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc) or "could not create persona"))))
         return
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"persona": result})))
+
+
+async def handle_persona_select(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    persona_id = str(raw.get("personaId") or raw.get("id") or "").strip()
+    if not persona_id:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message="personaId is required"))))
+        return
+    settings = orchestrator.select_persona(
+        persona_id=persona_id,
+        provider=str(raw.get("provider") or "").strip() or None,
+        model=str(raw.get("model") or "").strip() or None,
+    )
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"settings": settings})))
 
 
 async def handle_persona_read_file(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

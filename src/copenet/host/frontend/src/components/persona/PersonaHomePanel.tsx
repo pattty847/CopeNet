@@ -116,9 +116,8 @@ export function PersonaHomePanel() {
   const [creatingPersona, setCreatingPersona] = useState(false);
 
   const selectPersona = async (personaId: string) => {
-    if (!personaSettings) return;
     try {
-      await wsClient.updatePersonaSettings({ ...personaSettings, defaultPersonaId: personaId });
+      await wsClient.selectPersona(personaId, { provider: runtime.provider, model: runtime.model });
       await refresh();
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to switch persona.');
@@ -185,7 +184,7 @@ export function PersonaHomePanel() {
           model: runtime.model,
           privacyTier: runtime.personaPrivacyTier,
         }),
-        wsClient.listPersonas(),
+        wsClient.listPersonas({ provider: runtime.provider, model: runtime.model }),
       ]);
       setPersonas(personaList);
     } catch (error) {

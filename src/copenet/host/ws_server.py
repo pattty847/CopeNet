@@ -173,6 +173,7 @@ class CopeNetWsServer:
                                 "persona.flavor.save",
                                 "persona.list",
                                 "persona.create",
+                                "persona.select",
                                 "persona.readFile",
                                 "persona.writeFile",
                                 "profile.changelog",
