@@ -83,6 +83,13 @@ Make persona files first-class and user-managed.
   the picker + are editable inline. Verified deterministically; ready for a live chat test.
 - ⬜ **Brick 2 — two scopes.** Root/global (`~/.copenet`) + project-local personas;
   scope-aware discovery + resolution. The DTO already has `scope` so this is additive.
+  - **Storage relocation (Patrick noticed):** global personas currently land in
+    `~/.copenet/sessions/personas/` because the orchestrator defaults operator stores under
+    the sessions base when `COPNET_DATA_DIR` is unset. The intended global home is
+    `~/.copenet/personas/` (= `default_personas_dir()`, used today only when `COPNET_DATA_DIR`
+    is set). Brick 2 should make global personas live at `~/.copenet/personas` and **migrate**
+    existing ones (builder-homie etc.) so they aren't orphaned. Project personas →
+    `<project>/.copenet/personas`.
 - ⬜ **Per-model override reconciliation.** A saved per-model flavor override currently wins
   over `default_persona_id`, so switching the picker doesn't visibly change the *resolved*
   persona for a model that has an override. Decide: switching clears/sets the override, or
