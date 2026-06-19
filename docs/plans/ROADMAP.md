@@ -76,6 +76,11 @@ Make persona files first-class and user-managed.
 - ✅ **Brick 1 — picker (list / create / switch).** `persona.list` / `persona.create` +
   a Personas picker card in Persona Home (chips, active-first, "+ New" create). Selecting
   sets `default_persona_id`. Personas carry a `scope` field ("global" for now). Verified.
+- ✅ **Brick 1.5 — `persona.author` model tool (first "AI builds your stuff").** Ask in chat
+  and the model authors a persona itself. Model-facing tool whose description is the schematic
+  (soul/identity/agents/user/tools/public_memory); `PersonaHomeService.author_persona` writes
+  the sections; `persona_service` threaded into the tool context. Authored personas show in
+  the picker + are editable inline. Verified deterministically; ready for a live chat test.
 - ⬜ **Brick 2 — two scopes.** Root/global (`~/.copenet`) + project-local personas;
   scope-aware discovery + resolution. The DTO already has `scope` so this is additive.
 - ⬜ **Per-model override reconciliation.** A saved per-model flavor override currently wins
