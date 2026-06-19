@@ -13,6 +13,16 @@ from copenet._paths import default_personas_dir
 
 PersonaPrivacyTier = Literal["private", "safe", "off"]
 
+# Logical section name -> (subdir, filename) for model-authored persona content.
+_PERSONA_SECTION_PATHS: dict[str, tuple[str, str]] = {
+    "soul": ("core", "SOUL.md"),
+    "identity": ("core", "IDENTITY.md"),
+    "agents": ("core", "AGENTS.md"),
+    "user": ("user", "USER.md"),
+    "tools": ("environment", "TOOLS.md"),
+    "public_memory": ("memory", "PUBLIC.md"),
+}
+
 
 def _text(value: Any) -> str:
     return str(value or "").strip()
@@ -315,6 +325,34 @@ class PersonaHomeService:
         safe = _safe_segment(persona_id)
         self._scaffold_persona(safe, display_name=display_name)
         return self._persona_public(safe)
+
+    def author_persona(
+        self,
+        *,
+        persona_id: str,
+        display_name: str | None = None,
+        sections: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Scaffold a persona and write the provided section contents (overwriting).
+
+        ``sections`` maps logical names (soul, identity, agents, user, tools,
+        public_memory) to markdown bodies. Used by the model-facing persona tool
+        so the agent can author a full personality in one call.
+        """
+        safe = _safe_segment(persona_id)
+        self._scaffold_persona(safe, display_name=display_name)
+        persona_root = self._persona_dir(safe)
+        written: list[str] = []
+        for key, body in (sections or {}).items():
+            rel = _PERSONA_SECTION_PATHS.get(key)
+            text = _text(body)
+            if rel is None or not text:
+                continue
+            target = persona_root / rel[0] / rel[1]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(text.rstrip() + "\n", encoding="utf-8")
+            written.append(f"{rel[0]}/{rel[1]}")
+        return {**self._persona_public(safe), "writtenFiles": written}
 
     def _persona_public(self, persona_id: str) -> dict[str, Any]:
         persona_dir = self._persona_dir(persona_id)

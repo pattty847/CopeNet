@@ -12,6 +12,7 @@ from copenet.core.sessions import SessionStore, TranscriptStore
 
 if TYPE_CHECKING:
     from copenet.core.memory import MemoryService
+    from copenet.core.persona import PersonaHomeService
     from copenet.core.profile import PatProfileService
     from copenet.core.workspace_intel import WorkspaceIntelService
 
@@ -264,6 +265,7 @@ class ToolExecutionContext:
     memory_service: MemoryService | None = None
     profile_service: PatProfileService | None = None
     workspace_intel_service: WorkspaceIntelService | None = None
+    persona_service: PersonaHomeService | None = None
     artifact_store: Any | None = None
     edit_backup_store: Any | None = None
     task_prompt_id: str | None = None

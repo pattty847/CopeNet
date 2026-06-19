@@ -7,6 +7,7 @@ from .handlers.artifacts import DESCRIPTORS as ARTIFACT_DESCRIPTORS, HANDLERS as
 from .handlers.files import DESCRIPTORS as FILE_DESCRIPTORS, HANDLERS as FILE_HANDLERS
 from .handlers.git import DESCRIPTORS as GIT_DESCRIPTORS, HANDLERS as GIT_HANDLERS
 from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMORY_HANDLERS
+from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
 from .handlers.web import DESCRIPTORS as WEB_DESCRIPTORS, HANDLERS as WEB_HANDLERS
@@ -35,6 +36,7 @@ MANIFEST_TOOL_IDS = {
     "plan.write",
     "web.search",
     "web.fetch",
+    "persona.author",
 }
 
 # ALL_DESCRIPTORS stays the full set so the registry can still ROUTE + policy-check
@@ -46,6 +48,7 @@ ALL_DESCRIPTORS = (
     + SHELL_DESCRIPTORS
     + ARTIFACT_DESCRIPTORS
     + MEMORY_DESCRIPTORS
+    + PERSONA_DESCRIPTORS
     + WORKSPACE_INTEL_DESCRIPTORS
     + PLAN_DESCRIPTORS
     + WEB_DESCRIPTORS
@@ -54,6 +57,7 @@ ALL_HANDLERS = {
     **FILE_HANDLERS,
     **GIT_HANDLERS,
     **MEMORY_HANDLERS,
+    **PERSONA_HANDLERS,
     **SHELL_HANDLERS,
     **ARTIFACT_HANDLERS,
     **WORKSPACE_INTEL_HANDLERS,

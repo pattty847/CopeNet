@@ -352,6 +352,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 memory_service=orchestrator._memory_service,
                 profile_service=orchestrator._profile_service,
                 workspace_intel_service=orchestrator._workspace_intel_service,
+                persona_service=orchestrator._persona_service,
                 artifact_store=orchestrator._artifact_store,
                 edit_backup_store=orchestrator._edit_backup_store,
                 task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
