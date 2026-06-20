@@ -4,6 +4,7 @@ import { Check, ChevronDown, FolderOpen, Loader2, Mic, Paperclip, Plus, Send, Sp
 import { wsClient } from '../../lib/wsClient';
 import { useVoiceToText } from '../../lib/useVoiceToText';
 import { useAppStore } from '../../store/useAppStore';
+import { accessOptionsFor, providerAllowsFullAccess } from '../../lib/access';
 import type { DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 
 export interface RuntimePillSummary {
@@ -15,13 +16,14 @@ export interface RuntimePillSummary {
   locked: boolean;
 }
 
-type DraftRuntimeField = 'provider' | 'model' | 'profile' | 'mode';
+type DraftRuntimeField = 'provider' | 'model' | 'profile' | 'access';
 
 interface RuntimeOption {
   id: string;
   label: string;
   hint?: string;
 }
+
 
 function workspaceLabel(workspaceRoot?: string | null) {
   if (!workspaceRoot) return 'Choose workspace';
@@ -368,7 +370,6 @@ export function AgentComposer({
   const modelsByProvider = useAppStore((state) => state.modelsByProvider);
   const loadedModelProviders = useAppStore((state) => state.loadedModelProviders);
   const profiles = useAppStore((state) => state.profiles);
-  const taskModes = useAppStore((state) => state.taskModes);
   const draftSettings = useAppStore((state) => state.draftSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
   const patchDraftSettings = useAppStore((state) => state.patchDraftSettings);
@@ -407,13 +408,22 @@ export function AgentComposer({
   const providerOptions = useMemo(() => makeProviderOptions(providers), [providers]);
   const modelOptions = useMemo(() => makeModelOptions(availableModels), [availableModels]);
   const profileOptions = useMemo(() => makePromptOptions(profiles), [profiles]);
-  const modeOptions = useMemo(() => makePromptOptions(taskModes), [taskModes]);
+  const accessOptions = useMemo(() => accessOptionsFor(draftSettings.provider), [draftSettings.provider]);
 
   const selectedProvider = providerOptions.find((option) => option.id === draftSettings.provider)?.label || 'Select provider';
   const selectedModel = modelOptions.find((option) => option.id === draftSettings.model)?.label || (draftSettings.provider ? 'Select model' : 'Pick provider first');
   const selectedProfile = profileOptions.find((option) => option.id === draftSettings.systemPromptId)?.label || 'Profile';
-  const selectedMode = modeOptions.find((option) => option.id === draftSettings.taskPromptId)?.label || 'Mode';
+  const selectedAccess = accessOptions.find((option) => option.id === draftSettings.taskPromptId)?.label || 'Read-only';
   const selectedVariant = optimizedVariants.find((variant) => variant.id === selectedVariantId) || null;
+
+  // Keep the draft honest: if the chosen provider can't grant Full Access, drop the
+  // draft back to Read-only so the UI matches what the backend would actually enforce.
+  useEffect(() => {
+    if (!isDraft) return;
+    if (draftSettings.taskPromptId === 'full-access' && !providerAllowsFullAccess(draftSettings.provider)) {
+      patchDraftSettings({ taskPromptId: 'none' });
+    }
+  }, [isDraft, draftSettings.provider, draftSettings.taskPromptId, patchDraftSettings]);
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -724,12 +734,12 @@ export function AgentComposer({
 
                 <span className="my-1 hidden w-px bg-operator-border/55 sm:block" />
 
-                <RuntimeSegment title="Mode" value={selectedMode} active={openDraftMenu === 'mode'} onClick={() => setOpenDraftMenu((current) => current === 'mode' ? null : 'mode')}>
-                  {openDraftMenu === 'mode' ? (
+                <RuntimeSegment title="Access" value={selectedAccess} active={openDraftMenu === 'access'} onClick={() => setOpenDraftMenu((current) => current === 'access' ? null : 'access')}>
+                  {openDraftMenu === 'access' ? (
                     <RuntimeMenu
-                      label="Task mode"
-                      options={modeOptions}
-                      selectedId={draftSettings.taskPromptId || ''}
+                      label="Access"
+                      options={accessOptions}
+                      selectedId={draftSettings.taskPromptId || 'none'}
                       onSelect={(nextValue) => updateDraftSetting('taskPromptId', nextValue)}
                       onClose={() => setOpenDraftMenu(null)}
                     />

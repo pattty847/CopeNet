@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
+import { accessLabel, accessOptionsFor } from '../lib/access';
 import { DraftSettings } from '../types/backend';
 import { Activity, Brain, Info, Inbox, Settings2, ChevronLeft, ChevronRight, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -38,7 +39,6 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
   const modelsByProvider = useAppStore((state) => state.modelsByProvider);
   const loadedModelProviders = useAppStore((state) => state.loadedModelProviders);
   const profiles = useAppStore((state) => state.profiles);
-  const taskModes = useAppStore((state) => state.taskModes);
   const wsStatus = useAppStore((state) => state.wsStatus);
   const draftSettings = useAppStore((state) => state.draftSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
@@ -94,7 +94,7 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
 
   const providerName = providers.find((provider) => provider.id === currentProvider)?.displayName || currentProvider || 'None';
   const profileName = profiles.find((profile) => profile.id === currentProfile)?.name || currentProfile || 'Default';
-  const taskModeName = taskModes.find((mode) => mode.id === currentTaskMode)?.name || currentTaskMode || 'None';
+  const accessName = accessLabel(currentTaskMode);
   const displayedWorkspaceRoot = isDraft
     ? (draftSettings.workspaceRoot || runtimeContext?.workspaceRoot || '')
     : (activeSession?.workspaceRoot || runtimeContext?.workspaceRoot || '');
@@ -485,14 +485,14 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
                     </select>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Mode</span>
+                    <span className="text-operator-muted text-[10px] font-semibold uppercase tracking-wider">Access</span>
                     <select
-                      value={currentTaskMode || ''}
+                      value={currentTaskMode || 'none'}
                       onChange={(e) => updateDraftSetting('taskPromptId', e.target.value)}
                       className={selectClass}
                     >
-                      {taskModes.map((mode) => (
-                        <option key={mode.id} value={mode.id}>{mode.name}</option>
+                      {accessOptionsFor(currentProvider).map((option) => (
+                        <option key={option.id} value={option.id}>{option.label}</option>
                       ))}
                     </select>
                   </div>
@@ -514,8 +514,8 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
                     <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={profileName}>{profileName}</span>
                   </div>
                   <div className="flex min-w-0 items-start justify-between gap-3">
-                    <span className="text-operator-muted">Mode:</span>
-                    <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={taskModeName}>{taskModeName}</span>
+                    <span className="text-operator-muted">Access:</span>
+                    <span className="min-w-0 flex-1 truncate text-right font-medium text-operator-text" title={accessName}>{accessName}</span>
                   </div>
                 </div>
               )}
