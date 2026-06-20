@@ -33,7 +33,7 @@ function compactModelName(model?: string | null) {
   return `${normalized.slice(0, 16)}…`;
 }
 
-export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
+export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const sessions = useAppStore((state) => state.sessions);
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const setActiveSessionKey = useAppStore((state) => state.setActiveSessionKey);
@@ -81,6 +81,7 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
     setSessionSelectMode(false);
     setMergeDraft(null);
     wsClient.beginDraft();
+    onNavigate?.();   // close the mobile sessions sheet after starting a draft
   };
 
   const handleSessionSelect = (sessionKey: string) => {
@@ -91,6 +92,7 @@ export function SessionSidebar({ mobile = false }: { mobile?: boolean }) {
     setDraftOpen(false);
     setMergeDraft(null);
     setActiveSessionKey(sessionKey);
+    onNavigate?.();   // close the mobile sessions sheet and go straight to the session
   };
 
   const handleMergeIntoWorkspace = () => {

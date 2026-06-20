@@ -136,7 +136,7 @@ export function AgentsPage() {
         </div>
 
         <MobileSheet open={mobileSessionsOpen} onClose={() => setMobileSessionsOpen(false)} title="Sessions" fullHeight>
-          <SessionSidebar mobile />
+          <SessionSidebar mobile onNavigate={() => setMobileSessionsOpen(false)} />
         </MobileSheet>
 
         <MobileSheet open={mobileInspectorOpen} onClose={() => setMobileInspectorOpen(false)} title="Inspector" fullHeight>

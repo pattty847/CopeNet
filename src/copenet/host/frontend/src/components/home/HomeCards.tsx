@@ -32,6 +32,7 @@ export interface HomeCardContext {
   setShowChangelog: (value: boolean | ((prev: boolean) => boolean)) => void;
   setCurrentSection: (section: 'agents' | 'data-tools' | 'observability' | 'experiments') => void;
   setWorkflowsRoute: (route: 'hub' | 'meme-lab') => void;
+  onCreateSession: () => void;
   pulseCount: number;
 }
 
@@ -117,7 +118,7 @@ export function renderHomeCard(id: HomeCardId, ctx: HomeCardContext): ReactEleme
               <div className="relative mt-5 flex max-w-full flex-col items-stretch gap-2 sm:flex-row sm:flex-wrap">
                 <button
                   type="button"
-                  onClick={() => ctx.setCurrentSection('agents')}
+                  onClick={() => ctx.onCreateSession()}
                   className="glow-accent grid w-full max-w-full min-w-0 grid-cols-[14px_minmax(0,1fr)] items-center gap-2 overflow-hidden rounded-xl border border-shell-accent/40 bg-shell-accent px-4 py-2.5 text-[13px] font-semibold text-[#1a1209] sm:inline-flex sm:w-auto sm:py-2"
                 >
                   <Bot className="h-3.5 w-3.5 shrink-0" />

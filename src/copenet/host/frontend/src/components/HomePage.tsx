@@ -134,6 +134,13 @@ export function HomePage() {
     setShowChangelog,
     setCurrentSection,
     setWorkflowsRoute,
+    onCreateSession: () => {
+      // Fresh draft: clear any active session and open the provider/model selector,
+      // rather than dropping the operator back into their last (locked) session.
+      setActiveSessionKey(null);
+      setDraftOpen(true);
+      setCurrentSection('agents');
+    },
     pulseCount: pulses.length,
   };
 
