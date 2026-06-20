@@ -97,6 +97,34 @@ Make persona files first-class and user-managed.
 
 ---
 
+## 🟢 Theme: Mid-session runtime mutability (A + B1 shipped)
+
+The "session locks to provider/model/profile/task after first send" invariant was a
+product *policy*, not a data constraint — every run already stamps its own provider/model
+in the transcript + run record, so switching stays auditable per-turn. Reframed: a session
+is a container; each run picks its runtime; past runs never change.
+
+- ✅ **Mobile approval fix** — the ApprovalRequestCard was trapped in the desktop-only
+  right panel; off-allowlist Ask-mode prompts never reached mobile. Now rendered inline in
+  the center column on mobile + the paused banner opens the mobile Inspector sheet.
+- ✅ **A — change Access mid-session.** `assert_session_binding` reconciles `task_prompt_id`
+  instead of raising. The model can't alter its own runtime (params come from the operator
+  request); Full Access stays provider-gated. Editable in the locked runtime popover.
+- ✅ **B1 — same-provider model switch mid-session.** Same reconcile path for `model`.
+  Editable Model dropdown in the locked popover; applied as a pending override on next send.
+- ⬜ **B2 — cross-provider switch.** Provider stays hard-locked today. Needs continuity
+  care: some providers keep server-side session state, so a new provider gets the transcript
+  *replayed* fresh. Confirm the replay/context-rebuild path is solid for every provider, then
+  relax the provider lock too.
+- ⬜ **B3 — multi-model orchestration** (north-star). Two+ models collaborating, roping in
+  local models. A new feature class (sub-agents/orchestration), not a field unlock — its
+  own design doc. The per-run-runtime + transcript-as-truth primitives from A/B1 are the
+  substrate. See also the north-star section.
+- ⬜ **Live smoke test** — change Access→Ask on a locked session, resend an off-allowlist
+  command (e.g. `whoami`), confirm the approval prompt fires (now mobile-visible).
+
+---
+
 ## 🔵 Theme: Access & Permissions (in progress)
 
 Separate **permissions** (what a runtime can touch) from **behavior** (how it acts). Today
