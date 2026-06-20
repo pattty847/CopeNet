@@ -54,11 +54,18 @@ class ToolPolicy:
     guidance_char_limit: int = 6000
 
 
-def policy_for_task_mode(task_prompt_id: str | None) -> ToolPolicy:
-    """Return the effective tool policy for one task mode."""
+# Full Access (write + unrestricted shell) is only granted to frontier providers we
+# trust with that power. A local/other model that requests full-access is downgraded to
+# the read-only base policy. provider=None (e.g. internal callers/tests) is not gated.
+FULL_ACCESS_PROVIDERS: frozenset[str] = frozenset({"claude-cli", "openai-codex"})
+
+
+def policy_for_task_mode(task_prompt_id: str | None, provider: str | None = None) -> ToolPolicy:
+    """Return the effective tool policy for one task mode (Full Access provider-gated)."""
     normalized = (task_prompt_id or "none").strip().lower() or "none"
     base = {"repo-read", "shell-read", "context", "artifact", "web"}
-    if normalized == "full-access":
+    full_access_allowed = provider is None or provider.strip().lower() in FULL_ACCESS_PROVIDERS
+    if normalized == "full-access" and full_access_allowed:
         return ToolPolicy(
             allowed_categories={*base, "repo-write"},
             unrestricted_shell=True,

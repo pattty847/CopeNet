@@ -314,7 +314,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
             session_state=session_state,
         )
-        effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
+        effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id, provider=provider_name)
         available_tools = [
             tool
             for tool in orchestrator._tool_registry.list_tools()
