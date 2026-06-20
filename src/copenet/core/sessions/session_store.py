@@ -256,7 +256,19 @@ class SessionStore:
         persona_privacy_tier: str | None = None,
         workspace_root: str | None = None,
     ) -> SessionIndexEntry:
-        """Ensure the requested provider/model matches the locked session binding."""
+        """Enforce the session's locked binding, reconciling the mutable runtime fields.
+
+        Mid-session runtime mutability (A + B1): **provider** stays hard-locked — a
+        session's identity is per-provider, and cross-provider switching is a separate,
+        larger change. **Profile / persona / workspace** stay soft-locked (only enforced
+        when set at creation). But **model** (same provider) and **Access / task mode**
+        are now mutable mid-session: when the request differs, the stored binding is
+        reconciled to the new runtime so the session remembers its current setup. Every
+        run is still stamped with the exact provider/model it used in the transcript and
+        run record, so switching stays fully auditable per-turn. Full Access escalation
+        remains gated downstream in ``policy_for_task_mode`` (provider gate), so a
+        mid-session Access change can never silently over-grant.
+        """
         normalized_key = session_key.strip()
         normalized_provider = provider.strip()
         normalized_model = model.strip() if model else None
@@ -276,22 +288,14 @@ class SessionStore:
                 raise KeyError(f"unknown session_key: {normalized_key}")
             if entry.archived:
                 raise RuntimeError(f"session is archived: {normalized_key}")
+            # Provider is the one hard lock — identity is per-provider.
             if entry.provider != normalized_provider:
                 raise RuntimeError(
                     f"session is locked to provider {entry.provider}; requested {normalized_provider}"
                 )
-            if entry.model != normalized_model:
-                raise RuntimeError(
-                    f"session is locked to model {entry.model or 'default'}; requested {normalized_model or 'default'}"
-                )
             if entry.system_prompt_id and entry.system_prompt_id != normalized_system_prompt_id:
                 raise RuntimeError(
                     f"session is locked to profile {entry.system_prompt_id}; requested {normalized_system_prompt_id or 'none'}"
-                )
-            if _effective_task_mode(entry.task_prompt_id) != _effective_task_mode(normalized_task_prompt_id):
-                raise RuntimeError(
-                    f"session is locked to task mode {entry.task_prompt_id or 'none'}; "
-                    f"requested {normalized_task_prompt_id or 'none'}"
                 )
             if entry.persona_id and entry.persona_id != normalized_persona_id:
                 raise RuntimeError(
@@ -309,6 +313,21 @@ class SessionStore:
                 raise RuntimeError(
                     f"session is locked to workspace root {entry.workspace_root}; requested {normalized_workspace_root or 'default'}"
                 )
+
+            # Reconcile the mutable runtime fields: switch the session's model (same
+            # provider) and Access level to the requested values. A missing model in the
+            # request never clears a stored model — only an explicit switch updates it.
+            dirty = False
+            if normalized_model and entry.model != normalized_model:
+                entry.model = normalized_model
+                dirty = True
+            if _effective_task_mode(entry.task_prompt_id) != _effective_task_mode(normalized_task_prompt_id):
+                entry.task_prompt_id = normalized_task_prompt_id
+                dirty = True
+            if dirty:
+                entry.updated_at = utc_now_iso()
+                sessions[normalized_key] = entry
+                self._save_map(sessions)
             return entry
 
     def rename_session(self, session_key: str, title: str | None) -> SessionIndexEntry:

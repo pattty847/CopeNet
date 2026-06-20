@@ -8,6 +8,7 @@ import {
   Pencil,
   Send,
   ShieldAlert,
+  ShieldCheck,
   X,
 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
@@ -43,11 +44,14 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
   };
   const MetaIcon = meta.icon;
 
-  const decide = (decision: 'approved' | 'rejected' | 'modified') => {
+  // "approved_always" approves now AND persists the command to the global allowlist
+  // so it never asks again (Brick E). Locally it reads as a plain approval.
+  const decide = (decision: 'approved' | 'approved_always' | 'rejected' | 'modified') => {
     const now = new Date().toISOString();
+    const localDecision = decision === 'approved_always' ? 'approved' : decision;
     // Optimistic local update so the card reflects the choice immediately.
     resolveApproval(approval.approvalId, {
-      decision,
+      decision: localDecision,
       note: note || null,
       decidedAt: now,
       ...(decision === 'modified'
@@ -61,10 +65,14 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
     });
     // Tell the backend to wake the parked run. (modified is message-only; the
     // tool-approval backend treats anything non-approved as rejected.)
-    if (decision === 'approved' || decision === 'rejected') {
+    if (decision === 'approved' || decision === 'approved_always' || decision === 'rejected') {
       void wsClient.decideApproval(approval.approvalId, decision, note || undefined);
     }
   };
+
+  // "Always allow" only makes sense for a concrete shell command we can persist.
+  const command = approval.proposedAction.payload?.command;
+  const canAlwaysAllow = typeof command === 'string' && command.trim().length > 0;
 
   const statusBadge = () => {
     if (approval.status === 'approved') return <span className="text-[10px] font-semibold text-operator-success uppercase tracking-wider">Approved</span>;
@@ -190,6 +198,16 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
           >
             <Check className="w-3 h-3" /> Approve
           </button>
+          {canAlwaysAllow && (
+            <button
+              type="button"
+              onClick={() => decide('approved_always')}
+              title={`Always allow "${(command as string).trim()}" — adds it to your global allowlist`}
+              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-semibold bg-operator-success/5 text-operator-success/90 border border-operator-success/20 hover:bg-operator-success/15 transition-colors duration-150"
+            >
+              <ShieldCheck className="w-3 h-3" /> Always allow
+            </button>
+          )}
           <button
             type="button"
             onClick={() => decide('rejected')}

@@ -4,6 +4,7 @@ import { Check, ChevronDown, FolderOpen, Loader2, Mic, Paperclip, Plus, Send, Sp
 import { wsClient } from '../../lib/wsClient';
 import { useVoiceToText } from '../../lib/useVoiceToText';
 import { useAppStore } from '../../store/useAppStore';
+import { accessOptionsFor, providerAllowsFullAccess } from '../../lib/access';
 import type { DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 
 export interface RuntimePillSummary {
@@ -15,13 +16,14 @@ export interface RuntimePillSummary {
   locked: boolean;
 }
 
-type DraftRuntimeField = 'provider' | 'model' | 'profile' | 'mode';
+type DraftRuntimeField = 'provider' | 'model' | 'profile' | 'access';
 
 interface RuntimeOption {
   id: string;
   label: string;
   hint?: string;
 }
+
 
 function workspaceLabel(workspaceRoot?: string | null) {
   if (!workspaceRoot) return 'Choose workspace';
@@ -368,10 +370,13 @@ export function AgentComposer({
   const modelsByProvider = useAppStore((state) => state.modelsByProvider);
   const loadedModelProviders = useAppStore((state) => state.loadedModelProviders);
   const profiles = useAppStore((state) => state.profiles);
-  const taskModes = useAppStore((state) => state.taskModes);
   const draftSettings = useAppStore((state) => state.draftSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
   const patchDraftSettings = useAppStore((state) => state.patchDraftSettings);
+  const sessions = useAppStore((state) => state.sessions);
+  const activeSessionKey = useAppStore((state) => state.activeSessionKey);
+  const sessionRuntimeOverrides = useAppStore((state) => state.sessionRuntimeOverrides);
+  const setSessionRuntimeOverride = useAppStore((state) => state.setSessionRuntimeOverride);
   const activeRunId = useAppStore((state) => state.activeRunId);
 
   const [aborting, setAborting] = useState(false);
@@ -407,13 +412,41 @@ export function AgentComposer({
   const providerOptions = useMemo(() => makeProviderOptions(providers), [providers]);
   const modelOptions = useMemo(() => makeModelOptions(availableModels), [availableModels]);
   const profileOptions = useMemo(() => makePromptOptions(profiles), [profiles]);
-  const modeOptions = useMemo(() => makePromptOptions(taskModes), [taskModes]);
+  const accessOptions = useMemo(() => accessOptionsFor(draftSettings.provider), [draftSettings.provider]);
 
   const selectedProvider = providerOptions.find((option) => option.id === draftSettings.provider)?.label || 'Select provider';
   const selectedModel = modelOptions.find((option) => option.id === draftSettings.model)?.label || (draftSettings.provider ? 'Select model' : 'Pick provider first');
   const selectedProfile = profileOptions.find((option) => option.id === draftSettings.systemPromptId)?.label || 'Profile';
-  const selectedMode = modeOptions.find((option) => option.id === draftSettings.taskPromptId)?.label || 'Mode';
+  const selectedAccess = accessOptions.find((option) => option.id === draftSettings.taskPromptId)?.label || 'Read-only';
   const selectedVariant = optimizedVariants.find((variant) => variant.id === selectedVariantId) || null;
+
+  // Locked-session mid-session controls (A + B1): Model + Access can change on an
+  // existing session (same provider). The pending change is an override applied on the
+  // next send; provider/profile stay locked.
+  const lockedSession = !isDraft && activeSessionKey ? sessions.find((s) => s.key === activeSessionKey) || null : null;
+  const lockedOverride = activeSessionKey ? sessionRuntimeOverrides[activeSessionKey] : undefined;
+  const lockedModelValue = lockedOverride?.model ?? lockedSession?.model ?? '';
+  const lockedAccessValue = lockedOverride?.taskPromptId ?? lockedSession?.taskPromptId ?? 'none';
+  const lockedProviderModels = lockedSession ? modelsByProvider[lockedSession.provider] || [] : [];
+  const lockedAccessOptions = useMemo(() => accessOptionsFor(lockedSession?.provider), [lockedSession?.provider]);
+  const lockedRuntimeDirty = Boolean(lockedOverride && (lockedOverride.model || lockedOverride.taskPromptId));
+  const lockedModelLabel = lockedProviderModels.find((model) => model.id === lockedModelValue)?.displayName || lockedModelValue || runtimeSummary.model;
+
+  // Ensure the locked session's provider models are loaded so the Model dropdown has options.
+  useEffect(() => {
+    if (!lockedSession) return;
+    if (loadedModelProviders[lockedSession.provider]) return;
+    void wsClient.loadModels(lockedSession.provider);
+  }, [lockedSession, loadedModelProviders]);
+
+  // Keep the draft honest: if the chosen provider can't grant Full Access, drop the
+  // draft back to Read-only so the UI matches what the backend would actually enforce.
+  useEffect(() => {
+    if (!isDraft) return;
+    if (draftSettings.taskPromptId === 'full-access' && !providerAllowsFullAccess(draftSettings.provider)) {
+      patchDraftSettings({ taskPromptId: 'none' });
+    }
+  }, [isDraft, draftSettings.provider, draftSettings.taskPromptId, patchDraftSettings]);
 
   useEffect(() => {
     if (!textareaRef.current) return;
@@ -551,9 +584,12 @@ export function AgentComposer({
               </span>
               <span className="truncate text-operator-text/90">{runtimeSummary.provider}</span>
               <span className="text-operator-muted/45">/</span>
-              <span className="truncate text-operator-text/85">{runtimeSummary.model}</span>
+              <span className="truncate text-operator-text/85">{lockedSession ? lockedModelLabel : runtimeSummary.model}</span>
               <span className="text-operator-muted/45">·</span>
               <span className="truncate">{runtimeSummary.profile}</span>
+              {lockedRuntimeDirty && (
+                <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-operator-accent" title="Pending runtime change — applies on your next message" />
+              )}
               <ChevronDown className={`h-3 w-3 shrink-0 transition-transform ${runtimeOpen ? 'rotate-180 text-operator-accent' : ''}`} />
             </button>
 
@@ -564,17 +600,51 @@ export function AgentComposer({
             {runtimeOpen && (
               <div className="absolute bottom-full left-0 z-20 mb-2 w-full max-w-sm rounded-2xl border border-operator-border bg-operator-bg p-3 shadow-shell-xl">
                 <div className="text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted/85">Runtime</div>
-                <div className="mt-2 space-y-1 text-[12px] text-operator-text">
-                  <div className="flex justify-between gap-2"><span className="text-operator-muted">Provider</span><span className="truncate text-right">{runtimeSummary.provider}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-operator-muted">Model</span><span className="truncate text-right">{runtimeSummary.model}</span></div>
-                  <div className="flex justify-between gap-2"><span className="text-operator-muted">Profile</span><span className="truncate text-right">{runtimeSummary.profile}</span></div>
+                <div className="mt-2 space-y-1.5 text-[12px] text-operator-text">
+                  <div className="flex items-center justify-between gap-2"><span className="text-operator-muted">Provider</span><span className="truncate text-right">{runtimeSummary.provider}</span></div>
+                  {lockedSession ? (
+                    <label className="flex items-center justify-between gap-2">
+                      <span className="text-operator-muted">Model</span>
+                      <select
+                        value={lockedModelValue}
+                        onChange={(event) => setSessionRuntimeOverride(lockedSession.key, { model: event.target.value })}
+                        className="min-w-0 max-w-[62%] flex-1 truncate rounded-md border border-operator-border bg-operator-panel/60 px-1.5 py-1 text-right text-[11.5px] text-operator-text outline-none transition-colors focus:border-operator-accent/40"
+                      >
+                        {!lockedProviderModels.some((model) => model.id === lockedModelValue) && (
+                          <option value={lockedModelValue}>{lockedModelValue || 'default'}</option>
+                        )}
+                        {lockedProviderModels.map((model) => (
+                          <option key={model.id} value={model.id}>{model.displayName || model.id}</option>
+                        ))}
+                      </select>
+                    </label>
+                  ) : (
+                    <div className="flex items-center justify-between gap-2"><span className="text-operator-muted">Model</span><span className="truncate text-right">{runtimeSummary.model}</span></div>
+                  )}
+                  <div className="flex items-center justify-between gap-2"><span className="text-operator-muted">Profile</span><span className="truncate text-right">{runtimeSummary.profile}</span></div>
+                  {lockedSession && (
+                    <label className="flex items-center justify-between gap-2">
+                      <span className="text-operator-muted">Access</span>
+                      <select
+                        value={lockedAccessValue}
+                        onChange={(event) => setSessionRuntimeOverride(lockedSession.key, { taskPromptId: event.target.value })}
+                        className="min-w-0 max-w-[62%] flex-1 truncate rounded-md border border-operator-border bg-operator-panel/60 px-1.5 py-1 text-right text-[11.5px] text-operator-text outline-none transition-colors focus:border-operator-accent/40"
+                      >
+                        {lockedAccessOptions.map((option) => (
+                          <option key={option.id} value={option.id}>{option.label}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
                   {runtimeSummary.workspaceRoot && (
                     <div className="pt-1 break-all font-mono text-[10.5px] leading-5 text-operator-muted">{runtimeSummary.workspaceRoot}</div>
                   )}
                 </div>
                 {runtimeSummary.locked && (
                   <div className="mt-2.5 rounded-lg border border-operator-accent/15 bg-operator-accent/5 px-2.5 py-1.5 text-[11px] leading-5 text-operator-muted">
-                    Locked to this runtime. Start a new session to change provider, model, profile, or mode.
+                    {lockedRuntimeDirty
+                      ? 'Model / Access apply on your next message.'
+                      : 'Model and Access can change here. Provider and profile are locked — start a new session to change those.'}
                   </div>
                 )}
                 <div className="mt-2.5">
@@ -724,12 +794,12 @@ export function AgentComposer({
 
                 <span className="my-1 hidden w-px bg-operator-border/55 sm:block" />
 
-                <RuntimeSegment title="Mode" value={selectedMode} active={openDraftMenu === 'mode'} onClick={() => setOpenDraftMenu((current) => current === 'mode' ? null : 'mode')}>
-                  {openDraftMenu === 'mode' ? (
+                <RuntimeSegment title="Access" value={selectedAccess} active={openDraftMenu === 'access'} onClick={() => setOpenDraftMenu((current) => current === 'access' ? null : 'access')}>
+                  {openDraftMenu === 'access' ? (
                     <RuntimeMenu
-                      label="Task mode"
-                      options={modeOptions}
-                      selectedId={draftSettings.taskPromptId || ''}
+                      label="Access"
+                      options={accessOptions}
+                      selectedId={draftSettings.taskPromptId || 'none'}
                       onSelect={(nextValue) => updateDraftSetting('taskPromptId', nextValue)}
                       onClose={() => setOpenDraftMenu(null)}
                     />

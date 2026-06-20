@@ -97,6 +97,94 @@ Make persona files first-class and user-managed.
 
 ---
 
+## 🟢 Theme: Mid-session runtime mutability (A + B1 shipped)
+
+The "session locks to provider/model/profile/task after first send" invariant was a
+product *policy*, not a data constraint — every run already stamps its own provider/model
+in the transcript + run record, so switching stays auditable per-turn. Reframed: a session
+is a container; each run picks its runtime; past runs never change.
+
+- ✅ **Mobile approval fix** — the ApprovalRequestCard was trapped in the desktop-only
+  right panel; off-allowlist Ask-mode prompts never reached mobile. Now rendered inline in
+  the center column on mobile + the paused banner opens the mobile Inspector sheet.
+- ✅ **A — change Access mid-session.** `assert_session_binding` reconciles `task_prompt_id`
+  instead of raising. The model can't alter its own runtime (params come from the operator
+  request); Full Access stays provider-gated. Editable in the locked runtime popover.
+- ✅ **B1 — same-provider model switch mid-session.** Same reconcile path for `model`.
+  Editable Model dropdown in the locked popover; applied as a pending override on next send.
+- ⬜ **B2 — cross-provider switch.** Provider stays hard-locked today. Needs continuity
+  care: some providers keep server-side session state, so a new provider gets the transcript
+  *replayed* fresh. Confirm the replay/context-rebuild path is solid for every provider, then
+  relax the provider lock too.
+- ⬜ **B3 — multi-model orchestration** (north-star). Two+ models collaborating, roping in
+  local models. A new feature class (sub-agents/orchestration), not a field unlock — its
+  own design doc. The per-run-runtime + transcript-as-truth primitives from A/B1 are the
+  substrate. See also the north-star section.
+- ✅ **Live smoke test (DONE 2026-06-21, on-device mobile).** Ask mode → `whoami` paused and
+  the approval card rendered inline in the chat on mobile; Approve ran it (exit 0,
+  `policyDecision: "allowed"`); "Always allow" persisted to the global allowlist so the next
+  two runs went straight through with no prompt. Full loop verified: prompt → approve →
+  standing allowlist → silent. Root cause of the earlier no-popup was a stale tailnet process
+  (pre-Brick-D code) + browser cache, not a code bug — resolved by restarting the tailnet host.
+
+---
+
+## 🔵 Theme: Access & Permissions (in progress)
+
+Separate **permissions** (what a runtime can touch) from **behavior** (how it acts). Today
+the "task mode" axis mashes them together — `planning/debug/code-review/refactor/none` are
+pure prompt presets; only `full-access` actually changes policy. So:
+
+- **Behavior → Profiles**, **Access → a small permission axis** (rename the "Mode" selector).
+  Proposed values: **Read-only · Ask · Full Access**. Suggested label: **"Access"**.
+- Builds on what already exists: the approval-gated executor (run pauses on
+  `approval_required`), the ApprovalRequestCard, the shell allowlist, and per-call approvals.
+
+What CopeNet already has: 6 task modes; an approval pause/resume flow + card; a static shell
+allowlist; per-run memory of approved commands. The bricks below add the rest.
+
+- ✅ **A — read-allowlist band-aid.** Added `cat/tail/wc/tree/file/which/diff` to the default
+  shell allowlist so common reads stop being silently blocked (the `cat` bug). Verified.
+- ✅ **B — persist last Access level.** The draft now persists `taskPromptId` so the chosen
+  Access sticks across provider/model switches + reload (was resetting to `none`). Verified.
+- ✅ **C — "Access" selector.** Done:
+  - ✅ **Backend Full-Access gate**: `policy_for_task_mode(provider=…)` downgrades full-access
+    to read-only for non-Claude/OpenAI providers. Enforced regardless of UI.
+  - ✅ UI: Full Access option hidden for non-Claude/OpenAI providers (`lib/access.ts`,
+    single source of truth, consumed by AgentComposer + RightPanel). A draft holding
+    `full-access` is coerced to Read-only when the provider can't grant it.
+  - ✅ Renamed Mode → Access. Values shipped: **Read-only / Full Access** (Ask is Brick D —
+    deliberately not shipped as a dead option).
+  - ✅ Moved behavioral presets (planning/debug/code-review/refactor) into Profiles by
+    relocating the preset `.md` files. `taskPromptId` field kept; old locked sessions
+    degrade gracefully (overlay drops, policy unchanged).
+  - ⬜ **Follow-up:** `MessagingSettingsPanel.tsx` still renders a backend-enumerated "Task
+    mode" dropdown — now naturally reduced to `none`/`full-access`. Convert it to the same
+    Access control (`accessOptionsFor`) for consistency when that panel is next touched.
+- ✅ **D — "Ask" mode.** Third Access value shipped. Off-allowlist shell commands return
+  `approval_required` (operator prompt) instead of silently blocking, reusing the existing
+  pause/resume/approve flow; on approve the command re-runs with full shell, on reject the
+  model adapts. `prompt_on_block` flag in `policy.py` (ungated — operator is the gate),
+  block→prompt conversion in `handlers/shell.py`, `ask.md` preset, `lib/access.ts` ladder
+  entry. 5 new shell tests; read-only path byte-for-byte unchanged. Verified in-browser.
+- ✅ **E — "Always allow" → global persisted allowlist.** `core/permissions/PermissionStore`
+  (in-memory + atomic JSON at `~/.copenet/sessions/permissions.json`, whitespace-normalized,
+  global over per-session). `decide_approval` accepts `approved_always`; the gated executor
+  persists on it. `handlers/shell.py` consults a standing-approval set (run-scoped ∪ global)
+  and runs matches with full shell in any Access mode. ApprovalRequestCard got an "Always
+  allow" button. Threaded onto `ToolExecutionContext.permission_store`. 9 tests.
+- ✅ **F — Permissions settings UI.** `permissions.allowlist.list/add/remove` RPCs (new
+  `rpc_permissions.py`), wsClient wrappers, and a `PermissionsSettingsPanel` mounted as a
+  new "Permissions" route under Data & Tools (view/add/remove entries). Verified end-to-end
+  in-browser. Default-Access-level setting was effectively delivered by Brick B (the draft
+  persists the last-selected Access), so it's not re-litigated here.
+
+**Theme complete (A–F).** Remaining adjacents are nice-to-haves, not blockers: the
+MessagingSettingsPanel task-mode dropdown could adopt `accessOptionsFor` (noted under C),
+and a fresh README screenshot of the Permissions surface per the UI-polish convention.
+
+---
+
 ## 🔵 Theme: Memory (after Personas — mirrors the same model)
 
 - **Two scopes**, same as personas: **global/root** (`~/.copenet`) and **project** (repo-local).

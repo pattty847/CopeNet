@@ -268,6 +268,9 @@ class ToolExecutionContext:
     persona_service: PersonaHomeService | None = None
     artifact_store: Any | None = None
     edit_backup_store: Any | None = None
+    # Global operator shell allowlist (Brick E). The shell handler consults it as a
+    # standing approval; the approval-gated executor adds to it on "approved_always".
+    permission_store: Any | None = None
     task_prompt_id: str | None = None
     run_id: str | None = None
     trace: Callable[[str, dict[str, Any] | None], None] | None = None

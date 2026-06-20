@@ -70,7 +70,7 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
             emit_event=emit_event,
             abort_event=abort_event,
         )
-        if decision == "approved":
+        if decision in ("approved", "approved_always"):
             # Re-run the exact call with the gate bypassed. The shell pattern gate
             # checks `approved_commands` by command string; the Barricade side-
             # effect gate checks `barricade_approved` by an argument-DIGEST key, so
@@ -78,6 +78,14 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
             from copenet.core.tools.barricade import approval_key
 
             command_key = command or str(output.get("target") or result.tool_id)
+            # "Always allow" → persist to the global shell allowlist (Brick E) so
+            # this exact command runs without asking on future runs. Best-effort:
+            # a store failure must not break the in-flight approve.
+            if decision == "approved_always" and command and getattr(context, "permission_store", None) is not None:
+                try:
+                    context.permission_store.add(command)
+                except Exception:  # noqa: BLE001 - persistence is best-effort here
+                    pass
             shell_approved = context.ephemeral.setdefault("approved_commands", set())
             (shell_approved if isinstance(shell_approved, set) else set()).add(command_key)
             if not isinstance(shell_approved, set):
@@ -314,7 +322,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
             session_state=session_state,
         )
-        effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id)
+        effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id, provider=provider_name)
         available_tools = [
             tool
             for tool in orchestrator._tool_registry.list_tools()
@@ -355,6 +363,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 persona_service=orchestrator._persona_service,
                 artifact_store=orchestrator._artifact_store,
                 edit_backup_store=orchestrator._edit_backup_store,
+                permission_store=orchestrator._permission_store,
                 task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
                 run_id=run_id,
                 trace=trace.record,

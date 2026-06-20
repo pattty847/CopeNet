@@ -46,6 +46,7 @@ import {
   TurnStateSnapshot,
   WorkspaceFile,
   WorkspaceFileContent,
+  ShellAllowlistEntry,
 } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 
@@ -512,6 +513,19 @@ function normalizeMemoryItem(raw: unknown): MemoryItem | null {
     archived: Boolean(payload.archived),
     lastSessionKey: payload.lastSessionKey ? String(payload.lastSessionKey) : null,
   };
+}
+
+function normalizeShellAllowlist(raw: unknown): ShellAllowlistEntry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): ShellAllowlistEntry | null => {
+      if (!item || typeof item !== 'object') return null;
+      const payload = item as Record<string, unknown>;
+      const command = String(payload.command || '').trim();
+      if (!command) return null;
+      return { command, addedAt: String(payload.addedAt || '') };
+    })
+    .filter((entry): entry is ShellAllowlistEntry => entry != null);
 }
 
 function normalizeIdentityContextRuntime(raw: unknown): IdentityContextRuntime | null {
@@ -1929,9 +1943,26 @@ class WsClient {
     );
   }
 
-  /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run. */
-  async decideApproval(approvalId: string, decision: 'approved' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
+  /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run.
+   *  `approved_always` also persists the command to the global allowlist (Brick E). */
+  async decideApproval(approvalId: string, decision: 'approved' | 'approved_always' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
     return this.request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
+  }
+
+  /** Global shell allowlist (Access & Permissions — Brick F): the operator's standing approvals. */
+  async listShellAllowlist(): Promise<ShellAllowlistEntry[]> {
+    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.list', {});
+    return normalizeShellAllowlist(payload.commands);
+  }
+
+  async addShellAllowlist(command: string): Promise<ShellAllowlistEntry[]> {
+    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.add', { command });
+    return normalizeShellAllowlist(payload.commands);
+  }
+
+  async removeShellAllowlist(command: string): Promise<ShellAllowlistEntry[]> {
+    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.remove', { command });
+    return normalizeShellAllowlist(payload.commands);
   }
 
   /** List viewable files under a session's workspace root (read-only file viewer). */
@@ -2031,6 +2062,13 @@ class WsClient {
         store.setDraftStarterIntent(null);
       }
 
+      // Mid-session runtime mutability (A + B1): a locked session may carry a pending
+      // model / Access override. Apply it on this send; the backend reconciles the
+      // binding, then refreshSessions pulls the canonical values and we clear it.
+      const override = store.sessionRuntimeOverrides[session.key];
+      const effectiveModel = override?.model || session.model;
+      const effectiveTaskPromptId = override?.taskPromptId ?? session.taskPromptId;
+
       const userMessage: Message = {
         localId: makeLocalId('user'),
         sessionKey: session.key,
@@ -2039,7 +2077,7 @@ class WsClient {
         content: trimmed,
         timestamp: new Date().toISOString(),
         provider: session.provider,
-        model: session.model,
+        model: effectiveModel,
         providerSessionId: session.providerSessionId,
         state: 'final',
         toolExecution: null,
@@ -2052,13 +2090,14 @@ class WsClient {
         sessionKey: session.key,
         message: trimmed,
         provider: session.provider,
-        model: session.model || undefined,
+        model: effectiveModel || undefined,
         systemPromptId: session.systemPromptId || undefined,
-        taskPromptId: session.taskPromptId || undefined,
+        taskPromptId: effectiveTaskPromptId || undefined,
         personaId: session.personaId || undefined,
         personaFlavorId: session.personaFlavorId || undefined,
         personaPrivacyTier: session.personaPrivacyTier || undefined,
       });
+      store.clearSessionRuntimeOverride(session.key);
       const runId = payload.runId ? String(payload.runId) : null;
       const status = payload.status ? String(payload.status) : '';
 

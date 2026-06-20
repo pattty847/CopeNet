@@ -46,7 +46,8 @@ def test_create_session_raises_on_duplicate_key(session_store: SessionStore) -> 
         session_store.create_session(session_key="alpha", provider="fake")
 
 
-def test_assert_session_binding_raises_for_mismatches(session_store: SessionStore) -> None:
+def test_assert_session_binding_raises_for_locked_field_mismatches(session_store: SessionStore) -> None:
+    # Provider and profile stay locked after first use; model and Access do not.
     session_store.create_session(
         session_key="alpha",
         provider="fake",
@@ -57,18 +58,38 @@ def test_assert_session_binding_raises_for_mismatches(session_store: SessionStor
 
     with pytest.raises(RuntimeError, match="locked to provider"):
         session_store.assert_session_binding("alpha", provider="other", model="model-a")
-    with pytest.raises(RuntimeError, match="locked to model"):
-        session_store.assert_session_binding("alpha", provider="fake", model="other")
     with pytest.raises(RuntimeError, match="locked to profile"):
         session_store.assert_session_binding("alpha", provider="fake", model="model-a", system_prompt_id="other")
-    with pytest.raises(RuntimeError, match="locked to task mode"):
-        session_store.assert_session_binding(
-            "alpha",
-            provider="fake",
-            model="model-a",
-            system_prompt_id="default",
-            task_prompt_id="other",
-        )
+
+
+def test_assert_session_binding_reconciles_model_and_access_mid_session(session_store: SessionStore) -> None:
+    # Mid-session runtime mutability (A + B1): a same-provider model switch and an
+    # Access change update the stored binding instead of raising.
+    session_store.create_session(
+        session_key="alpha",
+        provider="fake",
+        model="model-a",
+        system_prompt_id="default",
+        task_prompt_id="none",
+    )
+
+    switched = session_store.assert_session_binding(
+        "alpha", provider="fake", model="model-b", system_prompt_id="default", task_prompt_id="full-access"
+    )
+    assert switched.model == "model-b"
+    assert switched.task_prompt_id == "full-access"
+
+    # The change persisted to the stored entry, not just the returned object.
+    reloaded = session_store.get("alpha")
+    assert reloaded is not None
+    assert reloaded.model == "model-b"
+    assert reloaded.task_prompt_id == "full-access"
+
+    # A request with no model must never clear a stored model.
+    kept = session_store.assert_session_binding(
+        "alpha", provider="fake", model=None, system_prompt_id="default", task_prompt_id="full-access"
+    )
+    assert kept.model == "model-b"
 
 
 def test_mark_run_started_and_finished_manage_in_flight_lock(session_store: SessionStore) -> None:
@@ -186,14 +207,15 @@ def test_clear_stale_in_flight_unblocks_future_sends(session_store: SessionStore
     assert entry.in_flight_run_id == "new-run"
 
 
-def test_null_task_mode_session_cannot_escalate_to_full_access(session_store: SessionStore) -> None:
-    # First send with no task mode -> stored null. A later full-access send must
-    # NOT be allowed to silently escalate the session's tool policy.
+def test_null_task_mode_session_can_change_access_mid_session(session_store: SessionStore) -> None:
+    # Access is operator-driven and reconciles mid-session. A model can never escalate
+    # itself — it doesn't supply task_prompt_id — and Full Access stays provider-gated
+    # downstream in policy_for_task_mode, so this reconcile can't silently over-grant.
     session_store.create_session(session_key="gamma", provider="fake", task_prompt_id=None)
-    with pytest.raises(RuntimeError, match="locked to task mode none"):
-        session_store.assert_session_binding(
-            session_key="gamma", provider="fake", task_prompt_id="full-access"
-        )
+    entry = session_store.assert_session_binding(
+        session_key="gamma", provider="fake", task_prompt_id="full-access"
+    )
+    assert entry.task_prompt_id == "full-access"
 
 
 def test_null_task_mode_continuation_still_works(session_store: SessionStore) -> None:
@@ -205,14 +227,14 @@ def test_null_task_mode_continuation_still_works(session_store: SessionStore) ->
     assert entry.session_key == "delta"
 
 
-def test_full_access_session_locks_and_continues(session_store: SessionStore) -> None:
+def test_full_access_session_can_downgrade_access_mid_session(session_store: SessionStore) -> None:
     session_store.create_session(session_key="epsilon", provider="fake", task_prompt_id="full-access")
     # Same mode continues fine.
     session_store.assert_session_binding(
         session_key="epsilon", provider="fake", task_prompt_id="full-access"
     )
-    # Cannot silently downgrade either.
-    with pytest.raises(RuntimeError, match="locked to task mode full-access"):
-        session_store.assert_session_binding(
-            session_key="epsilon", provider="fake", task_prompt_id=None
-        )
+    # Downgrading back to read-only mid-session reconciles (operator's call).
+    downgraded = session_store.assert_session_binding(
+        session_key="epsilon", provider="fake", task_prompt_id=None
+    )
+    assert downgraded.task_prompt_id is None

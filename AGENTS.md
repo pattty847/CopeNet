@@ -65,7 +65,7 @@ See [docs/architecture.md](docs/architecture.md) for the current request flow.
 
 **Atomic session writes.** `SessionStore` must keep the temp-file + rename pattern for index updates.
 
-**Session identity is sacred.** Once a session is used, do not silently mutate its provider/model/profile/task binding.
+**Session identity is sacred.** Once a session is used, never silently mutate its binding. Provider/profile/persona/workspace stay locked. Model (same provider) and Access (task mode) may change mid-session, but only via an explicit operator-driven request — the model can never alter its own runtime — and each run is stamped with what it actually used. See Session Semantics below.
 
 **UI stays honest.** The frontend now uses React + Vite, but should still stay straightforward, typed, and product-driven. Avoid unnecessary abstractions, state sprawl, or design churn without a clear product reason.
 
@@ -182,9 +182,15 @@ Rules:
 For current behavior, assume:
 
 - draft sessions are editable before first send
-- after first send, the session is locked to provider, model, profile, and task mode
+- after first send, **provider, profile, persona, and workspace** stay locked; changing
+  any of those is still a new-chat / future-branch flow, not an in-place mutation
+- **model (same provider) and Access (task mode) are mutable mid-session** as of the
+  Mid-session Runtime Mutability change (A + B1): `assert_session_binding` reconciles the
+  stored binding to the requested model/Access instead of raising. Every run is stamped
+  with the provider/model it used (transcript + run record), so switching stays auditable
+  per-turn, and Full Access escalation is still provider-gated in `policy_for_task_mode`.
+  Cross-provider switching (B2) and multi-model orchestration (B3) remain future work.
 - renaming is allowed after lock
-- changing runtime/model for an existing conversation should become a new chat or future branch flow, not an in-place mutation
 
 ## Working In Each Area
 
