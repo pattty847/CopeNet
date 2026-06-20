@@ -48,6 +48,11 @@ Experiments makes evaluation legible by surfacing provider × model runs in one 
 
 ![CopeNet Experiments Matrix](docs/imgs/copenet-experiments-matrix.png)
 
+### Access & Permissions — operator-grade trust, not all-or-nothing
+Permissions are their own axis, separate from behavior. Every session picks an **Access** level — **Read-only** (reads + a safe shell allowlist), **Ask** (anything off-allowlist pauses for your approval instead of silently failing), or **Full Access** (writes + unrestricted shell, gated to trusted frontier providers). When a command pauses, the approval card surfaces inline — on desktop *and* mobile — with **Approve**, **Reject**, or **Always allow**. "Always allow" writes the command to a global, persisted allowlist you can edit any time, so the things you trust stop nagging you. Access (and the model, same provider) can even change mid-session, while every run stays stamped with exactly what it used.
+
+![CopeNet Access & Permissions](docs/imgs/copenet-access-permissions.png)
+
 ## Why CopeNet
 
 Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built for the workflows that happen after that:
@@ -62,12 +67,12 @@ Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built f
 
 CopeNet is evolving into an operator workspace, not just a chat client. Today it already supports:
 
-- **Agent sessions** with persistent transcripts, first-send runtime locking, archive/restore, and inline tool execution
+- **Agent sessions** with persistent transcripts, first-send runtime binding (provider/profile lock; model + Access changeable mid-session), archive/restore, and inline tool execution
 - **Observability** with run pulse views, recent traces, provider/tool distributions, and session activity inspection
 - **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured local-model generation
 - **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
 - **Experiments** for comparing provider/model behavior across real runs
-- **Prompt layering** with editable profile + task-mode markdown presets
+- **Profile + Access layering**: behavioral Profiles (markdown presets) plus a separate **Read-only · Ask · Full Access** permission axis with operator approvals and a persisted shell allowlist
 
 ## Providers
 
