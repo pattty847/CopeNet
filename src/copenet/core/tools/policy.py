@@ -16,7 +16,12 @@ class ToolPolicy:
     )
     allow_shell: bool = True
     unrestricted_shell: bool = False
-    shell_allowlist: tuple[str, ...] = ("git", "rg", "ls", "pwd", "find", "grep", "head")
+    # Read-only commands allowed in non-full-access modes. Write/exec forms (e.g.
+    # `find -delete`) are still caught by the secondary gate in handlers/shell.py.
+    shell_allowlist: tuple[str, ...] = (
+        "git", "rg", "ls", "pwd", "find", "grep", "head",
+        "cat", "tail", "wc", "tree", "file", "which", "diff",
+    )
     shell_approval_patterns: tuple[str, ...] = (
         "rm -rf /",
         "rm -rf /*",
