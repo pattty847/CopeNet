@@ -97,6 +97,37 @@ Make persona files first-class and user-managed.
 
 ---
 
+## 🔵 Theme: Access & Permissions (in progress)
+
+Separate **permissions** (what a runtime can touch) from **behavior** (how it acts). Today
+the "task mode" axis mashes them together — `planning/debug/code-review/refactor/none` are
+pure prompt presets; only `full-access` actually changes policy. So:
+
+- **Behavior → Profiles**, **Access → a small permission axis** (rename the "Mode" selector).
+  Proposed values: **Read-only · Ask · Full Access**. Suggested label: **"Access"**.
+- Builds on what already exists: the approval-gated executor (run pauses on
+  `approval_required`), the ApprovalRequestCard, the shell allowlist, and per-call approvals.
+
+What CopeNet already has: 6 task modes; an approval pause/resume flow + card; a static shell
+allowlist; per-run memory of approved commands. The bricks below add the rest.
+
+- ✅ **A — read-allowlist band-aid.** Added `cat/tail/wc/tree/file/which/diff` to the default
+  shell allowlist so common reads stop being silently blocked (the `cat` bug). Verified.
+- ✅ **B — persist last Access level.** The draft now persists `taskPromptId` so the chosen
+  Access sticks across provider/model switches + reload (was resetting to `none`). Verified.
+- ⬜ **C — "Access" selector.** Rename Mode → Access (Read-only / Ask / Full Access). **Full
+  Access gated to Claude/OpenAI providers** (UI + backend guard). Move behavioral presets
+  (planning/debug/…) into Profiles. Keep the underlying `taskPromptId` field; map old locked
+  sessions' values safely (behavioral → read-only; Patrick OK leaving old sessions as-is).
+- ⬜ **D — "Ask" mode.** Non-allowlisted shell/tools → `approval_required` (prompt) instead
+  of silent block. The systemic `cat` fix; reuses the existing pause/card flow.
+- ⬜ **E — "Always allow"** on the approval card → a **global, persisted, editable** allowlist
+  it writes to (decided: global over per-session). The policy/barricade consult it.
+- ⬜ **F — Permissions settings UI.** View/edit/remove allowlist entries + set the default
+  Access level.
+
+---
+
 ## 🔵 Theme: Memory (after Personas — mirrors the same model)
 
 - **Two scopes**, same as personas: **global/root** (`~/.copenet`) and **project** (repo-local).
