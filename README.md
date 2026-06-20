@@ -14,14 +14,14 @@ CopeNet is a *continuity engine* agent operator for people who want more than a 
 ## Product Tour
 
 ### Home Dashboard — workspace overview and operator launchpad
-The Home dashboard is the front door to CopeNet: active sessions, provider health, pinned agents, quick-start actions, and the workspaces you keep returning to.
+The Home dashboard is the front door to CopeNet: the operator console with live workspace signal (active sessions, provider health, tools available), recent activity, system health, quick-start actions, and an ambient NASA *Picture of the Day* to orient you when you sit back down.
 
 ![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
 
 ### Agents Console — persistent sessions with inspectable runtime context
-The Agents view keeps the live conversation, session list, working set, debug actions, and runtime inspector together so a run stays understandable instead of turning into opaque chat history. Here it is mid-session with OpenAI Codex 5.5 in the `friendly` profile answering a quantum optics question while the runtime inspector stays visible on the side.
+The Agents view keeps the live conversation and the runtime inspector together so a run stays understandable instead of turning into opaque chat history. Here a sub-agent delegation session shows the model's actual tool calls (test runs, `py_compile`, `git status`) and reasoning inline, while the inspector on the right rolls the run up into grouped activity — "Edited 6 files · Read 10 files" — plus the locked provider, model, mode, and persona.
 
-![CopeNet Agents Console](docs/imgs/copenet-agents-console-openai-codex-spdc.png)
+![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
 
 ### Workflows — purpose-built operator surfaces beyond a single chat
 The Workflows section is where CopeNet starts feeling like an operator studio instead of a prompt box: focused workflow entrypoints, scoped task surfaces, and room for productized agent behaviors that deserve more than one conversation pane.
@@ -32,6 +32,11 @@ The Workflows section is where CopeNet starts feeling like an operator studio in
 Data & Tools gathers the practical substrate around the agent: imported assets, source material, tool surfaces, and the structured inputs that make later runs more reusable and less ad hoc.
 
 ![CopeNet Data & Tools](docs/imgs/copenet-data-tools.png)
+
+### Persona Home — give CopeNet a stable self, per model
+Persona Home makes identity explicit and editable instead of spooky. Pick or create a persona, switch the active one per runtime, and edit the underlying identity files (`SOUL.md`, `IDENTITY.md`, `USER.md`, …) right in the inline editor. The model can even author a whole persona on request — just ask it to build one and it fills the files itself. Personas live in a plain folder of markdown you fully control.
+
+![CopeNet Persona Home](docs/imgs/copenet-persona-home.png)
 
 ### Observability — trace the work, not just the answer
 The Observability surface exposes run pulse, recent traces, provider distribution, and top tool activity so you can inspect what the system actually did across sessions.
