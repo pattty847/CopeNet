@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { PausedRunBanner } from './PausedRunBanner';
+import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { Archive, ArrowDown, ArrowUp, Copy, CopyPlus, Download, Ellipsis, GitMerge, Sparkles, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
 import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
@@ -44,6 +45,9 @@ export function ChatWorkspace() {
   const composerDisabled = isMergePrep || isArchived || Boolean(activeRunId);
   const canDebugConversation = Boolean(activeSession);
   const isMobile = useIsMobile();
+  // On mobile the right-panel approval card lives behind an opt-in sheet, so a
+  // paused run never surfaces its prompt. Render it inline here instead.
+  const pendingApproval = useAppStore((s) => s.pendingApproval);
   const activeSessions = sessions.filter((session) => !session.archived).length;
   const archivedSessions = sessions.filter((session) => session.archived).length;
   const connectedProviders = new Set(sessions.filter((session) => !session.archived).map((session) => session.provider).filter(Boolean)).size;
@@ -418,6 +422,14 @@ export function ChatWorkspace() {
 
       {/* Paused-run approval banner */}
       <PausedRunBanner />
+
+      {/* Mobile: the approval card lives in the desktop-only right panel, so
+          surface it inline here — the run can't proceed until it's answered. */}
+      {isMobile && pendingApproval && pendingApproval.status === 'pending' && (
+        <div className="border-b border-operator-accent/20 bg-operator-bg px-3 py-2.5">
+          <ApprovalRequestCard approval={pendingApproval} />
+        </div>
+      )}
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg">
