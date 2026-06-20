@@ -13,6 +13,7 @@ from typing import Awaitable, Callable
 from copenet.core.apps import AppStore
 from copenet.core.harness import ChatHarness
 from copenet.core.memory import MemoryService, MemoryStore
+from copenet.core.permissions import PermissionStore
 from copenet.core.messaging import MessagingConfigStore, TelegramSessionRouteStore
 from copenet.core.nasa import NasaApodImageCache, NasaApodService, NasaApodStore
 from copenet.core.orchestrator.nasa import (
@@ -130,6 +131,9 @@ class Orchestrator:
         self._route_store = TelegramSessionRouteStore(path=base / "telegram-routes.json")
         self._memory_store = MemoryStore(path=base / "memory.json")
         self._memory_service = MemoryService(self._memory_store)
+        # Global operator shell allowlist (Access & Permissions — Brick E). One list
+        # per data dir; consulted by the shell handler as a standing approval.
+        self._permission_store = PermissionStore(path=base / "permissions.json")
         self._nasa_store = NasaApodStore(path=base / "nasa-apod.json")
         self._nasa_service = NasaApodService()
         self._nasa_image_cache = NasaApodImageCache(root_dir=base / "nasa-apod-images")
@@ -841,14 +845,35 @@ class Orchestrator:
         if entry is None:
             return {"ok": False, "error": "no pending approval with that id"}
         normalized = decision.strip().lower()
-        if normalized not in {"approved", "rejected"}:
-            return {"ok": False, "error": "decision must be 'approved' or 'rejected'"}
+        # "approved_always" approves this command AND persists it to the global
+        # allowlist so it never asks again (Brick E). The gated executor handles
+        # the persistence (it has the command + permission store on the context).
+        if normalized not in {"approved", "rejected", "approved_always"}:
+            return {"ok": False, "error": "decision must be 'approved', 'approved_always', or 'rejected'"}
         entry["decision"] = normalized
         entry["note"] = note
         event = entry.get("event")
         if isinstance(event, asyncio.Event):
             event.set()
         return {"ok": True, "approvalId": approval_id, "decision": normalized}
+
+    # --- Global shell allowlist (Access & Permissions — Brick E/F) ---
+
+    def list_shell_allowlist(self) -> dict:
+        """Return the operator's global shell allowlist entries."""
+        return {"commands": self._permission_store.list_commands()}
+
+    def add_shell_allowlist(self, command: str) -> dict:
+        """Add a command to the global shell allowlist."""
+        entry = self._permission_store.add(command)
+        if entry is None:
+            return {"ok": False, "error": "command is required"}
+        return {"ok": True, "entry": entry, "commands": self._permission_store.list_commands()}
+
+    def remove_shell_allowlist(self, command: str) -> dict:
+        """Remove a command from the global shell allowlist."""
+        removed = self._permission_store.remove(command)
+        return {"ok": removed, "commands": self._permission_store.list_commands()}
 
     def _resolve_session_workspace_root(self, session_key: str) -> Path:
         """Return the on-disk workspace root for a session (falls back to workdir)."""

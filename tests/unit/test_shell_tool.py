@@ -288,3 +288,62 @@ async def test_read_only_non_allowlisted_command_still_hard_blocks(tmp_path: Pat
     )
     assert result.ok is False
     assert result.output["policyDecision"] == "unsafe_unknown"
+
+
+# --- Global allowlist / standing approvals (Brick E) ---
+
+
+def test_permission_store_add_is_idempotent_and_normalized(tmp_path: Path) -> None:
+    from copenet.core.permissions import PermissionStore
+
+    store = PermissionStore(path=tmp_path / "permissions.json")
+    store.add("npm   test")
+    store.add("npm test")  # same command, different spacing
+    assert [e["command"] for e in store.list_commands()] == ["npm test"]
+    assert store.is_allowed("npm test") is True
+    assert store.is_allowed("npm run build") is False
+    assert store.remove("npm test") is True
+    assert store.is_allowed("npm test") is False
+
+
+def test_permission_store_persists_across_instances(tmp_path: Path) -> None:
+    from copenet.core.permissions import PermissionStore
+
+    path = tmp_path / "permissions.json"
+    PermissionStore(path=path).add("printf hi")
+    assert PermissionStore(path=path).is_allowed("printf hi") is True
+
+
+@pytest.mark.asyncio
+async def test_standing_allowlist_runs_command_in_read_only_mode(tmp_path: Path) -> None:
+    # A globally-allowed command runs (with full shell) even in plain read-only mode.
+    from copenet.core.permissions import PermissionStore
+
+    registry = ToolRegistry()
+    context = _context_with_policy(tmp_path, policy_for_task_mode(None))
+    store = PermissionStore(path=tmp_path / "permissions.json")
+    store.add("printf hi | tr a-z A-Z")
+    object.__setattr__(context, "permission_store", store)
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "printf hi | tr a-z A-Z"}),
+        context,
+    )
+    assert result.ok is True
+    assert result.output["policyDecision"] == "allowed"
+    assert result.output["stdout"] == "HI"
+
+
+@pytest.mark.asyncio
+async def test_unlisted_command_still_blocks_with_permission_store_present(tmp_path: Path) -> None:
+    # The store must not relax anything for commands that aren't on it.
+    from copenet.core.permissions import PermissionStore
+
+    registry = ToolRegistry()
+    context = _context_with_policy(tmp_path, policy_for_task_mode(None))
+    object.__setattr__(context, "permission_store", PermissionStore(path=tmp_path / "permissions.json"))
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "printf hi"}),
+        context,
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "unsafe_unknown"

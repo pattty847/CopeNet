@@ -1929,8 +1929,9 @@ class WsClient {
     );
   }
 
-  /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run. */
-  async decideApproval(approvalId: string, decision: 'approved' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
+  /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run.
+   *  `approved_always` also persists the command to the global allowlist (Brick E). */
+  async decideApproval(approvalId: string, decision: 'approved' | 'approved_always' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
     return this.request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
   }
 

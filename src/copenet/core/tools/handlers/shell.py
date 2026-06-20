@@ -254,6 +254,24 @@ def _is_pre_approved(command: str, context: ToolExecutionContext) -> bool:
     return isinstance(approved, (set, frozenset, list, tuple)) and command in approved
 
 
+def _is_standing_approved(command: str, context: ToolExecutionContext) -> bool:
+    """True when this command carries a standing operator approval.
+
+    Either approved earlier this run (run-scoped `approved_commands`) or on the
+    persisted global allowlist (Brick E). Standing-approved commands run with full
+    shell in any Access mode — the operator already blessed this exact command.
+    """
+    if _is_pre_approved(command, context):
+        return True
+    store = getattr(context, "permission_store", None)
+    if store is None:
+        return False
+    try:
+        return bool(store.is_allowed(command))
+    except Exception:  # noqa: BLE001 - allowlist read must never break execution
+        return False
+
+
 def _ask_approval_result(command: str, context: ToolExecutionContext, exc: ToolBlockedError) -> ToolExecutionResult:
     """Turn a guarded-mode block into an operator approval prompt (Ask mode).
 
@@ -414,15 +432,16 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
 
     ask_mode = bool(getattr(context.policy, "prompt_on_block", False))
 
-    # Ask mode: a command the operator already approved this run executes with full
-    # shell (it cleared the prompt once; don't re-block it on the allowlist).
-    if ask_mode and _is_pre_approved(command, context):
+    # Standing approval (Brick E): a command on the global allowlist — or approved
+    # earlier this run — runs with full shell in any mode, no re-prompt. The
+    # operator already blessed this exact command.
+    if _is_standing_approved(command, context):
         return await _run_unrestricted_shell(
             command,
             request,
             context,
             summary="Ran operator-approved shell command.",
-            policy_summary="Operator-approved Ask-mode shell command executed.",
+            policy_summary="Operator-approved shell command executed (standing allowlist).",
         )
 
     # Guarded read-only path. In Ask mode, a block becomes an operator prompt.
