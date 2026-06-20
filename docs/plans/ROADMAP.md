@@ -115,15 +115,23 @@ allowlist; per-run memory of approved commands. The bricks below add the rest.
   shell allowlist so common reads stop being silently blocked (the `cat` bug). Verified.
 - ✅ **B — persist last Access level.** The draft now persists `taskPromptId` so the chosen
   Access sticks across provider/model switches + reload (was resetting to `none`). Verified.
-- 🟡 **C — "Access" selector.** Partially done:
+- ✅ **C — "Access" selector.** Done:
   - ✅ **Backend Full-Access gate**: `policy_for_task_mode(provider=…)` downgrades full-access
     to read-only for non-Claude/OpenAI providers. Enforced regardless of UI.
-  - ⬜ UI: hide the Full Access option for non-Claude/OpenAI providers.
-  - ⬜ Rename Mode → Access (Read-only / Ask / Full Access).
-  - ⬜ Move behavioral presets (planning/debug/…) into Profiles. Keep the underlying
-    `taskPromptId` field; map old locked sessions' values safely (behavioral → read-only).
-- ⬜ **D — "Ask" mode.** Non-allowlisted shell/tools → `approval_required` (prompt) instead
-  of silent block. The systemic `cat` fix; reuses the existing pause/card flow.
+  - ✅ UI: Full Access option hidden for non-Claude/OpenAI providers (`lib/access.ts`,
+    single source of truth, consumed by AgentComposer + RightPanel). A draft holding
+    `full-access` is coerced to Read-only when the provider can't grant it.
+  - ✅ Renamed Mode → Access. Values shipped: **Read-only / Full Access** (Ask is Brick D —
+    deliberately not shipped as a dead option).
+  - ✅ Moved behavioral presets (planning/debug/code-review/refactor) into Profiles by
+    relocating the preset `.md` files. `taskPromptId` field kept; old locked sessions
+    degrade gracefully (overlay drops, policy unchanged).
+  - ⬜ **Follow-up:** `MessagingSettingsPanel.tsx` still renders a backend-enumerated "Task
+    mode" dropdown — now naturally reduced to `none`/`full-access`. Convert it to the same
+    Access control (`accessOptionsFor`) for consistency when that panel is next touched.
+- ⬜ **D — "Ask" mode.** Adds the third Access value. Non-allowlisted shell/tools →
+  `approval_required` (prompt) instead of silent block. The systemic `cat` fix; reuses the
+  existing pause/card flow. Wire `ask` into `policy.py` + `handlers/shell.py` + `lib/access.ts`.
 - ⬜ **E — "Always allow"** on the approval card → a **global, persisted, editable** allowlist
   it writes to (decided: global over per-session). The policy/barricade consult it.
 - ⬜ **F — Permissions settings UI.** View/edit/remove allowlist entries + set the default
