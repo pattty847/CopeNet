@@ -42,34 +42,31 @@ function persistPinnedSessionKeys(keys: string[]) {
   window.localStorage.setItem(PINNED_SESSIONS_STORAGE_KEY, JSON.stringify(keys));
 }
 
-function readStoredDraftRuntime(): Pick<DraftSettings, 'provider' | 'model'> {
-  if (typeof window === 'undefined') {
-    return { provider: 'openai-codex', model: 'gpt-5.5' };
-  }
+function readStoredDraftRuntime(): Pick<DraftSettings, 'provider' | 'model' | 'taskPromptId'> {
+  const fallback = { provider: 'openai-codex', model: 'gpt-5.5', taskPromptId: 'none' };
+  if (typeof window === 'undefined') return fallback;
   try {
     const raw = window.localStorage.getItem(DRAFT_RUNTIME_STORAGE_KEY);
-    if (!raw) {
-      return { provider: 'openai-codex', model: 'gpt-5.5' };
-    }
-    const parsed = JSON.parse(raw) as { provider?: unknown; model?: unknown };
+    if (!raw) return fallback;
+    const parsed = JSON.parse(raw) as { provider?: unknown; model?: unknown; taskPromptId?: unknown };
     const provider = typeof parsed.provider === 'string' && parsed.provider.trim() ? parsed.provider.trim() : 'openai-codex';
     const model = typeof parsed.model === 'string' ? parsed.model.trim() : '';
-    return {
-      provider,
-      model: model || 'gpt-5.4',
-    };
+    // Persist the last-chosen Access level so it sticks across provider/model switches.
+    const taskPromptId = typeof parsed.taskPromptId === 'string' && parsed.taskPromptId.trim() ? parsed.taskPromptId.trim() : 'none';
+    return { provider, model: model || 'gpt-5.4', taskPromptId };
   } catch {
-    return { provider: 'openai-codex', model: 'gpt-5.5' };
+    return fallback;
   }
 }
 
-function persistDraftRuntime(settings: Pick<DraftSettings, 'provider' | 'model'>) {
+function persistDraftRuntime(settings: Pick<DraftSettings, 'provider' | 'model' | 'taskPromptId'>) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(
     DRAFT_RUNTIME_STORAGE_KEY,
     JSON.stringify({
       provider: settings.provider || 'openai-codex',
       model: settings.model || '',
+      taskPromptId: settings.taskPromptId || 'none',
     }),
   );
 }
@@ -324,7 +321,7 @@ const DEFAULT_DRAFT: DraftSettings = {
   provider: storedDraftRuntime.provider,
   model: storedDraftRuntime.model,
   systemPromptId: 'default',
-  taskPromptId: 'none',
+  taskPromptId: storedDraftRuntime.taskPromptId,
   personaId: 'default',
   personaFlavorId: '',
   personaPrivacyTier: 'private',
