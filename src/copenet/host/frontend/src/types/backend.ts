@@ -205,6 +205,12 @@ export interface WorkspaceFileContent extends WorkspaceFile {
   truncated: boolean;
 }
 
+/** One entry in the global shell allowlist (Access & Permissions — Brick E/F). */
+export interface ShellAllowlistEntry {
+  command: string;
+  addedAt: string;
+}
+
 export type ToolResultPreview =
   | FileReadPreview
   | RepoSearchPreview
@@ -319,7 +325,7 @@ export interface PromptOptimizationResult {
   model: string | null;
 }
 
-export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'web' | 'messaging' | 'persona';
+export type DataToolsRoute = 'hub' | 'sources' | 'media' | 'web' | 'messaging' | 'persona' | 'permissions';
 
 export interface DraftSettings {
   provider: string;

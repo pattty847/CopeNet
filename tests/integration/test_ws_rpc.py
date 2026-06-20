@@ -606,6 +606,25 @@ def test_messaging_destination_rpcs_upsert_and_delete(rpc_client: TestClient) ->
         assert delete_response["payload"]["config"]["destinations"] == []
 
 
+def test_permissions_allowlist_rpcs_add_list_and_remove(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        add_id = socket.request("permissions.allowlist.add", {"command": "npm   test"})
+        add_response = socket.recv_response(add_id)
+        assert add_response["payload"]["ok"] is True
+        # Stored whitespace-normalized.
+        assert add_response["payload"]["entry"]["command"] == "npm test"
+
+        list_id = socket.request("permissions.allowlist.list")
+        list_response = socket.recv_response(list_id)
+        commands = [entry["command"] for entry in list_response["payload"]["commands"]]
+        assert "npm test" in commands
+
+        remove_id = socket.request("permissions.allowlist.remove", {"command": "npm test"})
+        remove_response = socket.recv_response(remove_id)
+        assert remove_response["payload"]["ok"] is True
+        assert all(entry["command"] != "npm test" for entry in remove_response["payload"]["commands"])
+
+
 def test_messaging_config_update_can_persist_telegram_runtime_defaults(rpc_client: TestClient) -> None:
     with _open_rpc(rpc_client) as socket:
         update_id = socket.request(

@@ -13,6 +13,7 @@ import {
   PanelRightOpen,
   PlayCircle,
   RadioTower,
+  ShieldCheck,
   Sparkles,
   Upload,
   X,
@@ -26,6 +27,7 @@ import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
 import { MessagingSettingsPanel } from './MessagingSettingsPanel';
+import { PermissionsSettingsPanel } from './PermissionsSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
 import { PersonaHomePanel } from './persona/PersonaHomePanel';
 import { WorkspaceFileViewer } from './WorkspaceFileViewer';
@@ -60,6 +62,7 @@ function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: (
     web: ['Data & Tools', 'Data Sources', 'Web Pages'],
     messaging: ['Data & Tools', 'Messaging'],
     persona: ['Data & Tools', 'Persona Home'],
+    permissions: ['Data & Tools', 'Permissions'],
   };
 
   return (
@@ -121,7 +124,7 @@ function HubCard({
   );
 }
 
-function DataToolsHub({ openSources, openMessaging, openPersona }: { openSources: () => void; openMessaging: () => void; openPersona: () => void }) {
+function DataToolsHub({ openSources, openMessaging, openPersona, openPermissions }: { openSources: () => void; openMessaging: () => void; openPersona: () => void; openPermissions: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
       <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
@@ -143,6 +146,7 @@ function DataToolsHub({ openSources, openMessaging, openPersona }: { openSources
         <HubCard eyebrow="Operate" title="Tool Catalog" body="Available tool surfaces, their safety rules, and recent execution history." accent="text-shell-accent" />
         <HubCard eyebrow="Route" title="Messaging" body="Configure Telegram reachability, default runtimes, and chat-to-session routes." accent="text-shell-accent" onClick={openMessaging} />
         <HubCard eyebrow="Identity" title="Persona Home" body="Inspect identity files, privacy defaults, and model-specific persona flavors." accent="text-shell-accent" onClick={openPersona} />
+        <HubCard eyebrow="Guard" title="Permissions" body="Manage the global shell allowlist — the commands you've told CopeNet it can always run." accent="text-shell-accent" onClick={openPermissions} />
       </section>
 
       <section className="shell-page-utility-tile rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
@@ -305,6 +309,50 @@ function MessagingSettingsPage() {
             <div className="space-y-2 text-sm leading-6 text-shell-muted">
               <p>Inbound Telegram messages can use these routes to continue the right session automatically.</p>
               <p>Model selection via settings is already here; slash-command model switching can layer on top later.</p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function PermissionsSettingsPage() {
+  return (
+    <div className="animate-fade-in-up space-y-3">
+      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
+          <ShieldCheck className="h-3.5 w-3.5 text-shell-accent" />
+          Permissions
+        </div>
+        <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
+          Decide once which commands CopeNet can always run.
+        </h1>
+        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
+          The global shell allowlist is your standing trust. A listed command runs in any Access
+          mode without asking — the rest still prompt (Ask) or block (Read-only). Curate it here, or
+          grow it one approval at a time.
+        </p>
+      </section>
+
+      <section className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_320px]">
+        <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+          <PermissionsSettingsPanel />
+        </div>
+        <div className="space-y-3">
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">How it works</div>
+            <div className="space-y-2 text-sm leading-6 text-shell-muted">
+              <p>Read-only and Ask sessions consult this list before blocking or prompting.</p>
+              <p>An allowed command runs with full shell — it's the same standing trust as Claude Code's bypass.</p>
+              <p>Stored exactly as approved (whitespace-normalized), so it's the precise command you blessed.</p>
+            </div>
+          </div>
+          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+            <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Tip</div>
+            <div className="space-y-2 text-sm leading-6 text-shell-muted">
+              <p>The fastest way to add an entry is the “Always allow” button on an approval prompt.</p>
+              <p>Full Access stays provider-gated; this allowlist is the lighter, command-scoped trust.</p>
             </div>
           </div>
         </div>
@@ -1092,7 +1140,7 @@ export function DataToolsPage() {
       <SectionBreadcrumb route={route} onBack={handleBack} />
       {route === 'hub' && (
         <>
-          <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} openPersona={() => setRoute('persona')} />
+          <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} openPersona={() => setRoute('persona')} openPermissions={() => setRoute('permissions')} />
           <WorkspaceFileViewer />
         </>
       )}
@@ -1101,6 +1149,7 @@ export function DataToolsPage() {
       {route === 'web' && <WebPageImportsPage />}
       {route === 'messaging' && <MessagingSettingsPage />}
       {route === 'persona' && <PersonaHomePanel />}
+      {route === 'permissions' && <PermissionsSettingsPage />}
     </div>
   );
 }

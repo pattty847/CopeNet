@@ -46,6 +46,7 @@ import {
   TurnStateSnapshot,
   WorkspaceFile,
   WorkspaceFileContent,
+  ShellAllowlistEntry,
 } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 
@@ -512,6 +513,19 @@ function normalizeMemoryItem(raw: unknown): MemoryItem | null {
     archived: Boolean(payload.archived),
     lastSessionKey: payload.lastSessionKey ? String(payload.lastSessionKey) : null,
   };
+}
+
+function normalizeShellAllowlist(raw: unknown): ShellAllowlistEntry[] {
+  if (!Array.isArray(raw)) return [];
+  return raw
+    .map((item): ShellAllowlistEntry | null => {
+      if (!item || typeof item !== 'object') return null;
+      const payload = item as Record<string, unknown>;
+      const command = String(payload.command || '').trim();
+      if (!command) return null;
+      return { command, addedAt: String(payload.addedAt || '') };
+    })
+    .filter((entry): entry is ShellAllowlistEntry => entry != null);
 }
 
 function normalizeIdentityContextRuntime(raw: unknown): IdentityContextRuntime | null {
@@ -1933,6 +1947,22 @@ class WsClient {
    *  `approved_always` also persists the command to the global allowlist (Brick E). */
   async decideApproval(approvalId: string, decision: 'approved' | 'approved_always' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
     return this.request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
+  }
+
+  /** Global shell allowlist (Access & Permissions — Brick F): the operator's standing approvals. */
+  async listShellAllowlist(): Promise<ShellAllowlistEntry[]> {
+    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.list', {});
+    return normalizeShellAllowlist(payload.commands);
+  }
+
+  async addShellAllowlist(command: string): Promise<ShellAllowlistEntry[]> {
+    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.add', { command });
+    return normalizeShellAllowlist(payload.commands);
+  }
+
+  async removeShellAllowlist(command: string): Promise<ShellAllowlistEntry[]> {
+    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.remove', { command });
+    return normalizeShellAllowlist(payload.commands);
   }
 
   /** List viewable files under a session's workspace root (read-only file viewer). */
