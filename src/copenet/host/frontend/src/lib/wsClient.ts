@@ -2062,6 +2062,13 @@ class WsClient {
         store.setDraftStarterIntent(null);
       }
 
+      // Mid-session runtime mutability (A + B1): a locked session may carry a pending
+      // model / Access override. Apply it on this send; the backend reconciles the
+      // binding, then refreshSessions pulls the canonical values and we clear it.
+      const override = store.sessionRuntimeOverrides[session.key];
+      const effectiveModel = override?.model || session.model;
+      const effectiveTaskPromptId = override?.taskPromptId ?? session.taskPromptId;
+
       const userMessage: Message = {
         localId: makeLocalId('user'),
         sessionKey: session.key,
@@ -2070,7 +2077,7 @@ class WsClient {
         content: trimmed,
         timestamp: new Date().toISOString(),
         provider: session.provider,
-        model: session.model,
+        model: effectiveModel,
         providerSessionId: session.providerSessionId,
         state: 'final',
         toolExecution: null,
@@ -2083,13 +2090,14 @@ class WsClient {
         sessionKey: session.key,
         message: trimmed,
         provider: session.provider,
-        model: session.model || undefined,
+        model: effectiveModel || undefined,
         systemPromptId: session.systemPromptId || undefined,
-        taskPromptId: session.taskPromptId || undefined,
+        taskPromptId: effectiveTaskPromptId || undefined,
         personaId: session.personaId || undefined,
         personaFlavorId: session.personaFlavorId || undefined,
         personaPrivacyTier: session.personaPrivacyTier || undefined,
       });
+      store.clearSessionRuntimeOverride(session.key);
       const runId = payload.runId ? String(payload.runId) : null;
       const status = payload.status ? String(payload.status) : '';
 

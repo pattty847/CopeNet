@@ -192,6 +192,9 @@ interface AppState {
   draftSettings: DraftSettings;
   replaceDraftSettings: (settings: DraftSettings) => void;
   patchDraftSettings: (updates: Partial<DraftSettings>) => void;
+  sessionRuntimeOverrides: Record<string, { model?: string; taskPromptId?: string }>;
+  setSessionRuntimeOverride: (sessionKey: string, patch: { model?: string; taskPromptId?: string }) => void;
+  clearSessionRuntimeOverride: (sessionKey: string) => void;
   runtimeContext: RuntimeContext | null;
   setRuntimeContext: (context: RuntimeContext | null) => void;
   mergeStates: Record<string, SessionMergeState>;
@@ -471,6 +474,24 @@ export const useAppStore = create<AppState>((set) => ({
       };
       persistDraftRuntime(next);
       return { draftSettings: next };
+    }),
+  // Pending mid-session runtime changes for a LOCKED session (model + Access only).
+  // Applied on the next chat.send, then cleared once the backend reconciles and
+  // refreshSessions pulls the canonical values back. Keyed by session key.
+  sessionRuntimeOverrides: {},
+  setSessionRuntimeOverride: (sessionKey, patch) =>
+    set((state) => ({
+      sessionRuntimeOverrides: {
+        ...state.sessionRuntimeOverrides,
+        [sessionKey]: { ...state.sessionRuntimeOverrides[sessionKey], ...patch },
+      },
+    })),
+  clearSessionRuntimeOverride: (sessionKey) =>
+    set((state) => {
+      if (!state.sessionRuntimeOverrides[sessionKey]) return state;
+      const next = { ...state.sessionRuntimeOverrides };
+      delete next[sessionKey];
+      return { sessionRuntimeOverrides: next };
     }),
   runtimeContext: null,
   setRuntimeContext: (context) => set({ runtimeContext: context }),
