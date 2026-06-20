@@ -129,13 +129,20 @@ allowlist; per-run memory of approved commands. The bricks below add the rest.
   - ⬜ **Follow-up:** `MessagingSettingsPanel.tsx` still renders a backend-enumerated "Task
     mode" dropdown — now naturally reduced to `none`/`full-access`. Convert it to the same
     Access control (`accessOptionsFor`) for consistency when that panel is next touched.
-- ⬜ **D — "Ask" mode.** Adds the third Access value. Non-allowlisted shell/tools →
-  `approval_required` (prompt) instead of silent block. The systemic `cat` fix; reuses the
-  existing pause/card flow. Wire `ask` into `policy.py` + `handlers/shell.py` + `lib/access.ts`.
+- ✅ **D — "Ask" mode.** Third Access value shipped. Off-allowlist shell commands return
+  `approval_required` (operator prompt) instead of silently blocking, reusing the existing
+  pause/resume/approve flow; on approve the command re-runs with full shell, on reject the
+  model adapts. `prompt_on_block` flag in `policy.py` (ungated — operator is the gate),
+  block→prompt conversion in `handlers/shell.py`, `ask.md` preset, `lib/access.ts` ladder
+  entry. 5 new shell tests; read-only path byte-for-byte unchanged. Verified in-browser.
 - ⬜ **E — "Always allow"** on the approval card → a **global, persisted, editable** allowlist
-  it writes to (decided: global over per-session). The policy/barricade consult it.
-- ⬜ **F — Permissions settings UI.** View/edit/remove allowlist entries + set the default
-  Access level.
+  it writes to (decided: global over per-session). The policy/barricade consult it. Today
+  approval only sticks for the current run (`approved_commands` ephemeral set); E makes
+  "always" durable. Likely a new `core/permissions/` store + a consult hook in
+  `handlers/shell.py` (before the allowlist check) and the approval card gets an "Always
+  allow" action alongside allow-once/deny.
+- ⬜ **F — Permissions settings UI.** View/edit/remove the global allowlist entries (from E)
+  + set the default Access level. New surface under Data & Tools or a settings panel.
 
 ---
 
