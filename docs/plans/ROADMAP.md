@@ -135,14 +135,21 @@ allowlist; per-run memory of approved commands. The bricks below add the rest.
   model adapts. `prompt_on_block` flag in `policy.py` (ungated — operator is the gate),
   block→prompt conversion in `handlers/shell.py`, `ask.md` preset, `lib/access.ts` ladder
   entry. 5 new shell tests; read-only path byte-for-byte unchanged. Verified in-browser.
-- ⬜ **E — "Always allow"** on the approval card → a **global, persisted, editable** allowlist
-  it writes to (decided: global over per-session). The policy/barricade consult it. Today
-  approval only sticks for the current run (`approved_commands` ephemeral set); E makes
-  "always" durable. Likely a new `core/permissions/` store + a consult hook in
-  `handlers/shell.py` (before the allowlist check) and the approval card gets an "Always
-  allow" action alongside allow-once/deny.
-- ⬜ **F — Permissions settings UI.** View/edit/remove the global allowlist entries (from E)
-  + set the default Access level. New surface under Data & Tools or a settings panel.
+- ✅ **E — "Always allow" → global persisted allowlist.** `core/permissions/PermissionStore`
+  (in-memory + atomic JSON at `~/.copenet/sessions/permissions.json`, whitespace-normalized,
+  global over per-session). `decide_approval` accepts `approved_always`; the gated executor
+  persists on it. `handlers/shell.py` consults a standing-approval set (run-scoped ∪ global)
+  and runs matches with full shell in any Access mode. ApprovalRequestCard got an "Always
+  allow" button. Threaded onto `ToolExecutionContext.permission_store`. 9 tests.
+- ✅ **F — Permissions settings UI.** `permissions.allowlist.list/add/remove` RPCs (new
+  `rpc_permissions.py`), wsClient wrappers, and a `PermissionsSettingsPanel` mounted as a
+  new "Permissions" route under Data & Tools (view/add/remove entries). Verified end-to-end
+  in-browser. Default-Access-level setting was effectively delivered by Brick B (the draft
+  persists the last-selected Access), so it's not re-litigated here.
+
+**Theme complete (A–F).** Remaining adjacents are nice-to-haves, not blockers: the
+MessagingSettingsPanel task-mode dropdown could adopt `accessOptionsFor` (noted under C),
+and a fresh README screenshot of the Permissions surface per the UI-polish convention.
 
 ---
 
