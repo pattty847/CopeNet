@@ -16,6 +16,10 @@ class ToolPolicy:
     )
     allow_shell: bool = True
     unrestricted_shell: bool = False
+    # Ask mode: instead of silently blocking a command outside the read-only
+    # allowlist, return `approval_required` so the operator is prompted. On approve
+    # the command re-runs with full shell (via the approved_commands ephemeral set).
+    prompt_on_block: bool = False
     # Read-only commands allowed in non-full-access modes. Write/exec forms (e.g.
     # `find -delete`) are still caught by the secondary gate in handlers/shell.py.
     shell_allowlist: tuple[str, ...] = (
@@ -61,7 +65,14 @@ FULL_ACCESS_PROVIDERS: frozenset[str] = frozenset({"claude-cli", "openai-codex"}
 
 
 def policy_for_task_mode(task_prompt_id: str | None, provider: str | None = None) -> ToolPolicy:
-    """Return the effective tool policy for one task mode (Full Access provider-gated)."""
+    """Return the effective tool policy for one access level (Full Access provider-gated).
+
+    Access levels ride on `task_prompt_id` for backwards-compat:
+      - `full-access` → writes + unrestricted shell (gated to frontier providers)
+      - `ask`         → read-only allowlist, but prompts the operator before running
+                        anything outside it (ungated — approval is the gate)
+      - anything else → read-only (the default)
+    """
     normalized = (task_prompt_id or "none").strip().lower() or "none"
     base = {"repo-read", "shell-read", "context", "artifact", "web"}
     full_access_allowed = provider is None or provider.strip().lower() in FULL_ACCESS_PROVIDERS
@@ -71,5 +82,15 @@ def policy_for_task_mode(task_prompt_id: str | None, provider: str | None = None
             unrestricted_shell=True,
             shell_timeout_sec=120.0,
             shell_output_limit=30000,  # match Claude Code's Bash-output default
+        )
+    if normalized == "ask":
+        # Same read-only category set as default, but a blocked command becomes an
+        # operator prompt instead of a hard wall. Approved commands run with full
+        # shell, so use the elevated timeout/output ceiling like full-access.
+        return ToolPolicy(
+            allowed_categories=base,
+            prompt_on_block=True,
+            shell_timeout_sec=120.0,
+            shell_output_limit=30000,
         )
     return ToolPolicy(allowed_categories=base)

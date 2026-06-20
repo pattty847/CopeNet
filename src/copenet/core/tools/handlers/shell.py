@@ -243,54 +243,92 @@ def _approval_required(command: str, context: ToolExecutionContext) -> ToolExecu
     return None
 
 
-async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
-    if not context.policy.allow_shell:
-        raise ToolBlockedError(
-            "shell execution disabled by policy",
-            workspace_root=str(context.session_workspace_root),
-            access_action="unknown",
-            policy_decision="unsafe_unknown",
-        )
-    command = str(request.arguments.get("command") or "").strip()
-    if not command:
-        raise ValueError("command is required")
-    if context.policy.unrestricted_shell:
-        approval_result = _approval_required(command, context)
-        if approval_result is not None:
-            return approval_result
-        code, stdout_text, stderr_text = await run_shell_command(
-            command,
-            cwd=context.workdir,
-            timeout_sec=context.policy.shell_timeout_sec,
-            output_limit=context.policy.shell_output_limit,
-        )
-        output = {
+# Block kinds that Ask mode converts into an operator prompt rather than a hard
+# wall. egress/barricade blocks are not in this set — those stay hard blocks.
+_ASK_PROMPTABLE_DECISIONS = frozenset({"unsafe_unknown", "write_blocked"})
+
+
+def _is_pre_approved(command: str, context: ToolExecutionContext) -> bool:
+    """True when the operator already approved this exact command this run."""
+    approved = context.ephemeral.get("approved_commands") if isinstance(context.ephemeral, dict) else None
+    return isinstance(approved, (set, frozenset, list, tuple)) and command in approved
+
+
+def _ask_approval_result(command: str, context: ToolExecutionContext, exc: ToolBlockedError) -> ToolExecutionResult:
+    """Turn a guarded-mode block into an operator approval prompt (Ask mode).
+
+    Carries `command` in the output so the approval-gated executor re-runs this
+    exact command after approval (it keys `approved_commands` off output.command).
+    """
+    return ToolExecutionResult(
+        tool_id="shell.exec",
+        ok=False,
+        summary="Shell command needs your approval (Ask mode).",
+        error=f"approval required (ask mode): {exc}",
+        output={
             "command": command,
-            "exitCode": code,
-            "stdout": stdout_text,
-            "stderr": stderr_text,
             "target": command,
             "workspaceRoot": str(context.session_workspace_root),
-            "scope": "outside_workspace",
-            "accessAction": "unknown",
-            "policyDecision": "allowed",
-            "policySummary": "Full-access shell command executed with the current user's permissions.",
-        }
-        if code != 0:
-            return ToolExecutionResult(
-                tool_id=request.tool_id,
-                ok=False,
-                summary=f"Shell command failed with exit {code}.",
-                error=stderr_text or stdout_text or f"command failed with exit {code}",
-                output=output,
-            )
+            "scope": exc.scope or "outside_workspace",
+            "accessAction": exc.access_action,
+            "policyDecision": "approval_required",
+            "policySummary": (
+                "Ask mode: this command is outside the read-only allowlist and needs "
+                "operator approval before it runs."
+            ),
+        },
+    )
+
+
+async def _run_unrestricted_shell(
+    command: str,
+    request: ToolExecutionRequest,
+    context: ToolExecutionContext,
+    *,
+    summary: str,
+    policy_summary: str,
+) -> ToolExecutionResult:
+    """Execute a command with full shell syntax (full-access + approved Ask commands)."""
+    code, stdout_text, stderr_text = await run_shell_command(
+        command,
+        cwd=context.workdir,
+        timeout_sec=context.policy.shell_timeout_sec,
+        output_limit=context.policy.shell_output_limit,
+    )
+    output = {
+        "command": command,
+        "exitCode": code,
+        "stdout": stdout_text,
+        "stderr": stderr_text,
+        "target": command,
+        "workspaceRoot": str(context.session_workspace_root),
+        "scope": "outside_workspace",
+        "accessAction": "unknown",
+        "policyDecision": "allowed",
+        "policySummary": policy_summary,
+    }
+    if code != 0:
         return ToolExecutionResult(
             tool_id=request.tool_id,
-            ok=True,
-            summary="Ran full-access shell command.",
+            ok=False,
+            summary=f"Shell command failed with exit {code}.",
+            error=stderr_text or stdout_text or f"command failed with exit {code}",
             output=output,
         )
-    # Pipes and redirection can hide write effects — always blocked in default mode.
+    return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary=summary, output=output)
+
+
+async def _run_guarded_shell(
+    command: str,
+    request: ToolExecutionRequest,
+    context: ToolExecutionContext,
+) -> ToolExecutionResult:
+    """Guarded read-only execution: allowlist + write-predicate gates, no shell syntax.
+
+    Raises ToolBlockedError for anything outside the read-only contract. Ask mode
+    catches those and converts them to operator prompts; read-only lets them raise.
+    """
+    # Pipes and redirection can hide write effects — always blocked in guarded mode.
     if any(t in command for t in _HARD_BLOCKED_TOKENS):
         raise ToolBlockedError(
             "shell.exec does not allow pipes or redirection in default mode",
@@ -347,6 +385,53 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
         summary=f"Ran shell command: {argv[0]}",
         output=output,
     )
+
+
+async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+    if not context.policy.allow_shell:
+        raise ToolBlockedError(
+            "shell execution disabled by policy",
+            workspace_root=str(context.session_workspace_root),
+            access_action="unknown",
+            policy_decision="unsafe_unknown",
+        )
+    command = str(request.arguments.get("command") or "").strip()
+    if not command:
+        raise ValueError("command is required")
+
+    # Full Access: arbitrary shell, only high-risk patterns pause for approval.
+    if context.policy.unrestricted_shell:
+        approval_result = _approval_required(command, context)
+        if approval_result is not None:
+            return approval_result
+        return await _run_unrestricted_shell(
+            command,
+            request,
+            context,
+            summary="Ran full-access shell command.",
+            policy_summary="Full-access shell command executed with the current user's permissions.",
+        )
+
+    ask_mode = bool(getattr(context.policy, "prompt_on_block", False))
+
+    # Ask mode: a command the operator already approved this run executes with full
+    # shell (it cleared the prompt once; don't re-block it on the allowlist).
+    if ask_mode and _is_pre_approved(command, context):
+        return await _run_unrestricted_shell(
+            command,
+            request,
+            context,
+            summary="Ran operator-approved shell command.",
+            policy_summary="Operator-approved Ask-mode shell command executed.",
+        )
+
+    # Guarded read-only path. In Ask mode, a block becomes an operator prompt.
+    try:
+        return await _run_guarded_shell(command, request, context)
+    except ToolBlockedError as exc:
+        if ask_mode and exc.policy_decision in _ASK_PROMPTABLE_DECISIONS:
+            return _ask_approval_result(command, context, exc)
+        raise
 
 
 async def _run_chain(

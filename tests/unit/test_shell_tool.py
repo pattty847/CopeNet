@@ -218,3 +218,73 @@ async def test_tool_error_is_surfaced_in_output_not_just_error(tmp_path: Path) -
     assert isinstance(result.output, dict)
     assert result.output.get("policyDecision") == "tool_error"
     assert "pattern" in str(result.output.get("error", "")).lower()
+
+
+# --- Ask mode (Brick D): off-allowlist commands prompt instead of silently blocking ---
+
+
+@pytest.mark.asyncio
+async def test_ask_mode_allowlisted_command_runs_silently(tmp_path: Path) -> None:
+    # An allowlisted read still runs without any prompt in Ask mode.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "pwd"}),
+        _context_with_policy(tmp_path, policy_for_task_mode("ask")),
+    )
+    assert result.ok is True
+    assert result.output["policyDecision"] == "allowed"
+    assert result.output["stdout"].strip() == str(tmp_path)
+
+
+@pytest.mark.asyncio
+async def test_ask_mode_non_allowlisted_command_requests_approval(tmp_path: Path) -> None:
+    # A command outside the allowlist becomes an approval prompt, not a hard block.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "printf hi"}),
+        _context_with_policy(tmp_path, policy_for_task_mode("ask")),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "approval_required"
+    # The exact command must ride along so the approval gate can re-run it.
+    assert result.output["command"] == "printf hi"
+
+
+@pytest.mark.asyncio
+async def test_ask_mode_write_predicate_requests_approval(tmp_path: Path) -> None:
+    # In read-only this is write_blocked; in Ask mode it prompts the operator.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "find . -delete"}),
+        _context_with_policy(tmp_path, policy_for_task_mode("ask")),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "approval_required"
+
+
+@pytest.mark.asyncio
+async def test_ask_mode_approved_command_runs_with_full_shell(tmp_path: Path) -> None:
+    # Once the operator approves a command (it lands in approved_commands), the
+    # re-run executes it with full shell syntax — pipes included.
+    registry = ToolRegistry()
+    context = _context_with_policy(tmp_path, policy_for_task_mode("ask"))
+    context.ephemeral["approved_commands"] = {"printf hi | tr a-z A-Z"}
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "printf hi | tr a-z A-Z"}),
+        context,
+    )
+    assert result.ok is True
+    assert result.output["policyDecision"] == "allowed"
+    assert result.output["stdout"] == "HI"
+
+
+@pytest.mark.asyncio
+async def test_read_only_non_allowlisted_command_still_hard_blocks(tmp_path: Path) -> None:
+    # Read-only (default) must keep its byte-for-byte behavior: a hard block.
+    registry = ToolRegistry()
+    result = await registry.execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "printf hi"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] == "unsafe_unknown"

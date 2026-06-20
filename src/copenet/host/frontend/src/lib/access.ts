@@ -1,13 +1,15 @@
 // Access is CopeNet's permission axis — what a runtime is allowed to touch. It is
 // distinct from Profile (how the agent behaves). For backwards-compat it rides on the
-// session `taskPromptId` field, but only two values change tool policy:
+// session `taskPromptId` field, but only three values change tool policy:
 //   - `none`        → Read-only (reads + safe shell allowlist)
+//   - `ask`         → Read-only, but prompts the operator before anything off-allowlist
 //   - `full-access` → Full Access (writes + unrestricted shell)
 // Behavioral presets (planning/debug/code-review/refactor) are Profile concerns now.
 //
-// Full Access is granted only to frontier providers. This list MUST match
-// FULL_ACCESS_PROVIDERS in src/copenet/core/tools/policy.py, which enforces the gate
-// server-side regardless of what the UI offers.
+// Full Access is granted only to frontier providers (this list MUST match
+// FULL_ACCESS_PROVIDERS in src/copenet/core/tools/policy.py, enforced server-side
+// regardless of what the UI offers). Ask is ungated — the operator approves each
+// off-allowlist command, so the human is the gate.
 
 export interface AccessOption {
   id: string;
@@ -19,6 +21,7 @@ export const FULL_ACCESS_PROVIDERS = new Set(['claude-cli', 'openai-codex']);
 
 export const ACCESS_OPTIONS: AccessOption[] = [
   { id: 'none', label: 'Read-only', hint: 'Reads + safe shell commands' },
+  { id: 'ask', label: 'Ask', hint: 'Prompts you before anything off-allowlist' },
   { id: 'full-access', label: 'Full Access', hint: 'Writes + unrestricted shell' },
 ];
 
@@ -34,5 +37,8 @@ export function accessOptionsFor(providerId: string | null | undefined): AccessO
 
 /** Human label for a stored taskPromptId, from the Access perspective. */
 export function accessLabel(taskPromptId: string | null | undefined): string {
-  return (taskPromptId || '').trim().toLowerCase() === 'full-access' ? 'Full Access' : 'Read-only';
+  const id = (taskPromptId || '').trim().toLowerCase();
+  if (id === 'full-access') return 'Full Access';
+  if (id === 'ask') return 'Ask';
+  return 'Read-only';
 }
