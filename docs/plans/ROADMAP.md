@@ -120,8 +120,12 @@ is a container; each run picks its runtime; past runs never change.
   local models. A new feature class (sub-agents/orchestration), not a field unlock — its
   own design doc. The per-run-runtime + transcript-as-truth primitives from A/B1 are the
   substrate. See also the north-star section.
-- ⬜ **Live smoke test** — change Access→Ask on a locked session, resend an off-allowlist
-  command (e.g. `whoami`), confirm the approval prompt fires (now mobile-visible).
+- ✅ **Live smoke test (DONE 2026-06-21, on-device mobile).** Ask mode → `whoami` paused and
+  the approval card rendered inline in the chat on mobile; Approve ran it (exit 0,
+  `policyDecision: "allowed"`); "Always allow" persisted to the global allowlist so the next
+  two runs went straight through with no prompt. Full loop verified: prompt → approve →
+  standing allowlist → silent. Root cause of the earlier no-popup was a stale tailnet process
+  (pre-Brick-D code) + browser cache, not a code bug — resolved by restarting the tailnet host.
 
 ---
 
