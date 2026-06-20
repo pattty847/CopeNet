@@ -115,10 +115,13 @@ allowlist; per-run memory of approved commands. The bricks below add the rest.
   shell allowlist so common reads stop being silently blocked (the `cat` bug). Verified.
 - ✅ **B — persist last Access level.** The draft now persists `taskPromptId` so the chosen
   Access sticks across provider/model switches + reload (was resetting to `none`). Verified.
-- ⬜ **C — "Access" selector.** Rename Mode → Access (Read-only / Ask / Full Access). **Full
-  Access gated to Claude/OpenAI providers** (UI + backend guard). Move behavioral presets
-  (planning/debug/…) into Profiles. Keep the underlying `taskPromptId` field; map old locked
-  sessions' values safely (behavioral → read-only; Patrick OK leaving old sessions as-is).
+- 🟡 **C — "Access" selector.** Partially done:
+  - ✅ **Backend Full-Access gate**: `policy_for_task_mode(provider=…)` downgrades full-access
+    to read-only for non-Claude/OpenAI providers. Enforced regardless of UI.
+  - ⬜ UI: hide the Full Access option for non-Claude/OpenAI providers.
+  - ⬜ Rename Mode → Access (Read-only / Ask / Full Access).
+  - ⬜ Move behavioral presets (planning/debug/…) into Profiles. Keep the underlying
+    `taskPromptId` field; map old locked sessions' values safely (behavioral → read-only).
 - ⬜ **D — "Ask" mode.** Non-allowlisted shell/tools → `approval_required` (prompt) instead
   of silent block. The systemic `cat` fix; reuses the existing pause/card flow.
 - ⬜ **E — "Always allow"** on the approval card → a **global, persisted, editable** allowlist
