@@ -760,7 +760,9 @@ def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestCli
         assert [message["role"] for message in messages] == ["user", "assistant"]
         assert messages[-1]["content"] == "hello from fake provider"
 
-        mismatch_id = socket.request(
+        # Mid-session runtime mutability (B1): a same-provider model switch now
+        # reconciles and runs instead of erroring.
+        switch_id = socket.request(
             "chat.send",
             {
                 "sessionKey": "alpha",
@@ -771,10 +773,26 @@ def test_chat_send_streams_history_and_locked_binding_errors(rpc_client: TestCli
                 "taskPromptId": "general",
             },
         )
+        switch_started = socket.recv_response(switch_id)
+        switch_events = socket.recv_chat_until_terminal(session_key="alpha", run_id=switch_started["payload"]["runId"])
+        assert switch_events[-1]["payload"]["state"] == "final"
+
+        # Profile stays locked, so a profile mismatch still surfaces the binding error.
+        mismatch_id = socket.request(
+            "chat.send",
+            {
+                "sessionKey": "alpha",
+                "message": "Try a different profile",
+                "provider": "fake",
+                "model": "model-b",
+                "systemPromptId": "other",
+                "taskPromptId": "general",
+            },
+        )
         mismatch_started = socket.recv_response(mismatch_id)
         mismatch_events = socket.recv_chat_until_terminal(session_key="alpha", run_id=mismatch_started["payload"]["runId"])
         assert mismatch_events[-1]["payload"]["state"] == "error"
-        assert "locked to model" in mismatch_events[-1]["payload"]["errorMessage"]
+        assert "locked to profile" in mismatch_events[-1]["payload"]["errorMessage"]
 
 
 def test_chat_run_survives_websocket_disconnect_after_started_response(rpc_client: TestClient) -> None:
