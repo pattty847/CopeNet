@@ -127,6 +127,16 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
+import {
+  createMergedSessionRpc,
+  exportSessionRpc,
+  listSessionArtifactsRpc,
+  listSessionRunsRpc,
+  resolveMergeStateRpc,
+  resolveSessionRunRpc,
+  resolveSessionStateRpc,
+  revertEditRpc,
+} from './wsSessionRpc';
 export { normalizeAssistantDisplayText } from './wsNormalizers';
 
 type PendingRequest = {
@@ -782,19 +792,7 @@ class WsClient {
     workspaceRoot: string;
     title?: string;
   }): Promise<{ session: Session; mergeState: SessionMergeState | null }> {
-    const payload = await this.request<{ session: unknown; mergeState?: unknown | null }>('sessions.merge.create', {
-      sourceSessionKeys: params.sourceSessionKeys,
-      provider: params.provider,
-      model: params.model || undefined,
-      systemPromptId: params.systemPromptId || undefined,
-      taskPromptId: params.taskPromptId || undefined,
-      workspaceRoot: params.workspaceRoot || undefined,
-      title: params.title || undefined,
-    });
-    return {
-      session: normalizeSession(payload.session),
-      mergeState: normalizeMergeState(payload.mergeState),
-    };
+    return createMergedSessionRpc(this.request.bind(this), params);
   }
 
   async fetchApod(opts?: { date?: string; refresh?: boolean }): Promise<ApodResult> {
@@ -903,21 +901,11 @@ class WsClient {
   }
 
   async exportSession(key: string): Promise<SessionExportPayload> {
-    const payload = await this.request<{
-      session: unknown;
-      messages: PublicMessagePayload[];
-      markdown: string;
-    }>('sessions.export', { key });
-    return {
-      session: normalizeSession(payload.session),
-      messages: (payload.messages || []).map((message) => message),
-      markdown: String(payload.markdown || ''),
-    };
+    return exportSessionRpc(this.request.bind(this), key);
   }
 
   async listSessionRuns(key: string, limit = 20): Promise<SessionRunRecord[]> {
-    const payload = await this.request<{ runs?: SessionRunRecord[] }>('sessions.runs', { key, limit });
-    return Array.isArray(payload.runs) ? payload.runs : [];
+    return listSessionRunsRpc(this.request.bind(this), key, limit);
   }
 
   async upsertMemory(input: {
@@ -998,16 +986,12 @@ class WsClient {
   }
 
   async listSessionArtifacts(key: string, limit = 50): Promise<SessionArtifactRecord[]> {
-    const payload = await this.request<{ artifacts?: SessionArtifactRecord[] }>('sessions.artifacts', { key, limit });
-    return Array.isArray(payload.artifacts) ? payload.artifacts : [];
+    return listSessionArtifactsRpc(this.request.bind(this), key, limit);
   }
 
   /** Undo a model's file write/edit by restoring the recorded pre-edit content. */
   async revertEdit(key: string, path: string, afterDigest: string): Promise<{ ok: boolean; error?: string; path?: string; newDigest?: string }> {
-    return this.request<{ ok: boolean; error?: string; path?: string; newDigest?: string }>(
-      'sessions.revertEdit',
-      { key, path, afterDigest },
-    );
+    return revertEditRpc(this.request.bind(this), key, path, afterDigest);
   }
 
   /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run.
@@ -1055,18 +1039,15 @@ class WsClient {
   }
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
-    const payload = await this.request<{ run?: SessionRunRecord | null }>('sessions.run', { key, runId });
-    return payload.run ?? null;
+    return resolveSessionRunRpc(this.request.bind(this), key, runId);
   }
 
   async resolveSessionState(key: string): Promise<SessionStateRecord | null> {
-    const payload = await this.request<{ state?: SessionStateRecord | null }>('sessions.state', { key });
-    return payload.state ?? null;
+    return resolveSessionStateRpc(this.request.bind(this), key);
   }
 
   async resolveMergeState(key: string): Promise<SessionMergeState | null> {
-    const payload = await this.request<{ mergeState?: unknown | null }>('sessions.merge.state', { key });
-    return normalizeMergeState(payload.mergeState);
+    return resolveMergeStateRpc(this.request.bind(this), key);
   }
 
   async optimizePrompt(options: {
