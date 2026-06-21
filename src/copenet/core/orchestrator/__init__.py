@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import json
 import os
 import subprocess
 from dataclasses import dataclass
@@ -36,18 +35,6 @@ from copenet.core.orchestrator.catalog import (
     resolve_session as resolve_session_record,
 )
 from copenet.core.orchestrator.merge import merge_sessions as merge_session_record, resolve_merge_state as resolve_merge_state_record
-from copenet.core.orchestrator.messaging import (
-    delete_messaging_route as delete_messaging_route_record,
-    delete_messaging_destination as delete_messaging_destination_record,
-    get_messaging_config as get_messaging_config_record,
-    list_messaging_destinations as list_messaging_destinations_record,
-    list_messaging_routes as list_messaging_routes_record,
-    resolve_messaging_route as resolve_messaging_route_record,
-    test_messaging_platform as test_messaging_platform_record,
-    upsert_messaging_route as upsert_messaging_route_record,
-    upsert_messaging_destination as upsert_messaging_destination_record,
-    update_messaging_config as update_messaging_config_record,
-)
 from copenet.core.orchestrator.pulse import (
     create_pulse_from_session as create_pulse_from_session_record,
     dismiss_pulse as dismiss_pulse_record,
@@ -58,6 +45,9 @@ from copenet.core.pulse import PulseStore
 from copenet.core.persona import PersonaHomeService, PersonaPrivacyTier
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
+from copenet.core.orchestrator.facade_identity import IdentityFacadeMixin
+from copenet.core.orchestrator.facade_messaging import MessagingFacadeMixin
+from copenet.core.orchestrator.facade_provider_auth import ProviderAuthFacadeMixin
 from copenet.core.profile import PatProfileService
 from copenet.prompts.optimizer import optimize_prompt_variants
 from copenet.providers import Provider
@@ -107,7 +97,7 @@ class SessionInFlightError(RuntimeError):
         self.run_id = run_id
 
 
-class Orchestrator:
+class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacadeMixin):
     """Coordinates providers, session store, transcript store, and run lifecycle."""
 
     def __init__(
@@ -337,106 +327,6 @@ class Orchestrator:
         """List known sessions."""
         return list_session_catalog(self, include_archived=include_archived)
 
-    def get_messaging_config(self) -> dict:
-        """Return the persisted operator messaging configuration."""
-        return get_messaging_config_record(self)
-
-    def update_messaging_config(self, *, approval_policy: dict | None = None, telegram_defaults: dict | None = None) -> dict:
-        """Persist a minimal messaging configuration patch."""
-        return update_messaging_config_record(self, approval_policy=approval_policy, telegram_defaults=telegram_defaults)
-
-    def test_messaging_platform(self, platform: str = "telegram") -> dict:
-        """Run a conservative local messaging config test."""
-        return test_messaging_platform_record(self, platform=platform)
-
-    def list_messaging_destinations(self) -> list[dict]:
-        """Return configured messaging destinations."""
-        return list_messaging_destinations_record(self)
-
-    def upsert_messaging_destination(self, *, destination: dict) -> dict:
-        """Create or update one messaging destination."""
-        return upsert_messaging_destination_record(self, destination=destination)
-
-    def delete_messaging_destination(self, *, destination_id: str) -> dict:
-        """Delete one messaging destination."""
-        return delete_messaging_destination_record(self, destination_id=destination_id)
-
-    def list_messaging_routes(self) -> list[dict]:
-        """Return configured Telegram chat-to-session routes."""
-        return list_messaging_routes_record(self)
-
-    def upsert_messaging_route(self, *, route: dict) -> dict:
-        """Create or update one Telegram route mapping."""
-        return upsert_messaging_route_record(self, route=route)
-
-    def delete_messaging_route(self, *, route_id: str) -> dict:
-        """Delete one Telegram route mapping."""
-        return delete_messaging_route_record(self, route_id=route_id)
-
-    def resolve_messaging_route(
-        self,
-        *,
-        platform: str,
-        chat_id: str,
-        thread_id: str | None = None,
-        create_if_missing: bool = False,
-        title_hint: str | None = None,
-    ) -> dict:
-        """Resolve or autocreate the CopeNet session backing one messaging conversation."""
-        return resolve_messaging_route_record(
-            self,
-            platform=platform,
-            chat_id=chat_id,
-            thread_id=thread_id,
-            create_if_missing=create_if_missing,
-            title_hint=title_hint,
-        )
-
-    def provider_auth_status(self, provider_id: str) -> dict:
-        """Resolve auth status for a provider that owns local auth state."""
-        provider = self._providers.get(provider_id.strip())
-        auth_service = getattr(provider, "auth_service", None)
-        if auth_service is None or not hasattr(auth_service, "status"):
-            raise ValueError(f"provider does not expose auth management: {provider_id}")
-        return auth_service.status()
-
-    def provider_auth_begin_login(self, provider_id: str, redirect_uri: str | None = None) -> dict:
-        """Start an interactive provider auth login flow."""
-        provider = self._providers.get(provider_id.strip())
-        auth_service = getattr(provider, "auth_service", None)
-        if auth_service is None or not hasattr(auth_service, "begin_login"):
-            raise ValueError(f"provider does not expose auth management: {provider_id}")
-        return auth_service.begin_login(redirect_uri=redirect_uri)
-
-    def provider_auth_complete_login(
-        self,
-        provider_id: str,
-        *,
-        login_token: str,
-        redirect_url: str | None = None,
-        code: str | None = None,
-        state: str | None = None,
-    ) -> dict:
-        """Finish an interactive provider auth login flow."""
-        provider = self._providers.get(provider_id.strip())
-        auth_service = getattr(provider, "auth_service", None)
-        if auth_service is None or not hasattr(auth_service, "complete_login"):
-            raise ValueError(f"provider does not expose auth management: {provider_id}")
-        return auth_service.complete_login(
-            login_token=login_token,
-            redirect_url=redirect_url,
-            code=code,
-            state=state,
-        )
-
-    def provider_auth_logout(self, provider_id: str) -> dict:
-        """Clear provider-owned local auth state."""
-        provider = self._providers.get(provider_id.strip())
-        auth_service = getattr(provider, "auth_service", None)
-        if auth_service is None or not hasattr(auth_service, "logout"):
-            raise ValueError(f"provider does not expose auth management: {provider_id}")
-        return auth_service.logout()
-
     def resolve_session(self, session_key: str) -> dict | None:
         """Resolve one session by key."""
         return resolve_session_record(self, session_key)
@@ -534,184 +424,6 @@ class Orchestrator:
             workspace_root=workspace_root,
             emit_event=emit_event,
         )
-
-    def get_pat_profile(self) -> dict | None:
-        """Return the current public Pat Profile payload, if configured."""
-        profile = self._profile_service.load_profile()
-        return profile.to_public_dict() if profile is not None else None
-
-    def get_identity_prompt_payload(self) -> dict:
-        """Return the current identity prompt payload used by the harness."""
-        return self._profile_service.build_identity_prompt_payload(include_briefing=True).to_public_dict()
-
-    def get_persona(self, *, provider: str | None = None, model: str | None = None, privacy_tier: PersonaPrivacyTier | None = None) -> dict:
-        """Return the resolved Persona Home summary for UI clients."""
-        return self._persona_service.get_summary(provider=provider, model=model, privacy_tier=privacy_tier)
-
-    def get_persona_settings(self) -> dict:
-        """Return Persona Home defaults and provider/model overrides."""
-        return self._persona_service.load_settings().to_public_dict()
-
-    def list_personas(self, *, provider: str | None = None, model: str | None = None) -> list[dict]:
-        """List available personas (active one first) for the persona picker."""
-        return self._persona_service.list_personas(provider=provider, model=model)
-
-    def create_persona(self, *, persona_id: str, display_name: str | None = None) -> dict:
-        """Create a new persona scaffold and return its public record."""
-        return self._persona_service.create_persona(persona_id=persona_id, display_name=display_name)
-
-    def select_persona(self, *, persona_id: str, provider: str | None = None, model: str | None = None) -> dict:
-        """Activate a persona for the current runtime (overrides honored)."""
-        return self._persona_service.select_persona(persona_id=persona_id, provider=provider, model=model).to_public_dict()
-
-    def update_persona_settings(
-        self,
-        *,
-        default_persona_id: str | None = None,
-        default_privacy_tier: PersonaPrivacyTier | None = None,
-        model_overrides: dict | None = None,
-    ) -> dict:
-        """Persist Persona Home defaults and provider/model overrides."""
-        return self._persona_service.update_settings(
-            default_persona_id=default_persona_id,
-            default_privacy_tier=default_privacy_tier,
-            model_overrides=model_overrides,
-        ).to_public_dict()
-
-    def get_persona_context(
-        self,
-        *,
-        provider: str | None = None,
-        model: str | None = None,
-        privacy_tier: PersonaPrivacyTier | None = None,
-        query: str = "",
-    ) -> dict:
-        """Return effective Persona Home prompt context for debugging and UI proof."""
-        return self._persona_service.build_prompt_context(
-            provider=provider or "",
-            model=model,
-            privacy_tier=privacy_tier,
-            query=query,
-        ).to_public_dict()
-
-    async def draft_persona_flavor(self, *, provider_id: str, model: str | None = None) -> dict:
-        """Ask a model to draft its own compact identity flavor without saving it."""
-        provider = self._providers.get(provider_id)
-        if provider is None:
-            raise ValueError(f"unsupported provider: {provider_id}")
-        persona_context = self._persona_service.build_prompt_context(
-            provider=provider_id,
-            model=model,
-            privacy_tier="private",
-            query="draft a model flavor",
-        )
-        prompt = (
-            "Use this CopeNet Persona Home context as your base and draft a model-specific flavor.\n\n"
-            f"{persona_context.prompt}\n\n"
-            "Draft a compact CopeNet model identity flavor for yourself. "
-            "Return JSON only with displayName, identityMarkdown, soulMarkdown, and notesMarkdown. "
-            "Reflect the operator/workspace reality honestly. "
-            "Do not invent new private memories or claim a relationship history you do not have."
-        )
-        abort_event = asyncio.Event()
-        parts: list[str] = []
-        async for event in provider.run(
-            prompt=prompt,
-            provider_session_id=None,
-            abort_event=abort_event,
-            model=model,
-            system_prompt=(
-                "You draft concise assistant identity files for local operator review. "
-                "Use the provided Persona Home context carefully and stay grounded in the real workspace."
-            ),
-        ):
-            if event.kind == "delta" and event.text:
-                parts.append(event.text)
-        raw_text = "".join(parts).strip()
-        return {
-            "provider": provider_id,
-            "model": model,
-            "draft": _parse_persona_flavor_draft(raw_text),
-            "rawText": raw_text,
-        }
-
-    def save_persona_flavor(self, *, provider_id: str, model: str | None = None, draft: dict | None = None) -> dict:
-        """Save an operator-approved model identity flavor."""
-        return self._persona_service.save_flavor(provider=provider_id, model=model, draft=draft or {}).to_public_dict()
-
-    def list_memory(self, *, include_archived: bool = False, category: str | None = None, status: str = "active", limit: int = 50) -> list[dict]:
-        """Return recent user-visible memory items (status: active | draft | all)."""
-        return [
-            item.to_public_dict()
-            for item in self._memory_service.list_memory(
-                include_archived=include_archived,
-                category=category if category in {"preference", "project_convention", "ongoing_priority", "fact"} else None,
-                status=status,
-                limit=limit,
-            )
-        ]
-
-    def upsert_memory(
-        self,
-        *,
-        category: str,
-        title: str,
-        summary: str,
-        detail: str | None = None,
-        tags: list[str] | None = None,
-        memory_id: str | None = None,
-    ) -> dict:
-        """Create or update one user-visible memory item."""
-        item = self._memory_service.upsert_memory(
-            memory_id=memory_id,
-            category=category,  # type: ignore[arg-type]
-            title=title,
-            summary=summary,
-            detail=detail,
-            tags=tags or [],
-            source="explicit",
-            confidence=0.95,
-        )
-        return item.to_public_dict()
-
-    def archive_memory(self, *, memory_id: str, archived: bool = True) -> dict | None:
-        """Archive or restore one memory item."""
-        item = self._memory_service.archive_memory(memory_id, archived=archived)
-        return item.to_public_dict() if item is not None else None
-
-    def approve_memory(
-        self,
-        *,
-        memory_id: str,
-        category: str | None = None,
-        title: str | None = None,
-        summary: str | None = None,
-        detail: str | None = None,
-        tags: list[str] | None = None,
-    ) -> dict | None:
-        """Commit a model-proposed draft (optionally with operator edits)."""
-        item = self._memory_service.approve_memory(
-            memory_id,
-            category=category,  # type: ignore[arg-type]
-            title=title,
-            summary=summary,
-            detail=detail,
-            tags=tags,
-        )
-        return item.to_public_dict() if item is not None else None
-
-    def discard_memory(self, *, memory_id: str) -> bool:
-        """Delete a model-proposed draft outright."""
-        return self._memory_service.discard_memory(memory_id)
-
-    def list_profile_changelog(self, limit: int = 20) -> list[dict]:
-        """Return recent Pat Profile changelog entries."""
-        return [item.to_json() for item in self._profile_service.list_changelog(limit=limit)]
-
-    def get_return_briefing(self) -> dict | None:
-        """Return the latest return briefing payload, if any."""
-        briefing = self._profile_service.build_return_briefing()
-        return briefing.to_public_dict() if briefing is not None else None
 
     def validate_workspace_root(self, workspace_root: str | None) -> str:
         """Validate and normalize one session workspace root."""
@@ -1111,18 +823,3 @@ class Orchestrator:
             first_user_message=first_user_message,
             first_assistant_message=first_assistant_message,
         )
-
-
-def _parse_persona_flavor_draft(raw_text: str) -> dict:
-    try:
-        parsed = json.loads(raw_text)
-    except json.JSONDecodeError:
-        parsed = {}
-    if not isinstance(parsed, dict):
-        parsed = {}
-    return {
-        "displayName": str(parsed.get("displayName") or parsed.get("name") or "Model Flavor").strip(),
-        "identityMarkdown": str(parsed.get("identityMarkdown") or parsed.get("identity") or raw_text or "# Model Flavor").strip(),
-        "soulMarkdown": str(parsed.get("soulMarkdown") or parsed.get("soul") or "").strip(),
-        "notesMarkdown": str(parsed.get("notesMarkdown") or parsed.get("notes") or "").strip(),
-    }
