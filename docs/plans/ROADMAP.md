@@ -185,13 +185,54 @@ and a fresh README screenshot of the Permissions surface per the UI-polish conve
 
 ---
 
-## 🔵 Theme: Memory (after Personas — mirrors the same model)
+## 🟢 Theme: Memory (in progress — evolve the existing store, don't rebuild)
 
-- **Two scopes**, same as personas: **global/root** (`~/.copenet`) and **project** (repo-local).
-- **Model-initiated memory:** the model can be told "remember this."
-  - If the user didn't say **where** (global vs project) → **ask**.
-  - Then create a **draft** memory → user **approves or edits** before it's committed.
-- Reuse the editor surface for the approve/edit step.
+**Grounding decision (2026-06-21):** memory ALREADY exists as a solid JSON store —
+`core/memory/` (`MemoryStore` + `MemoryService`), with **relevance ranking already built**
+(`select_relevant`: term-overlap + category bonus, top-3 for tool runs / top-1 for text),
+injection via `_build_identity_memory_overlay` (runtime.py), RPCs (list/upsert/archive), a
+`memory.changed` event, and a `MemorySurface` UI. The "don't dump poo on the porch" concern
+is therefore **already solved**. So we EVOLVE this store rather than rebuild it as markdown
+files — the markdown-vs-JSON detail isn't the value; the value is the *AI-proposes →
+you-approve* loop + scopes, which is storage-agnostic. (Pure-markdown storage stays a
+possible later migration, not a prerequisite.)
+
+What's actually missing (the build, mirroring the Personas `persona.author` pattern):
+- ⬜ **M1 — `memory.remember` model tool + draft→approve.** The model proposes a memory
+  (category/title/summary/detail/tags) but it lands as a **draft** (`status="draft"`),
+  NOT committed. Operator approves / edits / discards from the Memory UI. Drafts are
+  excluded from relevance injection + the default list. Mirrors persona.author but
+  draft-first. `memory_service` is already on `ToolExecutionContext`.
+- ⬜ **M2 — scope (global vs project).** Add a `scope` field; project memory under
+  `<workspace_root>/.copenet/memory.json` (session_workspace_root is on the context). If the
+  model didn't say where, the approve step asks. (Global-only is fine for M1; add scope next.)
+- ⬜ **M3 — approve/edit surface** in `MemorySurface`: a "pending review" section with
+  Approve / Edit / Discard; Edit reuses the existing memory form.
+
+---
+
+## 🟣 Theme: Stock Watcher — the first heartbeat (parked, post-Memory)
+
+Patrick's one genuine "runs while I'm away" idea, and the ideal first heartbeat: weekday
+after-close cadence, free daily data (yfinance), read-only-safe, produces a "what I found
+while you were away" briefing artifact. **Honest framing:** not an alpha machine (edge gets
+arbitraged) — an **attention machine** that scans a universe so Patrick doesn't have to, and
+surfaces a short list for his judgment. Daily/monthly bars are the *correct* timeframe for
+the swing use case (intraday only matters for day-trading, which isn't the goal), so the
+"no free intraday" worry is a non-issue.
+
+Signal design (Patrick's):
+- **Ehlers MAMA/FAMA (MESA Adaptive MA) crossovers** on a long-term **monthly** swing basis.
+- Track the **% distance between MAMA and FAMA** to infer an *impending* crossover from
+  sideways/compression after a long trend (the adaptive lines compressing = setup forming).
+- Plus a **reversal/momentum** indicator and a **headline/news jumpstarter** for context.
+- **Universe scan** → spot opportunities; a second model angle hunts **long-term value**.
+- Aspiration: a real **alpha generator** (acknowledged hard; willing to try — "why not").
+
+Convergence: this is the first real consumer of **Memory** (watchlist, indicator thresholds,
+risk prefs) and the **heartbeat** that finally makes the return **briefing** substantive. Good
+candidate to dogfood **GPT-5.5-in-CopeNet** on the *greenfield indicator module* (low blast
+radius, obviously verifiable) while **Codex** takes the wsClient/orchestrator refactor.
 
 ---
 
