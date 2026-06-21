@@ -7,17 +7,8 @@
 // Until then, renders an honest "No profile overlay yet" empty state.
 
 import { ArrowRight, Brain, Clock } from 'lucide-react';
+import { formatLowercaseRelativeAge } from '../../lib/formatting';
 import { usePatProfile, useProfileChangelog } from '../../runtime/adapter';
-
-function timeAgo(iso: string): string {
-  const ms = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(ms / 60_000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 interface ProfileStatusCardProps {
   onViewChangelog?: () => void;
@@ -114,7 +105,7 @@ export function ProfileStatusCard({ onViewChangelog }: ProfileStatusCardProps) {
       <div className="mt-3 flex items-center justify-between">
         <div className="flex items-center gap-1 text-[10px] text-shell-muted">
           <Clock className="h-3 w-3" />
-          Updated {timeAgo(profile.lastUpdatedAt)}
+          Updated {formatLowercaseRelativeAge(profile.lastUpdatedAt)}
         </div>
         {onViewChangelog && (
           <button

@@ -15,19 +15,8 @@ import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { organizeSessionDrawerSections } from '../lib/sessionDrawer';
 import { describeSessionReturnCue } from '../lib/personalHistory';
+import { formatSessionAge } from '../lib/formatting';
 import type { Session } from '../types/backend';
-
-function timeAgo(dateString?: string | null) {
-  if (!dateString) return 'Just now';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  if (diffHours < 1) return 'Just now';
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
-}
 
 function compactModelName(model?: string | null) {
   if (!model) return '';
@@ -94,7 +83,7 @@ function SessionRow({
               <div className="truncate text-[13px] font-semibold text-shell-text">{session.title || session.key || 'New Chat'}</div>
               <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-shell-muted/85">
                 <div className="min-w-0 truncate" title={returnCue.primary}>{returnCue.primary}</div>
-                <span className="text-shell-muted/50 tabular-nums">{timeAgo(session.updatedAt || session.createdAt)}</span>
+                <span className="text-shell-muted/50 tabular-nums">{formatSessionAge(session.updatedAt || session.createdAt)}</span>
               </div>
             </div>
             <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
