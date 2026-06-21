@@ -137,6 +137,7 @@ import {
   resolveSessionStateRpc,
   revertEditRpc,
 } from './wsSessionRpc';
+import { browseWorkspaceRootRpc, setWorkspaceRootRpc } from './wsRuntimeRpc';
 export { normalizeAssistantDisplayText } from './wsNormalizers';
 
 type PendingRequest = {
@@ -715,22 +716,11 @@ class WsClient {
   }
 
   async browseWorkspaceRoot(): Promise<{ workspaceRoot: string | null; runtimeContext: RuntimeContext | null }> {
-    const payload = await this.request<{ workspaceRoot?: string | null; runtimeContext?: unknown | null }>('runtime.workspace.browse', {});
-    return {
-      workspaceRoot: payload.workspaceRoot ? String(payload.workspaceRoot) : null,
-      runtimeContext: normalizeRuntimeContext(payload.runtimeContext),
-    };
+    return browseWorkspaceRootRpc(this.request.bind(this));
   }
 
   async setWorkspaceRoot(workspaceRoot: string): Promise<RuntimeContext> {
-    const payload = await this.request<{ workspaceRoot?: string | null; runtimeContext?: unknown | null }>('runtime.workspace.set', {
-      workspaceRoot,
-    });
-    const runtimeContext = normalizeRuntimeContext(payload.runtimeContext);
-    if (!runtimeContext) {
-      throw new Error('Workspace root update returned no runtime context.');
-    }
-    return runtimeContext;
+    return setWorkspaceRootRpc(this.request.bind(this), workspaceRoot);
   }
 
   beginDraft() {
