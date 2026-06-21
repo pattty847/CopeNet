@@ -286,6 +286,8 @@ interface AppState {
   memoryItems: MemoryItem[];
   setMemoryItems: (items: MemoryItem[]) => void;
   upsertMemoryItem: (item: MemoryItem) => void;
+  memoryDrafts: MemoryItem[];
+  setMemoryDrafts: (items: MemoryItem[]) => void;
   lastMemoryChange: MemoryChangeEvent | null;
   setLastMemoryChange: (event: MemoryChangeEvent | null) => void;
   sessionIdentityUsage: Record<string, IdentityContextRuntime>;
@@ -690,6 +692,8 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       memoryItems: [item, ...state.memoryItems.filter((existing) => existing.id !== item.id)].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
     })),
+  memoryDrafts: [],
+  setMemoryDrafts: (memoryDrafts) => set({ memoryDrafts }),
   lastMemoryChange: null,
   setLastMemoryChange: (event) => set({ lastMemoryChange: event }),
   sessionIdentityUsage: {},

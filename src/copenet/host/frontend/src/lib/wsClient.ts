@@ -1147,6 +1147,9 @@ class WsClient {
 
     if (frame.event === 'memory.changed') {
       const payload = (frame.payload || {}) as Record<string, unknown>;
+      // Any memory change can affect the pending-drafts list (approve removes one,
+      // discard removes one, a fresh proposal adds one) — resync it.
+      void this.refreshMemoryDrafts();
       const item = normalizeMemoryItem(payload.item);
       if (item) {
         const store = useAppStore.getState();
@@ -1356,6 +1359,7 @@ class WsClient {
           ? memoryPayload.items.map(normalizeMemoryItem).filter((item): item is MemoryItem => item != null)
           : [],
       );
+      void this.refreshMemoryDrafts();
       store.setProfileChangelog(
         Array.isArray(changelogPayload.changelog)
           ? changelogPayload.changelog
@@ -1832,6 +1836,37 @@ class WsClient {
       archived,
     });
     return normalizeMemoryItem(payload.memoryItem);
+  }
+
+  /** Commit a model-proposed memory draft (optionally with operator edits). */
+  async approveMemory(id: string, edits?: { category?: MemoryItem['category']; title?: string; summary?: string; detail?: string | null }): Promise<MemoryItem | null> {
+    const payload = await this.request<{ memoryItem?: unknown | null }>('memory.approve', {
+      id,
+      category: edits?.category,
+      title: edits?.title,
+      summary: edits?.summary,
+      detail: edits?.detail ?? undefined,
+    });
+    return normalizeMemoryItem(payload.memoryItem);
+  }
+
+  /** Discard a model-proposed memory draft outright. */
+  async discardMemory(id: string): Promise<boolean> {
+    const payload = await this.request<{ discarded?: unknown }>('memory.discard', { id });
+    return Boolean(payload.discarded);
+  }
+
+  /** Refresh the pending (draft) memory list into the store. */
+  async refreshMemoryDrafts(): Promise<void> {
+    try {
+      const payload = await this.request<{ items?: unknown[] }>('memory.list', { status: 'draft', limit: 24 });
+      const drafts = Array.isArray(payload.items)
+        ? payload.items.map(normalizeMemoryItem).filter((item): item is MemoryItem => item != null)
+        : [];
+      useAppStore.getState().setMemoryDrafts(drafts);
+    } catch {
+      /* non-fatal: drafts surface refreshes on the next trigger */
+    }
   }
 
   async updatePersonaSettings(settings: PersonaSettings): Promise<PersonaSettings | null> {
@@ -2447,6 +2482,8 @@ class WsClient {
         store.setDraftOpen(false);
       }
       void this.refreshSessions();
+      // The run may have proposed a memory draft (memory.write) — surface it.
+      void this.refreshMemoryDrafts();
     }
   }
 }
