@@ -1,5 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
-import type { Message, PublicMessagePayload, Session } from '../types/backend';
+import type { Message, Provider, PublicMessagePayload, Session } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 import { normalizeMessage, normalizeSession } from './wsNormalizers';
 
@@ -7,6 +7,41 @@ type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
   params: Record<string, unknown>,
 ) => Promise<T>;
+
+const PROVIDER_PRIORITY = ['lm-studio', 'ollama', 'openai-codex'];
+
+function pickPreferredProvider(providers: Provider[]): string {
+  for (const id of PROVIDER_PRIORITY) {
+    if (providers.some((provider) => provider.id === id && provider.available !== false)) return id;
+  }
+  return providers.find((provider) => provider.available !== false)?.id || providers[0]?.id || 'openai-codex';
+}
+
+export function ensureDraftDefaultsAction(): void {
+  const store = useAppStore.getState();
+  const preferredProvider = pickPreferredProvider(store.providers);
+  const defaultProfile = store.profiles.find((item) => item.id === 'default')?.id || store.profiles[0]?.id || '';
+  const defaultTaskMode = store.taskModes.find((item) => item.id === 'none')?.id || store.taskModes[0]?.id || '';
+  const current = store.draftSettings;
+  const nextProvider = store.providers.some((provider) => provider.id === current.provider && provider.available !== false)
+    ? current.provider
+    : preferredProvider;
+  const knownModels = store.loadedModelProviders[nextProvider] ? store.modelsByProvider[nextProvider] || [] : [];
+  const nextModel = nextProvider === current.provider
+    ? (!knownModels.length || knownModels.some((item) => item.id === current.model) ? current.model : '')
+    : '';
+  const personaSettings = store.personaSettings;
+  store.replaceDraftSettings({
+    provider: nextProvider,
+    model: nextModel,
+    systemPromptId: store.profiles.some((item) => item.id === current.systemPromptId) ? current.systemPromptId : defaultProfile,
+    taskPromptId: store.taskModes.some((item) => item.id === current.taskPromptId) ? current.taskPromptId : defaultTaskMode,
+    personaId: current.personaId || personaSettings?.defaultPersonaId || 'default',
+    personaFlavorId: current.personaFlavorId || '',
+    personaPrivacyTier: current.personaPrivacyTier || personaSettings?.defaultPrivacyTier || 'private',
+    workspaceRoot: current.workspaceRoot || store.runtimeContext?.workspaceRoot || '',
+  });
+}
 
 export async function refreshSessionsAction(request: WsRpcRequest): Promise<void> {
   const payload = await request<{ sessions: unknown[] }>('sessions.list', {
@@ -32,7 +67,7 @@ export async function loadHistoryAction(request: WsRpcRequest, sessionKey: strin
   useAppStore.getState().setMessages(sessionKey, normalized);
 }
 
-export function beginDraftAction(ensureDraftDefaults: () => void): void {
+export function beginDraftAction(): void {
   const store = useAppStore.getState();
   store.setActiveSessionKey(null);
   store.setDraftOpen(true);
@@ -41,7 +76,7 @@ export function beginDraftAction(ensureDraftDefaults: () => void): void {
   store.setSessionDrawerOpen(false);
   store.setInspectorTarget(null);
   store.clearAppError();
-  ensureDraftDefaults();
+  ensureDraftDefaultsAction();
 }
 
 export async function renameSessionAction(request: WsRpcRequest, key: string, title: string): Promise<void> {

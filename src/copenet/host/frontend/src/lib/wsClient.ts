@@ -23,7 +23,6 @@ import {
   PromptOptimizationResult,
   PulseRecord,
   ProfileChangelogItem,
-  Provider,
   ProviderAuthStatus,
   PublicMessagePayload,
   RuntimeContext,
@@ -142,6 +141,7 @@ import {
   archiveSessionAction,
   beginDraftAction,
   debugCopySessionAction,
+  ensureDraftDefaultsAction,
   loadHistoryAction,
   refreshSessionsAction,
   renameSessionAction,
@@ -157,7 +157,6 @@ const RECONNECT_DELAY_MS = 3000;
 const CONNECT_TIMEOUT_MS = 10000;
 const REQUEST_TIMEOUT_MS = 15000;
 const DEFAULT_DEV_TOKEN = 'dev-token';
-const PROVIDER_PRIORITY = ['lm-studio', 'ollama', 'openai-codex'];
 
 function getEnvString(name: 'VITE_COPNET_WS_URL' | 'VITE_COPNET_TOKEN'): string {
   const meta = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: Record<string, unknown> }) : undefined;
@@ -179,13 +178,6 @@ function getAuthToken(): string {
   const fromStorage = typeof window !== 'undefined' ? window.localStorage.getItem('copnet.token') || '' : '';
   const fromMeta = typeof document !== 'undefined' ? document.querySelector('meta[name="copnet-token"]')?.getAttribute('content')?.trim() || '' : '';
   return envToken || fromWindow || fromStorage || fromMeta || DEFAULT_DEV_TOKEN;
-}
-
-function pickPreferredProvider(providers: Provider[]): string {
-  for (const id of PROVIDER_PRIORITY) {
-    if (providers.some((provider) => provider.id === id && provider.available !== false)) return id;
-  }
-  return providers.find((provider) => provider.available !== false)?.id || providers[0]?.id || 'openai-codex';
 }
 
 class WsClient {
@@ -524,32 +516,6 @@ class WsClient {
     this.pendingRequests.clear();
   }
 
-  private ensureDraftDefaults() {
-    const store = useAppStore.getState();
-    const preferredProvider = pickPreferredProvider(store.providers);
-    const defaultProfile = store.profiles.find((item) => item.id === 'default')?.id || store.profiles[0]?.id || '';
-    const defaultTaskMode = store.taskModes.find((item) => item.id === 'none')?.id || store.taskModes[0]?.id || '';
-    const current = store.draftSettings;
-    const nextProvider = store.providers.some((provider) => provider.id === current.provider && provider.available !== false)
-      ? current.provider
-      : preferredProvider;
-    const knownModels = store.loadedModelProviders[nextProvider] ? store.modelsByProvider[nextProvider] || [] : [];
-    const nextModel = nextProvider === current.provider
-      ? (!knownModels.length || knownModels.some((item) => item.id === current.model) ? current.model : '')
-      : '';
-    const personaSettings = store.personaSettings;
-    store.replaceDraftSettings({
-      provider: nextProvider,
-      model: nextModel,
-      systemPromptId: store.profiles.some((item) => item.id === current.systemPromptId) ? current.systemPromptId : defaultProfile,
-      taskPromptId: store.taskModes.some((item) => item.id === current.taskPromptId) ? current.taskPromptId : defaultTaskMode,
-      personaId: current.personaId || personaSettings?.defaultPersonaId || 'default',
-      personaFlavorId: current.personaFlavorId || '',
-      personaPrivacyTier: current.personaPrivacyTier || personaSettings?.defaultPrivacyTier || 'private',
-      workspaceRoot: current.workspaceRoot || store.runtimeContext?.workspaceRoot || '',
-    });
-  }
-
   private async bootstrap() {
     try {
       const [providersPayload, toolsPayload, promptsPayload, sessionsPayload, profilePayload, personaPayload, personaSettingsPayload, identityPayload, memoryPayload, changelogPayload, briefingPayload, runtimeContextPayload, pulsePayload, messagingPayload, approvalsPayload] = await Promise.all([
@@ -617,7 +583,7 @@ class WsClient {
         store.setRunPausedReason('awaiting_approval');
         store.upsertApprovalInHistory(recoveredApproval);
       }
-      this.ensureDraftDefaults();
+      ensureDraftDefaultsAction();
 
       const currentKey = store.activeSessionKey;
       const hasCurrent = currentKey && sessions.some((session) => session.key === currentKey);
@@ -689,7 +655,7 @@ class WsClient {
       .then((payload) => {
         const models = (payload.models || []).map(normalizeModel);
         useAppStore.getState().setModelsForProvider(providerId, models);
-        this.ensureDraftDefaults();
+        ensureDraftDefaultsAction();
         this.modelLoads.delete(providerId);
         return models;
       })
@@ -716,7 +682,7 @@ class WsClient {
   }
 
   beginDraft() {
-    beginDraftAction(() => this.ensureDraftDefaults());
+    beginDraftAction();
   }
 
   async renameSession(key: string, title: string) {
