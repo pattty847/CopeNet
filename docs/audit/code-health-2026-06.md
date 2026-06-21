@@ -123,3 +123,28 @@ Local `main` was clean and ahead of `origin/main` by 27 commits, not behind.
 
 No seam changes are needed for the first pass; the brief's low-risk-to-high-value order still
 looks correct, with `rpc_catalog.py` before orchestrator slimming to reduce facade pressure first.
+
+## Refactor pass progress — 2026-06-21
+
+Completed checkpoints on `refactor/god-objects`:
+
+| Phase | Status | Before | After | Notes |
+|---|---|---:|---:|---|
+| P0 re-audit | Done | n/a | n/a | Refreshed counts and confirmed seams in this document. |
+| P1 `lib/formatting.ts` | Done | Duplicate local helpers in 14 files | `formatting.ts` 119 lines | Removed local `timeAgo`/duration variants while preserving their display differences. |
+| P2 `core/_json_store.py` | Done | 6 local JSON helper/write paths | `_json_store.py` 30 lines | Centralized JSON read, atomic JSON write, and JSONL append helpers. |
+| P3 `wsClient.ts` normalizers | Done | `wsClient.ts` 2491 lines | `wsClient.ts` 1540 lines | Extracted `wsNormalizers.ts` (900), `wsMessagingRpc.ts` (172), and `wsIdentityRpc.ts` (202). |
+
+Verification run after each extraction:
+
+- P1: `npx tsc --noEmit`; `npm run build`
+- P2: focused storage/profile/persona tests; `python3 -m py_compile $(rg --files src/copenet -g '*.py')`; `uv run --extra dev pytest -q` (`414 passed`)
+- P3 slices: `npx tsc --noEmit`; `npm run build` after each slice
+
+Intentionally left for later small cuts:
+
+- `wsClient.ts` still owns socket lifecycle, bootstrap/reconnect reconciliation, chat streaming,
+  and several RPC domains. Continue with domain RPC modules before attempting `wsConnection.ts`.
+- `wsNormalizers.ts` is large at 900 lines, but it is a single responsibility and a safer
+  intermediate state than keeping normalization inside the socket facade.
+- P4+ (`tool_loop.py`, `rpc_catalog.py`, orchestrator facade) not started in this checkpoint.
