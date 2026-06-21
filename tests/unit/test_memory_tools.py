@@ -29,6 +29,36 @@ def _tool_context(tmp_path: Path, *, policy: ToolPolicy | None = None) -> ToolEx
     )
 
 
+def test_memory_draft_lifecycle_propose_approve_discard(tmp_path: Path) -> None:
+    service = MemoryService(MemoryStore(tmp_path / "memory.json"))
+
+    draft = service.propose_memory(category="fact", title="Home base", summary="Patrick is a Starbucks shift supervisor.")
+    assert draft.status == "draft"
+
+    # Drafts are excluded from the default list and from relevance injection.
+    assert service.list_memory() == []
+    assert service.select_relevant(query="Starbucks supervisor") == []
+    # …but visible when explicitly listing drafts.
+    drafts = service.list_memory(status="draft")
+    assert [d.id for d in drafts] == [draft.id]
+
+    # Proposing again never mutates an existing memory — it's a fresh draft.
+    second = service.propose_memory(category="fact", title="Home base", summary="Patrick is a Starbucks shift supervisor.")
+    assert second.id != draft.id
+    assert len(service.list_memory(status="draft")) == 2
+
+    # Approve one, discard the other.
+    approved = service.approve_memory(draft.id, summary="Patrick is a Starbucks shift supervisor (edited).")
+    assert approved is not None and approved.status == "active"
+    assert approved.summary.endswith("(edited).")
+    assert service.discard_memory(second.id) is True
+
+    active = service.list_memory()
+    assert [a.id for a in active] == [draft.id]
+    assert service.list_memory(status="draft") == []
+    assert len(service.select_relevant(query="Starbucks supervisor")) == 1
+
+
 def test_memory_store_round_trips_and_archives_items(tmp_path: Path) -> None:
     store = MemoryStore(tmp_path / "memory.json")
     service = MemoryService(store)
@@ -109,14 +139,28 @@ async def test_memory_read_and_write_tools_persist_user_visible_memory(tmp_path:
         context,
     )
 
+    # memory.write now PROPOSES a draft (draft-first): the model can't silently commit.
     assert write_result.ok is True
     assert write_result.output["item"]["title"] == "Chat vibe"
+    assert write_result.output["item"]["status"] == "draft"
+    memory_id = write_result.output["item"]["id"]
 
-    read_result = await registry.execute(
+    # A draft is NOT recallable / injectable until approved.
+    read_before = await registry.execute(
         ToolExecutionRequest(tool_id="memory.read", arguments={"query": "warm conversation", "limit": 3}),
         context,
     )
+    assert read_before.ok is True
+    assert read_before.output["count"] == 0
 
-    assert read_result.ok is True
-    assert read_result.output["count"] == 1
-    assert read_result.output["items"][0]["summary"] == "Keep the conversation fluid and warm."
+    # Operator approves the draft -> it becomes active and recallable.
+    approved = context.memory_service.approve_memory(memory_id)
+    assert approved is not None and approved.status == "active"
+
+    read_after = await registry.execute(
+        ToolExecutionRequest(tool_id="memory.read", arguments={"query": "warm conversation", "limit": 3}),
+        context,
+    )
+    assert read_after.ok is True
+    assert read_after.output["count"] == 1
+    assert read_after.output["items"][0]["summary"] == "Keep the conversation fluid and warm."

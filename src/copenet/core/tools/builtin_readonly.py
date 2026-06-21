@@ -37,6 +37,10 @@ MANIFEST_TOOL_IDS = {
     "web.search",
     "web.fetch",
     "persona.author",
+    # Memory came back into the manifest redesigned as draft-first (§3.6 opt-in):
+    # memory.read recalls, memory.write PROPOSES a draft that the operator approves.
+    "memory.read",
+    "memory.write",
 }
 
 # ALL_DESCRIPTORS stays the full set so the registry can still ROUTE + policy-check

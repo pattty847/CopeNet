@@ -181,6 +181,8 @@ class CopeNetWsServer:
                                 "memory.list",
                                 "memory.upsert",
                                 "memory.archive",
+                                "memory.approve",
+                                "memory.discard",
                                 "runtime.context",
                                 "runtime.workspace.browse",
                                 "runtime.workspace.set",
