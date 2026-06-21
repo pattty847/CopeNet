@@ -138,6 +138,14 @@ import {
   revertEditRpc,
 } from './wsSessionRpc';
 import { browseWorkspaceRootRpc, setWorkspaceRootRpc } from './wsRuntimeRpc';
+import {
+  archiveSessionAction,
+  beginDraftAction,
+  debugCopySessionAction,
+  loadHistoryAction,
+  refreshSessionsAction,
+  renameSessionAction,
+} from './wsSessionActions';
 export { normalizeAssistantDisplayText } from './wsNormalizers';
 
 type PendingRequest = {
@@ -665,10 +673,7 @@ class WsClient {
   }
 
   async refreshSessions() {
-    const payload = await this.request<{ sessions: unknown[] }>('sessions.list', {
-      includeArchived: useAppStore.getState().showArchived,
-    });
-    useAppStore.getState().setSessions((payload.sessions || []).map(normalizeSession));
+    return refreshSessionsAction(this.request.bind(this));
   }
 
   async loadModels(providerId: string): Promise<Model[]> {
@@ -699,20 +704,7 @@ class WsClient {
   }
 
   async loadHistory(sessionKey: string) {
-    const payload = await this.request<{ sessionKey: string; messages: PublicMessagePayload[] }>('chat.history', {
-      sessionKey,
-      limit: 200,
-    });
-    const normalized = (payload.messages || []).map((message, index) =>
-      normalizeMessage(
-        message,
-        sessionKey,
-        `history-${sessionKey}-${index}-${message.timestamp || index}`,
-        (message.role as Message['role']) || 'assistant',
-        (message.state as Message['state']) || 'final',
-      ),
-    );
-    useAppStore.getState().setMessages(sessionKey, normalized);
+    return loadHistoryAction(this.request.bind(this), sessionKey);
   }
 
   async browseWorkspaceRoot(): Promise<{ workspaceRoot: string | null; runtimeContext: RuntimeContext | null }> {
@@ -724,53 +716,24 @@ class WsClient {
   }
 
   beginDraft() {
-    const store = useAppStore.getState();
-    store.setActiveSessionKey(null);
-    store.setDraftOpen(true);
-    store.setDraftStarterIntent(null);
-    store.setMessages(DRAFT_TRANSCRIPT_SESSION_KEY, []);
-    store.setSessionDrawerOpen(false);
-    store.setInspectorTarget(null);
-    store.clearAppError();
-    this.ensureDraftDefaults();
+    beginDraftAction(() => this.ensureDraftDefaults());
   }
 
   async renameSession(key: string, title: string) {
-    const payload = await this.request<{ session: unknown }>('sessions.rename', { key, title: title || undefined });
-    if (payload.session) {
-      useAppStore.getState().upsertSession(normalizeSession(payload.session));
-    }
+    return renameSessionAction(this.request.bind(this), key, title);
   }
 
   async archiveSession(key: string, archived: boolean) {
-    const payload = await this.request<{ session: unknown }>('sessions.archive', { key, archived });
-    if (payload.session) {
-      useAppStore.getState().upsertSession(normalizeSession(payload.session));
-    }
-    const store = useAppStore.getState();
-    if (!archived) {
-      // Restoring: switch to active view and re-select the session so it's immediately visible.
-      store.setShowArchived(false);
-      store.setActiveSessionKey(key);
-      store.setDraftOpen(false);
-    } else if (store.activeSessionKey === key) {
-      // Archiving the currently active session — deselect it.
-      store.setActiveSessionKey(null);
-    }
-    await this.refreshSessions();
+    return archiveSessionAction(this.request.bind(this), () => this.refreshSessions(), key, archived);
   }
 
   async debugCopySession(key: string): Promise<Session> {
-    const payload = await this.request<{ session: unknown }>('sessions.debugCopy', { key });
-    const session = normalizeSession(payload.session);
-    const store = useAppStore.getState();
-    store.upsertSession(session);
-    store.setShowArchived(false);
-    store.setActiveSessionKey(session.key);
-    store.setDraftOpen(false);
-    await this.refreshSessions();
-    await this.loadHistory(session.key);
-    return session;
+    return debugCopySessionAction(
+      this.request.bind(this),
+      () => this.refreshSessions(),
+      (sessionKey) => this.loadHistory(sessionKey),
+      key,
+    );
   }
 
   async createMergedSession(params: {
