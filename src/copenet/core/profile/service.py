@@ -9,6 +9,11 @@ from typing import Any
 from uuid import uuid4
 
 from copenet._paths import default_pat_profile_dir
+from copenet.core._json_store import (
+    append_jsonl as _append_jsonl,
+    read_json as _read_json,
+    write_json_atomic as _write_json,
+)
 from copenet.core.runtime import RunRecord, RunStore
 from copenet.core.sessions.session_store import utc_now_iso
 
@@ -17,31 +22,11 @@ def _profile_template_dir() -> Path:
     return Path(__file__).resolve().parent / "templates"
 
 
-def _read_json(path: Path, fallback: Any) -> Any:
-    if not path.exists():
-        return fallback
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return fallback
-
-
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-
-
 def _read_markdown(path: Path, fallback: str = "") -> str:
     try:
         return path.read_text(encoding="utf-8")
     except OSError:
         return fallback
-
-
-def _append_jsonl(path: Path, payload: dict[str, Any]) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8", newline="\n") as handle:
-        handle.write(json.dumps(payload, ensure_ascii=False) + "\n")
 
 
 def _merge_dict(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:

@@ -10,6 +10,7 @@ import threading
 from typing import Any, Literal
 from uuid import uuid4
 
+from copenet.core._json_store import read_json, write_json_atomic
 from copenet.core.sessions.session_store import utc_now_iso
 
 PlatformConnectionStatus = Literal["connected", "disconnected", "error", "unconfigured"]
@@ -325,11 +326,8 @@ class MessagingConfigStore:
         return updated
 
     def _load_unlocked(self) -> MessagingConfigRecord:
-        if not self._path.exists():
-            return _default_record_from_env()
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
+        raw = read_json(self._path, None)
+        if raw is None:
             return _default_record_from_env()
         if not isinstance(raw, dict):
             return _default_record_from_env()
@@ -340,9 +338,7 @@ class MessagingConfigStore:
 
     def _save_unlocked(self, record: MessagingConfigRecord) -> None:
         payload = {"config": record.to_json(), "updated_at": utc_now_iso()}
-        tmp_path = self._path.with_suffix(".tmp")
-        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp_path.replace(self._path)
+        write_json_atomic(self._path, payload, trailing_newline=False)
 
 
 def _default_record_from_env() -> MessagingConfigRecord:

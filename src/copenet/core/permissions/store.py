@@ -11,11 +11,11 @@ whitespace-normalized so trivial spacing differences don't create duplicates.
 
 from __future__ import annotations
 
-import json
 from pathlib import Path
 import threading
 from typing import Any
 
+from copenet.core._json_store import read_json, write_json_atomic
 from copenet.core.sessions.session_store import utc_now_iso
 
 
@@ -36,14 +36,7 @@ class PermissionStore:
         self._load_unlocked()
 
     def _load_unlocked(self) -> None:
-        if not self._path.exists():
-            self._entries = {}
-            return
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            self._entries = {}
-            return
+        raw = read_json(self._path, {})
         rows = raw.get("commands") if isinstance(raw, dict) else None
         entries: dict[str, dict[str, str]] = {}
         if isinstance(rows, list):
@@ -60,9 +53,7 @@ class PermissionStore:
     def _save_unlocked(self) -> None:
         ordered = sorted(self._entries.values(), key=lambda e: e["command"])
         payload = {"commands": ordered}
-        tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        tmp.replace(self._path)
+        write_json_atomic(self._path, payload)
 
     def is_allowed(self, command: str) -> bool:
         """True when this exact (normalized) command is on the global allowlist."""

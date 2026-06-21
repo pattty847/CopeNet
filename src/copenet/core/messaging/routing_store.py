@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-import json
 from pathlib import Path
 import threading
 from typing import Any
 from uuid import uuid4
+
+from copenet.core._json_store import read_json, write_json_atomic
 
 
 def _required_text(raw: dict[str, Any], key: str) -> str:
@@ -114,12 +115,7 @@ class TelegramSessionRouteStore:
             return rows
 
     def _load_unlocked(self) -> list[TelegramSessionRouteRecord]:
-        if not self._path.exists():
-            return []
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return []
+        raw = read_json(self._path, [])
         payload = raw.get("routes") if isinstance(raw, dict) and isinstance(raw.get("routes"), list) else raw
         if not isinstance(payload, list):
             return []
@@ -140,9 +136,7 @@ class TelegramSessionRouteStore:
 
     def _save_unlocked(self, routes: list[TelegramSessionRouteRecord]) -> None:
         payload = {"routes": [item.to_json() for item in routes]}
-        tmp_path = self._path.with_suffix('.tmp')
-        tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding='utf-8')
-        tmp_path.replace(self._path)
+        write_json_atomic(self._path, payload, trailing_newline=False)
 
 
 def _normalize_route(route: TelegramSessionRouteRecord) -> TelegramSessionRouteRecord:
