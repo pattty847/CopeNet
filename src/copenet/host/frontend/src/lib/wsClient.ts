@@ -21,7 +21,6 @@ import {
   PersonaListItem,
   PersonaSettings,
   PromptOptimizationResult,
-  PromptOptimizationVariant,
   PulseRecord,
   ProfileChangelogItem,
   Provider,
@@ -75,7 +74,6 @@ import {
   normalizeReturnBriefing,
   normalizeRuntimeContext,
   normalizeSession,
-  normalizeShellAllowlist,
   normalizeTelegramRoute,
   normalizeTool,
   normalizeToolEffect,
@@ -110,6 +108,25 @@ import {
   updatePersonaSettingsRpc,
   upsertMemoryRpc,
 } from './wsIdentityRpc';
+import {
+  addShellAllowlistRpc,
+  createPulseFromSessionRpc,
+  dismissPulseRpc,
+  fetchApodRpc,
+  listPulsesRpc,
+  listShellAllowlistRpc,
+  listWorkspaceFilesRpc,
+  optimizePromptRpc,
+  providerAuthBeginLoginRpc,
+  providerAuthLogoutRpc,
+  providerAuthStatusRpc,
+  readPersonaFileRpc,
+  readWorkspaceFileRpc,
+  removeShellAllowlistRpc,
+  savePulsesRpc,
+  writePersonaFileRpc,
+  writeWorkspaceFileRpc,
+} from './wsSupportRpc';
 export { normalizeAssistantDisplayText } from './wsNormalizers';
 
 type PendingRequest = {
@@ -781,22 +798,11 @@ class WsClient {
   }
 
   async fetchApod(opts?: { date?: string; refresh?: boolean }): Promise<ApodResult> {
-    const payload = await this.request<Partial<ApodResult>>('nasa.apod', {
-      date: opts?.date,
-      refresh: opts?.refresh ?? false,
-    });
-    return {
-      configured: Boolean(payload.configured),
-      apod: payload.apod ?? null,
-      error: payload.error ?? null,
-    };
+    return fetchApodRpc(this.request.bind(this), opts);
   }
 
   async listPulses(): Promise<PulseRecord[]> {
-    const payload = await this.request<{ pulses?: unknown[] }>('pulse.list', {});
-    return Array.isArray(payload.pulses)
-      ? payload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null)
-      : [];
+    return listPulsesRpc(this.request.bind(this));
   }
 
   async getMessagingConfig(): Promise<MessagingConfig | null> {
@@ -878,23 +884,11 @@ class WsClient {
     systemPromptId: string;
     taskPromptId: string;
   }): Promise<PulseRecord> {
-    const payload = await this.request<{ pulse: unknown }>('pulse.create_from_session', {
-      sessionKey: params.sessionKey,
-      provider: params.provider,
-      model: params.model || undefined,
-      systemPromptId: params.systemPromptId || undefined,
-      taskPromptId: params.taskPromptId || undefined,
-    });
-    const pulse = normalizePulse(payload.pulse);
-    if (!pulse) throw new Error('Pulse creation returned no pulse.');
-    return pulse;
+    return createPulseFromSessionRpc(this.request.bind(this), params);
   }
 
   async dismissPulse(pulseId: string): Promise<PulseRecord> {
-    const payload = await this.request<{ pulse: unknown }>('pulse.dismiss', { pulseId });
-    const pulse = normalizePulse(payload.pulse);
-    if (!pulse) throw new Error('Pulse dismiss returned no pulse.');
-    return pulse;
+    return dismissPulseRpc(this.request.bind(this), pulseId);
   }
 
   async savePulses(params: {
@@ -905,18 +899,7 @@ class WsClient {
     taskPromptId: string;
     workspaceRoot: string;
   }): Promise<{ session: Session; mergeState: SessionMergeState | null }> {
-    const payload = await this.request<{ session: unknown; mergeState?: unknown | null }>('pulse.save', {
-      pulseIds: params.pulseIds,
-      provider: params.provider,
-      model: params.model || undefined,
-      systemPromptId: params.systemPromptId || undefined,
-      taskPromptId: params.taskPromptId || undefined,
-      workspaceRoot: params.workspaceRoot || undefined,
-    });
-    return {
-      session: normalizeSession(payload.session),
-      mergeState: normalizeMergeState(payload.mergeState),
-    };
+    return savePulsesRpc(this.request.bind(this), params);
   }
 
   async exportSession(key: string): Promise<SessionExportPayload> {
@@ -1035,43 +1018,40 @@ class WsClient {
 
   /** Global shell allowlist (Access & Permissions — Brick F): the operator's standing approvals. */
   async listShellAllowlist(): Promise<ShellAllowlistEntry[]> {
-    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.list', {});
-    return normalizeShellAllowlist(payload.commands);
+    return listShellAllowlistRpc(this.request.bind(this));
   }
 
   async addShellAllowlist(command: string): Promise<ShellAllowlistEntry[]> {
-    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.add', { command });
-    return normalizeShellAllowlist(payload.commands);
+    return addShellAllowlistRpc(this.request.bind(this), command);
   }
 
   async removeShellAllowlist(command: string): Promise<ShellAllowlistEntry[]> {
-    const payload = await this.request<{ commands?: unknown[] }>('permissions.allowlist.remove', { command });
-    return normalizeShellAllowlist(payload.commands);
+    return removeShellAllowlistRpc(this.request.bind(this), command);
   }
 
   /** List viewable files under a session's workspace root (read-only file viewer). */
   async listWorkspaceFiles(key: string): Promise<{ root: string; files: WorkspaceFile[] }> {
-    return this.request<{ root: string; files: WorkspaceFile[] }>('workspace.listFiles', { key });
+    return listWorkspaceFilesRpc(this.request.bind(this), key);
   }
 
   /** Read one file under a session's workspace root, rendered by the file viewer. */
   async readWorkspaceFile(key: string, path: string): Promise<WorkspaceFileContent> {
-    return this.request<WorkspaceFileContent & Record<string, unknown>>('workspace.readFile', { key, path });
+    return readWorkspaceFileRpc(this.request.bind(this), key, path);
   }
 
   /** Operator inline-edit: write a file under a session's workspace root (revertible). */
   async writeWorkspaceFile(key: string, path: string, content: string): Promise<WorkspaceFileContent & { digest: string; revertible: boolean }> {
-    return this.request<WorkspaceFileContent & { digest: string; revertible: boolean } & Record<string, unknown>>('workspace.writeFile', { key, path, content });
+    return writeWorkspaceFileRpc(this.request.bind(this), key, path, content);
   }
 
   /** Read one persona file (scoped to the persona root) for the inline editor. */
   async readPersonaFile(path: string): Promise<WorkspaceFileContent> {
-    return this.request<WorkspaceFileContent & Record<string, unknown>>('persona.readFile', { path });
+    return readPersonaFileRpc(this.request.bind(this), path);
   }
 
   /** Operator inline-edit: write a persona file (scoped to the persona root, revertible). */
   async writePersonaFile(path: string, content: string): Promise<WorkspaceFileContent & { digest: string; revertible: boolean }> {
-    return this.request<WorkspaceFileContent & { digest: string; revertible: boolean } & Record<string, unknown>>('persona.writeFile', { path, content });
+    return writePersonaFileRpc(this.request.bind(this), path, content);
   }
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
@@ -1095,26 +1075,7 @@ class WsClient {
     model?: string;
     customTransform?: string;
   }): Promise<PromptOptimizationResult> {
-    const payload = await this.request<{
-      variants?: PromptOptimizationVariant[];
-      provider?: string;
-      model?: string | null;
-    }>('prompts.optimize', {
-      prompt: options.prompt,
-      provider: options.provider || undefined,
-      model: options.model || undefined,
-      customTransform: options.customTransform || undefined,
-    });
-    return {
-      variants: Array.isArray(payload.variants) ? payload.variants.map((variant) => ({
-        id: String(variant.id || ''),
-        label: String(variant.label || ''),
-        prompt: String(variant.prompt || ''),
-        rationale: String(variant.rationale || ''),
-      })).filter((variant) => variant.id && variant.prompt) : [],
-      provider: String(payload.provider || options.provider || ''),
-      model: payload.model == null ? null : String(payload.model),
-    };
+    return optimizePromptRpc(this.request.bind(this), options);
   }
 
   async sendMessage(message: string) {
@@ -1250,21 +1211,15 @@ class WsClient {
   // ---------------------------------------------------------------------------
 
   async providerAuthStatus(providerId: string): Promise<ProviderAuthStatus> {
-    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.status', { provider: providerId });
-    return payload.status;
+    return providerAuthStatusRpc(this.request.bind(this), providerId);
   }
 
   async providerAuthBeginLogin(providerId: string, redirectUri?: string): Promise<{ loginId: string; authorizeUrl: string; redirectUri: string; state: string }> {
-    const payload = await this.request<{ login: { loginId: string; authorizeUrl: string; redirectUri: string; state: string } }>(
-      'providerAuth.beginLogin',
-      { provider: providerId, redirectUri: redirectUri ?? undefined },
-    );
-    return payload.login;
+    return providerAuthBeginLoginRpc(this.request.bind(this), providerId, redirectUri);
   }
 
   async providerAuthLogout(providerId: string): Promise<ProviderAuthStatus> {
-    const payload = await this.request<{ status: ProviderAuthStatus }>('providerAuth.logout', { provider: providerId });
-    return payload.status;
+    return providerAuthLogoutRpc(this.request.bind(this), providerId);
   }
 
   private handleChatEvent(payload: ChatEventPayload) {
