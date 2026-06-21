@@ -133,7 +133,7 @@ Completed checkpoints on `refactor/god-objects`:
 | P0 re-audit | Done | n/a | n/a | Refreshed counts and confirmed seams in this document. |
 | P1 `lib/formatting.ts` | Done | Duplicate local helpers in 14 files | `formatting.ts` 119 lines | Removed local `timeAgo`/duration variants while preserving their display differences. |
 | P2 `core/_json_store.py` | Done | 6 local JSON helper/write paths | `_json_store.py` 30 lines | Centralized JSON read, atomic JSON write, and JSONL append helpers. |
-| P3 `wsClient.ts` normalizers + RPC domains | In progress | `wsClient.ts` 2491 lines | `wsClient.ts` 1466 lines | Extracted `wsNormalizers.ts` (900), `wsMessagingRpc.ts` (172), `wsIdentityRpc.ts` (202), `wsSupportRpc.ts` (203), `wsSessionRpc.ts` (100), and `wsRuntimeRpc.ts` (28). |
+| P3 `wsClient.ts` normalizers + RPC domains | In progress | `wsClient.ts` 2491 lines | `wsClient.ts` 1285 lines | Extracted `wsNormalizers.ts` (900), `wsBootstrapAction.ts` (136), `wsMessagingRpc.ts` (172), `wsIdentityRpc.ts` (202), `wsSupportRpc.ts` (203), `wsSessionRpc.ts` (100), `wsSessionActions.ts` (126), `wsRuntimeRpc.ts` (28), `wsCatalogActions.ts` (40), and `wsChatActions.ts` (24). |
 
 Verification run after each extraction:
 
@@ -143,9 +143,9 @@ Verification run after each extraction:
 
 Intentionally left for later small cuts:
 
-- `wsClient.ts` still owns socket lifecycle, bootstrap/reconnect reconciliation, chat streaming,
-  catalog/model loading, draft/session mutation helpers, and chat abort/approval coordination.
-  Continue with domain RPC modules before attempting `wsConnection.ts`.
+- `wsClient.ts` still owns socket lifecycle, reconnect reconciliation, `sendMessage`, chat
+  streaming event handling, and the public facade over the extracted domain helpers. Continue
+  with small domain cuts before attempting `wsConnection.ts`.
 - `wsNormalizers.ts` is large at 900 lines, but it is a single responsibility and a safer
   intermediate state than keeping normalization inside the socket facade.
 - P4+ (`tool_loop.py`, `rpc_catalog.py`, orchestrator facade) not started in this checkpoint.
