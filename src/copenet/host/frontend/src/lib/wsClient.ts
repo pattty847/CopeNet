@@ -60,7 +60,6 @@ import {
   normalizeMessage,
   normalizeMessageParts,
   normalizeMessagingConfig,
-  normalizeModel,
   normalizePatProfile,
   normalizePersonaContext,
   normalizePersonaFlavorDraft,
@@ -137,6 +136,8 @@ import {
   revertEditRpc,
 } from './wsSessionRpc';
 import { browseWorkspaceRootRpc, setWorkspaceRootRpc } from './wsRuntimeRpc';
+import { loadModelsAction } from './wsCatalogActions';
+import { abortActiveRunAction, decideApprovalAction } from './wsChatActions';
 import {
   archiveSessionAction,
   beginDraftAction,
@@ -643,30 +644,7 @@ class WsClient {
   }
 
   async loadModels(providerId: string): Promise<Model[]> {
-    const store = useAppStore.getState();
-    if (store.loadedModelProviders[providerId]) {
-      return store.modelsByProvider[providerId] || [];
-    }
-
-    const inFlight = this.modelLoads.get(providerId);
-    if (inFlight) return inFlight;
-
-    const promise = this.request<{ models: unknown[] }>('models.list', { provider: providerId, kind: 'chat' })
-      .then((payload) => {
-        const models = (payload.models || []).map(normalizeModel);
-        useAppStore.getState().setModelsForProvider(providerId, models);
-        ensureDraftDefaultsAction();
-        this.modelLoads.delete(providerId);
-        return models;
-      })
-      .catch((error) => {
-        useAppStore.getState().setModelsForProvider(providerId, []);
-        this.modelLoads.delete(providerId);
-        throw error;
-      });
-
-    this.modelLoads.set(providerId, promise);
-    return promise;
+    return loadModelsAction(this.request.bind(this), this.modelLoads, providerId);
   }
 
   async loadHistory(sessionKey: string) {
@@ -916,7 +894,7 @@ class WsClient {
   /** Record an operator's decision on a pending high-risk tool approval; wakes the parked run.
    *  `approved_always` also persists the command to the global allowlist (Brick E). */
   async decideApproval(approvalId: string, decision: 'approved' | 'approved_always' | 'rejected', note?: string): Promise<{ ok: boolean; error?: string }> {
-    return this.request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
+    return decideApprovalAction(this.request.bind(this), approvalId, decision, note);
   }
 
   /** Global shell allowlist (Access & Permissions — Brick F): the operator's standing approvals. */
@@ -1098,12 +1076,7 @@ class WsClient {
   }
 
   async abortActiveRun() {
-    const store = useAppStore.getState();
-    if (!store.activeRunId && !store.activeSessionKey) return;
-    await this.request('chat.abort', {
-      sessionKey: store.activeSessionKey || undefined,
-      runId: store.activeRunId || undefined,
-    });
+    return abortActiveRunAction(this.request.bind(this));
   }
 
   // ---------------------------------------------------------------------------
