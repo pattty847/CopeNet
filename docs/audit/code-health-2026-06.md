@@ -133,19 +133,29 @@ Completed checkpoints on `refactor/god-objects`:
 | P0 re-audit | Done | n/a | n/a | Refreshed counts and confirmed seams in this document. |
 | P1 `lib/formatting.ts` | Done | Duplicate local helpers in 14 files | `formatting.ts` 119 lines | Removed local `timeAgo`/duration variants while preserving their display differences. |
 | P2 `core/_json_store.py` | Done | 6 local JSON helper/write paths | `_json_store.py` 30 lines | Centralized JSON read, atomic JSON write, and JSONL append helpers. |
-| P3 `wsClient.ts` normalizers + RPC domains | In progress | `wsClient.ts` 2491 lines | `wsClient.ts` 1285 lines | Extracted `wsNormalizers.ts` (900), `wsBootstrapAction.ts` (136), `wsMessagingRpc.ts` (172), `wsIdentityRpc.ts` (202), `wsSupportRpc.ts` (203), `wsSessionRpc.ts` (100), `wsSessionActions.ts` (126), `wsRuntimeRpc.ts` (28), `wsCatalogActions.ts` (40), and `wsChatActions.ts` (24). |
+| P3 `wsClient.ts` normalizers + RPC/actions/events | Done | `wsClient.ts` 2491 lines | `wsClient.ts` 900 lines | Kept `wsClient.ts` as public socket facade; extracted normalizers, bootstrap hydration, catalog/session/runtime/support/messaging/identity RPC helpers, session actions, chat send, and chat event handling. |
+| P4 `core/harness/tool_loop.py` | Done | 1045 lines | `tool_loop.py` 74 lines | Split strategy code into `tool_loop_native.py` (219), `tool_loop_responses.py` (230), `tool_loop_prompted.py` (165), shared loop helpers in `tool_loop_common.py` (380), and materialization in `tool_result_materialization.py` (134). |
+| P5 `host/rpc_catalog.py` | Done | 764 lines | `rpc_catalog.py` 108 lines | Converted catalog into a compatibility export over domain handlers: core, profile, persona, memory, runtime, provider auth, and messaging. |
+| P6 `orchestrator/__init__.py` facade | Done | 1128 lines | 468 lines | Moved identity/profile/persona/memory, messaging, provider auth, runtime workspace, approvals, and app registration facades into focused mixins. |
+| P7 `core/meme_ideation.py` | Done | 1120 lines | `meme_ideation.py` 65 lines | Preserved the public import facade and split constants, dataclasses, parsing, prompt building, scoring, and provider runtime orchestration into `meme_ideation_*` modules. |
 
 Verification run after each extraction:
 
-- P1: `npx tsc --noEmit`; `npm run build`
-- P2: focused storage/profile/persona tests; `python3 -m py_compile $(rg --files src/copenet -g '*.py')`; `uv run --extra dev pytest -q` (`414 passed`)
-- P3 slices: `npx tsc --noEmit`; `npm run build` after each slice
+- P1/P3 frontend slices: `npx tsc --noEmit`; `npm run build`
+- P2/P5/P6/P7 backend slices: `python3 -m py_compile $(rg --files src/copenet -g '*.py')`; `uv run --extra dev pytest -q` (`414 passed`)
+- P4 targeted harness slice: `uv run --extra dev pytest -q tests/integration/test_tool_prompt_matrix.py tests/integration/test_responses_tool_loop.py tests/unit/test_tool_result_materialize.py`
+- P7 targeted meme slice: `uv run --extra dev pytest -q tests/unit/test_meme_ideation.py tests/integration/test_app_api_memes.py`
 
 Intentionally left for later small cuts:
 
-- `wsClient.ts` still owns socket lifecycle, reconnect reconciliation, `sendMessage`, chat
-  streaming event handling, and the public facade over the extracted domain helpers. Continue
-  with small domain cuts before attempting `wsConnection.ts`.
-- `wsNormalizers.ts` is large at 900 lines, but it is a single responsibility and a safer
-  intermediate state than keeping normalization inside the socket facade.
-- P4+ (`tool_loop.py`, `rpc_catalog.py`, orchestrator facade) not started in this checkpoint.
+- `core/orchestrator/runtime.py` remains 1121 lines. It is the remaining true god file, but
+  it owns `send_chat`, in-flight locking, transcript writes, run records, artifact persistence,
+  and post-run profile/title side effects. Split it only with a dedicated lifecycle plan and
+  session-flow verification.
+- `wsClient.ts` still owns socket lifecycle and reconnect reconciliation. The extracted helpers
+  make a future `wsConnection.ts` cut smaller, but the facade is now a stable 900-line boundary.
+- `wsNormalizers.ts` is still large at 900 lines, but it is a single responsibility and safer
+  than scattering normalization across RPC/action modules.
+- Frontend product surfaces (`DataToolsPage.tsx`, `AgentComposer.tsx`, `MessagingSettingsPanel.tsx`,
+  `MemeLab.tsx`, `ChatWorkspace.tsx`, `InlineToolRows.tsx`, `RightPanel.tsx`) remain above threshold
+  and should be split when their surfaces are next touched.
