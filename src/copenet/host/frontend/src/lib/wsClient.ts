@@ -83,6 +83,18 @@ import {
   normalizeToolResultPreview,
   normalizeWorkspaceIntelSummary,
 } from './wsNormalizers';
+import {
+  deleteMessagingDestinationRpc,
+  deleteMessagingRouteRpc,
+  getMessagingConfigRpc,
+  listMessagingDestinationsRpc,
+  listMessagingRoutesRpc,
+  testMessagingPlatformRpc,
+  updateMessagingApprovalPolicyRpc,
+  updateTelegramRuntimeDefaultsRpc,
+  upsertMessagingDestinationRpc,
+  upsertMessagingRouteRpc,
+} from './wsMessagingRpc';
 export { normalizeAssistantDisplayText } from './wsNormalizers';
 
 type PendingRequest = {
@@ -773,35 +785,22 @@ class WsClient {
   }
 
   async getMessagingConfig(): Promise<MessagingConfig | null> {
-    const payload = await this.request<{ config?: unknown | null }>('messaging.config.get', {});
-    return normalizeMessagingConfig(payload.config);
+    return getMessagingConfigRpc(this.request.bind(this));
   }
 
   async listMessagingDestinations(): Promise<MessageDestination[]> {
-    const payload = await this.request<{ destinations?: unknown[] }>('messaging.destinations.list', {});
-    return Array.isArray(payload.destinations)
-      ? payload.destinations.map(normalizeDestination).filter((item): item is MessageDestination => item != null)
-      : [];
+    return listMessagingDestinationsRpc(this.request.bind(this));
   }
 
   async listMessagingRoutes(): Promise<TelegramSessionRoute[]> {
-    const payload = await this.request<{ routes?: unknown[] }>('messaging.routes.list', {});
-    return Array.isArray(payload.routes)
-      ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
-      : [];
+    return listMessagingRoutesRpc(this.request.bind(this));
   }
 
   async updateMessagingApprovalPolicy(params: {
     requireApprovalByDefault: boolean;
     hardlineBlocklist?: string[];
   }): Promise<MessagingConfig | null> {
-    const payload = await this.request<{ config?: unknown | null }>('messaging.config.update', {
-      approvalPolicy: {
-        requireApprovalByDefault: params.requireApprovalByDefault,
-        hardlineBlocklist: params.hardlineBlocklist || [],
-      },
-    });
-    return normalizeMessagingConfig(payload.config);
+    return updateMessagingApprovalPolicyRpc(this.request.bind(this), params);
   }
 
   async updateTelegramRuntimeDefaults(params: {
@@ -810,15 +809,7 @@ class WsClient {
     systemPromptId: string;
     taskPromptId: string;
   }): Promise<MessagingConfig | null> {
-    const payload = await this.request<{ config?: unknown | null }>('messaging.config.update', {
-      telegramDefaults: {
-        provider: params.provider || undefined,
-        model: params.model || undefined,
-        systemPromptId: params.systemPromptId || undefined,
-        taskPromptId: params.taskPromptId || undefined,
-      },
-    });
-    return normalizeMessagingConfig(payload.config);
+    return updateTelegramRuntimeDefaultsRpc(this.request.bind(this), params);
   }
 
   async testMessagingPlatform(platform = 'telegram'): Promise<{
@@ -830,25 +821,7 @@ class WsClient {
       verifiedAt: string | null;
     };
   }> {
-    const payload = await this.request<{
-      config?: unknown | null;
-      result?: Record<string, unknown>;
-    }>('messaging.test', { platform });
-    return {
-      config: normalizeMessagingConfig(payload.config),
-      result: {
-        ok: Boolean(payload.result?.ok),
-        connectionStatus:
-          payload.result?.connectionStatus === 'connected' ||
-          payload.result?.connectionStatus === 'disconnected' ||
-          payload.result?.connectionStatus === 'error' ||
-          payload.result?.connectionStatus === 'unconfigured'
-            ? payload.result.connectionStatus
-            : 'unconfigured',
-        message: payload.result?.message ? String(payload.result.message) : '',
-        verifiedAt: payload.result?.verifiedAt ? String(payload.result.verifiedAt) : null,
-      },
-    };
+    return testMessagingPlatformRpc(this.request.bind(this), platform);
   }
 
   async upsertMessagingDestination(destination: {
@@ -861,24 +834,11 @@ class WsClient {
     requiresApproval: boolean;
     status?: 'configured' | 'unconfigured' | 'error';
   }): Promise<{ destination: MessageDestination | null; config: MessagingConfig | null }> {
-    const payload = await this.request<{ destination?: unknown | null; config?: unknown | null }>(
-      'messaging.destinations.upsert',
-      { destination },
-    );
-    return {
-      destination: normalizeDestination(payload.destination),
-      config: normalizeMessagingConfig(payload.config),
-    };
+    return upsertMessagingDestinationRpc(this.request.bind(this), destination);
   }
 
   async deleteMessagingDestination(destinationId: string): Promise<{ deleted: boolean; config: MessagingConfig | null }> {
-    const payload = await this.request<{ deleted?: unknown; config?: unknown | null }>('messaging.destinations.delete', {
-      destinationId,
-    });
-    return {
-      deleted: Boolean(payload.deleted),
-      config: normalizeMessagingConfig(payload.config),
-    };
+    return deleteMessagingDestinationRpc(this.request.bind(this), destinationId);
   }
 
   async upsertMessagingRoute(route: {
@@ -889,27 +849,11 @@ class WsClient {
     sessionKey: string;
     titleOverride?: string | null;
   }): Promise<{ route: TelegramSessionRoute | null; routes: TelegramSessionRoute[] }> {
-    const payload = await this.request<{ route?: unknown | null; routes?: unknown[] }>('messaging.routes.upsert', {
-      route,
-    });
-    return {
-      route: normalizeTelegramRoute(payload.route),
-      routes: Array.isArray(payload.routes)
-        ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
-        : [],
-    };
+    return upsertMessagingRouteRpc(this.request.bind(this), route);
   }
 
   async deleteMessagingRoute(routeId: string): Promise<{ deleted: boolean; routes: TelegramSessionRoute[] }> {
-    const payload = await this.request<{ deleted?: unknown; routes?: unknown[] }>('messaging.routes.delete', {
-      routeId,
-    });
-    return {
-      deleted: Boolean(payload.deleted),
-      routes: Array.isArray(payload.routes)
-        ? payload.routes.map(normalizeTelegramRoute).filter((item): item is TelegramSessionRoute => item != null)
-        : [],
-    };
+    return deleteMessagingRouteRpc(this.request.bind(this), routeId);
   }
 
   async createPulseFromSession(params: {
