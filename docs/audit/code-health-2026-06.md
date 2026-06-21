@@ -63,3 +63,63 @@ React.lazy code-splitting; `useAppStore` is a god object (every component subscr
 
 Treat these as opportunistic: refactor a file when you're already in it for a feature, plus
 1–2 deliberate "cleanup" passes for the god-objects (wsClient, orchestrator). Don't big-bang it.
+
+## Refactor pass kickoff — 2026-06-21
+
+Branch: `refactor/god-objects` from local `main` at `f3524a2` after `git fetch origin --prune`.
+Local `main` was clean and ahead of `origin/main` by 27 commits, not behind.
+
+### Refreshed backend counts
+
+| File | Lines | Note |
+|---|---:|---|
+| `src/copenet/core/orchestrator/__init__.py` | 1128 | God facade; highest coupling, keep for late-phase slimming. |
+| `src/copenet/core/orchestrator/runtime.py` | 1121 | Run lifecycle + approvals + message construction; behavior-critical. |
+| `src/copenet/core/meme_ideation.py` | 1120 | Still a coherent but oversized meme-lab domain file; defer until after core runtime cuts. |
+| `src/copenet/core/harness/tool_loop.py` | 1045 | Native/responses/prompted strategies still form the right seam. |
+| `src/copenet/host/app_api.py` | 782 | REST app lane remains mixed, but below the first-pass priority. |
+| `src/copenet/providers/openai_codex.py` | 779 | Provider transport/SSE/payload split still makes sense, but defer. |
+| `src/copenet/host/rpc_catalog.py` | 764 | Grew from 728; split by existing RPC subsystem pattern. |
+| `src/copenet/core/profile/service.py` | 671 | JSON helper extraction plus later briefing/changelog split. |
+| `src/copenet/probes/runtime_bundle.py` | 670 | Newly visible over threshold; probe-focused, leave unless touched. |
+| `src/copenet/host/rpc_sessions.py` | 645 | Over threshold but already subsystem-specific; leave unless session RPCs change. |
+| `src/copenet/core/messaging/store.py` | 502 | Use as one of the `_json_store.py` extraction targets. |
+| `src/copenet/core/persona/service.py` | 465 | Use as one of the `_json_store.py` extraction targets. |
+
+### Refreshed frontend counts
+
+| File | Lines | Note |
+|---|---:|---|
+| `src/copenet/host/frontend/src/lib/wsClient.ts` | 2491 | Biggest liability; transport/normalizer/RPC seams still hold. |
+| `src/copenet/host/frontend/src/components/DataToolsPage.tsx` | 1155 | Still a page extraction candidate; defer until low-level client/storage cuts land. |
+| `src/copenet/host/frontend/src/types/backend.ts` | 1052 | Domain type split remains valuable but high-import churn; defer. |
+| `src/copenet/host/frontend/src/components/agents/AgentComposer.tsx` | 868 | Grew from 798; runtime selector/optimizer/attachment seams still hold. |
+| `src/copenet/host/frontend/src/components/MessagingSettingsPanel.tsx` | 832 | CRUD/form hook extraction remains the seam. |
+| `src/copenet/host/frontend/src/workflows/meme/MemeLab.tsx` | 831 | View extraction candidate. |
+| `src/copenet/host/frontend/src/components/ChatWorkspace.tsx` | 817 | Composer/export/merge prep seams still hold. |
+| `src/copenet/host/frontend/src/store/useAppStore.ts` | 719 | God store; defer until client API is slimmer. |
+| `src/copenet/host/frontend/src/components/transcript/InlineToolRows.tsx` | 674 | Preview-block extraction candidate. |
+| `src/copenet/host/frontend/src/components/runtime/InspectorDrawer.tsx` | 594 | Newly visible over threshold; runtime detail panels can split later. |
+| `src/copenet/host/frontend/src/runtime/mocks.ts` | 571 | Large fixture file; leave unless mock shape changes. |
+| `src/copenet/host/frontend/src/components/RightPanel.tsx` | 566 | Tab extraction candidate. |
+| `src/copenet/host/frontend/src/components/SessionDrawer.tsx` | 539 | Over threshold; defer unless drawer work lands. |
+| `src/copenet/host/frontend/src/components/OperatorActionCenter.tsx` | 531 | Over threshold and includes duplicate formatting; handle formatting now, deeper split later. |
+
+### Confirmed seams and order
+
+1. `lib/formatting.ts` remains the safest first extraction. `timeAgo()` is duplicated across
+   session, profile, runtime, approval, outbound, and operator components; duration helpers also
+   vary locally.
+2. `core/_json_store.py` is still a small mechanical storage helper extraction. Keep atomic
+   temp-file + rename writes and preserve each store's public API and file shape.
+3. `lib/wsClient.ts` should wait until after the cheap dedupe passes. Cut normalizers first, then
+   transport/RPC in reviewable slices while keeping `wsClient` as the public facade.
+4. `core/harness/tool_loop.py` should split by strategy (`native`, `responses`, `prompted`) only
+   after the integration tests are green at baseline.
+5. `host/rpc_catalog.py` can follow existing subsystem modules before the orchestrator facade cut.
+6. `core/orchestrator/__init__.py` stays late and incremental. Leave risky moves in place if a
+   facade method touches session identity, approvals, in-flight locking, transcripts, or run
+   stamping in a non-obvious way.
+
+No seam changes are needed for the first pass; the brief's low-risk-to-high-value order still
+looks correct, with `rpc_catalog.py` before orchestrator slimming to reduce facade pressure first.
