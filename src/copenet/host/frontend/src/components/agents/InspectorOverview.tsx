@@ -1,7 +1,9 @@
 import type React from 'react';
 import { Brain, Info, Send, Settings2 } from 'lucide-react';
+import { Check, Sparkles, X } from 'lucide-react';
 import { useDestinations, usePendingApproval } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
+import { wsClient } from '../../lib/wsClient';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
 import { RunActivityPanel } from '../runtime/RunActivityPanel';
 
@@ -40,6 +42,7 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
   const draftSettings = useAppStore((state) => state.draftSettings);
   const runtimeContext = useAppStore((state) => state.runtimeContext);
   const memoryItems = useAppStore((state) => state.memoryItems);
+  const memoryDrafts = useAppStore((state) => state.memoryDrafts);
   const lastMemoryChange = useAppStore((state) => state.lastMemoryChange);
   const sessionIdentityUsage = useAppStore((state) => state.sessionIdentityUsage);
   const activeSession = sessions.find((session) => session.key === activeSessionKey) || null;
@@ -100,6 +103,37 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
       </Section>
 
       <Section icon={Brain} title="Identity + Memory">
+        {memoryDrafts.length > 0 && (
+          <div className="mb-2 space-y-1.5 rounded-lg border border-operator-accent/30 bg-operator-accent/8 px-2.5 py-2">
+            <div className="flex items-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.14em] text-operator-accent">
+              <Sparkles className="h-3 w-3" />
+              CopeNet wants to remember ({memoryDrafts.length})
+            </div>
+            {memoryDrafts.slice(0, 6).map((item) => (
+              <div key={item.id} className="rounded-md border border-operator-border bg-operator-panel/40 px-2 py-1.5">
+                <div className="truncate text-[11px] font-medium text-operator-text" title={item.title}>{item.title}</div>
+                <div className="mt-0.5 line-clamp-2 text-[10px] leading-4 text-operator-muted/85">{item.summary}</div>
+                <div className="mt-1.5 flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void wsClient.approveMemory(item.id)}
+                    className="inline-flex items-center gap-1 rounded-md border border-operator-success/30 bg-operator-success/10 px-2 py-0.5 text-[10px] font-semibold text-operator-success transition-colors hover:bg-operator-success/20"
+                  >
+                    <Check className="h-2.5 w-2.5" /> Approve
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void wsClient.discardMemory(item.id)}
+                    className="ml-auto inline-flex items-center gap-1 rounded-md border border-operator-border px-2 py-0.5 text-[10px] font-semibold text-operator-muted transition-colors hover:border-operator-error/40 hover:text-operator-error"
+                  >
+                    <X className="h-2.5 w-2.5" /> Discard
+                  </button>
+                </div>
+              </div>
+            ))}
+            <div className="text-[9.5px] leading-4 text-operator-muted/70">Edit before approving in the Home → Identity + Memory card.</div>
+          </div>
+        )}
         {identityUsage ? (
           <div className="space-y-2">
             <div className="rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-2">
@@ -133,9 +167,9 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
               <div className="text-[11px] text-operator-muted/85 italic">No specific memory items were attached to the latest run.</div>
             )}
           </div>
-        ) : (
+        ) : memoryDrafts.length === 0 ? (
           <div className="text-[11px] text-operator-muted/85 italic">Identity stays available in the background. Relevant memory appears here after a run uses it.</div>
-        )}
+        ) : null}
       </Section>
       <Section icon={Send} title="Destinations">
         {destinations.length === 0 ? (

@@ -9,7 +9,9 @@ from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 from .rpc_catalog import (
     handle_briefing_get,
     handle_identity_context_get,
+    handle_memory_approve,
     handle_memory_archive,
+    handle_memory_discard,
     handle_memory_list,
     handle_memory_upsert,
     handle_messaging_config_get,
@@ -182,6 +184,10 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_memory_upsert(req.id, req.params, send_json, orchestrator)
     elif req.method == "memory.archive":
         await handle_memory_archive(req.id, req.params, send_json, orchestrator)
+    elif req.method == "memory.approve":
+        await handle_memory_approve(req.id, req.params, send_json, orchestrator)
+    elif req.method == "memory.discard":
+        await handle_memory_discard(req.id, req.params, send_json, orchestrator)
     elif req.method == "runtime.context":
         if req.params:
             await handle_runtime_context_resolve(req.id, req.params, send_json, orchestrator)

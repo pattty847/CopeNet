@@ -42,6 +42,9 @@ class MemoryRecord:
     created_at: str = utc_now_iso()
     updated_at: str = utc_now_iso()
     archived: bool = False
+    # "active" once committed; "draft" while a model-proposed memory awaits operator
+    # approval. Drafts are excluded from relevance injection and the default list.
+    status: str = "active"
     last_session_key: str | None = None
 
     @classmethod
@@ -63,6 +66,7 @@ class MemoryRecord:
             created_at=created_at,
             updated_at=updated_at,
             archived=bool(raw.get("archived")),
+            status=(_text(raw.get("status")).lower() if _text(raw.get("status")).lower() in {"active", "draft"} else "active"),
             last_session_key=_optional_text(raw.get("lastSessionKey") or raw.get("last_session_key")),
         )
 
@@ -82,6 +86,7 @@ class MemoryRecord:
             "createdAt": self.created_at,
             "updatedAt": self.updated_at,
             "archived": self.archived,
+            "status": self.status,
             "lastSessionKey": self.last_session_key,
         }
 
@@ -142,9 +147,22 @@ class MemoryStore:
             created_at=current.created_at,
             updated_at=utc_now_iso(),
             archived=archived,
+            status=current.status,
             last_session_key=current.last_session_key,
         )
         return self.upsert(updated)
+
+    def delete(self, memory_id: str) -> bool:
+        target = _text(memory_id)
+        if not target:
+            return False
+        with self._lock:
+            rows = self._load_unlocked()
+            kept = [item for item in rows if item.id != target]
+            if len(kept) == len(rows):
+                return False
+            self._save_unlocked(kept)
+        return True
 
     def _load_unlocked(self) -> list[MemoryRecord]:
         if not self._path.exists():

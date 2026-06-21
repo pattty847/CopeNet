@@ -639,13 +639,14 @@ class Orchestrator:
         """Save an operator-approved model identity flavor."""
         return self._persona_service.save_flavor(provider=provider_id, model=model, draft=draft or {}).to_public_dict()
 
-    def list_memory(self, *, include_archived: bool = False, category: str | None = None, limit: int = 50) -> list[dict]:
-        """Return recent user-visible memory items."""
+    def list_memory(self, *, include_archived: bool = False, category: str | None = None, status: str = "active", limit: int = 50) -> list[dict]:
+        """Return recent user-visible memory items (status: active | draft | all)."""
         return [
             item.to_public_dict()
             for item in self._memory_service.list_memory(
                 include_archived=include_archived,
                 category=category if category in {"preference", "project_convention", "ongoing_priority", "fact"} else None,
+                status=status,
                 limit=limit,
             )
         ]
@@ -677,6 +678,31 @@ class Orchestrator:
         """Archive or restore one memory item."""
         item = self._memory_service.archive_memory(memory_id, archived=archived)
         return item.to_public_dict() if item is not None else None
+
+    def approve_memory(
+        self,
+        *,
+        memory_id: str,
+        category: str | None = None,
+        title: str | None = None,
+        summary: str | None = None,
+        detail: str | None = None,
+        tags: list[str] | None = None,
+    ) -> dict | None:
+        """Commit a model-proposed draft (optionally with operator edits)."""
+        item = self._memory_service.approve_memory(
+            memory_id,
+            category=category,  # type: ignore[arg-type]
+            title=title,
+            summary=summary,
+            detail=detail,
+            tags=tags,
+        )
+        return item.to_public_dict() if item is not None else None
+
+    def discard_memory(self, *, memory_id: str) -> bool:
+        """Delete a model-proposed draft outright."""
+        return self._memory_service.discard_memory(memory_id)
 
     def list_profile_changelog(self, limit: int = 20) -> list[dict]:
         """Return recent Pat Profile changelog entries."""

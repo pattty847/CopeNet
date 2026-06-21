@@ -447,8 +447,9 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
         tool_rows = tools["payload"]["tools"]
         # Phase 3 (HARNESS_REBUILD_V2): the model-facing manifest is the file/shell/web
         # primitives + plan.write. git.* / repo.map / test.discover / files.list /
-        # files.search are dropped; memory.* / artifact.create are deferred. persona.author
-        # is an opt-in identity-authoring tool (operator-data write, same lane as memory).
+        # files.search are dropped; artifact.create stays deferred. persona.author and
+        # memory.read/memory.write are opt-in operator-data tools (memory.write is
+        # draft-first — proposes a memory the operator approves).
         assert {tool["id"] for tool in tool_rows} == {
             "files.edit",
             "files.read",
@@ -459,6 +460,8 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "web.search",
             "web.fetch",
             "persona.author",
+            "memory.read",
+            "memory.write",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
 
@@ -937,7 +940,7 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         # Phase 3: the run's tool manifest is the small primitive set (+ plan.write).
         manifest_ids = {tool["id"] for tool in runs[0]["metadata"]["toolManifest"]}
         assert "files.read" in manifest_ids
-        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author"}
+        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write"}
         assert "repo.map" not in manifest_ids
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})

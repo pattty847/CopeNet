@@ -56,10 +56,20 @@ class MemoryService:
     def __init__(self, store: MemoryStore) -> None:
         self._store = store
 
-    def list_memory(self, *, include_archived: bool = False, category: MemoryCategory | None = None, limit: int = 50) -> list[MemoryRecord]:
+    def list_memory(
+        self,
+        *,
+        include_archived: bool = False,
+        category: MemoryCategory | None = None,
+        status: str = "active",
+        limit: int = 50,
+    ) -> list[MemoryRecord]:
         rows = self._store.list_items(include_archived=include_archived)
         if category:
             rows = [item for item in rows if item.category == category]
+        normalized_status = (status or "active").strip().lower()
+        if normalized_status != "all":
+            rows = [item for item in rows if item.status == normalized_status]
         return rows[:max(1, limit)]
 
     def upsert_memory(
@@ -75,9 +85,17 @@ class MemoryService:
         memory_id: str | None = None,
         last_session_key: str | None = None,
         archived: bool = False,
+        status: str = "active",
     ) -> MemoryRecord:
         now = utc_now_iso()
-        existing = self._store.get(memory_id or "") if memory_id else self._find_duplicate(category=category, title=title, summary=summary)
+        # Drafts always create a fresh record — proposing a memory must never mutate an
+        # existing committed one. Committed upserts still dedupe by content.
+        if memory_id:
+            existing = self._store.get(memory_id)
+        elif status == "draft":
+            existing = None
+        else:
+            existing = self._find_duplicate(category=category, title=title, summary=summary)
         record = MemoryRecord(
             id=(existing.id if existing is not None else (memory_id or f"memory-{uuid4()}")),
             category=category,
@@ -90,12 +108,68 @@ class MemoryService:
             created_at=existing.created_at if existing is not None else now,
             updated_at=now,
             archived=archived,
+            status=("draft" if status == "draft" else "active"),
             last_session_key=last_session_key or (existing.last_session_key if existing is not None else None),
         )
         return self._store.upsert(record)
 
     def archive_memory(self, memory_id: str, *, archived: bool = True) -> MemoryRecord | None:
         return self._store.archive(memory_id, archived=archived)
+
+    def propose_memory(
+        self,
+        *,
+        category: MemoryCategory,
+        title: str,
+        summary: str,
+        detail: str | None = None,
+        tags: list[str] | tuple[str, ...] | None = None,
+        last_session_key: str | None = None,
+    ) -> MemoryRecord:
+        """Create a draft memory (model-proposed). Awaits operator approval before it
+        becomes active / eligible for relevance injection."""
+        return self.upsert_memory(
+            category=category,
+            title=title,
+            summary=summary,
+            detail=detail,
+            tags=tags,
+            source="model_proposed",
+            confidence=0.7,
+            status="draft",
+            last_session_key=last_session_key,
+        )
+
+    def approve_memory(
+        self,
+        memory_id: str,
+        *,
+        category: MemoryCategory | None = None,
+        title: str | None = None,
+        summary: str | None = None,
+        detail: str | None = None,
+        tags: list[str] | tuple[str, ...] | None = None,
+    ) -> MemoryRecord | None:
+        """Commit a draft (optionally with operator edits) — flips it to active."""
+        existing = self._store.get(memory_id)
+        if existing is None:
+            return None
+        return self.upsert_memory(
+            memory_id=existing.id,
+            category=category or existing.category,
+            title=title if title is not None else existing.title,
+            summary=summary if summary is not None else existing.summary,
+            detail=detail if detail is not None else existing.detail,
+            tags=tags if tags is not None else list(existing.tags),
+            source=existing.source,
+            confidence=existing.confidence,
+            status="active",
+            last_session_key=existing.last_session_key,
+        )
+
+    def discard_memory(self, memory_id: str) -> bool:
+        """Delete a draft outright (it was never committed)."""
+        return self._store.delete(memory_id)
 
     def build_prompt_payload(
         self,
@@ -112,7 +186,8 @@ class MemoryService:
         return MemoryPromptPayload(memory_items=rows, digest="\n".join(digest_lines))
 
     def select_relevant(self, *, query: str, limit: int = 3) -> list[MemoryRecord]:
-        rows = self._store.list_items(include_archived=False)
+        # Only committed memories are injected — drafts await operator approval.
+        rows = [item for item in self._store.list_items(include_archived=False) if item.status == "active"]
         if not rows:
             return []
         query_terms = _terms(query)
