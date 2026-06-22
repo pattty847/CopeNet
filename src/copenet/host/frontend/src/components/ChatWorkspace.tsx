@@ -4,8 +4,9 @@ import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
 import { PausedRunBanner } from './PausedRunBanner';
 import { ApprovalRequestCard } from './ApprovalRequestCard';
-import { Archive, ArrowDown, ArrowUp, Copy, CopyPlus, Download, Ellipsis, GitMerge, Sparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, Ellipsis, GitMerge, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
+import { SessionActionsMenu } from './SessionActionsMenu';
 import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
 import { AgentComposer } from './agents/AgentComposer';
@@ -506,58 +507,21 @@ export function ChatWorkspace() {
                   <Ellipsis className="w-3.5 h-3.5" />
                 </button>
                 {actionsOpen && (
-                  <div className="absolute right-0 top-full mt-1.5 w-44 z-20 rounded-xl border border-operator-border bg-operator-panel shadow-lg overflow-hidden py-1">
-                    <button
-                      type="button"
-                      onClick={() => { void handleDebugCopy(); setActionsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
-                    >
-                      <CopyPlus className="w-3.5 h-3.5 shrink-0" />
-                      Debug Copy
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { void handleCopyConversation(); setActionsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
-                    >
-                      <Copy className="w-3.5 h-3.5 shrink-0" />
-                      {copiedAction === 'chat' ? 'Copied' : 'Copy Chat'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { void handleCopyConversationWithToolActivity(); setActionsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
-                    >
-                      <Copy className="w-3.5 h-3.5 shrink-0" />
-                      {copiedAction === 'chat_activity' ? 'Copied' : 'Copy Chat + Tool Activity'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { void handleExportConversation(); setActionsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
-                    >
-                      <Download className="w-3.5 h-3.5 shrink-0" />
-                      Export
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { void handleCreatePulse(); setActionsOpen(false); }}
-                      className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-accent hover:bg-operator-panel/60 transition-colors text-left"
-                    >
-                      <Sparkles className="w-3.5 h-3.5 shrink-0" />
-                      Create Pulse
-                    </button>
-                    {activeSession && (
-                      <button
-                        type="button"
-                        onClick={() => { void wsClient.archiveSession(activeSession.key, !activeSession.archived); setActionsOpen(false); }}
-                        className="w-full flex items-center gap-2 px-3 py-2 text-[12px] text-operator-muted hover:text-operator-text hover:bg-operator-panel/60 transition-colors text-left"
-                      >
-                        <Archive className="w-3.5 h-3.5 shrink-0" />
-                        {activeSession.archived ? 'Restore' : 'Archive'}
-                      </button>
-                    )}
-                  </div>
+                  <SessionActionsMenu
+                    copiedAction={copiedAction}
+                    archived={Boolean(activeSession?.archived)}
+                    canArchive={Boolean(activeSession)}
+                    onDebugCopy={() => { void handleDebugCopy(); setActionsOpen(false); }}
+                    onCopyConversation={() => { void handleCopyConversation(); setActionsOpen(false); }}
+                    onCopyConversationWithToolActivity={() => { void handleCopyConversationWithToolActivity(); setActionsOpen(false); }}
+                    onExportConversation={() => { void handleExportConversation(); setActionsOpen(false); }}
+                    onCreatePulse={() => { void handleCreatePulse(); setActionsOpen(false); }}
+                    onArchiveConversation={() => {
+                      if (!activeSession) return;
+                      void wsClient.archiveSession(activeSession.key, !activeSession.archived);
+                      setActionsOpen(false);
+                    }}
+                  />
                 )}
               </div>
             )}
