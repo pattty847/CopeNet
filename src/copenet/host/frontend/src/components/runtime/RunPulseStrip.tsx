@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { formatRunDuration, formatTimeOfDay } from '../../lib/formatting';
 import type { SessionRunRecord } from '../../types/backend';
 
 interface RunPulseStripProps {
@@ -22,24 +23,6 @@ const TONE_CLASS: Record<StatusTone, string> = {
   running: 'bg-shell-accent/70 hover:bg-shell-accent',
   empty: 'bg-shell-border-strong/40',
 };
-
-function formatDuration(run: SessionRunRecord): string {
-  if (!run.completedAt) return '—';
-  const start = new Date(run.startedAt).getTime();
-  const end = new Date(run.completedAt).getTime();
-  const ms = Math.max(0, end - start);
-  if (ms < 1000) return `${ms}ms`;
-  const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(1)}s`;
-  const m = Math.floor(s / 60);
-  const rem = Math.floor(s % 60);
-  return `${m}m${rem.toString().padStart(2, '0')}s`;
-}
-
-function formatTimeOfDay(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-}
 
 export function RunPulseStrip({ runs, loading = false, cellCount = 72 }: RunPulseStripProps) {
   const [hoverIndex, setHoverIndex] = useState<number | null>(null);
@@ -111,7 +94,7 @@ export function RunPulseStrip({ runs, loading = false, cellCount = 72 }: RunPuls
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-shell-text">
             <span className="text-shell-accent">{hoveredRun.runId.slice(0, 10)}</span>
             <span className="text-shell-muted">{formatTimeOfDay(hoveredRun.startedAt)}</span>
-            <span className="text-shell-muted">dur {formatDuration(hoveredRun)}</span>
+            <span className="text-shell-muted">dur {formatRunDuration(hoveredRun.startedAt, hoveredRun.completedAt, true)}</span>
             <span className="text-shell-muted">
               {hoveredRun.provider}
               {hoveredRun.model ? ` · ${hoveredRun.model}` : ''}

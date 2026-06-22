@@ -28,6 +28,7 @@ import { LoadingState } from './ResourceStates';
 import { ChatMarkdown } from '../ChatMarkdown';
 import { DiffView, FileLinesView, JsonView, PlanView } from './CodeViews';
 import { langFromPath } from '../../lib/syntax';
+import { formatShortMsDuration } from '../../lib/formatting';
 
 function ArtifactBody({ artifact }: { artifact: Artifact }) {
   if (artifact.kind === 'patch_plan' || artifact.kind === 'diff') {
@@ -102,12 +103,6 @@ function shortPath(path: string): string {
   return `…/${parts.slice(-2).join('/')}`;
 }
 
-function formatDurationMs(ms: number): string {
-  if (ms < 1) return '';
-  if (ms < 1000) return `${Math.round(ms)}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
 function ScopeBadge({ scope }: { scope?: 'inside_workspace' | 'outside_workspace' | null }) {
   if (!scope) return null;
   const tone =
@@ -152,7 +147,7 @@ function BatchCallRow({ call }: { call: import('../../runtime/types').ActivityTo
   const hasTarget = !!call.target;
   const hasSummary = !!call.summary && call.summary !== call.target;
   const isExpandable = hasTarget || hasSummary;
-  const dur = formatDurationMs(call.durationMs);
+  const dur = formatShortMsDuration(call.durationMs, true);
 
   return (
     <li className="rounded-lg border border-operator-border bg-operator-panel/30 overflow-hidden">

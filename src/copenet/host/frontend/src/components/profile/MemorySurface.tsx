@@ -1,5 +1,6 @@
 import { Brain, Check, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { formatLowercaseRelativeAge } from '../../lib/formatting';
 import { wsClient } from '../../lib/wsClient';
 import { useAppStore } from '../../store/useAppStore';
 import type { MemoryItem } from '../../types/backend';
@@ -12,18 +13,6 @@ const CATEGORY_LABELS: Record<MemoryItem['category'], string> = {
 };
 
 const CATEGORY_OPTIONS: MemoryItem['category'][] = ['preference', 'project_convention', 'ongoing_priority', 'fact'];
-
-function timeAgo(iso: string): string {
-  const then = new Date(iso).getTime();
-  const now = Date.now();
-  const diff = Math.max(0, now - then);
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  return `${Math.floor(hours / 24)}d ago`;
-}
 
 export function MemorySurface() {
   const identityContext = useAppStore((state) => state.identityContext);
@@ -206,7 +195,7 @@ export function MemorySurface() {
                 <span className="rounded-full border border-shell-border bg-shell-panel-strong px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-shell-accent">
                   {CATEGORY_LABELS[item.category]}
                 </span>
-                <span className="text-[10px] text-shell-muted">{timeAgo(item.updatedAt)}</span>
+                <span className="text-[10px] text-shell-muted">{formatLowercaseRelativeAge(item.updatedAt)}</span>
               </div>
               <div className="mt-1 text-[12px] font-medium text-shell-text">{item.title}</div>
               <div className="mt-0.5 text-[11px] leading-5 text-shell-muted">{item.summary}</div>
@@ -247,7 +236,7 @@ export function MemorySurface() {
                   <span className="rounded-full border border-shell-border bg-shell-panel px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-shell-accent">
                     {CATEGORY_LABELS[item.category]}
                   </span>
-                  <span className="text-[10px] text-shell-muted">{timeAgo(item.updatedAt)}</span>
+                  <span className="text-[10px] text-shell-muted">{formatLowercaseRelativeAge(item.updatedAt)}</span>
                 </div>
                 <button type="button" onClick={() => beginEdit(item)} className="mt-1 block text-left text-[12px] font-medium text-shell-text hover:text-shell-accent">
                   {item.title}

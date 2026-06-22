@@ -1,24 +1,12 @@
 import type React from 'react';
 import { Brain, Info, Send, Settings2 } from 'lucide-react';
 import { Check, Sparkles, X } from 'lucide-react';
+import { formatRelativeMinutes } from '../../lib/formatting';
 import { useDestinations, usePendingApproval } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
 import { wsClient } from '../../lib/wsClient';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
 import { RunActivityPanel } from '../runtime/RunActivityPanel';
-
-function timeAgo(dateString?: string | null) {
-  if (!dateString) return '--';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  return `${Math.floor(diffHours / 24)}d ago`;
-}
 
 function Section({ icon: Icon, title, children }: { icon: typeof Info; title: string; children: React.ReactNode }) {
   return (
@@ -194,9 +182,9 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
       <Section icon={Info} title="Session Info">
         <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">
           <dt className="text-operator-muted">Created</dt>
-          <dd className="text-right text-operator-text tabular-nums">{timeAgo(activeSession?.createdAt)}</dd>
+          <dd className="text-right text-operator-text tabular-nums">{formatRelativeMinutes(activeSession?.createdAt)}</dd>
           <dt className="text-operator-muted">Updated</dt>
-          <dd className="text-right text-operator-text tabular-nums">{timeAgo(activeSession?.updatedAt)}</dd>
+          <dd className="text-right text-operator-text tabular-nums">{formatRelativeMinutes(activeSession?.updatedAt)}</dd>
           <dt className="text-operator-muted">Messages</dt>
           <dd className="text-right text-operator-text tabular-nums">{messages.length}</dd>
         </dl>

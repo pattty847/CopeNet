@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { useIsMobile } from '../../lib/responsive';
 import { clampResponsiveText } from '../../lib/mobileCopy';
+import { formatCompactAge, formatRunDuration } from '../../lib/formatting';
 import { CheckCircle2, CircleDashed, XCircle, Wrench } from 'lucide-react';
 import type { SessionRunRecord } from '../../types/backend';
 
@@ -8,24 +9,6 @@ interface TraceListProps {
   runs: SessionRunRecord[];
   limit?: number;
   onSelect?: (runId: string) => void;
-}
-
-function formatDur(run: SessionRunRecord): string {
-  if (!run.completedAt) return '—';
-  const ms = new Date(run.completedAt).getTime() - new Date(run.startedAt).getTime();
-  if (ms < 1000) return `${ms}ms`;
-  if (ms < 60_000) return `${(ms / 1000).toFixed(1)}s`;
-  return `${Math.floor(ms / 60_000)}m${Math.floor((ms % 60_000) / 1000)
-    .toString()
-    .padStart(2, '0')}s`;
-}
-
-function timeAgo(iso: string): string {
-  const diffS = Math.floor((Date.now() - new Date(iso).getTime()) / 1000);
-  if (diffS < 60) return `${diffS}s`;
-  if (diffS < 3600) return `${Math.floor(diffS / 60)}m`;
-  if (diffS < 86400) return `${Math.floor(diffS / 3600)}h`;
-  return `${Math.floor(diffS / 86400)}d`;
 }
 
 function StatusIcon({ run }: { run: SessionRunRecord }) {
@@ -95,8 +78,8 @@ export function TraceList({ runs, limit = 12, onSelect }: TraceListProps) {
                         {run.toolSteps.length}
                       </span>
                     )}
-                    <span className="w-10 text-right">{formatDur(run)}</span>
-                    <span className="w-6 text-right">{timeAgo(run.startedAt)}</span>
+                    <span className="w-10 text-right">{formatRunDuration(run.startedAt, run.completedAt)}</span>
+                    <span className="w-6 text-right">{formatCompactAge(run.startedAt)}</span>
                     <span
                       className={`w-12 text-right uppercase tracking-wider ${
                         failed ? 'text-shell-error' : running ? 'text-shell-accent' : 'text-shell-success/80'

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
-import json
 from pathlib import Path
 import threading
 from typing import Any, Literal
 from uuid import uuid4
 
+from copenet.core._json_store import read_json, write_json_atomic
 from copenet.core.sessions.session_store import utc_now_iso
 
 MemoryCategory = Literal["preference", "project_convention", "ongoing_priority", "fact"]
@@ -165,12 +165,7 @@ class MemoryStore:
         return True
 
     def _load_unlocked(self) -> list[MemoryRecord]:
-        if not self._path.exists():
-            return []
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return []
+        raw = read_json(self._path, [])
         payload = raw.get("items") if isinstance(raw, dict) else raw
         if not isinstance(payload, list):
             return []
@@ -189,6 +184,4 @@ class MemoryStore:
 
     def _save_unlocked(self, rows: list[MemoryRecord]) -> None:
         payload = {"items": [item.to_json() for item in sorted(rows, key=lambda item: item.updated_at, reverse=True)]}
-        tmp = self._path.with_suffix(".tmp")
-        tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-        tmp.replace(self._path)
+        write_json_atomic(self._path, payload)

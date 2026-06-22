@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { downloadMediaFromUrl, extractWebPage, getMediaAssetDetail, importMediaFromUrl, listMediaAssets, uploadMediaFile } from '../lib/appApi';
 import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../lib/mediaMemeBridge';
+import { formatMediaDuration, formatRoundedRelativeAge } from '../lib/formatting';
 import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobileCopy';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
@@ -31,28 +32,6 @@ import { PermissionsSettingsPanel } from './PermissionsSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
 import { PersonaHomePanel } from './persona/PersonaHomePanel';
 import { WorkspaceFileViewer } from './WorkspaceFileViewer';
-
-function formatRelative(timestamp: string): string {
-  const then = new Date(timestamp).getTime();
-  if (!Number.isFinite(then)) return 'Recently';
-  const seconds = Math.max(1, Math.round((Date.now() - then) / 1000));
-  if (seconds < 60) return 'Just now';
-  const minutes = Math.round(seconds / 60);
-  if (minutes < 60) return `${minutes}m ago`;
-  const hours = Math.round(minutes / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.round(hours / 24);
-  return `${days}d ago`;
-}
-
-function formatDuration(seconds: number | null): string {
-  if (!seconds || seconds <= 0) return 'Unknown duration';
-  const total = Math.round(seconds);
-  const mins = Math.floor(total / 60);
-  const secs = total % 60;
-  if (mins <= 0) return `${secs}s`;
-  return `${mins}m ${secs.toString().padStart(2, '0')}s`;
-}
 
 function SectionBreadcrumb({ route, onBack }: { route: DataToolsRoute; onBack: () => void }) {
   const labels: Record<DataToolsRoute, string[]> = {
@@ -574,9 +553,9 @@ function MediaAssetRow({ asset, onOpen }: { asset: MediaAsset; onOpen: (asset: M
               <div className="mt-1 flex flex-wrap items-center gap-2 text-xs font-medium uppercase tracking-[0.18em] text-shell-muted">
                 <span>{asset.transcriptSource || 'Transcript'}</span>
                 <span>•</span>
-                <span>{formatRelative(asset.createdAt)}</span>
+                <span>{formatRoundedRelativeAge(asset.createdAt)}</span>
                 <span>•</span>
-                <span>{formatDuration(asset.durationSeconds)}</span>
+                <span>{formatMediaDuration(asset.durationSeconds)}</span>
               </div>
             </div>
           </div>
@@ -657,8 +636,8 @@ function MediaAssetDrawer({
 
       <div className={`flex flex-wrap items-center gap-2 border-b border-shell-border text-xs font-semibold uppercase tracking-[0.18em] text-shell-muted ${mobile ? 'px-4 py-3' : 'px-6 py-4'}`}>
         {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{detail.transcriptSource || 'Transcript'}</div>}
-        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatDuration(detail.durationSeconds)}</div>}
-        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatRelative(detail.createdAt)}</div>}
+        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatMediaDuration(detail.durationSeconds)}</div>}
+        {detail && <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">{formatRoundedRelativeAge(detail.createdAt)}</div>}
       </div>
 
       <div className={`flex flex-wrap items-center gap-3 border-b border-shell-border ${mobile ? 'px-4 py-3' : 'px-6 py-4'}`}>

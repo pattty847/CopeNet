@@ -1,4 +1,5 @@
 import { AlertCircle, Check, Clock, ExternalLink, Send, ShieldCheck } from 'lucide-react';
+import { formatOutboundAge } from '../lib/formatting';
 import type { OutboundMessageRecord, OutboundMessageStatus } from '../runtime/types';
 
 const STATUS_META: Record<
@@ -11,15 +12,6 @@ const STATUS_META: Record<
   sent: { label: 'Sent', icon: Check, tone: 'text-operator-success', bg: 'bg-operator-success/10' },
   failed: { label: 'Failed', icon: AlertCircle, tone: 'text-operator-error', bg: 'bg-operator-error/10' },
 };
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const m = Math.floor(diff / 60000);
-  if (m < 1) return 'just now';
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  return `${h}h ago`;
-}
 
 interface OutboundMessageCardProps {
   outbound: OutboundMessageRecord;
@@ -52,7 +44,7 @@ export function OutboundMessageCard({ outbound, onOpenApproval }: OutboundMessag
               {outbound.targetDisplayName ?? outbound.target}
             </span>
             <span className="text-[9px] text-operator-muted/70 font-mono ml-auto">
-              {timeAgo(outbound.createdAt)}
+              {formatOutboundAge(outbound.createdAt)}
             </span>
           </div>
           <div className="text-[11px] text-operator-text leading-relaxed break-words bg-operator-bg/60 rounded-lg px-2.5 py-2 border border-operator-border whitespace-pre-wrap">
@@ -66,7 +58,7 @@ export function OutboundMessageCard({ outbound, onOpenApproval }: OutboundMessag
           )}
           {outbound.sentAt && (
             <div className="mt-1.5 text-[10px] text-operator-muted">
-              Delivered {timeAgo(outbound.sentAt)}
+              Delivered {formatOutboundAge(outbound.sentAt)}
               {outbound.approvalId && ' · approval on record'}
             </div>
           )}

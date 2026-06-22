@@ -16,7 +16,11 @@ copenet/
 │   ├── harness/
 │   │   ├── capabilities.py            ← capability profiles and routing
 │   │   ├── planning.py                ← provider capability plan ahead of execution
-│   │   └── tool_loop.py               ← native provider tool-call loop
+│   │   ├── tool_loop.py               ← public tool-loop facade
+│   │   ├── tool_loop_native.py        ← Chat Completions tool-call loop
+│   │   ├── tool_loop_responses.py     ← Responses API tool-call loop
+│   │   ├── tool_loop_prompted.py      ← prompted text-protocol tool loop
+│   │   └── tool_loop_common.py        ← shared loop execution helpers
 │   ├── media/
 │   │   ├── downloader.py              ← yt-dlp / URL fetch
 │   │   ├── transcriber.py             ← audio transcription
@@ -30,6 +34,7 @@ copenet/
 │   │   └── routing_store.py           ← TelegramSessionRouteStore
 │   ├── orchestrator/
 │   │   ├── __init__.py                ← Orchestrator facade, ChatSendRequest
+│   │   ├── facade_*.py                ← identity, messaging, provider auth, runtime workspace, approvals, apps
 │   │   ├── catalog.py                 ← session catalog + provider registry build
 │   │   ├── runtime.py                 ← send_chat run lifecycle
 │   │   ├── titles.py                  ← async title generation
@@ -76,7 +81,8 @@ copenet/
 │   │   ├── service.py                 ← repo mapping + verification discovery
 │   │   └── store.py                   ← durable workspace cache
 │   ├── knowledge_runtime.py           ← knowledge runtime entrypoint (Meme Lab and friends)
-│   ├── meme_ideation.py               ← Meme Lab ideation API
+│   ├── meme_ideation.py               ← Meme Lab ideation public facade
+│   ├── meme_ideation_*.py             ← Meme Lab constants, models, parsing, prompts, scoring, runtime
 │   ├── meme_knowledge.py              ← Meme knowledge index
 │   └── web_ingest.py                  ← WebIngestionService
 │
@@ -88,7 +94,14 @@ copenet/
 │   ├── rpc_dispatch.py                ← method routing
 │   ├── rpc_chat.py                    ← chat.send/abort/history handlers
 │   ├── rpc_sessions.py                ← session + pulse + artifact handlers
-│   ├── rpc_catalog.py                 ← provider/model/tools/profile/messaging handlers
+│   ├── rpc_catalog.py                 ← compatibility export for catalog-style handlers
+│   ├── rpc_catalog_core.py            ← provider/model/tool catalogs
+│   ├── rpc_profile.py                 ← profile + briefing handlers
+│   ├── rpc_persona.py                 ← persona handlers
+│   ├── rpc_memory.py                  ← memory handlers
+│   ├── rpc_messaging.py               ← messaging config + route handlers
+│   ├── rpc_provider_auth.py           ← provider auth handlers
+│   ├── rpc_runtime.py                 ← runtime context handlers
 │   ├── app_api.py                     ← `/api/v1` REST + SSE for external apps (Subtext, etc.)
 │   ├── frontend/                      ← Vite + React/TypeScript UI (primary surface)
 │   │   ├── src/
@@ -97,7 +110,7 @@ copenet/
 │   │   │   ├── runtime/               ← adapter, types, mocks, activityProof
 │   │   │   ├── store/                 ← useAppStore.ts (Zustand)
 │   │   │   ├── workflows/             ← Meme Lab and other workflow surfaces
-│   │   │   ├── lib/                   ← wsClient, RPC helpers
+│   │   │   ├── lib/                   ← wsClient facade, normalizers, RPC/action/event helpers
 │   │   │   └── types/                 ← backend.ts (typed RPC payloads)
 │   │   ├── vite.config.ts
 │   │   └── dist/                      ← production build (served when present; see note below)
@@ -145,7 +158,7 @@ CopeNetWsServer  (host/ws_server.py)
   - task lifecycle
         |
         v
-RPC dispatch + handlers  (host/rpc_dispatch.py, rpc_chat.py, rpc_sessions.py, rpc_catalog.py)
+RPC dispatch + handlers  (host/rpc_dispatch.py, rpc_chat.py, rpc_sessions.py, rpc_catalog*.py)
   - chat
   - sessions / pulses / artifacts / merges
   - catalogs (providers, models, prompts, tools)
@@ -153,7 +166,7 @@ RPC dispatch + handlers  (host/rpc_dispatch.py, rpc_chat.py, rpc_sessions.py, rp
         |
         | chat.send
         v
-Orchestrator facade  (core/orchestrator/__init__.py)
+Orchestrator facade  (core/orchestrator/__init__.py + facade_*.py mixins)
   - public API
   - provider registry construction (catalog.build_default_provider_registry)
   - profile / briefing access
@@ -236,7 +249,7 @@ In practice that means:
 
 `core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects the tool-execution mode: `responses` (native Responses API, when the provider declares `responsesApi` — openai-codex), `native` (Chat Completions tool calls — LM Studio/Ollama), `prompted` (text-protocol fallback), or `none`.
 
-`core/harness/tool_loop.py` owns turn-level tool continuation across three loops: `run_with_responses_tools` (Phase 2: streams the native function_call lifecycle, appends `function_call`/`function_call_output` items to the input[] array, re-POSTs), `run_with_native_tools` (Chat Completions), and `run_with_prompted_tools`. All stream normalized events and let the model decide when to finalize (cap: `MAX_TOOL_STEPS=100`, with an explicit stop note when hit). The harness does not classify prompt text, keyword-match intent, or force a tool sequence; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+`core/harness/tool_loop.py` is the public facade for turn-level tool continuation. The concrete loops live in `tool_loop_responses.py` (`run_with_responses_tools`, streaming the native function_call lifecycle and appending `function_call`/`function_call_output` items to the input[] array), `tool_loop_native.py` (`run_with_native_tools`, Chat Completions), and `tool_loop_prompted.py` (`run_with_prompted_tools`). Shared execution helpers live in `tool_loop_common.py`, and model-facing result artifact materialization lives in `tool_result_materialization.py`. All loops stream normalized events and let the model decide when to finalize (cap: `MAX_TOOL_STEPS=100`, with an explicit stop note when hit). The harness does not classify prompt text, keyword-match intent, or force a tool sequence; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
 
 `core/orchestrator/messages.py` builds the real multi-turn message history (Phase 1): `build_chat_messages` walks the durable transcript into a Responses-API `input[]` array (used directly by the responses loop) and `flatten_messages_to_prompt` renders it as a transcript-style string for prompt-only providers. This replaced the synthetic `working_set` blob and the keyword auto-mutation of session state.
 

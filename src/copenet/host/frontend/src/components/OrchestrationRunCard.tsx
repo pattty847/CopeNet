@@ -13,25 +13,12 @@ import {
   Zap,
 } from 'lucide-react';
 import { useState } from 'react';
+import { formatOrchestrationAge, formatShortMsDuration } from '../lib/formatting';
 import type { OrchestrationRun, OrchestrationRunStatus } from '../runtime/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
-
-function formatDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  return `${(ms / 1000).toFixed(1)}s`;
-}
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  return `${Math.floor(m / 60)}h ago`;
-}
 
 // ---------------------------------------------------------------------------
 // Status metadata
@@ -153,11 +140,11 @@ export function OrchestrationRunCard({ run }: OrchestrationRunCardProps) {
             </span>
             {run.durationMs != null && (
               <span className="text-[9px] text-operator-muted/60 font-mono">
-                {formatDuration(run.durationMs)}
+                {formatShortMsDuration(run.durationMs)}
               </span>
             )}
             <span className="text-[9px] text-operator-muted/50 font-mono ml-auto">
-              {timeAgo(run.startedAt)}
+              {formatOrchestrationAge(run.startedAt)}
             </span>
           </div>
 

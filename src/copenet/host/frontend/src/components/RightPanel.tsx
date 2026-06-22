@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { accessLabel, accessOptionsFor } from '../lib/access';
+import { formatRelativeMinutes } from '../lib/formatting';
 import { DraftSettings } from '../types/backend';
 import { Activity, Brain, Info, Inbox, Settings2, ChevronLeft, ChevronRight, ShieldAlert, FolderOpen, RotateCcw } from 'lucide-react';
 import { LiveToolFeed } from './runtime/LiveToolFeed';
@@ -12,20 +13,6 @@ import { ProviderAuthCard } from './ProviderAuthCard';
 import { InspectorOverview } from './agents/InspectorOverview';
 import { usePendingApproval, useApprovalHistory, useInboxItems, usePatProfile } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
-
-function timeAgo(dateString?: string | null) {
-  if (!dateString) return '--';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  if (diffMins < 1) return 'Just now';
-  if (diffMins < 60) return `${diffMins}m ago`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
-}
 
 const selectClass =
   'bg-operator-bg border border-operator-border text-operator-text text-[12px] px-2 py-1.5 rounded-md focus:outline-none focus:border-operator-accent/40 w-full transition-colors duration-150';
@@ -367,11 +354,11 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
               </div>
               <div className="flex justify-between">
                 <span className="text-operator-muted">Created:</span>
-                <span className="text-operator-text">{timeAgo(activeSession?.createdAt)}</span>
+                <span className="text-operator-text">{formatRelativeMinutes(activeSession?.createdAt)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-operator-muted">Updated:</span>
-                <span className="text-operator-text">{timeAgo(activeSession?.updatedAt)}</span>
+                <span className="text-operator-text">{formatRelativeMinutes(activeSession?.updatedAt)}</span>
               </div>
             </div>
           </section>

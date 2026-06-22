@@ -10,24 +10,10 @@ import {
   ShieldCheck,
   X,
 } from 'lucide-react';
+import { formatAgoWithSeconds } from '../lib/formatting';
 import { useApprovalHistory, useApprovalActions } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
 import type { ApprovalRequest, ApprovalStatus } from '../runtime/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
 
 const STATUS_META: Record<
   ApprovalStatus,
@@ -95,7 +81,7 @@ function ApprovalRow({ approval, defaultExpanded = false }: { approval: Approval
               {meta.label}
             </span>
             <span className="text-[9px] text-operator-muted/70 font-mono ml-auto">
-              {timeAgo(approval.createdAt)}
+              {formatAgoWithSeconds(approval.createdAt)}
             </span>
           </div>
           <div className="text-[12px] font-semibold text-operator-text leading-snug truncate">
@@ -154,7 +140,7 @@ function ApprovalRow({ approval, defaultExpanded = false }: { approval: Approval
               )}
               {approval.resolvedAt && (
                 <div className="text-[10px] text-operator-muted/60 font-mono">
-                  {timeAgo(approval.resolvedAt)}
+                  {formatAgoWithSeconds(approval.resolvedAt)}
                 </div>
               )}
               {approval.outcome.modifiedPayload?.message && (

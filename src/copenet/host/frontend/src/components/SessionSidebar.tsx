@@ -3,18 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { ArchiveRestore, Archive, CheckSquare, GitMerge, Plus, Square } from 'lucide-react';
 import { describeSessionReturnCue } from '../lib/personalHistory';
-
-function timeAgo(dateString?: string | null) {
-  if (!dateString) return 'Just now';
-  const date = new Date(dateString);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
-  if (diffHours < 1) return 'Just now';
-  if (diffHours < 24) return `${diffHours}h ago`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d ago`;
-}
+import { formatSessionAge } from '../lib/formatting';
 
 function compactModelName(model?: string | null) {
   if (!model) return '';
@@ -252,7 +241,7 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
                 <div className="min-w-0 truncate" title={returnCue.primary}>
                   <span className={returnCue.kind === 'personal' ? 'text-operator-muted/92' : ''}>{returnCue.primary}</span>
                 </div>
-                <span className="shrink-0 text-[10px] text-operator-muted/45 tabular-nums">{timeAgo(session.updatedAt || session.createdAt)}</span>
+                <span className="shrink-0 text-[10px] text-operator-muted/45 tabular-nums">{formatSessionAge(session.updatedAt || session.createdAt)}</span>
               </div>
             </div>
           );

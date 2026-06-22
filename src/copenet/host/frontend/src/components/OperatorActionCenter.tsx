@@ -15,25 +15,11 @@ import {
   X,
 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { formatAgoWithSeconds } from '../lib/formatting';
 import { wsClient } from '../lib/wsClient';
 import { useInboxItems, useApprovalActions } from '../runtime/adapter';
 import { useAppStore } from '../store/useAppStore';
 import type { InboxItem, InboxItemPriority } from '../runtime/types';
-
-// ---------------------------------------------------------------------------
-// Helpers
-// ---------------------------------------------------------------------------
-
-function timeAgo(iso: string) {
-  const diff = Date.now() - new Date(iso).getTime();
-  const s = Math.floor(diff / 1000);
-  if (s < 60) return `${s}s ago`;
-  const m = Math.floor(s / 60);
-  if (m < 60) return `${m}m ago`;
-  const h = Math.floor(m / 60);
-  if (h < 24) return `${h}h ago`;
-  return `${Math.floor(h / 24)}d ago`;
-}
 
 const PRIORITY_META: Record<InboxItemPriority, { border: string; bg: string; glow: string }> = {
   urgent: {
@@ -132,7 +118,7 @@ function InboxItemRow({
               {statusLabel}
             </span>
             <span className="text-[9px] text-operator-muted/60 font-mono ml-auto shrink-0">
-              {timeAgo(item.createdAt)}
+              {formatAgoWithSeconds(item.createdAt)}
             </span>
           </div>
           <div className="text-[12px] font-semibold text-operator-text leading-snug truncate">

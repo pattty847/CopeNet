@@ -4,12 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
-import json
 from pathlib import Path
 import re
 from typing import Any, Literal
 
 from copenet._paths import default_personas_dir
+from copenet.core._json_store import read_json as _read_json, write_json_atomic as _write_json
 
 PersonaPrivacyTier = Literal["private", "safe", "off"]
 
@@ -44,20 +44,6 @@ def _write_text_if_missing(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_text(body.strip() + "\n", encoding="utf-8")
-
-
-def _read_json(path: Path, fallback: Any) -> Any:
-    try:
-        return json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return fallback
-
-
-def _write_json(path: Path, payload: Any) -> None:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    tmp = path.with_suffix(".tmp")
-    tmp.write_text(json.dumps(payload, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
-    tmp.replace(path)
 
 
 @dataclass(frozen=True)
