@@ -68,4 +68,27 @@ def create_app(
     def index() -> FileResponse:
         return FileResponse(_root_index_path())
 
+    # PWA root assets: iOS/Android fetch these from the site root, not /assets.
+    # Without explicit routes they'd 404 and "Add to Home Screen" would break.
+    _PWA_ROOT_ASSETS = {
+        "manifest.webmanifest",
+        "apple-touch-icon.png",
+        "icon.svg",
+        "icon-192.png",
+        "icon-512.png",
+        "icon-maskable-512.png",
+        "favicon.ico",
+        "favicon-32.png",
+        "favicon-16.png",
+    }
+
+    @app.get("/{asset_name}")
+    def pwa_root_asset(asset_name: str) -> FileResponse:
+        if asset_name not in _PWA_ROOT_ASSETS:
+            raise HTTPException(status_code=404, detail="Not found")
+        path = _FRONTEND_DIST_DIR / asset_name
+        if not path.is_file():
+            raise HTTPException(status_code=404, detail="Not found")
+        return FileResponse(path)
+
     return app

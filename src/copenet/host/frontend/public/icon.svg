@@ -1,0 +1,33 @@
+<svg width="512" height="512" viewBox="0 0 512 512" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="bg" x1="64" y1="48" x2="448" y2="464" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#000103"/>
+      <stop offset="0.5" stop-color="#080809"/>
+      <stop offset="1" stop-color="#010204"/>
+    </linearGradient>
+    <radialGradient id="glow" cx="0" cy="0" r="1" gradientUnits="userSpaceOnUse" gradientTransform="translate(256 230) scale(150 150)">
+      <stop stop-color="#FEC77A"/>
+      <stop offset="0.32" stop-color="#FB9423"/>
+      <stop offset="1" stop-color="#FB9423" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="sun" x1="256" y1="150" x2="256" y2="300" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FEC77A"/>
+      <stop offset="1" stop-color="#FB9423"/>
+    </linearGradient>
+  </defs>
+
+  <rect width="512" height="512" fill="url(#bg)"/>
+
+  <!-- glow halo -->
+  <circle cx="256" cy="230" r="150" fill="url(#glow)" opacity="0.85"/>
+
+  <!-- sun disc -->
+  <circle cx="256" cy="230" r="74" fill="url(#sun)"/>
+
+  <!-- horizon arcs echoing the hero motif -->
+  <g stroke="#FB9423" fill="none" stroke-linecap="round">
+    <path d="M96 330 C 170 312, 342 312, 416 330" stroke-width="8" opacity="0.95"/>
+    <path d="M72 372 C 168 350, 344 350, 440 372" stroke-width="7" opacity="0.6"/>
+    <path d="M56 414 C 168 388, 344 388, 456 414" stroke-width="6" opacity="0.32"/>
+  </g>
+</svg>
