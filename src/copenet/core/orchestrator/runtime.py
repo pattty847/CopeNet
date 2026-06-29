@@ -10,8 +10,8 @@ from uuid import uuid4
 
 from copenet.core._config import (
     auto_memory_extraction_enabled,
-    auto_profile_extraction_enabled,
 )
+from copenet.core.harness.responses_items import image_content_part
 from copenet.core.orchestrator.messages import (
     build_chat_messages,
     estimate_input_tokens,
@@ -126,8 +126,37 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     message = request.message.strip()
     if not session_key:
         raise ValueError("session_key is required")
-    if not message:
+
+    # Resolve composer attachments up front: build the live turn's inline image
+    # parts and the lean refs we persist on the user transcript message. An
+    # image-only turn (no text) is valid, so we only require *something* to send.
+    attachment_store = orchestrator._chat_attachment_store
+    current_image_parts: list[dict] = []
+    attachment_refs: list[dict] = []
+    for attachment_id in request.attachment_ids:
+        attachment = attachment_store.get(attachment_id)
+        if attachment is None:
+            continue
+        data_url = attachment_store.data_url(attachment_id)
+        if not data_url:
+            continue
+        current_image_parts.append(image_content_part(data_url))
+        attachment_refs.append(attachment.to_transcript_ref())
+
+    if not message and not current_image_parts:
         raise ValueError("message is required")
+
+    def _resolve_attachment_images(refs: list[dict]) -> list[dict]:
+        """Re-inline images for a past user turn from its persisted attachment refs."""
+        parts: list[dict] = []
+        for ref in refs:
+            ref_id = str(ref.get("attachmentId") or "").strip()
+            if not ref_id:
+                continue
+            data_url = attachment_store.data_url(ref_id)
+            if data_url:
+                parts.append(image_content_part(data_url))
+        return parts
 
     # Per Phase -1.2 (HARNESS_REBUILD_V2.md): use idempotency_key as run_id
     # when provided so callers (rpc_chat etc.) keep round-trip identity between
@@ -253,6 +282,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 model=request.model,
                 provider_session_id=entry.provider_session_id,
                 timestamp=transcript_now(),
+                attachments=attachment_refs or None,
             ),
         )
         session_state = orchestrator._session_state_store.get_or_create(session_key)
@@ -277,6 +307,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         chat_messages = build_chat_messages(
             transcript_messages=history_for_replay,
             current_user_message=message,
+            current_user_image_parts=current_image_parts or None,
+            attachment_resolver=_resolve_attachment_images,
         )
         # CLI providers (claude-cli / openai-codex) keep their OWN conversation thread
         # server-side and resume it via provider_session_id. Re-sending the full
@@ -309,7 +341,6 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         tool_steps: list[dict] = []
         persisted_tool_artifact_ids: list[str] = []
         identity_context_payload: dict[str, object] = {
-            "profileActive": False,
             "memoryCount": 0,
             "memoryItemIds": [],
             "personaActive": False,
@@ -358,9 +389,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 policy=effective_tool_policy,
                 available_tools=available_tools,
                 memory_service=orchestrator._memory_service,
-                profile_service=orchestrator._profile_service,
                 workspace_intel_service=orchestrator._workspace_intel_service,
                 persona_service=orchestrator._persona_service,
+                user_notes_service=orchestrator._user_notes_service,
                 artifact_store=orchestrator._artifact_store,
                 edit_backup_store=orchestrator._edit_backup_store,
                 permission_store=orchestrator._permission_store,
@@ -674,18 +705,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         # Phase 0.4: auto-extraction is OFF by default. The previous behavior
         # keyword-scraped user text for "i like / do not / we should" and
         # re-injected those into next-turn prompts, polluting context. Enable
-        # via COPNET_AUTO_PROFILE_EXTRACTION / COPNET_AUTO_MEMORY_EXTRACTION.
-        profile_changes = []
-        if auto_profile_extraction_enabled():
-            try:
-                profile_changes = orchestrator._profile_service.apply_post_run_updates(
-                    user_message=message,
-                    run_record=run_record,
-                )
-            except Exception as exc:
-                trace.record("post_run_side_effect_failed", {"stage": "profile", "error": str(exc)})
-        else:
-            trace.record("post_run_side_effect_skipped", {"stage": "profile", "reason": "auto_extraction_disabled"})
+        # via COPNET_AUTO_MEMORY_EXTRACTION. Operator identity (USER.md) is now
+        # updated only through the approval-gated user.remember draft flow.
         memory_created = []
         if auto_memory_extraction_enabled():
             try:
@@ -707,19 +728,6 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "categories": [item.category for item in memory_created],
                 },
             )
-        if emit_event is not None and profile_changes:
-            try:
-                profile_payload = orchestrator.get_pat_profile()
-                for item in profile_changes:
-                    await emit_event(
-                        "profile.changed",
-                        {
-                            "profile": profile_payload,
-                            "change": item.to_json(),
-                        },
-                    )
-            except Exception as exc:
-                trace.record("post_run_side_effect_failed", {"stage": "profile_emit", "error": str(exc)})
         if emit_event is not None and memory_created:
             try:
                 for item in memory_created:
@@ -1094,14 +1102,10 @@ def _build_identity_memory_overlay(
         privacy_tier=persona_privacy_tier,  # type: ignore[arg-type]
         query=query,
     )
-    identity_payload = orchestrator._profile_service.build_identity_prompt_payload(
-        include_briefing=plan.will_attempt_tool_loop
-    )
     memory_payload = orchestrator._memory_service.build_prompt_payload(
         query=query,
         limit=3 if plan.will_attempt_tool_loop else 1,
     )
-    sink["profileActive"] = bool(identity_payload.stable_identity)
     sink["memoryCount"] = len(memory_payload.memory_items)
     sink["memoryItemIds"] = [item.id for item in memory_payload.memory_items]
     sink["personaActive"] = bool(persona_payload.prompt)
@@ -1112,8 +1116,6 @@ def _build_identity_memory_overlay(
         part
         for part in (
             persona_payload.prompt,
-            identity_payload.stable_identity,
-            identity_payload.situational_briefing,
             memory_payload.digest,
         )
         if part

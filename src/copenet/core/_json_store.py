@@ -24,6 +24,14 @@ def write_json_atomic(path: Path, payload: Any, *, trailing_newline: bool = True
     tmp.replace(path)
 
 
+def write_text_atomic(path: Path, body: str) -> None:
+    """Atomically write text via temp-file + rename (honors the atomic-write invariant)."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(path.suffix + ".tmp")
+    tmp.write_text(body, encoding="utf-8")
+    tmp.replace(path)
+
+
 def append_jsonl(path: Path, payload: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("a", encoding="utf-8", newline="\n") as handle:

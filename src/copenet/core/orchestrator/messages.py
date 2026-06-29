@@ -28,12 +28,18 @@ def build_chat_messages(
     transcript_messages: list[dict[str, Any]],
     current_user_message: str,
     max_context_tokens: int | None = None,
+    current_user_image_parts: list[dict[str, Any]] | None = None,
+    attachment_resolver: responses_items.AttachmentResolver | None = None,
 ) -> list[dict[str, Any]]:
     """Walk transcript parts and produce a Responses-API input array.
 
     `transcript_messages` are the durable history rows (role/content/parts/run_id)
     in chronological order, EXCLUDING the current user message — that is appended
     last from `current_user_message`.
+
+    `current_user_image_parts` carry the live turn's image attachments as
+    `input_image` parts; `attachment_resolver` re-inlines images for past user
+    turns so multi-turn vision survives replay.
 
     Token-budget compaction is deferred (see HARNESS_REBUILD_V2 Phase 6+); for now
     `max_context_tokens` is accepted but unused so callers can pass it through.
@@ -42,6 +48,8 @@ def build_chat_messages(
     return responses_items.transcript_to_input_array(
         transcript_messages=transcript_messages,
         current_user_message=current_user_message,
+        current_user_image_parts=current_user_image_parts,
+        attachment_resolver=attachment_resolver,
     )
 
 

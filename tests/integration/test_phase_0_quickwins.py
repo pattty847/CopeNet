@@ -7,7 +7,7 @@ Verifies the changes landed in HARNESS_REBUILD_V2.md Phase 0:
       continuation hint when truncated.
 - 0.2 files.rg paginates with offset/limit and emits continuation hints.
 - 0.3 context.prepare is no longer registered.
-- 0.4 memory/profile auto-extraction is off by default (env-gated).
+- 0.4 memory auto-extraction is off by default (env-gated).
 """
 
 from __future__ import annotations
@@ -19,7 +19,6 @@ import pytest
 
 from copenet.core._config import (
     auto_memory_extraction_enabled,
-    auto_profile_extraction_enabled,
 )
 from copenet.core.harness import tool_loop as harness_tool_loop
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, ToolPolicy
@@ -40,7 +39,6 @@ def _make_context(workdir: Path, *, policy: ToolPolicy | None = None) -> ToolExe
         policy=policy or ToolPolicy(),
         available_tools=[],
         memory_service=None,
-        profile_service=None,
         workspace_intel_service=None,
         artifact_store=None,
         task_prompt_id=None,
@@ -64,18 +62,14 @@ def test_context_prepare_no_longer_registered() -> None:
 
 
 def test_auto_extraction_is_off_by_default(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Phase 0.4 made memory + profile auto-extraction explicit opt-in."""
+    """Phase 0.4 made memory auto-extraction explicit opt-in."""
     monkeypatch.delenv("COPNET_AUTO_MEMORY_EXTRACTION", raising=False)
-    monkeypatch.delenv("COPNET_AUTO_PROFILE_EXTRACTION", raising=False)
     assert auto_memory_extraction_enabled() is False
-    assert auto_profile_extraction_enabled() is False
 
 
 def test_auto_extraction_respects_env_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("COPNET_AUTO_MEMORY_EXTRACTION", "1")
-    monkeypatch.setenv("COPNET_AUTO_PROFILE_EXTRACTION", "true")
     assert auto_memory_extraction_enabled() is True
-    assert auto_profile_extraction_enabled() is True
 
 
 @pytest.mark.asyncio

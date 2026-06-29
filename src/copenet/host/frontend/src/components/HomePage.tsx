@@ -31,7 +31,6 @@ export function HomePage() {
   const setReturnBriefing = useAppStore((state) => state.setReturnBriefing);
   const isMobile = useIsMobile();
   const returnBriefing = useReturnBriefing();
-  const [showChangelog, setShowChangelog] = useState(false);
   const [missionRunsBySession, setMissionRunsBySession] = useState<Record<string, SessionRunRecord[]>>({});
   const [missionLoading, setMissionLoading] = useState(false);
   const resolvedThemeMode = typeof window === 'undefined' ? useAppStore.getState().themeMode : themeMode;
@@ -130,8 +129,6 @@ export function HomePage() {
     toolCount: tools.length,
     wsStatus,
     latestSessions,
-    showChangelog,
-    setShowChangelog,
     setCurrentSection,
     setWorkflowsRoute,
     onCreateSession: () => {

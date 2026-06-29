@@ -23,6 +23,7 @@ from copenet.core.meme_ideation import (
     ideate_memes,
     refine_memes,
 )
+from copenet.core.attachments import ChatAttachmentError
 from copenet.core.media import MediaDependencyError, MediaDownloadError, MediaIngestionService, MediaTranscriptionError
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 from copenet.core.web_ingest import WebIngestError, WebIngestionService
@@ -732,6 +733,40 @@ def create_app_router(
             except OSError:
                 pass
         return {"text": text}
+
+    @router.post("/chat/attachments")
+    async def upload_chat_attachment(
+        file: UploadFile = File(...),
+        app: AuthenticatedApp = Depends(require_media_access),
+    ) -> dict[str, Any]:
+        """Persist one composer image attachment; returns its id + metadata.
+
+        The chat send then references the id via `attachmentIds`, and the
+        orchestrator inlines the image into the model's vision input.
+        """
+        try:
+            content = await file.read()
+            attachment = orchestrator._chat_attachment_store.save(
+                data=content,
+                mime_type=file.content_type or "",
+                filename=file.filename or "image",
+            )
+        except ChatAttachmentError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+        finally:
+            await file.close()
+        return {"attachment": attachment.to_public_dict()}
+
+    @router.get("/chat/attachments/{attachment_id}")
+    async def get_chat_attachment(
+        attachment_id: str,
+        app: AuthenticatedApp = Depends(require_media_access),
+    ) -> FileResponse:
+        """Serve the raw bytes for a stored attachment (UI thumbnail rendering)."""
+        attachment = orchestrator._chat_attachment_store.get(attachment_id)
+        if attachment is None:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="attachment not found")
+        return FileResponse(path=attachment.path, media_type=attachment.mime_type, filename=attachment.filename)
 
     @router.post("/web/extract")
     async def extract_web_page(body: WebExtractRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:

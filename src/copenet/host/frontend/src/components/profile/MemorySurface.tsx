@@ -1,4 +1,4 @@
-import { Brain, Check, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
+import { Check, Pencil, Plus, Save, Sparkles, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { formatLowercaseRelativeAge } from '../../lib/formatting';
 import { wsClient } from '../../lib/wsClient';
@@ -15,7 +15,6 @@ const CATEGORY_LABELS: Record<MemoryItem['category'], string> = {
 const CATEGORY_OPTIONS: MemoryItem['category'][] = ['preference', 'project_convention', 'ongoing_priority', 'fact'];
 
 export function MemorySurface() {
-  const identityContext = useAppStore((state) => state.identityContext);
   const memoryItems = useAppStore((state) => state.memoryItems);
   const memoryDrafts = useAppStore((state) => state.memoryDrafts);
   const [composerOpen, setComposerOpen] = useState(false);
@@ -108,9 +107,9 @@ export function MemorySurface() {
     <div className="shell-home-panel rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
-          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Identity + Memory</div>
+          <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Memory</div>
           <div className="mt-1 text-[12px] text-shell-muted">
-            {identityContext?.stableIdentity ? 'CopeNet knows its operator context and remembers durable preferences.' : 'Memory stays user-visible and editable.'}
+            Memory stays user-visible and editable.
           </div>
         </div>
         <button
@@ -121,20 +120,6 @@ export function MemorySurface() {
         >
           {composerOpen ? <X className="h-3.5 w-3.5" /> : <Plus className="h-3.5 w-3.5" />}
         </button>
-      </div>
-
-      <div className="mb-3 rounded-[16px] border border-shell-border bg-shell-panel-strong px-3 py-3">
-        <div className="flex items-center gap-2 text-shell-text">
-          <div className="flex h-7 w-7 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
-            <Brain className="h-3.5 w-3.5" />
-          </div>
-          <div className="min-w-0 flex-1">
-            <div className="text-[12px] font-medium">Identity prompt ready</div>
-            <div className="truncate text-[11px] text-shell-muted" title={identityContext?.situationalBriefing || identityContext?.stableIdentity || undefined}>
-              {identityContext?.situationalBriefing || identityContext?.stableIdentity || 'No operator identity overlay yet.'}
-            </div>
-          </div>
-        </div>
       </div>
 
       {composerOpen && (

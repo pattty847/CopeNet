@@ -85,12 +85,24 @@ export interface ToolExecution {
   effect?: ToolEffect | null;
 }
 
+/** An image (or future file) attached to a user message. Bytes live server-side
+ *  in the chat attachment store; `previewUrl` is a client-only object URL set on
+ *  optimistic sends so the thumbnail renders before the server round-trips. */
+export interface ChatAttachment {
+  attachmentId: string;
+  mimeType: string;
+  filename: string;
+  sizeBytes?: number;
+  previewUrl?: string;
+}
+
 export interface Message {
   localId: string;
   sessionKey: string;
   runId: string | null;
   role: MessageRole;
   content: string;
+  attachments?: ChatAttachment[] | null;
   timestamp: string;
   provider: string | null;
   model: string | null;
@@ -420,6 +432,7 @@ export interface PublicMessagePayload {
   timestamp?: string | null;
   state?: string | null;
   toolExecution?: ToolExecution | null;
+  attachments?: unknown[] | null;
 }
 
 export interface ChatEventPayload {
@@ -877,49 +890,8 @@ export interface LiveToolCall {
 }
 
 // ---------------------------------------------------------------------------
-// Pat Profile — wire types
-// Backend contract is documented in docs/investigations/pat-profile-frontend-contract.md
-// These types are stubs until the backend RPC ships.
+// Memory + identity wire types
 // ---------------------------------------------------------------------------
-
-export type PatProfileSource = 'template' | 'explicit' | 'inferred' | 'session_observation';
-
-export interface PatProfilePriority {
-  id: string;
-  label: string;
-  weight: number;        // 0–1 relative weight among priorities
-}
-
-export interface PatProfileGoal {
-  id: string;
-  text: string;
-  source: PatProfileSource;
-  updatedAt: string;
-}
-
-export interface PatProfileTonePreference {
-  directness: 'terse' | 'balanced' | 'verbose';
-  formality: 'casual' | 'professional';
-  preferBullets: boolean;
-}
-
-export interface PatProfile {
-  profileId: string;
-  displayName: string;
-  active: boolean;
-  source: PatProfileSource;
-  priorities: PatProfilePriority[];
-  goals: PatProfileGoal[];
-  tonePreference: PatProfileTonePreference;
-  noiseFilters: string[];         // topics/signals to suppress
-  lastUpdatedAt: string;          // ISO
-  changelogCount: number;         // total entries in the changelog
-}
-
-export interface IdentityContextPayload {
-  stableIdentity: string | null;
-  situationalBriefing: string | null;
-}
 
 export type MemoryCategory = 'preference' | 'project_convention' | 'ongoing_priority' | 'fact';
 
@@ -939,7 +911,6 @@ export interface MemoryItem {
 }
 
 export interface IdentityContextRuntime {
-  profileActive: boolean;
   memoryCount: number;
   memoryItemIds: string[];
   personaActive?: boolean;
@@ -948,32 +919,23 @@ export interface IdentityContextRuntime {
   personaPrivacyTier?: PersonaPrivacyTier | null;
 }
 
+// USER.md proposal — a model-proposed identity delta awaiting operator review.
+export interface UserNoteProposal {
+  id: string;
+  targetSection: string;
+  summary: string;
+  body: string;
+  status: 'draft' | 'approved';
+  createdAt: string;
+  updatedAt: string;
+  lastSessionKey?: string | null;
+}
+
 export interface MemoryChangeEvent {
   item: MemoryItem;
   reason: string;
   sessionKey?: string | null;
   runId?: string | null;
-}
-
-export type ProfileChangelogChangeKind =
-  | 'priority_updated'
-  | 'goal_added'
-  | 'goal_removed'
-  | 'tone_updated'
-  | 'noise_filter_added'
-  | 'noise_filter_removed'
-  | 'schedule_updated'
-  | 'constraint_updated';
-
-export interface ProfileChangelogItem {
-  id: string;
-  kind: ProfileChangelogChangeKind;
-  summary: string;                         // one-line human-readable change description
-  detail?: string | null;
-  source: PatProfileSource;
-  rationale?: string | null;               // why CopeNet made this change
-  triggeredBySessionKey?: string | null;
-  changedAt: string;                       // ISO
 }
 
 // Return Briefing — payload for the "I'm back" re-entry surface.

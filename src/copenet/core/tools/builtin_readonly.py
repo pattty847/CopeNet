@@ -10,6 +10,7 @@ from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMO
 from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
+from .handlers.user_note import DESCRIPTORS as USER_NOTE_DESCRIPTORS, HANDLERS as USER_NOTE_HANDLERS
 from .handlers.web import DESCRIPTORS as WEB_DESCRIPTORS, HANDLERS as WEB_HANDLERS
 from .handlers.workspace_intel import DESCRIPTORS as WORKSPACE_INTEL_DESCRIPTORS, HANDLERS as WORKSPACE_INTEL_HANDLERS
 
@@ -41,6 +42,8 @@ MANIFEST_TOOL_IDS = {
     # memory.read recalls, memory.write PROPOSES a draft that the operator approves.
     "memory.read",
     "memory.write",
+    # user.remember PROPOSES a USER.md identity delta the operator approves (draft-first).
+    "user.remember",
 }
 
 # ALL_DESCRIPTORS stays the full set so the registry can still ROUTE + policy-check
@@ -56,6 +59,7 @@ ALL_DESCRIPTORS = (
     + WORKSPACE_INTEL_DESCRIPTORS
     + PLAN_DESCRIPTORS
     + WEB_DESCRIPTORS
+    + USER_NOTE_DESCRIPTORS
 )
 ALL_HANDLERS = {
     **FILE_HANDLERS,
@@ -67,6 +71,7 @@ ALL_HANDLERS = {
     **WORKSPACE_INTEL_HANDLERS,
     **PLAN_HANDLERS,
     **WEB_HANDLERS,
+    **USER_NOTE_HANDLERS,
 }
 
 

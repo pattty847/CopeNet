@@ -10,15 +10,6 @@ from .persona_flavor import parse_persona_flavor_draft as _parse_persona_flavor_
 
 
 class IdentityFacadeMixin:
-    def get_pat_profile(self) -> dict | None:
-        """Return the current public Pat Profile payload, if configured."""
-        profile = self._profile_service.load_profile()
-        return profile.to_public_dict() if profile is not None else None
-
-    def get_identity_prompt_payload(self) -> dict:
-        """Return the current identity prompt payload used by the harness."""
-        return self._profile_service.build_identity_prompt_payload(include_briefing=True).to_public_dict()
-
     def get_persona(self, *, provider: str | None = None, model: str | None = None, privacy_tier: PersonaPrivacyTier | None = None) -> dict:
         """Return the resolved Persona Home summary for UI clients."""
         return self._persona_service.get_summary(provider=provider, model=model, privacy_tier=privacy_tier)
@@ -179,11 +170,32 @@ class IdentityFacadeMixin:
         """Delete a model-proposed draft outright."""
         return self._memory_service.discard_memory(memory_id)
 
-    def list_profile_changelog(self, limit: int = 20) -> list[dict]:
-        """Return recent Pat Profile changelog entries."""
-        return [item.to_json() for item in self._profile_service.list_changelog(limit=limit)]
+    def list_user_notes(self, *, status: str = "draft") -> list[dict]:
+        """Return model-proposed USER.md deltas (status: draft | approved | all)."""
+        return [item.to_public_dict() for item in self._user_notes_service.list_proposals(status=status)]
+
+    def approve_user_note(
+        self,
+        *,
+        note_id: str,
+        target_section: str | None = None,
+        summary: str | None = None,
+        body: str | None = None,
+    ) -> dict | None:
+        """Merge a USER.md proposal into the active persona's USER.md (optionally edited)."""
+        item = self._user_notes_service.approve_user_note(
+            note_id,
+            target_section=target_section,
+            summary=summary,
+            body=body,
+        )
+        return item.to_public_dict() if item is not None else None
+
+    def discard_user_note(self, *, note_id: str) -> bool:
+        """Delete a model-proposed USER.md draft outright."""
+        return self._user_notes_service.discard_user_note(note_id)
 
     def get_return_briefing(self) -> dict | None:
         """Return the latest return briefing payload, if any."""
-        briefing = self._profile_service.build_return_briefing()
+        briefing = self._briefing_service.build_return_briefing()
         return briefing.to_public_dict() if briefing is not None else None

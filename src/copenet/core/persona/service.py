@@ -9,7 +9,11 @@ import re
 from typing import Any, Literal
 
 from copenet._paths import default_personas_dir
-from copenet.core._json_store import read_json as _read_json, write_json_atomic as _write_json
+from copenet.core._json_store import (
+    read_json as _read_json,
+    write_json_atomic as _write_json,
+    write_text_atomic as _write_text_atomic,
+)
 
 PersonaPrivacyTier = Literal["private", "safe", "off"]
 
@@ -44,6 +48,106 @@ def _write_text_if_missing(path: Path, body: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     if not path.exists():
         path.write_text(body.strip() + "\n", encoding="utf-8")
+
+
+def _compress_user_md(text: str) -> tuple[str, list[str]]:
+    """Split USER.md into its always-injected summary and on-demand section titles.
+
+    Convention: a leading ``## Summary`` section is the compressed block injected every
+    turn; every other ``## `` header is body the model reads on demand via files.read.
+    Files that don't follow the convention fall back to their preamble (text before the
+    first ``## ``, minus a leading ``# `` title) as the summary. Returns
+    ``(summary_text, other_section_titles)``.
+    """
+    preamble: list[str] = []
+    body_sections: list[tuple[str, list[str]]] = []
+    current_title: str | None = None
+    current_body: list[str] = []
+    for line in text.splitlines():
+        if line.strip().startswith("## "):
+            if current_title is None:
+                preamble = current_body
+            else:
+                body_sections.append((current_title, current_body))
+            current_title = line.strip()[3:].strip()
+            current_body = []
+        else:
+            current_body.append(line)
+    if current_title is None:
+        preamble = current_body
+    else:
+        body_sections.append((current_title, current_body))
+
+    summary = ""
+    other_titles: list[str] = []
+    for title, body in body_sections:
+        if title.lower() == "summary" and not summary:
+            summary = "\n".join(body).strip()
+        else:
+            other_titles.append(title)
+
+    if not summary:
+        # No explicit ## Summary — use the preamble, dropping a leading "# Title" line.
+        cleaned: list[str] = []
+        for line in preamble:
+            if not cleaned and line.strip().startswith("# "):
+                continue
+            cleaned.append(line)
+        summary = "\n".join(cleaned).strip()
+        if not summary and body_sections:
+            summary = "\n".join(body_sections[0][1]).strip()
+    return summary, other_titles
+
+
+def _merge_user_md_section(text: str, title: str, body: str) -> str:
+    """Replace the body of the ``## {title}`` section (appending it if absent).
+
+    Preserves the file's preamble and other sections; re-renders with consistent
+    spacing. Used by the approve path so an accepted proposal updates one section
+    rather than blindly appending.
+    """
+    preamble: list[str] = []
+    titles: list[str] = []
+    bodies: list[list[str]] = []
+    current_title: str | None = None
+    current_body: list[str] = []
+    for line in text.splitlines():
+        if line.strip().startswith("## "):
+            if current_title is None:
+                preamble = current_body
+            else:
+                titles.append(current_title)
+                bodies.append(current_body)
+            current_title = line.strip()[3:].strip()
+            current_body = []
+        else:
+            current_body.append(line)
+    if current_title is None:
+        preamble = current_body
+    else:
+        titles.append(current_title)
+        bodies.append(current_body)
+
+    new_body = body.strip().splitlines()
+    replaced = False
+    for index, existing in enumerate(titles):
+        if existing.lower() == title.lower():
+            titles[index] = title
+            bodies[index] = new_body
+            replaced = True
+            break
+    if not replaced:
+        titles.append(title)
+        bodies.append(new_body)
+
+    parts: list[str] = []
+    pre = "\n".join(preamble).strip()
+    if pre:
+        parts.append(pre)
+    for section_title, section_body in zip(titles, bodies):
+        rendered_body = "\n".join(section_body).strip()
+        parts.append(f"## {section_title}\n{rendered_body}".rstrip())
+    return "\n\n".join(parts).strip() + "\n"
 
 
 @dataclass(frozen=True)
@@ -233,12 +337,24 @@ class PersonaHomeService:
                 if text := _read_text(path):
                     sections.append((f"Model flavor {name}", text, path))
         if resolved_tier == "private":
-            for path in (
-                persona_root / "user" / "USER.md",
-                persona_root / "memory" / "MEMORY.md",
-            ):
-                if text := _read_text(path):
-                    sections.append((path.name, text, path))
+            # USER.md is two-tier: only the compressed ``## Summary`` block is injected
+            # every turn; the rest of the file is read on demand via files.read. The
+            # synthetic index line tells the model what's available and where to find it.
+            user_path = persona_root / "user" / "USER.md"
+            if user_text := _read_text(user_path):
+                summary, section_titles = _compress_user_md(user_text)
+                if summary:
+                    sections.append((user_path.name, summary, user_path))
+                if section_titles:
+                    index_line = (
+                        "Full operator context lives in USER.md. Sections available on demand: "
+                        + ", ".join(section_titles)
+                        + f". Read the full file with files.read on: {user_path}"
+                    )
+                    sections.append(("USER.md sections", index_line, user_path))
+            memory_path = persona_root / "memory" / "MEMORY.md"
+            if text := _read_text(memory_path):
+                sections.append((memory_path.name, text, memory_path))
             for path in self._recent_daily_paths(persona_root):
                 if text := _read_text(path):
                     sections.append((f"Daily memory {path.name}", text, path))
@@ -369,6 +485,22 @@ class PersonaHomeService:
             written.append(f"{rel[0]}/{rel[1]}")
         return {**self._persona_public(safe), "writtenFiles": written}
 
+    def user_md_path(self, persona_id: str | None = None) -> Path:
+        """Return the USER.md path for the given (or default) persona."""
+        self._ensure_scaffold()
+        pid = _safe_segment(persona_id) if persona_id else self.load_settings().default_persona_id
+        return self._persona_dir(pid) / "user" / "USER.md"
+
+    def merge_user_md_section(self, *, target_section: str, body: str, persona_id: str | None = None) -> Path:
+        """Merge an approved USER.md delta into one section (atomic temp+rename)."""
+        path = self.user_md_path(persona_id)
+        current = _read_text(path)
+        if not current:
+            current = "# USER.md"
+        merged = _merge_user_md_section(current, target_section.strip() or "Summary", body)
+        _write_text_atomic(path, merged)
+        return path
+
     def _persona_public(self, persona_id: str, *, active_id: str | None = None) -> dict[str, Any]:
         persona_dir = self._persona_dir(persona_id)
         active = active_id if active_id is not None else self.load_settings().default_persona_id
@@ -396,19 +528,37 @@ class PersonaHomeService:
         safe = _safe_segment(persona_id)
         persona_root = self._persona_dir(safe)
         if safe == "default":
-            # The default persona keeps its original, stable content (relied on by tests
-            # and existing installs); only NEW personas get title-derived headings.
+            # The default persona keeps its stable H1 titles (relied on by tests and
+            # existing installs); only NEW personas get title-derived headings.
             soul_title, identity_title = "CopeNet Home", "CopeNet Identity"
             agents_title = "CopeNet Persona Operating Notes"
-            identity_body = "This is CopeNet's shared persona home. Individual models may layer their own flavor on top."
+            identity_body = (
+                "This is CopeNet's shared persona home. You are the operator's collaborator inside their own "
+                "harness — capable across the whole stack, skeptical, practical, and good company. Individual "
+                "models may layer their own flavor on top, but this identity and the home around it stay constant "
+                "so the operator always knows who they are working with.\n\n"
+                "Who the operator is lives in USER.md — read its summary every turn and read the full file when "
+                "the topic calls for it."
+            )
         else:
             name = _text(display_name) or safe
             soul_title = identity_title = name
             agents_title = f"{name} — Operating Notes"
-            identity_body = f"This is the {safe} persona home. Individual models may layer their own flavor on top."
+            identity_body = (
+                f"This is the {safe} persona home. You are the operator's collaborator inside their own harness. "
+                "Individual models may layer their own flavor on top. Who the operator is lives in USER.md — read "
+                "its summary every turn and the full file when the topic calls for it."
+            )
         _write_text_if_missing(
             persona_root / "core" / "SOUL.md",
-            f"# {soul_title}\n\nBe genuinely helpful, practical, warm, and careful with private context.",
+            f"# {soul_title}\n\n"
+            "This harness is your home. CopeNet is a personal, local agent platform — not a faceless API "
+            "endpoint — and you share it with one person: the operator. You wake up fresh each run with no memory "
+            "of yesterday, so the files in this home are your continuity. Trust them and keep them current.\n\n"
+            "Be genuinely helpful, direct, and warm. Lead with the result, then the reasoning. Push back when "
+            "something is weak instead of flattering it. Care about the operator's actual goals and wellbeing, not "
+            "just the literal request. Keep private context out of shared or public channels. You are here because "
+            "you give a damn about this specific person — not as a generic assistant.",
         )
         _write_text_if_missing(
             persona_root / "core" / "IDENTITY.md",
@@ -416,11 +566,23 @@ class PersonaHomeService:
         )
         _write_text_if_missing(
             persona_root / "core" / "AGENTS.md",
-            f"# {agents_title}\n\nUse shared memory responsibly. Keep private context out of shared or public channels.",
+            f"# {agents_title}\n\n"
+            "- The operator's identity is in USER.md — two-tier: a `## Summary` you always see, plus sections you "
+            "read on demand with files.read using the path in the section index.\n"
+            "- Use memory and persona files responsibly. Keep private context out of shared or public channels.\n"
+            "- When you learn something durable and identity-level about the operator, propose it with "
+            "`user.remember`. It becomes a draft they review — never a silent write. Pick the real deltas; do not "
+            "log trivia, and there is a small daily limit.\n"
+            "- Stay grounded in the real workspace. Do not invent a relationship history or memories you do not have.",
         )
         _write_text_if_missing(
             persona_root / "user" / "USER.md",
-            "# USER.md\n\nPrivate operator context belongs here.",
+            "# USER.md\n\n"
+            "Who the operator is. The `## Summary` below is injected into every turn; the other `## ` sections are "
+            "read on demand. Keep the summary tight and put depth in the sections.\n\n"
+            "## Summary\n"
+            "Operator identity not written yet. Ask the operator about themselves, or let them paste it in — then "
+            "propose updates with user.remember.",
         )
         _write_text_if_missing(
             persona_root / "environment" / "TOOLS.md",

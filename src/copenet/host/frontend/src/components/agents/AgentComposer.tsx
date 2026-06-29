@@ -5,7 +5,18 @@ import { wsClient } from '../../lib/wsClient';
 import { useVoiceToText } from '../../lib/useVoiceToText';
 import { useAppStore } from '../../store/useAppStore';
 import { accessOptionsFor, providerAllowsFullAccess } from '../../lib/access';
-import type { DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
+import { uploadChatAttachment } from '../../lib/appApi';
+import type { ChatAttachment, DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
+
+/** A composer-local image attachment in flight: object-URL preview + upload status. */
+interface PendingAttachment {
+  localId: string;
+  filename: string;
+  previewUrl: string;
+  status: 'uploading' | 'ready' | 'error';
+  attachment: ChatAttachment | null;
+  error?: string;
+}
 
 export interface RuntimePillSummary {
   provider: string;
@@ -343,7 +354,7 @@ export function AgentComposer({
   value: string;
   onChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  onSend: (messageOverride?: string) => void;
+  onSend: (messageOverride?: string, attachments?: ChatAttachment[]) => void;
   optimizationProviderId: string;
   optimizationModelId?: string | null;
   disabled: boolean;
@@ -381,6 +392,80 @@ export function AgentComposer({
 
   const [aborting, setAborting] = useState(false);
   const isRunning = Boolean(activeRunId);
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [isDragging, setIsDragging] = useState(false);
+  const hasUploadingAttachment = attachments.some((item) => item.status === 'uploading');
+  const readyAttachments = attachments.filter((item) => item.status === 'ready' && item.attachment);
+
+  const ingestFiles = (files: File[]) => {
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    if (images.length === 0) return;
+    for (const file of images) {
+      const localId = `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const previewUrl = URL.createObjectURL(file);
+      setAttachments((current) => [
+        ...current,
+        { localId, filename: file.name || 'image', previewUrl, status: 'uploading', attachment: null },
+      ]);
+      void uploadChatAttachment(file)
+        .then((attachment) => {
+          setAttachments((current) =>
+            current.map((item) =>
+              item.localId === localId ? { ...item, status: 'ready', attachment } : item,
+            ),
+          );
+        })
+        .catch((error) => {
+          setAttachments((current) =>
+            current.map((item) =>
+              item.localId === localId
+                ? { ...item, status: 'error', error: error instanceof Error ? error.message : 'Upload failed' }
+                : item,
+            ),
+          );
+        });
+    }
+  };
+
+  const removeAttachment = (localId: string) => {
+    setAttachments((current) => {
+      const target = current.find((item) => item.localId === localId);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return current.filter((item) => item.localId !== localId);
+    });
+  };
+
+  const clearAttachments = () => {
+    setAttachments((current) => {
+      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      return [];
+    });
+  };
+
+  const handleFileInputChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files ? Array.from(event.target.files) : [];
+    ingestFiles(files);
+    event.target.value = '';
+  };
+
+  const handlePaste = (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const files = Array.from(event.clipboardData?.files || []);
+    const images = files.filter((file) => file.type.startsWith('image/'));
+    if (images.length > 0) {
+      event.preventDefault();
+      ingestFiles(images);
+    }
+  };
+
+  const handleDrop = (event: React.DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragging(false);
+    if (disabled) return;
+    const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
+    ingestFiles(files);
+  };
 
   const handleStop = async () => {
     if (aborting) return;
@@ -559,12 +644,25 @@ export function AgentComposer({
     }
   };
 
+  // Pass ready attachments (carrying their local previewUrl so the sent bubble
+  // renders instantly) up to the parent, then clear the composer tray.
+  const submitMessage = (text: string) => {
+    const ready: ChatAttachment[] = readyAttachments.map((item) => ({
+      ...(item.attachment as ChatAttachment),
+      previewUrl: item.previewUrl,
+    }));
+    onSend(text, ready.length > 0 ? ready : undefined);
+    clearAttachments();
+  };
+
+  const canSend = (Boolean(value.trim()) || readyAttachments.length > 0) && !disabled && !hasUploadingAttachment;
+
   const triggerDirectSend = () => {
-    if (!value.trim() || disabled) return;
+    if (!canSend) return;
     const now = Date.now();
     if (now - lastDirectSendAtRef.current < 700) return;
     lastDirectSendAtRef.current = now;
-    onSend(value);
+    submitMessage(value);
   };
 
   return (
@@ -665,20 +763,72 @@ export function AgentComposer({
           </div>
         )}
 
-        <div className="rounded-2xl border border-operator-border bg-operator-panel/65 shadow-shell transition-colors focus-within:border-operator-accent/45 focus-within:shadow-shell-hover" ref={isDraft ? runtimeRef : undefined}>
+        <div
+          className={`rounded-2xl border bg-operator-panel/65 shadow-shell transition-colors focus-within:border-operator-accent/45 focus-within:shadow-shell-hover ${isDragging ? 'border-operator-accent/60 ring-1 ring-operator-accent/40' : 'border-operator-border'}`}
+          ref={isDraft ? runtimeRef : undefined}
+          onDragOver={(event) => { event.preventDefault(); if (!disabled) setIsDragging(true); }}
+          onDragLeave={(event) => { event.preventDefault(); setIsDragging(false); }}
+          onDrop={handleDrop}
+        >
+          {attachments.length > 0 && (
+            <div className="flex flex-wrap gap-2 border-b border-operator-border/60 px-3 py-2">
+              {attachments.map((item) => (
+                <div
+                  key={item.localId}
+                  className="group relative h-16 w-16 overflow-hidden rounded-lg border border-operator-border bg-operator-bg"
+                  title={item.error || item.filename}
+                >
+                  <img src={item.previewUrl} alt={item.filename} className="h-full w-full object-cover" />
+                  {item.status === 'uploading' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-operator-bg/60">
+                      <Loader2 className="h-4 w-4 animate-spin text-operator-accent" />
+                    </div>
+                  )}
+                  {item.status === 'error' && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-operator-error/30 text-[9px] font-semibold text-operator-error">
+                      Failed
+                    </div>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(item.localId)}
+                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-operator-bg/80 text-operator-muted opacity-0 transition-opacity hover:text-operator-error group-hover:opacity-100"
+                    title="Remove"
+                  >
+                    <X className="h-2.5 w-2.5" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-1 px-3 py-2">
             <textarea
               ref={textareaRef}
               value={value}
               onChange={(event) => onChange(event.target.value)}
               onKeyDown={onKeyDown}
+              onPaste={handlePaste}
               disabled={disabled}
               placeholder={placeholder}
               className="max-h-[160px] min-h-[28px] flex-1 resize-none overflow-y-auto bg-transparent px-0.5 py-1 text-[13.5px] leading-[1.5] text-operator-text outline-none placeholder:text-operator-muted/55 disabled:opacity-40"
               rows={1}
             />
             <div className="flex items-center gap-0.5 pb-0">
-              <button disabled={disabled} className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-text disabled:opacity-40" title="Attach file">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/png,image/jpeg,image/webp,image/gif"
+                multiple
+                className="hidden"
+                onChange={handleFileInputChange}
+              />
+              <button
+                type="button"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={disabled}
+                className="rounded-lg p-2 text-operator-muted/80 transition-colors hover:bg-operator-panel hover:text-operator-accent disabled:opacity-40"
+                title="Attach image"
+              >
                 <Paperclip className="h-3.5 w-3.5" />
               </button>
               <button
@@ -738,7 +888,7 @@ export function AgentComposer({
                     triggerDirectSend();
                   }}
                   onClick={triggerDirectSend}
-                  disabled={!value.trim() || disabled}
+                  disabled={!canSend}
                   className="glow-accent ml-0.5 flex h-9 w-9 items-center justify-center rounded-xl bg-operator-accent text-operator-bg disabled:cursor-not-allowed disabled:opacity-30 disabled:shadow-none"
                   title="Send"
                   aria-label="Send message"
@@ -849,7 +999,7 @@ export function AgentComposer({
         onGenerateCustom={() => void generateVariants(customTransform)}
         onUseOriginal={() => {
           setOptimizerOpen(false);
-          onSend(optimizerOriginal);
+          submitMessage(optimizerOriginal);
         }}
         onReplaceComposer={() => {
           if (!selectedVariant?.prompt?.trim()) return;
@@ -859,7 +1009,7 @@ export function AgentComposer({
         onSendSelected={() => {
           if (!selectedVariant?.prompt?.trim()) return;
           setOptimizerOpen(false);
-          onSend(selectedVariant.prompt);
+          submitMessage(selectedVariant.prompt);
         }}
         onClose={() => setOptimizerOpen(false)}
       />

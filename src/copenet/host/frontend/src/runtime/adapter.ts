@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import type { SessionArtifactRecord } from '../types/backend';
 import { buildInboxItems } from './inboxItems';
 import { mapRunToActivity } from './activityProof';
-import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, PatProfile, ProfileChangelogItem, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -237,22 +237,10 @@ export function useApprovalActions() {
 // Pat Profile hooks — real store state only; null until backend ships
 // ---------------------------------------------------------------------------
 
-// Returns the active Pat Profile from the store.
-// Null until the backend profile:loaded RPC fires.
-export function usePatProfile(): PatProfile | null {
-  return useAppStore((s) => s.patProfile);
-}
-
 // Returns the pending return briefing from the store.
 // Null until the backend briefing:ready RPC fires (or dev trigger seeds it).
 export function useReturnBriefing(): ReturnBriefingPayload | null {
   return useAppStore((s) => s.returnBriefing);
-}
-
-// Returns the profile changelog from the store.
-// Empty until the backend pushes profile mutation events.
-export function useProfileChangelog(): ProfileChangelogItem[] {
-  return useAppStore((s) => s.profileChangelog);
 }
 
 // ---------------------------------------------------------------------------

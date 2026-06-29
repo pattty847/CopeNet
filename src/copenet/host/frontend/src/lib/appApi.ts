@@ -1,4 +1,4 @@
-import { MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
+import { ChatAttachment, MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
 
 const DEFAULT_DEV_TOKEN = 'dev-token';
 
@@ -215,4 +215,47 @@ export async function uploadMediaFile(file: File): Promise<MediaAsset> {
   });
   const payload = await readJson<{ asset?: unknown }>(response);
   return normalizeMediaAsset(payload.asset);
+}
+
+function normalizeChatAttachment(raw: unknown): ChatAttachment {
+  const payload = (raw || {}) as Record<string, unknown>;
+  return {
+    attachmentId: String(payload.attachmentId || ''),
+    mimeType: String(payload.mimeType || 'application/octet-stream'),
+    filename: String(payload.filename || 'image'),
+    sizeBytes: typeof payload.sizeBytes === 'number' ? payload.sizeBytes : Number(payload.sizeBytes || 0),
+  };
+}
+
+/** Upload one composer image attachment; returns its server id + metadata. */
+export async function uploadChatAttachment(file: File): Promise<ChatAttachment> {
+  const form = new FormData();
+  form.append('file', file);
+
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/chat/attachments`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+    body: form,
+  });
+  const payload = await readJson<{ attachment?: unknown }>(response);
+  return normalizeChatAttachment(payload.attachment);
+}
+
+/** Fetch a persisted attachment as an object URL (auth header can't ride on
+ *  <img src>, so historical thumbnails fetch the bytes and wrap them). Caller
+ *  owns revoking the returned URL. */
+export async function fetchChatAttachmentObjectUrl(attachmentId: string): Promise<string> {
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/chat/attachments/${encodeURIComponent(attachmentId)}`, {
+    method: 'GET',
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to load attachment (${response.status})`);
+  }
+  const blob = await response.blob();
+  return URL.createObjectURL(blob);
 }

@@ -6,6 +6,7 @@ import type {
   PersonaHomeSummary,
   PersonaListItem,
   PersonaSettings,
+  UserNoteProposal,
 } from '../types/backend';
 import {
   normalizeMemoryItem,
@@ -13,6 +14,7 @@ import {
   normalizePersonaFlavorDraft,
   normalizePersonaHome,
   normalizePersonaSettings,
+  normalizeUserNote,
 } from './wsNormalizers';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
@@ -77,6 +79,37 @@ export async function refreshMemoryDraftsRpc(request: WsRpcRequest): Promise<voi
       ? payload.items.map(normalizeMemoryItem).filter((item): item is MemoryItem => item != null)
       : [];
     useAppStore.getState().setMemoryDrafts(drafts);
+  } catch {
+    /* non-fatal: drafts surface refreshes on the next trigger */
+  }
+}
+
+export async function approveUserNoteRpc(
+  request: WsRpcRequest,
+  id: string,
+  edits?: { targetSection?: string; summary?: string; body?: string },
+): Promise<UserNoteProposal | null> {
+  const payload = await request<{ userNote?: unknown | null }>('userNotes.approve', {
+    id,
+    targetSection: edits?.targetSection,
+    summary: edits?.summary,
+    body: edits?.body,
+  });
+  return normalizeUserNote(payload.userNote);
+}
+
+export async function discardUserNoteRpc(request: WsRpcRequest, id: string): Promise<boolean> {
+  const payload = await request<{ discarded?: unknown }>('userNotes.discard', { id });
+  return Boolean(payload.discarded);
+}
+
+export async function refreshUserNoteDraftsRpc(request: WsRpcRequest): Promise<void> {
+  try {
+    const payload = await request<{ items?: unknown[] }>('userNotes.list', { status: 'draft' });
+    const drafts = Array.isArray(payload.items)
+      ? payload.items.map(normalizeUserNote).filter((item): item is UserNoteProposal => item != null)
+      : [];
+    useAppStore.getState().setUserNoteDrafts(drafts);
   } catch {
     /* non-fatal: drafts surface refreshes on the next trigger */
   }

@@ -20,7 +20,13 @@ Item types:
 from __future__ import annotations
 
 import json
-from typing import Any, TypedDict
+from typing import Any, Callable, TypedDict
+
+
+# Resolves a transcript message's stored attachment refs (list of dicts carrying
+# `attachmentId`) into Responses `input_image` content parts. Injected by the
+# orchestrator so this module stays free of storage dependencies.
+AttachmentResolver = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 
 
 # -- Item dict shapes (TypedDict for readability; runtime values are plain dicts) -
@@ -56,11 +62,29 @@ class FunctionCallOutputItem(TypedDict):
 # -- Item builders --------------------------------------------------------------
 
 
-def user_input_item(text: str) -> dict[str, Any]:
-    """One user-authored message in the input[] array."""
+def image_content_part(image_url: str) -> dict[str, Any]:
+    """One `input_image` content part for the Responses/codex backend.
+
+    `image_url` is a base64 data URL (`data:<mime>;base64,<...>`) or an http(s)
+    URL. `detail: "auto"` matches the reference (openclaw) shape the codex backend
+    accepts.
+    """
+    return {"type": "input_image", "detail": "auto", "image_url": image_url}
+
+
+def user_input_item(text: str, image_parts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """One user-authored message in the input[] array.
+
+    Text is always present (kept first so prompt-flattening still finds it). Any
+    `image_parts` (already-built `input_image` content parts) are appended, which
+    is how attachments reach a vision-capable model.
+    """
+    content: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
+    if image_parts:
+        content.extend(image_parts)
     return {
         "role": "user",
-        "content": [{"type": "input_text", "text": text}],
+        "content": content,
     }
 
 
@@ -188,20 +212,31 @@ def transcript_to_input_array(
     *,
     transcript_messages: list[dict[str, Any]],
     current_user_message: str,
+    current_user_image_parts: list[dict[str, Any]] | None = None,
+    attachment_resolver: AttachmentResolver | None = None,
 ) -> list[dict[str, Any]]:
     """Walk a session's full transcript and emit the input[] array for the next turn.
 
     Yields user input items for past user messages, plus the assistant-side items
     (text + tool calls + tool outputs) interleaved in their original order, finally
     appending the new user message.
+
+    `current_user_image_parts` are `input_image` parts for the live turn's
+    attachments. `attachment_resolver`, when provided, re-inlines images for PAST
+    user turns that carried attachments — keeping multi-turn vision intact (ask a
+    follow-up about an image uploaded several turns ago).
     """
     items: list[dict[str, Any]] = []
     for message in transcript_messages:
         role = str(message.get("role") or "").strip()
         if role == "user":
             content = str(message.get("content") or "").strip()
-            if content:
-                items.append(user_input_item(content))
+            past_image_parts: list[dict[str, Any]] = []
+            refs = message.get("attachments")
+            if attachment_resolver is not None and isinstance(refs, list) and refs:
+                past_image_parts = attachment_resolver(refs)
+            if content or past_image_parts:
+                items.append(user_input_item(content, past_image_parts or None))
         elif role == "assistant":
             parts = message.get("parts")
             run_id = str(message.get("run_id") or message.get("runId") or "unknown")
@@ -212,7 +247,7 @@ def transcript_to_input_array(
                 content = str(message.get("content") or "").strip()
                 if content:
                     items.append(assistant_message_item(message_id=f"msg_{run_id}", text=content))
-    items.append(user_input_item(current_user_message))
+    items.append(user_input_item(current_user_message, current_user_image_parts))
     return items
 
 

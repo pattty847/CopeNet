@@ -8,12 +8,14 @@ from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
 from .rpc_catalog import (
     handle_briefing_get,
-    handle_identity_context_get,
     handle_memory_approve,
     handle_memory_archive,
     handle_memory_discard,
     handle_memory_list,
     handle_memory_upsert,
+    handle_user_notes_approve,
+    handle_user_notes_discard,
+    handle_user_notes_list,
     handle_messaging_config_get,
     handle_messaging_config_update,
     handle_messaging_destinations_delete,
@@ -36,8 +38,6 @@ from .rpc_catalog import (
     handle_persona_settings_get,
     handle_persona_settings_update,
     handle_persona_write_file,
-    handle_profile_changelog,
-    handle_profile_get,
     handle_prompts_list,
     handle_prompts_optimize,
     handle_provider_auth_begin_login,
@@ -148,10 +148,6 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_models_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "tools.list":
         await handle_tools_list(req.id, send_json, orchestrator)
-    elif req.method == "profile.get":
-        await handle_profile_get(req.id, send_json, orchestrator)
-    elif req.method == "identity.context":
-        await handle_identity_context_get(req.id, send_json, orchestrator)
     elif req.method == "persona.get":
         await handle_persona_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.settings.get":
@@ -174,8 +170,6 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_persona_read_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.writeFile":
         await handle_persona_write_file(req.id, req.params, send_json, orchestrator)
-    elif req.method == "profile.changelog":
-        await handle_profile_changelog(req.id, req.params, send_json, orchestrator)
     elif req.method == "briefing.get":
         await handle_briefing_get(req.id, send_json, orchestrator)
     elif req.method == "memory.list":
@@ -188,6 +182,12 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_memory_approve(req.id, req.params, send_json, orchestrator)
     elif req.method == "memory.discard":
         await handle_memory_discard(req.id, req.params, send_json, orchestrator)
+    elif req.method == "userNotes.list":
+        await handle_user_notes_list(req.id, req.params, send_json, orchestrator)
+    elif req.method == "userNotes.approve":
+        await handle_user_notes_approve(req.id, req.params, send_json, orchestrator)
+    elif req.method == "userNotes.discard":
+        await handle_user_notes_discard(req.id, req.params, send_json, orchestrator)
     elif req.method == "runtime.context":
         if req.params:
             await handle_runtime_context_resolve(req.id, req.params, send_json, orchestrator)

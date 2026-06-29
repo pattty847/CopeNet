@@ -35,6 +35,10 @@ class TranscriptMessage:
     state: str | None = None
     tool_execution: dict[str, Any] | None = None
     parts: list[dict[str, Any]] | None = None
+    # Image (and future file) attachment refs for a user turn: list of
+    # {attachmentId, mimeType, filename}. Bytes live in ChatAttachmentStore; only
+    # the refs are persisted here so replay can re-inline the images.
+    attachments: list[dict[str, Any]] | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Convert message into a JSON-serializable dictionary."""
@@ -53,6 +57,8 @@ class TranscriptMessage:
             payload["tool_execution"] = self.tool_execution
         if self.parts:
             payload["parts"] = [dict(part) for part in self.parts]
+        if self.attachments:
+            payload["attachments"] = [dict(ref) for ref in self.attachments]
         return payload
 
 
@@ -69,6 +75,7 @@ def to_public_message(record: dict[str, Any]) -> dict[str, Any]:
         "state": record.get("state"),
         "toolExecution": record.get("tool_execution"),
         "parts": record.get("parts") if isinstance(record.get("parts"), list) else None,
+        "attachments": record.get("attachments") if isinstance(record.get("attachments"), list) else None,
     }
 
 
@@ -139,6 +146,7 @@ class TranscriptStore:
                     state=str(record.get("state")) if record.get("state") is not None else None,
                     tool_execution=dict(record.get("tool_execution")) if isinstance(record.get("tool_execution"), dict) else None,
                     parts=[dict(part) for part in record.get("parts")] if isinstance(record.get("parts"), list) else None,
+                    attachments=[dict(ref) for ref in record.get("attachments")] if isinstance(record.get("attachments"), list) else None,
                 ),
             )
             count += 1

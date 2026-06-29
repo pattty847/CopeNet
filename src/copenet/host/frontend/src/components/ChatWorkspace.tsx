@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
+import type { ChatAttachment } from '../types/backend';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { MessageBubble } from './MessageBubble';
@@ -216,16 +217,18 @@ export function ChatWorkspace() {
     return true;
   };
 
-  const handleSend = async (messageOverride?: string) => {
+  const handleSend = async (messageOverride?: string, attachments?: ChatAttachment[]) => {
     const message = (messageOverride ?? input).trim();
-    if (!message || activeRunId) return;
-    const handledPersonaCommand = await handlePersonaCommand(message);
+    const hasAttachments = (attachments?.length || 0) > 0;
+    if ((!message && !hasAttachments) || activeRunId) return;
+    // Persona slash commands are text-only; only intercept when there's no image.
+    const handledPersonaCommand = message && !hasAttachments ? await handlePersonaCommand(message) : false;
     if (handledPersonaCommand) {
       setInput('');
       return;
     }
     try {
-      await wsClient.sendMessage(message);
+      await wsClient.sendMessage(message, attachments);
       setInput('');
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to send message.');
@@ -757,7 +760,7 @@ export function ChatWorkspace() {
         value={input}
         onChange={setInput}
         onKeyDown={handleKeyDown}
-        onSend={(messageOverride) => void handleSend(messageOverride)}
+        onSend={(messageOverride, attachments) => void handleSend(messageOverride, attachments)}
         optimizationProviderId={isDraft ? draftSettings.provider : activeSession?.provider || draftSettings.provider}
         optimizationModelId={isDraft ? draftSettings.model : activeSession?.model || draftSettings.model}
         disabled={composerDisabled}

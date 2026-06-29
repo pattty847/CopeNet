@@ -35,10 +35,18 @@ def _optional_int(raw: dict[str, Any], key: str) -> int | None:
     return int(value)
 
 
+def _string_list(raw: dict[str, Any], key: str) -> tuple[str, ...]:
+    value = raw.get(key)
+    if not isinstance(value, list):
+        return ()
+    return tuple(str(item).strip() for item in value if str(item).strip())
+
+
 @dataclass(frozen=True)
 class ChatSendParams:
     session_key: str
     message: str
+    attachment_ids: tuple[str, ...]
     run_id: str
     provider: str
     model: str | None
@@ -61,6 +69,7 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
     return ChatSendParams(
         session_key=session_key,
         message=message,
+        attachment_ids=_string_list(raw, "attachmentIds"),
         run_id=run_id,
         provider=_optional_text(raw, "provider") or "openai-codex",
         model=_optional_text(raw, "model"),
@@ -106,13 +115,13 @@ async def handle_chat_send(
     emit_to = broadcast or send_json
     raw = params or {}
     request = _normalize_chat_send_params(raw)
-    if not request.session_key or not request.message:
+    if not request.session_key or (not request.message and not request.attachment_ids):
         await send_json(
             make_response_frame(
                 ResponseFrame(
                     id=request_id,
                     ok=False,
-                    error=RpcError(code="INVALID_REQUEST", message="sessionKey and message are required"),
+                    error=RpcError(code="INVALID_REQUEST", message="sessionKey and a message or attachment are required"),
                 )
             )
         )
@@ -144,6 +153,7 @@ async def handle_chat_send(
                 ChatSendRequest(
                     session_key=request.session_key,
                     message=request.message,
+                    attachment_ids=request.attachment_ids,
                     idempotency_key=request.run_id,
                     provider=request.provider,
                     model=request.model,

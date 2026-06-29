@@ -134,7 +134,6 @@ def _make_context(tmp_path: Path) -> ToolExecutionContext:
         policy=ToolPolicy(),
         available_tools=[],
         memory_service=None,
-        profile_service=None,
         workspace_intel_service=None,
         artifact_store=None,
         task_prompt_id=None,

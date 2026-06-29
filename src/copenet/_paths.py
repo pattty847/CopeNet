@@ -30,6 +30,18 @@ def default_media_dir() -> Path:
     return Path.home() / ".copenet" / "media"
 
 
+def default_chat_attachments_dir() -> Path:
+    """Return default chat-attachment root: COPNET_DATA_DIR/attachments or ~/.copenet/attachments.
+
+    Stores image (and future file) bytes uploaded into the chat composer, keyed by
+    attachment id, separate from the media library (which is its own ingestion lane).
+    """
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "attachments"
+    return Path.home() / ".copenet" / "attachments"
+
+
 def default_session_state_dir() -> Path:
     """Return default session state root under the sessions data tree."""
     return default_sessions_dir() / "state"
@@ -51,14 +63,6 @@ def default_provider_auth_dir() -> Path:
     if base:
         return Path(base).expanduser() / "providers" / "auth"
     return Path.home() / ".copenet" / "providers" / "auth"
-
-
-def default_pat_profile_dir() -> Path:
-    """Return default Pat Profile root: COPNET_DATA_DIR/profile or ~/.copenet/profile."""
-    base = os.environ.get("COPNET_DATA_DIR", "").strip()
-    if base:
-        return Path(base).expanduser() / "profile"
-    return Path.home() / ".copenet" / "profile"
 
 
 def default_personas_dir() -> Path:

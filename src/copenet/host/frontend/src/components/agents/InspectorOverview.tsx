@@ -127,7 +127,7 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
             <div className="rounded-lg border border-operator-border bg-operator-panel/25 px-2.5 py-2">
               <div className="flex items-center justify-between gap-2">
                 <div className="text-[11px] font-medium text-operator-text">
-                  {identityUsage.personaActive ? 'Persona home active' : identityUsage.profileActive ? 'Identity overlay active' : 'Memory assist active'}
+                  {identityUsage.personaActive ? 'Persona home active' : 'Memory assist active'}
                 </div>
                 <div className="rounded-full border border-operator-border px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-operator-accent">
                   {identityUsage.memoryCount} memory

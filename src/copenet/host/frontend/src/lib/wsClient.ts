@@ -3,20 +3,19 @@ import {
   ChatEventPayload,
   EventFrame,
   IncomingFrame,
-  IdentityContextPayload,
-  IdentityContextRuntime,
   MemoryItem,
+  UserNoteProposal,
   MessageDestination,
   MessagePart,
   MessagingConfig,
   Model,
-  PatProfile,
   PersonaContextPayload,
   ApodResult,
   PersonaFlavorDraft,
   PersonaHomeSummary,
   PersonaListItem,
   PersonaSettings,
+  ChatAttachment,
   PromptOptimizationResult,
   PulseRecord,
   ProviderAuthStatus,
@@ -49,10 +48,8 @@ import {
   normalizeMergeState,
   normalizeMessage,
   normalizeMessagingConfig,
-  normalizePatProfile,
   normalizePersonaContext,
   normalizePersonaFlavorDraft,
-  normalizeProfileChangelogItem,
   normalizePulse,
   normalizeReturnBriefing,
   normalizeSession,
@@ -73,14 +70,17 @@ import {
 } from './wsMessagingRpc';
 import {
   approveMemoryRpc,
+  approveUserNoteRpc,
   archiveMemoryRpc,
   createPersonaRpc,
   discardMemoryRpc,
+  discardUserNoteRpc,
   draftPersonaFlavorRpc,
   getPersonaContextRpc,
   getPersonaSummaryRpc,
   listPersonasRpc,
   refreshMemoryDraftsRpc,
+  refreshUserNoteDraftsRpc,
   savePersonaFlavorRpc,
   selectPersonaRpc,
   updatePersonaSettingsRpc,
@@ -337,18 +337,6 @@ class WsClient {
       return;
     }
 
-    if (frame.event === 'profile.changed') {
-      const payload = (frame.payload || {}) as Record<string, unknown>;
-      const profile = normalizePatProfile(payload.profile);
-      const change = normalizeProfileChangelogItem(payload.change);
-      if (profile) {
-        useAppStore.getState().setPatProfile(profile);
-      }
-      if (change) {
-        useAppStore.getState().prependProfileChangelogItem(change);
-      }
-      return;
-    }
 
     if (frame.event === 'memory.changed') {
       const payload = (frame.payload || {}) as Record<string, unknown>;
@@ -366,6 +354,12 @@ class WsClient {
           runId: payload.runId ? String(payload.runId) : null,
         });
       }
+      return;
+    }
+
+    if (frame.event === 'userNotes.changed') {
+      // approve/discard/new proposal all change the draft list — resync it.
+      void this.refreshUserNoteDrafts();
       return;
     }
 
@@ -504,7 +498,7 @@ class WsClient {
       this.request.bind(this),
       (sessionKey) => this.loadHistory(sessionKey),
       (sessions) => this.reconcilePendingRuns(sessions),
-      () => this.refreshMemoryDrafts(),
+      () => { void this.refreshUserNoteDrafts(); return this.refreshMemoryDrafts(); },
     );
   }
 
@@ -742,6 +736,21 @@ class WsClient {
     return refreshMemoryDraftsRpc(this.request.bind(this));
   }
 
+  /** Approve a model-proposed USER.md delta (merges it into USER.md). */
+  async approveUserNote(id: string, edits?: { targetSection?: string; summary?: string; body?: string }): Promise<UserNoteProposal | null> {
+    return approveUserNoteRpc(this.request.bind(this), id, edits);
+  }
+
+  /** Discard a model-proposed USER.md delta outright. */
+  async discardUserNote(id: string): Promise<boolean> {
+    return discardUserNoteRpc(this.request.bind(this), id);
+  }
+
+  /** Refresh the pending (draft) USER.md proposal list into the store. */
+  async refreshUserNoteDrafts(): Promise<void> {
+    return refreshUserNoteDraftsRpc(this.request.bind(this));
+  }
+
   async updatePersonaSettings(settings: PersonaSettings): Promise<PersonaSettings | null> {
     return updatePersonaSettingsRpc(this.request.bind(this), settings);
   }
@@ -863,8 +872,8 @@ class WsClient {
     return optimizePromptRpc(this.request.bind(this), options);
   }
 
-  async sendMessage(message: string) {
-    return sendMessageAction(this.request.bind(this), message);
+  async sendMessage(message: string, attachments?: ChatAttachment[]) {
+    return sendMessageAction(this.request.bind(this), message, attachments);
   }
 
   async abortActiveRun() {
@@ -891,7 +900,7 @@ class WsClient {
     return handleChatEventAction(
       payload,
       () => this.refreshSessions(),
-      () => this.refreshMemoryDrafts(),
+      () => { void this.refreshUserNoteDrafts(); return this.refreshMemoryDrafts(); },
     );
 
   }

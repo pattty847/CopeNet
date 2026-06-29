@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Awaitable, Callable
 
 from copenet.core.apps import AppStore
+from copenet.core.attachments import ChatAttachmentStore
 from copenet.core.harness import ChatHarness
 from copenet.core.memory import MemoryService, MemoryStore
 from copenet.core.permissions import PermissionStore
@@ -50,7 +51,8 @@ from copenet.core.orchestrator.facade_runtime_workspace import RuntimeWorkspaceF
 from copenet.core.orchestrator.facade_identity import IdentityFacadeMixin
 from copenet.core.orchestrator.facade_messaging import MessagingFacadeMixin
 from copenet.core.orchestrator.facade_provider_auth import ProviderAuthFacadeMixin
-from copenet.core.profile import PatProfileService
+from copenet.core.briefing import ReturnBriefingService
+from copenet.core.user_notes import UserNotesService, UserNotesStore
 from copenet.prompts.optimizer import optimize_prompt_variants
 from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, EditBackupStore, RunStore
@@ -59,7 +61,7 @@ from copenet.core.tools import ToolPolicy, ToolRegistry
 from copenet.core.workspace_intel import WorkspaceIntelService, WorkspaceIntelStore
 from copenet._paths import (
     default_artifacts_dir,
-    default_pat_profile_dir,
+    default_chat_attachments_dir,
     default_personas_dir,
     default_session_state_dir,
     default_sessions_dir,
@@ -78,6 +80,9 @@ class ChatSendRequest:
     session_key: str
     message: str
     idempotency_key: str | None = None
+    # Chat attachment ids (resolved to inline images for the model). Tuple keeps
+    # the frozen dataclass hashable; default empty for text-only sends.
+    attachment_ids: tuple[str, ...] = ()
     provider: str = "openai-codex"
     model: str | None = None
     system_prompt_id: str | None = None
@@ -116,6 +121,7 @@ class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacade
         self._transcript_store = transcript_store or TranscriptStore(root_dir=base)
         self._session_state_store = SessionStateStore(root_dir=default_session_state_dir() if sessions_dir is None else base / "state")
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
+        self._chat_attachment_store = ChatAttachmentStore(root_dir=default_chat_attachments_dir() if sessions_dir is None else base / "attachments")
         self._edit_backup_store = EditBackupStore(root_dir=None if sessions_dir is None else base / "edit-backups")
         self._run_store = RunStore(root_dir=base / "runs")
         self._pulse_store = PulseStore(path=base / "pulses.json")
@@ -129,8 +135,7 @@ class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacade
         self._nasa_store = NasaApodStore(path=base / "nasa-apod.json")
         self._nasa_service = NasaApodService()
         self._nasa_image_cache = NasaApodImageCache(root_dir=base / "nasa-apod-images")
-        profile_overlay_dir = default_pat_profile_dir() if os.environ.get("COPNET_DATA_DIR", "").strip() else base / "profile"
-        self._profile_service = PatProfileService(run_store=self._run_store, overlay_dir=profile_overlay_dir)
+        self._briefing_service = ReturnBriefingService(run_store=self._run_store)
         # Personas are user-level identity, NOT session data — they live at the canonical
         # global root (~/.copenet/personas, or COPNET_DATA_DIR/personas), never under
         # sessions/. Only a test that passes an explicit sessions_dir WITHOUT a COPNET_DATA_DIR
@@ -138,6 +143,11 @@ class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacade
         persona_isolated = sessions_dir is not None and not os.environ.get("COPNET_DATA_DIR", "").strip()
         persona_root = base / "personas" if persona_isolated else default_personas_dir()
         self._persona_service = PersonaHomeService(root_dir=persona_root)
+        self._user_notes_store = UserNotesStore(path=base / "user-notes.json")
+        self._user_notes_service = UserNotesService(
+            store=self._user_notes_store,
+            persona_service=self._persona_service,
+        )
         workspace_intel_path = default_workspace_intel_path() if sessions_dir is None else base / "workspace-intel.json"
         self._workspace_intel_store = WorkspaceIntelStore(path=workspace_intel_path)
         self._workspace_intel_service = WorkspaceIntelService(self._workspace_intel_store)

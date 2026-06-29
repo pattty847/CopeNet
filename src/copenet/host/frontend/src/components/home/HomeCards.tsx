@@ -11,8 +11,7 @@ import {
 } from 'lucide-react';
 import type { ReactElement } from 'react';
 import { MemorySurface } from '../profile/MemorySurface';
-import { ProfileChangelog } from '../profile/ProfileChangelog';
-import { ProfileStatusCard } from '../profile/ProfileStatusCard';
+import { UserNotesSurface } from '../profile/UserNotesSurface';
 import type { Session, WsStatus } from '../../types/backend';
 import type { HomeCardId } from './homeLayout';
 
@@ -28,8 +27,6 @@ export interface HomeCardContext {
   toolCount: number;
   wsStatus: WsStatus;
   latestSessions: Session[];
-  showChangelog: boolean;
-  setShowChangelog: (value: boolean | ((prev: boolean) => boolean)) => void;
   setCurrentSection: (section: 'agents' | 'data-tools' | 'observability' | 'experiments') => void;
   setWorkflowsRoute: (route: 'hub' | 'meme-lab') => void;
   onCreateSession: () => void;
@@ -281,32 +278,9 @@ export function renderHomeCard(id: HomeCardId, ctx: HomeCardContext): ReactEleme
       );
     case 'memory_profile':
       return (
-        <div className="space-y-3">
-          <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-12">
-            <div className="lg:col-span-8">
-              <MemorySurface />
-            </div>
-            <div className="lg:col-span-4">
-              <ProfileStatusCard onViewChangelog={() => ctx.setShowChangelog((v) => !v)} />
-            </div>
-          </div>
-          {ctx.showChangelog && (
-            <div className="shell-home-panel rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
-              <div className="mb-3 flex items-center justify-between">
-                <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
-                  Profile History
-                </div>
-                <button
-                  type="button"
-                  onClick={() => ctx.setShowChangelog(false)}
-                  className="text-[11px] text-shell-muted transition-colors duration-150 hover:text-shell-text"
-                >
-                  Close
-                </button>
-              </div>
-              <ProfileChangelog limit={8} />
-            </div>
-          )}
+        <div className="grid grid-cols-1 items-start gap-3 lg:grid-cols-2">
+          <MemorySurface />
+          <UserNotesSurface />
         </div>
       );
   }

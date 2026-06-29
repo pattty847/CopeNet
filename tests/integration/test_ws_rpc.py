@@ -11,6 +11,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from copenet.core.orchestrator import Orchestrator
+from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.api import create_app
 from copenet.providers import ProviderEvent, ProviderModel
@@ -462,12 +463,9 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "persona.author",
             "memory.read",
             "memory.write",
+            "user.remember",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
-
-        identity_id = socket.request("identity.context")
-        identity = socket.recv_response(identity_id)
-        assert set(identity["payload"]["identityContext"]) == {"stableIdentity", "situationalBriefing"}
 
         memory_list_id = socket.request("memory.list")
         memory_list = socket.recv_response(memory_list_id)
@@ -940,7 +938,7 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         # Phase 3: the run's tool manifest is the small primitive set (+ plan.write).
         manifest_ids = {tool["id"] for tool in runs[0]["metadata"]["toolManifest"]}
         assert "files.read" in manifest_ids
-        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write"}
+        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write", "user.remember"}
         assert "repo.map" not in manifest_ids
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})
@@ -1073,46 +1071,10 @@ def test_session_artifacts_rpc_exposes_runtime_artifacts(rpc_client: TestClient)
         assert {row["type"] for row in artifacts} >= {"answer"}
 
 
-def test_profile_rpcs_return_profile_changelog_and_briefing(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+def test_briefing_rpc_returns_recent_activity(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setenv("COPNET_TOKEN", "test-token")
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
     monkeypatch.setenv("COPNET_DATA_DIR", str(tmp_path / "data"))
-
-    profile_dir = tmp_path / "data" / "profile"
-    profile_dir.mkdir(parents=True, exist_ok=True)
-    (profile_dir / "identity.json").write_text(
-        json.dumps(
-            {
-                "profileId": "pat-profile:patrick",
-                "displayName": "Patrick Cope",
-                "configured": True,
-                "priorities": [{"id": "school", "label": "School", "weight": 1.0}],
-                "goals": [{"id": "ship", "text": "Ship CopeNet", "source": "explicit", "updatedAt": "2026-04-30T00:00:00Z"}],
-                "tonePreference": {"directness": "terse", "formality": "casual", "preferBullets": True},
-                "noiseFilters": ["ignore china crypto bans unless price moves materially"],
-                "scheduleBasics": ["Homework due tonight"],
-                "recurringConstraints": ["School first when deadlines are imminent"],
-            },
-            indent=2,
-        ),
-        encoding="utf-8",
-    )
-    (profile_dir / "observed_tendencies.json").write_text("[]\n", encoding="utf-8")
-    (profile_dir / "guidance_rules.json").write_text("[]\n", encoding="utf-8")
-    (profile_dir / "notes.md").write_text("# Notes\n\nReal overlay.\n", encoding="utf-8")
-    (profile_dir / "changelog.jsonl").write_text(
-        json.dumps(
-            {
-                "id": "chg-1",
-                "kind": "tone_updated",
-                "summary": "Updated tone preference to lead with the punchline.",
-                "source": "explicit",
-                "changedAt": "2026-04-30T00:00:00Z",
-            }
-        )
-        + "\n",
-        encoding="utf-8",
-    )
 
     orchestrator = Orchestrator(
         session_store=SessionStore(path=tmp_path / "index.json"),
@@ -1120,20 +1082,73 @@ def test_profile_rpcs_return_profile_changelog_and_briefing(monkeypatch: pytest.
         sessions_dir=tmp_path,
         providers={"fake": FakeProvider()},
     )
+    # Seed one durable run record so the briefing has activity to surface.
+    orchestrator._run_store.create(
+        RunRecord(
+            run_id="run-1",
+            session_key="probe",
+            provider="fake",
+            model="fake-model",
+            status="completed",
+            user_message="Run pwd and report stdout.",
+            tool_execution_mode="guarded",
+            will_attempt_tool_loop=True,
+            completed_at="2026-04-30T00:00:00Z",
+            output_summary="Reported the working directory.",
+        )
+    )
     app = create_app(orchestrator=orchestrator)
 
     with TestClient(app) as client, _open_rpc(client) as socket:
-        profile_id = socket.request("profile.get")
-        profile_res = socket.recv_response(profile_id)
-        assert profile_res["ok"] is True
-        assert profile_res["payload"]["profile"]["displayName"] == "Patrick Cope"
-
-        changelog_id = socket.request("profile.changelog")
-        changelog_res = socket.recv_response(changelog_id)
-        assert changelog_res["ok"] is True
-        assert changelog_res["payload"]["changelog"][0]["summary"].startswith("Updated tone preference")
-
         briefing_id = socket.request("briefing.get")
         briefing_res = socket.recv_response(briefing_id)
         assert briefing_res["ok"] is True
-        assert briefing_res["payload"]["briefing"] is not None
+        briefing = briefing_res["payload"]["briefing"]
+        assert briefing is not None
+        assert briefing["activityItems"][0]["summary"] == "Reported the working directory."
+        # Profile-derived sections are retired; they stay empty now.
+        assert briefing["attentionItems"] == []
+        assert briefing["watchItems"] == []
+
+
+def test_user_notes_rpcs_list_approve_and_discard(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setenv("COPNET_TOKEN", "test-token")
+    monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
+    monkeypatch.setenv("COPNET_DATA_DIR", str(tmp_path / "data"))
+
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
+        sessions_dir=tmp_path,
+        providers={"fake": FakeProvider()},
+    )
+    persona = orchestrator._persona_service
+    persona.user_md_path().write_text("# USER.md\n\n## Summary\nPat builds things.\n", encoding="utf-8")
+    keep = orchestrator._user_notes_service.propose_user_note(
+        target_section="Projects", summary="add projects", body="Sentinel, CopeNet."
+    )
+    drop = orchestrator._user_notes_service.propose_user_note(
+        target_section="Markets", summary="add markets", body="DXY, CVD."
+    )
+    app = create_app(orchestrator=orchestrator)
+
+    with TestClient(app) as client, _open_rpc(client) as socket:
+        list_id = socket.request("userNotes.list", {"status": "draft"})
+        listed = socket.recv_response(list_id)
+        assert listed["ok"] is True
+        assert {item["id"] for item in listed["payload"]["items"]} == {keep.id, drop.id}
+
+        approve_id = socket.request("userNotes.approve", {"id": keep.id})
+        approved = socket.recv_response(approve_id)
+        assert approved["ok"] is True
+        assert approved["payload"]["userNote"]["status"] == "approved"
+        # The approved delta is merged into USER.md; Summary stays intact.
+        text = persona.user_md_path().read_text(encoding="utf-8")
+        assert "## Projects\nSentinel, CopeNet." in text
+        assert "## Summary\nPat builds things." in text
+
+        discard_id = socket.request("userNotes.discard", {"id": drop.id})
+        discarded = socket.recv_response(discard_id)
+        assert discarded["ok"] is True
+        assert discarded["payload"]["discarded"] is True
+        assert orchestrator._user_notes_service.list_proposals(status="draft") == []

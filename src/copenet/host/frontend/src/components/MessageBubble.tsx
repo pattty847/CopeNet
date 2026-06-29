@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
-import { Message } from '../types/backend';
+import React, { useEffect, useState } from 'react';
+import { Message, ChatAttachment } from '../types/backend';
+import { fetchChatAttachmentObjectUrl } from '../lib/appApi';
 import { ToolTraceCard } from './ToolTraceCard';
 import { InlineToolPart } from './transcript/InlineToolRows';
 import { Copy, Check } from 'lucide-react';
@@ -64,6 +65,65 @@ function formatTimestamp(ts: string) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
+// One attached image. Uses the optimistic previewUrl (object URL set at send
+// time) when present; otherwise lazily fetches the persisted bytes with auth.
+function AttachmentImage({ attachment }: { attachment: ChatAttachment }) {
+  const [src, setSrc] = useState<string | null>(attachment.previewUrl || null);
+
+  useEffect(() => {
+    if (attachment.previewUrl) {
+      setSrc(attachment.previewUrl);
+      return;
+    }
+    let revoked: string | null = null;
+    let cancelled = false;
+    fetchChatAttachmentObjectUrl(attachment.attachmentId)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        revoked = url;
+        setSrc(url);
+      })
+      .catch(() => {
+        if (!cancelled) setSrc(null);
+      });
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [attachment.attachmentId, attachment.previewUrl]);
+
+  if (!src) {
+    return (
+      <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-operator-border bg-operator-bg text-[9px] text-operator-muted">
+        {attachment.filename}
+      </div>
+    );
+  }
+  return (
+    <a href={src} target="_blank" rel="noreferrer" title={attachment.filename}>
+      <img
+        src={src}
+        alt={attachment.filename}
+        className="max-h-48 max-w-[16rem] rounded-lg border border-operator-border object-cover"
+      />
+    </a>
+  );
+}
+
+function MessageAttachments({ attachments }: { attachments: ChatAttachment[] }) {
+  if (!attachments.length) return null;
+  return (
+    <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
+      {attachments.map((attachment) => (
+        <AttachmentImage key={attachment.attachmentId} attachment={attachment} />
+      ))}
+    </div>
+  );
+}
+
 export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -89,9 +149,14 @@ export function MessageBubble({ message }: { message: Message }) {
     return (
       <div className="animate-message group relative flex w-full justify-end pb-4">
         <div className="relative max-w-[80%] min-w-0">
-          <div className="rounded-2xl rounded-br-md border border-operator-accent/15 bg-operator-accent/5 px-3.5 py-2 text-[13.5px] leading-relaxed text-operator-text font-sans break-words">
-            {message.content && <ChatMarkdown content={message.content} density="compact" />}
-          </div>
+          {message.attachments && message.attachments.length > 0 && (
+            <MessageAttachments attachments={message.attachments} />
+          )}
+          {message.content && (
+            <div className="rounded-2xl rounded-br-md border border-operator-accent/15 bg-operator-accent/5 px-3.5 py-2 text-[13.5px] leading-relaxed text-operator-text font-sans break-words">
+              <ChatMarkdown content={message.content} density="compact" />
+            </div>
+          )}
           <div className="mt-1 flex items-center justify-end gap-1.5 px-1 text-[10px] text-operator-muted/70">
             <button
               onClick={handleCopy}

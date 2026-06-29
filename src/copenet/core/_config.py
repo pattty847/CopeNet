@@ -33,11 +33,3 @@ def auto_memory_extraction_enabled() -> bool:
     a thoughtful explicit-opt-in design lands.
     """
     return _env_flag("COPNET_AUTO_MEMORY_EXTRACTION", default=False)
-
-
-def auto_profile_extraction_enabled() -> bool:
-    """Whether to run profile_service.apply_post_run_updates after each chat turn.
-
-    Off by default for the same reason as memory extraction.
-    """
-    return _env_flag("COPNET_AUTO_PROFILE_EXTRACTION", default=False)

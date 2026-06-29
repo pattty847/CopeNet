@@ -40,14 +40,7 @@ export type {
   ToolEffect,
   TurnStateSnapshot,
   HarnessDecisionRecord,
-  // Pat Profile + Return Briefing
-  PatProfile,
-  PatProfileSource,
-  PatProfilePriority,
-  PatProfileGoal,
-  PatProfileTonePreference,
-  ProfileChangelogItem,
-  ProfileChangelogChangeKind,
+  // Return Briefing
   BriefingAttentionItem,
   BriefingActivityItem,
   BriefingWatchItem,

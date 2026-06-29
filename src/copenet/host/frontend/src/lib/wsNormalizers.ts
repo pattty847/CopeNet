@@ -1,19 +1,17 @@
 import type {
   ApprovalRequest,
-  IdentityContextPayload,
   IdentityContextRuntime,
   MemoryItem,
+  UserNoteProposal,
   Message,
   MessageDestination,
   MessagePart,
   MessagingConfig,
   Model,
-  PatProfile,
   PersonaContextPayload,
   PersonaFlavorDraft,
   PersonaHomeSummary,
   PersonaSettings,
-  ProfileChangelogItem,
   Provider,
   PublicMessagePayload,
   PulseRecord,
@@ -327,55 +325,6 @@ export function normalizeTool(raw: unknown): ToolDescriptor {
   };
 }
 
-export function normalizePatProfile(raw: unknown): PatProfile | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const payload = raw as Record<string, unknown>;
-  return {
-    profileId: String(payload.profileId || ''),
-    displayName: String(payload.displayName || 'Operator'),
-    active: Boolean(payload.active),
-    source: String(payload.source || 'template') as PatProfile['source'],
-    priorities: Array.isArray(payload.priorities)
-      ? payload.priorities.map((item: unknown) => {
-          const priority = (item || {}) as Record<string, unknown>;
-          return {
-            id: String(priority.id || ''),
-            label: String(priority.label || ''),
-            weight: Number(priority.weight || 0),
-          };
-        })
-      : [],
-    goals: Array.isArray(payload.goals)
-      ? payload.goals.map((item: unknown) => {
-          const goal = (item || {}) as Record<string, unknown>;
-          return {
-            id: String(goal.id || ''),
-            text: String(goal.text || ''),
-            source: String(goal.source || 'template') as PatProfile['source'],
-            updatedAt: String(goal.updatedAt || new Date().toISOString()),
-          };
-        })
-      : [],
-    tonePreference: {
-      directness: String((payload.tonePreference as Record<string, unknown> | undefined)?.directness || 'balanced') as PatProfile['tonePreference']['directness'],
-      formality: String((payload.tonePreference as Record<string, unknown> | undefined)?.formality || 'casual') as PatProfile['tonePreference']['formality'],
-      preferBullets: Boolean((payload.tonePreference as Record<string, unknown> | undefined)?.preferBullets),
-    },
-    noiseFilters: Array.isArray(payload.noiseFilters) ? payload.noiseFilters.map(String) : [],
-    lastUpdatedAt: String(payload.lastUpdatedAt || new Date().toISOString()),
-    changelogCount: Number(payload.changelogCount || 0),
-  };
-}
-
-export function normalizeIdentityContext(raw: unknown): IdentityContextPayload | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const payload = raw as Record<string, unknown>;
-  return {
-    stableIdentity: payload.stableIdentity ? String(payload.stableIdentity) : null,
-    situationalBriefing: payload.situationalBriefing ? String(payload.situationalBriefing) : null,
-  };
-}
-
 export function normalizePersonaHome(raw: unknown): PersonaHomeSummary | null {
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
@@ -456,6 +405,24 @@ export function normalizeMemoryItem(raw: unknown): MemoryItem | null {
   };
 }
 
+export function normalizeUserNote(raw: unknown): UserNoteProposal | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  const id = String(payload.id || '');
+  if (!id) return null;
+  const status = String(payload.status || 'draft');
+  return {
+    id,
+    targetSection: String(payload.targetSection || 'Summary'),
+    summary: String(payload.summary || 'USER.md update'),
+    body: String(payload.body || ''),
+    status: status === 'approved' ? 'approved' : 'draft',
+    createdAt: String(payload.createdAt || new Date().toISOString()),
+    updatedAt: String(payload.updatedAt || payload.createdAt || new Date().toISOString()),
+    lastSessionKey: payload.lastSessionKey ? String(payload.lastSessionKey) : null,
+  };
+}
+
 export function normalizeShellAllowlist(raw: unknown): ShellAllowlistEntry[] {
   if (!Array.isArray(raw)) return [];
   return raw
@@ -473,28 +440,12 @@ export function normalizeIdentityContextRuntime(raw: unknown): IdentityContextRu
   if (!raw || typeof raw !== 'object') return null;
   const payload = raw as Record<string, unknown>;
   return {
-    profileActive: Boolean(payload.profileActive),
     memoryCount: Number(payload.memoryCount || 0),
     memoryItemIds: Array.isArray(payload.memoryItemIds) ? payload.memoryItemIds.map((value) => String(value)).filter(Boolean) : [],
     personaActive: Boolean(payload.personaActive),
     personaId: payload.personaId ? String(payload.personaId) : null,
     personaFlavorId: payload.personaFlavorId ? String(payload.personaFlavorId) : null,
     personaPrivacyTier: payload.personaPrivacyTier ? String(payload.personaPrivacyTier) as IdentityContextRuntime['personaPrivacyTier'] : null,
-  };
-}
-
-export function normalizeProfileChangelogItem(raw: unknown): ProfileChangelogItem | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const payload = raw as Record<string, unknown>;
-  return {
-    id: String(payload.id || ''),
-    kind: String(payload.kind || 'constraint_updated') as ProfileChangelogItem['kind'],
-    summary: String(payload.summary || ''),
-    detail: payload.detail ? String(payload.detail) : null,
-    source: String(payload.source || 'template') as ProfileChangelogItem['source'],
-    rationale: payload.rationale ? String(payload.rationale) : null,
-    triggeredBySessionKey: payload.triggeredBySessionKey ? String(payload.triggeredBySessionKey) : null,
-    changedAt: String(payload.changedAt || new Date().toISOString()),
   };
 }
 
@@ -771,7 +722,25 @@ export function normalizeMessage(
     errorMessage: null,
     optimistic,
     parts: normalizeMessageParts(raw?.parts),
+    attachments: normalizeChatAttachments(raw?.attachments),
   };
+}
+
+export function normalizeChatAttachments(raw: unknown): Message['attachments'] {
+  if (!Array.isArray(raw)) return null;
+  const attachments: NonNullable<Message['attachments']> = [];
+  for (const item of raw) {
+    if (!item || typeof item !== 'object') continue;
+    const payload = item as Record<string, unknown>;
+    const attachmentId = String(payload.attachmentId || '');
+    if (!attachmentId) continue;
+    attachments.push({
+      attachmentId,
+      mimeType: String(payload.mimeType || 'application/octet-stream'),
+      filename: String(payload.filename || 'image'),
+    });
+  }
+  return attachments.length > 0 ? attachments : null;
 }
 
 export function normalizeAssistantDisplayText(raw: string): string {

@@ -1,5 +1,5 @@
 import { useAppStore } from '../store/useAppStore';
-import type { Message } from '../types/backend';
+import type { ChatAttachment, Message } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 import { makeLocalId, normalizeSession } from './wsNormalizers';
 
@@ -26,9 +26,15 @@ export async function abortActiveRunAction(request: WsRpcRequest): Promise<void>
   });
 }
 
-export async function sendMessageAction(request: WsRpcRequest, message: string): Promise<void> {
+export async function sendMessageAction(
+  request: WsRpcRequest,
+  message: string,
+  attachments?: ChatAttachment[],
+): Promise<void> {
   const trimmed = message.trim();
-  if (!trimmed) return;
+  const readyAttachments = (attachments || []).filter((item) => item.attachmentId);
+  // An image-only send (no text) is valid as long as something is attached.
+  if (!trimmed && readyAttachments.length === 0) return;
 
   const store = useAppStore.getState();
   store.clearAppError();
@@ -68,6 +74,7 @@ export async function sendMessageAction(request: WsRpcRequest, message: string):
       runId: null,
       role: 'user',
       content: trimmed,
+      attachments: readyAttachments.length > 0 ? readyAttachments : null,
       timestamp: new Date().toISOString(),
       provider: session.provider,
       model: effectiveModel,
@@ -82,6 +89,7 @@ export async function sendMessageAction(request: WsRpcRequest, message: string):
     const payload = await request<{ runId?: string; status?: string }>('chat.send', {
       sessionKey: session.key,
       message: trimmed,
+      attachmentIds: readyAttachments.map((item) => item.attachmentId),
       provider: session.provider,
       model: effectiveModel || undefined,
       systemPromptId: session.systemPromptId || undefined,

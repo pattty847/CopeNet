@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextPayload, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PatProfile, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, ProfileChangelogItem, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, WsStatus } from '../types/backend';
+import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } from '../components/home/homeLayout';
@@ -267,10 +267,6 @@ interface AppState {
   setProviderAuthStatus: (providerId: string, status: ProviderAuthStatus) => void;
   clearProviderAuthStatus: (providerId: string) => void;
 
-  // Pat Profile (v1 — frontend shell, backend contract pending)
-  // Null until the backend profile RPC ships and pushes a real profile.
-  patProfile: PatProfile | null;
-  setPatProfile: (profile: PatProfile | null) => void;
   personaHome: PersonaHomeSummary | null;
   setPersonaHome: (personaHome: PersonaHomeSummary | null) => void;
   personaSettings: PersonaSettings | null;
@@ -281,13 +277,13 @@ interface AppState {
   setPersonaFlavorDraft: (draft: PersonaFlavorDraft | null) => void;
   personaFlavorReviewOpen: boolean;
   setPersonaFlavorReviewOpen: (open: boolean) => void;
-  identityContext: IdentityContextPayload | null;
-  setIdentityContext: (payload: IdentityContextPayload | null) => void;
   memoryItems: MemoryItem[];
   setMemoryItems: (items: MemoryItem[]) => void;
   upsertMemoryItem: (item: MemoryItem) => void;
   memoryDrafts: MemoryItem[];
   setMemoryDrafts: (items: MemoryItem[]) => void;
+  userNoteDrafts: UserNoteProposal[];
+  setUserNoteDrafts: (items: UserNoteProposal[]) => void;
   lastMemoryChange: MemoryChangeEvent | null;
   setLastMemoryChange: (event: MemoryChangeEvent | null) => void;
   sessionIdentityUsage: Record<string, IdentityContextRuntime>;
@@ -298,11 +294,6 @@ interface AppState {
   returnBriefing: ReturnBriefingPayload | null;
   setReturnBriefing: (briefing: ReturnBriefingPayload | null) => void;
   dismissReturnBriefing: () => void;
-
-  // Profile changelog — receipt-style history of profile mutations
-  profileChangelog: ProfileChangelogItem[];
-  setProfileChangelog: (changelog: ProfileChangelogItem[]) => void;
-  prependProfileChangelogItem: (item: ProfileChangelogItem) => void;
 }
 
 function sortSessions(sessions: Session[]) {
@@ -672,8 +663,6 @@ export const useAppStore = create<AppState>((set) => ({
       return { providerAuthStatuses: next };
     }),
 
-  patProfile: null,
-  setPatProfile: (profile) => set({ patProfile: profile }),
   personaHome: null,
   setPersonaHome: (personaHome) => set({ personaHome }),
   personaSettings: null,
@@ -684,8 +673,6 @@ export const useAppStore = create<AppState>((set) => ({
   setPersonaFlavorDraft: (personaFlavorDraft) => set({ personaFlavorDraft }),
   personaFlavorReviewOpen: false,
   setPersonaFlavorReviewOpen: (personaFlavorReviewOpen) => set({ personaFlavorReviewOpen }),
-  identityContext: null,
-  setIdentityContext: (identityContext) => set({ identityContext }),
   memoryItems: [],
   setMemoryItems: (memoryItems) => set({ memoryItems }),
   upsertMemoryItem: (item) =>
@@ -694,6 +681,8 @@ export const useAppStore = create<AppState>((set) => ({
     })),
   memoryDrafts: [],
   setMemoryDrafts: (memoryDrafts) => set({ memoryDrafts }),
+  userNoteDrafts: [],
+  setUserNoteDrafts: (userNoteDrafts) => set({ userNoteDrafts }),
   lastMemoryChange: null,
   setLastMemoryChange: (event) => set({ lastMemoryChange: event }),
   sessionIdentityUsage: {},
@@ -711,9 +700,4 @@ export const useAppStore = create<AppState>((set) => ({
   returnBriefing: null,
   setReturnBriefing: (briefing) => set({ returnBriefing: briefing }),
   dismissReturnBriefing: () => set({ returnBriefing: null }),
-
-  profileChangelog: [],
-  setProfileChangelog: (changelog) => set({ profileChangelog: changelog }),
-  prependProfileChangelogItem: (item) =>
-    set((state) => ({ profileChangelog: [item, ...state.profileChangelog] })),
 }));

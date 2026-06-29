@@ -13,7 +13,7 @@ from copenet.core.sessions import SessionStore, TranscriptStore
 if TYPE_CHECKING:
     from copenet.core.memory import MemoryService
     from copenet.core.persona import PersonaHomeService
-    from copenet.core.profile import PatProfileService
+    from copenet.core.user_notes import UserNotesService
     from copenet.core.workspace_intel import WorkspaceIntelService
 
 
@@ -263,9 +263,9 @@ class ToolExecutionContext:
     policy: Any
     available_tools: list[ToolDescriptor] = field(default_factory=list)
     memory_service: MemoryService | None = None
-    profile_service: PatProfileService | None = None
     workspace_intel_service: WorkspaceIntelService | None = None
     persona_service: PersonaHomeService | None = None
+    user_notes_service: UserNotesService | None = None
     artifact_store: Any | None = None
     edit_backup_store: Any | None = None
     # Global operator shell allowlist (Brick E). The shell handler consults it as a
