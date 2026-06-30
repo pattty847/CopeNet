@@ -51,6 +51,7 @@ UNIVERSE: tuple[UniverseAsset, ...] = (
     UniverseAsset("XLU", "Utilities Select Sector SPDR", "sector"),
     UniverseAsset("XLB", "Materials Select Sector SPDR", "sector"),
     UniverseAsset("XLV", "Health Care Select Sector SPDR", "sector"),
+    UniverseAsset("XLC", "Communication Services Select Sector SPDR", "sector"),
 )
 
 PORTFOLIO_BASIS = {
@@ -64,7 +65,7 @@ PORTFOLIO_BASIS = {
 }
 
 MACRO_SYMBOLS = ("DXY", "VIX", "USO", "BTCUSD", "ETHUSD")
-SECTOR_SYMBOLS = ("XLK", "XLE", "XLF", "XLI", "XLV", "XLP", "XLY", "XLU", "XLB", "XLRE", "SMH")
+SECTOR_SYMBOLS = ("XLK", "XLE", "XLF", "XLI", "XLV", "XLP", "XLY", "XLU", "XLB", "XLRE", "XLC", "SMH")
 
 
 def yf_symbol(symbol: str) -> str:

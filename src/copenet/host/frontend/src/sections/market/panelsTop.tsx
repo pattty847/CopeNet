@@ -18,7 +18,7 @@ function Sparkline({ data, tone }: { data: number[]; tone: 'up' | 'down' | 'flat
   );
 }
 
-export function BriefingHero({ panel, onOpen }: { panel: Panel<Briefing>; onOpen: (s: string) => void }) {
+export function BriefingHero({ panel, onOpen, onExplain }: { panel: Panel<Briefing>; onOpen: (s: string) => void; onExplain: () => void }) {
   const b = panel.data;
   const [before, after] = b.emphasis && b.headline.includes(b.emphasis) ? b.headline.split(b.emphasis) : [b.headline, ''];
   return (
@@ -64,12 +64,15 @@ export function BriefingHero({ panel, onOpen }: { panel: Panel<Briefing>; onOpen
             </span>
           ))}
         </div>
-        <h1 style={{ margin: '0 0 14px', fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, fontSize: 38, lineHeight: 1.08, letterSpacing: '-.01em', color: MM.text, maxWidth: 760 }}>
-          {before}
-          {after && <span style={{ color: MM.accent }}>{b.emphasis}</span>}
-          {after}
-        </h1>
-        <p style={{ margin: '0 0 18px', fontSize: 14, lineHeight: 1.6, color: MM.muted, maxWidth: 640 }}>{b.summary}</p>
+        <div onClick={onExplain} title="See why this read" style={{ cursor: 'pointer', marginBottom: 16 }}>
+          <h1 style={{ margin: '0 0 12px', fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, fontSize: 38, lineHeight: 1.08, letterSpacing: '-.01em', color: MM.text, maxWidth: 760 }}>
+            {before}
+            {after && <span style={{ color: MM.accent }}>{b.emphasis}</span>}
+            {after}
+          </h1>
+          <p style={{ margin: '0 0 8px', fontSize: 14, lineHeight: 1.6, color: MM.muted, maxWidth: 640 }}>{b.summary}</p>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 5, font: '600 10px Inter', letterSpacing: '.06em', textTransform: 'uppercase', color: MM.accent }}>Why this read →</span>
+        </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9 }}>
           {b.attention.map((a, i) => (
             <button

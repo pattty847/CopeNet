@@ -28,21 +28,23 @@ export function useMarketDashboard(): MarketDashboardState {
   const [refreshing, setRefreshing] = useState(false);
   const [live, setLive] = useState(false);
   const cancelled = useRef(false);
+  const lastAsOf = useRef<string>('');
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
+    const before = lastAsOf.current; // the backend stamps a new asOf per compute
     try {
       await wsClient.marketRefresh('all');
-      for (let i = 0; i < 12 && !cancelled.current; i += 1) {
+      for (let i = 0; i < 16 && !cancelled.current; i += 1) {
         await sleep(2500);
         try {
           const next = await wsClient.marketDashboard();
-          if (isPopulated(next)) {
-            if (!cancelled.current) {
-              setDashboard(next);
-              setLive(true);
-            }
-            break;
+          if (isPopulated(next) && !cancelled.current) {
+            setDashboard(next);
+            setLive(true);
+            lastAsOf.current = next.asOf;
+            // stop once the fresh compute has landed (asOf advanced past pre-refresh value)
+            if (next.asOf && next.asOf !== before) break;
           }
         } catch {
           /* keep polling — transient */
@@ -64,6 +66,7 @@ export function useMarketDashboard(): MarketDashboardState {
         if (!cancelled.current && isPopulated(next)) {
           setDashboard(next);
           setLive(true);
+          lastAsOf.current = next.asOf;
         }
       })
       .catch(() => {});
