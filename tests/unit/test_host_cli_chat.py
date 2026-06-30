@@ -1,4 +1,5 @@
 import argparse
+import json
 
 import pytest
 
@@ -14,6 +15,22 @@ def test_chat_send_parser_defaults_to_named_probe_session() -> None:
     assert args.session == "69696469"
     assert args.provider == "openai-codex"
     assert args.message == ["hello"]
+
+
+def test_nasa_wallpaper_parser_accepts_apply_install_status_and_uninstall() -> None:
+    parser = host_main._build_parser()
+
+    apply_args = parser.parse_args(["nasa", "wallpaper", "apply", "--date", "2026-06-29", "--refresh", "--json"])
+    assert apply_args.command == "nasa"
+    assert apply_args.nasa_command == "wallpaper"
+    assert apply_args.wallpaper_command == "apply"
+    assert apply_args.date == "2026-06-29"
+    assert apply_args.refresh is True
+    assert apply_args.json is True
+
+    assert parser.parse_args(["nasa", "wallpaper", "install-agent"]).wallpaper_command == "install-agent"
+    assert parser.parse_args(["nasa", "wallpaper", "uninstall-agent"]).wallpaper_command == "uninstall-agent"
+    assert parser.parse_args(["nasa", "wallpaper", "status"]).wallpaper_command == "status"
 
 
 def test_read_cli_message_joins_arguments() -> None:
@@ -62,3 +79,36 @@ async def test_chat_send_uses_real_orchestrator_session(monkeypatch, capsys) -> 
     assert calls[0].session_key == "69696469"
     assert calls[0].provider == "openai-codex"
     assert calls[0].model == "gpt-5.5"
+
+
+def test_nasa_wallpaper_apply_json_prints_structured_result(monkeypatch, capsys) -> None:
+    class FakeResult:
+        ok = True
+        status = "applied"
+        date = "2026-06-29"
+        title = "Today image"
+        image_path = "/tmp/space.jpg"
+        reason = None
+        error = None
+
+        def to_json(self):
+            return {
+                "ok": self.ok,
+                "status": self.status,
+                "date": self.date,
+                "title": self.title,
+                "imagePath": self.image_path,
+                "reason": self.reason,
+                "error": self.error,
+            }
+
+    calls = []
+    monkeypatch.setattr(host_main, "apply_apod_wallpaper", lambda **kwargs: calls.append(kwargs) or FakeResult())
+
+    args = argparse.Namespace(wallpaper_command="apply", date="2026-06-29", refresh=True, json=True)
+    host_main._run_nasa_wallpaper_command(args)
+
+    payload = json.loads(capsys.readouterr().out)
+    assert payload["status"] == "applied"
+    assert payload["imagePath"] == "/tmp/space.jpg"
+    assert calls == [{"date": "2026-06-29", "refresh": True}]

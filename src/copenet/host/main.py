@@ -11,12 +11,19 @@ import argparse
 import asyncio
 import json
 import os
+from pathlib import Path
 import sys
 from typing import Any
 
 import uvicorn
 
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.nasa.wallpaper import (
+    apply_apod_wallpaper,
+    install_launch_agent,
+    launch_agent_status,
+    uninstall_launch_agent,
+)
 from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuthService
 
 
@@ -122,6 +129,20 @@ def _build_parser() -> argparse.ArgumentParser:
     history.add_argument("--session", default=os.environ.get("COPNET_CLI_SESSION", "69696469"))
     history.add_argument("--limit", type=int, default=12)
     history.add_argument("--json", action="store_true")
+
+    nasa = subparsers.add_parser("nasa", help="NASA data helpers")
+    nasa_subparsers = nasa.add_subparsers(dest="nasa_command", required=True)
+    wallpaper = nasa_subparsers.add_parser("wallpaper", help="Manage NASA APOD desktop wallpaper")
+    wallpaper_subparsers = wallpaper.add_subparsers(dest="wallpaper_command", required=True)
+
+    apply_wallpaper = wallpaper_subparsers.add_parser("apply", help="Fetch APOD and apply it as the macOS wallpaper")
+    apply_wallpaper.add_argument("--date", default=None, help="APOD date to fetch (YYYY-MM-DD); defaults to today")
+    apply_wallpaper.add_argument("--refresh", action="store_true", help="Refresh the APOD record even if cached")
+    apply_wallpaper.add_argument("--json", action="store_true", help="Print structured JSON output")
+
+    wallpaper_subparsers.add_parser("install-agent", help="Install the morning APOD wallpaper LaunchAgent")
+    wallpaper_subparsers.add_parser("uninstall-agent", help="Remove the APOD wallpaper LaunchAgent")
+    wallpaper_subparsers.add_parser("status", help="Show APOD wallpaper LaunchAgent status")
 
     return parser
 
@@ -267,6 +288,53 @@ def _run_chat_command(args: argparse.Namespace) -> None:
     raise SystemExit(f"Unknown chat command: {args.chat_command}")
 
 
+def _run_nasa_wallpaper_command(args: argparse.Namespace) -> None:
+    if args.wallpaper_command == "apply":
+        result = apply_apod_wallpaper(date=args.date, refresh=bool(args.refresh))
+        if args.json:
+            print(json.dumps(result.to_json(), indent=2, sort_keys=True))
+            return
+        print(_wallpaper_result_line(result))
+        return
+    if args.wallpaper_command == "install-agent":
+        plist = install_launch_agent(working_directory=Path.cwd())
+        print(f"installed {plist}")
+        return
+    if args.wallpaper_command == "uninstall-agent":
+        plist = uninstall_launch_agent()
+        print(f"removed {plist}")
+        return
+    if args.wallpaper_command == "status":
+        status = launch_agent_status()
+        state = "installed" if status["installed"] else "not installed"
+        print(f"{state}: {status['path']}")
+        return
+    raise SystemExit(f"Unknown NASA wallpaper command: {args.wallpaper_command}")
+
+
+def _run_nasa_command(args: argparse.Namespace) -> None:
+    if args.nasa_command == "wallpaper":
+        _run_nasa_wallpaper_command(args)
+        return
+    raise SystemExit(f"Unknown NASA command: {args.nasa_command}")
+
+
+def _wallpaper_result_line(result) -> str:
+    if result.status == "applied" and result.date and result.title:
+        return f"applied {result.date}: {result.title}"
+    if result.status == "fallback_applied" and result.date and result.title:
+        return f"today is a video; applied previous image {result.date}: {result.title}"
+    if result.reason == "missing_api_key":
+        return "NASA_API_KEY is not set"
+    if result.reason == "unsupported_platform":
+        return "unsupported platform: macOS required"
+    if result.status == "skipped":
+        return "NASA APOD not ready; kept existing wallpaper"
+    if result.error:
+        return result.error
+    return "NASA APOD not ready; kept existing wallpaper"
+
+
 
 def main() -> None:
     # Load `.env` first so secrets like NASA_API_KEY are present before any
@@ -287,6 +355,9 @@ def main() -> None:
         return
     if args.command == "chat":
         _run_chat_command(args)
+        return
+    if args.command == "nasa":
+        _run_nasa_command(args)
         return
 
     host = _resolve_bind_host(os.environ.get("COPNET_HOST", "127.0.0.1"))
