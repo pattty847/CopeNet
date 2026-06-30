@@ -3,7 +3,7 @@ import { MM, PanelCard, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, Rrg } from './panelsTop';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
-import { AccumulationWatch, Contrarian, Evidence, Portfolio, Speculative, TrendWatch } from './panelsLists';
+import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch } from './panelsLists';
 import { useMarketDashboard, useTickerDetail } from './useMarketMonitorData';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
@@ -144,6 +144,7 @@ export function MarketMonitor() {
         </div>
         <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} />
         <MacroBoard panel={dash.macro} />
+        {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
         <div style={ROW}>
           <Rrg panel={dash.rrg} onOpen={open} />
           <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>

@@ -135,6 +135,14 @@ export const SAMPLE_DASHBOARD: DashboardPayload = {
       { symbol: 'TSLA', direction: 'down', note: 'Weekly down — caution flag', when: 'Thu', confirmed: true },
     ],
   },
+  softBottoming: {
+    status: 'preview',
+    data: [
+      { symbol: 'SOFI', name: 'SoFi Technologies', score: 0.71, drawdown: '−38.8%', rsi: '60' },
+      { symbol: 'INTC', name: 'Intel', score: 0.57, drawdown: '−58.0%', rsi: '36' },
+    ],
+    note: 'historically resolved up 54% of the time over 8w (median +1.6%, n=611)',
+  },
   portfolio: {
     status: 'preview',
     data: {

@@ -176,6 +176,15 @@ class ChartEvent:
 
 
 @dataclass
+class SoftBottomItem:
+    symbol: str
+    name: str
+    score: float
+    drawdown: str
+    rsi: str
+
+
+@dataclass
 class DashboardPayload:
     as_of: str
     briefing: MarketPanel
@@ -184,6 +193,7 @@ class DashboardPayload:
     rrg: MarketPanel
     accumulation: MarketPanel
     trend: MarketPanel
+    soft_bottoming: MarketPanel
     portfolio: MarketPanel
     speculative: MarketPanel
     evidence: MarketPanel
@@ -223,6 +233,7 @@ class DashboardPayload:
             rrg=MarketPanel(status="preview", data=[], note=preview),
             accumulation=MarketPanel(status="preview", data=[], note=preview),
             trend=MarketPanel(status="preview", data=[], note=preview),
+            soft_bottoming=MarketPanel(status="preview", data=[], note=preview),
             portfolio=MarketPanel(status="preview", data=Portfolio("$0", "$0 · 0.0%", "flat", []), note=preview),
             speculative=MarketPanel(status="preview", data=[], note=preview),
             evidence=MarketPanel(status="preview", data=[], note=preview),

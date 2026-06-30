@@ -23,6 +23,7 @@ from .models import (
     Portfolio,
     PortfolioPosition,
     SignalRow,
+    SoftBottomItem,
     SpecPosition,
     TickerDetailPayload,
     TickerInsight,
@@ -126,6 +127,7 @@ class MarketRuntime:
         accumulation: list[AccumulationRow] = []
         trend: list[Any] = []
         live_signal_symbols = [asset.symbol for asset in UNIVERSE if asset.role in {"holding", "watch", "spec"}]
+        soft_bottoms: list[SoftBottomItem] = []
         above_trend = 0
         total_trend = 0
         for asset in UNIVERSE:
@@ -136,6 +138,17 @@ class MarketRuntime:
             self.store.save_signals(asset.symbol, signals.__dict__)
             if asset.symbol in live_signal_symbols:
                 total_trend += 1
+                fs = compute_features(frame, benchmark, symbol=asset.symbol)
+                if fs.soft_bottoming:
+                    soft_bottoms.append(
+                        SoftBottomItem(
+                            symbol=asset.symbol,
+                            name=asset.name,
+                            score=fs.soft_bottoming_score,
+                            drawdown=signals.drawdown,
+                            rsi=signals.rsi,
+                        )
+                    )
                 above_trend += 1 if signals.trend_direction == "up" else 0
                 if signals.confluence > 0 or signals.drawdown.startswith("-"):
                     accumulation.append(
@@ -162,6 +175,14 @@ class MarketRuntime:
             dashboard.accumulation = MarketPanel(status="live", data=accumulation[:12], as_of=_now_iso())
         if trend:
             dashboard.trend = MarketPanel(status="live", data=trend[:12], as_of=_now_iso())
+        soft_bottoms.sort(key=lambda s: s.score, reverse=True)
+        _sb_rate = load_base_rate("soft_bottoming", 8)
+        dashboard.soft_bottoming = MarketPanel(
+            status="live",
+            data=soft_bottoms,
+            as_of=_now_iso(),
+            note=_sb_rate.headline() if _sb_rate else "base rate calibrating",
+        )
 
         rrg = [
             compute_rrg_tail(asset.symbol, asset.name, weekly.get(asset.symbol, pd.DataFrame()), benchmark)
