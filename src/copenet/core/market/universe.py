@@ -54,14 +54,13 @@ UNIVERSE: tuple[UniverseAsset, ...] = (
     UniverseAsset("XLC", "Communication Services Select Sector SPDR", "sector"),
 )
 
+# Patrick's actual book (Webull, captured 2026-06-30). avg_cost = average price paid.
 PORTFOLIO_BASIS = {
-    "ASX": {"shares": 0.0, "avg_cost": 0.0},
-    "GOOG": {"shares": 0.0, "avg_cost": 0.0},
-    "SOFI": {"shares": 0.0, "avg_cost": 0.0},
-    "VTI": {"shares": 0.0, "avg_cost": 0.0},
-    "XLK": {"shares": 0.0, "avg_cost": 0.0},
-    "XLE": {"shares": 0.0, "avg_cost": 0.0},
-    "SLI": {"shares": 0.0, "avg_cost": 0.0},
+    "GOOG": {"shares": 3.60079, "avg_cost": 206.81},
+    "XLK": {"shares": 8.69941, "avg_cost": 154.26},
+    "VTI": {"shares": 2.85273, "avg_cost": 343.53},
+    "SOFI": {"shares": 22.59539, "avg_cost": 22.10},
+    "SLI": {"shares": 29.0, "avg_cost": 4.126},
 }
 
 MACRO_SYMBOLS = ("DXY", "VIX", "USO", "BTCUSD", "ETHUSD")

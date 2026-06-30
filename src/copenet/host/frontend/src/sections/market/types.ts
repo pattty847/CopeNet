@@ -169,7 +169,7 @@ export interface TickerDetailPayload {
   last: string;
   change: string;
   tone: Tone;
-  series: { weekly: Ohlcv[]; daily: Ohlcv[] };
+  series: { daily: Ohlcv[]; weekly: Ohlcv[]; monthly: Ohlcv[] };
   verdict: VerdictRow[];
   signals: SignalRow[];
   evidence: EvidenceItem[];

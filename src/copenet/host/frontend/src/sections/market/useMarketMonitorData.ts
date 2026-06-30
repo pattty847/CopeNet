@@ -35,7 +35,7 @@ export function useMarketDashboard(): MarketDashboardState {
     const before = lastAsOf.current; // the backend stamps a new asOf per compute
     try {
       await wsClient.marketRefresh('all');
-      for (let i = 0; i < 16 && !cancelled.current; i += 1) {
+      for (let i = 0; i < 28 && !cancelled.current; i += 1) {
         await sleep(2500);
         try {
           const next = await wsClient.marketDashboard();
@@ -59,19 +59,23 @@ export function useMarketDashboard(): MarketDashboardState {
 
   useEffect(() => {
     cancelled.current = false;
-    // 1) instant read of whatever is already stored (only swap in if it's real data)
+    // Show the stored snapshot instantly. Only auto-compute when the store is empty — otherwise a
+    // full refresh (~40s for the whole watchlist) would run on every visit. Refresh is on-demand.
     wsClient
       .marketDashboard()
       .then((next) => {
-        if (!cancelled.current && isPopulated(next)) {
+        if (cancelled.current) return;
+        if (isPopulated(next)) {
           setDashboard(next);
           setLive(true);
           lastAsOf.current = next.asOf;
+        } else {
+          void refresh();
         }
       })
-      .catch(() => {});
-    // 2) kick a fresh compute and poll it in
-    void refresh();
+      .catch(() => {
+        if (!cancelled.current) void refresh();
+      });
     return () => {
       cancelled.current = true;
     };

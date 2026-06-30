@@ -22,7 +22,7 @@ function ConfDots({ n }: { n: number }) {
 export function AccumulationWatch({ panel, onOpen }: { panel: Panel<AccumulationRow[]>; onOpen: (s: string) => void }) {
   return (
     <PanelCard title="Accumulation Watch" status={panel.status} subtitle="Quality names sitting in pullback zones — add candidates" right={<span style={{ fontSize: 10, color: MM.dim }}>confluence ranked</span>}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 360, overflowY: 'auto', paddingRight: 4 }}>
         {panel.data.map((r) => (
           <button key={r.symbol} onClick={() => onOpen(r.symbol)} style={{ cursor: 'pointer', padding: '10px 0', borderTop: `1px solid rgba(254,252,244,.05)`, background: 'transparent', border: 'none', borderTopColor: 'rgba(254,252,244,.05)', textAlign: 'left', width: '100%' }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
@@ -48,7 +48,7 @@ export function AccumulationWatch({ panel, onOpen }: { panel: Panel<Accumulation
 export function TrendWatch({ panel, onOpen }: { panel: Panel<TrendRow[]>; onOpen: (s: string) => void }) {
   return (
     <PanelCard title="Trend-Change Watch" status={panel.status} right={<span style={{ fontSize: 10, color: MM.dim }}>weekly · daily-confirmed</span>}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 9, maxHeight: 240, overflowY: 'auto', paddingRight: 4 }}>
         {panel.data.map((t) => {
           const up = t.direction === 'up';
           return (
@@ -72,7 +72,7 @@ export function Portfolio({ panel, onOpen }: { panel: Panel<PortfolioData>; onOp
     <PanelCard
       title="Portfolio · live P&L"
       status={panel.status}
-      subtitle="Disciplined core · cost basis pending"
+      subtitle="Disciplined core · live P&L"
       style={{ flex: 1.4, minWidth: 380 }}
       right={
         <div style={{ textAlign: 'right' }}>
