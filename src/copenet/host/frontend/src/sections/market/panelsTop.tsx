@@ -194,7 +194,7 @@ export function Rrg({ panel, onOpen }: { panel: Panel<RrgSector[]>; onOpen: (s: 
       title="Sector Rotation · RRG"
       status={panel.status}
       subtitle="Relative strength vs S&P 500 · weekly · clockwise = rotation cycle"
-      style={{ flex: 1.55, minWidth: 420 }}
+      style={{ flex: 1.55, minWidth: 420, alignSelf: 'flex-start' }}
     >
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', maxHeight: 420, display: 'block' }}>
