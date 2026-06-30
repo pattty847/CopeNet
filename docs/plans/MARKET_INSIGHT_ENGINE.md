@@ -174,3 +174,35 @@ packets` → `D LLM interpretation (cites earned base rates)` → `A2/C2 richer 
 1. OK to move historical market data to **DuckDB** (keep JSON for the latest-dashboard payload)?
 2. Confirm flagship descriptor + horizon to pre-register first: **`soft_bottoming` / 8-week**?
 3. Scope of v1 universe for base rates: just the watchlist, or a broad universe for bigger n?
+
+---
+
+## 10. BUILT overnight 2026-06-30 (autonomous, grounded)
+
+Codex CLI was unavailable on PATH, so Claude executed the converged §9 spec solo (Codex's review is
+already baked into §9). Shipped + verified live + tested:
+
+- **A1 — feature library** (`features.py`, PR #13): typed numeric FeatureSet (returns/vol/ATR/MA/
+  drawdown/RS/RSI + data-quality) + flagship `soft_bottoming` (decomposed, pre-registered threshold
+  0.6). Pure + point-in-time (slice-independence test). 5 tests.
+- **C1 — calibration** (`replay.py` + `base_rates.py`, PR #14): point-in-time replay reusing the
+  exact live feature path; episode de-dup; split-adjusted; forward returns in a separate label phase.
+  **Calibrated: soft_bottoming/8w resolved up 54% (median +1.6%, n=611, 2019–2026), beats VOO only
+  47%, works better in bear (61%) than bull (51%).** Cached versioned artifact. Script:
+  `scripts/run_base_rate_calibration.py`. 3 tests.
+- **Surfacing** (PR #14 + #15): ticker detail shows soft_bottoming + decomposed checklist + base
+  rate ("a base rate, not a forecast"); dashboard "Soft Bottoming Watch" strip flags watchlist names
+  (SOFI + TSLA live). 442 tests pass total.
+
+**Deliberately NOT built (needs Patrick's greenlight):**
+- **D — LLM interpretation.** Per §9 sequencing, D follows C1 (now done). But D spends provider
+  quota and produces the *model's opinion* Patrick explicitly wants to SHAPE. Building it
+  autonomously would make a product/cost call that is his to own — so it stops here, by design.
+  Next session: shape the prompt + structured-output schema together, then wire `synthesis.py` →
+  frontier model that reasons over the fact packets + cites these base rates.
+- **DuckDB point-in-time store** (§9 greenlight #1): C1 runs in-memory on yfinance split-adjusted
+  history, which is honest for pattern *shape* but not a true vendor as-of archive. The DuckDB
+  store (raw bars + actions + `get_price_frame`) is the rigor upgrade — still pending greenlight.
+
+**Open greenlight items (unchanged):** DuckDB store? confirm `soft_bottoming/8w` pre-registration
+(done as the v1 flagship)? base-rate universe scope (current: watchlist + drawdown basket, n=611).
