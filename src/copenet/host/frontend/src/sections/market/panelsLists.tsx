@@ -4,10 +4,42 @@ import type {
   EvidenceItem,
   Panel,
   Portfolio as PortfolioData,
+  SoftBottomItem,
   SpecPosition,
   TrendRow,
 } from './types';
 import { MM, PanelCard, label, mono, toneColor } from './marketUi';
+
+export function SoftBottomingWatch({ panel, onOpen }: { panel: Panel<SoftBottomItem[]>; onOpen: (s: string) => void }) {
+  return (
+    <PanelCard
+      title="Soft Bottoming Watch"
+      status={panel.status}
+      subtitle={panel.note || 'names putting in a base — calibrated against real history'}
+      right={<span style={{ fontSize: 10, color: MM.dim }}>calibrated · 8w</span>}
+    >
+      {panel.data.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>No names flagged right now — soft bottoming is rare by design.</div>
+      ) : (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 9 }}>
+          {panel.data.map((s) => (
+            <button
+              key={s.symbol}
+              onClick={() => onOpen(s.symbol)}
+              title={s.name}
+              style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 9, border: `1px solid rgba(105,197,137,.22)`, background: 'rgba(105,197,137,.06)', borderRadius: 11, padding: '8px 12px', textAlign: 'left' }}
+            >
+              <span style={{ width: 7, height: 7, borderRadius: '50%', background: MM.up, flex: '0 0 auto' }} />
+              <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: MM.text }}>{s.symbol}</span>
+              <span style={{ fontFamily: mono, fontSize: 10.5, color: MM.up }}>{s.score.toFixed(2)}</span>
+              <span style={{ fontFamily: mono, fontSize: 10.5, color: MM.dim }}>{s.drawdown} dd · RSI {s.rsi}</span>
+            </button>
+          ))}
+        </div>
+      )}
+    </PanelCard>
+  );
+}
 
 function ConfDots({ n }: { n: number }) {
   return (

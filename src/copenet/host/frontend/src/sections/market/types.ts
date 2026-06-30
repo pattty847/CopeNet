@@ -120,6 +120,14 @@ export interface ContrarianNote {
   kill: string;
 }
 
+export interface SoftBottomItem {
+  symbol: string;
+  name: string;
+  score: number;
+  drawdown: string;
+  rsi: string;
+}
+
 export interface DashboardPayload {
   asOf: string;
   briefing: Panel<Briefing>;
@@ -128,6 +136,7 @@ export interface DashboardPayload {
   rrg: Panel<RrgSector[]>;
   accumulation: Panel<AccumulationRow[]>;
   trend: Panel<TrendRow[]>;
+  softBottoming: Panel<SoftBottomItem[]>;
   portfolio: Panel<Portfolio>;
   speculative: Panel<SpecPosition[]>;
   evidence: Panel<EvidenceItem[]>;
