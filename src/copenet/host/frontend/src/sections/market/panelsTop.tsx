@@ -147,6 +147,24 @@ export function MacroBoard({ panel }: { panel: Panel<MacroItem[]> }) {
   );
 }
 
+/** Catmull-Rom → cubic bezier, so rotation tails read as smooth curves not jagged polylines. */
+function smoothPath(p: { x: number; y: number }[]): string {
+  if (p.length < 2) return p.length ? `M${p[0].x.toFixed(1)},${p[0].y.toFixed(1)}` : '';
+  let d = `M${p[0].x.toFixed(1)},${p[0].y.toFixed(1)}`;
+  for (let i = 0; i < p.length - 1; i += 1) {
+    const p0 = p[i - 1] || p[i];
+    const p1 = p[i];
+    const p2 = p[i + 1];
+    const p3 = p[i + 2] || p2;
+    const c1x = p1.x + (p2.x - p0.x) / 6;
+    const c1y = p1.y + (p2.y - p0.y) / 6;
+    const c2x = p2.x - (p3.x - p1.x) / 6;
+    const c2y = p2.y - (p3.y - p1.y) / 6;
+    d += `C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
+  }
+  return d;
+}
+
 export function Rrg({ panel, onOpen }: { panel: Panel<RrgSector[]>; onOpen: (s: string) => void }) {
   const W = 560;
   const H = 430;
@@ -154,9 +172,18 @@ export function Rrg({ panel, onOpen }: { panel: Panel<RrgSector[]>; onOpen: (s: 
   const R = 20;
   const T = 18;
   const B = 30;
-  const dom = 6;
-  const sx = (x: number) => L + ((x + dom) / (2 * dom)) * (W - L - R);
-  const sy = (y: number) => T + ((dom - y) / (2 * dom)) * (H - T - B);
+  const TAIL = 4; // most-recent N points = a readable rotation cycle without spaghetti
+  const sectors = panel.data.map((s) => ({ ...s, pts: s.tail.slice(-TAIL) }));
+  // The backend's RS-Ratio (% deviation) and RS-Momentum (z-score) live on different scales, so a
+  // fixed domain pushed points off-canvas. Auto-fit each axis to the real data; keep 0 centered so
+  // the quadrants stay meaningful; clamp outliers to the box edge.
+  const xs = sectors.flatMap((s) => s.pts.map((p) => Math.abs(p.x)));
+  const ys = sectors.flatMap((s) => s.pts.map((p) => Math.abs(p.y)));
+  const domX = Math.max(1, ...xs) * 1.12;
+  const domY = Math.max(1, ...ys) * 1.12;
+  const clamp = (v: number, d: number) => Math.max(-d, Math.min(d, v));
+  const sx = (x: number) => L + ((clamp(x, domX) + domX) / (2 * domX)) * (W - L - R);
+  const sy = (y: number) => T + ((domY - clamp(y, domY)) / (2 * domY)) * (H - T - B);
   const cx = sx(0);
   const cy = sy(0);
   return (
@@ -168,6 +195,11 @@ export function Rrg({ panel, onOpen }: { panel: Panel<RrgSector[]>; onOpen: (s: 
     >
       <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
         <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: 'auto', maxHeight: 420, display: 'block' }}>
+          <defs>
+            <clipPath id="rrgClip">
+              <rect x={L} y={T} width={W - L - R} height={H - T - B} />
+            </clipPath>
+          </defs>
           <rect x={cx} y={T} width={W - R - cx} height={cy - T} fill="rgba(251,148,35,.045)" />
           <rect x={L} y={T} width={cx - L} height={cy - T} fill="rgba(254,252,244,.018)" />
           <rect x={L} y={cy} width={cx - L} height={H - B - cy} fill="rgba(254,252,244,.01)" />
@@ -183,15 +215,15 @@ export function Rrg({ panel, onOpen }: { panel: Panel<RrgSector[]>; onOpen: (s: 
               {q[0] as string}
             </text>
           ))}
-          {panel.data.map((s) => {
-            const tail = s.tail.map((p) => ({ x: sx(p.x), y: sy(p.y) }));
+          {sectors.map((s) => {
+            const tail = s.pts.map((p) => ({ x: sx(p.x), y: sy(p.y) }));
+            if (!tail.length) return null;
             const head = tail[tail.length - 1];
-            const d = 'M' + tail.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' L');
             return (
               <g key={s.symbol} style={{ cursor: 'pointer' }} onClick={() => onOpen(s.symbol)}>
-                <path d={d} fill="none" stroke="rgba(254,252,244,.16)" strokeWidth={1.4} strokeLinecap="round" />
+                <path d={smoothPath(tail)} clipPath="url(#rrgClip)" fill="none" stroke="rgba(254,252,244,.13)" strokeWidth={1.2} strokeLinecap="round" />
                 {tail.slice(0, -1).map((tp, ti) => (
-                  <circle key={ti} cx={tp.x} cy={tp.y} r={1.6} fill={MM.text} opacity={(ti / tail.length) * 0.5} />
+                  <circle key={ti} cx={tp.x} cy={tp.y} r={1.4} fill={MM.text} opacity={(ti / tail.length) * 0.4} />
                 ))}
                 <circle cx={head.x} cy={head.y} r={4.6} fill="#0c0c0d" stroke={MM.text} strokeWidth={1.6} />
                 <text x={head.x + 8} y={head.y + 3} fill={MM.textSoft} fontSize={9.5} fontWeight={600} fontFamily={mono}>
