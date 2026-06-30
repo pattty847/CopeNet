@@ -2,6 +2,7 @@ import {
   Activity,
   Blocks,
   Bot,
+  CandlestickChart,
   ChevronLeft,
   FlaskConical,
   Home,
@@ -15,6 +16,7 @@ import { ThemeToggle } from './ThemeToggle';
 const NAV_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'market', label: 'Market', icon: CandlestickChart },
   { id: 'workflows', label: 'Workflows', icon: Layers3 },
   { id: 'data-tools', label: 'Data & Tools', icon: Wrench },
   { id: 'observability', label: 'Observability', icon: Activity },

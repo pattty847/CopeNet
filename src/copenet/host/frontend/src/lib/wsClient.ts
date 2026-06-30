@@ -105,6 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
+import { marketDashboardRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc } from './wsMarketRpc';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -595,6 +596,22 @@ class WsClient {
 
   async fetchApod(opts?: { date?: string; refresh?: boolean }): Promise<ApodResult> {
     return fetchApodRpc(this.request.bind(this), opts);
+  }
+
+  async marketDashboard() {
+    return marketDashboardRpc(this.request.bind(this));
+  }
+
+  async marketTicker(symbol: string) {
+    return marketTickerRpc(this.request.bind(this), symbol);
+  }
+
+  async marketUniverse() {
+    return marketUniverseRpc(this.request.bind(this));
+  }
+
+  async marketRefresh(scope: 'all' | 'macro' | 'signals' | 'edgar' = 'all') {
+    return marketRefreshRpc(this.request.bind(this), scope);
   }
 
   async listPulses(): Promise<PulseRecord[]> {

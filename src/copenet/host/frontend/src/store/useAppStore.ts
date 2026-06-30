@@ -4,7 +4,7 @@ import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } from '../components/home/homeLayout';
 
-export type AppSection = 'home' | 'agents' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
+export type AppSection = 'home' | 'agents' | 'market' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
 export type RightPanelTab = 'inbox' | 'runtime' | 'approvals';
 export type WorkflowsRoute = 'hub' | 'meme-lab';
