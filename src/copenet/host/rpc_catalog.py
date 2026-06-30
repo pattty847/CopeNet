@@ -61,6 +61,12 @@ from .rpc_messaging import (
     handle_messaging_routes_delete,
     handle_messaging_routes_resolve,
 )
+from .rpc_market import (
+    handle_market_dashboard_get,
+    handle_market_refresh,
+    handle_market_ticker_get,
+    handle_market_universe_get,
+)
 
 
 __all__ = [
@@ -107,4 +113,8 @@ __all__ = [
     "handle_messaging_routes_upsert",
     "handle_messaging_routes_delete",
     "handle_messaging_routes_resolve",
+    "handle_market_dashboard_get",
+    "handle_market_ticker_get",
+    "handle_market_universe_get",
+    "handle_market_refresh",
 ]
