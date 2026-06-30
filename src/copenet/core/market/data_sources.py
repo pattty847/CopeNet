@@ -10,13 +10,15 @@ from .models import MacroItem, MarketBar
 from .universe import yf_symbol
 
 
-def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y") -> pd.DataFrame:
+def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: bool = False) -> pd.DataFrame:
     try:
         import yfinance as yf
     except ImportError as exc:  # pragma: no cover - dependency exists in packaged env
         raise RuntimeError("yfinance is required for market data") from exc
     ticker = yf_symbol(symbol)
-    frame = yf.download(ticker, period=period, interval=interval, auto_adjust=False, progress=False, threads=False)
+    # auto_adjust=True returns split/dividend-adjusted prices. Pattern detection wants split-adjusted
+    # shape (returns/drawdowns are scale-invariant to splits); raw prices show fake split gaps.
+    frame = yf.download(ticker, period=period, interval=interval, auto_adjust=auto_adjust, progress=False, threads=False)
     if frame is None or frame.empty:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
     if isinstance(frame.columns, pd.MultiIndex):

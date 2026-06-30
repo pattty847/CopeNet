@@ -17,13 +17,18 @@ from .models import (
     AccumulationRow,
     DashboardPayload,
     EvidenceItem,
+    InsightBaseRate,
+    InsightComponent,
     MarketPanel,
     Portfolio,
     PortfolioPosition,
     SignalRow,
     SpecPosition,
     TickerDetailPayload,
+    TickerInsight,
 )
+from .base_rates import load_base_rate
+from .features import compute_features
 from .signals import compute_price_signals, compute_rrg_tail
 from .store import MarketStore
 from .synthesis import synthesize_briefing
@@ -68,13 +73,15 @@ class MarketRuntime:
         if not signals and not weekly_frame.empty:
             computed = compute_price_signals(weekly_frame)
             signals = computed.__dict__
+        voo_frame = _bars_to_frame(self.store.load_bars("VOO", "weekly"))
         verdict = benchmark_verdict(
             weekly_frame,
             {
-                "VOO": _bars_to_frame(self.store.load_bars("VOO", "weekly")),
+                "VOO": voo_frame,
                 "XLK": _bars_to_frame(self.store.load_bars("XLK", "weekly")),
             },
         )
+        insight = _build_insight(compute_features(weekly_frame, voo_frame, symbol=normalized))
         return TickerDetailPayload(
             symbol=normalized,
             name=name,
@@ -87,6 +94,7 @@ class MarketRuntime:
             evidence=evidence,
             events=chart_events_from_evidence(evidence),
             kill="This read is wrong if price, volume, and benchmark-relative behavior stop confirming the thesis.",
+            insight=insight,
         )
 
     def refresh(self, *, scope: str = "all") -> DashboardPayload:
@@ -214,6 +222,38 @@ def _macro_items(frames: dict[str, pd.DataFrame]) -> list:
         if item is not None:
             items.append(item)
     return items
+
+
+def _build_insight(fs) -> TickerInsight:
+    """Attach the soft_bottoming flag + decomposed components + the calibrated base rate (read by key
+    from the cached artifact). The base rate is only surfaced when the pattern is currently firing."""
+    base_rate = None
+    if fs.soft_bottoming:
+        br = load_base_rate("soft_bottoming", 8)
+        if br is not None:
+            base_rate = InsightBaseRate(
+                pattern="soft_bottoming",
+                horizon_weeks=br.horizon_weeks,
+                pct_up=br.pct_up,
+                median_fwd=br.median_fwd,
+                n=br.n,
+                headline=br.headline(),
+            )
+    components = [
+        InsightComponent("Lower lows stopped", fs.sb_lower_lows_stopped),
+        InsightComponent("Higher low formed", fs.sb_higher_low),
+        InsightComponent("Reclaimed short MA", fs.sb_ma_reclaim),
+        InsightComponent("Drawdown stabilized", fs.sb_drawdown_stabilized),
+        InsightComponent("Relative strength improving", fs.sb_rs_improving),
+        InsightComponent("Decline volume drying", fs.sb_volume_drying),
+        InsightComponent("Momentum divergence", fs.sb_momentum_divergence),
+    ]
+    return TickerInsight(
+        soft_bottoming=fs.soft_bottoming,
+        score=fs.soft_bottoming_score,
+        components=components,
+        base_rate=base_rate,
+    )
 
 
 def _portfolio_panel(frames: dict[str, pd.DataFrame]) -> Portfolio:
