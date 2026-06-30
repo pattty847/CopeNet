@@ -43,7 +43,7 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
 }
 
 export function MarketMonitor() {
-  const dash = useMarketDashboard();
+  const { dashboard: dash, refreshing, live, refresh } = useMarketDashboard();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
 
   if (activeTicker) {
@@ -59,6 +59,29 @@ export function MarketMonitor() {
   return (
     <div style={{ background: MM.bg, minHeight: '100%', color: MM.text }}>
       <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1640, margin: '0 auto' }}>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.muted }}>
+            <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? MM.up : MM.dim }} />
+            {live ? 'Live data' : 'Illustrative preview'} · {dash.asOf}
+          </span>
+          <button
+            onClick={() => void refresh()}
+            disabled={refreshing}
+            style={{
+              cursor: refreshing ? 'default' : 'pointer',
+              border: `1px solid ${MM.borderHi}`,
+              background: MM.accentSoft,
+              color: MM.accent,
+              borderRadius: 9,
+              padding: '7px 13px',
+              font: '600 10px Inter',
+              letterSpacing: '.05em',
+              opacity: refreshing ? 0.6 : 1,
+            }}
+          >
+            {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
+          </button>
+        </div>
         <BriefingHero panel={dash.briefing} onOpen={open} />
         <MacroBoard panel={dash.macro} />
         <div style={ROW}>
@@ -77,7 +100,7 @@ export function MarketMonitor() {
           <Contrarian panel={dash.contrarian} />
         </div>
         <div style={{ textAlign: 'center', fontSize: 10.5, color: MM.dimmer, padding: '6px 0 14px' }}>
-          Reads are evidence-based with caveats — never forecasts. Data shown is illustrative until the backend is wired.
+          Reads are evidence-based with caveats — never forecasts. Panels marked “preview” are illustrative until their live data loads.
         </div>
       </div>
     </div>
