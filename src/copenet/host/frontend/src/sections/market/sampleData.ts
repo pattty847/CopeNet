@@ -185,7 +185,7 @@ export function sampleTicker(symbol: string): TickerDetailPayload {
     last: '—',
     change: '—',
     tone: 'flat',
-    series: { weekly: [], daily: [] },
+    series: { daily: [], weekly: [], monthly: [] },
     verdict: [
       { bench: 'VOO', label: 'In line', pct: '50%', tone: 'flat' },
       { bench: 'Sector', label: 'In line', pct: '50%', tone: 'flat' },

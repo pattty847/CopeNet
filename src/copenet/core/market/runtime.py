@@ -44,8 +44,21 @@ class MarketRuntime:
         normalized = symbol.strip().upper()
         asset = find_asset(normalized)
         name = asset.name if asset else normalized
-        weekly = self.store.load_bars(normalized, "weekly")
-        daily = self.store.load_bars(normalized, "daily")
+        # Deep multi-timeframe history for the chart, fetched on-demand. The dashboard refresh only
+        # persists weekly(3y)/daily(6mo) for signals, so pull richer D/W/M here for the candle view;
+        # fall back to the stored bars if a live fetch fails.
+        def _chart_bars(interval: str, period: str, cache_key: str) -> list:
+            try:
+                bars = frame_to_bars(fetch_ohlcv(normalized, interval=interval, period=period))
+                if bars:
+                    return bars
+            except Exception:
+                pass
+            return self.store.load_bars(normalized, cache_key)
+
+        daily = _chart_bars("1d", "2y", "daily")
+        weekly = _chart_bars("1wk", "5y", "weekly")
+        monthly = _chart_bars("1mo", "10y", "monthly")
         weekly_frame = _bars_to_frame(weekly)
         signals = self.store.load_signals(normalized)
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == normalized]
@@ -68,7 +81,7 @@ class MarketRuntime:
             last=f"${last:,.2f}" if last else "n/a",
             change=f"{change_pct:+.2f}%" if last else "n/a",
             tone="up" if change_pct > 0 else "down" if change_pct < 0 else "flat",
-            series={"weekly": weekly, "daily": daily},
+            series={"daily": daily, "weekly": weekly, "monthly": monthly},
             verdict=verdict,
             signals=_signal_rows(signals),
             evidence=evidence,

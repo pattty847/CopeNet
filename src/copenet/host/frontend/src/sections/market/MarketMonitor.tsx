@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, Rrg } from './panelsTop';
 import { BriefingReasoning } from './BriefingReasoning';
+import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, Speculative, TrendWatch } from './panelsLists';
 import { useMarketDashboard, useTickerDetail } from './useMarketMonitorData';
 
@@ -9,17 +10,48 @@ const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: '
 
 function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void }) {
   const td = useTickerDetail(symbol);
+  const [tf, setTf] = useState<'D' | 'W' | 'M'>('W');
+  const series = tf === 'D' ? td.series.daily : tf === 'M' ? td.series.monthly : td.series.weekly;
+  const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
+  const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
+    <button
+      key={key}
+      onClick={() => setTf(key)}
+      style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 11px', font: '600 10px Inter', background: tf === key ? MM.accent : 'transparent', color: tf === key ? '#1a1205' : MM.muted }}
+    >
+      {label}
+    </button>
+  );
   return (
     <div style={{ padding: 22, maxWidth: 1640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 18, flexWrap: 'wrap' }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <button onClick={onClose} style={{ cursor: 'pointer', border: `1px solid rgba(254,252,244,.08)`, background: MM.panel, color: MM.muted, borderRadius: 9, padding: '8px 13px', font: '600 11px Inter' }}>← Market Monitor</button>
         <span style={{ fontFamily: mono, fontSize: 26, fontWeight: 600, color: MM.text, letterSpacing: '-.02em' }}>{td.symbol}</span>
         <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: MM.muted }}>{td.name}</span>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontFamily: mono, fontSize: 22, color: MM.text }}>{td.last}</span>
+        <span style={{ fontFamily: mono, fontSize: 14, color: toneColor(td.tone) }}>{td.change}</span>
       </div>
       <div style={ROW}>
-        <PanelCard title="Price · Weekly" status="preview" style={{ flex: 1.7, minWidth: 420 }}>
-          <div style={{ minHeight: 320, display: 'flex', alignItems: 'center', justifyContent: 'center', border: `1px dashed ${MM.border}`, borderRadius: 10, color: MM.dim, fontSize: 12, fontStyle: 'italic' }}>
-            TradingView Lightweight Charts wiring lands next — weekly candles, MA/MAMA overlays, insider ▲ / 8-K ◆ markers.
+        <PanelCard
+          title={`Price · ${tfLabel}`}
+          status={series.length ? 'live' : 'preview'}
+          style={{ flex: 1.7, minWidth: 420 }}
+          right={
+            <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
+              {tfBtn('D', '1D')}
+              {tfBtn('W', '1W')}
+              {tfBtn('M', '1M')}
+            </div>
+          }
+        >
+          <CandleChart bars={series} height={400} />
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
+            <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
+              <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>
+              Charts by TradingView
+            </span>
+            <span style={{ fontSize: 10, color: MM.dim, fontStyle: 'italic' }}>~5y history · weekly primary, daily confirmation</span>
           </div>
         </PanelCard>
         <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
