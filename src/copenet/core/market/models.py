@@ -234,6 +234,30 @@ class DashboardPayload:
 
 
 @dataclass
+class InsightBaseRate:
+    pattern: str
+    horizon_weeks: int
+    pct_up: float
+    median_fwd: float
+    n: int
+    headline: str
+
+
+@dataclass
+class InsightComponent:
+    label: str
+    met: bool
+
+
+@dataclass
+class TickerInsight:
+    soft_bottoming: bool
+    score: float
+    components: list[InsightComponent]
+    base_rate: InsightBaseRate | None
+
+
+@dataclass
 class TickerDetailPayload:
     symbol: str
     name: str
@@ -246,6 +270,7 @@ class TickerDetailPayload:
     evidence: list[EvidenceItem]
     events: list[ChartEvent]
     kill: str
+    insight: TickerInsight | None = None
 
     def to_wire(self) -> dict[str, Any]:
         return _to_wire(self)

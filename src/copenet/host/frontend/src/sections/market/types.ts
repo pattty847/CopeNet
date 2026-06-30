@@ -163,6 +163,27 @@ export interface ChartEvent {
   glyph: string;
 }
 
+export interface InsightBaseRate {
+  pattern: string;
+  horizonWeeks: number;
+  pctUp: number;
+  medianFwd: number;
+  n: number;
+  headline: string;
+}
+
+export interface InsightComponent {
+  label: string;
+  met: boolean;
+}
+
+export interface TickerInsight {
+  softBottoming: boolean;
+  score: number;
+  components: InsightComponent[];
+  baseRate: InsightBaseRate | null;
+}
+
 export interface TickerDetailPayload {
   symbol: string;
   name: string;
@@ -175,4 +196,5 @@ export interface TickerDetailPayload {
   evidence: EvidenceItem[];
   events: ChartEvent[];
   kill: string;
+  insight?: TickerInsight | null;
 }

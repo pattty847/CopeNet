@@ -55,6 +55,32 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
           </div>
         </PanelCard>
         <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {td.insight?.softBottoming && (
+            <div style={{ background: `linear-gradient(180deg, rgba(105,197,137,.07), transparent 52%), ${MM.panel}`, border: `1px solid rgba(105,197,137,.25)`, borderRadius: 14, padding: 16 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.up }}>
+                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: MM.up }} /> Soft Bottoming
+                </span>
+                <span style={{ fontFamily: mono, fontSize: 12, color: MM.up }}>score {td.insight.score.toFixed(2)}</span>
+              </div>
+              {td.insight.baseRate ? (
+                <div style={{ fontSize: 12.5, color: MM.textSoft, lineHeight: 1.5, marginBottom: 12 }}>
+                  {td.insight.baseRate.headline}.
+                  <span style={{ color: MM.dim }}> Calibrated on real history — a base rate, not a forecast.</span>
+                </div>
+              ) : (
+                <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', marginBottom: 12 }}>Base rate calibrating…</div>
+              )}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px' }}>
+                {td.insight.components.map((c, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: c.met ? MM.textSoft : MM.dim }}>
+                    <span style={{ color: c.met ? MM.up : MM.dimmer, fontFamily: mono }}>{c.met ? '✓' : '·'}</span>
+                    {c.label}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
           <PanelCard title="Signal Readout" status="preview">
             <div style={{ display: 'flex', flexDirection: 'column' }}>
               {td.signals.map((s, i) => (
