@@ -26,6 +26,10 @@ from .rpc_catalog import (
     handle_messaging_routes_resolve,
     handle_messaging_routes_upsert,
     handle_messaging_test,
+    handle_market_dashboard_get,
+    handle_market_refresh,
+    handle_market_ticker_get,
+    handle_market_universe_get,
     handle_models_list,
     handle_persona_context_get,
     handle_persona_flavor_draft,
@@ -225,6 +229,14 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_messaging_routes_delete(req.id, req.params, send_json, orchestrator)
     elif req.method == "messaging.routes.resolve":
         await handle_messaging_routes_resolve(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.dashboard.get":
+        await handle_market_dashboard_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.ticker.get":
+        await handle_market_ticker_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.universe.get":
+        await handle_market_universe_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.refresh":
+        await handle_market_refresh(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.merge.create":
