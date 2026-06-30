@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Bot, FlaskConical, Home, Layers3, MoreHorizontal, Search, Wrench } from 'lucide-react';
+import { Activity, Bot, CandlestickChart, FlaskConical, Home, Layers3, MoreHorizontal, Search, Wrench } from 'lucide-react';
 import { getMobileSectionSummary } from '../../lib/mobileCopy';
 import { useAppStore, type AppSection } from '../../store/useAppStore';
 import { MobileSheet } from './MobileSheet';
@@ -7,11 +7,12 @@ import { MobileSheet } from './MobileSheet';
 const PRIMARY_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'market', label: 'Market', icon: CandlestickChart },
   { id: 'workflows', label: 'Workflows', icon: Layers3 },
-  { id: 'data-tools', label: 'Media', icon: Wrench },
 ];
 
 const MORE_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Activity }> = [
+  { id: 'data-tools', label: 'Media', icon: Wrench },
   { id: 'observability', label: 'Observability', icon: Activity },
   { id: 'experiments', label: 'Experiments', icon: FlaskConical },
 ];
@@ -19,6 +20,7 @@ const MORE_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Activity }
 const SECTION_TITLES: Record<AppSection, string> = {
   home: 'Home',
   agents: 'Agents',
+  market: 'Market',
   workflows: 'Workflows',
   'data-tools': 'Data & Tools',
   observability: 'Observability',

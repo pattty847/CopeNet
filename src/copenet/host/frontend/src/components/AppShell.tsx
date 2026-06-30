@@ -7,6 +7,7 @@ import { ConnectionBanner } from './ConnectionBanner';
 import { DataToolsPage } from './DataToolsPage';
 import { ExperimentsPage } from './ExperimentsPage';
 import { HomePage } from './HomePage';
+import { MarketMonitor } from '../sections/market/MarketMonitor';
 import { MobileBottomNav, MobileTopBar } from './mobile/MobileNav';
 import { ObservabilityPage } from './ObservabilityPage';
 import { PersonaFlavorReviewModal } from './persona/PersonaFlavorReviewModal';
@@ -26,6 +27,10 @@ function AppSectionContent() {
 
   if (currentSection === 'agents') {
     return <AgentsPage />;
+  }
+
+  if (currentSection === 'market') {
+    return <MarketMonitor />;
   }
 
   if (currentSection === 'workflows') {

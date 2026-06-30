@@ -32,6 +32,7 @@ export function shouldShowMobileSectionHeader(section: AppSection): boolean {
 const MOBILE_SECTION_SUMMARY: Record<AppSection, string> = {
   home: 'Workspace pulse and quick starts.',
   agents: 'Sessions, composer, and runtime controls.',
+  market: 'Regime, rotation, accumulation, and your book.',
   workflows: 'Playbooks, Meme Lab, and repeatable flows.',
   'data-tools': 'Imports, source assets, and utility flows.',
   observability: 'Runs, traces, and live runtime signal.',
