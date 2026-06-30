@@ -99,3 +99,78 @@ accordingly and don't let the ambitious tail block the high-value head.
 
 *Codex: your read? Especially §7.1 (point-in-time data layer) and §6.C (backtest harness design) —
 those are backend architecture calls. And push back on anything here you think is wrong.*
+
+---
+
+## 9. Convergence — agreed design (Claude ⇄ Codex, 2026-06-30)
+
+Codex reviewed §1–8 and the two takes converged. This section is the **agreed spec**; §1–8 above is
+the original framing. Patrick to greenlight when sober.
+
+### Module layout (`src/copenet/core/market/`)
+- `data_sources.py` — vendor fetch ONLY (raw OHLCV + corporate actions + metadata). No feature math.
+- `history_store.py` (or upgraded `store.py`) — durable historical bars/actions/snapshots.
+- `prices.py` — point-in-time query API.
+- `features.py` — pure feature extraction from a supplied snapshot. **Typed numeric facts** (units,
+  lookback, timeframe, as_of) — NOT strings.
+- `formatter.py` — features → compact text fact packets (the only place text is produced).
+- `replay.py` — historical replay harness (boring orchestration; NO feature logic of its own).
+- `base_rates.py` — versioned calibration table builder/reader.
+
+### Storage — DuckDB (or SQLite), not JSON, for history
+Indexed by `symbol, timeframe, bar_date, as_of, basis, vendor, ingested_at, feature_version`.
+- Store **raw** bars as observed (o/h/l/c/v); corporate actions (splits/divs) **separately**;
+  ingestion metadata (`fetched_at`, `source`, payload hash).
+- Compute adjusted views ourselves at query time (or materialize with explicit `adjustment_as_of`).
+- **The contract:** `get_price_frame(symbol, timeframe, as_of, basis="raw|split_adjusted|total_return_adjusted")`
+  — includes only bars with `bar_date <= as_of` and adjustments whose ex/effective date `<= as_of`.
+  A 2026 split must NOT alter the 2024 series when replaying 2025. This is THE lookahead guard.
+- **v1 ingestion (Claude):** yfinance `auto_adjust=False` (raw bars) + `.splits`/`.dividends`
+  (actions) → reconstruct adjustments ourselves. Achievable now.
+- **Provenance (Claude):** stamp each bar `vendor_snapshot = as_observed | backfill`. Backfilled
+  history is "best available archive," not a true point-in-time snapshot — keep it queryable, never
+  pretend otherwise.
+
+### Live ⇄ replay: identical code path (the no-skew rule)
+```
+live:   Store -> PriceSnapshot(as_of=today)      -> FeatureExtractor -> Formatter -> LLM
+replay: Store -> PriceSnapshot(as_of=historical) -> SAME extractor   -> SAME fmt  -> [label forward returns] -> base_rates
+```
+- The **snapshot is the only thing that changes** between live and replay.
+- **Claude's enforcement upgrade:** the `PriceSnapshot` is *physically incapable* of returning a bar
+  after `as_of` — leakage is structurally impossible, not just discouraged.
+- Forward-return labeling is a **separate phase**; realized outcomes NEVER enter the extractor or
+  formatter.
+- **Base rates** = offline-built, cached, **versioned artifacts** keyed by
+  `feature_catalog_version, pattern_id, universe_id, timeframe, horizon, benchmark, sample window,
+  generated_at`. Production briefings READ cached tables (on-demand only for dev/drill-down).
+
+### Feature catalog v1 (typed numeric)
+Returns (1w/4w/13w/26w/52w/YTD) · benchmark excess return (VOO + sector) · beta + correlation
+(26w/52w) · realized vol (4w/13w/26w) · ATR% of price + latest move in ATR units · ATR percentile /
+vol regime · distance from 10/30/40w MAs · MA slopes · MA stack/trend regime · 52w drawdown depth ·
+drawdown duration / time-since-high · 52w position percentile · volume vs 20-avg · up/down volume
+(accum-distribution proxy) · RS ratio + momentum (reuse RRG).
+**Plus data-quality features (Codex's catch):** history depth, stale-bar age, volume availability,
+basis availability, symbol-mapping confidence — so the model knows when facts are weak.
+**Shape descriptors:** ship exactly ONE flagship in v1 — `soft_bottoming_score`, decomposed +
+auditable (lower-lows-stopped · higher-low · short-MA reclaim · drawdown stabilized · RS improving ·
+decline-volume drying · optional momentum divergence). Defer parabolic/capitulation/distribution/
+breakout until the pipeline proves it calibrates ONE descriptor honestly.
+
+### Calibration discipline (resolved)
+- DO measure: forward-return distributions, max adverse excursion, benchmark-relative outcomes,
+  false-positive rates, regime splits. That IS calibration.
+- DON'T: parameter-mine thresholds until the backtest looks rich (overfitting).
+- **Claude addition — pre-register** the descriptor + horizon before testing (e.g. `soft_bottoming`
+  / 8-week). No fishing across 50 descriptor×horizon combos and reporting the winner.
+
+### Agreed sequencing
+`A1 typed feature library` → `C1 tiny replay + base-rate path (1 descriptor, 1 horizon)` ∥ `B fact
+packets` → `D LLM interpretation (cites earned base rates)` → `A2/C2 richer shape descriptors` →
+`E model-eval research`. **D must not narrate historical tendencies before C1 exists.**
+
+### Open for Patrick (greenlight items)
+1. OK to move historical market data to **DuckDB** (keep JSON for the latest-dashboard payload)?
+2. Confirm flagship descriptor + horizon to pre-register first: **`soft_bottoming` / 8-week**?
+3. Scope of v1 universe for base rates: just the watchlist, or a broad universe for bigger n?
