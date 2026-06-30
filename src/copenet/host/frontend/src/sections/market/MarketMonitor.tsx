@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, Rrg } from './panelsTop';
+import { BriefingReasoning } from './BriefingReasoning';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, Speculative, TrendWatch } from './panelsLists';
 import { useMarketDashboard, useTickerDetail } from './useMarketMonitorData';
 
@@ -45,6 +46,7 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
 export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh } = useMarketDashboard();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
+  const [reasoningOpen, setReasoningOpen] = useState(false);
 
   if (activeTicker) {
     return (
@@ -82,7 +84,7 @@ export function MarketMonitor() {
             {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
           </button>
         </div>
-        <BriefingHero panel={dash.briefing} onOpen={open} />
+        <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} />
         <MacroBoard panel={dash.macro} />
         <div style={ROW}>
           <Rrg panel={dash.rrg} onOpen={open} />
@@ -103,6 +105,7 @@ export function MarketMonitor() {
           Reads are evidence-based with caveats — never forecasts. Panels marked “preview” are illustrative until their live data loads.
         </div>
       </div>
+      {reasoningOpen && <BriefingReasoning dash={dash} onClose={() => setReasoningOpen(false)} />}
     </div>
   );
 }
