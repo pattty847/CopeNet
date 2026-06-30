@@ -43,6 +43,7 @@ export const SAMPLE_UNIVERSE: UniverseAsset[] = [
   { symbol: 'XLU', name: 'Utilities', role: 'sector' },
   { symbol: 'XLB', name: 'Materials', role: 'sector' },
   { symbol: 'XLV', name: 'Health Care', role: 'sector' },
+  { symbol: 'XLC', name: 'Communication Services', role: 'sector' },
 ];
 
 const spark = (dir: number): number[] => {
@@ -114,6 +115,7 @@ export const SAMPLE_DASHBOARD: DashboardPayload = {
       { symbol: 'XLE', name: 'Energy', quadrant: 'improving', tail: [{ x: -4.0, y: -1.2 }, { x: -3.4, y: -0.2 }, { x: -2.8, y: 0.6 }, { x: -2.2, y: 1.1 }] },
       { symbol: 'XLU', name: 'Utilities', quadrant: 'lagging', tail: [{ x: -2.2, y: 0.4 }, { x: -2.6, y: -0.2 }, { x: -3.0, y: -0.8 }, { x: -3.3, y: -1.1 }] },
       { symbol: 'XLV', name: 'Health Care', quadrant: 'improving', tail: [{ x: -2.6, y: -0.8 }, { x: -2.2, y: -0.1 }, { x: -1.8, y: 0.6 }, { x: -1.3, y: 1.0 }] },
+      { symbol: 'XLC', name: 'Communication Services', quadrant: 'leading', tail: [{ x: 0.6, y: 0.3 }, { x: 1.3, y: 0.8 }, { x: 2.0, y: 1.0 }, { x: 2.6, y: 0.8 }] },
     ],
   },
   accumulation: {
