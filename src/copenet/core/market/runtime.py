@@ -29,7 +29,9 @@ from .models import (
     TickerInsight,
 )
 from .base_rates import load_base_rate
+from .fact_packets import market_fact_packet, ticker_fact_packet
 from .features import compute_features
+from .interpretation import generate_market_read, generate_ticker_read
 from .signals import compute_price_signals, compute_rrg_tail
 from .store import MarketStore
 from .synthesis import synthesize_briefing
@@ -97,6 +99,42 @@ class MarketRuntime:
             kill="This read is wrong if price, volume, and benchmark-relative behavior stop confirming the thesis.",
             insight=insight,
         )
+
+    async def interpret(self, provider, *, target: str = "market", model: str = "gpt-5.5") -> dict:
+        """Run the LLM interpretation lane (Insight Engine Phase D) and persist the read.
+
+        target='market' → whole-market read from the stored dashboard wire.
+        target=<SYMBOL> → per-asset read from the stored weekly bars' FeatureSet.
+        The provider is injected (openai-codex); the call is one-shot, no chat session.
+        """
+        generated_at = _now_iso()
+        sb_rate = load_base_rate("soft_bottoming", 8)
+        if target == "market":
+            packet = market_fact_packet(self.store.load_dashboard_wire(), sb_rate)
+            read = await generate_market_read(provider, packet, model=model, generated_at=generated_at)
+            wire = read.to_wire()
+            self.store.save_market_read(wire)
+            return wire
+
+        symbol = target.strip().upper()
+        asset = find_asset(symbol)
+        weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
+        voo_frame = _bars_to_frame(self.store.load_bars("VOO", "weekly"))
+        fs = compute_features(weekly_frame, voo_frame, symbol=symbol)
+        verdict = benchmark_verdict(weekly_frame, {"VOO": voo_frame})
+        evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == symbol]
+        packet = ticker_fact_packet(
+            fs,
+            name=asset.name if asset else symbol,
+            base_rate=sb_rate,
+            verdict=[{"bench": v.bench, "label": v.label} for v in verdict],
+            evidence=[{"type": e.type, "headline": e.headline, "source": e.source} for e in evidence],
+        )
+        read = await generate_ticker_read(provider, packet, model=model, generated_at=generated_at)
+        wire = read.to_wire()
+        wire["symbol"] = symbol
+        self.store.save_ticker_read(symbol, wire)
+        return wire
 
     def refresh(self, *, scope: str = "all") -> DashboardPayload:
         weekly: dict[str, pd.DataFrame] = {}

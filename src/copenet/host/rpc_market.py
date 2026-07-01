@@ -44,12 +44,58 @@ async def handle_market_refresh(request_id: str, params: dict[str, Any] | None, 
     runtime = _runtime(orchestrator)
     started_at = _now_iso()
     run_id = f"market-refresh-{uuid4().hex[:12]}"
-    task = asyncio.create_task(asyncio.to_thread(runtime.refresh, scope=scope))
+    provider = _interpret_provider(orchestrator)
+
+    async def _refresh_then_interpret() -> None:
+        await asyncio.to_thread(runtime.refresh, scope=scope)
+        # Default lane: one automatic whole-market model read per refresh (operator design).
+        if provider is not None and scope in {"all", "signals"}:
+            try:
+                await runtime.interpret(provider, target="market")
+            except Exception:
+                pass  # the deterministic briefing still stands; the read stays stale
+
+    _track_task(orchestrator, asyncio.create_task(_refresh_then_interpret()))
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": started_at, "runId": run_id})))
+
+
+async def handle_market_interpret(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    target = str(raw.get("target") or "market").strip() or "market"
+    runtime = _runtime(orchestrator)
+    provider = _interpret_provider(orchestrator)
+    if provider is None:
+        raise ValueError("openai-codex provider unavailable — model reads need it configured")
+    started_at = _now_iso()
+    run_id = f"market-interpret-{uuid4().hex[:12]}"
+    _track_task(orchestrator, asyncio.create_task(runtime.interpret(provider, target=target)))
+    await send_json(
+        make_response_frame(
+            ResponseFrame(id=request_id, ok=True, payload={"startedAt": started_at, "runId": run_id, "target": target})
+        )
+    )
+
+
+async def handle_market_read_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    target = str(raw.get("target") or "market").strip() or "market"
+    runtime = _runtime(orchestrator)
+    read = runtime.store.load_market_read() if target == "market" else runtime.store.load_ticker_read(target)
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"target": target, "read": read})))
+
+
+def _interpret_provider(orchestrator):
+    providers = getattr(orchestrator, "_providers", None)
+    if isinstance(providers, dict):
+        return providers.get("openai-codex")
+    return None
+
+
+def _track_task(orchestrator, task: asyncio.Task) -> None:
     background_tasks = getattr(orchestrator, "_background_tasks", None)
     if isinstance(background_tasks, set):
         background_tasks.add(task)
         task.add_done_callback(background_tasks.discard)
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": started_at, "runId": run_id})))
 
 
 def _runtime(orchestrator) -> MarketRuntime:

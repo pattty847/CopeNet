@@ -63,6 +63,8 @@ from .rpc_messaging import (
 )
 from .rpc_market import (
     handle_market_dashboard_get,
+    handle_market_interpret,
+    handle_market_read_get,
     handle_market_refresh,
     handle_market_ticker_get,
     handle_market_universe_get,
@@ -117,4 +119,6 @@ __all__ = [
     "handle_market_ticker_get",
     "handle_market_universe_get",
     "handle_market_refresh",
+    "handle_market_interpret",
+    "handle_market_read_get",
 ]

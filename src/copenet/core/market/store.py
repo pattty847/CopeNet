@@ -75,6 +75,25 @@ class MarketStore:
             return payload
         return DashboardPayload.empty(as_of="as of no market refresh yet").to_wire()
 
+    def save_market_read(self, read: dict[str, Any]) -> None:
+        with self._lock:
+            write_json_atomic(self._root / "latest-market-read.json", read)
+
+    def load_market_read(self) -> dict[str, Any] | None:
+        payload = read_json(self._root / "latest-market-read.json", None)
+        return payload if isinstance(payload, dict) and payload else None
+
+    def save_ticker_read(self, symbol: str, read: dict[str, Any]) -> None:
+        with self._lock:
+            write_json_atomic(self._reads_path(symbol), read)
+
+    def load_ticker_read(self, symbol: str) -> dict[str, Any] | None:
+        payload = read_json(self._reads_path(symbol), None)
+        return payload if isinstance(payload, dict) and payload else None
+
+    def _reads_path(self, symbol: str) -> Path:
+        return self._root / "reads" / f"{symbol.upper()}.json"
+
     def _bars_path(self, symbol: str, timeframe: str) -> Path:
         return self._root / "bars" / f"{symbol.upper()}-{timeframe}.json"
 

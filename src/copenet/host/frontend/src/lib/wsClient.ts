@@ -105,7 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketDashboardRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc } from './wsMarketRpc';
+import { marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc } from './wsMarketRpc';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -612,6 +612,14 @@ class WsClient {
 
   async marketRefresh(scope: 'all' | 'macro' | 'signals' | 'edgar' = 'all') {
     return marketRefreshRpc(this.request.bind(this), scope);
+  }
+
+  async marketInterpret(target: string = 'market') {
+    return marketInterpretRpc(this.request.bind(this), target);
+  }
+
+  async marketReadGet(target: string = 'market') {
+    return marketReadGetRpc(this.request.bind(this), target);
   }
 
   async listPulses(): Promise<PulseRecord[]> {

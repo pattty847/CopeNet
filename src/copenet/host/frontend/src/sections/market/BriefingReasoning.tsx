@@ -5,7 +5,7 @@
 // will show the model's captured reasoning instead.
 
 import { useEffect } from 'react';
-import type { DashboardPayload } from './types';
+import type { DashboardPayload, MarketRead } from './types';
 import { MM, mono, toneColor } from './marketUi';
 
 function regimeLogic(breadthPct: number, vix: number): { call: string; rule: string } {
@@ -26,9 +26,19 @@ const sectionLabel = {
   marginBottom: 8,
 };
 
-export function BriefingReasoning({ dash, onClose }: { dash: DashboardPayload; onClose: () => void }) {
+export function BriefingReasoning({
+  dash,
+  read,
+  onClose,
+}: {
+  dash: DashboardPayload;
+  read?: MarketRead | null;
+  onClose: () => void;
+}) {
   const b = dash.briefing.data;
   const logic = regimeLogic(b.breadthPct, b.vix);
+  const headline = read?.headline || b.headline;
+  const killers = read && read.thesisKillers.length ? read.thesisKillers : dash.contrarian.data;
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -37,7 +47,7 @@ export function BriefingReasoning({ dash, onClose }: { dash: DashboardPayload; o
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
-  const ruleBased = true; // briefing synthesis is deterministic today (not yet an LLM)
+  const ruleBased = !read; // deterministic rules unless a model read exists
 
   return (
     <div
@@ -52,7 +62,7 @@ export function BriefingReasoning({ dash, onClose }: { dash: DashboardPayload; o
         <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '17px 18px', borderBottom: `1px solid ${MM.border}` }}>
           <div>
             <div style={{ ...sectionLabel, color: MM.accent, marginBottom: 6 }}>Why this read</div>
-            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: MM.text, lineHeight: 1.15 }}>{b.headline}</div>
+            <div style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: MM.text, lineHeight: 1.15 }}>{headline}</div>
           </div>
           <button onClick={onClose} style={{ cursor: 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '4px 9px', font: '600 10px Inter' }}>esc</button>
         </div>
@@ -61,9 +71,16 @@ export function BriefingReasoning({ dash, onClose }: { dash: DashboardPayload; o
           {/* the logic */}
           <div>
             <div style={sectionLabel}>How the call was formed</div>
-            <div style={{ fontSize: 12.5, color: MM.textSoft, lineHeight: 1.55 }}>
-              Regime read is <span style={{ color: MM.accent, fontWeight: 600 }}>{logic.call}</span> because {logic.rule}.
-            </div>
+            {read ? (
+              <div style={{ fontSize: 12.5, color: MM.textSoft, lineHeight: 1.55 }}>
+                Regime read is <span style={{ color: MM.accent, fontWeight: 600 }}>{read.regime}</span>. {read.regimeReasoning}
+                {read.caveats && <div style={{ marginTop: 8, fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>Caveats: {read.caveats}</div>}
+              </div>
+            ) : (
+              <div style={{ fontSize: 12.5, color: MM.textSoft, lineHeight: 1.55 }}>
+                Regime read is <span style={{ color: MM.accent, fontWeight: 600 }}>{logic.call}</span> because {logic.rule}.
+              </div>
+            )}
             <div style={{ display: 'flex', gap: 18, marginTop: 10 }}>
               <div><div style={{ fontFamily: mono, fontSize: 16, color: MM.text }}>{b.vix.toFixed(1)}</div><div style={{ ...sectionLabel, marginBottom: 0, marginTop: 2 }}>VIX</div></div>
               <div><div style={{ fontFamily: mono, fontSize: 16, color: MM.up }}>{b.breadthPct.toFixed(0)}%</div><div style={{ ...sectionLabel, marginBottom: 0, marginTop: 2 }}>Breadth</div></div>
@@ -100,11 +117,11 @@ export function BriefingReasoning({ dash, onClose }: { dash: DashboardPayload; o
           )}
 
           {/* thesis-killers */}
-          {dash.contrarian.data.length > 0 && (
+          {killers.length > 0 && (
             <div>
               <div style={{ ...sectionLabel, color: MM.accent }}>◆ What would make this wrong</div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 9 }}>
-                {dash.contrarian.data.map((c, i) => (
+                {killers.map((c, i) => (
                   <div key={i} style={{ borderLeft: `2px solid rgba(251,148,35,.3)`, paddingLeft: 11 }}>
                     <div style={{ font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', color: MM.muted, marginBottom: 3 }}>{c.signal}</div>
                     <div style={{ fontSize: 11.5, color: MM.textSoft, lineHeight: 1.5 }}>{c.kill}</div>
@@ -114,10 +131,16 @@ export function BriefingReasoning({ dash, onClose }: { dash: DashboardPayload; o
             </div>
           )}
 
+          {read && (
+            <div style={{ borderTop: `1px solid ${MM.border}`, paddingTop: 12, fontSize: 10.5, color: MM.dim, fontStyle: 'italic', lineHeight: 1.5 }}>
+              Read generated by {read.model} from the computed facts above — an interpretation with caveats, not a forecast.
+              Base rates are quoted from calibration, never invented.
+            </div>
+          )}
           {ruleBased && (
             <div style={{ borderTop: `1px solid ${MM.border}`, paddingTop: 12, fontSize: 10.5, color: MM.dim, fontStyle: 'italic', lineHeight: 1.5 }}>
               This read is currently computed from the facts above by deterministic rules — not a language model.
-              A frontier-model narrative (reasoning over the same evidence, with explicit caveats) is a planned upgrade.
+              Run “✦ Model read” on the dashboard for a frontier-model interpretation of the same facts.
             </div>
           )}
         </div>

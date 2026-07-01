@@ -172,6 +172,35 @@ export interface ChartEvent {
   glyph: string;
 }
 
+// ---------- model reads (Insight Engine Phase D) ----------
+export interface MarketRead {
+  headline: string;
+  emphasis: string;
+  summary: string;
+  regime: 'risk-off' | 'chop' | 'risk-on' | 'event-risk';
+  regimeReasoning: string;
+  attention: { symbol: string; kind: string; why: string }[];
+  rotationRead: string;
+  speculativeComment: string;
+  thesisKillers: { signal: string; kill: string }[];
+  caveats: string;
+  model: string;
+  generatedAt: string;
+}
+
+export interface TickerRead {
+  read: string;
+  bullCase: string;
+  bearCase: string;
+  whatWouldChangeMyMind: string;
+  confidence: 'low' | 'medium' | 'high';
+  confidenceReason: string;
+  keyFacts: string[];
+  model: string;
+  generatedAt: string;
+  symbol?: string;
+}
+
 export interface InsightBaseRate {
   pattern: string;
   horizonWeeks: number;
