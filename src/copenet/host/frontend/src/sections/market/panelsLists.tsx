@@ -127,7 +127,7 @@ export function Portfolio({ panel, onOpen }: { panel: Panel<PortfolioData>; onOp
   );
 }
 
-export function Speculative({ panel, onOpen }: { panel: Panel<SpecPosition[]>; onOpen: (s: string) => void }) {
+export function Speculative({ panel, onOpen, comment }: { panel: Panel<SpecPosition[]>; onOpen: (s: string) => void; comment?: string }) {
   return (
     <div
       style={{
@@ -145,6 +145,12 @@ export function Speculative({ panel, onOpen }: { panel: Panel<SpecPosition[]>; o
         <span style={{ borderRadius: 999, border: `1px solid rgba(251,148,35,.28)`, padding: '2px 8px', font: '600 8px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>sized small</span>
       </div>
       <div style={{ fontSize: 11, color: MM.faint, marginBottom: 13, fontStyle: 'italic' }}>Separate from the core. Every position has a defined exit.</div>
+      {comment && (
+        <div style={{ fontSize: 11.5, color: MM.textSoft, fontStyle: 'italic', marginBottom: 12, lineHeight: 1.5, borderLeft: `2px solid rgba(90,143,199,.35)`, paddingLeft: 10 }}>
+          <span style={{ color: '#8fb8e8' }}>✦ </span>
+          {comment}
+        </div>
+      )}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 11 }}>
         {panel.data.map((s) => (
           <button key={s.symbol} onClick={() => onOpen(s.symbol)} style={{ cursor: 'pointer', border: `1px solid ${MM.border}`, borderRadius: 10, padding: 11, background: 'transparent', textAlign: 'left' }}>

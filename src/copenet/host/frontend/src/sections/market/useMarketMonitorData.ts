@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, TickerDetailPayload, UniverseAsset } from './types';
+import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerRead, UniverseAsset } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -99,6 +99,63 @@ export function useMarketUniverse(): UniverseAsset[] {
     };
   }, []);
   return universe;
+}
+
+/** Generic model-read lane (Insight Engine Phase D): load the stored read, and expose a
+ *  trigger that kicks market.interpret then polls market.read.get until a FRESH read lands
+ *  (generatedAt advances). The model call runs server-side in the background. */
+function useModelRead<T extends MarketRead | TickerRead>(target: string) {
+  const [read, setRead] = useState<T | null>(null);
+  const [running, setRunning] = useState(false);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    setRead(null);
+    wsClient
+      .marketReadGet(target)
+      .then((next) => {
+        if (alive.current && next) setRead(next as T);
+      })
+      .catch(() => {});
+    return () => {
+      alive.current = false;
+    };
+  }, [target]);
+
+  const run = useCallback(async () => {
+    setRunning(true);
+    const before = (read as { generatedAt?: string } | null)?.generatedAt || '';
+    try {
+      await wsClient.marketInterpret(target);
+      for (let i = 0; i < 30 && alive.current; i += 1) {
+        await sleep(3000);
+        try {
+          const next = await wsClient.marketReadGet(target);
+          if (next && (next as { generatedAt?: string }).generatedAt !== before) {
+            if (alive.current) setRead(next as T);
+            break;
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+      }
+    } catch {
+      /* provider unavailable — leave the read as-is */
+    } finally {
+      if (alive.current) setRunning(false);
+    }
+  }, [target, read]);
+
+  return { read, running, run };
+}
+
+export function useMarketRead() {
+  return useModelRead<MarketRead>('market');
+}
+
+export function useTickerRead(symbol: string) {
+  return useModelRead<TickerRead>(symbol);
 }
 
 export function useTickerDetail(symbol: string): TickerDetailPayload {

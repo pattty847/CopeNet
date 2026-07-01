@@ -1,12 +1,80 @@
 import { useState } from 'react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
-import { BriefingHero, MacroBoard, Rrg } from './panelsTop';
+import { BriefingHero, MacroBoard, ModelBadge, Rrg } from './panelsTop';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch } from './panelsLists';
-import { useMarketDashboard, useTickerDetail } from './useMarketMonitorData';
+import { useMarketDashboard, useMarketRead, useTickerDetail, useTickerRead } from './useMarketMonitorData';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
+
+const CONFIDENCE_COLORS: Record<string, string> = { low: '#d96d5f', medium: '#a29b90', high: '#69c589' };
+
+function TickerReadPanel({ symbol }: { symbol: string }) {
+  const { read, running, run } = useTickerRead(symbol);
+  return (
+    <div style={{ background: `linear-gradient(180deg, rgba(90,143,199,.06), transparent 45%), ${MM.panel}`, border: `1px solid rgba(90,143,199,.22)`, borderRadius: 14, padding: 16 }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: read ? 12 : 0, flexWrap: 'wrap' }}>
+        <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: '#8fb8e8' }}>
+          ✦ Model read — {symbol}
+        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {read && <ModelBadge model={read.model} generatedAt={read.generatedAt} />}
+          <button
+            onClick={() => void run()}
+            disabled={running}
+            style={{ cursor: running ? 'default' : 'pointer', border: `1px solid rgba(90,143,199,.35)`, background: 'rgba(90,143,199,.1)', color: '#8fb8e8', borderRadius: 9, padding: '7px 13px', font: '600 10px Inter', letterSpacing: '.05em', opacity: running ? 0.6 : 1 }}
+          >
+            {running ? '◍ Reading the tape…' : read ? '↻ Re-run read' : '✦ Run model read'}
+          </button>
+        </div>
+      </div>
+      {!read && !running && (
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', marginTop: 8 }}>
+          Sends this asset's computed fact packet to GPT-5.5 for a deeper interpretation — bull case, bear case, and what would change its mind.
+        </div>
+      )}
+      {running && !read && (
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', marginTop: 8 }}>The model is reading the computed facts — usually 10–30 seconds…</div>
+      )}
+      {read && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+          <div style={{ fontSize: 13, color: MM.textSoft, lineHeight: 1.6 }}>{read.read}</div>
+          <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
+            <div style={{ flex: 1, minWidth: 240, borderLeft: `2px solid rgba(105,197,137,.4)`, paddingLeft: 11 }}>
+              <div style={{ font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.up, marginBottom: 5 }}>Bull case</div>
+              <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{read.bullCase}</div>
+            </div>
+            <div style={{ flex: 1, minWidth: 240, borderLeft: `2px solid rgba(217,109,95,.4)`, paddingLeft: 11 }}>
+              <div style={{ font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.down, marginBottom: 5 }}>Bear case</div>
+              <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{read.bearCase}</div>
+            </div>
+          </div>
+          <div style={{ borderLeft: `2px solid rgba(251,148,35,.35)`, paddingLeft: 11 }}>
+            <div style={{ font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.accent, marginBottom: 5 }}>What would change its mind</div>
+            <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{read.whatWouldChangeMyMind}</div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
+            <span style={{ borderRadius: 999, border: `1px solid ${MM.border}`, padding: '3px 9px', font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: CONFIDENCE_COLORS[read.confidence] || MM.muted }}>
+              confidence: {read.confidence}
+            </span>
+            <span style={{ fontSize: 11, color: MM.dim, fontStyle: 'italic', flex: 1, minWidth: 200 }}>{read.confidenceReason}</span>
+          </div>
+          {read.keyFacts.length > 0 && (
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+              {read.keyFacts.map((f, i) => (
+                <span key={i} style={{ fontFamily: mono, fontSize: 10, color: MM.muted, border: `1px solid ${MM.border}`, borderRadius: 7, padding: '3px 8px' }}>{f}</span>
+              ))}
+            </div>
+          )}
+          <div style={{ fontSize: 10, color: MM.dimmer, fontStyle: 'italic' }}>
+            Model interpretation of computed facts — an opinion with caveats, not a forecast. Base rates quoted from calibration.
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void }) {
   const td = useTickerDetail(symbol);
@@ -97,12 +165,14 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
           </div>
         </div>
       </div>
+      <TickerReadPanel symbol={symbol} />
     </div>
   );
 }
 
 export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh } = useMarketDashboard();
+  const { read: marketRead, running: reading, run: runRead } = useMarketRead();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
 
@@ -124,29 +194,48 @@ export function MarketMonitor() {
             <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? MM.up : MM.dim }} />
             {live ? 'Live data' : 'Illustrative preview'} · {dash.asOf}
           </span>
-          <button
-            onClick={() => void refresh()}
-            disabled={refreshing}
-            style={{
-              cursor: refreshing ? 'default' : 'pointer',
-              border: `1px solid ${MM.borderHi}`,
-              background: MM.accentSoft,
-              color: MM.accent,
-              borderRadius: 9,
-              padding: '7px 13px',
-              font: '600 10px Inter',
-              letterSpacing: '.05em',
-              opacity: refreshing ? 0.6 : 1,
-            }}
-          >
-            {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
-          </button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={() => void runRead()}
+              disabled={reading}
+              style={{
+                cursor: reading ? 'default' : 'pointer',
+                border: `1px solid rgba(90,143,199,.35)`,
+                background: 'rgba(90,143,199,.1)',
+                color: '#8fb8e8',
+                borderRadius: 9,
+                padding: '7px 13px',
+                font: '600 10px Inter',
+                letterSpacing: '.05em',
+                opacity: reading ? 0.6 : 1,
+              }}
+            >
+              {reading ? '◍ Reading the tape…' : '✦ Model read'}
+            </button>
+            <button
+              onClick={() => void refresh()}
+              disabled={refreshing}
+              style={{
+                cursor: refreshing ? 'default' : 'pointer',
+                border: `1px solid ${MM.borderHi}`,
+                background: MM.accentSoft,
+                color: MM.accent,
+                borderRadius: 9,
+                padding: '7px 13px',
+                font: '600 10px Inter',
+                letterSpacing: '.05em',
+                opacity: refreshing ? 0.6 : 1,
+              }}
+            >
+              {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
+            </button>
+          </div>
         </div>
-        <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} />
+        <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
         <MacroBoard panel={dash.macro} />
         {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
         <div style={ROW}>
-          <Rrg panel={dash.rrg} onOpen={open} />
+          <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
           <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <AccumulationWatch panel={dash.accumulation} onOpen={open} />
             <TrendWatch panel={dash.trend} onOpen={open} />
@@ -154,17 +243,23 @@ export function MarketMonitor() {
         </div>
         <div style={ROW}>
           <Portfolio panel={dash.portfolio} onOpen={open} />
-          <Speculative panel={dash.speculative} onOpen={open} />
+          <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
         </div>
         <div style={ROW}>
           <Evidence panel={dash.evidence} onOpen={open} />
-          <Contrarian panel={dash.contrarian} />
+          <Contrarian
+            panel={
+              marketRead && marketRead.thesisKillers.length
+                ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
+                : dash.contrarian
+            }
+          />
         </div>
         <div style={{ textAlign: 'center', fontSize: 10.5, color: MM.dimmer, padding: '6px 0 14px' }}>
           Reads are evidence-based with caveats — never forecasts. Panels marked “preview” are illustrative until their live data loads.
         </div>
       </div>
-      {reasoningOpen && <BriefingReasoning dash={dash} onClose={() => setReasoningOpen(false)} />}
+      {reasoningOpen && <BriefingReasoning dash={dash} read={marketRead} onClose={() => setReasoningOpen(false)} />}
     </div>
   );
 }

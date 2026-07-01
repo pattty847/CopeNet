@@ -204,6 +204,8 @@ class CopeNetWsServer:
                                 "market.ticker.get",
                                 "market.universe.get",
                                 "market.refresh",
+                                "market.interpret",
+                                "market.read.get",
                                 "models.list",
                                 "tools.list",
                                 "sessions.list",

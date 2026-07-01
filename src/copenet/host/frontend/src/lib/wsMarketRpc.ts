@@ -2,7 +2,7 @@
 // already matches the typed contract in sections/market/types.ts, so these helpers just pass the
 // payload through. This is the only place the frontend touches the market.* wire methods.
 
-import type { DashboardPayload, TickerDetailPayload, UniverseAsset } from '../sections/market/types';
+import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerRead, UniverseAsset } from '../sections/market/types';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
@@ -33,4 +33,21 @@ export async function marketRefreshRpc(
 ): Promise<{ startedAt: string; runId: string }> {
   const payload = await request<Record<string, unknown>>('market.refresh', { scope });
   return { startedAt: String(payload.startedAt || ''), runId: String(payload.runId || '') };
+}
+
+export async function marketInterpretRpc(
+  request: WsRpcRequest,
+  target: string = 'market',
+): Promise<{ startedAt: string; runId: string }> {
+  const payload = await request<Record<string, unknown>>('market.interpret', { target });
+  return { startedAt: String(payload.startedAt || ''), runId: String(payload.runId || '') };
+}
+
+export async function marketReadGetRpc(
+  request: WsRpcRequest,
+  target: string = 'market',
+): Promise<MarketRead | TickerRead | null> {
+  const payload = await request<{ read?: unknown }>('market.read.get', { target });
+  const read = payload.read;
+  return read && typeof read === 'object' ? (read as MarketRead | TickerRead) : null;
 }
