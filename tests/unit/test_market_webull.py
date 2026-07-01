@@ -28,7 +28,8 @@ def test_config_absent_returns_none(monkeypatch):
 def test_normalize_positions_tolerates_vendor_key_variants():
     payload = {
         "data": [
-            {"symbol": "sofi", "quantity": "22.59539", "cost_price": "22.10", "unrealized_profit_loss_rate": "-17.7"},
+            # vendor P&L rate is a decimal FRACTION (verified live 2026-07-01): -0.177 == -17.7%
+            {"symbol": "sofi", "quantity": "22.59539", "cost_price": "22.10", "unrealized_profit_loss_rate": "-0.177"},
             {"ticker": "SLI", "qty": 29, "avgCost": 4.126},
             {"note": "row with no symbol should be skipped"},
         ]
@@ -37,14 +38,26 @@ def test_normalize_positions_tolerates_vendor_key_variants():
     assert [p.symbol for p in positions] == ["SOFI", "SLI"]
     assert positions[0].quantity == 22.59539
     assert positions[0].avg_cost == 22.10
+    assert positions[0].unrealized_pl_pct == -17.7  # fraction -> percent
     assert positions[1].avg_cost == 4.126
     assert len(warnings) == 1  # the skipped row is reported, not silently dropped
 
 
-def test_normalize_balance_variants():
-    balance = normalize_balance({"net_liquidation_value": "4,417.00", "cash_balance": "12.50", "currency": "USD"})
-    assert balance["total_equity"] == 4417.0
-    assert balance["cash"] == 12.5
+def test_normalize_balance_live_shape():
+    # exact key structure observed from a live US cash account (2026-07-01)
+    payload = {
+        "total_asset_currency": "USD",
+        "total_net_liquidation_value": "4,452.78",
+        "total_market_value": "4452.78",
+        "total_cash_balance": "0.00",
+        "account_currency_assets": [
+            {"currency": "USD", "cash_balance": "0.00", "settled_cash": "0.00", "buying_power": "0.00"}
+        ],
+    }
+    balance = normalize_balance(payload)
+    assert balance["total_equity"] == 4452.78
+    assert balance["cash"] == 0.0
+    assert balance["buying_power"] == 0.0
     assert balance["currency"] == "USD"
     empty = normalize_balance({})
     assert empty["total_equity"] is None  # missing data stays None, never fabricated

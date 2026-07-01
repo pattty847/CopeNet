@@ -133,6 +133,9 @@ def normalize_positions(payload: Any) -> tuple[list[WebullPosition], list[str]]:
         if not symbol or quantity is None:
             warnings.append("skipped a position row with no symbol/quantity")
             continue
+        # Webull returns the P&L *rate* as a decimal fraction (0.205 == +20.5%) — verified against a
+        # live account on 2026-07-01. Convert to percent here so every downstream consumer sees %.
+        pl_rate = _num(_pick(row, "unrealized_profit_loss_rate", "unrealizedProfitLossRate"))
         position = WebullPosition(
             symbol=str(symbol).upper(),
             quantity=quantity,
@@ -140,7 +143,7 @@ def normalize_positions(payload: Any) -> tuple[list[WebullPosition], list[str]]:
             last_price=_num(_pick(row, "last_price", "lastPrice", "market_price", "price")),
             market_value=_num(_pick(row, "market_value", "marketValue")),
             unrealized_pl=_num(_pick(row, "unrealized_profit_loss", "unrealizedProfitLoss", "unrealized_pl", "unrealizedProfitLossBase")),
-            unrealized_pl_pct=_num(_pick(row, "unrealized_profit_loss_rate", "unrealizedProfitLossRate")),
+            unrealized_pl_pct=round(pl_rate * 100, 2) if pl_rate is not None else None,
             asset_type=(str(_pick(row, "instrument_type", "instrumentType", "asset_type", "security_type") or "") or None),
         )
         if position.avg_cost is None:
@@ -150,14 +153,19 @@ def normalize_positions(payload: Any) -> tuple[list[WebullPosition], list[str]]:
 
 
 def normalize_balance(payload: Any) -> dict[str, Any]:
+    """Live payload shape (verified 2026-07-01): top level carries total_* fields, per-currency
+    detail (cash, buying power) nests under account_currency_assets[0]."""
     rows = _rows(payload)
     row = rows[0] if rows else {}
-    # account-level currency assets sometimes nest under accounts/currency lists; stay tolerant
+    assets = row.get("account_currency_assets")
+    detail = assets[0] if isinstance(assets, list) and assets and isinstance(assets[0], dict) else {}
     return {
-        "total_equity": _num(_pick(row, "net_liquidation_value", "netLiquidationValue", "total_asset", "totalAsset", "account_value", "total_market_value")),
-        "cash": _num(_pick(row, "cash_balance", "cashBalance", "cash", "settled_cash", "usable_cash")),
-        "buying_power": _num(_pick(row, "buying_power", "buyingPower", "day_buying_power")),
-        "currency": (str(_pick(row, "currency") or "") or None),
+        "total_equity": _num(
+            _pick(row, "total_net_liquidation_value", "net_liquidation_value", "netLiquidationValue", "total_asset", "totalAsset", "account_value", "total_market_value")
+        ),
+        "cash": _num(_pick(row, "total_cash_balance", "cash_balance", "cashBalance", "cash") or _pick(detail, "cash_balance", "settled_cash")),
+        "buying_power": _num(_pick(row, "buying_power", "buyingPower") or _pick(detail, "buying_power", "day_buying_power")),
+        "currency": (str(_pick(row, "total_asset_currency", "currency") or _pick(detail, "currency") or "") or None),
     }
 
 
