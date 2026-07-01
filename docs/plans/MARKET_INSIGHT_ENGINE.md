@@ -206,3 +206,17 @@ already baked into §9). Shipped + verified live + tested:
 
 **Open greenlight items (unchanged):** DuckDB store? confirm `soft_bottoming/8w` pre-registration
 (done as the v1 flagship)? base-rate universe scope (current: watchlist + drawdown basket, n=611).
+
+---
+
+## 11. Phase B+D SHIPPED 2026-07-01 (PR #17) — greenlit by Patrick
+
+Operator design: **GPT-5.5**, two lanes — automatic whole-market read per refresh + on-demand
+per-ticker read via a button on the detail page. Built: `fact_packets.py` (B), `interpretation.py`
+(D: prompts w/ honesty rails, JSON schemas, tolerant parsing, one-shot provider invocation),
+`runtime.interpret`, `market.interpret`/`market.read.get` RPCs (background — model calls exceed the
+15s ws timeout), reads persisted under `reads/`. Frontend: model read takes over the briefing hero
+(GPT-5.5 badge), regime hover reasoning, RRG rotation note, spec-lane comment, model thesis-killers,
+per-ticker read panel (bull/bear/change-my-mind/confidence/key facts). Verified live: model quotes
+base rates verbatim and stays humble ("only modest", "not decisively bullish"). 448 tests.
+Remaining from §9: DuckDB point-in-time store (greenlight pending), A2/C2 richer descriptors, E evals.
