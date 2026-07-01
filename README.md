@@ -278,3 +278,26 @@ COPNET_PORT=17124 uv run copenet
 CopeNet is actively evolving, but it is already a real operator workspace: persistent sessions, local-provider support, workflow surfaces, observability, and mobile-friendly remote access are all in place.
 
 The direction is simple: make local agent systems inspectable, composable, and actually useful for real workflows.
+
+## Webull Portfolio Sync (read-only)
+
+CopeNet can read your actual Webull positions/balances and (optionally) hand a sanitized portfolio
+context pack to the model reads. **Phase 1 is strictly read-only — no order placement, modification,
+or cancellation exists in the integration.** Credentials and tokens never reach any model or log.
+
+Setup:
+1. Apply for Webull OpenAPI individual access (developer.webull.com → OpenAPI Management) and create
+   an App Key + App Secret. Individual developers don't need IP whitelisting.
+2. Add to `.env` (gitignored): `WEBULL_KEY=…`, `WEBULL_SECRET=…` (optional `WEBULL_ENV=sandbox`).
+3. `uv run copenet webull auth` — then **approve the request in the Webull app on your phone**
+   (the SDK polls up to ~5 minutes). Tokens persist under `~/.copenet/data/market/webull/`.
+4. `uv run copenet webull accounts` → `uv run copenet webull select --account-id <id>`.
+5. `uv run copenet webull sync` — pulls balances + positions (prices enriched via yfinance;
+   Webull market data is a separate paid subscription and is not required).
+6. Dry-run the AI pack: `uv run copenet webull context` — prints the sanitized context pack only
+   and verifies no credentials are present. Nothing is sent anywhere.
+7. Opt in to model visibility: `INCLUDE_WEBULL_PORTFOLIO_CONTEXT=true` in `.env` (default **false**).
+   When enabled, market/ticker model reads include the sanitized pack (masked account id only).
+
+In the UI, the Market → Portfolio card shows its data source and a `↻ Webull` re-sync button.
+`uv run copenet webull status` shows auth/token state, the selected account, and last sync.

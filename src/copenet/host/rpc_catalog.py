@@ -68,6 +68,11 @@ from .rpc_market import (
     handle_market_refresh,
     handle_market_ticker_get,
     handle_market_universe_get,
+    handle_market_webull_account_select,
+    handle_market_webull_accounts,
+    handle_market_webull_auth,
+    handle_market_webull_status,
+    handle_market_webull_sync,
 )
 
 
@@ -121,4 +126,9 @@ __all__ = [
     "handle_market_refresh",
     "handle_market_interpret",
     "handle_market_read_get",
+    "handle_market_webull_status",
+    "handle_market_webull_auth",
+    "handle_market_webull_accounts",
+    "handle_market_webull_account_select",
+    "handle_market_webull_sync",
 ]

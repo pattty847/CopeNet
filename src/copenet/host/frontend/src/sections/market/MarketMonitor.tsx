@@ -171,10 +171,28 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
 }
 
 export function MarketMonitor() {
-  const { dashboard: dash, refreshing, live, refresh } = useMarketDashboard();
+  const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
   const { read: marketRead, running: reading, run: runRead } = useMarketRead();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
+  const [webullSyncing, setWebullSyncing] = useState(false);
+
+  const syncWebull = async () => {
+    setWebullSyncing(true);
+    try {
+      const { wsClient } = await import('../../lib/wsClient');
+      await wsClient.marketWebullSync();
+      // the sync + dashboard rebuild run server-side in the background; poll the stored result in
+      for (let i = 0; i < 8; i += 1) {
+        await new Promise((resolve) => setTimeout(resolve, 5000));
+        await reload();
+      }
+    } catch {
+      /* not configured / not authed — the Portfolio subtitle keeps showing the fallback source */
+    } finally {
+      setWebullSyncing(false);
+    }
+  };
 
   if (activeTicker) {
     return (
@@ -242,7 +260,7 @@ export function MarketMonitor() {
           </div>
         </div>
         <div style={ROW}>
-          <Portfolio panel={dash.portfolio} onOpen={open} />
+          <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
           <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
         </div>
         <div style={ROW}>

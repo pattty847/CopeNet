@@ -32,6 +32,11 @@ from .rpc_catalog import (
     handle_market_refresh,
     handle_market_ticker_get,
     handle_market_universe_get,
+    handle_market_webull_account_select,
+    handle_market_webull_accounts,
+    handle_market_webull_auth,
+    handle_market_webull_status,
+    handle_market_webull_sync,
     handle_models_list,
     handle_persona_context_get,
     handle_persona_flavor_draft,
@@ -243,6 +248,16 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_interpret(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.read.get":
         await handle_market_read_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.status":
+        await handle_market_webull_status(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.auth":
+        await handle_market_webull_auth(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.accounts":
+        await handle_market_webull_accounts(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.account.select":
+        await handle_market_webull_account_select(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.sync":
+        await handle_market_webull_sync(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.merge.create":

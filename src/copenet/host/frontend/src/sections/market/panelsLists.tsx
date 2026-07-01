@@ -98,18 +98,41 @@ export function TrendWatch({ panel, onOpen }: { panel: Panel<TrendRow[]>; onOpen
   );
 }
 
-export function Portfolio({ panel, onOpen }: { panel: Panel<PortfolioData>; onOpen: (s: string) => void }) {
+export function Portfolio({
+  panel,
+  onOpen,
+  onSyncWebull,
+  syncing,
+}: {
+  panel: Panel<PortfolioData>;
+  onOpen: (s: string) => void;
+  onSyncWebull?: () => void;
+  syncing?: boolean;
+}) {
   const p = panel.data;
+  const fromWebull = (panel.note || '').toLowerCase().includes('webull');
   return (
     <PanelCard
       title="Portfolio · live P&L"
       status={panel.status}
-      subtitle="Disciplined core · live P&L"
+      subtitle={panel.note || 'Disciplined core · live P&L'}
       style={{ flex: 1.4, minWidth: 380 }}
       right={
-        <div style={{ textAlign: 'right' }}>
-          <div style={{ fontFamily: mono, fontSize: 17, color: MM.text }}>{p.total}</div>
-          <div style={{ fontFamily: mono, fontSize: 11, color: toneColor(p.pnlTone) }}>{p.pnl}</div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {onSyncWebull && (
+            <button
+              onClick={onSyncWebull}
+              disabled={syncing}
+              title={fromWebull ? 'Re-sync positions from Webull (read-only)' : 'Sync positions from Webull (read-only)'}
+              style={{ cursor: syncing ? 'default' : 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', opacity: syncing ? 0.6 : 1 }}
+            >
+              {syncing ? '◍ Syncing…' : '↻ Webull'}
+            </button>
+          )}
+          <div style={{ textAlign: 'right' }}>
+            <div style={{ fontFamily: mono, fontSize: 17, color: MM.text }}>{p.total}</div>
+            <div style={{ fontFamily: mono, fontSize: 11, color: toneColor(p.pnlTone) }}>{p.pnl}</div>
+          </div>
         </div>
       }
     >
