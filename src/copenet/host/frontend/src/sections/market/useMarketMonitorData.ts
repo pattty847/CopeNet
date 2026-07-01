@@ -21,6 +21,8 @@ export interface MarketDashboardState {
   refreshing: boolean;
   live: boolean;
   refresh: () => Promise<void>;
+  /** Re-pull the stored dashboard without triggering a new compute (used after server-side syncs). */
+  reload: () => Promise<void>;
 }
 
 export function useMarketDashboard(): MarketDashboardState {
@@ -57,6 +59,19 @@ export function useMarketDashboard(): MarketDashboardState {
     }
   }, []);
 
+  const reload = useCallback(async () => {
+    try {
+      const next = await wsClient.marketDashboard();
+      if (!cancelled.current && isPopulated(next)) {
+        setDashboard(next);
+        setLive(true);
+        lastAsOf.current = next.asOf;
+      }
+    } catch {
+      /* offline — keep what we have */
+    }
+  }, []);
+
   useEffect(() => {
     cancelled.current = false;
     // Show the stored snapshot instantly. Only auto-compute when the store is empty — otherwise a
@@ -81,7 +96,7 @@ export function useMarketDashboard(): MarketDashboardState {
     };
   }, [refresh]);
 
-  return { dashboard, refreshing, live, refresh };
+  return { dashboard, refreshing, live, refresh, reload };
 }
 
 export function useMarketUniverse(): UniverseAsset[] {

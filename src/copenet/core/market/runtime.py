@@ -33,6 +33,9 @@ from .fact_packets import market_fact_packet, ticker_fact_packet
 from .features import compute_features
 from .interpretation import generate_market_read, generate_ticker_read
 from .signals import compute_price_signals, compute_rrg_tail
+from .webull.config import include_portfolio_context_enabled
+from .webull.context_pack import build_portfolio_context_pack
+from .webull.sync import load_snapshot as load_webull_snapshot
 from .store import MarketStore
 from .synthesis import synthesize_briefing
 from .universe import MACRO_SYMBOLS, PORTFOLIO_BASIS, SECTOR_SYMBOLS, UNIVERSE, find_asset
@@ -111,6 +114,13 @@ class MarketRuntime:
         sb_rate = load_base_rate("soft_bottoming", 8)
         if target == "market":
             packet = market_fact_packet(self.store.load_dashboard_wire(), sb_rate)
+            # Opt-in only (INCLUDE_WEBULL_PORTFOLIO_CONTEXT=true): append the sanitized account
+            # context pack. Built from whitelisted snapshot fields — no credentials/tokens exist
+            # anywhere in its inputs.
+            if include_portfolio_context_enabled():
+                snapshot = load_webull_snapshot()
+                if snapshot:
+                    packet = f"{packet}\n\n{build_portfolio_context_pack(snapshot)}"
             read = await generate_market_read(provider, packet, model=model, generated_at=generated_at)
             wire = read.to_wire()
             self.store.save_market_read(wire)
@@ -130,6 +140,14 @@ class MarketRuntime:
             verdict=[{"bench": v.bench, "label": v.label} for v in verdict],
             evidence=[{"type": e.type, "headline": e.headline, "source": e.source} for e in evidence],
         )
+        if include_portfolio_context_enabled():
+            snapshot = load_webull_snapshot()
+            held = next((p for p in (snapshot or {}).get("positions", []) if p.get("symbol") == symbol), None)
+            if held:
+                packet += (
+                    f"\nOPERATOR POSITION (Webull): holds {held.get('quantity')} sh @ avg {held.get('avg_cost')}"
+                    f" · unrealized P&L {held.get('unrealized_pl_pct')}% · {held.get('allocation_pct')}% of portfolio."
+                )
         read = await generate_ticker_read(provider, packet, model=model, generated_at=generated_at)
         wire = read.to_wire()
         wire["symbol"] = symbol
@@ -231,9 +249,15 @@ class MarketRuntime:
         if rrg:
             dashboard.rrg = MarketPanel(status="live", data=rrg, as_of=_now_iso())
 
-        portfolio = _portfolio_panel(weekly)
+        webull_snapshot = load_webull_snapshot()
+        if webull_snapshot and webull_snapshot.get("positions"):
+            portfolio = _portfolio_panel_from_webull(webull_snapshot)
+            note = f"account data: Webull · synced {webull_snapshot.get('synced_at', 'unknown')}"
+        else:
+            portfolio = _portfolio_panel(weekly)
+            note = "account data: configured cost basis · prices: yfinance"
         if portfolio.positions:
-            dashboard.portfolio = MarketPanel(status="live", data=portfolio, as_of=_now_iso())
+            dashboard.portfolio = MarketPanel(status="live", data=portfolio, as_of=_now_iso(), note=note)
 
         speculative = _speculative_panel(weekly)
         if speculative:
@@ -312,6 +336,45 @@ def _build_insight(fs) -> TickerInsight:
         score=fs.soft_bottoming_score,
         components=components,
         base_rate=base_rate,
+    )
+
+
+def _portfolio_panel_from_webull(snapshot: dict) -> Portfolio:
+    """Build the portfolio panel from the synced (sanitized) Webull snapshot — real broker data."""
+    positions: list[PortfolioPosition] = []
+    total = 0.0
+    cost = 0.0
+    for row in snapshot.get("positions", []):
+        if not isinstance(row, dict) or not row.get("symbol"):
+            continue
+        quantity = float(row.get("quantity") or 0)
+        avg_cost = float(row.get("avg_cost") or 0)
+        last = row.get("last_price")
+        market_value = row.get("market_value")
+        pnl_pct = row.get("unrealized_pl_pct")
+        if market_value is not None:
+            total += float(market_value)
+        cost += quantity * avg_cost
+        positions.append(
+            PortfolioPosition(
+                symbol=str(row["symbol"]),
+                shares=quantity,
+                avg_cost=avg_cost,
+                last=f"${float(last):,.2f}" if last is not None else "n/a",
+                pnl_pct=f"{float(pnl_pct):+.1f}%" if pnl_pct is not None else "n/a",
+                tone="up" if (pnl_pct or 0) > 0 else "down" if (pnl_pct or 0) < 0 else "flat",
+                nudge="add zone" if (pnl_pct or 0) < -10 else None,
+            )
+        )
+    equity = snapshot.get("total_equity")
+    headline_total = float(equity) if equity is not None else total
+    pnl = total - cost
+    pnl_pct_total = (pnl / cost * 100) if cost else 0.0
+    return Portfolio(
+        total=f"${headline_total:,.0f}",
+        pnl=f"{pnl:+,.0f} · {pnl_pct_total:+.1f}%",
+        pnl_tone="up" if pnl > 0 else "down" if pnl < 0 else "flat",
+        positions=positions,
     )
 
 

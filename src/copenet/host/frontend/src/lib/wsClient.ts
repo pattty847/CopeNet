@@ -105,7 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc } from './wsMarketRpc';
+import { marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc } from './wsMarketRpc';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -620,6 +620,14 @@ class WsClient {
 
   async marketReadGet(target: string = 'market') {
     return marketReadGetRpc(this.request.bind(this), target);
+  }
+
+  async marketWebullStatus() {
+    return marketWebullStatusRpc(this.request.bind(this));
+  }
+
+  async marketWebullSync() {
+    return marketWebullSyncRpc(this.request.bind(this));
   }
 
   async listPulses(): Promise<PulseRecord[]> {

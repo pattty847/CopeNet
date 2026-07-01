@@ -43,6 +43,24 @@ export async function marketInterpretRpc(
   return { startedAt: String(payload.startedAt || ''), runId: String(payload.runId || '') };
 }
 
+export interface WebullStatus {
+  configured: boolean;
+  auth?: { authenticated?: boolean; status?: string } | null;
+  account?: { accountId: string } | null;
+  lastSync?: string | null;
+  positionCount?: number;
+}
+
+export async function marketWebullStatusRpc(request: WsRpcRequest): Promise<WebullStatus> {
+  const payload = await request<Record<string, unknown>>('market.webull.status', {});
+  return payload as unknown as WebullStatus;
+}
+
+export async function marketWebullSyncRpc(request: WsRpcRequest): Promise<{ startedAt: string }> {
+  const payload = await request<Record<string, unknown>>('market.webull.sync', {});
+  return { startedAt: String(payload.startedAt || '') };
+}
+
 export async function marketReadGetRpc(
   request: WsRpcRequest,
   target: string = 'market',

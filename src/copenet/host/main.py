@@ -144,6 +144,16 @@ def _build_parser() -> argparse.ArgumentParser:
     wallpaper_subparsers.add_parser("uninstall-agent", help="Remove the APOD wallpaper LaunchAgent")
     wallpaper_subparsers.add_parser("status", help="Show APOD wallpaper LaunchAgent status")
 
+    webull = subparsers.add_parser("webull", help="Read-only Webull portfolio sync (no trading)")
+    webull_subparsers = webull.add_subparsers(dest="webull_command", required=True)
+    webull_subparsers.add_parser("auth", help="Authenticate — approve the request in your Webull mobile app when prompted")
+    webull_subparsers.add_parser("status", help="Show auth/token state, selected account, and last sync (no secrets)")
+    webull_subparsers.add_parser("accounts", help="List available Webull accounts")
+    webull_select = webull_subparsers.add_parser("select", help="Select the default account for syncs")
+    webull_select.add_argument("--account-id", required=True, help="Webull account id from `webull accounts`")
+    webull_subparsers.add_parser("sync", help="Pull balances + positions (read-only) into the local snapshot")
+    webull_subparsers.add_parser("context", help="Dry-run: print the sanitized AI portfolio context pack (never sends anything)")
+
     return parser
 
 
@@ -336,6 +346,84 @@ def _wallpaper_result_line(result) -> str:
 
 
 
+def _run_webull_command(args) -> None:
+    """Read-only Webull portfolio sync CLI. Never prints credentials or tokens."""
+    import json as _json
+
+    from copenet.core.market.webull.client import auth_status, select_account, selected_account
+    from copenet.core.market.webull.config import load_webull_config
+    from copenet.core.market.webull.sync import load_snapshot
+
+    config = load_webull_config()
+    if args.webull_command == "status":
+        snapshot = load_snapshot()
+        print("Webull configured:", "yes" if config else "no (set WEBULL_KEY / WEBULL_SECRET in .env)")
+        if config:
+            print("Environment:", config.env)
+        state = auth_status()
+        print("Auth:", state["status"], f"(token valid until {state['expires']})" if state.get("expires") else "")
+        account = selected_account()
+        print("Selected account:", account["accountId"] if account else "none — run `copenet webull accounts` then `select`")
+        print("Last sync:", snapshot.get("synced_at") if snapshot else "never", f"({len(snapshot.get('positions', []))} positions)" if snapshot else "")
+        return
+    if config is None:
+        print("Webull is not configured. Add WEBULL_KEY and WEBULL_SECRET to .env first.")
+        return
+    if args.webull_command == "auth":
+        from copenet.core.market.webull.client import build_trade_client
+
+        print("Starting Webull authentication…")
+        print(">>> Open the Webull app on your PHONE and APPROVE the API access request (this polls up to ~5 minutes).")
+        build_trade_client(config)
+        state = auth_status()
+        print("Auth:", state["status"], f"(token valid until {state['expires']})" if state.get("expires") else "")
+        return
+    if args.webull_command == "accounts":
+        from copenet.core.market.webull.client import build_trade_client
+        from copenet.core.market.webull.sync import list_accounts
+
+        accounts = list_accounts(build_trade_client(config))
+        if not accounts:
+            print("No accounts returned.")
+            return
+        for account in accounts:
+            print(f"  {account['accountId']}  {account.get('accountType', '')}  {account.get('brokerName', '')}  {account.get('currency', '')}")
+        print("Select one with: uv run copenet webull select --account-id <id>")
+        return
+    if args.webull_command == "select":
+        payload = select_account(args.account_id)
+        print("Selected account:", payload["accountId"])
+        return
+    if args.webull_command == "sync":
+        from copenet.core.market.webull.client import build_trade_client
+        from copenet.core.market.webull.sync import fetch_snapshot
+
+        account = selected_account()
+        if account is None:
+            print("No account selected — run `copenet webull accounts` then `copenet webull select --account-id <id>`.")
+            return
+        snapshot = fetch_snapshot(build_trade_client(config), account["accountId"])
+        print(f"Fetched {len(snapshot.positions)} positions · equity {snapshot.total_equity} · synced {snapshot.synced_at}")
+        for warning in snapshot.warnings:
+            print("  warning:", warning)
+        return
+    if args.webull_command == "context":
+        from copenet.core.market.webull.context_pack import build_portfolio_context_pack
+
+        snapshot = load_snapshot()
+        if snapshot is None:
+            print("No snapshot yet — run `copenet webull sync` first.")
+            return
+        pack = build_portfolio_context_pack(snapshot)
+        for needle in (config.app_key, config.app_secret):
+            if needle and needle in pack:
+                raise SystemExit("REDACTION FAILURE: a credential appeared in the context pack — aborting.")
+        print(pack)
+        print("\n--- dry run only: nothing was sent to any model; no secrets present (verified) ---")
+        return
+    print(_json.dumps({"error": f"unknown webull command {args.webull_command}"}))
+
+
 def main() -> None:
     # Load `.env` first so secrets like NASA_API_KEY are present before any
     # Orchestrator (and its provider/store init) is constructed below.
@@ -358,6 +446,9 @@ def main() -> None:
         return
     if args.command == "nasa":
         _run_nasa_command(args)
+        return
+    if args.command == "webull":
+        _run_webull_command(args)
         return
 
     host = _resolve_bind_host(os.environ.get("COPNET_HOST", "127.0.0.1"))
