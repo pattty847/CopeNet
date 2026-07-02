@@ -128,7 +128,14 @@ class MarketRuntime:
 
         symbol = target.strip().upper()
         asset = find_asset(symbol)
-        weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
+        # Multi-year structure features need the full 5y weekly history; fetch live with a
+        # stored-bars fallback (same pattern as the chart path in ticker()).
+        try:
+            weekly_frame = fetch_ohlcv(symbol, interval="1wk", period="5y")
+            if weekly_frame.empty:
+                weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
+        except Exception:
+            weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
         voo_frame = _bars_to_frame(self.store.load_bars("VOO", "weekly"))
         fs = compute_features(weekly_frame, voo_frame, symbol=symbol)
         verdict = benchmark_verdict(weekly_frame, {"VOO": voo_frame})
@@ -160,7 +167,7 @@ class MarketRuntime:
         symbols = _symbols_for_scope(scope)
         for symbol in symbols:
             try:
-                weekly[symbol] = fetch_ohlcv(symbol, interval="1wk", period="3y")
+                weekly[symbol] = fetch_ohlcv(symbol, interval="1wk", period="5y")
                 daily[symbol] = fetch_ohlcv(symbol, interval="1d", period="6mo")
             except Exception:
                 weekly[symbol] = pd.DataFrame()

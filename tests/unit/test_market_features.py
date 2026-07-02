@@ -78,3 +78,26 @@ def test_no_lookahead_slice_independence():
     appended.loc[k:, "close"] = 999.0
     as_of_again = compute_features(appended.iloc[:k].copy(), symbol="A")
     assert as_of.to_dict() == as_of_again.to_dict()
+
+
+def test_multiyear_structure_uptrend_with_triangle():
+    """A 4-year uptrend that consolidates into a converging triangle near the highs — the
+    'accumulation wedge in a big uptrend' shape. Structure must see the LONG horizon."""
+    trend = list(np.linspace(100, 480, 170))
+    # converging oscillation around 430: lower highs, higher lows, shrinking amplitude
+    tri = [430 + amp * (1 if i % 2 == 0 else -1) for i, amp in enumerate(np.linspace(60, 8, 40))]
+    closes = trend + tri
+    fs = compute_features(_frame(closes), symbol="TRI")
+    assert fs.long_trend == "up"
+    assert fs.dist_hi_full is not None and fs.dist_hi_full < 0  # below the multi-year high
+    assert fs.pct_range_full is not None and fs.pct_range_full > 60  # upper part of full range
+    assert fs.range_ratio_12v36 is not None and fs.range_ratio_12v36 < 0.75  # contracting
+    assert fs.compression is True
+    assert fs.compression_shape in {"symmetrical", "descending", "ascending", "flat"}
+
+
+def test_structure_blank_on_thin_history():
+    fs = compute_features(_frame(list(np.linspace(100, 120, 20))), symbol="THIN")
+    assert fs.long_trend == "n/a"
+    assert fs.compression is False
+    assert fs.r_3y is None
