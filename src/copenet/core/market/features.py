@@ -81,6 +81,17 @@ class FeatureSet:
     sb_momentum_divergence: bool
     soft_bottoming_score: float
     soft_bottoming: bool
+    # multi-year structure (additive in v1 — computed from the FULL supplied history so the model
+    # sees the horizon a human sees on a 5y chart, not just the 52w tactical window)
+    r_3y: float | None = None
+    dist_hi_full: float | None = None
+    weeks_since_hi_full: int | None = None
+    pct_range_full: float | None = None
+    long_trend: str = "n/a"          # up | down | sideways over ~2y regression
+    long_trend_slope: float | None = None  # approx %/year
+    range_ratio_12v36: float | None = None  # last-12w range vs prior-24w range (<1 = contracting)
+    compression: bool = False
+    compression_shape: str | None = None  # symmetrical | ascending | descending | flat
 
     def to_dict(self) -> dict:
         return asdict(self)
@@ -105,7 +116,12 @@ def _normalize(frame: pd.DataFrame) -> pd.DataFrame:
     cols = {str(c).lower(): c for c in frame.columns}
     out = pd.DataFrame()
     date_col = cols.get("date") or cols.get("datetime")
-    out["date"] = pd.to_datetime(frame[date_col]) if date_col else pd.to_datetime(frame.index)
+    dates = pd.to_datetime(frame[date_col]) if date_col else pd.to_datetime(frame.index)
+    # live yfinance dates are tz-aware, stored bars are tz-naive — normalize so mixed-source
+    # joins (e.g. live asset vs stored benchmark) can never collide on timezone awareness
+    if getattr(dates.dt, "tz", None) is not None:
+        dates = dates.dt.tz_localize(None)
+    out["date"] = dates
     for name in ("open", "high", "low", "close", "volume"):
         out[name] = pd.to_numeric(frame[cols[name]], errors="coerce") if name in cols else np.nan
     return out.dropna(subset=["close"]).sort_values("date").reset_index(drop=True)
@@ -259,6 +275,7 @@ def compute_features(
     rsi_last = _f(rsi.iloc[-1]) if len(rsi.dropna()) else None
 
     sb = _soft_bottoming(close, ma10, rsi, drawdown_pct, rs_momentum, f if has_volume else None, thin)
+    structure = _structure(f)
 
     return FeatureSet(
         symbol=symbol,
@@ -299,6 +316,7 @@ def compute_features(
         has_volume=has_volume,
         thin_history=thin,
         **sb,
+        **structure,
     )
 
 
@@ -395,6 +413,94 @@ def _soft_bottoming(
         "sb_momentum_divergence": momentum_divergence,
         "soft_bottoming_score": round(score, 3),
         "soft_bottoming": soft_bottoming,
+    }
+
+
+def _structure(f: pd.DataFrame) -> dict:
+    """Multi-year structure facts from the FULL supplied history (deterministic, explainable).
+
+    Covers what a human reads off a long chart: where price sits in the multi-year range, the
+    long-horizon trend, and range compression / converging swings (triangle-style consolidation).
+    """
+    blanks = {
+        "r_3y": None,
+        "dist_hi_full": None,
+        "weeks_since_hi_full": None,
+        "pct_range_full": None,
+        "long_trend": "n/a",
+        "long_trend_slope": None,
+        "range_ratio_12v36": None,
+        "compression": False,
+        "compression_shape": None,
+    }
+    n = len(f)
+    if n < 40:
+        return blanks
+
+    close = f["close"].astype(float)
+    high = f["high"].astype(float) if f["high"].notna().any() else close
+    low = f["low"].astype(float) if f["low"].notna().any() else close
+    last = float(close.iloc[-1])
+
+    # Anchor the multi-year extremes to weekly CLOSES, not wick extremes — vendor data
+    # occasionally carries bad-tick spikes in high/low that a human reading a chart ignores.
+    full_hi = float(close.max())
+    full_lo = float(close.min())
+    r_3y = _f(_ret(close, 156)) if n > 156 else _f(_ret(close, n - 1))
+    dist_hi_full = _f((last / full_hi - 1) * 100) if full_hi else None
+    weeks_since_hi_full = int(n - 1 - int(np.argmax(close.to_numpy())))
+    pct_range_full = _f((last - full_lo) / (full_hi - full_lo) * 100) if full_hi > full_lo else None
+
+    # long trend: log-price regression over the last ~2y, annualized
+    window = close.iloc[-min(104, n):]
+    x = np.arange(len(window), dtype=float)
+    slope_per_week = float(np.polyfit(x, np.log(window.to_numpy()), 1)[0])
+    annual_pct = (math.exp(slope_per_week * 52) - 1) * 100
+    if annual_pct > 5:
+        long_trend = "up"
+    elif annual_pct < -5:
+        long_trend = "down"
+    else:
+        long_trend = "sideways"
+
+    # compression: recent 12w range vs the prior 24w range, plus converging swing extremes
+    range_ratio = None
+    compression = False
+    shape: str | None = None
+    if n >= 36:
+        recent_range = float(high.iloc[-12:].max() - low.iloc[-12:].min())
+        prior_range = float(high.iloc[-36:-12].max() - low.iloc[-36:-12].min())
+        if prior_range > 0:
+            range_ratio = _f(recent_range / prior_range)
+            hi4 = high.rolling(4).max().dropna().iloc[-16:]
+            lo4 = low.rolling(4).min().dropna().iloc[-16:]
+            if len(hi4) >= 8 and last:
+                xs = np.arange(len(hi4), dtype=float)
+                hi_slope = float(np.polyfit(xs, hi4.to_numpy(), 1)[0]) / last * 100  # %/wk of price
+                lo_slope = float(np.polyfit(np.arange(len(lo4), dtype=float), lo4.to_numpy(), 1)[0]) / last * 100
+                highs_falling = hi_slope < -0.05
+                lows_rising = lo_slope > 0.05
+                compression = range_ratio is not None and range_ratio < 0.75
+                if compression:
+                    if highs_falling and lows_rising:
+                        shape = "symmetrical"
+                    elif lows_rising:
+                        shape = "ascending"
+                    elif highs_falling:
+                        shape = "descending"
+                    else:
+                        shape = "flat"
+
+    return {
+        "r_3y": r_3y,
+        "dist_hi_full": dist_hi_full,
+        "weeks_since_hi_full": weeks_since_hi_full,
+        "pct_range_full": pct_range_full,
+        "long_trend": long_trend,
+        "long_trend_slope": _f(annual_pct),
+        "range_ratio_12v36": range_ratio,
+        "compression": compression,
+        "compression_shape": shape,
     }
 
 

@@ -120,6 +120,28 @@ def ticker_fact_packet(
             trend_bits.append(f"{label} MA {dist:+.1f}% away{slope_txt}")
     sections.append("TREND: " + "; ".join(trend_bits))
 
+    # multi-year structure — the horizon a human reads off a 5y chart
+    structure_bits = []
+    if fs.r_3y is not None:
+        structure_bits.append(f"3y return {fs.r_3y:+.0f}%")
+    if fs.dist_hi_full is not None and fs.weeks_since_hi_full is not None:
+        structure_bits.append(f"{fs.dist_hi_full:+.1f}% from the multi-year high set {fs.weeks_since_hi_full}w ago")
+    if fs.pct_range_full is not None:
+        structure_bits.append(f"at {fs.pct_range_full:.0f}% of the full historical range")
+    if fs.long_trend != "n/a" and fs.long_trend_slope is not None:
+        structure_bits.append(f"long trend (2y regression): {fs.long_trend} ~{fs.long_trend_slope:+.0f}%/yr")
+    if structure_bits:
+        years = fs.history_weeks / 52
+        sections.append(f"STRUCTURE (multi-year, {years:.1f}y of weekly history): " + "; ".join(structure_bits))
+    if fs.range_ratio_12v36 is not None:
+        line = f"RANGE BEHAVIOR: last-12w range is {fs.range_ratio_12v36:.2f}x the prior-24w range"
+        if fs.compression:
+            line += f" — CONSOLIDATION detected ({fs.compression_shape or 'compressed'}"
+            if fs.compression_shape == "symmetrical":
+                line += ": lower highs + higher lows converging"
+            line += ")"
+        sections.append(line)
+
     risk_bits = []
     if fs.drawdown_pct is not None:
         risk_bits.append(f"drawdown {fs.drawdown_pct:+.1f}% from 52w high")
