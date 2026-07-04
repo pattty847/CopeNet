@@ -6,6 +6,7 @@ from .contracts import ToolBlockedError, ToolExecutionContext, ToolExecutionRequ
 from .handlers.artifacts import DESCRIPTORS as ARTIFACT_DESCRIPTORS, HANDLERS as ARTIFACT_HANDLERS
 from .handlers.files import DESCRIPTORS as FILE_DESCRIPTORS, HANDLERS as FILE_HANDLERS
 from .handlers.git import DESCRIPTORS as GIT_DESCRIPTORS, HANDLERS as GIT_HANDLERS
+from .handlers.market import DESCRIPTORS as MARKET_DESCRIPTORS, HANDLERS as MARKET_HANDLERS
 from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMORY_HANDLERS
 from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
@@ -37,6 +38,8 @@ MANIFEST_TOOL_IDS = {
     "plan.write",
     "web.search",
     "web.fetch",
+    "market.dashboard",
+    "market.ticker",
     "persona.author",
     # Memory came back into the manifest redesigned as draft-first (§3.6 opt-in):
     # memory.read recalls, memory.write PROPOSES a draft that the operator approves.
@@ -59,6 +62,7 @@ ALL_DESCRIPTORS = (
     + WORKSPACE_INTEL_DESCRIPTORS
     + PLAN_DESCRIPTORS
     + WEB_DESCRIPTORS
+    + MARKET_DESCRIPTORS
     + USER_NOTE_DESCRIPTORS
 )
 ALL_HANDLERS = {
@@ -71,6 +75,7 @@ ALL_HANDLERS = {
     **WORKSPACE_INTEL_HANDLERS,
     **PLAN_HANDLERS,
     **WEB_HANDLERS,
+    **MARKET_HANDLERS,
     **USER_NOTE_HANDLERS,
 }
 

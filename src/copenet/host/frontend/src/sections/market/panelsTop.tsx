@@ -225,6 +225,26 @@ function smoothPath(p: { x: number; y: number }[]): string {
   return d;
 }
 
+// One distinct, legible-on-dark color per sector tail, assigned by symbol order so it stays stable across renders.
+const RRG_PALETTE = [
+  '#6fb8f2', // blue
+  '#f2a65a', // orange
+  '#7fd88f', // green
+  '#e07be0', // magenta
+  '#f2d75a', // yellow
+  '#f27b7b', // red
+  '#7be0c9', // teal
+  '#b39ddb', // violet
+  '#f2955a', // amber
+  '#8fc9f2', // sky
+  '#c9e07b', // lime
+];
+
+function rrgColor(symbol: string, allSymbols: string[]): string {
+  const idx = allSymbols.indexOf(symbol);
+  return RRG_PALETTE[idx % RRG_PALETTE.length];
+}
+
 export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen: (s: string) => void; note?: string }) {
   const W = 560;
   const H = 430;
@@ -281,23 +301,27 @@ export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen
               {q[0] as string}
             </text>
           ))}
-          {sectors.map((s) => {
-            const tail = s.pts.map((p) => ({ x: sx(p.x), y: sy(p.y) }));
-            if (!tail.length) return null;
-            const head = tail[tail.length - 1];
-            return (
-              <g key={s.symbol} style={{ cursor: 'pointer' }} onClick={() => onOpen(s.symbol)}>
-                <path d={smoothPath(tail)} clipPath="url(#rrgClip)" fill="none" stroke="rgba(254,252,244,.13)" strokeWidth={1.2} strokeLinecap="round" />
-                {tail.slice(0, -1).map((tp, ti) => (
-                  <circle key={ti} cx={tp.x} cy={tp.y} r={1.4} fill={MM.text} opacity={(ti / tail.length) * 0.4} />
-                ))}
-                <circle cx={head.x} cy={head.y} r={4.6} fill="#0c0c0d" stroke={MM.text} strokeWidth={1.6} />
-                <text x={head.x + 8} y={head.y + 3} fill={MM.textSoft} fontSize={9.5} fontWeight={600} fontFamily={mono}>
-                  {s.symbol}
-                </text>
-              </g>
-            );
-          })}
+          {(() => {
+            const allSymbols = sectors.map((s) => s.symbol);
+            return sectors.map((s) => {
+              const tail = s.pts.map((p) => ({ x: sx(p.x), y: sy(p.y) }));
+              if (!tail.length) return null;
+              const head = tail[tail.length - 1];
+              const color = rrgColor(s.symbol, allSymbols);
+              return (
+                <g key={s.symbol} style={{ cursor: 'pointer' }} onClick={() => onOpen(s.symbol)}>
+                  <path d={smoothPath(tail)} clipPath="url(#rrgClip)" fill="none" stroke={color} strokeWidth={1.3} strokeLinecap="round" opacity={0.55} />
+                  {tail.slice(0, -1).map((tp, ti) => (
+                    <circle key={ti} cx={tp.x} cy={tp.y} r={1.6} fill={color} opacity={(ti / tail.length) * 0.6 + 0.15} />
+                  ))}
+                  <circle cx={head.x} cy={head.y} r={4.6} fill="#0c0c0d" stroke={color} strokeWidth={1.8} />
+                  <text x={head.x + 8} y={head.y + 3} fill={color} fontSize={9.5} fontWeight={600} fontFamily={mono}>
+                    {s.symbol}
+                  </text>
+                </g>
+              );
+            });
+          })()}
         </svg>
       </div>
     </PanelCard>
