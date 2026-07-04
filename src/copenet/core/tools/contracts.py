@@ -339,6 +339,21 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
                 "wordCount": int(body.get("wordCount") or 0),
                 "text": text.rstrip()[:600],
             }
+    if tool_id == "market.dashboard":
+        regime = ((body.get("regime") or {}).get("data") or {}).get("current")
+        briefing = (body.get("briefing") or {}).get("data") or {}
+        return {
+            "type": "market_dashboard",
+            "regime": regime,
+            "headline": briefing.get("headline") if isinstance(briefing, dict) else None,
+        }
+    if tool_id == "market.ticker":
+        return {
+            "type": "market_ticker",
+            "symbol": body.get("symbol"),
+            "last": body.get("last"),
+            "change": body.get("change"),
+        }
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")
@@ -533,7 +548,7 @@ def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
         return "web_search"
     if tool_id == "web.fetch":
         return "web_fetch"
-    if tool_id in {"context.prepare", "memory.read", "memory.write"}:
+    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker"}:
         return "context"
     return "raw"
 

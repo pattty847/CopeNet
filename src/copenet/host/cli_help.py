@@ -73,6 +73,7 @@ _ENV_VARS: list[tuple[str, str]] = [
     ("COPNET_WORKDIR", "workspace root for tools (default: current directory)"),
     ("COPNET_TOKEN", "gateway auth token (default: dev-token)"),
     ("COPNET_TRACE", "set to 1 to write per-run JSONL traces"),
+    ("COPNET_WEB_FETCH_ALLOWLIST", "comma-separated domains web.fetch/web.search may reach (default: unrestricted)"),
     ("NASA_API_KEY", "key for the NASA Picture of the Day feature (loaded from .env)"),
 ]
 

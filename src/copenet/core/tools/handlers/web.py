@@ -11,11 +11,17 @@ Both are ``side_effect="external"`` (they touch the network) but carry no write
 risk, so they sit in the ``web`` category which is auto-allowed in every task
 mode. The single network boundary is :func:`_http_get_text`; tests monkeypatch
 it so nothing in the suite reaches the real internet.
+
+Set ``COPNET_WEB_FETCH_ALLOWLIST`` (comma-separated apex domains) to restrict
+which hosts the model may fetch/surface — unset means unrestricted (today's
+default). ``web.fetch`` hard-blocks any other host; ``web.search`` filters its
+results down to matching hosts instead of erroring.
 """
 
 from __future__ import annotations
 
 import asyncio
+import os
 import re
 from html import unescape
 from urllib import error, parse, request
@@ -33,6 +39,23 @@ _SEARCH_ENDPOINT = "https://html.duckduckgo.com/html/"
 SEARCH_RESULT_LIMIT = 8
 SEARCH_SNIPPET_CHARS = 300
 FETCH_MAX_CHARS = 12000
+
+# Model-initiated web.fetch/web.search are the tool where an autonomous agent picks
+# its own URLs — a different trust boundary than user-pasted links (web_ingest.py's
+# other callers, e.g. media ingestion). Comma-separated apex domains; unset/empty
+# means unrestricted (today's default behavior). Matching includes subdomains, so
+# "reuters.com" also allows "www.reuters.com".
+_FETCH_ALLOWLIST_ENV = "COPNET_WEB_FETCH_ALLOWLIST"
+
+
+def _fetch_allowlist() -> set[str]:
+    raw = os.environ.get(_FETCH_ALLOWLIST_ENV, "")
+    return {domain.strip().lower() for domain in raw.split(",") if domain.strip()}
+
+
+def _host_allowed(hostname: str, allowlist: set[str]) -> bool:
+    host = hostname.lower().strip(".")
+    return any(host == domain or host.endswith(f".{domain}") for domain in allowlist)
 
 # One DuckDuckGo HTML result row: a result__a anchor (url + title) optionally
 # followed by a result__snippet anchor. We capture each separately and zip them
@@ -117,6 +140,9 @@ async def search_web(request: ToolExecutionRequest, context: ToolExecutionContex
         raise RuntimeError(f"web search failed: {exc.reason}") from exc
 
     results = _parse_search_results(html_text, limit=limit)
+    allowlist = _fetch_allowlist()
+    if allowlist:
+        results = [r for r in results if _host_allowed(parse.urlparse(r["url"]).hostname or "", allowlist)]
     if not results:
         return ToolExecutionResult(
             tool_id=request.tool_id,
@@ -137,6 +163,13 @@ async def fetch_web(request: ToolExecutionRequest, context: ToolExecutionContext
     url = str(request.arguments.get("url") or "").strip()
     if not url:
         raise ValueError("url is required")
+    allowlist = _fetch_allowlist()
+    if allowlist:
+        hostname = parse.urlparse(url if "://" in url else f"https://{url}").hostname or ""
+        if not _host_allowed(hostname, allowlist):
+            raise RuntimeError(
+                f"'{hostname}' is not in the configured fetch allowlist ({_FETCH_ALLOWLIST_ENV})"
+            )
     raw_max = request.arguments.get("maxChars")
     try:
         max_chars = int(raw_max) if raw_max is not None else FETCH_MAX_CHARS
