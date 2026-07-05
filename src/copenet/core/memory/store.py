@@ -11,7 +11,7 @@ from uuid import uuid4
 from copenet.core._json_store import read_json, write_json_atomic
 from copenet.core.sessions.session_store import utc_now_iso
 
-MemoryCategory = Literal["preference", "project_convention", "ongoing_priority", "fact"]
+MemoryCategory = Literal["preference", "project_convention", "ongoing_priority", "fact", "market_thesis"]
 
 
 def _text(value: Any) -> str:
@@ -24,7 +24,7 @@ def _optional_text(value: Any) -> str | None:
 
 
 def _string_list(value: Any) -> list[str]:
-    if not isinstance(value, list):
+    if not isinstance(value, (list, tuple)):
         return []
     return [text for item in value if (text := _text(item))]
 
@@ -50,7 +50,7 @@ class MemoryRecord:
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> "MemoryRecord":
         category = _text(raw.get("category") or raw.get("kind") or "")
-        if category not in {"preference", "project_convention", "ongoing_priority", "fact"}:
+        if category not in {"preference", "project_convention", "ongoing_priority", "fact", "market_thesis"}:
             category = "fact"
         created_at = _text(raw.get("createdAt") or raw.get("created_at")) or utc_now_iso()
         updated_at = _text(raw.get("updatedAt") or raw.get("updated_at")) or created_at

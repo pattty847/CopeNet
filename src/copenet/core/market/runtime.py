@@ -11,7 +11,7 @@ import pandas as pd
 from copenet._paths import default_sessions_dir
 
 from .benchmark import benchmark_verdict
-from .data_sources import fetch_ohlcv, frame_to_bars, macro_item_from_frame
+from .data_sources import fetch_fund_profile, fetch_ohlcv, frame_to_bars, macro_item_from_frame
 from .edgar import chart_events_from_evidence, fetch_evidence
 from .models import (
     AccumulationRow,
@@ -27,10 +27,11 @@ from .models import (
     SpecPosition,
     TickerDetailPayload,
     TickerInsight,
+    TickerIntelligence,
 )
 from .base_rates import load_base_rate
 from .fact_packets import market_fact_packet, ticker_fact_packet
-from .features import compute_features
+from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
 from .signals import compute_price_signals, compute_rrg_tail
 from .webull.config import include_portfolio_context_enabled
@@ -71,23 +72,31 @@ class MarketRuntime:
         weekly = _chart_bars("1wk", "5y", "weekly")
         monthly = _chart_bars("1mo", "10y", "monthly")
         weekly_frame = _bars_to_frame(weekly)
-        signals = self.store.load_signals(normalized)
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == normalized]
         last = weekly[-1].c if weekly else 0.0
         previous = weekly[-2].c if len(weekly) > 1 else last
         change_pct = ((last / previous) - 1) * 100 if previous else 0.0
-        if not signals and not weekly_frame.empty:
-            computed = compute_price_signals(weekly_frame)
-            signals = computed.__dict__
         voo_frame = _bars_to_frame(self.store.load_bars("VOO", "weekly"))
-        verdict = benchmark_verdict(
-            weekly_frame,
-            {
-                "VOO": voo_frame,
-                "XLK": _bars_to_frame(self.store.load_bars("XLK", "weekly")),
-            },
+        qqq_frame = _bars_to_frame(self.store.load_bars("QQQ", "weekly"))
+        # Always compute signals live from the same weekly_frame used below — the cached
+        # per-symbol signals (written by the last dashboard refresh) can be stale enough
+        # to disagree with the live-fetched intelligence packet (e.g. drawdown %) in the
+        # same response, which is confusing rather than just imprecise.
+        signals = compute_price_signals(weekly_frame, benchmark=voo_frame).__dict__ if not weekly_frame.empty else {}
+        benchmark_frames = {"VOO": voo_frame, "XLK": _bars_to_frame(self.store.load_bars("XLK", "weekly")), "QQQ": qqq_frame}
+        benchmark_frames.pop(normalized, None)  # never benchmark a symbol against itself
+        verdict = benchmark_verdict(weekly_frame, benchmark_frames)
+        fs = compute_features(weekly_frame, voo_frame, symbol=normalized)
+        insight = _build_insight(fs)
+        rotation = compute_rrg_tail(normalized, name, weekly_frame, voo_frame)
+        intelligence = _build_intelligence(
+            fs,
+            role=asset.role if asset else "unknown",
+            verdict=verdict,
+            rotation=rotation if rotation.tail else None,
+            portfolio=_portfolio_position_for_symbol(normalized, last=last),
+            exposure=fetch_fund_profile(normalized),
         )
-        insight = _build_insight(compute_features(weekly_frame, voo_frame, symbol=normalized))
         return TickerDetailPayload(
             symbol=normalized,
             name=name,
@@ -101,6 +110,7 @@ class MarketRuntime:
             events=chart_events_from_evidence(evidence),
             kill="This read is wrong if price, volume, and benchmark-relative behavior stop confirming the thesis.",
             insight=insight,
+            intelligence=intelligence,
         )
 
     async def interpret(self, provider, *, target: str = "market", model: str = "gpt-5.5") -> dict:
@@ -346,6 +356,116 @@ def _build_insight(fs) -> TickerInsight:
     )
 
 
+def _build_intelligence(
+    fs: FeatureSet,
+    *,
+    role: str,
+    verdict: list,
+    rotation,
+    portfolio: dict[str, Any] | None,
+    exposure: dict[str, Any] | None,
+) -> TickerIntelligence:
+    """Reshape the FeatureSet the Insight Engine already computes into a compact, agent-facing
+    packet — the numbers already exist, this just stops discarding all but the soft-bottoming flags."""
+    return TickerIntelligence(
+        as_of=fs.as_of,
+        asset_role=role,
+        trend={
+            "ma_stack": fs.ma_stack,
+            "long_trend": fs.long_trend,
+            "long_trend_slope_pct_per_year": fs.long_trend_slope,
+            "dist_ma10_pct": fs.dist_ma10,
+            "dist_ma30_pct": fs.dist_ma30,
+            "dist_ma40_pct": fs.dist_ma40,
+            "slope_ma10_pct": fs.slope_ma10,
+            "slope_ma30_pct": fs.slope_ma30,
+            "slope_ma40_pct": fs.slope_ma40,
+        },
+        momentum={
+            "rsi_14": fs.rsi_14,
+            "atr_pct": fs.atr_pct,
+            "atr_move_multiple": fs.atr_move,
+            "atr_percentile": fs.atr_pctile,
+            "vol_vs_avg": fs.vol_vs_avg,
+            "up_down_vol_ratio": fs.up_down_vol,
+        },
+        returns={
+            "r_1w_pct": fs.r_1w,
+            "r_4w_pct": fs.r_4w,
+            "r_13w_pct": fs.r_13w,
+            "r_26w_pct": fs.r_26w,
+            "r_52w_pct": fs.r_52w,
+            "r_ytd_pct": fs.r_ytd,
+            "r_3y_pct": fs.r_3y,
+        },
+        drawdown={
+            "drawdown_52w_pct": fs.drawdown_pct,
+            "weeks_since_52w_high": fs.weeks_since_high,
+            "pct_of_52w_range": fs.pct_52w,
+            "dist_from_full_history_high_pct": fs.dist_hi_full,
+            "weeks_since_full_history_high": fs.weeks_since_hi_full,
+            "pct_of_full_history_range": fs.pct_range_full,
+        },
+        volatility={
+            "vol_4w_annualized_pct": fs.vol_4w,
+            "vol_13w_annualized_pct": fs.vol_13w,
+            "vol_26w_annualized_pct": fs.vol_26w,
+            "beta_52w_vs_voo": fs.beta_52w,
+            "corr_52w_vs_voo": fs.corr_52w,
+        },
+        relative_strength={
+            "rs_ratio_vs_voo": fs.rs_ratio,
+            "rs_momentum_vs_voo": fs.rs_momentum,
+            "excess_return_13w_pct": fs.excess_13w,
+            "excess_return_26w_pct": fs.excess_26w,
+            "benchmarks": [{"symbol": v.bench, "verdict": v.label, "risk_adjusted_excess": v.pct} for v in verdict],
+        },
+        structure={
+            "compression": fs.compression,
+            "compression_shape": fs.compression_shape,
+            "range_ratio_12w_vs_36w": fs.range_ratio_12v36,
+        },
+        data_quality={
+            "history_weeks": fs.history_weeks,
+            "has_volume": fs.has_volume,
+            "thin_history": fs.thin_history,
+        },
+        rotation={"quadrant": rotation.quadrant, "benchmark": "VOO"} if rotation is not None else None,
+        portfolio=portfolio,
+        exposure=exposure,
+    )
+
+
+def _portfolio_position_for_symbol(symbol: str, *, last: float) -> dict[str, Any] | None:
+    """Best-effort portfolio join for a single symbol — Webull snapshot first, static cost-basis
+    fallback second. Mirrors the join already done for the whole-dashboard portfolio panel."""
+    snapshot = load_webull_snapshot()
+    if snapshot:
+        for row in snapshot.get("positions", []):
+            if isinstance(row, dict) and row.get("symbol") == symbol:
+                return {
+                    "shares": row.get("quantity"),
+                    "avg_cost": row.get("avg_cost"),
+                    "last_price": row.get("last_price"),
+                    "pnl_pct": row.get("unrealized_pl_pct"),
+                    "allocation_pct": row.get("allocation_pct"),
+                    "source": "webull",
+                }
+    basis = PORTFOLIO_BASIS.get(symbol)
+    if basis and last:
+        avg_cost = float(basis["avg_cost"])
+        pnl_pct = ((last / avg_cost) - 1) * 100 if avg_cost else None
+        return {
+            "shares": basis["shares"],
+            "avg_cost": avg_cost,
+            "last_price": last,
+            "pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
+            "allocation_pct": None,
+            "source": "configured cost basis",
+        }
+    return None
+
+
 def _portfolio_panel_from_webull(snapshot: dict) -> Portfolio:
     """Build the portfolio panel from the synced (sanitized) Webull snapshot — real broker data."""
     positions: list[PortfolioPosition] = []
@@ -445,13 +565,13 @@ def _speculative_panel(frames: dict[str, pd.DataFrame]) -> list[SpecPosition]:
 
 def _signal_rows(signals: dict[str, Any]) -> list[SignalRow]:
     mapping = {
-        "below_ma": "Below 40W MA",
-        "drawdown": "Drawdown",
+        "below_ma": "Dist from 40W MA",
+        "drawdown": "Drawdown (52w)",
         "rsi": "RSI",
         "relative_strength": "Relative strength",
         "mama_regime": "MAMA/FAMA",
         "atr_move": "ATR move",
-        "volume_vs_avg": "Volume",
+        "volume_vs_avg": "Volume vs 20D avg",
     }
     rows = []
     for key, label in mapping.items():

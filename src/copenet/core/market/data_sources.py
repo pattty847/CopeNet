@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import timezone
+from typing import Any
 
 import pandas as pd
 
@@ -50,6 +51,44 @@ def frame_to_bars(frame: pd.DataFrame) -> list[MarketBar]:
             )
         )
     return bars
+
+
+def fetch_fund_profile(symbol: str) -> dict[str, Any] | None:
+    """Best-effort ETF/fund exposure via yfinance (`funds_data`). Individual stocks and any lookup
+    failure return None — there is no fallback data source, so callers must treat this as optional.
+    """
+    try:
+        import yfinance as yf
+
+        funds_data = yf.Ticker(yf_symbol(symbol)).funds_data
+        top_holdings = funds_data.top_holdings
+        sector_weightings = funds_data.sector_weightings
+    except Exception:
+        return None
+    holdings: list[dict[str, Any]] = []
+    if top_holdings is not None and not top_holdings.empty:
+        for row_symbol, row in top_holdings.reset_index().iterrows():
+            del row_symbol
+            symbol_col = row.iloc[0]
+            name = row.get("Name")
+            weight = row.get("Holding Percent")
+            holdings.append(
+                {
+                    "symbol": str(symbol_col),
+                    "name": str(name) if name is not None else None,
+                    "weightPct": round(float(weight) * 100, 2) if weight is not None else None,
+                }
+            )
+    sectors = {}
+    if isinstance(sector_weightings, dict):
+        sectors = {
+            str(key): round(float(value) * 100, 1)
+            for key, value in sector_weightings.items()
+            if isinstance(value, (int, float)) and value
+        }
+    if not holdings and not sectors:
+        return None
+    return {"source": "yfinance", "topHoldings": holdings, "sectorWeightPct": sectors}
 
 
 def macro_item_from_frame(label: str, frame: pd.DataFrame) -> MacroItem | None:

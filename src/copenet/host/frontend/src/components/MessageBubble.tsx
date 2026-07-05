@@ -182,13 +182,6 @@ export function MessageBubble({ message }: { message: Message }) {
         <div className="mb-1 flex items-center gap-2 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-operator-muted/85">
           <span>Assistant</span>
           <span className="tabular-nums text-operator-muted/55">{formatTimestamp(message.timestamp)}</span>
-          <button
-            onClick={handleCopy}
-            className="ml-auto inline-flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100 hover:text-operator-text"
-            title="Copy message"
-          >
-            {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}
-          </button>
         </div>
 
         <div className="px-1 text-[13.5px] leading-relaxed text-operator-text font-sans break-words">
@@ -214,6 +207,16 @@ export function MessageBubble({ message }: { message: Message }) {
               {message.errorMessage}
             </div>
           )}
+        </div>
+
+        <div className="mt-1 flex items-center px-1 text-[10px] text-operator-muted/70">
+          <button
+            onClick={handleCopy}
+            className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
+            title="Copy message"
+          >
+            {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}
+          </button>
         </div>
       </div>
     </div>

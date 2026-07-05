@@ -6,7 +6,13 @@ from copenet.core.memory import MemoryCategory
 
 from ..contracts import ToolBlockedError, ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
-_ALLOWED_CATEGORIES: set[MemoryCategory] = {"preference", "project_convention", "ongoing_priority", "fact"}
+_ALLOWED_CATEGORIES: set[MemoryCategory] = {
+    "preference",
+    "project_convention",
+    "ongoing_priority",
+    "fact",
+    "market_thesis",
+}
 
 DESCRIPTORS = [
     ToolDescriptor(
@@ -37,7 +43,16 @@ DESCRIPTORS = [
             "worth carrying into future sessions. This proposes a DRAFT — it is NOT used until the "
             "operator approves it in the Memory surface, so propose freely but don't claim it's saved.\n"
             "Categories: preference (how they like things), project_convention (a rule for this codebase), "
-            "ongoing_priority (a current goal), fact (a stable fact about them or their setup).\n"
+            "ongoing_priority (a current goal), fact (a stable fact about them or their setup), "
+            "market_thesis (why the operator holds or watches a specific ticker, and what would prove "
+            "that reasoning wrong).\n"
+            "For market_thesis: title '<SYMBOL> thesis', tags MUST include 'symbol:<SYMBOL>' (uppercase) "
+            "so market.ticker can surface it automatically on future mentions, summary is the one-line "
+            "thesis, and detail should cover why you hold/watch it and what would change your mind — for "
+            "example: 'Why: <reasons>. Invalidated if: <conditions>. Add zone: <price/condition>. Trim "
+            "zone: <price/condition>.' Propose or refresh one when the operator states a reason for a "
+            "position, or when you're asked to evaluate a ticker and no thesis exists yet — infer it from "
+            "the conversation, don't wait to be told to save it.\n"
             "Keep title short, summary one clear sentence, extra nuance in detail. Never propose secrets, "
             "credentials, or sensitive personal data."
         ),

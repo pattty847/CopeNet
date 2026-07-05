@@ -10,9 +10,16 @@ const CATEGORY_LABELS: Record<MemoryItem['category'], string> = {
   project_convention: 'Convention',
   ongoing_priority: 'Priority',
   fact: 'Fact',
+  market_thesis: 'Market thesis',
 };
 
-const CATEGORY_OPTIONS: MemoryItem['category'][] = ['preference', 'project_convention', 'ongoing_priority', 'fact'];
+const CATEGORY_OPTIONS: MemoryItem['category'][] = [
+  'preference',
+  'project_convention',
+  'ongoing_priority',
+  'fact',
+  'market_thesis',
+];
 
 export function MemorySurface() {
   const memoryItems = useAppStore((state) => state.memoryItems);

@@ -269,6 +269,27 @@ class TickerInsight:
 
 
 @dataclass
+class TickerIntelligence:
+    """Compact, agent-facing summary of a symbol's condition — the FeatureSet reshaped for reasoning
+    instead of buried under a raw OHLCV dump. See docs/plans/MARKET_TICKER_INTELLIGENCE.md."""
+
+    as_of: str | None
+    asset_role: str
+    trend: dict[str, Any]
+    momentum: dict[str, Any]
+    returns: dict[str, Any]
+    drawdown: dict[str, Any]
+    volatility: dict[str, Any]
+    relative_strength: dict[str, Any]
+    structure: dict[str, Any]
+    data_quality: dict[str, Any]
+    rotation: dict[str, Any] | None = None
+    portfolio: dict[str, Any] | None = None
+    exposure: dict[str, Any] | None = None
+    thesis: dict[str, Any] | None = None
+
+
+@dataclass
 class TickerDetailPayload:
     symbol: str
     name: str
@@ -282,6 +303,7 @@ class TickerDetailPayload:
     events: list[ChartEvent]
     kill: str
     insight: TickerInsight | None = None
+    intelligence: TickerIntelligence | None = None
 
     def to_wire(self) -> dict[str, Any]:
         return _to_wire(self)

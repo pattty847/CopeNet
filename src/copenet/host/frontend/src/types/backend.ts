@@ -893,7 +893,7 @@ export interface LiveToolCall {
 // Memory + identity wire types
 // ---------------------------------------------------------------------------
 
-export type MemoryCategory = 'preference' | 'project_convention' | 'ongoing_priority' | 'fact';
+export type MemoryCategory = 'preference' | 'project_convention' | 'ongoing_priority' | 'fact' | 'market_thesis';
 
 export interface MemoryItem {
   id: string;
