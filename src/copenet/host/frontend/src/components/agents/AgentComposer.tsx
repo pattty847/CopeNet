@@ -7,6 +7,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { accessOptionsFor, providerAllowsFullAccess } from '../../lib/access';
 import { uploadChatAttachment } from '../../lib/appApi';
 import type { ChatAttachment, DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
+import type { UniverseAsset } from '../../sections/market/types';
 
 /** A composer-local image attachment in flight: object-URL preview + upload status. */
 interface PendingAttachment {
@@ -142,6 +143,55 @@ function RuntimeSegment({
         {onClick ? <ChevronDown className={`ml-auto h-3 w-3 shrink-0 text-operator-muted/65 transition-transform ${active ? 'rotate-180 text-operator-accent' : 'group-hover:text-operator-text'}`} /> : null}
       </button>
       {children}
+    </div>
+  );
+}
+
+const MENTION_TRIGGER = /(?:^|\s)@([\w.]*)$/;
+const MENTION_MAX_RESULTS = 8;
+
+function matchMentionCandidates(candidates: UniverseAsset[], query: string): UniverseAsset[] {
+  const needle = query.trim().toLowerCase();
+  if (!needle) return candidates.slice(0, MENTION_MAX_RESULTS);
+  const starts = candidates.filter((asset) => asset.symbol.toLowerCase().startsWith(needle));
+  const contains = candidates.filter(
+    (asset) => !asset.symbol.toLowerCase().startsWith(needle) &&
+      (asset.symbol.toLowerCase().includes(needle) || asset.name.toLowerCase().includes(needle)),
+  );
+  return [...starts, ...contains].slice(0, MENTION_MAX_RESULTS);
+}
+
+function MentionMenu({
+  candidates,
+  activeIndex,
+  onSelect,
+}: {
+  candidates: UniverseAsset[];
+  activeIndex: number;
+  onSelect: (asset: UniverseAsset) => void;
+}) {
+  if (candidates.length === 0) return null;
+  return (
+    <div className="absolute bottom-full left-0 z-30 mb-2 w-full max-w-xs overflow-hidden rounded-2xl border border-operator-border bg-operator-panel shadow-shell-xl backdrop-blur">
+      <div className="border-b border-operator-border/60 px-3 py-2 text-[10px] font-semibold uppercase tracking-[0.16em] text-operator-muted/85">
+        Mention a symbol
+      </div>
+      <div className="max-h-56 overflow-y-auto p-1.5">
+        {candidates.map((asset, index) => (
+          <button
+            key={asset.symbol}
+            type="button"
+            onMouseDown={(event) => {
+              event.preventDefault();
+              onSelect(asset);
+            }}
+            className={`flex w-full items-center gap-2 rounded-lg px-3 py-1.5 text-left transition-colors ${index === activeIndex ? 'bg-operator-accent/10 text-operator-accent' : 'text-operator-text hover:bg-operator-bg/70'}`}
+          >
+            <span className="shrink-0 text-[12px] font-semibold">{asset.symbol}</span>
+            <span className="min-w-0 flex-1 truncate text-[11px] text-operator-muted/85">{asset.name}</span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -377,6 +427,16 @@ export function AgentComposer({
   const [optimizedVariants, setOptimizedVariants] = useState<PromptOptimizationVariant[]>([]);
   const [selectedVariantId, setSelectedVariantId] = useState<string | null>(null);
 
+  const [mentionUniverse, setMentionUniverse] = useState<UniverseAsset[] | null>(null);
+  const mentionFetchStartedRef = useRef(false);
+  const [mentionQuery, setMentionQuery] = useState<string | null>(null);
+  const [mentionActiveIndex, setMentionActiveIndex] = useState(0);
+  const mentionCandidates = useMemo(
+    () => (mentionQuery !== null && mentionUniverse ? matchMentionCandidates(mentionUniverse, mentionQuery) : []),
+    [mentionQuery, mentionUniverse],
+  );
+  const mentionOpen = mentionQuery !== null && mentionCandidates.length > 0;
+
   const providers = useAppStore((state) => state.providers);
   const modelsByProvider = useAppStore((state) => state.modelsByProvider);
   const loadedModelProviders = useAppStore((state) => state.loadedModelProviders);
@@ -465,6 +525,81 @@ export function AgentComposer({
     if (disabled) return;
     const files = event.dataTransfer?.files ? Array.from(event.dataTransfer.files) : [];
     ingestFiles(files);
+  };
+
+  const ensureMentionUniverseLoaded = () => {
+    if (mentionFetchStartedRef.current) return;
+    mentionFetchStartedRef.current = true;
+    void wsClient
+      .marketUniverse()
+      .then((universe) => setMentionUniverse(universe))
+      .catch(() => setMentionUniverse([]));
+  };
+
+  const syncMentionState = (text: string, caret: number) => {
+    const match = MENTION_TRIGGER.exec(text.slice(0, caret));
+    if (!match) {
+      setMentionQuery(null);
+      return;
+    }
+    ensureMentionUniverseLoaded();
+    setMentionQuery(match[1]);
+    setMentionActiveIndex(0);
+  };
+
+  const handleTextareaChange = (event: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const nextValue = event.target.value;
+    onChange(nextValue);
+    syncMentionState(nextValue, event.target.selectionStart);
+  };
+
+  const insertMention = (asset: UniverseAsset) => {
+    const textarea = textareaRef.current;
+    const caret = textarea ? textarea.selectionStart : value.length;
+    const before = value.slice(0, caret);
+    const after = value.slice(caret);
+    const match = MENTION_TRIGGER.exec(before);
+    if (!match) {
+      setMentionQuery(null);
+      return;
+    }
+    const prefixEnd = before.length - match[1].length - 1;
+    const insertion = `@${asset.symbol} `;
+    const nextValue = `${before.slice(0, prefixEnd)}${insertion}${after}`;
+    onChange(nextValue);
+    setMentionQuery(null);
+    requestAnimationFrame(() => {
+      if (!textarea) return;
+      const caretAt = prefixEnd + insertion.length;
+      textarea.focus();
+      textarea.setSelectionRange(caretAt, caretAt);
+    });
+  };
+
+  const handleTextareaKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (mentionOpen) {
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        setMentionActiveIndex((current) => (current + 1) % mentionCandidates.length);
+        return;
+      }
+      if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        setMentionActiveIndex((current) => (current - 1 + mentionCandidates.length) % mentionCandidates.length);
+        return;
+      }
+      if (event.key === 'Enter' || event.key === 'Tab') {
+        event.preventDefault();
+        insertMention(mentionCandidates[mentionActiveIndex]);
+        return;
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        setMentionQuery(null);
+        return;
+      }
+    }
+    onKeyDown(event);
   };
 
   const handleStop = async () => {
@@ -801,12 +936,15 @@ export function AgentComposer({
               ))}
             </div>
           )}
-          <div className="flex items-end gap-1 px-3 py-2">
+          <div className="relative flex items-end gap-1 px-3 py-2">
+            {mentionOpen && (
+              <MentionMenu candidates={mentionCandidates} activeIndex={mentionActiveIndex} onSelect={insertMention} />
+            )}
             <textarea
               ref={textareaRef}
               value={value}
-              onChange={(event) => onChange(event.target.value)}
-              onKeyDown={onKeyDown}
+              onChange={handleTextareaChange}
+              onKeyDown={handleTextareaKeyDown}
               onPaste={handlePaste}
               disabled={disabled}
               placeholder={placeholder}
