@@ -15,6 +15,8 @@ from .data_sources import fetch_fund_profile, fetch_ohlcv, frame_to_bars, macro_
 from .edgar import chart_events_from_evidence, fetch_evidence
 from .models import (
     AccumulationRow,
+    CompareResult,
+    CompareRow,
     DashboardPayload,
     EvidenceItem,
     InsightBaseRate,
@@ -52,7 +54,18 @@ class MarketRuntime:
     def universe(self) -> list[dict[str, Any]]:
         return [asset.to_wire() for asset in UNIVERSE]
 
-    def ticker(self, symbol: str) -> TickerDetailPayload:
+    def _weekly_frame(self, symbol: str) -> pd.DataFrame:
+        """Live weekly fetch with a store-bars fallback — the same freshness pattern as the
+        chart bars, so a benchmark series is never a stale cache sitting next to a live one."""
+        try:
+            frame = fetch_ohlcv(symbol, interval="1wk", period="5y")
+            if not frame.empty:
+                return frame
+        except Exception:
+            pass
+        return _bars_to_frame(self.store.load_bars(symbol, "weekly"))
+
+    def ticker(self, symbol: str, *, compare: list[str] | None = None) -> TickerDetailPayload:
         normalized = symbol.strip().upper()
         asset = find_asset(normalized)
         name = asset.name if asset else normalized
@@ -68,6 +81,7 @@ class MarketRuntime:
                 pass
             return self.store.load_bars(normalized, cache_key)
 
+        fetched_at = _now_iso()
         daily = _chart_bars("1d", "2y", "daily")
         weekly = _chart_bars("1wk", "5y", "weekly")
         monthly = _chart_bars("1mo", "10y", "monthly")
@@ -76,17 +90,24 @@ class MarketRuntime:
         last = weekly[-1].c if weekly else 0.0
         previous = weekly[-2].c if len(weekly) > 1 else last
         change_pct = ((last / previous) - 1) * 100 if previous else 0.0
-        voo_frame = _bars_to_frame(self.store.load_bars("VOO", "weekly"))
-        qqq_frame = _bars_to_frame(self.store.load_bars("QQQ", "weekly"))
+        voo_frame = self._weekly_frame("VOO")
+        qqq_frame = self._weekly_frame("QQQ")
         # Always compute signals live from the same weekly_frame used below — the cached
         # per-symbol signals (written by the last dashboard refresh) can be stale enough
         # to disagree with the live-fetched intelligence packet (e.g. drawdown %) in the
         # same response, which is confusing rather than just imprecise.
         signals = compute_price_signals(weekly_frame, benchmark=voo_frame).__dict__ if not weekly_frame.empty else {}
-        benchmark_frames = {"VOO": voo_frame, "XLK": _bars_to_frame(self.store.load_bars("XLK", "weekly")), "QQQ": qqq_frame}
+        # Default benchmarks are the broad market/growth read (VOO/XLK/QQQ); `compare` lets the
+        # caller add specific symbols (a sector ETF, a direct competitor) on top — it never
+        # replaces the defaults, so the human-facing Market page's verdict table is unaffected.
+        benchmark_frames = {"VOO": voo_frame, "XLK": self._weekly_frame("XLK"), "QQQ": qqq_frame}
+        for extra in compare or []:
+            extra_symbol = extra.strip().upper()
+            if extra_symbol and extra_symbol not in benchmark_frames:
+                benchmark_frames[extra_symbol] = self._weekly_frame(extra_symbol)
         benchmark_frames.pop(normalized, None)  # never benchmark a symbol against itself
         verdict = benchmark_verdict(weekly_frame, benchmark_frames)
-        fs = compute_features(weekly_frame, voo_frame, symbol=normalized)
+        fs = compute_features(weekly_frame, voo_frame, symbol=normalized, as_of=fetched_at)
         insight = _build_insight(fs)
         rotation = compute_rrg_tail(normalized, name, weekly_frame, voo_frame)
         intelligence = _build_intelligence(
@@ -112,6 +133,60 @@ class MarketRuntime:
             insight=insight,
             intelligence=intelligence,
         )
+
+    def compare(self, symbols: list[str]) -> CompareResult:
+        """Side-by-side comparable stats for an arbitrary list of symbols — two names head-to-head
+        or a batch. No pairwise verdicts or rankings-as-conclusions: just the same numbers for each
+        symbol so the caller (model or human) draws its own comparison."""
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in symbols:
+            sym = raw.strip().upper()
+            if sym and sym not in seen:
+                seen.add(sym)
+                normalized.append(sym)
+        as_of = _now_iso()
+        rows: list[CompareRow] = []
+        for sym in normalized:
+            asset = find_asset(sym)
+            name = asset.name if asset else sym
+            frame = self._weekly_frame(sym)
+            if frame.empty:
+                rows.append(
+                    CompareRow(
+                        symbol=sym, name=name, last=None, change_pct=None,
+                        r_1w_pct=None, r_4w_pct=None, r_13w_pct=None, r_26w_pct=None, r_52w_pct=None, r_ytd_pct=None,
+                        vol_13w_pct=None, drawdown_52w_pct=None, rsi_14=None, ma_stack="n/a", long_trend="n/a",
+                    )
+                )
+                continue
+            close = frame["close"].astype(float).dropna()
+            last_price = float(close.iloc[-1]) if len(close) else None
+            change = ((close.iloc[-1] / close.iloc[-2]) - 1) * 100 if len(close) > 1 else None
+            fs = compute_features(frame, None, symbol=sym, as_of=as_of)
+            rows.append(
+                CompareRow(
+                    symbol=sym,
+                    name=name,
+                    last=last_price,
+                    change_pct=round(change, 2) if change is not None else None,
+                    r_1w_pct=fs.r_1w,
+                    r_4w_pct=fs.r_4w,
+                    r_13w_pct=fs.r_13w,
+                    r_26w_pct=fs.r_26w,
+                    r_52w_pct=fs.r_52w,
+                    r_ytd_pct=fs.r_ytd,
+                    vol_13w_pct=fs.vol_13w,
+                    drawdown_52w_pct=fs.drawdown_pct,
+                    rsi_14=fs.rsi_14,
+                    ma_stack=fs.ma_stack,
+                    long_trend=fs.long_trend,
+                )
+            )
+        ranked = sorted((r for r in rows if r.r_13w_pct is not None), key=lambda r: r.r_13w_pct, reverse=True)
+        for position, row in enumerate(ranked, start=1):
+            row.rank_13w = position
+        return CompareResult(as_of=as_of, rows=rows)
 
     async def interpret(self, provider, *, target: str = "market", model: str = "gpt-5.5") -> dict:
         """Run the LLM interpretation lane (Insight Engine Phase D) and persist the read.

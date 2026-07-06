@@ -354,6 +354,10 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             "last": body.get("last"),
             "change": body.get("change"),
         }
+    if tool_id == "market.compare":
+        rows = body.get("rows")
+        symbols = [row.get("symbol") for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
+        return {"type": "market_compare", "symbols": symbols}
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")
@@ -548,7 +552,7 @@ def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
         return "web_search"
     if tool_id == "web.fetch":
         return "web_fetch"
-    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker"}:
+    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker", "market.compare"}:
         return "context"
     return "raw"
 

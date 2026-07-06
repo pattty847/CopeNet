@@ -290,6 +290,35 @@ class TickerIntelligence:
 
 
 @dataclass
+class CompareRow:
+    symbol: str
+    name: str
+    last: float | None
+    change_pct: float | None
+    r_1w_pct: float | None
+    r_4w_pct: float | None
+    r_13w_pct: float | None
+    r_26w_pct: float | None
+    r_52w_pct: float | None
+    r_ytd_pct: float | None
+    vol_13w_pct: float | None
+    drawdown_52w_pct: float | None
+    rsi_14: float | None
+    ma_stack: str
+    long_trend: str
+    rank_13w: int | None = None
+
+
+@dataclass
+class CompareResult:
+    as_of: str
+    rows: list[CompareRow]
+
+    def to_wire(self) -> dict[str, Any]:
+        return _to_wire(self)
+
+
+@dataclass
 class TickerDetailPayload:
     symbol: str
     name: str
