@@ -85,6 +85,9 @@ class RrgSector:
     name: str
     tail: list[dict[str, float]]
     quadrant: Literal["leading", "weakening", "lagging", "improving"]
+    # per-speed tails ("fast" / "default" / "slow"); `tail` above mirrors `tails["default"]`
+    # for callers that only ever cared about the single-speed rotation read.
+    tails: dict[str, list[dict[str, float]]] = field(default_factory=dict)
 
 
 @dataclass

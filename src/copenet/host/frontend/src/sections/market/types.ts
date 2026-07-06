@@ -54,11 +54,14 @@ export interface MacroItem {
   spark: number[];
 }
 
+export type RrgMode = 'fast' | 'default' | 'slow';
+
 export interface RrgSector {
   symbol: string;
   name: string;
-  tail: { x: number; y: number }[]; // x = RS-Ratio, y = RS-Momentum; last point = current
+  tail: { x: number; y: number }[]; // x = RS-Ratio, y = RS-Momentum; last point = current; mirrors tails.default
   quadrant: 'leading' | 'weakening' | 'lagging' | 'improving';
+  tails?: Partial<Record<RrgMode, { x: number; y: number }[]>>;
 }
 
 export interface AccumulationRow {

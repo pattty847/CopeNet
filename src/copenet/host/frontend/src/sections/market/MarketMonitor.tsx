@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
-import { BriefingHero, MacroBoard, ModelBadge, Rrg } from './panelsTop';
+import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
+import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch } from './panelsLists';
 import { useMarketDashboard, useMarketRead, useTickerDetail, useTickerRead } from './useMarketMonitorData';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
+const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
 
 const CONFIDENCE_COLORS: Record<string, string> = { low: '#d96d5f', medium: '#a29b90', high: '#69c589' };
 
@@ -252,7 +254,7 @@ export function MarketMonitor() {
         <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
         <MacroBoard panel={dash.macro} />
         {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
-        <div style={ROW}>
+        <div style={ROTATION_ROW}>
           <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
           <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
             <AccumulationWatch panel={dash.accumulation} onOpen={open} />
