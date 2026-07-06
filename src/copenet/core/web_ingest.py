@@ -1,11 +1,18 @@
 from __future__ import annotations
 
 import html
+import os
 import re
 from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any
 from urllib import error, request
+
+# Jina Reader (r.jina.ai): free, no-key URL→clean-markdown proxy — this is the primary
+# extraction path. Optional JINA_API_KEY raises the rate limit but isn't required; any
+# failure (network, rate limit, target error) falls back to the homegrown HTML parser
+# below, so a Jina outage degrades quality rather than breaking web.fetch outright.
+_JINA_READER_BASE = "https://r.jina.ai/"
 
 
 class WebIngestError(RuntimeError):
@@ -92,6 +99,27 @@ def _normalize_whitespace(text: str) -> str:
     return re.sub(r"\s+", " ", html.unescape(text or "")).strip()
 
 
+_JINA_CONTENT_MARKER = "Markdown Content:"
+
+
+def _parse_jina_reader_response(body: str) -> tuple[str, str]:
+    """Split Jina Reader's plain-text envelope (Title:/URL Source:/Warning:/Markdown Content:)
+    into (title, content). Raises if the envelope itself reports the TARGET url failed —
+    Jina Reader returns HTTP 200 with an embedded warning for a 404 on the real page, so a
+    silent success here would otherwise pass a 404 page off as real content."""
+    header, _, content = body.partition(_JINA_CONTENT_MARKER)
+    title = ""
+    warning = ""
+    for line in header.splitlines():
+        if line.lower().startswith("title:") and not title:
+            title = line.split(":", 1)[1].strip()
+        elif "warning: target url returned error" in line.lower():
+            warning = line.split(":", 1)[1].strip()
+    if warning:
+        raise WebIngestError(warning)
+    return title, content.strip()
+
+
 def _looks_boilerplate(block: str) -> bool:
     lowered = block.lower()
     if len(lowered) < 24:
@@ -121,6 +149,11 @@ class WebIngestionService:
             raise WebIngestError("url is required")
         if not raw.startswith(("http://", "https://")):
             raw = f"https://{raw}"
+
+        try:
+            return self._extract_via_jina(raw, max_chars=max_chars)
+        except WebIngestError:
+            pass  # fall back to the direct fetch below
 
         req = request.Request(
             raw,
@@ -152,6 +185,23 @@ class WebIngestionService:
             cleaned = _normalize_whitespace(text)
             result = self._build_result(final_url, final_url, cleaned, max_chars=max_chars)
         return result
+
+    def _extract_via_jina(self, url: str, *, max_chars: int) -> WebExtractResult:
+        headers = {"User-Agent": self._user_agent, "Accept": "text/plain"}
+        token = os.environ.get("JINA_API_KEY", "").strip()
+        if token:
+            headers["Authorization"] = f"Bearer {token}"
+        req = request.Request(f"{_JINA_READER_BASE}{url}", headers=headers)
+        try:
+            with request.urlopen(req, timeout=25.0) as response:
+                charset = response.headers.get_content_charset() or "utf-8"
+                body = response.read().decode(charset, errors="replace")
+        except Exception as exc:  # network error, timeout, non-2xx — fall back, don't fail the whole fetch
+            raise WebIngestError(f"jina reader failed: {exc}") from exc
+        title, text = _parse_jina_reader_response(body)
+        if not text.strip():
+            raise WebIngestError("jina reader returned no content")
+        return self._build_result(url, title or url, text, max_chars=max_chars)
 
     def _extract_from_html(self, url: str, html_text: str, *, max_chars: int) -> WebExtractResult:
         parser = _ReadableHtmlParser()

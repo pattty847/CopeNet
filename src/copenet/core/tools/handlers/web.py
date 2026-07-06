@@ -3,14 +3,20 @@
 Two read-only tools that ground the agent to the live web:
 
 - ``web.search`` runs a query and returns ranked {title, url, snippet} results.
-  Backed by DuckDuckGo's keyless HTML endpoint (no API key, no account).
-- ``web.fetch`` pulls one URL and returns its readable text (boilerplate
-  stripped) via the shared :class:`WebIngestionService`.
+  Uses Exa's semantic search API when ``EXA_API_KEY`` is set (real ranking, no
+  HTML-scrape fragility); falls back to DuckDuckGo's keyless HTML endpoint
+  (no API key, no account) when it isn't.
+- ``web.fetch`` pulls one URL and returns its readable text via the shared
+  :class:`WebIngestionService`, which itself prefers Jina Reader over a
+  homegrown boilerplate stripper (see ``web_ingest.py``).
 
 Both are ``side_effect="external"`` (they touch the network) but carry no write
 risk, so they sit in the ``web`` category which is auto-allowed in every task
-mode. The single network boundary is :func:`_http_get_text`; tests monkeypatch
-it so nothing in the suite reaches the real internet.
+mode. The default (keyless) network boundary is :func:`_http_get_text`; tests
+monkeypatch it so nothing in the suite reaches the real internet. The Exa path
+(:func:`_search_via_exa`) is a second, separate boundary — it's dormant unless
+``EXA_API_KEY`` is set, which the test suite never does, so it stays inert
+there without needing its own monkeypatch.
 
 Set ``COPNET_WEB_FETCH_ALLOWLIST`` (comma-separated apex domains) to restrict
 which hosts the model may fetch/surface — unset means unrestricted (today's
@@ -21,6 +27,7 @@ results down to matching hosts instead of erroring.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import re
 from html import unescape
@@ -36,6 +43,8 @@ from copenet.core.web_ingest import WebIngestError, WebIngestionService
 
 _USER_AGENT = "CopeNet/0.1 (+https://github.com/pattty847/CopeNet)"
 _SEARCH_ENDPOINT = "https://html.duckduckgo.com/html/"
+_EXA_SEARCH_ENDPOINT = "https://api.exa.ai/search"
+_EXA_API_KEY_ENV = "EXA_API_KEY"
 SEARCH_RESULT_LIMIT = 8
 SEARCH_SNIPPET_CHARS = 300
 FETCH_MAX_CHARS = 12000
@@ -121,6 +130,48 @@ def _parse_search_results(html_text: str, *, limit: int) -> list[dict[str, str]]
     return results
 
 
+def _search_via_exa(query: str, *, limit: int) -> list[dict[str, str]] | None:
+    """Exa semantic search — returns None (never raises) on missing key or any failure,
+    so the caller falls back to the keyless DuckDuckGo path without special-casing."""
+    api_key = os.environ.get(_EXA_API_KEY_ENV, "").strip()
+    if not api_key:
+        return None
+    payload = json.dumps(
+        {
+            "query": query,
+            "numResults": limit,
+            "type": "auto",
+            "contents": {"text": {"maxCharacters": SEARCH_SNIPPET_CHARS}},
+        }
+    ).encode("utf-8")
+    req = request.Request(
+        _EXA_SEARCH_ENDPOINT,
+        data=payload,
+        headers={"Content-Type": "application/json", "x-api-key": api_key, "User-Agent": _USER_AGENT},
+        method="POST",
+    )
+    try:
+        with request.urlopen(req, timeout=15.0) as response:
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return None
+    raw_results = body.get("results") if isinstance(body, dict) else None
+    if not isinstance(raw_results, list):
+        return None
+    results: list[dict[str, str]] = []
+    for item in raw_results:
+        if not isinstance(item, dict):
+            continue
+        url = str(item.get("url") or "").strip()
+        title = str(item.get("title") or "").strip()
+        if not url or not title:
+            continue
+        results.append({"title": title, "url": url, "snippet": str(item.get("text") or "").strip()[:SEARCH_SNIPPET_CHARS]})
+        if len(results) >= limit:
+            break
+    return results or None
+
+
 async def search_web(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     query = str(request.arguments.get("query") or "").strip()
     if not query:
@@ -132,14 +183,18 @@ async def search_web(request: ToolExecutionRequest, context: ToolExecutionContex
         limit = SEARCH_RESULT_LIMIT
     limit = max(1, min(limit, SEARCH_RESULT_LIMIT))
 
-    try:
-        html_text = await asyncio.to_thread(_http_get_text, _SEARCH_ENDPOINT, data={"q": query})
-    except error.HTTPError as exc:
-        raise RuntimeError(f"web search failed: HTTP {exc.code}") from exc
-    except error.URLError as exc:
-        raise RuntimeError(f"web search failed: {exc.reason}") from exc
+    exa_results = await asyncio.to_thread(_search_via_exa, query, limit=limit)
+    if exa_results is not None:
+        results, source = exa_results, "exa"
+    else:
+        try:
+            html_text = await asyncio.to_thread(_http_get_text, _SEARCH_ENDPOINT, data={"q": query})
+        except error.HTTPError as exc:
+            raise RuntimeError(f"web search failed: HTTP {exc.code}") from exc
+        except error.URLError as exc:
+            raise RuntimeError(f"web search failed: {exc.reason}") from exc
+        results, source = _parse_search_results(html_text, limit=limit), "duckduckgo"
 
-    results = _parse_search_results(html_text, limit=limit)
     allowlist = _fetch_allowlist()
     if allowlist:
         results = [r for r in results if _host_allowed(parse.urlparse(r["url"]).hostname or "", allowlist)]
@@ -148,14 +203,14 @@ async def search_web(request: ToolExecutionRequest, context: ToolExecutionContex
             tool_id=request.tool_id,
             ok=True,
             summary=f"No web results for '{query}'",
-            output={"query": query, "results": []},
+            output={"query": query, "results": [], "source": source},
         )
     summary = f"{len(results)} web result{'s' if len(results) != 1 else ''} for '{query}' — top: {results[0]['title']}"
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
         summary=summary,
-        output={"query": query, "results": results},
+        output={"query": query, "results": results, "source": source},
     )
 
 
