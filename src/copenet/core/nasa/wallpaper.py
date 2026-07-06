@@ -8,8 +8,10 @@ desktop wallpaper while CopeNet is closed.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import os
 from pathlib import Path
 import plistlib
+import shutil
 import subprocess
 import sys
 from typing import Any, Callable, Sequence
@@ -23,6 +25,7 @@ from copenet.core.nasa.store import NasaApodRecord, NasaApodStore
 WALLPAPER_AGENT_LABEL = "com.copenet.nasa-wallpaper"
 WALLPAPER_AGENT_FILENAME = f"{WALLPAPER_AGENT_LABEL}.plist"
 WALLPAPER_RETRY_HOURS = (3, 6, 9)
+DESKTOP_PICTURE_WORKFLOW = "/System/Library/Services/Set Desktop Picture.workflow"
 
 
 @dataclass(frozen=True)
@@ -108,8 +111,7 @@ def set_macos_wallpaper(
     path = image_path.expanduser().resolve()
     if not path.is_file():
         raise RuntimeError(f"wallpaper image does not exist: {path}")
-    script = f'tell application "System Events" to set picture of every desktop to POSIX file {_applescript_string(str(path))}'
-    command = ["osascript", "-e", script]
+    command = ["automator", "-i", str(path), DESKTOP_PICTURE_WORKFLOW]
     if run_command is not None:
         run_command(command)
         return
@@ -125,8 +127,9 @@ def install_launch_agent(
     logs_dir: Path | None = None,
     program_arguments: Sequence[str] | None = None,
     working_directory: Path | None = None,
+    load_agent: Callable[[Path], None] | None = None,
 ) -> Path:
-    """Write the LaunchAgent plist that refreshes APOD wallpaper in the morning."""
+    """Write and load the LaunchAgent plist that refreshes APOD wallpaper."""
     launch_agents_dir = launch_agents_dir or (Path.home() / "Library" / "LaunchAgents")
     logs_dir = logs_dir or (Path.home() / ".copenet" / "logs")
     program_arguments = list(program_arguments or _default_agent_program_arguments())
@@ -144,12 +147,18 @@ def install_launch_agent(
         payload["WorkingDirectory"] = str(working_directory.expanduser().resolve())
     with plist_path.open("wb") as handle:
         plistlib.dump(payload, handle, sort_keys=False)
+    (load_agent or _bootstrap_launch_agent)(plist_path)
     return plist_path
 
 
-def uninstall_launch_agent(*, launch_agents_dir: Path | None = None) -> Path:
+def uninstall_launch_agent(
+    *,
+    launch_agents_dir: Path | None = None,
+    unload_agent: Callable[[], None] | None = None,
+) -> Path:
     launch_agents_dir = launch_agents_dir or (Path.home() / "Library" / "LaunchAgents")
     plist_path = launch_agents_dir / WALLPAPER_AGENT_FILENAME
+    (unload_agent or _bootout_launch_agent)()
     try:
         plist_path.unlink()
     except FileNotFoundError:
@@ -157,10 +166,15 @@ def uninstall_launch_agent(*, launch_agents_dir: Path | None = None) -> Path:
     return plist_path
 
 
-def launch_agent_status(*, launch_agents_dir: Path | None = None) -> dict[str, Any]:
+def launch_agent_status(
+    *,
+    launch_agents_dir: Path | None = None,
+    is_loaded: Callable[[Path], bool] | None = None,
+) -> dict[str, Any]:
     launch_agents_dir = launch_agents_dir or (Path.home() / "Library" / "LaunchAgents")
     plist_path = launch_agents_dir / WALLPAPER_AGENT_FILENAME
-    return {"installed": plist_path.is_file(), "path": str(plist_path)}
+    loaded = (is_loaded or _launch_agent_loaded)(plist_path)
+    return {"installed": plist_path.is_file(), "loaded": loaded, "path": str(plist_path)}
 
 
 def _cache_and_apply(
@@ -204,8 +218,44 @@ def _newest_cached_image_record(store: NasaApodStore, *, exclude_date: str) -> N
 
 
 def _default_agent_program_arguments() -> list[str]:
-    return ["/usr/bin/env", "uv", "run", "copenet", "nasa", "wallpaper", "apply", "--json"]
+    uv_path = shutil.which("uv") or "uv"
+    return [uv_path, "run", "copenet", "nasa", "wallpaper", "apply", "--json"]
 
 
-def _applescript_string(value: str) -> str:
-    return '"' + value.replace("\\", "\\\\").replace('"', '\\"') + '"'
+def _bootstrap_launch_agent(plist_path: Path) -> None:
+    _bootout_launch_agent()
+    completed = subprocess.run(
+        ["launchctl", "bootstrap", _launchctl_domain(), str(plist_path)],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    if completed.returncode != 0:
+        detail = (completed.stderr or completed.stdout or "").strip()
+        raise RuntimeError(f"failed to load LaunchAgent{f': {detail}' if detail else ''}")
+
+
+def _bootout_launch_agent() -> None:
+    subprocess.run(
+        ["launchctl", "bootout", f"{_launchctl_domain()}/{WALLPAPER_AGENT_LABEL}"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+
+
+def _launch_agent_loaded(_plist_path: Path) -> bool:
+    completed = subprocess.run(
+        ["launchctl", "print", f"{_launchctl_domain()}/{WALLPAPER_AGENT_LABEL}"],
+        capture_output=True,
+        text=True,
+        timeout=15,
+        check=False,
+    )
+    return completed.returncode == 0
+
+
+def _launchctl_domain() -> str:
+    return f"gui/{os.getuid()}"

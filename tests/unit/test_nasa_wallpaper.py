@@ -7,6 +7,7 @@ import pytest
 from copenet.core.nasa import NasaApodRecord, NasaApodStore
 from copenet.core.nasa.wallpaper import (
     apply_apod_wallpaper,
+    _default_agent_program_arguments,
     install_launch_agent,
     set_macos_wallpaper,
 )
@@ -163,17 +164,21 @@ def test_apply_apod_wallpaper_rejects_non_macos_before_fetching(tmp_path: Path) 
     assert service.calls == []
 
 
-def test_set_macos_wallpaper_builds_osascript_command(tmp_path: Path) -> None:
+def test_set_macos_wallpaper_uses_automator_desktop_picture_workflow(tmp_path: Path) -> None:
     image = tmp_path / "space.jpg"
     image.write_bytes(b"image")
     commands: list[list[str]] = []
 
     set_macos_wallpaper(image, platform="darwin", run_command=lambda command: commands.append(command))
 
-    assert commands
-    assert commands[0][:2] == ["osascript", "-e"]
-    assert str(image) in commands[0][2]
-    assert "every desktop" in commands[0][2]
+    assert commands == [
+        [
+            "automator",
+            "-i",
+            str(image.resolve()),
+            "/System/Library/Services/Set Desktop Picture.workflow",
+        ]
+    ]
 
 
 def test_set_macos_wallpaper_rejects_non_macos(tmp_path: Path) -> None:
@@ -182,10 +187,13 @@ def test_set_macos_wallpaper_rejects_non_macos(tmp_path: Path) -> None:
 
 
 def test_install_launch_agent_writes_expected_schedule_and_command(tmp_path: Path) -> None:
+    loaded: list[Path] = []
+
     plist = install_launch_agent(
         launch_agents_dir=tmp_path / "LaunchAgents",
         logs_dir=tmp_path / "logs",
         program_arguments=["/usr/bin/env", "uv", "run", "copenet", "nasa", "wallpaper", "apply"],
+        load_agent=loaded.append,
     )
 
     text = plist.read_text(encoding="utf-8")
@@ -195,3 +203,25 @@ def test_install_launch_agent_writes_expected_schedule_and_command(tmp_path: Pat
     assert "<integer>9</integer>" in text
     assert "nasa-wallpaper.out.log" in text
     assert "<string>copenet</string>" in text
+    assert loaded == [plist]
+
+
+def test_launch_agent_status_reports_file_and_loaded_state(tmp_path: Path) -> None:
+    launch_agents = tmp_path / "LaunchAgents"
+    launch_agents.mkdir()
+    plist = launch_agents / "com.copenet.nasa-wallpaper.plist"
+    plist.write_text("plist", encoding="utf-8")
+
+    from copenet.core.nasa.wallpaper import launch_agent_status
+
+    status = launch_agent_status(launch_agents_dir=launch_agents, is_loaded=lambda path: path == plist)
+
+    assert status == {"installed": True, "loaded": True, "path": str(plist)}
+
+
+def test_default_launch_agent_command_uses_resolved_uv_path(monkeypatch) -> None:
+    monkeypatch.setattr("copenet.core.nasa.wallpaper.shutil.which", lambda name: "/opt/homebrew/bin/uv" if name == "uv" else None)
+
+    args = _default_agent_program_arguments()
+
+    assert args[:3] == ["/opt/homebrew/bin/uv", "run", "copenet"]

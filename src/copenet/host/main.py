@@ -316,8 +316,9 @@ def _run_nasa_wallpaper_command(args: argparse.Namespace) -> None:
         return
     if args.wallpaper_command == "status":
         status = launch_agent_status()
-        state = "installed" if status["installed"] else "not installed"
-        print(f"{state}: {status['path']}")
+        installed = "installed" if status["installed"] else "not installed"
+        loaded = "loaded" if status["loaded"] else "not loaded"
+        print(f"{installed}, {loaded}: {status['path']}")
         return
     raise SystemExit(f"Unknown NASA wallpaper command: {args.wallpaper_command}")
 
