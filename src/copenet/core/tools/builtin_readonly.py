@@ -41,6 +41,7 @@ MANIFEST_TOOL_IDS = {
     "market.dashboard",
     "market.ticker",
     "market.compare",
+    "market.backtest",
     "persona.author",
     # Memory came back into the manifest redesigned as draft-first (§3.6 opt-in):
     # memory.read recalls, memory.write PROPOSES a draft that the operator approves.

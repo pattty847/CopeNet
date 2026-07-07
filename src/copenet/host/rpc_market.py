@@ -8,7 +8,9 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from copenet.core.market import MarketRuntime, MarketStore
+from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
 from copenet.core.market.runtime import default_market_dir
+from copenet.core.runtime.runs import RunRecord
 from copenet.host.rpc_schema import ResponseFrame, make_response_frame
 
 
@@ -205,3 +207,167 @@ def _runtime(orchestrator) -> MarketRuntime:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+
+async def handle_market_backtest_run(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    session_key = str(raw.get("sessionKey") or "").strip()
+    symbols = [str(s).strip().upper() for s in raw.get("symbols") or [] if str(s).strip()]
+    weights = [float(w) for w in raw.get("weights") or []]
+    start_date = str(raw.get("startDate") or "").strip()
+    end_date = str(raw.get("endDate") or "").strip()
+    benchmark = str(raw.get("benchmark") or "VOO").strip().upper()
+    rebalance = str(raw.get("rebalance") or "buy_and_hold").strip()
+    rebalance_interval = raw.get("rebalanceInterval")
+    if rebalance_interval:
+        rebalance_interval = str(rebalance_interval).strip()
+
+    if not symbols:
+        raise ValueError("symbols are required")
+    if not weights:
+        raise ValueError("weights are required")
+    if not start_date or not end_date:
+        raise ValueError("startDate and endDate are required")
+
+    runtime = _runtime(orchestrator)
+    result = await asyncio.to_thread(
+        run_portfolio_backtest,
+        symbols=symbols,
+        weights=weights,
+        start_date=start_date,
+        end_date=end_date,
+        benchmark=benchmark,
+        rebalance=rebalance,
+        rebalance_interval=rebalance_interval,
+        store=runtime.store,
+    )
+
+    if session_key:
+        run_id = f"backtest-{uuid4().hex[:12]}"
+        now = _now_iso()
+
+        run_record = RunRecord(
+            run_id=run_id,
+            session_key=session_key,
+            provider="backtest-engine",
+            model="v1-scoped",
+            status="ok",
+            user_message=f"Backtest: {', '.join(symbols)} vs {benchmark}",
+            tool_execution_mode="guarded",
+            will_attempt_tool_loop=False,
+            started_at=now,
+            completed_at=now,
+            working_set={},
+            message_count=0,
+            input_token_estimate=0,
+            tool_steps=[],
+            artifact_ids=[],
+            output_summary=f"Portfolio Return: {result.metrics['total_return']}%, Max Drawdown: {result.metrics['max_drawdown']}%",
+            error=None,
+            transition_reason=None,
+            terminal_reason=None,
+            tool_results=[],
+            pending_input_count=0,
+            oversized_tool_artifact_ids=[],
+            metadata={"type": "backtest", "symbols": symbols, "weights": weights, "metrics": result.metrics},
+        )
+        orchestrator._run_store.create(run_record)
+
+        body_md = f"""### Backtest Results
+
+- **Symbols**: {", ".join(f"{s} ({w * 100:.1f}%)" for s, w in zip(symbols, weights))}
+- **Date Range**: {start_date} to {end_date}
+- **Rebalance Mode**: {rebalance} {f'({rebalance_interval})' if rebalance == 'periodic' else ''}
+- **Benchmark**: {benchmark}
+
+| Metric | Portfolio | Benchmark (VOO) |
+|---|---|---|
+| **Total Return** | {result.metrics['total_return']}% | {result.metrics['total_return'] - result.metrics['benchmark_total_return']}% |
+| **Max Drawdown** | {result.metrics['max_drawdown']}% | {result.metrics['benchmark_max_drawdown']}% |
+| **Sharpe Ratio** | {result.metrics['sharpe']} | {result.metrics['benchmark_sharpe']} |
+| **Annualized Volatility** | {result.metrics['volatility']}% | {result.metrics['benchmark_volatility']}% |
+| **Beta vs Benchmark** | {result.metrics['beta']} | 1.00 |
+| **Correlation** | {result.metrics['correlation']} | 1.00 |
+"""
+        artifact = orchestrator._artifact_store.create(
+            session_key=session_key,
+            run_id=run_id,
+            artifact_type="backtest",
+            title=f"Backtest: {', '.join(symbols)}",
+            body=body_md,
+            metadata=result.to_json(),
+        )
+        run_record.artifact_ids.append(artifact.artifact_id)
+
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result.to_json())))
+
+
+async def handle_market_backtest_stress_test(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    session_key = str(raw.get("sessionKey") or "").strip()
+    scenario_key = str(raw.get("scenarioKey") or "").strip()
+    positions = raw.get("positions") or []
+
+    if not scenario_key:
+        raise ValueError("scenarioKey is required")
+
+    result = await asyncio.to_thread(
+        run_scenario,
+        positions=positions,
+        scenario_key=scenario_key,
+    )
+
+    if session_key:
+        run_id = f"stress-test-{uuid4().hex[:12]}"
+        now = _now_iso()
+
+        run_record = RunRecord(
+            run_id=run_id,
+            session_key=session_key,
+            provider="backtest-engine",
+            model="v1-scoped",
+            status="ok",
+            user_message=f"Stress Test: {scenario_key}",
+            tool_execution_mode="guarded",
+            will_attempt_tool_loop=False,
+            started_at=now,
+            completed_at=now,
+            working_set={},
+            message_count=0,
+            input_token_estimate=0,
+            tool_steps=[],
+            artifact_ids=[],
+            output_summary=f"Projected Return: {result.metrics['total_return']}%, Max Drawdown: {result.metrics['max_drawdown']}%",
+            error=None,
+            transition_reason=None,
+            terminal_reason=None,
+            tool_results=[],
+            pending_input_count=0,
+            oversized_tool_artifact_ids=[],
+            metadata={"type": "stress_test", "scenarioKey": scenario_key, "metrics": result.metrics},
+        )
+        orchestrator._run_store.create(run_record)
+
+        body_md = f"""### Stress Test: {result.metadata['scenarioName']}
+
+- **Duration**: {result.metadata['durationWeeks']} weeks
+- **Simulated Impact**:
+
+| Metric | Portfolio | Benchmark (VOO) |
+|---|---|---|
+| **Projected Return** | {result.metrics['total_return']}% | {result.metrics['total_return'] - result.metrics['benchmark_total_return']}% |
+| **Max Drawdown** | {result.metrics['max_drawdown']}% | {result.metrics['benchmark_max_drawdown']}% |
+| **Annualized Volatility** | {result.metrics['volatility']}% | {result.metrics['benchmark_volatility']}% |
+| **Sharpe Ratio** | {result.metrics['sharpe']} | {result.metrics['benchmark_sharpe']} |
+"""
+        artifact = orchestrator._artifact_store.create(
+            session_key=session_key,
+            run_id=run_id,
+            artifact_type="backtest",
+            title=f"Stress Test: {result.metadata['scenarioName']}",
+            body=body_md,
+            metadata=result.to_json(),
+        )
+        run_record.artifact_ids.append(artifact.artifact_id)
+
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=result.to_json())))

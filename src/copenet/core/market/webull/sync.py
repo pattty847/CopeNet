@@ -175,7 +175,7 @@ def enrich_with_yfinance(positions: list[WebullPosition]) -> None:
 
     for position in positions:
         try:
-            frame = fetch_ohlcv(position.symbol, interval="1d", period="5d")
+            frame = fetch_ohlcv(position.symbol, interval="1d", period="5d", auto_adjust=True)
         except Exception:
             frame = None
         if frame is None or frame.empty:

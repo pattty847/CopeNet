@@ -8,6 +8,7 @@ dashboard/store state (``market.dashboard``) or run a live per-symbol lookup
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from copenet.core.market.runtime import MarketRuntime
@@ -194,10 +195,167 @@ DESCRIPTORS = [
         evidence_role="grounding",
         side_effect="read",
     ),
+    ToolDescriptor(
+        id="market.backtest",
+        name="Run Backtest or Stress Test",
+        description=(
+            "Run a portfolio historical backtest or a macro stress test scenario on current holdings. "
+            "Supports: mode='backtest' with parameters symbols, weights, startDate, endDate, benchmark, "
+            "rebalance ('buy_and_hold' or 'periodic'), and rebalanceInterval ('daily', 'weekly', 'monthly'). "
+            "Or mode='stress_test' with scenarioName ('2022_tech_dump', '2020_covid_crash')."
+        ),
+        category="context",
+        input_schema={
+            "type": "object",
+            "properties": {
+                "mode": {"type": "string", "enum": ["backtest", "stress_test"], "description": "Mode to run: 'backtest' for portfolio backtesting, 'stress_test' for macro shock simulation."},
+                "symbols": {"type": "array", "items": {"type": "string"}, "description": "Tickers to backtest. Required for mode='backtest'."},
+                "weights": {"type": "array", "items": {"type": "number"}, "description": "Weights matching symbols. Required for mode='backtest'."},
+                "startDate": {"type": "string", "description": "Start date (YYYY-MM-DD). Required for mode='backtest'."},
+                "endDate": {"type": "string", "description": "End date (YYYY-MM-DD). Required for mode='backtest'."},
+                "benchmark": {"type": "string", "description": "Benchmark ticker. Default 'VOO'."},
+                "rebalance": {"type": "string", "enum": ["buy_and_hold", "periodic"], "description": "Rebalance mode. Default 'buy_and_hold'."},
+                "rebalanceInterval": {"type": "string", "enum": ["daily", "weekly", "monthly"], "description": "Rebalance interval for periodic mode."},
+                "scenarioName": {"type": "string", "enum": ["2022_tech_dump", "2020_covid_crash"], "description": "Scenario key to run. Required for mode='stress_test'."}
+            },
+            "required": ["mode"],
+            "additionalProperties": False,
+        },
+        capabilities=["market-data"],
+        evidence_role="grounding",
+        side_effect="read",
+    ),
 ]
+
+
+async def run_market_backtest(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+    mode = str(request.arguments.get("mode") or "backtest").strip().lower()
+
+    # Lazy import to avoid circular dependency
+    from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
+
+    runtime = MarketRuntime()
+
+    if mode == "stress_test":
+        scenario_key = str(request.arguments.get("scenarioName") or "2022_tech_dump").strip()
+        from copenet.core.market.universe import PORTFOLIO_BASIS
+        positions = []
+        if context.session_key:
+            try:
+                from copenet.core.market.webull.sync import load_snapshot
+                snapshot = load_snapshot()
+                if snapshot and snapshot.get("positions"):
+                    for p in snapshot["positions"]:
+                        positions.append({
+                            "symbol": p["symbol"],
+                            "shares": p["shares"],
+                            "last": p["last"],
+                        })
+            except Exception:
+                pass
+
+        if not positions:
+            for sym, data in PORTFOLIO_BASIS.items():
+                positions.append({
+                    "symbol": sym,
+                    "shares": data["shares"],
+                    "last": data["avg_cost"],
+                })
+
+        result = await asyncio.to_thread(
+            run_scenario,
+            positions=positions,
+            scenario_key=scenario_key,
+        )
+
+        if context.session_key and context.artifact_store and context.run_id:
+            body_md = f"""### Stress Test: {result.metadata['scenarioName']}
+
+- **Duration**: {result.metadata['durationWeeks']} weeks
+- **Simulated Impact**:
+
+| Metric | Portfolio | Benchmark (VOO) |
+|---|---|---|
+| **Projected Return** | {result.metrics['total_return']}% | {result.metrics['total_return'] - result.metrics['benchmark_total_return']}% |
+| **Max Drawdown** | {result.metrics['max_drawdown']}% | {result.metrics['benchmark_max_drawdown']}% |
+| **Annualized Volatility** | {result.metrics['volatility']}% | {result.metrics['benchmark_volatility']}% |
+| **Sharpe Ratio** | {result.metrics['sharpe']} | {result.metrics['benchmark_sharpe']} |
+"""
+            context.artifact_store.create(
+                session_key=context.session_key,
+                run_id=context.run_id,
+                artifact_type="backtest",
+                title=f"Stress Test: {result.metadata['scenarioName']}",
+                body=body_md,
+                metadata=result.to_json(),
+            )
+
+        summary = f"Stress Test: {result.metadata['scenarioName']} completed. Projected Return: {result.metrics['total_return']}%"
+        return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary=summary, output=result.to_json())
+
+    else:
+        symbols = [str(s).strip().upper() for s in request.arguments.get("symbols") or [] if str(s).strip()]
+        weights = [float(w) for w in request.arguments.get("weights") or []]
+        start_date = str(request.arguments.get("startDate") or "").strip()
+        end_date = str(request.arguments.get("endDate") or "").strip()
+        benchmark = str(request.arguments.get("benchmark") or "VOO").strip().upper()
+        rebalance = str(request.arguments.get("rebalance") or "buy_and_hold").strip()
+        rebalance_interval = request.arguments.get("rebalanceInterval")
+        if rebalance_interval:
+            rebalance_interval = str(rebalance_interval).strip()
+
+        if not symbols:
+            raise ValueError("symbols are required")
+        if not weights:
+            raise ValueError("weights are required")
+        if not start_date or not end_date:
+            raise ValueError("startDate and endDate are required")
+
+        result = await asyncio.to_thread(
+            run_portfolio_backtest,
+            symbols=symbols,
+            weights=weights,
+            start_date=start_date,
+            end_date=end_date,
+            benchmark=benchmark,
+            rebalance=rebalance,
+            rebalance_interval=rebalance_interval,
+            store=runtime.store,
+        )
+
+        if context.session_key and context.artifact_store and context.run_id:
+            body_md = f"""### Backtest Results
+
+- **Symbols**: {", ".join(f"{s} ({w * 100:.1f}%)" for s, w in zip(symbols, weights))}
+- **Date Range**: {start_date} to {end_date}
+- **Rebalance Mode**: {rebalance} {f'({rebalance_interval})' if rebalance == 'periodic' else ''}
+- **Benchmark**: {benchmark}
+
+| Metric | Portfolio | Benchmark (VOO) |
+|---|---|---|
+| **Total Return** | {result.metrics['total_return']}% | {result.metrics['benchmark_total_return'] + result.metrics['total_return']}% |
+| **Max Drawdown** | {result.metrics['max_drawdown']}% | {result.metrics['benchmark_max_drawdown']}% |
+| **Sharpe Ratio** | {result.metrics['sharpe']} | {result.metrics['benchmark_sharpe']} |
+| **Annualized Volatility** | {result.metrics['volatility']}% | {result.metrics['benchmark_volatility']}% |
+| **Beta vs Benchmark** | {result.metrics['beta']} | 1.00 |
+| **Correlation** | {result.metrics['correlation']} | 1.00 |
+"""
+            context.artifact_store.create(
+                session_key=context.session_key,
+                run_id=context.run_id,
+                artifact_type="backtest",
+                title=f"Backtest: {', '.join(symbols)}",
+                body=body_md,
+                metadata=result.to_json(),
+            )
+
+        summary = f"Backtest: {', '.join(symbols)} vs {benchmark} completed. Portfolio Return: {result.metrics['total_return']}%"
+        return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary=summary, output=result.to_json())
+
 
 HANDLERS = {
     "market.dashboard": get_market_dashboard,
     "market.ticker": get_market_ticker,
     "market.compare": compare_market_tickers,
+    "market.backtest": run_market_backtest,
 }

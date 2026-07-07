@@ -61,7 +61,7 @@ class MarketRuntime:
         """Live weekly fetch with a store-bars fallback — the same freshness pattern as the
         chart bars, so a benchmark series is never a stale cache sitting next to a live one."""
         try:
-            frame = fetch_ohlcv(symbol, interval="1wk", period="5y")
+            frame = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
             if not frame.empty:
                 return frame
         except Exception:
@@ -77,7 +77,7 @@ class MarketRuntime:
         # fall back to the stored bars if a live fetch fails.
         def _chart_bars(interval: str, period: str, cache_key: str) -> list:
             try:
-                bars = frame_to_bars(fetch_ohlcv(normalized, interval=interval, period=period))
+                bars = frame_to_bars(fetch_ohlcv(normalized, interval=interval, period=period, auto_adjust=True))
                 if bars:
                     return bars
             except Exception:
@@ -219,7 +219,7 @@ class MarketRuntime:
         # Multi-year structure features need the full 5y weekly history; fetch live with a
         # stored-bars fallback (same pattern as the chart path in ticker()).
         try:
-            weekly_frame = fetch_ohlcv(symbol, interval="1wk", period="5y")
+            weekly_frame = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
             if weekly_frame.empty:
                 weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
         except Exception:
@@ -266,8 +266,8 @@ class MarketRuntime:
         symbols = _symbols_for_scope(scope)
         for symbol in symbols:
             try:
-                weekly[symbol] = fetch_ohlcv(symbol, interval="1wk", period="5y")
-                daily[symbol] = fetch_ohlcv(symbol, interval="1d", period="6mo")
+                weekly[symbol] = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
+                daily[symbol] = fetch_ohlcv(symbol, interval="1d", period="6mo", auto_adjust=True)
             except Exception:
                 weekly[symbol] = pd.DataFrame()
                 daily[symbol] = pd.DataFrame()
