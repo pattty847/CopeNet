@@ -2,7 +2,15 @@
 // already matches the typed contract in sections/market/types.ts, so these helpers just pass the
 // payload through. This is the only place the frontend touches the market.* wire methods.
 
-import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerRead, UniverseAsset } from '../sections/market/types';
+import type {
+  DashboardPayload,
+  MarketRead,
+  SymbolSearchResult,
+  TickerDetailPayload,
+  TickerRead,
+  UniverseAsset,
+  WatchlistItem,
+} from '../sections/market/types';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
@@ -68,4 +76,84 @@ export async function marketReadGetRpc(
   const payload = await request<{ read?: unknown }>('market.read.get', { target });
   const read = payload.read;
   return read && typeof read === 'object' ? (read as MarketRead | TickerRead) : null;
+}
+
+export interface BacktestPayload {
+  portfolioSeries: { date: string; value: number }[];
+  benchmarkSeries: { date: string; value: number }[];
+  metrics: {
+    total_return: number;
+    benchmark_total_return: number;
+    max_drawdown: number;
+    benchmark_max_drawdown: number;
+    volatility: number;
+    benchmark_volatility: number;
+    sharpe: number;
+    benchmark_sharpe: number;
+    beta: number;
+    correlation: number;
+  };
+  metadata: {
+    symbols?: string[];
+    weights?: number[];
+    startDate?: string;
+    endDate?: string;
+    rebalanceMode?: string;
+    rebalanceInterval?: string | null;
+    benchmark?: string;
+    scenarioName?: string;
+    scenarioKey?: string;
+    durationWeeks?: number;
+    shockDetails?: Record<string, number>;
+    usedFallbackPositions?: boolean;
+  };
+}
+
+export async function marketBacktestRunRpc(
+  request: WsRpcRequest,
+  params: {
+    sessionKey: string;
+    symbols: string[];
+    weights: number[];
+    startDate: string;
+    endDate: string;
+    benchmark?: string;
+    rebalance?: string;
+    rebalanceInterval?: string | null;
+  }
+): Promise<BacktestPayload> {
+  const payload = await request<Record<string, unknown>>('market.backtest.run', params as any);
+  return payload as unknown as BacktestPayload;
+}
+
+export async function marketWatchlistGetRpc(request: WsRpcRequest): Promise<WatchlistItem[]> {
+  const payload = await request<{ items?: unknown }>('market.watchlist.get', {});
+  return Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [];
+}
+
+export async function marketWatchlistAddRpc(request: WsRpcRequest, symbol: string, name = ''): Promise<WatchlistItem[]> {
+  const payload = await request<{ items?: unknown }>('market.watchlist.add', { symbol, name });
+  return Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [];
+}
+
+export async function marketWatchlistRemoveRpc(request: WsRpcRequest, symbol: string): Promise<WatchlistItem[]> {
+  const payload = await request<{ items?: unknown }>('market.watchlist.remove', { symbol });
+  return Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [];
+}
+
+export async function marketSymbolsSearchRpc(request: WsRpcRequest, query: string, limit = 8): Promise<SymbolSearchResult[]> {
+  const payload = await request<{ results?: unknown }>('market.symbols.search', { query, limit });
+  return Array.isArray(payload.results) ? (payload.results as SymbolSearchResult[]) : [];
+}
+
+export async function marketBacktestStressTestRpc(
+  request: WsRpcRequest,
+  params: {
+    sessionKey: string;
+    scenarioKey: string;
+    positions: any[];
+  }
+): Promise<BacktestPayload> {
+  const payload = await request<Record<string, unknown>>('market.backtest.stress_test', params as any);
+  return payload as unknown as BacktestPayload;
 }

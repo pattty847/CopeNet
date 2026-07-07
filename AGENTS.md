@@ -31,6 +31,7 @@ The current product direction is:
 | Runtime        | `src/copenet/core/runtime/`                  | RunStore (durable run records), ArtifactStore, per-turn state |
 | Tools          | `src/copenet/core/tools/`                    | Tool contracts, policy (`policy_for_task_mode`), registry, built-in handlers |
 | Tracing        | `src/copenet/core/tracing/`                  | Per-run JSONL trace writer |
+| Market Monitor | `src/copenet/core/market/`                   | Slow-timeframe market radar: yfinance price signals, CopeTech-Edgar fundamentals/insider evidence, model reads, portfolio backtesting/scenario simulation. See "Market Monitor" under Working In Each Area. |
 | Profile        | `src/copenet/core/profile/`                  | Pat Profile loader, changelog, return-briefing builder |
 | Memory         | `src/copenet/core/memory/`                   | User-visible memory items (preferences, conventions, facts) |
 | Pulse          | `src/copenet/core/pulse/`                    | Inbox pulse store |
@@ -226,7 +227,7 @@ For current behavior, assume:
 
 ### WebSocket / RPC
 
-- Add RPC methods in `ws_server.py`.
+- `ws_server.py` owns the WS connection/frame lifecycle; actual method routing is an `elif req.method == "..."` chain in `rpc_dispatch.py` — add new RPC methods there, not in `ws_server.py` directly.
 - Keep streaming events and request/response frames clearly separated.
 - Prefer extending response payloads over changing existing field meaning.
 - Be careful with client compatibility because the browser UI and `GatewayClient` both depend on this layer.
@@ -255,6 +256,14 @@ For current behavior, assume:
 - For Codex specifically, treat `[@Browser](plugin://browser-use@openai-bundled)` as the canonical browser-validation path when the plugin is available. Read the Browser skill first, use the in-app browser workflow for localhost verification, and only fall back to Playwright or Computer Use if that path is genuinely unavailable. Claude and Gemini do not share this Codex-only browser surface, so do not assume they can follow the same workflow.
 - When a UI pass materially improves the product surface, capture a fresh product screenshot right away, store it under `docs/imgs/`, and update the matching `README.md` section in the canonical GitHub repo (`github.com/pattty847/CopeNet`). Prefer Browser Use for the capture flow when available; otherwise use a trustworthy automated localhost fallback such as Playwright. `gh` is installed, so repo docs/screenshot refreshes should be treated as part of finishing polished UI work rather than a nice-to-have.
 - Treat the legacy UI in `src/copenet/host/static/` as fallback compatibility code, not the primary product surface.
+
+### Market Monitor
+
+- Lives in `src/copenet/core/market/`: `data_sources.py` (yfinance — includes `search_symbols()` for live ticker/company lookup and `fetch_quote_row()` for a single-symbol last-price+change+sparkline), `signals.py`/`features.py` (technical signals, RRG, soft-bottoming pattern), `edgar.py` (CopeTech-Edgar adapter — insider Form 4/8-K evidence, fundamentals via `fetch_fundamentals`), `interpretation.py`/`fact_packets.py` (the LLM read pipeline), `replay.py`/`base_rates.py` (point-in-time pattern calibration), `backtester.py` (portfolio backtesting + scenario stress simulation), `webull/` (read-only broker sync), `store.py` (`MarketStore`, caches bars/signals/dashboard/reads to disk), `watchlist_store.py` (`WatchlistStore` — user-curated add/remove ticker list, distinct from the fixed `UNIVERSE` in `universe.py`; RPC handlers in `host/rpc_market_watchlist.py`: `market.watchlist.get/add/remove`, `market.symbols.search`).
+- **Load-bearing invariant: every `fetch_ohlcv()` call must be split-adjusted.** The function defaults to `auto_adjust=True`; do not call it with `auto_adjust=False` and do not add a new caller that skips this. Every consumer — the dashboard refresh, the ticker chart, `replay.py`'s calibration, and the backtester — shares `MarketStore`'s bar cache under the same `(symbol, timeframe)` key with no adjustment-basis tag on the key itself. If any caller writes unadjusted bars, every other caller sharing that cache key silently inherits them, including fake price cliffs on stock splits (this happened for real, 2026-07-06 — see `[[project_market_monitor]]` memory for the full incident and fix).
+- The model-facing `market.*` tools (`market.dashboard`, `market.ticker`, `market.compare`, `market.backtest`) are registered in `core/tools/handlers/market.py`, category `context` (read-only, auto-allowed in every task mode) — add new read-only market tools there, not under a new category.
+- The backtest lab's named scenario presets (`2022_tech_dump`, `2020_covid_crash` in `backtester.py`'s `SCENARIOS` dict) are **hand-typed shock magnitudes projected onto a synthetic cosine curve, not a real historical replay** — `run_portfolio_backtest` (the real engine, already correct) could replay the actual historical window instead; this just hasn't been done yet.
+- Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`, and this session's memory (`project_market_monitor.md`) for the blow-by-blow of what shipped and why.
 
 ## Safe Collaboration Rules
 

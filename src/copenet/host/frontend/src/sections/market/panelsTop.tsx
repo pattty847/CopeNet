@@ -33,7 +33,7 @@ export function ModelBadge({ model, generatedAt }: { model: string; generatedAt:
   );
 }
 
-function Sparkline({ data, tone }: { data: number[]; tone: 'up' | 'down' | 'flat' }) {
+export function Sparkline({ data, tone }: { data: number[]; tone: 'up' | 'down' | 'flat' }) {
   const w = 58;
   const h = 20;
   const mn = Math.min(...data);

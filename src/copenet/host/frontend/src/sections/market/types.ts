@@ -23,6 +23,22 @@ export interface UniverseAsset {
   role: AssetRole;
 }
 
+// ---------- watchlist (user-curated, add/remove — distinct from the fixed UNIVERSE above) ----------
+export interface WatchlistItem {
+  symbol: string;
+  name: string;
+  value: string;
+  change: string;
+  tone: Tone;
+  spark: number[];
+}
+
+export interface SymbolSearchResult {
+  symbol: string;
+  name: string;
+  exchange: string;
+}
+
 // ---------- dashboard ----------
 export interface AttentionItem {
   kind: string;

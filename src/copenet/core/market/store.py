@@ -20,6 +20,10 @@ class MarketStore:
         self._root.mkdir(parents=True, exist_ok=True)
         self._lock = threading.RLock()
 
+    @property
+    def root_dir(self) -> Path:
+        return self._root
+
     def save_bars(self, symbol: str, timeframe: str, bars: list[MarketBar]) -> None:
         path = self._bars_path(symbol, timeframe)
         payload = {"symbol": symbol.upper(), "timeframe": timeframe, "bars": [bar.__dict__ for bar in bars]}

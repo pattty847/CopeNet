@@ -7,8 +7,10 @@ import type {
   SoftBottomItem,
   SpecPosition,
   TrendRow,
+  WatchlistItem,
 } from './types';
 import { MM, PanelCard, label, mono, toneColor } from './marketUi';
+import { Sparkline } from './panelsTop';
 
 export function SoftBottomingWatch({ panel, onOpen }: { panel: Panel<SoftBottomItem[]>; onOpen: (s: string) => void }) {
   return (
@@ -191,6 +193,54 @@ export function Speculative({ panel, onOpen, comment }: { panel: Panel<SpecPosit
         ))}
       </div>
     </div>
+  );
+}
+
+export function Watchlist({
+  items,
+  loading,
+  onOpen,
+  onRemove,
+}: {
+  items: WatchlistItem[];
+  loading: boolean;
+  onOpen: (s: string) => void;
+  onRemove: (s: string) => void;
+}) {
+  return (
+    <PanelCard
+      title="Watchlist"
+      status={items.length ? 'live' : 'preview'}
+      subtitle={items.length ? undefined : loading ? 'Loading…' : 'Search a ticker above and add it to track it here.'}
+    >
+      {items.length === 0 && !loading ? (
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>Nothing tracked yet.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column' }}>
+          {items.map((it) => (
+            <div key={it.symbol} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', borderTop: `1px solid rgba(254,252,244,.05)` }}>
+              <button
+                onClick={() => onOpen(it.symbol)}
+                style={{ cursor: 'pointer', flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 10, background: 'transparent', border: 'none', padding: 0, textAlign: 'left' }}
+              >
+                <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: MM.text, width: 54, flex: '0 0 auto' }}>{it.symbol}</span>
+                <span style={{ fontSize: 11, color: MM.muted, flex: 1, minWidth: 0, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{it.name}</span>
+                {it.spark.length > 1 && <Sparkline data={it.spark} tone={it.tone} />}
+                <span style={{ fontFamily: mono, fontSize: 12, color: MM.text, width: 66, textAlign: 'right', flex: '0 0 auto' }}>{it.value}</span>
+                <span style={{ fontFamily: mono, fontSize: 11, color: toneColor(it.tone), width: 58, textAlign: 'right', flex: '0 0 auto' }}>{it.change}</span>
+              </button>
+              <button
+                onClick={() => onRemove(it.symbol)}
+                title={`Remove ${it.symbol} from watchlist`}
+                style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: MM.dim, fontSize: 14, padding: '0 4px', flex: '0 0 auto', lineHeight: 1 }}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </PanelCard>
   );
 }
 

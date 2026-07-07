@@ -3,10 +3,10 @@
 // market.dashboard.get until the store is populated and swap to the real payload. If the backend is
 // offline the sample stays (honestly badged), so the UI never shows a blank screen.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerRead, UniverseAsset } from './types';
+import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -171,6 +171,52 @@ export function useMarketRead() {
 
 export function useTickerRead(symbol: string) {
   return useModelRead<TickerRead>(symbol);
+}
+
+export interface MarketWatchlistState {
+  items: WatchlistItem[];
+  loading: boolean;
+  symbols: Set<string>;
+  add: (symbol: string, name?: string) => Promise<void>;
+  remove: (symbol: string) => Promise<void>;
+}
+
+export function useMarketWatchlist(): MarketWatchlistState {
+  const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    wsClient
+      .marketWatchlistGet()
+      .then((next) => {
+        if (alive.current) setItems(next);
+      })
+      .catch(() => {
+        /* backend offline — watchlist just stays empty until it's reachable */
+      })
+      .finally(() => {
+        if (alive.current) setLoading(false);
+      });
+    return () => {
+      alive.current = false;
+    };
+  }, []);
+
+  const add = useCallback(async (symbol: string, name = '') => {
+    const next = await wsClient.marketWatchlistAdd(symbol, name);
+    if (alive.current) setItems(next);
+  }, []);
+
+  const remove = useCallback(async (symbol: string) => {
+    const next = await wsClient.marketWatchlistRemove(symbol);
+    if (alive.current) setItems(next);
+  }, []);
+
+  const symbols = useMemo(() => new Set(items.map((item) => item.symbol)), [items]);
+
+  return { items, loading, symbols, add, remove };
 }
 
 export function useTickerDetail(symbol: string): TickerDetailPayload {

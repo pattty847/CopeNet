@@ -37,6 +37,12 @@ from .rpc_catalog import (
     handle_market_webull_auth,
     handle_market_webull_status,
     handle_market_webull_sync,
+    handle_market_backtest_run,
+    handle_market_backtest_stress_test,
+    handle_market_watchlist_get,
+    handle_market_watchlist_add,
+    handle_market_watchlist_remove,
+    handle_market_symbols_search,
     handle_models_list,
     handle_persona_context_get,
     handle_persona_flavor_draft,
@@ -258,6 +264,18 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_webull_account_select(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.sync":
         await handle_market_webull_sync(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.backtest.run":
+        await handle_market_backtest_run(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.backtest.stress_test":
+        await handle_market_backtest_stress_test(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.get":
+        await handle_market_watchlist_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.add":
+        await handle_market_watchlist_add(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.remove":
+        await handle_market_watchlist_remove(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.symbols.search":
+        await handle_market_symbols_search(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
         await handle_sessions_create(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.merge.create":

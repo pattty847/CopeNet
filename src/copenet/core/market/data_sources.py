@@ -11,7 +11,7 @@ from .models import MacroItem, MarketBar
 from .universe import yf_symbol
 
 
-def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: bool = False) -> pd.DataFrame:
+def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: bool = True) -> pd.DataFrame:
     try:
         import yfinance as yf
     except ImportError as exc:  # pragma: no cover - dependency exists in packaged env
@@ -19,6 +19,10 @@ def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: 
     ticker = yf_symbol(symbol)
     # auto_adjust=True returns split/dividend-adjusted prices. Pattern detection wants split-adjusted
     # shape (returns/drawdowns are scale-invariant to splits); raw prices show fake split gaps.
+    # Default is True so every caller — dashboard refresh, chart display, backtester, replay — shares
+    # one convention and one MarketStore cache basis. A prior default of False here let the live
+    # dashboard/chart paths silently cache unadjusted bars under the same key the backtester and
+    # replay.py write split-adjusted bars to, corrupting whichever read second.
     frame = yf.download(ticker, period=period, interval=interval, auto_adjust=auto_adjust, progress=False, threads=False)
     if frame is None or frame.empty:
         return pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
@@ -89,6 +93,52 @@ def fetch_fund_profile(symbol: str) -> dict[str, Any] | None:
     if not holdings and not sectors:
         return None
     return {"source": "yfinance", "topHoldings": holdings, "sectorWeightPct": sectors}
+
+
+def fetch_quote_row(symbol: str) -> MacroItem | None:
+    """Lightweight last-price + day-change + sparkline for one symbol, e.g. for a watchlist
+    row. Reuses the same split-adjusted fetch_ohlcv pipeline as every other Market Monitor
+    consumer (auto_adjust=True default) but with a short period — a watchlist row only needs
+    recent context, not the 2y default. Deliberately NOT written to MarketStore's bar cache
+    (see the auto_adjust invariant in AGENTS.md): this is a small, on-demand, ad hoc read, not
+    part of the shared (symbol, timeframe) cache basis every other caller relies on."""
+    frame = fetch_ohlcv(symbol, interval="1d", period="1mo")
+    return macro_item_from_frame(symbol, frame)
+
+
+def search_symbols(query: str, *, limit: int = 8) -> list[dict[str, str]]:
+    """Live ticker lookup by symbol or company name via Yahoo's search endpoint (yfinance.Search).
+    Best-effort: any failure returns an empty list rather than raising, since this backs an
+    interactive typeahead, not a data pipeline."""
+    normalized = (query or "").strip()
+    if not normalized:
+        return []
+    try:
+        import yfinance as yf
+
+        quotes = yf.Search(normalized, max_results=limit).quotes
+    except Exception:
+        return []
+    results: list[dict[str, str]] = []
+    seen: set[str] = set()
+    for quote in quotes or []:
+        if not isinstance(quote, dict):
+            continue
+        symbol = str(quote.get("symbol") or "").strip()
+        quote_type = str(quote.get("quoteType") or "").upper()
+        if not symbol or symbol in seen or quote_type not in {"EQUITY", "ETF", "INDEX", "CRYPTOCURRENCY"}:
+            continue
+        seen.add(symbol)
+        results.append(
+            {
+                "symbol": symbol,
+                "name": str(quote.get("longname") or quote.get("shortname") or symbol),
+                "exchange": str(quote.get("exchDisp") or quote.get("exchange") or ""),
+            }
+        )
+        if len(results) >= limit:
+            break
+    return results
 
 
 def macro_item_from_frame(label: str, frame: pd.DataFrame) -> MacroItem | None:

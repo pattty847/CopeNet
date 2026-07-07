@@ -105,7 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc } from './wsMarketRpc';
+import { marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -628,6 +628,43 @@ class WsClient {
 
   async marketWebullSync() {
     return marketWebullSyncRpc(this.request.bind(this));
+  }
+
+  async marketBacktestRun(params: {
+    sessionKey: string;
+    symbols: string[];
+    weights: number[];
+    startDate: string;
+    endDate: string;
+    benchmark?: string;
+    rebalance?: string;
+    rebalanceInterval?: string | null;
+  }) {
+    return marketBacktestRunRpc(this.request.bind(this), params);
+  }
+
+  async marketBacktestStressTest(params: {
+    sessionKey: string;
+    scenarioKey: string;
+    positions: any[];
+  }) {
+    return marketBacktestStressTestRpc(this.request.bind(this), params);
+  }
+
+  async marketWatchlistGet() {
+    return marketWatchlistGetRpc(this.request.bind(this));
+  }
+
+  async marketWatchlistAdd(symbol: string, name = '') {
+    return marketWatchlistAddRpc(this.request.bind(this), symbol, name);
+  }
+
+  async marketWatchlistRemove(symbol: string) {
+    return marketWatchlistRemoveRpc(this.request.bind(this), symbol);
+  }
+
+  async marketSymbolsSearch(query: string, limit = 8) {
+    return marketSymbolsSearchRpc(this.request.bind(this), query, limit);
   }
 
   async listPulses(): Promise<PulseRecord[]> {

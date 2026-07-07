@@ -4,8 +4,11 @@ import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
 import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
-import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch } from './panelsLists';
-import { useMarketDashboard, useMarketRead, useTickerDetail, useTickerRead } from './useMarketMonitorData';
+import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
+import { useMarketDashboard, useMarketRead, useMarketWatchlist, useTickerDetail, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { BacktestLab } from './BacktestLab';
+import { TickerSearch } from './TickerSearch';
+import { useIsMobile } from '../../lib/responsive';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
 const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
@@ -78,9 +81,20 @@ function TickerReadPanel({ symbol }: { symbol: string }) {
   );
 }
 
-function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void }) {
+function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose: () => void; watchlist: MarketWatchlistState }) {
   const td = useTickerDetail(symbol);
   const [tf, setTf] = useState<'D' | 'W' | 'M'>('W');
+  const [watchBusy, setWatchBusy] = useState(false);
+  const isWatched = watchlist.symbols.has(symbol.toUpperCase());
+  const toggleWatch = async () => {
+    setWatchBusy(true);
+    try {
+      if (isWatched) await watchlist.remove(symbol);
+      else await watchlist.add(symbol, td.name);
+    } finally {
+      setWatchBusy(false);
+    }
+  };
   const series = tf === 'D' ? td.series.daily : tf === 'M' ? td.series.monthly : td.series.weekly;
   const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
   const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
@@ -98,6 +112,23 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
         <button onClick={onClose} style={{ cursor: 'pointer', border: `1px solid rgba(254,252,244,.08)`, background: MM.panel, color: MM.muted, borderRadius: 9, padding: '8px 13px', font: '600 11px Inter' }}>← Market Monitor</button>
         <span style={{ fontFamily: mono, fontSize: 26, fontWeight: 600, color: MM.text, letterSpacing: '-.02em' }}>{td.symbol}</span>
         <span style={{ fontFamily: "'Cormorant Garamond', serif", fontSize: 22, color: MM.muted }}>{td.name}</span>
+        <button
+          onClick={() => void toggleWatch()}
+          disabled={watchBusy}
+          style={{
+            cursor: watchBusy ? 'default' : 'pointer',
+            border: `1px solid ${isWatched ? MM.borderHi : MM.border}`,
+            background: isWatched ? MM.accentSoft : 'transparent',
+            color: isWatched ? MM.accent : MM.muted,
+            borderRadius: 9,
+            padding: '6px 12px',
+            font: '600 10.5px Inter',
+            letterSpacing: '.03em',
+            opacity: watchBusy ? 0.6 : 1,
+          }}
+        >
+          {watchBusy ? '◍' : isWatched ? '✓ Watching' : '+ Watchlist'}
+        </button>
         <div style={{ flex: 1 }} />
         <span style={{ fontFamily: mono, fontSize: 22, color: MM.text }}>{td.last}</span>
         <span style={{ fontFamily: mono, fontSize: 14, color: toneColor(td.tone) }}>{td.change}</span>
@@ -172,22 +203,23 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
 export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
   const { read: marketRead, running: reading, run: runRead } = useMarketRead();
+  const watchlist = useMarketWatchlist();
+  const isMobile = useIsMobile();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
   const [reasoningOpen, setReasoningOpen] = useState(false);
   const [webullSyncing, setWebullSyncing] = useState(false);
+  const [activeTab, setActiveTab] = useState<'monitor' | 'backtest'>('monitor');
 
   const syncWebull = async () => {
     setWebullSyncing(true);
     try {
       const { wsClient } = await import('../../lib/wsClient');
       await wsClient.marketWebullSync();
-      // the sync + dashboard rebuild run server-side in the background; poll the stored result in
       for (let i = 0; i < 8; i += 1) {
         await new Promise((resolve) => setTimeout(resolve, 5000));
         await reload();
       }
     } catch {
-      /* not configured / not authed — the Portfolio subtitle keeps showing the fallback source */
     } finally {
       setWebullSyncing(false);
     }
@@ -196,7 +228,7 @@ export function MarketMonitor() {
   if (activeTicker) {
     return (
       <div style={{ background: MM.bg, minHeight: '100%', color: MM.text }}>
-        <TickerDetail symbol={activeTicker} onClose={() => setActiveTicker(null)} />
+        <TickerDetail symbol={activeTicker} onClose={() => setActiveTicker(null)} watchlist={watchlist} />
       </div>
     );
   }
@@ -206,72 +238,115 @@ export function MarketMonitor() {
   return (
     <div style={{ background: MM.bg, minHeight: '100%', color: MM.text }}>
       <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16, maxWidth: 1640, margin: '0 auto' }}>
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.muted }}>
-            <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? MM.up : MM.dim }} />
-            {live ? 'Live data' : 'Illustrative preview'} · {dash.asOf}
-          </span>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <button
-              onClick={() => void runRead()}
-              disabled={reading}
-              style={{
-                cursor: reading ? 'default' : 'pointer',
-                border: `1px solid rgba(90,143,199,.35)`,
-                background: 'rgba(90,143,199,.1)',
-                color: '#8fb8e8',
-                borderRadius: 9,
-                padding: '7px 13px',
-                font: '600 10px Inter',
-                letterSpacing: '.05em',
-                opacity: reading ? 0.6 : 1,
-              }}
-            >
-              {reading ? '◍ Reading the tape…' : '✦ Model read'}
-            </button>
-            <button
-              onClick={() => void refresh()}
-              disabled={refreshing}
-              style={{
-                cursor: refreshing ? 'default' : 'pointer',
-                border: `1px solid ${MM.borderHi}`,
-                background: MM.accentSoft,
-                color: MM.accent,
-                borderRadius: 9,
-                padding: '7px 13px',
-                font: '600 10px Inter',
-                letterSpacing: '.05em',
-                opacity: refreshing ? 0.6 : 1,
-              }}
-            >
-              {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
-            </button>
+        <div style={{ display: 'flex', flexDirection: isMobile ? 'column' : 'row', alignItems: isMobile ? 'stretch' : 'center', justifyContent: 'space-between', gap: 12 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.muted, whiteSpace: 'nowrap' }}>
+              <span style={{ width: 6, height: 6, borderRadius: '50%', background: live ? MM.up : MM.dim, flex: '0 0 auto' }} />
+              {live ? 'Live data' : 'Illustrative preview'} · {dash.asOf}
+            </span>
+            <div style={{ display: 'flex', gap: 4, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
+              <button
+                onClick={() => setActiveTab('monitor')}
+                style={{
+                  cursor: 'pointer',
+                  border: 'none',
+                  borderRadius: 5,
+                  padding: '4px 11px',
+                  font: '600 10.5px Inter',
+                  background: activeTab === 'monitor' ? MM.accent : 'transparent',
+                  color: activeTab === 'monitor' ? '#1a1205' : MM.muted,
+                }}
+              >
+                Monitor
+              </button>
+              <button
+                onClick={() => setActiveTab('backtest')}
+                style={{
+                  cursor: 'pointer',
+                  border: 'none',
+                  borderRadius: 5,
+                  padding: '4px 11px',
+                  font: '600 10.5px Inter',
+                  background: activeTab === 'backtest' ? MM.accent : 'transparent',
+                  color: activeTab === 'backtest' ? '#1a1205' : MM.muted,
+                }}
+              >
+                Backtest Lab
+              </button>
+            </div>
           </div>
+          {activeTab === 'monitor' && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <button
+                onClick={() => void runRead()}
+                disabled={reading}
+                style={{
+                  cursor: reading ? 'default' : 'pointer',
+                  border: `1px solid rgba(90,143,199,.35)`,
+                  background: 'rgba(90,143,199,.1)',
+                  color: '#8fb8e8',
+                  borderRadius: 9,
+                  padding: '7px 13px',
+                  font: '600 10px Inter',
+                  letterSpacing: '.05em',
+                  opacity: reading ? 0.6 : 1,
+                }}
+              >
+                {reading ? '◍ Reading the tape…' : '✦ Model read'}
+              </button>
+              <button
+                onClick={() => void refresh()}
+                disabled={refreshing}
+                style={{
+                  cursor: refreshing ? 'default' : 'pointer',
+                  border: `1px solid ${MM.borderHi}`,
+                  background: MM.accentSoft,
+                  color: MM.accent,
+                  borderRadius: 9,
+                  padding: '7px 13px',
+                  font: '600 10px Inter',
+                  letterSpacing: '.05em',
+                  opacity: refreshing ? 0.6 : 1,
+                }}
+              >
+                {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
+              </button>
+              <TickerSearch onSelect={(s) => open(s)} fullWidth={isMobile} />
+            </div>
+          )}
         </div>
-        <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
-        <MacroBoard panel={dash.macro} />
-        {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
-        <div style={ROTATION_ROW}>
-          <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
-          <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-            <AccumulationWatch panel={dash.accumulation} onOpen={open} />
-            <TrendWatch panel={dash.trend} onOpen={open} />
-          </div>
-        </div>
-        <div style={ROW}>
-          <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
-          <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
-        </div>
-        <div style={ROW}>
-          <Evidence panel={dash.evidence} onOpen={open} />
-          <Contrarian
-            panel={
-              marketRead && marketRead.thesisKillers.length
-                ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
-                : dash.contrarian
-            }
-          />
-        </div>
+
+        {activeTab === 'backtest' ? (
+          <BacktestLab />
+        ) : (
+          <>
+            <Watchlist items={watchlist.items} loading={watchlist.loading} onOpen={open} onRemove={(s) => void watchlist.remove(s)} />
+            <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
+            <MacroBoard panel={dash.macro} />
+            {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
+            <div style={ROTATION_ROW}>
+              <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
+              <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <AccumulationWatch panel={dash.accumulation} onOpen={open} />
+                <TrendWatch panel={dash.trend} onOpen={open} />
+              </div>
+            </div>
+            <div style={ROW}>
+              <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
+              <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
+            </div>
+            <div style={ROW}>
+              <Evidence panel={dash.evidence} onOpen={open} />
+              <Contrarian
+                panel={
+                  marketRead && marketRead.thesisKillers.length
+                    ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
+                    : dash.contrarian
+                }
+              />
+            </div>
+          </>
+        )}
         <div style={{ textAlign: 'center', fontSize: 10.5, color: MM.dimmer, padding: '6px 0 14px' }}>
           Reads are evidence-based with caveats — never forecasts. Panels marked “preview” are illustrative until their live data loads.
         </div>

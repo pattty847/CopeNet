@@ -1,6 +1,7 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import type { Panel, RrgMode, RrgSector } from './types';
 import { MM, PanelCard, mono } from './marketUi';
+import { useIsMobile } from '../../lib/responsive';
 
 const RRG_MODES: { mode: RrgMode; label: string; title: string }[] = [
   { mode: 'fast', label: 'FAST', title: 'Fast · 8w level · 2w momentum · EMA 2' },
@@ -97,6 +98,7 @@ function constrainView(next: RrgView): RrgView {
 }
 
 export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen: (s: string) => void; note?: string }) {
+  const isMobile = useIsMobile();
   const clipId = useId();
   const svgRef = useRef<SVGSVGElement | null>(null);
   const dragRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
@@ -199,7 +201,7 @@ export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen
       title="Sector Rotation · RRG"
       status={panel.status}
       subtitle="Relative strength vs S&P 500 · weekly · clockwise = rotation cycle"
-      style={{ flex: 1.55, minWidth: 420, alignSelf: 'stretch', minHeight: 520, height: 'auto' }}
+      style={{ flex: 1.55, minWidth: isMobile ? 0 : 420, width: isMobile ? '100%' : undefined, alignSelf: 'stretch', minHeight: 520, height: 'auto' }}
       right={
         <>
           <span style={{ fontFamily: mono, fontSize: 9, color: MM.dim, whiteSpace: 'nowrap' }}>
