@@ -15,6 +15,11 @@ __pycache__/
 # Local scratch outputs
 tmp/
 
+# CopeTech-Edgar's runtime cache — SECDataFetcher defaults to the relative path "data/edgar",
+# which lands here whenever CopeNet (or a test script) is run from the repo root. Not source,
+# never meant to be committed.
+data/
+
 # Local documentation
 TODO.md
 CLAUDE.md

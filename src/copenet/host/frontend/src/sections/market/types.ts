@@ -116,6 +116,7 @@ export interface EvidenceItem {
   source: string;
   tone: Tone;
   url?: string;
+  t?: number; // unix seconds, for chart marker placement
 }
 
 export interface ContrarianNote {

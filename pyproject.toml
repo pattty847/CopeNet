@@ -3,8 +3,9 @@ name = "copenet"
 version = "0.1.0"
 description = "Local agent gateway: orchestrator, providers, WebSocket RPC, session and transcript storage"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 dependencies = [
+    "copetech-edgar",
     "fastapi>=0.110.0",
     "pandas>=2.2.0",
     "playwright>=1.52.0",
@@ -41,3 +42,6 @@ packages = ["src/copenet"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[tool.uv.sources]
+copetech-edgar = { path = "../CopeTech-Edgar", editable = true }

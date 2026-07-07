@@ -9,6 +9,7 @@ This is the ONLY place feature data becomes prose for a model. Rules (spec §9):
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from .base_rates import BaseRate
 from .features import FeatureSet
@@ -88,6 +89,22 @@ def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None) -> str:
     return "\n".join(sections)
 
 
+def _domain(url: str) -> str:
+    try:
+        return urlparse(url).hostname or url
+    except ValueError:
+        return url
+
+
+def _fmt_money(value: float) -> str:
+    magnitude = abs(value)
+    if magnitude >= 1e9:
+        return f"${value / 1e9:.2f}B"
+    if magnitude >= 1e6:
+        return f"${value / 1e6:.1f}M"
+    return f"${value:,.0f}"
+
+
 def ticker_fact_packet(
     fs: FeatureSet,
     *,
@@ -95,6 +112,9 @@ def ticker_fact_packet(
     base_rate: BaseRate | None,
     verdict: list[dict[str, Any]] | None = None,
     evidence: list[dict[str, Any]] | None = None,
+    fundamentals: dict[str, Any] | None = None,
+    news: list[dict[str, Any]] | None = None,
+    news_source: str | None = None,
 ) -> str:
     """Format a single asset's packet from its typed FeatureSet."""
     sections: list[str] = [f"ASSET: {fs.symbol} ({name}) · weekly timeframe · basis {fs.basis}"]
@@ -202,5 +222,32 @@ def ticker_fact_packet(
     if evidence:
         rows = [f"[{e['type']}] {e['headline']} ({e.get('source', '')})" for e in evidence[:5]]
         sections.append("EVIDENCE: " + "; ".join(rows))
+
+    if fundamentals:
+        revenue_q = fundamentals.get("revenueQuarterly") or []
+        if revenue_q:
+            rows = []
+            for r in revenue_q[:4]:
+                yoy = r.get("yoy_pct")
+                yoy_txt = f", YoY {yoy:+.1%}" if yoy is not None else ""
+                rows.append(f"{r['period']} {_fmt_money(r['value'])}{yoy_txt}")
+            sections.append("FUNDAMENTALS — REVENUE (quarterly, newest first): " + "; ".join(rows))
+        pe_ttm = fundamentals.get("peTtm")
+        eps_ttm = fundamentals.get("epsTtm")
+        if pe_ttm is not None:
+            sections.append(f"VALUATION: trailing P/E ~{pe_ttm:.1f}x (TTM EPS ${eps_ttm:.2f})")
+        elif eps_ttm is not None and eps_ttm <= 0:
+            sections.append("VALUATION: trailing EPS is negative — P/E not meaningful")
+        if not revenue_q and pe_ttm is None:
+            sections.append("FUNDAMENTALS: SEC data found but no usable revenue/EPS series for this filer.")
+    else:
+        sections.append("FUNDAMENTALS: not available (ETF, or no matching SEC company facts).")
+
+    if news:
+        rows = [f"\"{n['title']}\" ({_domain(n['url'])}): {n.get('snippet', '').strip()[:180]}" for n in news[:5]]
+        source_note = f" [{news_source}]" if news_source else ""
+        sections.append(f"RECENT WEB/NEWS{source_note}: " + " | ".join(rows))
+    else:
+        sections.append("RECENT WEB/NEWS: no results returned (or search unavailable) — do not invent headlines.")
 
     return "\n".join(sections)

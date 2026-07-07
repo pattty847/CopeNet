@@ -148,6 +148,7 @@ class EvidenceItem:
     source: str
     tone: Tone
     url: str | None = None
+    t: int | None = None  # unix seconds, for chart marker placement
 
 
 @dataclass

@@ -93,7 +93,7 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
     </button>
   );
   return (
-    <div style={{ padding: 22, maxWidth: 1640, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <button onClick={onClose} style={{ cursor: 'pointer', border: `1px solid rgba(254,252,244,.08)`, background: MM.panel, color: MM.muted, borderRadius: 9, padding: '8px 13px', font: '600 11px Inter' }}>← Market Monitor</button>
         <span style={{ fontFamily: mono, fontSize: 26, fontWeight: 600, color: MM.text, letterSpacing: '-.02em' }}>{td.symbol}</span>
@@ -102,69 +102,66 @@ function TickerDetail({ symbol, onClose }: { symbol: string; onClose: () => void
         <span style={{ fontFamily: mono, fontSize: 22, color: MM.text }}>{td.last}</span>
         <span style={{ fontFamily: mono, fontSize: 14, color: toneColor(td.tone) }}>{td.change}</span>
       </div>
-      <div style={ROW}>
-        <PanelCard
-          title={`Price · ${tfLabel}`}
-          status={series.length ? 'live' : 'preview'}
-          style={{ flex: 1.7, minWidth: 420 }}
-          right={
-            <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
-              {tfBtn('D', '1D')}
-              {tfBtn('W', '1W')}
-              {tfBtn('M', '1M')}
-            </div>
-          }
-        >
-          <CandleChart bars={series} height={400} />
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
-            <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
-              <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>
-              Charts by TradingView
-            </span>
-            <span style={{ fontSize: 10, color: MM.dim, fontStyle: 'italic' }}>~5y history · weekly primary, daily confirmation</span>
+      <PanelCard
+        title={`Price · ${tfLabel}`}
+        status={series.length ? 'live' : 'preview'}
+        right={
+          <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
+            {tfBtn('D', '1D')}
+            {tfBtn('W', '1W')}
+            {tfBtn('M', '1M')}
           </div>
-        </PanelCard>
-        <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-          {td.insight?.softBottoming && (
-            <div style={{ background: `linear-gradient(180deg, rgba(105,197,137,.07), transparent 52%), ${MM.panel}`, border: `1px solid rgba(105,197,137,.25)`, borderRadius: 14, padding: 16 }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
-                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.up }}>
-                  <span style={{ width: 7, height: 7, borderRadius: '50%', background: MM.up }} /> Soft Bottoming
-                </span>
-                <span style={{ fontFamily: mono, fontSize: 12, color: MM.up }}>score {td.insight.score.toFixed(2)}</span>
-              </div>
-              {td.insight.baseRate ? (
-                <div style={{ fontSize: 12.5, color: MM.textSoft, lineHeight: 1.5, marginBottom: 12 }}>
-                  {td.insight.baseRate.headline}.
-                  <span style={{ color: MM.dim }}> Calibrated on real history — a base rate, not a forecast.</span>
-                </div>
-              ) : (
-                <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', marginBottom: 12 }}>Base rate calibrating…</div>
-              )}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px' }}>
-                {td.insight.components.map((c, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: c.met ? MM.textSoft : MM.dim }}>
-                    <span style={{ color: c.met ? MM.up : MM.dimmer, fontFamily: mono }}>{c.met ? '✓' : '·'}</span>
-                    {c.label}
-                  </div>
-                ))}
-              </div>
+        }
+      >
+        <CandleChart bars={series} events={td.events} height={620} />
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
+          <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>
+            Charts by TradingView · ▲/▼ insider Form 4 buys/sells · ▪ 8-K filings
+          </span>
+          <span style={{ fontSize: 10, color: MM.dim, fontStyle: 'italic' }}>~5y history · weekly primary, daily confirmation</span>
+        </div>
+      </PanelCard>
+      <div style={ROW}>
+        {td.insight?.softBottoming && (
+          <div style={{ flex: 1, minWidth: 260, background: `linear-gradient(180deg, rgba(105,197,137,.07), transparent 52%), ${MM.panel}`, border: `1px solid rgba(105,197,137,.25)`, borderRadius: 14, padding: 16 }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.up }}>
+                <span style={{ width: 7, height: 7, borderRadius: '50%', background: MM.up }} /> Soft Bottoming
+              </span>
+              <span style={{ fontFamily: mono, fontSize: 12, color: MM.up }}>score {td.insight.score.toFixed(2)}</span>
             </div>
-          )}
-          <PanelCard title="Signal Readout" status="preview">
-            <div style={{ display: 'flex', flexDirection: 'column' }}>
-              {td.signals.map((s, i) => (
-                <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none' }}>
-                  <span style={{ fontSize: 11.5, color: MM.muted }}>{s.key}</span>
-                  <span style={{ fontFamily: mono, fontSize: 11.5, color: toneColor(s.tone) }}>{s.value}</span>
+            {td.insight.baseRate ? (
+              <div style={{ fontSize: 12.5, color: MM.textSoft, lineHeight: 1.5, marginBottom: 12 }}>
+                {td.insight.baseRate.headline}.
+                <span style={{ color: MM.dim }}> Calibrated on real history — a base rate, not a forecast.</span>
+              </div>
+            ) : (
+              <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', marginBottom: 12 }}>Base rate calibrating…</div>
+            )}
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '5px 12px' }}>
+              {td.insight.components.map((c, i) => (
+                <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: c.met ? MM.textSoft : MM.dim }}>
+                  <span style={{ color: c.met ? MM.up : MM.dimmer, fontFamily: mono }}>{c.met ? '✓' : '·'}</span>
+                  {c.label}
                 </div>
               ))}
             </div>
-          </PanelCard>
-          <div style={{ background: `linear-gradient(180deg, rgba(251,148,35,.05), transparent 50%), ${MM.panel}`, border: `1px solid rgba(251,148,35,.16)`, borderRadius: 14, padding: 16 }}>
-            <div style={{ font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.accent, marginBottom: 9 }}>◆ What would make this wrong</div>
-            <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{td.kill}</div>
           </div>
+        )}
+        <PanelCard title="Signal Readout" status="preview" style={{ flex: 1, minWidth: 260 }}>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {td.signals.map((s, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none' }}>
+                <span style={{ fontSize: 11.5, color: MM.muted }}>{s.key}</span>
+                <span style={{ fontFamily: mono, fontSize: 11.5, color: toneColor(s.tone) }}>{s.value}</span>
+              </div>
+            ))}
+          </div>
+        </PanelCard>
+        <div style={{ flex: 1, minWidth: 260, background: `linear-gradient(180deg, rgba(251,148,35,.05), transparent 50%), ${MM.panel}`, border: `1px solid rgba(251,148,35,.16)`, borderRadius: 14, padding: 16 }}>
+          <div style={{ font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.accent, marginBottom: 9 }}>◆ What would make this wrong</div>
+          <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{td.kill}</div>
         </div>
       </div>
       <TickerReadPanel symbol={symbol} />

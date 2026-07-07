@@ -45,6 +45,9 @@ _USER_AGENT = "CopeNet/0.1 (+https://github.com/pattty847/CopeNet)"
 _SEARCH_ENDPOINT = "https://html.duckduckgo.com/html/"
 _EXA_SEARCH_ENDPOINT = "https://api.exa.ai/search"
 _EXA_API_KEY_ENV = "EXA_API_KEY"
+_BRAVE_WEB_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/web/search"
+_BRAVE_NEWS_SEARCH_ENDPOINT = "https://api.search.brave.com/res/v1/news/search"
+_BRAVE_API_KEY_ENV = "BRAVE_API_KEY"
 SEARCH_RESULT_LIMIT = 8
 SEARCH_SNIPPET_CHARS = 300
 FETCH_MAX_CHARS = 12000
@@ -172,6 +175,91 @@ def _search_via_exa(query: str, *, limit: int) -> list[dict[str, str]] | None:
     return results or None
 
 
+def _search_via_brave(query: str, *, limit: int, news: bool) -> list[dict[str, str]] | None:
+    """Brave Search API — real indexed web/news search (not a scrape). Returns None (never raises)
+    on missing key or any failure, so the caller falls back cleanly. News mode uses Brave's
+    dedicated news endpoint, which returns actual dated articles rather than generic web pages —
+    the DuckDuckGo fallback's "stock news" results are mostly quote-page boilerplate, this isn't."""
+    api_key = os.environ.get(_BRAVE_API_KEY_ENV, "").strip()
+    if not api_key:
+        return None
+    endpoint = _BRAVE_NEWS_SEARCH_ENDPOINT if news else _BRAVE_WEB_SEARCH_ENDPOINT
+    url = f"{endpoint}?{parse.urlencode({'q': query, 'count': limit})}"
+    # Deliberately no Accept-Encoding header — Brave only gzips when asked, and stdlib urllib
+    # doesn't auto-decompress, so omitting it keeps the response body plain JSON.
+    req = request.Request(
+        url,
+        headers={"Accept": "application/json", "X-Subscription-Token": api_key, "User-Agent": _USER_AGENT},
+        method="GET",
+    )
+    try:
+        with request.urlopen(req, timeout=15.0) as response:
+            body = json.loads(response.read().decode("utf-8", errors="replace"))
+    except Exception:
+        return None
+    # The news endpoint returns {"results": [...]} at the top level; the general web-search
+    # endpoint nests its organic results under {"web": {"results": [...]}} alongside sibling
+    # sections (videos, mixed, etc.) — two different shapes from the same API family.
+    if news:
+        raw_results = body.get("results") if isinstance(body, dict) else None
+    else:
+        web_section = body.get("web") if isinstance(body, dict) else None
+        raw_results = web_section.get("results") if isinstance(web_section, dict) else None
+    if not isinstance(raw_results, list):
+        return None
+    results: list[dict[str, str]] = []
+    for item in raw_results:
+        if not isinstance(item, dict):
+            continue
+        url_value = str(item.get("url") or "").strip()
+        title = str(item.get("title") or "").strip()
+        if not url_value or not title:
+            continue
+        snippet = str(item.get("description") or "").strip()
+        age = item.get("age")
+        if age:
+            snippet = f"[{age}] {snippet}"
+        results.append({"title": title, "url": url_value, "snippet": snippet[:SEARCH_SNIPPET_CHARS]})
+        if len(results) >= limit:
+            break
+    return results or None
+
+
+async def run_web_search(
+    query: str, *, limit: int = SEARCH_RESULT_LIMIT, kind: str = "web"
+) -> tuple[list[dict[str, str]], str]:
+    """The actual search logic behind ``web.search``, independent of the tool-call plumbing
+    (``ToolExecutionRequest``/``Context``) — so non-agent callers (e.g. the market read pipeline)
+    can reuse the exact same search/allowlist path without faking a tool-call context.
+
+    ``kind="news"`` prefers Brave's news endpoint (real dated articles) when BRAVE_API_KEY is set;
+    ``kind="web"`` (default) prefers Brave's general web search, then Exa, then DuckDuckGo.
+    """
+    limit = max(1, min(limit, SEARCH_RESULT_LIMIT))
+    news = kind == "news"
+
+    brave_results = await asyncio.to_thread(_search_via_brave, query, limit=limit, news=news)
+    if brave_results is not None:
+        results, source = brave_results, "brave_news" if news else "brave_web"
+    else:
+        exa_results = None if news else await asyncio.to_thread(_search_via_exa, query, limit=limit)
+        if exa_results is not None:
+            results, source = exa_results, "exa"
+        else:
+            try:
+                html_text = await asyncio.to_thread(_http_get_text, _SEARCH_ENDPOINT, data={"q": query})
+            except error.HTTPError as exc:
+                raise RuntimeError(f"web search failed: HTTP {exc.code}") from exc
+            except error.URLError as exc:
+                raise RuntimeError(f"web search failed: {exc.reason}") from exc
+            results, source = _parse_search_results(html_text, limit=limit), "duckduckgo"
+
+    allowlist = _fetch_allowlist()
+    if allowlist:
+        results = [r for r in results if _host_allowed(parse.urlparse(r["url"]).hostname or "", allowlist)]
+    return results, source
+
+
 async def search_web(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     query = str(request.arguments.get("query") or "").strip()
     if not query:
@@ -181,23 +269,8 @@ async def search_web(request: ToolExecutionRequest, context: ToolExecutionContex
         limit = int(raw_limit) if raw_limit is not None else SEARCH_RESULT_LIMIT
     except (TypeError, ValueError):
         limit = SEARCH_RESULT_LIMIT
-    limit = max(1, min(limit, SEARCH_RESULT_LIMIT))
 
-    exa_results = await asyncio.to_thread(_search_via_exa, query, limit=limit)
-    if exa_results is not None:
-        results, source = exa_results, "exa"
-    else:
-        try:
-            html_text = await asyncio.to_thread(_http_get_text, _SEARCH_ENDPOINT, data={"q": query})
-        except error.HTTPError as exc:
-            raise RuntimeError(f"web search failed: HTTP {exc.code}") from exc
-        except error.URLError as exc:
-            raise RuntimeError(f"web search failed: {exc.reason}") from exc
-        results, source = _parse_search_results(html_text, limit=limit), "duckduckgo"
-
-    allowlist = _fetch_allowlist()
-    if allowlist:
-        results = [r for r in results if _host_allowed(parse.urlparse(r["url"]).hostname or "", allowlist)]
+    results, source = await run_web_search(query, limit=limit)
     if not results:
         return ToolExecutionResult(
             tool_id=request.tool_id,

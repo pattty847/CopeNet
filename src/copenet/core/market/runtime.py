@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -9,10 +11,11 @@ from typing import Any
 import pandas as pd
 
 from copenet._paths import default_sessions_dir
+from copenet.core.tools.handlers.web import run_web_search
 
 from .benchmark import benchmark_verdict
 from .data_sources import fetch_fund_profile, fetch_ohlcv, frame_to_bars, macro_item_from_frame
-from .edgar import chart_events_from_evidence, fetch_evidence
+from .edgar import chart_events_from_evidence, fetch_evidence, fetch_fundamentals
 from .models import (
     AccumulationRow,
     CompareResult,
@@ -225,12 +228,23 @@ class MarketRuntime:
         fs = compute_features(weekly_frame, voo_frame, symbol=symbol)
         verdict = benchmark_verdict(weekly_frame, {"VOO": voo_frame})
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == symbol]
+        fundamentals = await fetch_fundamentals(symbol)
+        if fundamentals is not None:
+            fundamentals = {**fundamentals, **_trailing_eps_and_pe(fundamentals, weekly_frame)}
+        query_name = asset.name if asset else symbol
+        try:
+            news_results, news_source = await run_web_search(f"{query_name} {symbol} stock news", limit=5, kind="news")
+        except Exception:
+            news_results, news_source = [], "unavailable"
         packet = ticker_fact_packet(
             fs,
             name=asset.name if asset else symbol,
             base_rate=sb_rate,
             verdict=[{"bench": v.bench, "label": v.label} for v in verdict],
             evidence=[{"type": e.type, "headline": e.headline, "source": e.source} for e in evidence],
+            fundamentals=fundamentals,
+            news=news_results,
+            news_source=news_source,
         )
         if include_portfolio_context_enabled():
             snapshot = load_webull_snapshot()
@@ -355,8 +369,22 @@ class MarketRuntime:
         if speculative:
             dashboard.speculative = MarketPanel(status="live", data=speculative, as_of=_now_iso())
 
-        evidence = fetch_evidence([asset.symbol for asset in UNIVERSE if asset.role in {"holding", "watch", "spec"}])
-        dashboard.evidence = MarketPanel(status="live", data=evidence, as_of=_now_iso())
+        # _assemble_dashboard runs inside asyncio.to_thread (see rpc_market.py), i.e. a plain
+        # worker thread with no running loop, so asyncio.run() here is a safe sync/async bridge.
+        evidence = asyncio.run(
+            fetch_evidence([asset.symbol for asset in UNIVERSE if asset.role in {"holding", "watch", "spec"}])
+        )
+        evidence_note = None
+        if not evidence:
+            # Zero evidence across every symbol in one cycle is far more likely a transient failure
+            # (SEC rate-limit, network hiccup) than every ticker genuinely having no insider/8-K
+            # activity — don't let that silently wipe a previously good evidence panel.
+            previous = _evidence_from_dashboard(self.store.load_dashboard_wire())
+            if previous:
+                logging.warning("market refresh: evidence fetch returned empty for all symbols, keeping last known evidence")
+                evidence = previous
+                evidence_note = "evidence fetch returned empty this cycle — showing last known evidence"
+        dashboard.evidence = MarketPanel(status="live", data=evidence, as_of=_now_iso(), note=evidence_note)
 
         breadth_pct = (above_trend / total_trend * 100) if total_trend else 0.0
         briefing, contrarian = synthesize_briefing(macro=macro, evidence=evidence, breadth_pct=breadth_pct)
@@ -655,6 +683,27 @@ def _signal_rows(signals: dict[str, Any]) -> list[SignalRow]:
     return rows
 
 
+def _trailing_eps_and_pe(fundamentals: dict[str, Any], weekly_frame: pd.DataFrame) -> dict[str, Any]:
+    """CopeTech-Edgar has no ratio calculator (ratios need a live price, which is CopeNet's job) —
+    sum the last 4 quarterly EPS values for trailing-twelve-month EPS, then divide the last known
+    close into it for a trailing P/E. Returns {} (not a P/E) if EPS is negative or unavailable."""
+    eps_quarterly = fundamentals.get("epsQuarterly") or []
+    eps_ttm = None
+    if len(eps_quarterly) >= 4:
+        try:
+            eps_ttm = sum(float(e["value"]) for e in eps_quarterly[:4])
+        except (TypeError, ValueError, KeyError):
+            eps_ttm = None
+    pe_ttm = None
+    if eps_ttm is not None and eps_ttm > 0 and not weekly_frame.empty:
+        try:
+            last_price = float(weekly_frame["close"].iloc[-1])
+            pe_ttm = last_price / eps_ttm
+        except (TypeError, ValueError, IndexError, KeyError):
+            pe_ttm = None
+    return {"epsTtm": eps_ttm, "peTtm": pe_ttm}
+
+
 def _evidence_from_dashboard(payload: dict[str, Any]) -> list[EvidenceItem]:
     panel = payload.get("evidence") if isinstance(payload, dict) else None
     rows = panel.get("data") if isinstance(panel, dict) else None
@@ -671,6 +720,7 @@ def _evidence_from_dashboard(payload: dict[str, Any]) -> list[EvidenceItem]:
                     source=row.get("source") or "",
                     tone=row.get("tone") or "flat",
                     url=row.get("url"),
+                    t=row.get("t"),
                 )
             )
     return evidence
