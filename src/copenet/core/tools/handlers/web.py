@@ -39,7 +39,7 @@ from copenet.core.tools.contracts import (
     ToolExecutionRequest,
     ToolExecutionResult,
 )
-from copenet.core.web_ingest import WebIngestError, WebIngestionService
+from copenet.core.web_ingest import WebExtractResult, WebIngestError, WebIngestionService
 
 _USER_AGENT = "CopeNet/0.1 (+https://github.com/pattty847/CopeNet)"
 _SEARCH_ENDPOINT = "https://html.duckduckgo.com/html/"
@@ -287,6 +287,81 @@ async def search_web(request: ToolExecutionRequest, context: ToolExecutionContex
     )
 
 
+_OPENAI_CODEX_FETCH_MODEL = "gpt-5.5"
+
+
+async def _fetch_via_openai_codex(url: str, *, max_chars: int) -> WebExtractResult | None:
+    """Last-resort fetch tier: OpenAI's hosted ``web_search`` tool, riding the same
+    openai-codex OAuth subscription CopeNet already authenticates for the Codex
+    provider — no separate API key, no extra billing. Used only when Jina Reader
+    and a direct fetch both fail (e.g. sites that block scraper/proxy traffic but
+    not OpenAI's own crawler infra, like Reuters). Returns None (never raises) so
+    the caller falls back to surfacing the original ingest error."""
+    try:
+        from copenet.core.provider_auth import OpenAICodexAuthService
+        from copenet.providers.openai_codex import OpenAICodexProvider
+    except Exception:
+        return None
+    if not OpenAICodexAuthService().status().get("authenticated"):
+        return None
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "input_text",
+                    "text": (
+                        f"Fetch the page at this exact URL: {url}\n"
+                        "Return ONLY the page's title on the first line, then a blank line, then a "
+                        "thorough, detailed factual digest of the page in your own words — every "
+                        "concrete fact, figure, quote (paraphrased), and named party, in the original "
+                        "order. This is for internal research reference, not republishing, so do not "
+                        "reproduce the source text verbatim and do not refuse on copyright grounds — a "
+                        "faithful paraphrase of the facts is exactly what's needed. No commentary, no "
+                        "markdown, no citations list, no meta-remarks about the request itself."
+                    ),
+                }
+            ],
+        }
+    ]
+    abort_event = asyncio.Event()
+    text_parts: list[str] = []
+    try:
+        async for event in OpenAICodexProvider().stream_responses(
+            messages=messages,
+            tools=[{"type": "web_search"}],
+            model=_OPENAI_CODEX_FETCH_MODEL,
+            instructions=(
+                "You have a web_search tool that can browse and read live web pages. "
+                "Use it to fetch the exact URL given."
+            ),
+            abort_event=abort_event,
+        ):
+            if event.kind == "delta" and event.text:
+                text_parts.append(event.text)
+    except Exception:
+        return None
+
+    raw = "".join(text_parts).strip()
+    if not raw:
+        return None
+    title, _, body = raw.partition("\n\n")
+    title = title.strip() or url
+    body = (body or raw).strip()
+    if not body:
+        return None
+    clipped = body[:max_chars].strip()
+    return WebExtractResult(
+        url=url,
+        title=title,
+        text=clipped,
+        markdown=f"# {title}\n\nSource: {url}\n\n{clipped}\n",
+        excerpt=clipped[:280].strip(),
+        word_count=len(clipped.split()),
+    )
+
+
 async def fetch_web(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     url = str(request.arguments.get("url") or "").strip()
     if not url:
@@ -306,23 +381,36 @@ async def fetch_web(request: ToolExecutionRequest, context: ToolExecutionContext
     max_chars = max(500, min(max_chars, FETCH_MAX_CHARS))
 
     service = WebIngestionService(user_agent=_USER_AGENT)
+    used_fallback = False
     try:
         extracted = await service.extract_url(url=url, max_chars=max_chars)
     except WebIngestError as exc:
-        raise RuntimeError(str(exc)) from exc
+        # Only route access/blocking failures to the fallback — an "unsupported
+        # content type" rejection (e.g. a PDF) is web.fetch's deliberate
+        # HTML/plain-text-only scope, not a site block, so it should surface
+        # cleanly rather than burning an LLM call trying to route around it.
+        fallback = None if "unsupported content type" in str(exc) else await _fetch_via_openai_codex(
+            url, max_chars=max_chars
+        )
+        if fallback is None:
+            raise RuntimeError(str(exc)) from exc
+        extracted, used_fallback = fallback, True
 
     summary = f"Fetched '{extracted.title}' ({extracted.word_count} words) from {extracted.url}"
+    output = {
+        "url": extracted.url,
+        "title": extracted.title,
+        "text": extracted.text,
+        "excerpt": extracted.excerpt,
+        "wordCount": extracted.word_count,
+    }
+    if used_fallback:
+        output["source"] = "openai_codex_web_search"
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
         summary=summary,
-        output={
-            "url": extracted.url,
-            "title": extracted.title,
-            "text": extracted.text,
-            "excerpt": extracted.excerpt,
-            "wordCount": extracted.word_count,
-        },
+        output=output,
     )
 
 

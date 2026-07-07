@@ -1,7 +1,8 @@
 """web.search + web.fetch — the agent's window to the live web.
 
-The only real I/O boundary (`_http_get_text` and the WebIngestionService HTTP
-call) is monkeypatched, so these tests never touch the network.
+The real I/O boundaries (`_http_get_text`, the WebIngestionService HTTP call,
+and the `_fetch_via_openai_codex` fallback) are monkeypatched, so these tests
+never touch the network.
 """
 
 from __future__ import annotations
@@ -161,6 +162,56 @@ async def test_web_fetch_surfaces_ingest_error(tmp_path: Path, monkeypatch: pyte
         raise WebIngestError("unsupported content type: application/pdf")
 
     monkeypatch.setattr("copenet.core.web_ingest.WebIngestionService.extract_url", fake_extract)
+
+    result = await ToolRegistry().execute(
+        ToolExecutionRequest(tool_id="web.fetch", arguments={"url": "https://x.test/a.pdf"}),
+        _ctx(tmp_path),
+    )
+    assert result.ok is False
+    assert "unsupported content type" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_falls_back_to_openai_codex_when_blocked(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_extract(self, *, url: str, max_chars: int = 20000) -> WebExtractResult:
+        raise WebIngestError("web fetch failed: HTTP 401")
+
+    async def fake_fallback(url: str, *, max_chars: int) -> WebExtractResult:
+        return WebExtractResult(
+            url=url,
+            title="Blocked Site Article",
+            text="Digest gathered via the fallback path.",
+            markdown="# Blocked Site Article\n\nDigest gathered via the fallback path.\n",
+            excerpt="Digest gathered via the fallback path.",
+            word_count=6,
+        )
+
+    monkeypatch.setattr("copenet.core.web_ingest.WebIngestionService.extract_url", fake_extract)
+    monkeypatch.setattr(web_handler, "_fetch_via_openai_codex", fake_fallback)
+
+    result = await ToolRegistry().execute(
+        ToolExecutionRequest(tool_id="web.fetch", arguments={"url": "https://blocked.test/a"}),
+        _ctx(tmp_path),
+    )
+    assert result.ok is True
+    assert result.output["title"] == "Blocked Site Article"
+    assert result.output["source"] == "openai_codex_web_search"
+
+
+@pytest.mark.asyncio
+async def test_web_fetch_unsupported_content_type_skips_openai_codex_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def fake_extract(self, *, url: str, max_chars: int = 20000) -> WebExtractResult:
+        raise WebIngestError("unsupported content type: application/pdf")
+
+    async def unexpected_fallback(url: str, *, max_chars: int) -> WebExtractResult:
+        raise AssertionError("fallback must not run for unsupported-content-type errors")
+
+    monkeypatch.setattr("copenet.core.web_ingest.WebIngestionService.extract_url", fake_extract)
+    monkeypatch.setattr(web_handler, "_fetch_via_openai_codex", unexpected_fallback)
 
     result = await ToolRegistry().execute(
         ToolExecutionRequest(tool_id="web.fetch", arguments={"url": "https://x.test/a.pdf"}),
