@@ -741,6 +741,7 @@ def _evidence_from_dashboard(payload: dict[str, Any]) -> list[EvidenceItem]:
                     tone=row.get("tone") or "flat",
                     url=row.get("url"),
                     t=row.get("t"),
+                    flag=row.get("flag"),
                 )
             )
     return evidence

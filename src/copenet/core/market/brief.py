@@ -124,6 +124,7 @@ def _new_evidence(previous_wire: dict[str, Any], current_wire: dict[str, Any]) -
                 tone=row.get("tone") or "flat",
                 url=row.get("url"),
                 t=row.get("t"),
+                flag=row.get("flag"),
             )
         )
     return fresh[:_MAX_EVIDENCE]

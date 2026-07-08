@@ -142,13 +142,16 @@ class SpecPosition:
 
 @dataclass
 class EvidenceItem:
-    type: Literal["Insider", "8-K", "News"]
+    type: Literal["Insider", "8-K", "News", "Form 144"]
     symbol: str
     headline: str
     source: str
     tone: Tone
     url: str | None = None
     t: int | None = None  # unix seconds, for chart marker placement
+    # Badge-worthy anomaly: "cluster" = multi-insider buy window, "high-signal" = 8-K in a
+    # high-signal category (exec change, results, M&A, distress, restructuring, material agreement).
+    flag: Literal["cluster", "high-signal"] | None = None
 
 
 @dataclass
@@ -175,7 +178,7 @@ class SignalRow:
 @dataclass
 class ChartEvent:
     t: int
-    kind: Literal["insider", "8-K"]
+    kind: Literal["insider", "8-K", "planned-sale"]
     glyph: str
 
 

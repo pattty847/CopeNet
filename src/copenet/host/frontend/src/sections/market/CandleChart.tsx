@@ -56,6 +56,7 @@ function markersFor(events: ChartEvent[], bars: Ohlcv[]): SeriesMarker<Time>[] {
     const insiderBuys = bucket.filter((e) => e.kind === 'insider' && e.glyph === '▲').length;
     const insiderSells = bucket.filter((e) => e.kind === 'insider' && e.glyph === '▼').length;
     const filings = bucket.filter((e) => e.kind === '8-K').length;
+    const plannedSales = bucket.filter((e) => e.kind === 'planned-sale').length;
     if (insiderBuys) {
       markers.push({
         time: time as UTCTimestamp,
@@ -74,6 +75,16 @@ function markersFor(events: ChartEvent[], bars: Ohlcv[]): SeriesMarker<Time>[] {
         color: MM.down,
         size: 1,
         text: insiderSells > 1 ? `${insiderSells} insider sells` : 'insider sell',
+      });
+    }
+    if (plannedSales) {
+      markers.push({
+        time: time as UTCTimestamp,
+        position: 'aboveBar',
+        shape: 'circle',
+        color: MM.down,
+        size: 0.7,
+        text: plannedSales > 1 ? `${plannedSales} planned sales (144)` : 'planned sale (144)',
       });
     }
     if (filings) {

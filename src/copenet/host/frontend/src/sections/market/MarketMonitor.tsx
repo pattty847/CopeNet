@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { MM, PanelCard, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, MM, PanelCard, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
 import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
@@ -39,8 +39,6 @@ function SecActivityPanel({
   error: string | null;
   onRefresh: () => void;
 }) {
-  const typeBg = (t: EvidenceItem['type']) => (t === 'Insider' ? MM.accentSoft : 'rgba(254,252,244,.06)');
-  const typeColor = (t: EvidenceItem['type']) => (t === 'Insider' ? MM.accent : MM.textSoft);
   return (
     <PanelCard
       title="SEC Activity"
@@ -67,8 +65,11 @@ function SecActivityPanel({
           {evidence.map((item, i) => {
             const row = (
               <>
-                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: typeBg(item.type), color: typeColor(item.type) }}>{item.type}</span>
-                <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.4 }}>{item.headline}</span>
+                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  {item.headline}
+                  <EvidenceFlagBadge flag={item.flag} />
+                </span>
                 <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{item.source}</span>
               </>
             );
@@ -225,7 +226,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
           <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>
-            Charts by TradingView · ▲/▼ insider Form 4 buys/sells · ▪ 8-K filings
+            Charts by TradingView · ▲/▼ insider Form 4 buys/sells · ● planned sales (Form 144) · ▪ 8-K filings
           </span>
           <span style={{ fontSize: 10, color: MM.dim, fontStyle: 'italic' }}>~5y history · weekly primary, daily confirmation</span>
         </div>

@@ -32,6 +32,10 @@ class FakeFetcher:
         self.calls.append(f"refresh-8k:{symbol}:{days_back}:{filing_limit}")
         return _form8k_payload(symbol)
 
+    async def get_planned_insider_sales(self, symbol: str, *, days_back: int = 90, filing_limit: int = 25, use_cache: bool = True):
+        self.calls.append(f"144:{symbol}:{days_back}:{filing_limit}:{'cached' if use_cache else 'live'}")
+        return _form144_payload(symbol)
+
 
 class FakeOrchestrator:
     def __init__(self, root: Path) -> None:
@@ -54,6 +58,16 @@ def _insider_payload(symbol: str) -> dict[str, Any]:
                 "form_url": "https://sec.example/form4",
             }
         ],
+        "clusters": [
+            {
+                "window_start": "2026-07-01",
+                "window_end": "2026-07-05",
+                "unique_insiders": 3,
+                "event_count": 4,
+                "total_value": 1_250_000.0,
+                "filing_urls": ["https://sec.example/form4-cluster"],
+            }
+        ],
     }
 
 
@@ -65,7 +79,25 @@ def _form8k_payload(symbol: str) -> dict[str, Any]:
             {
                 "filing_date": "2026-07-06",
                 "url": "https://sec.example/8k",
-                "items": [{"label": "Departure or Election of Directors / Officers"}],
+                "items": [{"label": "Departure or Election of Directors / Officers", "category": "exec_change"}],
+                "high_signal": True,
+            }
+        ],
+    }
+
+
+def _form144_payload(symbol: str) -> dict[str, Any]:
+    return {
+        "symbol": symbol,
+        "as_of": "2026-07-08T12:00:02Z",
+        "records": [
+            {
+                "account_name": "John CFO",
+                "planned_shares": 50_000,
+                "aggregate_market_value": 900_000.0,
+                "signature_date": "2026-07-03",
+                "filing_date": "2026-07-04",
+                "form_url": "https://sec.example/form144",
             }
         ],
     }
@@ -89,11 +121,19 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
     payload = await edgar.fetch_ticker_evidence("AAPL")
 
     assert [item.headline for item in payload.evidence] == [
+        "Cluster buy — 3 insiders ~$1.2M (2026-07-01 → 2026-07-05)",
         "Jane Director (Director) bought 1,200 shares",
+        "John CFO filed to sell 50,000 shares (~$900K)",
         "Departure or Election of Directors / Officers",
     ]
-    assert [event.kind for event in payload.events] == ["insider", "8-K"]
-    assert FakeFetcher.calls == ["cached-insider:AAPL:180:40", "cached-8k:AAPL:180:5"]
+    assert [item.flag for item in payload.evidence] == ["cluster", None, None, "high-signal"]
+    assert [item.type for item in payload.evidence] == ["Insider", "Insider", "Form 144", "8-K"]
+    assert [event.kind for event in payload.events] == ["insider", "insider", "planned-sale", "8-K"]
+    assert FakeFetcher.calls == [
+        "cached-insider:AAPL:180:40",
+        "144:AAPL:90:25:cached",
+        "cached-8k:AAPL:180:5",
+    ]
 
 
 @pytest.mark.asyncio
@@ -104,7 +144,11 @@ async def test_fetch_ticker_evidence_refresh_uses_incremental_copetech_paths(mon
     payload = await edgar.fetch_ticker_evidence("AAPL", refresh=True)
 
     assert payload.refreshed is True
-    assert FakeFetcher.calls == ["refresh-insider:AAPL:180:40", "refresh-8k:AAPL:180:5"]
+    assert FakeFetcher.calls == [
+        "refresh-insider:AAPL:180:40",
+        "144:AAPL:90:25:live",
+        "refresh-8k:AAPL:180:5",
+    ]
 
 
 @pytest.mark.asyncio

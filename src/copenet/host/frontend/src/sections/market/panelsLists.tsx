@@ -9,7 +9,7 @@ import type {
   TrendRow,
   WatchlistItem,
 } from './types';
-import { MM, PanelCard, label, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, MM, PanelCard, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor } from './marketUi';
 import { Sparkline } from './panelsTop';
 
 export function SoftBottomingWatch({ panel, onOpen }: { panel: Panel<SoftBottomItem[]>; onOpen: (s: string) => void }) {
@@ -245,16 +245,17 @@ export function Watchlist({
 }
 
 export function Evidence({ panel, onOpen }: { panel: Panel<EvidenceItem[]>; onOpen: (s: string) => void }) {
-  const typeBg = (t: EvidenceItem['type']) => (t === 'Insider' ? MM.accentSoft : 'rgba(254,252,244,.06)');
-  const typeColor = (t: EvidenceItem['type']) => (t === 'Insider' ? MM.accent : MM.textSoft);
   return (
     <PanelCard title="Evidence & News — why it moved" status={panel.status} style={{ flex: 1.4, minWidth: 380 }} right={<span style={{ fontSize: 10, color: MM.dim }}>cited · last 72h</span>}>
       <div style={{ display: 'flex', flexDirection: 'column' }}>
         {panel.data.map((e, i) => (
           <button key={i} onClick={() => onOpen(e.symbol)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: `1px solid rgba(254,252,244,.05)`, background: 'transparent', border: 'none', borderTopColor: 'rgba(254,252,244,.05)', textAlign: 'left' }}>
-            <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: typeBg(e.type), color: typeColor(e.type) }}>{e.type}</span>
+            <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(e.type), color: evidenceTypeColor(e.type) }}>{e.type}</span>
             <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: MM.text, width: 50 }}>{e.symbol}</span>
-            <span style={{ flex: 1, fontSize: 12, color: MM.textSoft, lineHeight: 1.4 }}>{e.headline}</span>
+            <span style={{ flex: 1, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              {e.headline}
+              <EvidenceFlagBadge flag={e.flag} />
+            </span>
             <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{e.source}</span>
           </button>
         ))}

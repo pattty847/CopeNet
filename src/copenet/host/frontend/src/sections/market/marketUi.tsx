@@ -2,7 +2,7 @@
 // (which used CopeNet's token handoff), so these hexes match the app's dark theme exactly.
 
 import type { CSSProperties, ReactNode } from 'react';
-import type { PanelStatus, Tone } from './types';
+import type { EvidenceItem, PanelStatus, Tone } from './types';
 
 export const MM = {
   bg: '#000103',
@@ -35,6 +35,41 @@ export const label: CSSProperties = {
 };
 
 export const mono = "'JetBrains Mono', monospace";
+
+export function evidenceTypeBg(t: EvidenceItem['type']): string {
+  if (t === 'Insider') return MM.accentSoft;
+  if (t === 'Form 144') return 'rgba(217,109,95,.12)';
+  return 'rgba(254,252,244,.06)';
+}
+
+export function evidenceTypeColor(t: EvidenceItem['type']): string {
+  if (t === 'Insider') return MM.accent;
+  if (t === 'Form 144') return MM.down;
+  return MM.textSoft;
+}
+
+/** Anomaly badge for an evidence row — cluster buys and high-signal 8-Ks. */
+export function EvidenceFlagBadge({ flag }: { flag?: EvidenceItem['flag'] }) {
+  if (!flag) return null;
+  const cluster = flag === 'cluster';
+  return (
+    <span
+      style={{
+        flex: '0 0 auto',
+        borderRadius: 999,
+        padding: '2px 7px',
+        font: '700 8px Inter',
+        letterSpacing: '.1em',
+        textTransform: 'uppercase',
+        background: cluster ? 'rgba(105,197,137,.14)' : 'rgba(90,143,199,.14)',
+        color: cluster ? MM.up : '#8fb8e8',
+        border: `1px solid ${cluster ? 'rgba(105,197,137,.35)' : 'rgba(90,143,199,.35)'}`,
+      }}
+    >
+      {cluster ? 'cluster' : 'high signal'}
+    </span>
+  );
+}
 
 /** Tiny honest badge — only shows when a panel isn't live yet. */
 export function PreviewBadge({ status }: { status: PanelStatus }) {

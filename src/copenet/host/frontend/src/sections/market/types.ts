@@ -126,13 +126,15 @@ export interface SpecPosition {
 }
 
 export interface EvidenceItem {
-  type: 'Insider' | '8-K' | 'News';
+  type: 'Insider' | '8-K' | 'News' | 'Form 144';
   symbol: string;
   headline: string;
   source: string;
   tone: Tone;
   url?: string;
   t?: number; // unix seconds, for chart marker placement
+  /** Badge-worthy anomaly: multi-insider buy window, or an 8-K in a high-signal category. */
+  flag?: 'cluster' | 'high-signal';
 }
 
 export interface ContrarianNote {
@@ -188,7 +190,7 @@ export interface SignalRow {
 
 export interface ChartEvent {
   t: number;
-  kind: 'insider' | '8-K';
+  kind: 'insider' | '8-K' | 'planned-sale';
   glyph: string;
 }
 
