@@ -62,6 +62,8 @@ from .rpc_messaging import (
     handle_messaging_routes_resolve,
 )
 from .rpc_market import (
+    handle_market_brief_get,
+    handle_market_brief_run,
     handle_market_dashboard_get,
     handle_market_interpret,
     handle_market_read_get,
@@ -136,6 +138,8 @@ __all__ = [
     "handle_market_refresh",
     "handle_market_interpret",
     "handle_market_read_get",
+    "handle_market_brief_get",
+    "handle_market_brief_run",
     "handle_market_webull_status",
     "handle_market_webull_auth",
     "handle_market_webull_accounts",

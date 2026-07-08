@@ -19,8 +19,12 @@ def _line(parts: list[str]) -> str:
     return " · ".join(p for p in parts if p)
 
 
-def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None) -> str:
-    """Format the whole-market packet from the persisted dashboard wire dict."""
+def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None, *, overnight: dict[str, Any] | None = None) -> str:
+    """Format the whole-market packet from the persisted dashboard wire dict.
+
+    ``overnight`` is today's morning-brief wire (the delta vs the previous sweep);
+    when present it leads the packet so the model narrates what CHANGED, not just
+    what is."""
     sections: list[str] = []
 
     briefing = (wire.get("briefing") or {}).get("data") or {}
@@ -32,6 +36,10 @@ def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None) -> str:
     if breadth is not None:
         header.append(f"breadth {breadth:.0f}% of tracked names above weekly trend")
     sections.append(_line(header))
+
+    overnight_section = _overnight_section(overnight)
+    if overnight_section:
+        sections.append(overnight_section)
 
     macro = (wire.get("macro") or {}).get("data") or []
     if macro:
@@ -87,6 +95,40 @@ def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None) -> str:
         sections.append("SEC/NEWS EVIDENCE: none in the current window.")
 
     return "\n".join(sections)
+
+
+def _overnight_section(overnight: dict[str, Any] | None) -> str | None:
+    """Render the morning-brief delta as one packet section. Verbatim facts only —
+    the deltas were computed deterministically in brief.py, never re-derived here."""
+    if not overnight or overnight.get("firstSweep"):
+        return None
+    parts: list[str] = []
+    evidence = overnight.get("newEvidence") or []
+    if evidence:
+        rows = [f"[{e.get('type')}] {e.get('symbol')}: {e.get('headline')}" for e in evidence[:6]]
+        parts.append("new SEC/news evidence: " + "; ".join(rows))
+    regime = overnight.get("regimeShift")
+    if regime:
+        parts.append(f"regime shifted {regime.get('from')} → {regime.get('to')}")
+    shifts = overnight.get("rrgShifts") or []
+    if shifts:
+        rows = [f"{s.get('symbol')} {s.get('fromQuadrant')}→{s.get('toQuadrant')}" for s in shifts]
+        parts.append("sector rotation moves: " + ", ".join(rows))
+    flips = overnight.get("signalFlips") or []
+    if flips:
+        rows = [f"{f.get('symbol')}: {f.get('detail')}" for f in flips]
+        parts.append("signal flips: " + "; ".join(rows))
+    movers = overnight.get("movers") or []
+    if movers:
+        rows = [f"{m.get('symbol')} {m.get('changePct'):+.1f}%" for m in movers if m.get("changePct") is not None]
+        if rows:
+            parts.append("last-session movers: " + ", ".join(rows))
+    portfolio_note = overnight.get("portfolioNote")
+    if portfolio_note:
+        parts.append(portfolio_note)
+    if not parts:
+        return "OVERNIGHT CHANGES (since previous sweep): none material — a quiet tape."
+    return "OVERNIGHT CHANGES (since previous sweep): " + " | ".join(parts)
 
 
 def _domain(url: str) -> str:

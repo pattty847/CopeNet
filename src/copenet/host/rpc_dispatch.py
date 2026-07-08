@@ -26,6 +26,8 @@ from .rpc_catalog import (
     handle_messaging_routes_resolve,
     handle_messaging_routes_upsert,
     handle_messaging_test,
+    handle_market_brief_get,
+    handle_market_brief_run,
     handle_market_dashboard_get,
     handle_market_interpret,
     handle_market_read_get,
@@ -257,6 +259,10 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_interpret(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.read.get":
         await handle_market_read_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.brief.get":
+        await handle_market_brief_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.brief.run":
+        await handle_market_brief_run(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.status":
         await handle_market_webull_status(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.auth":

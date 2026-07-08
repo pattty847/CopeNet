@@ -87,6 +87,18 @@ class MarketStore:
         payload = read_json(self._root / "latest-market-read.json", None)
         return payload if isinstance(payload, dict) and payload else None
 
+    def save_morning_brief(self, wire: dict[str, Any]) -> None:
+        """Persist the latest morning brief plus a dated copy under briefs/ for history."""
+        with self._lock:
+            write_json_atomic(self._root / "latest-brief.json", wire)
+            brief_date = str(wire.get("briefDate") or "").strip()
+            if brief_date:
+                write_json_atomic(self._root / "briefs" / f"{brief_date}.json", wire)
+
+    def load_morning_brief(self) -> dict[str, Any] | None:
+        payload = read_json(self._root / "latest-brief.json", None)
+        return payload if isinstance(payload, dict) and payload else None
+
     def save_ticker_read(self, symbol: str, read: dict[str, Any]) -> None:
         with self._lock:
             write_json_atomic(self._reads_path(symbol), read)

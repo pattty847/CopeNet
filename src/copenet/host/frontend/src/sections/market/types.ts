@@ -200,6 +200,47 @@ export interface TickerEvidencePayload {
   refreshed: boolean;
 }
 
+// ---------- morning brief (overnight sentinel delta) ----------
+export interface BriefSignalFlip {
+  symbol: string;
+  kind: string; // 'soft-bottoming' | 'trend'
+  detail: string;
+  tone: Tone;
+}
+
+export interface BriefRrgShift {
+  symbol: string;
+  name: string;
+  fromQuadrant: string;
+  toQuadrant: string;
+  tone: Tone;
+}
+
+export interface BriefMover {
+  symbol: string;
+  name: string;
+  last: string;
+  changePct: number;
+  tone: Tone;
+}
+
+/** What changed between the previous pre-market sweep and this one. Optional fields are
+ *  omitted from the wire when null (backend drops None values). */
+export interface MorningBriefPayload {
+  briefDate: string; // YYYY-MM-DD, operator-local
+  generatedAt: string;
+  headline: string;
+  newEvidence: EvidenceItem[];
+  signalFlips: BriefSignalFlip[];
+  rrgShifts: BriefRrgShift[];
+  movers: BriefMover[];
+  regimeShift?: { from: string; to: string };
+  portfolioNote?: string;
+  previousAsOf?: string;
+  firstSweep: boolean;
+  note?: string;
+}
+
 // ---------- model reads (Insight Engine Phase D) ----------
 export interface MarketRead {
   headline: string;

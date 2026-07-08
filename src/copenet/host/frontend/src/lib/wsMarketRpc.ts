@@ -5,6 +5,7 @@
 import type {
   DashboardPayload,
   MarketRead,
+  MorningBriefPayload,
   TickerEvidencePayload,
   SymbolSearchResult,
   TickerDetailPayload,
@@ -55,6 +56,17 @@ export async function marketInterpretRpc(
 ): Promise<{ startedAt: string; runId: string }> {
   const payload = await request<Record<string, unknown>>('market.interpret', { target });
   return { startedAt: String(payload.startedAt || ''), runId: String(payload.runId || '') };
+}
+
+export async function marketBriefGetRpc(request: WsRpcRequest): Promise<MorningBriefPayload | null> {
+  const payload = await request<{ brief?: unknown }>('market.brief.get', {});
+  const brief = payload.brief;
+  return brief && typeof brief === 'object' ? (brief as MorningBriefPayload) : null;
+}
+
+export async function marketBriefRunRpc(request: WsRpcRequest, force = true): Promise<{ startedAt: string }> {
+  const payload = await request<Record<string, unknown>>('market.brief.run', { force });
+  return { startedAt: String(payload.startedAt || '') };
 }
 
 export interface WebullStatus {

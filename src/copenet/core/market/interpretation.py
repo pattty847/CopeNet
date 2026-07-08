@@ -38,6 +38,10 @@ Hard rules:
 - Each thesis-killer must be concrete and falsifiable ("wrong if X happens").
 - If evidence is thin or missing, say so plainly.
 - Keep the voice plain and calm. No hype, no emojis.
+- When an OVERNIGHT CHANGES section is present, lead with it: the owner reads this at the start of
+  the day and cares most about what is DIFFERENT since yesterday. Anchor the headline, summary, and
+  attention items on those changes when they are material; if the overnight tape was quiet, say so
+  plainly rather than re-describing the standing picture as if it were new.
 
 Respond with ONLY a JSON object matching exactly this shape (no markdown fences, no commentary):
 {

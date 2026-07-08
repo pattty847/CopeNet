@@ -5,7 +5,8 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { useMarketDashboard, useMarketRead, useMarketWatchlist, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { MorningBrief } from './MorningBrief';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { useIsMobile } from '../../lib/responsive';
@@ -287,6 +288,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
 export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
   const { read: marketRead, running: reading, run: runRead } = useMarketRead();
+  const morningBrief = useMorningBrief(reload);
   const watchlist = useMarketWatchlist();
   const isMobile = useIsMobile();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
@@ -404,6 +406,7 @@ export function MarketMonitor() {
           <BacktestLab />
         ) : (
           <>
+            <MorningBrief brief={morningBrief.brief} generating={morningBrief.generating} onRunNow={() => void morningBrief.runNow()} onOpen={open} />
             <Watchlist items={watchlist.items} loading={watchlist.loading} onOpen={open} onRemove={(s) => void watchlist.remove(s)} />
             <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
             <MacroBoard panel={dash.macro} />

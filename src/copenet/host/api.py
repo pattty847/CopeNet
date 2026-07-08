@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
+from copenet.core.market.sentinel import MarketSentinel, sentinel_enabled
 from copenet.core.media import MediaIngestionService
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.web_ingest import WebIngestionService
@@ -28,8 +30,20 @@ def create_app(
     media_service: MediaIngestionService | None = None,
     web_ingestion_service: WebIngestionService | None = None,
 ) -> FastAPI:
-    app = FastAPI(title="CopeNet Gateway", version="0.1.0")
     ws_server = CopeNetWsServer(orchestrator=orchestrator)
+    sentinel = MarketSentinel(ws_server.orchestrator)
+
+    @asynccontextmanager
+    async def lifespan(_app: FastAPI):
+        # Overnight market sentinel: pre-market sweep + morning brief. Disabled via
+        # COPNET_MARKET_SENTINEL=0. Its startup catch-up delay keeps short-lived test
+        # apps from ever triggering a real sweep.
+        if sentinel_enabled():
+            sentinel.start()
+        yield
+        sentinel.stop()
+
+    app = FastAPI(title="CopeNet Gateway", version="0.1.0", lifespan=lifespan)
 
     # TODO: Add deeper health probes for providers, orchestrator, etc.
     @app.get("/health")

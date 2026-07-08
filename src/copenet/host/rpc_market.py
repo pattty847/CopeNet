@@ -7,10 +7,11 @@ from datetime import datetime, timezone
 from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
-from copenet.core.market import MarketRuntime, MarketStore
+from copenet.core.market import MarketRuntime
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
 from copenet.core.market.edgar import fetch_ticker_evidence
-from copenet.core.market.runtime import default_market_dir
+from copenet.core.market.runtime import resolve_market_runtime
+from copenet.core.market.sentinel import run_morning_sweep
 from copenet.core.runtime.runs import RunRecord
 from copenet.host.rpc_schema import ResponseFrame, make_response_frame
 
@@ -96,6 +97,24 @@ async def handle_market_read_get(request_id: str, params: dict[str, Any] | None,
     runtime = _runtime(orchestrator)
     read = runtime.store.load_market_read() if target == "market" else runtime.store.load_ticker_read(target)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"target": target, "read": read})))
+
+
+async def handle_market_brief_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    del params
+    runtime = _runtime(orchestrator)
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"brief": runtime.store.load_morning_brief()})))
+
+
+async def handle_market_brief_run(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Kick a morning sweep now (background). The operator asked, so force a regenerate even
+    if today's brief already exists — same semantics as the Refresh button."""
+    raw = params or {}
+    force = raw.get("force") is not False
+    runtime = _runtime(orchestrator)
+    provider = _interpret_provider(orchestrator)
+    pulse_store = getattr(orchestrator, "_pulse_store", None)
+    _track_task(orchestrator, asyncio.create_task(run_morning_sweep(runtime, provider, pulse_store, force=force)))
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": _now_iso()})))
 
 
 async def handle_market_webull_status(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
@@ -203,18 +222,7 @@ def _track_task(orchestrator, task: asyncio.Task) -> None:
 
 
 def _runtime(orchestrator) -> MarketRuntime:
-    runtime = getattr(orchestrator, "_market_runtime", None)
-    if isinstance(runtime, MarketRuntime):
-        return runtime
-    store = getattr(orchestrator, "market_store", None)
-    if not isinstance(store, MarketStore):
-        store = MarketStore(default_market_dir())
-    runtime = MarketRuntime(store=store)
-    try:
-        setattr(orchestrator, "_market_runtime", runtime)
-    except Exception:
-        pass
-    return runtime
+    return resolve_market_runtime(orchestrator)
 
 
 def _now_iso() -> str:

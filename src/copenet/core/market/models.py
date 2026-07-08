@@ -343,6 +343,32 @@ class TickerDetailPayload:
 
 
 @dataclass
+class MorningBriefPayload:
+    """The overnight delta — what changed between the previous sweep and this one.
+
+    List entries are wire-shaped dicts (snake_case keys; ``to_wire`` camelCases them):
+    signal_flips {symbol, kind, detail, tone} · rrg_shifts {symbol, name, from_quadrant,
+    to_quadrant, tone} · movers {symbol, name, last, change_pct, tone}.
+    """
+
+    brief_date: str  # YYYY-MM-DD, operator-local
+    generated_at: str
+    headline: str
+    new_evidence: list[EvidenceItem]
+    signal_flips: list[dict[str, Any]]
+    rrg_shifts: list[dict[str, Any]]
+    movers: list[dict[str, Any]]
+    regime_shift: dict[str, Any] | None
+    portfolio_note: str | None
+    previous_as_of: str | None
+    first_sweep: bool = False
+    note: str | None = None
+
+    def to_wire(self) -> dict[str, Any]:
+        return _to_wire(self)
+
+
+@dataclass
 class TickerEvidencePayload:
     symbol: str
     evidence: list[EvidenceItem]

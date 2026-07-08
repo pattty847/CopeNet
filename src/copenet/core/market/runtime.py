@@ -201,7 +201,12 @@ class MarketRuntime:
         generated_at = _now_iso()
         sb_rate = load_base_rate("soft_bottoming", 8)
         if target == "market":
-            packet = market_fact_packet(self.store.load_dashboard_wire(), sb_rate)
+            # Include the overnight delta only when it's today's — a week-old brief in the
+            # packet would read as fresh "overnight changes" and mislead the model.
+            overnight = self.store.load_morning_brief()
+            if overnight and overnight.get("briefDate") != datetime.now().strftime("%Y-%m-%d"):
+                overnight = None
+            packet = market_fact_packet(self.store.load_dashboard_wire(), sb_rate, overnight=overnight)
             # Opt-in only (INCLUDE_WEBULL_PORTFOLIO_CONTEXT=true): append the sanitized account
             # context pack. Built from whitelisted snapshot fields — no credentials/tokens exist
             # anywhere in its inputs.
@@ -408,6 +413,21 @@ class MarketRuntime:
 
 def default_market_dir() -> Path:
     return default_sessions_dir().parent / "market"
+
+
+def resolve_market_runtime(orchestrator) -> MarketRuntime:
+    """Shared MarketRuntime per orchestrator — the sentinel and the RPC layer must see the
+    same store so a scheduled sweep and an operator-triggered one never diverge."""
+    runtime = getattr(orchestrator, "_market_runtime", None)
+    if isinstance(runtime, MarketRuntime):
+        return runtime
+    store = getattr(orchestrator, "market_store", None)
+    runtime = MarketRuntime(store=store if isinstance(store, MarketStore) else None)
+    try:
+        setattr(orchestrator, "_market_runtime", runtime)
+    except Exception:
+        pass
+    return runtime
 
 
 def _symbols_for_scope(scope: str) -> list[str]:

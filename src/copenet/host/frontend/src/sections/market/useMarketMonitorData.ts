@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerEvidencePayload, TickerRead, UniverseAsset, WatchlistItem } from './types';
+import type { DashboardPayload, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -97,6 +97,94 @@ export function useMarketDashboard(): MarketDashboardState {
   }, [refresh]);
 
   return { dashboard, refreshing, live, refresh, reload };
+}
+
+/** Local YYYY-MM-DD — matches the backend's operator-local briefDate stamp. */
+function localDateStamp(): string {
+  return new Date().toLocaleDateString('sv-SE');
+}
+
+export interface MorningBriefState {
+  brief: MorningBriefPayload | null;
+  /** True while a sweep we triggered is running server-side. */
+  generating: boolean;
+  /** Force a fresh sweep now (the operator's button). */
+  runNow: () => Promise<void>;
+}
+
+/** Morning brief lane (overnight sentinel): load the stored brief; if it isn't today's yet,
+ *  kick a sweep (idempotent server-side — the 7 AM sentinel and this auto-kick dedupe by date)
+ *  and poll until today's brief lands. `onSwept` fires after a sweep completes so the caller
+ *  can re-pull the dashboard the sweep just refreshed. */
+export function useMorningBrief(onSwept?: () => Promise<void>): MorningBriefState {
+  const [brief, setBrief] = useState<MorningBriefPayload | null>(null);
+  const [generating, setGenerating] = useState(false);
+  const alive = useRef(true);
+
+  const pollUntilFresh = useCallback(
+    async (before: string) => {
+      // A full sweep is ~40-70s for the whole watchlist; poll up to ~3 min.
+      for (let i = 0; i < 36 && alive.current; i += 1) {
+        await sleep(5000);
+        try {
+          const next = await wsClient.marketBriefGet();
+          if (next && next.generatedAt !== before && next.briefDate === localDateStamp()) {
+            if (alive.current) {
+              setBrief(next);
+              await onSwept?.();
+            }
+            return;
+          }
+        } catch {
+          /* transient — keep polling */
+        }
+      }
+    },
+    [onSwept],
+  );
+
+  useEffect(() => {
+    alive.current = true;
+    wsClient
+      .marketBriefGet()
+      .then(async (next) => {
+        if (!alive.current) return;
+        if (next) setBrief(next);
+        if (!next || next.briefDate !== localDateStamp()) {
+          // Stale or missing — catch up now rather than waiting for tomorrow's 7 AM sweep.
+          setGenerating(true);
+          try {
+            await wsClient.marketBriefRun(false);
+            await pollUntilFresh(next?.generatedAt || '');
+          } catch {
+            /* backend offline — honest empty state stands */
+          } finally {
+            if (alive.current) setGenerating(false);
+          }
+        }
+      })
+      .catch(() => {
+        /* backend offline — honest empty state stands */
+      });
+    return () => {
+      alive.current = false;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const runNow = useCallback(async () => {
+    setGenerating(true);
+    try {
+      await wsClient.marketBriefRun(true);
+      await pollUntilFresh(brief?.generatedAt || '');
+    } catch {
+      /* backend offline */
+    } finally {
+      if (alive.current) setGenerating(false);
+    }
+  }, [brief, pollUntilFresh]);
+
+  return { brief, generating, runNow };
 }
 
 export function useMarketUniverse(): UniverseAsset[] {
