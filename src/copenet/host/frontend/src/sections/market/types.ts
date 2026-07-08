@@ -192,6 +192,14 @@ export interface ChartEvent {
   glyph: string;
 }
 
+export interface TickerEvidencePayload {
+  symbol: string;
+  evidence: EvidenceItem[];
+  events: ChartEvent[];
+  asOf: string;
+  refreshed: boolean;
+}
+
 // ---------- model reads (Insight Engine Phase D) ----------
 export interface MarketRead {
   headline: string;

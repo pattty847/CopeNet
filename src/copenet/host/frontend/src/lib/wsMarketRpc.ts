@@ -5,6 +5,7 @@
 import type {
   DashboardPayload,
   MarketRead,
+  TickerEvidencePayload,
   SymbolSearchResult,
   TickerDetailPayload,
   TickerRead,
@@ -25,6 +26,11 @@ export async function marketDashboardRpc(request: WsRpcRequest): Promise<Dashboa
 export async function marketTickerRpc(request: WsRpcRequest, symbol: string): Promise<TickerDetailPayload> {
   const payload = await request<Record<string, unknown>>('market.ticker.get', { symbol });
   return payload as unknown as TickerDetailPayload;
+}
+
+export async function marketTickerEvidenceRpc(request: WsRpcRequest, symbol: string, refresh = false): Promise<TickerEvidencePayload> {
+  const payload = await request<Record<string, unknown>>('market.ticker.evidence.get', { symbol, refresh });
+  return payload as unknown as TickerEvidencePayload;
 }
 
 export async function marketUniverseRpc(request: WsRpcRequest): Promise<UniverseAsset[]> {

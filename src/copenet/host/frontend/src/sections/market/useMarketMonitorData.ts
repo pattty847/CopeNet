@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerRead, UniverseAsset, WatchlistItem } from './types';
+import type { DashboardPayload, MarketRead, TickerDetailPayload, TickerEvidencePayload, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -235,4 +235,62 @@ export function useTickerDetail(symbol: string): TickerDetailPayload {
     };
   }, [symbol]);
   return detail;
+}
+
+export interface TickerEvidenceState {
+  payload: TickerEvidencePayload | null;
+  loading: boolean;
+  refreshing: boolean;
+  error: string | null;
+  refresh: () => Promise<void>;
+}
+
+export function useTickerEvidence(symbol: string): TickerEvidenceState {
+  const normalized = symbol.trim().toUpperCase();
+  const [payload, setPayload] = useState<TickerEvidencePayload | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const latestSymbol = useRef(normalized);
+
+  useEffect(() => {
+    let alive = true;
+    latestSymbol.current = normalized;
+    setPayload(null);
+    setError(null);
+    setLoading(Boolean(normalized));
+    if (!normalized) return () => {
+      alive = false;
+    };
+    wsClient
+      .marketTickerEvidence(normalized, false)
+      .then((next) => {
+        if (alive && latestSymbol.current === normalized) setPayload(next);
+      })
+      .catch((err) => {
+        if (alive && latestSymbol.current === normalized) setError(err instanceof Error ? err.message : String(err));
+      })
+      .finally(() => {
+        if (alive && latestSymbol.current === normalized) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [normalized]);
+
+  const refresh = useCallback(async () => {
+    if (!normalized) return;
+    setRefreshing(true);
+    setError(null);
+    try {
+      const next = await wsClient.marketTickerEvidence(normalized, true);
+      if (latestSymbol.current === normalized) setPayload(next);
+    } catch (err) {
+      if (latestSymbol.current === normalized) setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      if (latestSymbol.current === normalized) setRefreshing(false);
+    }
+  }, [normalized]);
+
+  return { payload, loading, refreshing, error, refresh };
 }

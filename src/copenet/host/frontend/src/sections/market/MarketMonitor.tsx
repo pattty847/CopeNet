@@ -5,15 +5,88 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { useMarketDashboard, useMarketRead, useMarketWatchlist, useTickerDetail, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { useMarketDashboard, useMarketRead, useMarketWatchlist, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { useIsMobile } from '../../lib/responsive';
+import type { EvidenceItem } from './types';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
 const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
 
 const CONFIDENCE_COLORS: Record<string, string> = { low: '#d96d5f', medium: '#a29b90', high: '#69c589' };
+
+function formatSecAsOf(value?: string) {
+  if (!value) return '';
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return value;
+  return parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+}
+
+function SecActivityPanel({
+  evidence,
+  asOf,
+  loading,
+  refreshing,
+  error,
+  onRefresh,
+}: {
+  evidence: EvidenceItem[];
+  asOf?: string;
+  loading: boolean;
+  refreshing: boolean;
+  error: string | null;
+  onRefresh: () => void;
+}) {
+  const typeBg = (t: EvidenceItem['type']) => (t === 'Insider' ? MM.accentSoft : 'rgba(254,252,244,.06)');
+  const typeColor = (t: EvidenceItem['type']) => (t === 'Insider' ? MM.accent : MM.textSoft);
+  return (
+    <PanelCard
+      title="SEC Activity"
+      status={loading ? 'preview' : error ? 'error' : 'live'}
+      style={{ flex: 1.25, minWidth: 320 }}
+      right={
+        <button
+          onClick={onRefresh}
+          disabled={refreshing}
+          style={{ cursor: refreshing ? 'default' : 'pointer', border: `1px solid rgba(251,148,35,.3)`, background: refreshing ? 'rgba(251,148,35,.07)' : 'transparent', color: MM.accent, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', opacity: refreshing ? 0.65 : 1 }}
+        >
+          {refreshing ? 'Checking…' : 'Check SEC now'}
+        </button>
+      }
+      subtitle={asOf ? `cached as of ${formatSecAsOf(asOf)}` : 'cached Form 4 and 8-K evidence'}
+    >
+      {error && <div style={{ fontSize: 11, color: MM.down, marginBottom: 8 }}>{error}</div>}
+      {loading ? (
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>Loading cached SEC evidence…</div>
+      ) : evidence.length === 0 ? (
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>No recent Form 4 or 8-K activity found.</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
+          {evidence.map((item, i) => {
+            const row = (
+              <>
+                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: typeBg(item.type), color: typeColor(item.type) }}>{item.type}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.4 }}>{item.headline}</span>
+                <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{item.source}</span>
+              </>
+            );
+            const style = { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none', textAlign: 'left' as const };
+            return item.url ? (
+              <a key={`${item.type}-${item.t || i}-${item.headline}`} href={item.url} target="_blank" rel="noreferrer" style={{ ...style, textDecoration: 'none' }}>
+                {row}
+              </a>
+            ) : (
+              <div key={`${item.type}-${item.t || i}-${item.headline}`} style={style}>
+                {row}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </PanelCard>
+  );
+}
 
 function TickerReadPanel({ symbol }: { symbol: string }) {
   const { read, running, run } = useTickerRead(symbol);
@@ -83,6 +156,7 @@ function TickerReadPanel({ symbol }: { symbol: string }) {
 
 function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose: () => void; watchlist: MarketWatchlistState }) {
   const td = useTickerDetail(symbol);
+  const sec = useTickerEvidence(symbol);
   const [tf, setTf] = useState<'D' | 'W' | 'M'>('W');
   const [watchBusy, setWatchBusy] = useState(false);
   const isWatched = watchlist.symbols.has(symbol.toUpperCase());
@@ -96,6 +170,8 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
     }
   };
   const series = tf === 'D' ? td.series.daily : tf === 'M' ? td.series.monthly : td.series.weekly;
+  const chartEvents = sec.payload ? sec.payload.events : td.events;
+  const secEvidence = sec.payload?.evidence ?? [];
   const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
   const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
     <button
@@ -144,7 +220,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
           </div>
         }
       >
-        <CandleChart bars={series} events={td.events} height={620} />
+        <CandleChart bars={series} events={chartEvents} height={620} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
           <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>
@@ -180,6 +256,14 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
             </div>
           </div>
         )}
+        <SecActivityPanel
+          evidence={secEvidence}
+          asOf={sec.payload?.asOf}
+          loading={sec.loading}
+          refreshing={sec.refreshing}
+          error={sec.error}
+          onRefresh={() => void sec.refresh()}
+        />
         <PanelCard title="Signal Readout" status="preview" style={{ flex: 1, minWidth: 260 }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {td.signals.map((s, i) => (

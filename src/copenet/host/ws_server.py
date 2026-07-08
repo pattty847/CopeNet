@@ -202,6 +202,7 @@ class CopeNetWsServer:
                                 "messaging.routes.resolve",
                                 "market.dashboard.get",
                                 "market.ticker.get",
+                                "market.ticker.evidence.get",
                                 "market.universe.get",
                                 "market.refresh",
                                 "market.interpret",

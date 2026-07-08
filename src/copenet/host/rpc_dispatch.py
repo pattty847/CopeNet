@@ -30,6 +30,7 @@ from .rpc_catalog import (
     handle_market_interpret,
     handle_market_read_get,
     handle_market_refresh,
+    handle_market_ticker_evidence_get,
     handle_market_ticker_get,
     handle_market_universe_get,
     handle_market_webull_account_select,
@@ -246,6 +247,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_dashboard_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.get":
         await handle_market_ticker_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.ticker.evidence.get":
+        await handle_market_ticker_evidence_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.universe.get":
         await handle_market_universe_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.refresh":

@@ -9,6 +9,7 @@ from uuid import uuid4
 
 from copenet.core.market import MarketRuntime, MarketStore
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
+from copenet.core.market.edgar import fetch_ticker_evidence
 from copenet.core.market.runtime import default_market_dir
 from copenet.core.runtime.runs import RunRecord
 from copenet.host.rpc_schema import ResponseFrame, make_response_frame
@@ -30,6 +31,17 @@ async def handle_market_ticker_get(request_id: str, params: dict[str, Any] | Non
         raise ValueError("symbol is required")
     runtime = _runtime(orchestrator)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=runtime.ticker(symbol).to_wire())))
+
+
+async def handle_market_ticker_evidence_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    del orchestrator
+    raw = params or {}
+    symbol = str(raw.get("symbol") or "").strip().upper()
+    if not symbol:
+        raise ValueError("symbol is required")
+    refresh = bool(raw.get("refresh"))
+    payload = await fetch_ticker_evidence(symbol, refresh=refresh)
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload.to_wire())))
 
 
 async def handle_market_universe_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

@@ -342,6 +342,18 @@ class TickerDetailPayload:
         return _to_wire(self)
 
 
+@dataclass
+class TickerEvidencePayload:
+    symbol: str
+    evidence: list[EvidenceItem]
+    events: list[ChartEvent]
+    as_of: str
+    refreshed: bool
+
+    def to_wire(self) -> dict[str, Any]:
+        return _to_wire(self)
+
+
 @dataclass(frozen=True)
 class PriceSignals:
     below_ma: str
