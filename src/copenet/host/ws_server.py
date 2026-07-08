@@ -203,6 +203,7 @@ class CopeNetWsServer:
                                 "market.dashboard.get",
                                 "market.ticker.get",
                                 "market.ticker.evidence.get",
+                                "market.ticker.fundamentals.get",
                                 "market.universe.get",
                                 "market.refresh",
                                 "market.interpret",

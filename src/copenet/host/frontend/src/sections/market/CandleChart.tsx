@@ -6,6 +6,8 @@ import {
   CandlestickSeries,
   ColorType,
   HistogramSeries,
+  LineSeries,
+  LineType,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -17,6 +19,18 @@ import {
 } from 'lightweight-charts';
 import type { ChartEvent, Ohlcv } from './types';
 import { MM } from './marketUi';
+
+export interface RevenuePoint {
+  t: number; // unix seconds (quarter end)
+  value: number; // dollars
+}
+
+function formatRevenue(value: number): string {
+  const magnitude = Math.abs(value);
+  if (magnitude >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
+  if (magnitude >= 1e6) return `$${(value / 1e6).toFixed(0)}M`;
+  return `$${Math.round(value).toLocaleString()}`;
+}
 
 /** Sort ascending + de-dupe by time (lightweight-charts requires strictly increasing unique times).
  *  The backend emits `t` as a UNIX timestamp in SECONDS — which is exactly what lightweight-charts'
@@ -101,11 +115,23 @@ function markersFor(events: ChartEvent[], bars: Ohlcv[]): SeriesMarker<Time>[] {
   return markers.sort((a, z) => (a.time as number) - (z.time as number));
 }
 
-export function CandleChart({ bars, events = [], height = 380 }: { bars: Ohlcv[]; events?: ChartEvent[]; height?: number }) {
+export function CandleChart({
+  bars,
+  events = [],
+  height = 380,
+  revenue,
+}: {
+  bars: Ohlcv[];
+  events?: ChartEvent[];
+  height?: number;
+  /** Quarterly revenue overlay (step line, own hidden scale). Omit/empty = hidden. */
+  revenue?: RevenuePoint[];
+}) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
+  const revenueRef = useRef<ISeriesApi<'Line'> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
 
   // create once
@@ -135,11 +161,27 @@ export function CandleChart({ bars, events = [], height = 380 }: { bars: Ohlcv[]
     });
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
+    // Quarterly revenue: step line with point markers on its own scale so dollar
+    // magnitudes never distort the price axis. Band sits in the middle, clear of
+    // the volume strip at the bottom.
+    const revenueSeries = chart.addSeries(LineSeries, {
+      priceScaleId: 'revenue',
+      color: '#8fb8e8',
+      lineWidth: 2,
+      lineType: LineType.WithSteps,
+      pointMarkersVisible: true,
+      lastValueVisible: false,
+      priceLineVisible: false,
+      crosshairMarkerVisible: true,
+      priceFormat: { type: 'custom', formatter: formatRevenue, minMove: 1 },
+    });
+    chart.priceScale('revenue').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
     const markers = createSeriesMarkers(candle, []);
 
     chartRef.current = chart;
     candleRef.current = candle;
     volumeRef.current = volume;
+    revenueRef.current = revenueSeries;
     markersRef.current = markers;
 
     const ro = new ResizeObserver(() => {
@@ -152,6 +194,7 @@ export function CandleChart({ bars, events = [], height = 380 }: { bars: Ohlcv[]
       chartRef.current = null;
       candleRef.current = null;
       volumeRef.current = null;
+      revenueRef.current = null;
       markersRef.current = null;
     };
   }, [height]);
@@ -167,9 +210,13 @@ export function CandleChart({ bars, events = [], height = 380 }: { bars: Ohlcv[]
     volume.setData(
       rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
     );
+    const revenuePoints = [...(revenue ?? [])]
+      .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.value))
+      .sort((a, z) => a.t - z.t);
+    revenueRef.current?.setData(revenuePoints.map((p) => ({ time: p.t as UTCTimestamp, value: p.value })));
     chart.timeScale().fitContent();
     markersRef.current?.setMarkers(markersFor(events, rows));
-  }, [bars, events]);
+  }, [bars, events, revenue]);
 
   return (
     <div style={{ position: 'relative' }}>

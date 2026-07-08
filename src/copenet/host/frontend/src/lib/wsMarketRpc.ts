@@ -7,6 +7,7 @@ import type {
   MarketRead,
   MorningBriefPayload,
   TickerEvidencePayload,
+  TickerFundamentals,
   SymbolSearchResult,
   TickerDetailPayload,
   TickerRead,
@@ -56,6 +57,12 @@ export async function marketInterpretRpc(
 ): Promise<{ startedAt: string; runId: string }> {
   const payload = await request<Record<string, unknown>>('market.interpret', { target });
   return { startedAt: String(payload.startedAt || ''), runId: String(payload.runId || '') };
+}
+
+export async function marketTickerFundamentalsRpc(request: WsRpcRequest, symbol: string): Promise<TickerFundamentals | null> {
+  const payload = await request<{ fundamentals?: unknown }>('market.ticker.fundamentals.get', { symbol });
+  const fundamentals = payload.fundamentals;
+  return fundamentals && typeof fundamentals === 'object' ? (fundamentals as TickerFundamentals) : null;
 }
 
 export async function marketBriefGetRpc(request: WsRpcRequest): Promise<MorningBriefPayload | null> {

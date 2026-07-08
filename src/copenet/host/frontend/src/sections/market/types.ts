@@ -243,6 +243,23 @@ export interface MorningBriefPayload {
   note?: string;
 }
 
+// ---------- fundamentals (SEC XBRL, for the chart overlay) ----------
+/** One quarterly XBRL data point. Keys mirror CopeTech-Edgar's trend entries verbatim
+ *  (snake_case pcts — this payload passes through the RPC unreshaped for now). */
+export interface FundamentalsQuarter {
+  period: string; // "Q1 2026"
+  date: string; // period end, YYYY-MM-DD
+  value: number;
+  yoy_pct?: number | null;
+  qoq_pct?: number | null;
+}
+
+export interface TickerFundamentals {
+  entityName?: string;
+  revenueQuarterly: FundamentalsQuarter[];
+  epsQuarterly: FundamentalsQuarter[];
+}
+
 // ---------- model reads (Insight Engine Phase D) ----------
 export interface MarketRead {
   headline: string;

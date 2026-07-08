@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerRead, UniverseAsset, WatchlistItem } from './types';
+import type { DashboardPayload, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -323,6 +323,53 @@ export function useTickerDetail(symbol: string): TickerDetailPayload {
     };
   }, [symbol]);
   return detail;
+}
+
+export interface TickerFundamentalsState {
+  data: TickerFundamentals | null;
+  loading: boolean;
+  /** True once a load finished and the backend had no SEC fundamentals (ETFs, no-match filers). */
+  unavailable: boolean;
+  /** Lazy trigger — fetch on first overlay toggle, cached for the rest of the visit. */
+  load: () => Promise<void>;
+}
+
+export function useTickerFundamentals(symbol: string): TickerFundamentalsState {
+  const normalized = symbol.trim().toUpperCase();
+  const [data, setData] = useState<TickerFundamentals | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [unavailable, setUnavailable] = useState(false);
+  const loadedFor = useRef<string | null>(null);
+  const alive = useRef(true);
+
+  useEffect(() => {
+    alive.current = true;
+    setData(null);
+    setUnavailable(false);
+    loadedFor.current = null;
+    return () => {
+      alive.current = false;
+    };
+  }, [normalized]);
+
+  const load = useCallback(async () => {
+    if (!normalized || loadedFor.current === normalized || loading) return;
+    setLoading(true);
+    try {
+      const next = await wsClient.marketTickerFundamentals(normalized);
+      if (!alive.current) return;
+      loadedFor.current = normalized;
+      setData(next);
+      setUnavailable(next === null || !(next.revenueQuarterly?.length));
+    } catch {
+      /* backend offline — leave untouched so a later toggle retries */
+    } finally {
+      if (alive.current) setLoading(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [normalized, loading]);
+
+  return { data, loading, unavailable, load };
 }
 
 export interface TickerEvidenceState {

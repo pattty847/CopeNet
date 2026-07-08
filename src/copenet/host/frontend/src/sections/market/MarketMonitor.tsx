@@ -5,7 +5,7 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { MorningBrief } from './MorningBrief';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
@@ -159,7 +159,9 @@ function TickerReadPanel({ symbol }: { symbol: string }) {
 function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose: () => void; watchlist: MarketWatchlistState }) {
   const td = useTickerDetail(symbol);
   const sec = useTickerEvidence(symbol);
+  const fundamentals = useTickerFundamentals(symbol);
   const [tf, setTf] = useState<'D' | 'W' | 'M'>('W');
+  const [showRevenue, setShowRevenue] = useState(false);
   const [watchBusy, setWatchBusy] = useState(false);
   const isWatched = watchlist.symbols.has(symbol.toUpperCase());
   const toggleWatch = async () => {
@@ -175,6 +177,18 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
   const chartEvents = sec.payload ? sec.payload.events : td.events;
   const secEvidence = sec.payload?.evidence ?? [];
   const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
+  const toggleRevenue = () => {
+    const next = !showRevenue;
+    setShowRevenue(next);
+    if (next) void fundamentals.load();
+  };
+  const revenuePoints =
+    showRevenue && fundamentals.data
+      ? fundamentals.data.revenueQuarterly
+          .filter((q) => q.date && Number.isFinite(q.value))
+          .map((q) => ({ t: Math.floor(Date.parse(`${q.date}T00:00:00Z`) / 1000), value: q.value }))
+      : undefined;
+  const latestQuarter = fundamentals.data?.revenueQuarterly?.[0];
   const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
     <button
       key={key}
@@ -215,14 +229,45 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         title={`Price · ${tfLabel}`}
         status={series.length ? 'live' : 'preview'}
         right={
-          <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
-            {tfBtn('D', '1D')}
-            {tfBtn('W', '1W')}
-            {tfBtn('M', '1M')}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <button
+              onClick={toggleRevenue}
+              title={fundamentals.unavailable ? 'No SEC fundamentals for this symbol (ETF or no matching filer)' : 'Overlay quarterly revenue (SEC XBRL)'}
+              style={{
+                cursor: 'pointer',
+                border: `1px solid ${showRevenue ? 'rgba(90,143,199,.45)' : MM.border}`,
+                background: showRevenue ? 'rgba(90,143,199,.12)' : 'transparent',
+                color: fundamentals.unavailable ? MM.dimmer : showRevenue ? '#8fb8e8' : MM.muted,
+                borderRadius: 8,
+                padding: '5px 10px',
+                font: '600 9.5px Inter',
+                letterSpacing: '.06em',
+                textTransform: 'uppercase',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {fundamentals.loading ? '◍ Revenue' : '∿ Revenue'}
+            </button>
+            <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
+              {tfBtn('D', '1D')}
+              {tfBtn('W', '1W')}
+              {tfBtn('M', '1M')}
+            </div>
           </div>
         }
       >
-        <CandleChart bars={series} events={chartEvents} height={620} />
+        <CandleChart bars={series} events={chartEvents} height={620} revenue={revenuePoints} />
+        {showRevenue && fundamentals.unavailable && !fundamentals.loading && (
+          <div style={{ fontSize: 11, color: MM.dim, fontStyle: 'italic', marginTop: 6 }}>
+            No SEC fundamentals for this symbol — revenue overlay needs a filer with XBRL company facts (ETFs don't file).
+          </div>
+        )}
+        {showRevenue && latestQuarter && (
+          <div style={{ fontSize: 11, color: '#8fb8e8', marginTop: 6 }}>
+            ∿ Quarterly revenue (SEC XBRL) · latest {latestQuarter.period}: ${(latestQuarter.value / 1e6).toFixed(0)}M
+            {latestQuarter.yoy_pct != null ? ` (${latestQuarter.yoy_pct >= 0 ? '+' : ''}${(latestQuarter.yoy_pct * 100).toFixed(1)}% YoY)` : ''}
+          </div>
+        )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
           <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>

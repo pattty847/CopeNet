@@ -9,7 +9,7 @@ from uuid import uuid4
 
 from copenet.core.market import MarketRuntime
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
-from copenet.core.market.edgar import fetch_ticker_evidence
+from copenet.core.market.edgar import fetch_fundamentals, fetch_ticker_evidence
 from copenet.core.market.runtime import resolve_market_runtime
 from copenet.core.market.sentinel import run_morning_sweep
 from copenet.core.runtime.runs import RunRecord
@@ -43,6 +43,18 @@ async def handle_market_ticker_evidence_get(request_id: str, params: dict[str, A
     refresh = bool(raw.get("refresh"))
     payload = await fetch_ticker_evidence(symbol, refresh=refresh)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload.to_wire())))
+
+
+async def handle_market_ticker_fundamentals_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Quarterly revenue/EPS series for the chart overlay. Lazy — the frontend only asks
+    when the operator toggles the overlay on. `fundamentals` is null for ETFs/no-match filers."""
+    del orchestrator
+    raw = params or {}
+    symbol = str(raw.get("symbol") or "").strip().upper()
+    if not symbol:
+        raise ValueError("symbol is required")
+    fundamentals = await fetch_fundamentals(symbol, periods=12)
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"symbol": symbol, "fundamentals": fundamentals})))
 
 
 async def handle_market_universe_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
