@@ -201,7 +201,15 @@ export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen
       title="Sector Rotation · RRG"
       status={panel.status}
       subtitle="Relative strength vs S&P 500 · weekly · clockwise = rotation cycle"
-      style={{ flex: 1.55, minWidth: isMobile ? 0 : 420, width: isMobile ? '100%' : undefined, alignSelf: 'stretch', minHeight: 520, height: 'auto' }}
+      style={{
+        // Mobile: flex-basis 100% claims a full wrap line (width alone loses to flex-basis:0,
+        // which let this panel get crushed into a sliver beside the Accumulation column).
+        flex: isMobile ? '1 1 100%' : 1.55,
+        minWidth: isMobile ? 0 : 420,
+        alignSelf: 'stretch',
+        minHeight: 520,
+        height: 'auto',
+      }}
       right={
         <>
           <span style={{ fontFamily: mono, fontSize: 9, color: MM.dim, whiteSpace: 'nowrap' }}>
