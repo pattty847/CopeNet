@@ -96,10 +96,12 @@ async def run_morning_sweep(
         previous = runtime.store.load_dashboard_wire()
         await asyncio.to_thread(runtime.refresh, scope="all")
         current = runtime.store.load_dashboard_wire()
+        movers, movers_label = compute_movers(runtime.store)
         brief = build_morning_brief(
             previous,
             current,
-            movers=compute_movers(runtime.store),
+            movers=movers,
+            movers_label=movers_label,
             brief_date=brief_date,
         )
         wire = brief.to_wire()

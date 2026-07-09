@@ -97,13 +97,17 @@ def test_first_sweep_does_not_spam_deltas() -> None:
     assert "baseline" in brief.headline
 
 
-def test_portfolio_note_includes_delta_vs_previous_sweep() -> None:
+def test_portfolio_note_leads_with_delta_and_labels_lifetime_pnl() -> None:
     previous = _wire(portfolio={"total": "$4,400", "pnl": "+700 · +19.0%", "positions": [{"symbol": "GOOG"}]})
     current = _wire(portfolio={"total": "$4,417", "pnl": "+722 · +19.8%", "positions": [{"symbol": "GOOG"}]})
     brief = build_morning_brief(previous, current, movers=[])
-    assert brief.portfolio_note is not None
-    assert "$4,417" in brief.portfolio_note
-    assert "+17 vs previous sweep" in brief.portfolio_note
+    assert brief.portfolio_note == "Portfolio $4,417 · +17 since last sweep · +19.8% all-time"
+
+
+def test_portfolio_note_flat_overnight_still_labels_lifetime() -> None:
+    same = {"total": "$4,417", "pnl": "+722 · +19.8%", "positions": [{"symbol": "GOOG"}]}
+    brief = build_morning_brief(_wire(portfolio=same), _wire(portfolio=same), movers=[])
+    assert brief.portfolio_note == "Portfolio $4,417 · flat since last sweep · +19.8% all-time"
 
 
 def test_wire_shape_is_camel_case() -> None:
@@ -124,12 +128,27 @@ def test_compute_movers_ranks_by_absolute_change(tmp_path: Path) -> None:
 
     store.save_bars("SOFI", "daily", bars([10.0, 11.0]))  # +10%
     store.save_bars("GOOG", "daily", bars([100.0, 98.0]))  # -2%
-    movers = compute_movers(store)
+    movers, label = compute_movers(store)
     assert movers[0]["symbol"] == "SOFI"
     assert movers[0]["change_pct"] == 10.0
     assert movers[0]["tone"] == "up"
     goog = next(m for m in movers if m["symbol"] == "GOOG")
     assert goog["tone"] == "down"
+    assert label == "last session"  # fixture bars are from 2025 — never "today"
+
+
+def test_compute_movers_labels_forming_candle_as_today(tmp_path: Path) -> None:
+    from datetime import datetime, timezone
+
+    store = MarketStore(tmp_path)
+    now = int(datetime.now(timezone.utc).timestamp())
+    store.save_bars(
+        "SOFI",
+        "daily",
+        [MarketBar(t=now - 86400, o=10, h=10, l=10, c=10.0, v=100), MarketBar(t=now, o=10, h=11, l=10, c=10.5, v=100)],
+    )
+    _, label = compute_movers(store)
+    assert label == "today at the open"
 
 
 def test_store_brief_round_trip_and_dated_copy(tmp_path: Path) -> None:

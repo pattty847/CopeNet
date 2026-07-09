@@ -144,7 +144,7 @@ export function MorningBrief({
 
         {brief.movers.length > 0 && (
           <div style={{ flex: 1, minWidth: 220 }}>
-            <div style={SECTION_LABEL}>Last-session movers</div>
+            <div style={SECTION_LABEL}>Movers · {brief.moversLabel || 'last session'}</div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
               {brief.movers.map((m, i) =>
                 symbolChip(

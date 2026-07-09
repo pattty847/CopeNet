@@ -361,6 +361,7 @@ class MorningBriefPayload:
     signal_flips: list[dict[str, Any]]
     rrg_shifts: list[dict[str, Any]]
     movers: list[dict[str, Any]]
+    movers_label: str  # "today at the open" vs "last session" — freshness is self-evidencing
     regime_shift: dict[str, Any] | None
     portfolio_note: str | None
     previous_as_of: str | None

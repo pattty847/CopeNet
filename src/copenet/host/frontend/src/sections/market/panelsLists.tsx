@@ -9,7 +9,7 @@ import type {
   TrendRow,
   WatchlistItem,
 } from './types';
-import { EvidenceFlagBadge, MM, PanelCard, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor } from './marketUi';
 import { Sparkline } from './panelsTop';
 
 export function SoftBottomingWatch({ panel, onOpen }: { panel: Panel<SoftBottomItem[]>; onOpen: (s: string) => void }) {
@@ -256,7 +256,10 @@ export function Evidence({ panel, onOpen }: { panel: Panel<EvidenceItem[]>; onOp
               {e.headline}
               <EvidenceFlagBadge flag={e.flag} />
             </span>
-            <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{e.source}</span>
+            <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap', textAlign: 'right' }}>
+              {e.source}
+              {evidenceDate(e.t) && <span style={{ display: 'block', color: MM.dimmer }}>{evidenceDate(e.t)}</span>}
+            </span>
           </button>
         ))}
       </div>

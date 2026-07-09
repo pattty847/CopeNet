@@ -236,6 +236,8 @@ export interface MorningBriefPayload {
   signalFlips: BriefSignalFlip[];
   rrgShifts: BriefRrgShift[];
   movers: BriefMover[];
+  /** "today at the open" vs "last session" — set from the actual date of the newest daily bar. */
+  moversLabel?: string;
   regimeShift?: { from: string; to: string };
   portfolioNote?: string;
   previousAsOf?: string;

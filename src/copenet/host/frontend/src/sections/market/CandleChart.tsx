@@ -49,9 +49,15 @@ function normalize(bars: Ohlcv[]): Ohlcv[] {
 function markersFor(events: ChartEvent[], bars: Ohlcv[]): SeriesMarker<Time>[] {
   if (!events.length || !bars.length) return [];
   const times = bars.map((b) => b.t);
+  // Future-dated events (e.g. a Form 144 sale scheduled ahead) have no candle to live on —
+  // snapping them would pile everything onto the last bar. Anything beyond one bar-width past
+  // the newest candle is dropped here; the SEC Activity panel shows those with an "upcoming" chip.
+  const lastTime = times[times.length - 1];
+  const barSpacing = times.length > 1 ? lastTime - times[times.length - 2] : 86400;
   const grouped = new Map<number, ChartEvent[]>();
   for (const event of events) {
     if (!Number.isFinite(event.t)) continue;
+    if (event.t > lastTime + barSpacing) continue;
     let nearest = times[0];
     let bestDiff = Math.abs(times[0] - event.t);
     for (const t of times) {

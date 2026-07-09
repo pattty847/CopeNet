@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -269,6 +271,9 @@ class MarketRuntime:
         weekly: dict[str, pd.DataFrame] = {}
         daily: dict[str, pd.DataFrame] = {}
         symbols = _symbols_for_scope(scope)
+        # Polite pacing between symbols keeps the full sweep well under Yahoo's rate
+        # limits — the morning sentinel runs unattended, so slow-and-reliable wins.
+        pace = _fetch_pace_seconds()
         for symbol in symbols:
             try:
                 weekly[symbol] = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
@@ -278,6 +283,8 @@ class MarketRuntime:
                 daily[symbol] = pd.DataFrame()
             self.store.save_bars(symbol, "weekly", frame_to_bars(weekly[symbol]))
             self.store.save_bars(symbol, "daily", frame_to_bars(daily[symbol]))
+            if pace > 0:
+                time.sleep(pace)
 
         dashboard = self._assemble_dashboard(weekly=weekly, daily=daily)
         self.store.save_dashboard(dashboard)
@@ -428,6 +435,13 @@ def resolve_market_runtime(orchestrator) -> MarketRuntime:
     except Exception:
         pass
     return runtime
+
+
+def _fetch_pace_seconds() -> float:
+    try:
+        return max(float(os.environ.get("COPNET_MARKET_FETCH_PACE", "0.2")), 0.0)
+    except ValueError:
+        return 0.2
 
 
 def _symbols_for_scope(scope: str) -> list[str]:

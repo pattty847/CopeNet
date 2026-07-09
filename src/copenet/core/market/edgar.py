@@ -285,10 +285,14 @@ def _planned_sale_evidence(symbol: str, record: dict[str, Any]) -> EvidenceItem:
     value = record.get("aggregate_market_value")
     share_text = f" {int(shares):,} shares" if isinstance(shares, (int, float)) and shares else ""
     value_text = f" (~{_fmt_value(float(value))})" if isinstance(value, (int, float)) and value else ""
+    # The sale can be scheduled ahead of the filing — surface the intended date when it differs.
+    approx = str(record.get("approx_sale_date") or "").strip()
+    signature = str(record.get("signature_date") or "").strip()
+    sale_text = f" · sale ~{approx}" if approx and approx != signature else ""
     return EvidenceItem(
         type="Form 144",
         symbol=symbol,
-        headline=f"{who} filed to sell{share_text}{value_text}".strip(),
+        headline=f"{who} filed to sell{share_text}{value_text}{sale_text}".strip(),
         source="SEC Form 144",
         tone="down",
         url=record.get("form_url"),

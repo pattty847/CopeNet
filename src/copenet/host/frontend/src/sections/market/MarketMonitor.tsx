@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EvidenceFlagBadge, MM, PanelCard, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
 import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
@@ -63,14 +63,22 @@ function SecActivityPanel({
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
           {evidence.map((item, i) => {
+            const date = evidenceDate(item.t);
+            const upcoming = Boolean(item.t && item.t * 1000 > Date.now());
             const row = (
               <>
                 <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                   {item.headline}
                   <EvidenceFlagBadge flag={item.flag} />
+                  {upcoming && (
+                    <span style={{ flex: '0 0 auto', borderRadius: 999, padding: '2px 7px', font: '700 8px Inter', letterSpacing: '.1em', textTransform: 'uppercase', background: MM.accentSoft, color: MM.accent, border: `1px solid ${MM.borderHi}` }}>upcoming</span>
+                  )}
                 </span>
-                <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{item.source}</span>
+                <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap', textAlign: 'right' }}>
+                  {item.source}
+                  {date && <span style={{ display: 'block', color: MM.dimmer }}>{date}</span>}
+                </span>
               </>
             );
             const style = { display: 'flex', alignItems: 'center', gap: 10, padding: '9px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none', textAlign: 'left' as const };

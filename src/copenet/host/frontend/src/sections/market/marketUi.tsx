@@ -36,6 +36,15 @@ export const label: CSSProperties = {
 
 export const mono = "'JetBrains Mono', monospace";
 
+/** Compact evidence date from a unix-seconds stamp, e.g. "Jun 8". Empty when absent. */
+export function evidenceDate(t?: number): string {
+  if (!t || !Number.isFinite(t)) return '';
+  const parsed = new Date(t * 1000);
+  if (Number.isNaN(parsed.getTime())) return '';
+  const sameYear = parsed.getUTCFullYear() === new Date().getUTCFullYear();
+  return parsed.toLocaleDateString([], { month: 'short', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }), timeZone: 'UTC' });
+}
+
 export function evidenceTypeBg(t: EvidenceItem['type']): string {
   if (t === 'Insider') return MM.accentSoft;
   if (t === 'Form 144') return 'rgba(217,109,95,.12)';

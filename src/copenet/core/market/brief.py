@@ -26,15 +26,26 @@ _MAX_MOVERS = 5
 _UP_QUADRANTS = {"improving", "leading"}
 
 
-def compute_movers(store: MarketStore, *, limit: int = _MAX_MOVERS) -> list[dict[str, Any]]:
-    """Top movers by last-session close-over-close change, from the freshly refreshed daily bars."""
+def compute_movers(store: MarketStore, *, limit: int = _MAX_MOVERS) -> tuple[list[dict[str, Any]], str]:
+    """Top movers by close-over-close change from the freshly refreshed daily bars.
+
+    Returns (rows, label). The label is self-evidencing freshness: when the newest daily
+    bar IS the brief's calendar day (market open, forming candle present) it reads
+    "today at the open"; otherwise "last session" — so a stale pull is visible on the
+    hero, not silently mislabeled."""
     rows: list[dict[str, Any]] = []
+    newest_bar_day: str | None = None
     for asset in UNIVERSE:
         if asset.role not in {"holding", "watch", "spec", "index"}:
             continue
         bars = store.load_bars(asset.symbol, "daily")
         if len(bars) < 2 or not bars[-2].c:
             continue
+        # Local calendar day on BOTH sides of the comparison — a UTC day flips past 8 PM ET
+        # and would mislabel an evening sweep's forming candle as "last session".
+        bar_day = datetime.fromtimestamp(bars[-1].t).strftime("%Y-%m-%d")
+        if newest_bar_day is None or bar_day > newest_bar_day:
+            newest_bar_day = bar_day
         change = ((bars[-1].c / bars[-2].c) - 1) * 100
         rows.append(
             {
@@ -46,7 +57,8 @@ def compute_movers(store: MarketStore, *, limit: int = _MAX_MOVERS) -> list[dict
             }
         )
     rows.sort(key=lambda r: abs(r["change_pct"]), reverse=True)
-    return rows[:limit]
+    label = "today at the open" if newest_bar_day == datetime.now().strftime("%Y-%m-%d") else "last session"
+    return rows[:limit], label
 
 
 def build_morning_brief(
@@ -54,6 +66,7 @@ def build_morning_brief(
     current_wire: dict[str, Any],
     *,
     movers: list[dict[str, Any]],
+    movers_label: str = "last session",
     brief_date: str | None = None,
     generated_at: str | None = None,
 ) -> MorningBriefPayload:
@@ -91,6 +104,7 @@ def build_morning_brief(
         signal_flips=signal_flips,
         rrg_shifts=rrg_shifts,
         movers=movers,
+        movers_label=movers_label,
         regime_shift=regime_shift,
         portfolio_note=portfolio_note,
         previous_as_of=str(previous_wire.get("asOf") or "") or None,
@@ -204,6 +218,9 @@ def _regime_shift(previous_wire: dict[str, Any], current_wire: dict[str, Any]) -
 
 
 def _portfolio_note(previous_wire: dict[str, Any], current_wire: dict[str, Any]) -> str | None:
+    """The overnight delta leads; the lifetime P&L is explicitly labeled "all-time" so a
+    +20% cost-basis gain can never read as an overnight jump inside "since you last looked"."""
+
     def panel(wire: dict[str, Any]) -> dict[str, Any]:
         data = (wire.get("portfolio") or {}).get("data") if isinstance(wire.get("portfolio"), dict) else None
         return data if isinstance(data, dict) else {}
@@ -212,12 +229,17 @@ def _portfolio_note(previous_wire: dict[str, Any], current_wire: dict[str, Any])
     total = str(curr.get("total") or "")
     if not total or not curr.get("positions"):
         return None
-    note = f"Portfolio {total} ({curr.get('pnl', 'n/a')})"
+    parts = [f"Portfolio {total}"]
     prev_total = _money(str(panel(previous_wire).get("total") or ""))
     curr_total = _money(total)
-    if prev_total is not None and curr_total is not None and round(curr_total - prev_total) != 0:
-        note += f" · {curr_total - prev_total:+,.0f} vs previous sweep"
-    return note
+    if prev_total is not None and curr_total is not None:
+        delta = curr_total - prev_total
+        parts.append(f"{delta:+,.0f} since last sweep" if round(delta) != 0 else "flat since last sweep")
+    pnl = str(curr.get("pnl") or "").strip()
+    if pnl:
+        lifetime = pnl.split(" · ")[-1] if "%" in pnl else pnl
+        parts.append(f"{lifetime} all-time")
+    return " · ".join(parts)
 
 
 def _money(text: str) -> float | None:
