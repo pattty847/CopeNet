@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EvidenceFlagBadge, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, EvidenceToneGlyph, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
 import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
@@ -69,6 +69,7 @@ function SecActivityPanel({
               <>
                 <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                  <EvidenceToneGlyph tone={item.tone} />
                   {item.headline}
                   <EvidenceFlagBadge flag={item.flag} />
                   {upcoming && (

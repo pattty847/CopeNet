@@ -36,6 +36,23 @@ export const label: CSSProperties = {
 
 export const mono = "'JetBrains Mono', monospace";
 
+/** Tone from a signed value string ("+4.3%" green, "-8.4%" red) — display accents only. */
+export function valueTone(value: string): string {
+  if (value.startsWith('+')) return MM.up;
+  if (value.startsWith('-')) return MM.down;
+  return MM.dim;
+}
+
+/** ▲/▼ tone glyph for an evidence row (insider buy green / sell red); nothing when flat. */
+export function EvidenceToneGlyph({ tone }: { tone: Tone }) {
+  if (tone === 'flat') return null;
+  return (
+    <span style={{ flex: '0 0 auto', fontFamily: mono, fontSize: 10, color: toneColor(tone) }}>
+      {tone === 'up' ? '▲' : '▼'}
+    </span>
+  );
+}
+
 /** Compact evidence date from a unix-seconds stamp, e.g. "Jun 8". Empty when absent. */
 export function evidenceDate(t?: number): string {
   if (!t || !Number.isFinite(t)) return '';

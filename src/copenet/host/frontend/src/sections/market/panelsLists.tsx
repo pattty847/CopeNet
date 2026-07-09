@@ -9,7 +9,7 @@ import type {
   TrendRow,
   WatchlistItem,
 } from './types';
-import { EvidenceFlagBadge, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, EvidenceToneGlyph, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor, valueTone } from './marketUi';
 import { Sparkline } from './panelsTop';
 
 export function SoftBottomingWatch({ panel, onOpen }: { panel: Panel<SoftBottomItem[]>; onOpen: (s: string) => void }) {
@@ -67,8 +67,8 @@ export function AccumulationWatch({ panel, onOpen }: { panel: Panel<Accumulation
               <ConfDots n={r.confluence} />
             </div>
             <div style={{ display: 'flex', gap: 14, marginTop: 6, fontFamily: mono, fontSize: 10.5, color: MM.dim }}>
-              <span>{r.belowMa} <span style={{ color: MM.dimmer }}>vs 50W</span></span>
-              <span>{r.drawdown} <span style={{ color: MM.dimmer }}>drawdn</span></span>
+              <span style={{ color: valueTone(r.belowMa) }}>{r.belowMa} <span style={{ color: MM.dimmer }}>vs 50W</span></span>
+              <span style={{ color: valueTone(r.drawdown) }}>{r.drawdown} <span style={{ color: MM.dimmer }}>drawdn</span></span>
               <span>RSI {r.rsi}</span>
             </div>
             <div style={{ fontSize: 11, color: MM.faint, marginTop: 5, lineHeight: 1.45 }}>{r.why}</div>
@@ -139,14 +139,39 @@ export function Portfolio({
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {p.positions.map((pos) => (
-          <button key={pos.symbol} onClick={() => onOpen(pos.symbol)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: `1px solid rgba(254,252,244,.05)`, background: 'transparent', border: 'none', borderTopColor: 'rgba(254,252,244,.05)', textAlign: 'left' }}>
-            <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: MM.text, width: 54 }}>{pos.symbol}</span>
-            <span style={{ flex: 1, fontFamily: mono, fontSize: 10.5, color: MM.dim }}>{pos.shares ? `${pos.shares} sh @ ${pos.avgCost}` : 'add cost basis'}</span>
-            <span style={{ fontFamily: mono, fontSize: 12, color: MM.text, width: 74, textAlign: 'right' }}>{pos.last}</span>
-            <span style={{ fontFamily: mono, fontSize: 12, color: toneColor(pos.tone), width: 64, textAlign: 'right' }}>{pos.pnlPct}</span>
-          </button>
-        ))}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 6, font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
+          <span style={{ width: 54 }} />
+          <span style={{ flex: 1 }}>Position</span>
+          <span style={{ width: 74, textAlign: 'right' }}>Price</span>
+          <span style={{ width: 78, textAlign: 'right' }}>Value</span>
+          <span style={{ width: 52, textAlign: 'right' }}>Book</span>
+          <span style={{ width: 64, textAlign: 'right' }}>P&L</span>
+        </div>
+        {(() => {
+          const money = (s: string) => {
+            const n = parseFloat(s.replace(/[^0-9.\-]/g, ''));
+            return Number.isFinite(n) ? n : null;
+          };
+          const values = p.positions.map((pos) => {
+            const last = money(pos.last);
+            return last != null && pos.shares ? last * pos.shares : null;
+          });
+          const book = values.reduce<number>((acc, v) => acc + (v ?? 0), 0);
+          return p.positions.map((pos, i) => {
+            const value = values[i];
+            const alloc = value != null && book > 0 ? (value / book) * 100 : null;
+            return (
+              <button key={pos.symbol} onClick={() => onOpen(pos.symbol)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '9px 0', borderTop: `1px solid rgba(254,252,244,.05)`, background: 'transparent', border: 'none', borderTopColor: 'rgba(254,252,244,.05)', textAlign: 'left' }}>
+                <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: MM.text, width: 54 }}>{pos.symbol}</span>
+                <span style={{ flex: 1, fontFamily: mono, fontSize: 10.5, color: MM.dim }}>{pos.shares ? `${pos.shares} sh @ ${pos.avgCost}` : 'add cost basis'}</span>
+                <span style={{ fontFamily: mono, fontSize: 12, color: MM.text, width: 74, textAlign: 'right' }}>{pos.last}</span>
+                <span style={{ fontFamily: mono, fontSize: 12, color: MM.textSoft, width: 78, textAlign: 'right' }}>{value != null ? `$${value.toLocaleString(undefined, { maximumFractionDigits: 0 })}` : '—'}</span>
+                <span style={{ fontFamily: mono, fontSize: 11, color: MM.muted, width: 52, textAlign: 'right' }}>{alloc != null ? `${alloc.toFixed(0)}%` : '—'}</span>
+                <span style={{ fontFamily: mono, fontSize: 12, color: toneColor(pos.tone), width: 64, textAlign: 'right' }}>{pos.pnlPct}</span>
+              </button>
+            );
+          });
+        })()}
       </div>
     </PanelCard>
   );
@@ -253,6 +278,7 @@ export function Evidence({ panel, onOpen }: { panel: Panel<EvidenceItem[]>; onOp
             <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(e.type), color: evidenceTypeColor(e.type) }}>{e.type}</span>
             <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: MM.text, width: 50 }}>{e.symbol}</span>
             <span style={{ flex: 1, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <EvidenceToneGlyph tone={e.tone} />
               {e.headline}
               <EvidenceFlagBadge flag={e.flag} />
             </span>
