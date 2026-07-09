@@ -94,6 +94,49 @@ async def test_watchlist_store_is_scoped_to_orchestrators_market_store_root(tmp_
     assert (tmp_path / "market" / "watchlist.json").exists()
 
 
+async def test_watchlist_multi_list_create_select_delete_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    orchestrator = FakeOrchestrator(tmp_path)
+
+    await _send(handlers.handle_market_watchlist_add, {"symbol": "MSFT"}, orchestrator)
+
+    created = await _send(handlers.handle_market_watchlist_list_create, {"name": "Growth"}, orchestrator)
+    assert created["payload"]["lists"] == ["Default", "Growth"]
+    assert created["payload"]["active"] == "Growth"
+    assert created["payload"]["items"] == []  # new list starts empty; MSFT stays on Default
+
+    await _send(handlers.handle_market_watchlist_add, {"symbol": "GOOG"}, orchestrator)  # lands on active=Growth
+    selected = await _send(handlers.handle_market_watchlist_list_select, {"name": "Default"}, orchestrator)
+    assert [i["symbol"] for i in selected["payload"]["items"]] == ["MSFT"]
+
+    deleted = await _send(handlers.handle_market_watchlist_list_delete, {"name": "Growth"}, orchestrator)
+    assert deleted["payload"]["lists"] == ["Default"]
+    assert deleted["payload"]["active"] == "Default"
+
+
+async def test_watchlist_cannot_delete_last_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    orchestrator = FakeOrchestrator(tmp_path)
+
+    with pytest.raises(ValueError, match="last watchlist"):
+        await _send(handlers.handle_market_watchlist_list_delete, {"name": "Default"}, orchestrator)
+
+
+async def test_watchlist_migrates_legacy_flat_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    import json
+
+    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    orchestrator = FakeOrchestrator(tmp_path)
+    legacy = tmp_path / "market" / "watchlist.json"
+    legacy.parent.mkdir(parents=True, exist_ok=True)
+    legacy.write_text(json.dumps({"entries": [{"symbol": "AAPL", "name": "Apple"}]}), encoding="utf-8")
+
+    fetched = await _send(handlers.handle_market_watchlist_get, {}, orchestrator)
+    assert fetched["payload"]["lists"] == ["Default"]
+    assert fetched["payload"]["active"] == "Default"
+    assert [i["symbol"] for i in fetched["payload"]["items"]] == ["AAPL"]
+
+
 async def test_symbols_search_wraps_results(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     captured: dict[str, Any] = {}
 

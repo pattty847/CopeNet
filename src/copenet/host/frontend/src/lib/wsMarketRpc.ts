@@ -151,19 +151,42 @@ export async function marketBacktestRunRpc(
   return payload as unknown as BacktestPayload;
 }
 
-export async function marketWatchlistGetRpc(request: WsRpcRequest): Promise<WatchlistItem[]> {
-  const payload = await request<{ items?: unknown }>('market.watchlist.get', {});
-  return Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [];
+export interface WatchlistWireState {
+  items: WatchlistItem[];
+  lists: string[];
+  active: string;
 }
 
-export async function marketWatchlistAddRpc(request: WsRpcRequest, symbol: string, name = ''): Promise<WatchlistItem[]> {
-  const payload = await request<{ items?: unknown }>('market.watchlist.add', { symbol, name });
-  return Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [];
+function watchlistState(payload: { items?: unknown; lists?: unknown; active?: unknown }): WatchlistWireState {
+  return {
+    items: Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [],
+    lists: Array.isArray(payload.lists) ? (payload.lists as string[]) : ['Default'],
+    active: typeof payload.active === 'string' && payload.active ? payload.active : 'Default',
+  };
 }
 
-export async function marketWatchlistRemoveRpc(request: WsRpcRequest, symbol: string): Promise<WatchlistItem[]> {
-  const payload = await request<{ items?: unknown }>('market.watchlist.remove', { symbol });
-  return Array.isArray(payload.items) ? (payload.items as WatchlistItem[]) : [];
+export async function marketWatchlistGetRpc(request: WsRpcRequest): Promise<WatchlistWireState> {
+  return watchlistState(await request<Record<string, unknown>>('market.watchlist.get', {}));
+}
+
+export async function marketWatchlistAddRpc(request: WsRpcRequest, symbol: string, name = ''): Promise<WatchlistWireState> {
+  return watchlistState(await request<Record<string, unknown>>('market.watchlist.add', { symbol, name }));
+}
+
+export async function marketWatchlistRemoveRpc(request: WsRpcRequest, symbol: string): Promise<WatchlistWireState> {
+  return watchlistState(await request<Record<string, unknown>>('market.watchlist.remove', { symbol }));
+}
+
+export async function marketWatchlistListCreateRpc(request: WsRpcRequest, name: string): Promise<WatchlistWireState> {
+  return watchlistState(await request<Record<string, unknown>>('market.watchlist.list.create', { name }));
+}
+
+export async function marketWatchlistListDeleteRpc(request: WsRpcRequest, name: string): Promise<WatchlistWireState> {
+  return watchlistState(await request<Record<string, unknown>>('market.watchlist.list.delete', { name }));
+}
+
+export async function marketWatchlistListSelectRpc(request: WsRpcRequest, name: string): Promise<WatchlistWireState> {
+  return watchlistState(await request<Record<string, unknown>>('market.watchlist.list.select', { name }));
 }
 
 export async function marketSymbolsSearchRpc(request: WsRpcRequest, query: string, limit = 8): Promise<SymbolSearchResult[]> {

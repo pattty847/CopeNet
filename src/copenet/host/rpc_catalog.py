@@ -84,6 +84,9 @@ from .rpc_market_watchlist import (
     handle_market_watchlist_get,
     handle_market_watchlist_add,
     handle_market_watchlist_remove,
+    handle_market_watchlist_list_create,
+    handle_market_watchlist_list_delete,
+    handle_market_watchlist_list_select,
     handle_market_symbols_search,
 )
 
@@ -152,5 +155,8 @@ __all__ = [
     "handle_market_watchlist_get",
     "handle_market_watchlist_add",
     "handle_market_watchlist_remove",
+    "handle_market_watchlist_list_create",
+    "handle_market_watchlist_list_delete",
+    "handle_market_watchlist_list_select",
     "handle_market_symbols_search",
 ]

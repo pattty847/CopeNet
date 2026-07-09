@@ -462,7 +462,17 @@ export function MarketMonitor() {
         ) : (
           <>
             <MorningBrief brief={morningBrief.brief} generating={morningBrief.generating} onRunNow={() => void morningBrief.runNow()} onOpen={open} />
-            <Watchlist items={watchlist.items} loading={watchlist.loading} onOpen={open} onRemove={(s) => void watchlist.remove(s)} />
+            <Watchlist
+              items={watchlist.items}
+              lists={watchlist.lists}
+              active={watchlist.active}
+              loading={watchlist.loading}
+              onOpen={open}
+              onRemove={(s) => void watchlist.remove(s)}
+              onSelectList={(n) => void watchlist.selectList(n)}
+              onCreateList={(n) => void watchlist.createList(n)}
+              onDeleteList={(n) => void watchlist.deleteList(n)}
+            />
             <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
             <MacroBoard panel={dash.macro} />
             {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}

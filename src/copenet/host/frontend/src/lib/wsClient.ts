@@ -105,7 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketBriefGetRpc, marketBriefRunRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketBriefGetRpc, marketBriefRunRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -677,6 +677,18 @@ class WsClient {
 
   async marketWatchlistRemove(symbol: string) {
     return marketWatchlistRemoveRpc(this.request.bind(this), symbol);
+  }
+
+  async marketWatchlistListCreate(name: string) {
+    return marketWatchlistListCreateRpc(this.request.bind(this), name);
+  }
+
+  async marketWatchlistListDelete(name: string) {
+    return marketWatchlistListDeleteRpc(this.request.bind(this), name);
+  }
+
+  async marketWatchlistListSelect(name: string) {
+    return marketWatchlistListSelectRpc(this.request.bind(this), name);
   }
 
   async marketSymbolsSearch(query: string, limit = 8) {

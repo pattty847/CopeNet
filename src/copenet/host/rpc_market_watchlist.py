@@ -48,34 +48,70 @@ async def _quote_items(entries: list[dict[str, str]]) -> list[dict[str, Any]]:
     return list(await asyncio.gather(*[_row(e) for e in entries]))
 
 
+async def _state_payload(store: WatchlistStore) -> dict[str, Any]:
+    """Full watchlist wire state: quoted items for the ACTIVE list + tab metadata."""
+    state = store.state()
+    return {
+        "items": await _quote_items(state["entries"]),
+        "lists": state["lists"],
+        "active": state["active"],
+    }
+
+
+async def _respond_state(request_id: str, send_json: SendJson, store: WatchlistStore) -> None:
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=await _state_payload(store))))
+
+
 async def handle_market_watchlist_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     del params
-    items = await _quote_items(_store(orchestrator).list())
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"items": items})))
+    await _respond_state(request_id, send_json, _store(orchestrator))
 
 
 async def handle_market_watchlist_add(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     symbol = str(raw.get("symbol") or "").strip().upper()
     name = str(raw.get("name") or "").strip()
+    list_name = str(raw.get("list") or "").strip() or None
     if not symbol:
         raise ValueError("symbol is required")
     probe = await asyncio.to_thread(fetch_quote_row, symbol)
     if probe is None:
         raise ValueError(f"'{symbol}' did not resolve to a tradable ticker")
-    entries = _store(orchestrator).add(symbol, name)
-    items = await _quote_items(entries)
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"items": items})))
+    store = _store(orchestrator)
+    store.add(symbol, name, list_name)
+    await _respond_state(request_id, send_json, store)
 
 
 async def handle_market_watchlist_remove(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     symbol = str(raw.get("symbol") or "").strip().upper()
+    list_name = str(raw.get("list") or "").strip() or None
     if not symbol:
         raise ValueError("symbol is required")
-    entries = _store(orchestrator).remove(symbol)
-    items = await _quote_items(entries)
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"items": items})))
+    store = _store(orchestrator)
+    store.remove(symbol, list_name)
+    await _respond_state(request_id, send_json, store)
+
+
+async def handle_market_watchlist_list_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    store = _store(orchestrator)
+    store.create_list(str(raw.get("name") or ""))
+    await _respond_state(request_id, send_json, store)
+
+
+async def handle_market_watchlist_list_delete(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    store = _store(orchestrator)
+    store.delete_list(str(raw.get("name") or ""))
+    await _respond_state(request_id, send_json, store)
+
+
+async def handle_market_watchlist_list_select(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    store = _store(orchestrator)
+    store.select_list(str(raw.get("name") or ""))
+    await _respond_state(request_id, send_json, store)
 
 
 async def handle_market_symbols_search(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

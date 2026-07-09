@@ -9,6 +9,7 @@ import type {
   TrendRow,
   WatchlistItem,
 } from './types';
+import { useState } from 'react';
 import { EvidenceFlagBadge, EvidenceToneGlyph, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor, valueTone } from './marketUi';
 import { Sparkline } from './panelsTop';
 
@@ -221,22 +222,107 @@ export function Speculative({ panel, onOpen, comment }: { panel: Panel<SpecPosit
   );
 }
 
+function WatchlistTabs({
+  lists,
+  active,
+  onSelect,
+  onCreate,
+  onDelete,
+}: {
+  lists: string[];
+  active: string;
+  onSelect: (name: string) => void;
+  onCreate: (name: string) => void;
+  onDelete: (name: string) => void;
+}) {
+  const [naming, setNaming] = useState(false);
+  const [draft, setDraft] = useState('');
+  const submit = () => {
+    const name = draft.trim();
+    setNaming(false);
+    setDraft('');
+    if (name) onCreate(name);
+  };
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 4, flexWrap: 'wrap', background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
+      {lists.map((name) => {
+        const isActive = name === active;
+        return (
+          <span key={name} style={{ display: 'inline-flex', alignItems: 'center' }}>
+            <button
+              onClick={() => onSelect(name)}
+              style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 10px', font: '600 10px Inter', background: isActive ? MM.accent : 'transparent', color: isActive ? '#1a1205' : MM.muted, whiteSpace: 'nowrap' }}
+            >
+              {name}
+            </button>
+            {isActive && lists.length > 1 && (
+              <button
+                onClick={() => onDelete(name)}
+                title={`Delete watchlist "${name}"`}
+                style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: '#1a1205', fontSize: 11, padding: '0 6px 0 0', marginLeft: -6, lineHeight: 1, borderRadius: 5, backgroundColor: MM.accent, height: 22 }}
+              >
+                ×
+              </button>
+            )}
+          </span>
+        );
+      })}
+      {naming ? (
+        <input
+          autoFocus
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onBlur={submit}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') submit();
+            if (e.key === 'Escape') {
+              setNaming(false);
+              setDraft('');
+            }
+          }}
+          placeholder="List name…"
+          style={{ width: 90, background: 'transparent', border: `1px solid ${MM.borderHi}`, borderRadius: 5, padding: '3px 7px', font: '600 10px Inter', color: MM.text, outline: 'none' }}
+        />
+      ) : (
+        <button
+          onClick={() => setNaming(true)}
+          title="New watchlist"
+          style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 9px', font: '600 11px Inter', background: 'transparent', color: MM.dim }}
+        >
+          +
+        </button>
+      )}
+    </div>
+  );
+}
+
 export function Watchlist({
   items,
+  lists,
+  active,
   loading,
   onOpen,
   onRemove,
+  onSelectList,
+  onCreateList,
+  onDeleteList,
 }: {
   items: WatchlistItem[];
+  lists: string[];
+  active: string;
   loading: boolean;
   onOpen: (s: string) => void;
   onRemove: (s: string) => void;
+  onSelectList: (name: string) => void;
+  onCreateList: (name: string) => void;
+  onDeleteList: (name: string) => void;
 }) {
   return (
     <PanelCard
       title="Watchlist"
       status={items.length ? 'live' : 'preview'}
-      subtitle={items.length ? undefined : loading ? 'Loading…' : 'Search a ticker above and add it to track it here.'}
+      right={<WatchlistTabs lists={lists} active={active} onSelect={onSelectList} onCreate={onCreateList} onDelete={onDeleteList} />}
+      subtitle={items.length ? undefined : loading ? 'Loading…' : `"${active}" is empty — search a ticker above and add it.`}
     >
       {items.length === 0 && !loading ? (
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>Nothing tracked yet.</div>

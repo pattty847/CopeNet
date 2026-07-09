@@ -263,24 +263,36 @@ export function useTickerRead(symbol: string) {
 
 export interface MarketWatchlistState {
   items: WatchlistItem[];
+  lists: string[];
+  active: string;
   loading: boolean;
   symbols: Set<string>;
   add: (symbol: string, name?: string) => Promise<void>;
   remove: (symbol: string) => Promise<void>;
+  createList: (name: string) => Promise<void>;
+  deleteList: (name: string) => Promise<void>;
+  selectList: (name: string) => Promise<void>;
 }
 
 export function useMarketWatchlist(): MarketWatchlistState {
   const [items, setItems] = useState<WatchlistItem[]>([]);
+  const [lists, setLists] = useState<string[]>(['Default']);
+  const [active, setActive] = useState('Default');
   const [loading, setLoading] = useState(true);
   const alive = useRef(true);
+
+  const apply = useCallback((state: { items: WatchlistItem[]; lists: string[]; active: string }) => {
+    if (!alive.current) return;
+    setItems(state.items);
+    setLists(state.lists);
+    setActive(state.active);
+  }, []);
 
   useEffect(() => {
     alive.current = true;
     wsClient
       .marketWatchlistGet()
-      .then((next) => {
-        if (alive.current) setItems(next);
-      })
+      .then(apply)
       .catch(() => {
         /* backend offline — watchlist just stays empty until it's reachable */
       })
@@ -290,21 +302,36 @@ export function useMarketWatchlist(): MarketWatchlistState {
     return () => {
       alive.current = false;
     };
-  }, []);
+  }, [apply]);
 
   const add = useCallback(async (symbol: string, name = '') => {
-    const next = await wsClient.marketWatchlistAdd(symbol, name);
-    if (alive.current) setItems(next);
-  }, []);
+    apply(await wsClient.marketWatchlistAdd(symbol, name));
+  }, [apply]);
 
   const remove = useCallback(async (symbol: string) => {
-    const next = await wsClient.marketWatchlistRemove(symbol);
-    if (alive.current) setItems(next);
-  }, []);
+    apply(await wsClient.marketWatchlistRemove(symbol));
+  }, [apply]);
+
+  const createList = useCallback(async (name: string) => {
+    apply(await wsClient.marketWatchlistListCreate(name));
+  }, [apply]);
+
+  const deleteList = useCallback(async (name: string) => {
+    apply(await wsClient.marketWatchlistListDelete(name));
+  }, [apply]);
+
+  const selectList = useCallback(async (name: string) => {
+    setLoading(true);
+    try {
+      apply(await wsClient.marketWatchlistListSelect(name));
+    } finally {
+      if (alive.current) setLoading(false);
+    }
+  }, [apply]);
 
   const symbols = useMemo(() => new Set(items.map((item) => item.symbol)), [items]);
 
-  return { items, loading, symbols, add, remove };
+  return { items, lists, active, loading, symbols, add, remove, createList, deleteList, selectList };
 }
 
 export function useTickerDetail(symbol: string): TickerDetailPayload {

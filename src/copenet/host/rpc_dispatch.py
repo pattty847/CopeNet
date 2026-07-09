@@ -46,6 +46,9 @@ from .rpc_catalog import (
     handle_market_watchlist_get,
     handle_market_watchlist_add,
     handle_market_watchlist_remove,
+    handle_market_watchlist_list_create,
+    handle_market_watchlist_list_delete,
+    handle_market_watchlist_list_select,
     handle_market_symbols_search,
     handle_models_list,
     handle_persona_context_get,
@@ -286,6 +289,12 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_watchlist_add(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.watchlist.remove":
         await handle_market_watchlist_remove(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.list.create":
+        await handle_market_watchlist_list_create(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.list.delete":
+        await handle_market_watchlist_list_delete(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.list.select":
+        await handle_market_watchlist_list_select(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.symbols.search":
         await handle_market_symbols_search(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":
