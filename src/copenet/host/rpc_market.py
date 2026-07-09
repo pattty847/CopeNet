@@ -10,6 +10,7 @@ from uuid import uuid4
 from copenet.core.market import MarketRuntime
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
 from copenet.core.market.edgar import fetch_fundamentals, fetch_ticker_evidence
+from copenet.core.market.ledger import ledger_report, resolve_due_claims
 from copenet.core.market.runtime import resolve_market_runtime
 from copenet.core.market.sentinel import run_morning_sweep
 from copenet.core.runtime.runs import RunRecord
@@ -127,6 +128,19 @@ async def handle_market_brief_run(request_id: str, params: dict[str, Any] | None
     pulse_store = getattr(orchestrator, "_pulse_store", None)
     _track_task(orchestrator, asyncio.create_task(run_morning_sweep(runtime, provider, pulse_store, force=force)))
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": _now_iso()})))
+
+
+async def handle_market_ledger_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Forward-ledger calibration report. Resolves any past-due claims first so the page
+    always shows current outcomes (resolution is cheap — stored bars, no network)."""
+    del params
+    runtime = _runtime(orchestrator)
+    try:
+        await asyncio.to_thread(resolve_due_claims, runtime.store)
+    except Exception:
+        pass  # stale outcomes beat a failed page
+    payload = await asyncio.to_thread(ledger_report, runtime.store)
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload)))
 
 
 async def handle_market_webull_status(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

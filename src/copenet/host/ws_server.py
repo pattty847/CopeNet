@@ -210,6 +210,7 @@ class CopeNetWsServer:
                                 "market.read.get",
                                 "market.brief.get",
                                 "market.brief.run",
+                                "market.ledger.get",
                                 "market.webull.status",
                                 "market.webull.auth",
                                 "market.webull.accounts",

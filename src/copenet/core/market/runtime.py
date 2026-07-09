@@ -38,6 +38,7 @@ from .models import (
 )
 from .base_rates import load_base_rate
 from .fact_packets import market_fact_packet, ticker_fact_packet
+from .ledger import record_market_read_claims, record_ticker_read_claim, track_record_line
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
 from .signals import compute_price_signals, compute_rrg_tail
@@ -209,6 +210,9 @@ class MarketRuntime:
             if overnight and overnight.get("briefDate") != datetime.now().strftime("%Y-%m-%d"):
                 overnight = None
             packet = market_fact_packet(self.store.load_dashboard_wire(), sb_rate, overnight=overnight)
+            track_record = track_record_line(self.store)
+            if track_record:
+                packet = f"{packet}\n{track_record}"
             # Opt-in only (INCLUDE_WEBULL_PORTFOLIO_CONTEXT=true): append the sanitized account
             # context pack. Built from whitelisted snapshot fields — no credentials/tokens exist
             # anywhere in its inputs.
@@ -219,6 +223,10 @@ class MarketRuntime:
             read = await generate_market_read(provider, packet, model=model, generated_at=generated_at)
             wire = read.to_wire()
             self.store.save_market_read(wire)
+            try:
+                record_market_read_claims(self.store, wire)
+            except Exception:
+                logging.warning("forward ledger: failed to record market read claims", exc_info=True)
             return wire
 
         symbol = target.strip().upper()
@@ -261,10 +269,17 @@ class MarketRuntime:
                     f"\nOPERATOR POSITION (Webull): holds {held.get('quantity')} sh @ avg {held.get('avg_cost')}"
                     f" · unrealized P&L {held.get('unrealized_pl_pct')}% · {held.get('allocation_pct')}% of portfolio."
                 )
+        track_record = track_record_line(self.store)
+        if track_record:
+            packet = f"{packet}\n{track_record}"
         read = await generate_ticker_read(provider, packet, model=model, generated_at=generated_at)
         wire = read.to_wire()
         wire["symbol"] = symbol
         self.store.save_ticker_read(symbol, wire)
+        try:
+            record_ticker_read_claim(self.store, symbol, wire)
+        except Exception:
+            logging.warning("forward ledger: failed to record ticker read claim", exc_info=True)
         return wire
 
     def refresh(self, *, scope: str = "all") -> DashboardPayload:

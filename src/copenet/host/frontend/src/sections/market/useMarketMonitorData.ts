@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
+import type { DashboardPayload, LedgerReport, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -259,6 +259,31 @@ export function useMarketRead() {
 
 export function useTickerRead(symbol: string) {
   return useModelRead<TickerRead>(symbol);
+}
+
+export function useForwardLedger(): { report: LedgerReport | null; loading: boolean } {
+  const [report, setReport] = useState<LedgerReport | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let alive = true;
+    wsClient
+      .marketLedgerGet()
+      .then((next) => {
+        if (alive) setReport(next);
+      })
+      .catch(() => {
+        /* backend offline — panel shows its empty state */
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  return { report, loading };
 }
 
 export interface MarketWatchlistState {

@@ -262,6 +262,44 @@ export interface TickerFundamentals {
   epsQuarterly: FundamentalsQuarter[];
 }
 
+// ---------- forward ledger (model calls scored at horizon) ----------
+/** Claim rows come from the backend's dataclass dump — snake_case keys, unlike the rest
+ *  of the market wire. Lived-with for phase 1. */
+export interface LedgerHorizonSlot {
+  due_at: string;
+  resolved_at?: string | null;
+  return_pct?: number | null;
+  excess_pct?: number | null;
+  outcome?: 'correct' | 'incorrect' | 'push' | 'unscoreable' | null;
+}
+
+export interface LedgerClaim {
+  claim_id: string;
+  created_at: string;
+  kind: 'regime' | 'lean' | 'attention';
+  target: string;
+  value: string;
+  confidence?: string | null;
+  model: string;
+  note: string;
+  horizons: Record<string, LedgerHorizonSlot>;
+}
+
+export interface LedgerKindStats {
+  correct: number;
+  incorrect: number;
+  push: number;
+  accuracyPct: number | null;
+}
+
+export interface LedgerReport {
+  rulesVersion: string;
+  totalClaims: number;
+  pendingHorizons: number;
+  stats: Record<'regime' | 'lean' | 'attention', Record<string, LedgerKindStats>>;
+  recent: LedgerClaim[];
+}
+
 // ---------- model reads (Insight Engine Phase D) ----------
 export interface MarketRead {
   headline: string;
@@ -280,6 +318,7 @@ export interface MarketRead {
 
 export interface TickerRead {
   read: string;
+  lean?: 'bullish' | 'bearish' | 'neutral';
   bullCase: string;
   bearCase: string;
   whatWouldChangeMyMind: string;

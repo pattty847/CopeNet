@@ -105,7 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketBriefGetRpc, marketBriefRunRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketBriefGetRpc, marketBriefRunRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -636,6 +636,10 @@ class WsClient {
 
   async marketBriefRun(force = true) {
     return marketBriefRunRpc(this.request.bind(this), force);
+  }
+
+  async marketLedgerGet() {
+    return marketLedgerGetRpc(this.request.bind(this));
   }
 
   async marketWebullStatus() {

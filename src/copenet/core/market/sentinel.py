@@ -21,6 +21,7 @@ from typing import Any
 from copenet.core.pulse import PulseRecord
 
 from .brief import build_morning_brief, compute_movers
+from .ledger import resolve_due_claims
 from .runtime import MarketRuntime, resolve_market_runtime
 
 _LOG = logging.getLogger(__name__)
@@ -96,6 +97,12 @@ async def run_morning_sweep(
         previous = runtime.store.load_dashboard_wire()
         await asyncio.to_thread(runtime.refresh, scope="all")
         current = runtime.store.load_dashboard_wire()
+        try:
+            # Prices are fresh — score any forward-ledger claims that just came due, BEFORE
+            # the chained model read so its track-record line is current.
+            resolve_due_claims(runtime.store)
+        except Exception:
+            _LOG.warning("morning sweep: ledger resolution failed", exc_info=True)
         movers, movers_label = compute_movers(runtime.store)
         brief = build_morning_brief(
             previous,

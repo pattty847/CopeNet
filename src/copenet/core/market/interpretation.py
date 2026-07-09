@@ -96,13 +96,18 @@ Hard rules:
 Respond with ONLY a JSON object matching exactly this shape (no markdown fences, no commentary):
 {
   "read": "3-5 sentences: your interpretation of this asset's tape",
+  "lean": "bullish" | "bearish" | "neutral",
   "bull_case": "2-3 sentences: the honest case for accumulating here, citing facts",
   "bear_case": "2-3 sentences: the honest case against, citing facts",
   "what_would_change_my_mind": "1-2 concrete, falsifiable conditions",
   "confidence": "low" | "medium" | "high",
   "confidence_reason": "one sentence, tied to data quality and evidence density",
   "key_facts": [ "3-5 short strings, each a packet fact this read leans on" ]
-}"""
+}
+"lean" is your honest net directional lean for this asset on the weekly/positional horizon
+(the next 1-2 months), given everything in the packet. It is recorded in a forward ledger and
+scored against what actually happens — so answer what you actually believe, and use "neutral"
+when the evidence genuinely doesn't tilt. This is a lean, not advice or a forecast narrative."""
 
 
 @dataclass
@@ -134,6 +139,7 @@ class TickerRead:
     confidence: str
     confidence_reason: str
     key_facts: list[str] = field(default_factory=list)
+    lean: str = "neutral"  # bullish | bearish | neutral — the scoreable claim for the forward ledger
     model: str = ""
     generated_at: str = ""
 
@@ -172,6 +178,7 @@ def extract_json(text: str) -> dict[str, Any]:
 
 _VALID_REGIMES = {"risk-off", "chop", "risk-on", "event-risk"}
 _VALID_CONFIDENCE = {"low", "medium", "high"}
+_VALID_LEANS = {"bullish", "bearish", "neutral"}
 
 
 def parse_market_read(text: str, *, model: str, generated_at: str) -> MarketRead:
@@ -252,6 +259,7 @@ async def generate_ticker_read(
 def parse_ticker_read(text: str, *, model: str, generated_at: str) -> TickerRead:
     raw = extract_json(text)
     confidence = str(raw.get("confidence", "low")).lower().strip()
+    lean = str(raw.get("lean", "neutral")).lower().strip()
     key_facts = [str(f) for f in raw.get("key_facts", []) if isinstance(f, (str, int, float))][:6]
     return TickerRead(
         read=str(raw.get("read", "")).strip(),
@@ -261,6 +269,7 @@ def parse_ticker_read(text: str, *, model: str, generated_at: str) -> TickerRead
         confidence=confidence if confidence in _VALID_CONFIDENCE else "low",
         confidence_reason=str(raw.get("confidence_reason", "")).strip(),
         key_facts=key_facts,
+        lean=lean if lean in _VALID_LEANS else "neutral",
         model=model,
         generated_at=generated_at,
     )

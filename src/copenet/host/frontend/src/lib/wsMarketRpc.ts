@@ -4,6 +4,7 @@
 
 import type {
   DashboardPayload,
+  LedgerReport,
   MarketRead,
   MorningBriefPayload,
   TickerEvidencePayload,
@@ -63,6 +64,11 @@ export async function marketTickerFundamentalsRpc(request: WsRpcRequest, symbol:
   const payload = await request<{ fundamentals?: unknown }>('market.ticker.fundamentals.get', { symbol });
   const fundamentals = payload.fundamentals;
   return fundamentals && typeof fundamentals === 'object' ? (fundamentals as TickerFundamentals) : null;
+}
+
+export async function marketLedgerGetRpc(request: WsRpcRequest): Promise<LedgerReport> {
+  const payload = await request<Record<string, unknown>>('market.ledger.get', {});
+  return payload as unknown as LedgerReport;
 }
 
 export async function marketBriefGetRpc(request: WsRpcRequest): Promise<MorningBriefPayload | null> {

@@ -5,8 +5,9 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { MorningBrief } from './MorningBrief';
+import { ForwardLedger } from './ForwardLedger';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { useIsMobile } from '../../lib/responsive';
@@ -128,6 +129,11 @@ function TickerReadPanel({ symbol }: { symbol: string }) {
       )}
       {read && (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
+          {read.lean && (
+            <span style={{ alignSelf: 'flex-start', borderRadius: 999, border: `1px solid ${MM.border}`, padding: '3px 10px', font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: read.lean === 'bullish' ? MM.up : read.lean === 'bearish' ? MM.down : MM.muted }}>
+              lean: {read.lean} · logged to forward ledger
+            </span>
+          )}
           <div style={{ fontSize: 13, color: MM.textSoft, lineHeight: 1.6 }}>{read.read}</div>
           <div style={{ display: 'flex', gap: 14, flexWrap: 'wrap' }}>
             <div style={{ flex: 1, minWidth: 240, borderLeft: `2px solid rgba(105,197,137,.4)`, paddingLeft: 11 }}>
@@ -344,6 +350,7 @@ export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
   const { read: marketRead, running: reading, run: runRead } = useMarketRead();
   const morningBrief = useMorningBrief(reload);
+  const ledger = useForwardLedger();
   const watchlist = useMarketWatchlist();
   const isMobile = useIsMobile();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
@@ -487,6 +494,7 @@ export function MarketMonitor() {
               <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
               <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
             </div>
+            <ForwardLedger report={ledger.report} loading={ledger.loading} />
             <div style={ROW}>
               <Evidence panel={dash.evidence} onOpen={open} />
               <Contrarian

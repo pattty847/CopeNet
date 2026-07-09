@@ -28,6 +28,7 @@ from .rpc_catalog import (
     handle_messaging_test,
     handle_market_brief_get,
     handle_market_brief_run,
+    handle_market_ledger_get,
     handle_market_ticker_fundamentals_get,
     handle_market_dashboard_get,
     handle_market_interpret,
@@ -269,6 +270,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_brief_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.brief.run":
         await handle_market_brief_run(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.ledger.get":
+        await handle_market_ledger_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.status":
         await handle_market_webull_status(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.auth":
