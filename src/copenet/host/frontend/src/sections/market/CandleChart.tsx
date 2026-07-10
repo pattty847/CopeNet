@@ -1,13 +1,14 @@
 // TradingView Lightweight Charts (v5) candlestick + volume, themed to CopeNet's dark palette.
 // Consumes the typed OHLCV series from the ticker payload. Pure presentation — no data fetching.
 
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   CandlestickSeries,
   ColorType,
   HistogramSeries,
   LineSeries,
   LineType,
+  PriceScaleMode,
   createChart,
   createSeriesMarkers,
   type IChartApi,
@@ -139,6 +140,14 @@ export function CandleChart({
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const revenueRef = useRef<ISeriesApi<'Line'> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  // TradingView muscle memory: right-click the price axis to flip log/linear. Persisted.
+  const [logScale, setLogScale] = useState(() => {
+    try {
+      return localStorage.getItem('mm-log-scale') === '1';
+    } catch {
+      return false;
+    }
+  });
 
   // create once
   useEffect(() => {
@@ -205,6 +214,16 @@ export function CandleChart({
     };
   }, [height]);
 
+  // price-scale mode (runs after creation; also re-applies when the chart is rebuilt on height change)
+  useEffect(() => {
+    chartRef.current?.priceScale('right').applyOptions({ mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal });
+    try {
+      localStorage.setItem('mm-log-scale', logScale ? '1' : '0');
+    } catch {
+      /* private mode — preference just doesn't persist */
+    }
+  }, [logScale, height]);
+
   // update data
   useEffect(() => {
     const candle = candleRef.current;
@@ -224,9 +243,30 @@ export function CandleChart({
     markersRef.current?.setMarkers(markersFor(events, rows));
   }, [bars, events, revenue]);
 
+  const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    const chart = chartRef.current;
+    const el = containerRef.current;
+    if (!chart || !el) return;
+    const rect = el.getBoundingClientRect();
+    // Only when the right-click lands ON the price axis (same gesture as TradingView).
+    const axisWidth = chart.priceScale('right').width();
+    if (event.clientX >= rect.right - axisWidth) {
+      event.preventDefault();
+      setLogScale((v) => !v);
+    }
+  };
+
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative' }} onContextMenu={onContextMenu}>
       <div ref={containerRef} style={{ width: '100%' }} />
+      {logScale && (
+        <span
+          title="Logarithmic price scale — right-click the price axis to switch back to linear"
+          style={{ position: 'absolute', top: 6, right: 6, zIndex: 5, borderRadius: 6, padding: '2px 7px', font: '700 8.5px Inter', letterSpacing: '.1em', background: 'rgba(251,148,35,.14)', color: MM.accent, border: `1px solid rgba(251,148,35,.3)`, pointerEvents: 'none' }}
+        >
+          LOG
+        </span>
+      )}
       {bars.length === 0 && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: MM.dim, fontSize: 12, fontStyle: 'italic', pointerEvents: 'none' }}>
           Loading candles…

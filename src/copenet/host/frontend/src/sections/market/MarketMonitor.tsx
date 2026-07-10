@@ -329,7 +329,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
             <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>
             Charts by TradingView · ▲/▼ insider Form 4 buys/sells · ● planned sales (Form 144) · ▪ 8-K filings
           </span>
-          <span style={{ fontSize: 10, color: MM.dim, fontStyle: 'italic' }}>~5y history · weekly primary, daily confirmation</span>
+          <span style={{ fontSize: 10, color: MM.dim, fontStyle: 'italic' }}>~5y history · weekly primary, daily confirmation · right-click the price axis for log scale</span>
         </div>
       </PanelCard>
       <div style={ROW}>
