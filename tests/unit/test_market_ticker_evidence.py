@@ -160,6 +160,57 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
     ]
 
 
+def test_insider_net_tone_follows_dollars_when_shares_and_value_diverge() -> None:
+    # Vesting-style acquisitions inflate net shares with little gross value while real
+    # money exits via sells — tone must follow net dollars, not the share count.
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+    events = [
+        {
+            "shares": 400_000,
+            "gross_value": 0,
+            "is_acquisition": True,
+            "is_disposition": False,
+            "transaction_date": recent,
+        },
+        {
+            "shares": 68_000,
+            "gross_value": 230_000_000.0,
+            "is_acquisition": False,
+            "is_disposition": True,
+            "transaction_date": recent,
+        },
+    ]
+
+    windows = edgar._insider_net_windows(events)
+
+    assert windows is not None
+    assert windows["d30"]["net_shares"] == 332_000
+    assert windows["d30"]["net_value"] == -230_000_000
+    assert windows["d30"]["tone"] == "down"
+
+
+def test_insider_net_tone_falls_back_to_shares_without_values() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+    events = [
+        {
+            "shares": 1_000,
+            "is_acquisition": True,
+            "is_disposition": False,
+            "transaction_date": recent,
+        }
+    ]
+
+    windows = edgar._insider_net_windows(events)
+
+    assert windows is not None
+    assert windows["d30"]["net_value"] is None
+    assert windows["d30"]["tone"] == "up"
+
+
 @pytest.mark.asyncio
 async def test_fetch_ticker_evidence_refresh_uses_incremental_copetech_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeFetcher.calls = []

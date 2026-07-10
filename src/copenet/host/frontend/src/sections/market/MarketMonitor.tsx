@@ -41,21 +41,32 @@ function formatNetValue(n: number): string {
   return `${sign}$${(abs / 1e3).toFixed(0)}K`;
 }
 
+function signTone(n: number): 'up' | 'down' | 'flat' {
+  return n > 0 ? 'up' : n < 0 ? 'down' : 'flat';
+}
+
 function InsiderNetStrip({ net }: { net?: Record<string, InsiderNetWindow> }) {
   if (!net || Object.keys(net).length === 0) return null;
   const windows = Object.values(net).sort((a, z) => a.days - z.days);
   return (
     <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
-      {windows.map((w) => (
-        <div key={w.days} style={{ flex: 1, minWidth: 140, border: `1px solid ${w.tone === 'up' ? 'rgba(105,197,137,.25)' : w.tone === 'down' ? 'rgba(217,109,95,.25)' : MM.border}`, background: w.tone === 'up' ? 'rgba(105,197,137,.05)' : w.tone === 'down' ? 'rgba(217,109,95,.05)' : 'transparent', borderRadius: 9, padding: '7px 10px' }}>
-          <div style={{ font: '600 8px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 3 }}>Insider net · {w.days}d</div>
-          <div style={{ fontFamily: mono, fontSize: 12.5, color: toneColor(w.tone) }}>
-            {formatShares(w.netShares)}
-            {w.netValue != null && <span style={{ fontSize: 10.5, marginLeft: 6 }}>({formatNetValue(w.netValue)})</span>}
+      {windows.map((w) => {
+        // Color each figure by its own sign — vested grants inflate share "buys" while
+        // real dollars flow out, so shares and dollars can legitimately disagree.
+        // Tile chrome follows the dollar sign when dollars exist (the honest signal).
+        const shareTone = signTone(w.netShares);
+        const valueTone = w.netValue != null ? signTone(w.netValue) : shareTone;
+        return (
+          <div key={w.days} style={{ flex: 1, minWidth: 140, border: `1px solid ${valueTone === 'up' ? 'rgba(105,197,137,.25)' : valueTone === 'down' ? 'rgba(217,109,95,.25)' : MM.border}`, background: valueTone === 'up' ? 'rgba(105,197,137,.05)' : valueTone === 'down' ? 'rgba(217,109,95,.05)' : 'transparent', borderRadius: 9, padding: '7px 10px' }}>
+            <div style={{ font: '600 8px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 3 }}>Insider net · {w.days}d</div>
+            <div style={{ fontFamily: mono, fontSize: 12.5, color: toneColor(shareTone) }}>
+              {formatShares(w.netShares)}
+              {w.netValue != null && <span style={{ fontSize: 10.5, marginLeft: 6, color: toneColor(valueTone) }}>({formatNetValue(w.netValue)})</span>}
+            </div>
+            <div style={{ fontFamily: mono, fontSize: 9.5, color: MM.dim, marginTop: 2 }}>{w.buys} buys · {w.sells} sells</div>
           </div>
-          <div style={{ fontFamily: mono, fontSize: 9.5, color: MM.dim, marginTop: 2 }}>{w.buys} buys · {w.sells} sells</div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

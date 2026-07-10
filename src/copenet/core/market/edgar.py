@@ -345,13 +345,17 @@ def _insider_net_windows(events: list[dict[str, Any]], *, windows: tuple[int, ..
                 net_value += signed * float(value)
                 has_value = True
         if buys or sells:
+            # Tone follows net dollars when we have them: vested grants count as share
+            # "buys" with little/no gross value, so share sign alone can read green while
+            # real money is flowing out (e.g. +332K sh but -$230M sold).
+            tone_signal = net_value if has_value else net_shares
             out[f"d{days}"] = {
                 "days": days,
                 "buys": buys,
                 "sells": sells,
                 "net_shares": round(net_shares),
                 "net_value": round(net_value) if has_value else None,
-                "tone": "up" if net_shares > 0 else "down" if net_shares < 0 else "flat",
+                "tone": "up" if tone_signal > 0 else "down" if tone_signal < 0 else "flat",
             }
     return out or None
 
