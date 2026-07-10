@@ -163,8 +163,20 @@ def test_store_brief_round_trip_and_dated_copy(tmp_path: Path) -> None:
 
 
 def test_sentinel_schedules_catchup_when_brief_missing(tmp_path: Path, monkeypatch) -> None:
+    from copenet.core.market import sentinel as sentinel_module
     from copenet.core.market.runtime import MarketRuntime
     from copenet.core.market.sentinel import MarketSentinel, _CATCHUP_DELAY_SECONDS
+
+    # Freeze the sentinel's clock at local noon — the assertions below construct
+    # "before/after brief time" scenarios that are impossible near midnight (a same-day
+    # brief can't predate a 00:00 target), which made the wall-clock version flaky.
+    class _FixedDateTime(datetime):
+        @classmethod
+        def now(cls, tz=None):  # noqa: N805 — datetime API
+            base = cls(2026, 7, 15, 12, 0, 0)
+            return base.astimezone(tz) if tz is not None else base
+
+    monkeypatch.setattr(sentinel_module, "datetime", _FixedDateTime)
 
     runtime = MarketRuntime(store=MarketStore(tmp_path))
 
@@ -172,12 +184,10 @@ def test_sentinel_schedules_catchup_when_brief_missing(tmp_path: Path, monkeypat
         pass
 
     sentinel = MarketSentinel(_Orchestrator())
-    now = datetime.now()
-    past = f"{max(now.hour - 1, 0):02d}:00"
-    future = f"{min(now.hour + 1, 23):02d}:59"
+    now = _FixedDateTime(2026, 7, 15, 12, 0, 0)
 
-    # Past brief time, no brief for today → catch up soon.
-    monkeypatch.setenv("COPNET_MARKET_BRIEF_TIME", past)
+    # Past brief time (11:00 < noon), no brief for today → catch up soon.
+    monkeypatch.setenv("COPNET_MARKET_BRIEF_TIME", "11:00")
     assert sentinel._seconds_until_next_sweep(runtime) == _CATCHUP_DELAY_SECONDS
 
     # Past brief time, but today's brief predates brief time (a pre-dawn manual sweep) →
@@ -201,7 +211,7 @@ def test_sentinel_schedules_catchup_when_brief_missing(tmp_path: Path, monkeypat
     )
     assert sentinel._seconds_until_next_sweep(runtime) > 3600
 
-    # Before brief time → wait until brief time, not catch-up.
-    monkeypatch.setenv("COPNET_MARKET_BRIEF_TIME", future)
+    # Before brief time (13:59 > noon) → wait until brief time, not catch-up.
+    monkeypatch.setenv("COPNET_MARKET_BRIEF_TIME", "13:59")
     delay = sentinel._seconds_until_next_sweep(runtime)
     assert _CATCHUP_DELAY_SECONDS <= delay <= 2 * 3600

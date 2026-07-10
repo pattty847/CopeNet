@@ -135,6 +135,8 @@ export interface EvidenceItem {
   t?: number; // unix seconds, for chart marker placement
   /** Badge-worthy anomaly: multi-insider buy window, or an 8-K in a high-signal category. */
   flag?: 'cluster' | 'high-signal';
+  /** Transaction dollar value (Form 4 gross / 144 aggregate / cluster total). */
+  value?: number | null;
 }
 
 export interface ContrarianNote {

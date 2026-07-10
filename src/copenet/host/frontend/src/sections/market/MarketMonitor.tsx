@@ -328,7 +328,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
           </div>
         }
       >
-        <CandleChart bars={series} events={chartEvents} height={620} revenue={revenuePoints} />
+        <CandleChart bars={series} events={chartEvents} evidence={secEvidence.length ? secEvidence : td.evidence} height={620} revenue={revenuePoints} />
         {showRevenue && fundamentals.unavailable && !fundamentals.loading && (
           <div style={{ fontSize: 11, color: MM.dim, fontStyle: 'italic', marginTop: 6 }}>
             No SEC fundamentals for this symbol — revenue overlay needs a filer with XBRL company facts (ETFs don't file).

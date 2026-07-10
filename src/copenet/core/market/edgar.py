@@ -248,6 +248,7 @@ def _insider_evidence(symbol: str, event: dict[str, Any]) -> EvidenceItem:
         tone=tone,
         url=event.get("form_url"),
         t=_to_unix(event.get("transaction_date") or event.get("filing_date")),
+        value=float(event["gross_value"]) if isinstance(event.get("gross_value"), (int, float)) else None,
     )
 
 
@@ -283,6 +284,7 @@ def _cluster_evidence(symbol: str, cluster: dict[str, Any]) -> EvidenceItem:
         url=urls[0] if isinstance(urls, list) and urls else None,
         t=_to_unix(cluster.get("window_end") or cluster.get("window_start")),
         flag="cluster",
+        value=float(total_value) if isinstance(total_value, (int, float)) and total_value else None,
     )
 
 
@@ -305,6 +307,7 @@ def _planned_sale_evidence(symbol: str, record: dict[str, Any]) -> EvidenceItem:
         tone="down",
         url=record.get("form_url"),
         t=_to_unix(record.get("signature_date") or record.get("filing_date")),
+        value=float(value) if isinstance(value, (int, float)) and value else None,
     )
 
 

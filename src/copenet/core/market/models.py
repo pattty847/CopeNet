@@ -152,6 +152,9 @@ class EvidenceItem:
     # Badge-worthy anomaly: "cluster" = multi-insider buy window, "high-signal" = 8-K in a
     # high-signal category (exec change, results, M&A, distress, restructuring, material agreement).
     flag: Literal["cluster", "high-signal"] | None = None
+    # Transaction dollar value (Form 4 gross_value / 144 aggregate value / cluster total) —
+    # the difference between a $10K trade and a $1B one belongs in the data, not the prose.
+    value: float | None = None
 
 
 @dataclass

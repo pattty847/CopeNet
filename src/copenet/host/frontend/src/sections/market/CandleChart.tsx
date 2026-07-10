@@ -18,8 +18,8 @@ import {
   type Time,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { ChartEvent, Ohlcv } from './types';
-import { MM } from './marketUi';
+import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
+import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 
 export interface RevenuePoint {
   t: number; // unix seconds (quarter end)
@@ -31,6 +31,49 @@ function formatRevenue(value: number): string {
   if (magnitude >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
   if (magnitude >= 1e6) return `$${(value / 1e6).toFixed(0)}M`;
   return `$${Math.round(value).toLocaleString()}`;
+}
+
+function formatMoney(value: number): string {
+  const abs = Math.abs(value);
+  const sign = value < 0 ? '-' : '';
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(2)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
+  if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
+  return `${sign}$${Math.round(abs).toLocaleString()}`;
+}
+
+/** Snap a unix-seconds timestamp to the nearest bar time (shared by markers and click lookups). */
+function snapToBar(t: number, times: number[]): number {
+  let nearest = times[0];
+  let bestDiff = Math.abs(times[0] - t);
+  for (const candidate of times) {
+    const diff = Math.abs(candidate - t);
+    if (diff < bestDiff) {
+      nearest = candidate;
+      bestDiff = diff;
+    }
+  }
+  return nearest;
+}
+
+interface DayPopupState {
+  x: number;
+  y: number;
+  time: number;
+  items: EvidenceItem[];
+}
+
+/** All evidence snapped to a given bar time — what actually "hit" that day. */
+function evidenceForDay(evidence: EvidenceItem[], bars: Ohlcv[], time: number): EvidenceItem[] {
+  if (!bars.length) return [];
+  const times = bars.map((b) => b.t);
+  const lastTime = times[times.length - 1];
+  const barSpacing = times.length > 1 ? lastTime - times[times.length - 2] : 86400;
+  return evidence.filter((item) => {
+    if (!item.t || !Number.isFinite(item.t)) return false;
+    if (item.t > lastTime + barSpacing) return item.t === time; // future whitespace: exact match
+    return snapToBar(item.t, times) === time;
+  });
 }
 
 /** Sort ascending + de-dupe by time (lightweight-charts requires strictly increasing unique times).
@@ -76,15 +119,7 @@ function decorationsFor(events: ChartEvent[], bars: Ohlcv[]): { markers: SeriesM
       }
       continue;
     }
-    let nearest = times[0];
-    let bestDiff = Math.abs(times[0] - event.t);
-    for (const t of times) {
-      const diff = Math.abs(t - event.t);
-      if (diff < bestDiff) {
-        nearest = t;
-        bestDiff = diff;
-      }
-    }
+    const nearest = snapToBar(event.t, times);
     const bucket = grouped.get(nearest) ?? [];
     bucket.push(event);
     grouped.set(nearest, bucket);
@@ -143,11 +178,14 @@ function decorationsFor(events: ChartEvent[], bars: Ohlcv[]): { markers: SeriesM
 export function CandleChart({
   bars,
   events = [],
+  evidence = [],
   height = 380,
   revenue,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
+  /** Full evidence rows backing the markers — clicking a marker day pops their details. */
+  evidence?: EvidenceItem[];
   height?: number;
   /** Quarterly revenue overlay (step line, own hidden scale). Omit/empty = hidden. */
   revenue?: RevenuePoint[];
@@ -158,6 +196,12 @@ export function CandleChart({
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const revenueRef = useRef<ISeriesApi<'Line'> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
+  const [dayPopup, setDayPopup] = useState<DayPopupState | null>(null);
+  // Refs so the (once-subscribed) chart click handler always sees current data.
+  const evidenceRef = useRef<EvidenceItem[]>(evidence);
+  const barsRef = useRef<Ohlcv[]>(bars);
+  evidenceRef.current = evidence;
+  barsRef.current = bars;
   // TradingView muscle memory: right-click the price axis to flip log/linear. Persisted.
   const [logScale, setLogScale] = useState(() => {
     try {
@@ -210,6 +254,21 @@ export function CandleChart({
     });
     chart.priceScale('revenue').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
     const markers = createSeriesMarkers(candle, []);
+
+    // Click a marker day → popup with everything that hit that day (who, $, filing link).
+    chart.subscribeClick((param) => {
+      if (param.time == null || !param.point) {
+        setDayPopup(null);
+        return;
+      }
+      const time = param.time as number;
+      const items = evidenceForDay(evidenceRef.current, normalize(barsRef.current), time);
+      if (!items.length) {
+        setDayPopup(null);
+        return;
+      }
+      setDayPopup({ x: param.point.x, y: param.point.y, time, items });
+    });
 
     chartRef.current = chart;
     candleRef.current = candle;
@@ -280,9 +339,71 @@ export function CandleChart({
     }
   };
 
+  const popupNet = dayPopup
+    ? dayPopup.items.reduce(
+        (acc, item) => {
+          if (item.type === 'Insider' && item.tone !== 'flat' && item.value) {
+            acc.net += item.tone === 'up' ? item.value : -item.value;
+            acc[item.tone === 'up' ? 'buys' : 'sells'] += 1;
+          }
+          return acc;
+        },
+        { net: 0, buys: 0, sells: 0 },
+      )
+    : null;
+
   return (
     <div style={{ position: 'relative' }} onContextMenu={onContextMenu}>
       <div ref={containerRef} style={{ width: '100%' }} />
+      {dayPopup && (
+        <div
+          style={{
+            position: 'absolute',
+            left: Math.min(dayPopup.x + 12, Math.max((containerRef.current?.clientWidth ?? 600) - 372, 8)),
+            top: Math.max(Math.min(dayPopup.y, height - 240), 8),
+            zIndex: 10,
+            width: 360,
+            maxHeight: 260,
+            overflowY: 'auto',
+            background: '#0b0b0d',
+            border: `1px solid ${MM.borderHi}`,
+            borderRadius: 12,
+            padding: 12,
+            boxShadow: '0 16px 32px rgba(0,0,0,.55)',
+          }}
+        >
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
+            <span style={{ font: '600 9px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>
+              SEC activity · {evidenceDate(dayPopup.time)}
+            </span>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              {popupNet && (popupNet.buys || popupNet.sells) ? (
+                <span style={{ fontFamily: mono, fontSize: 10, color: popupNet.net > 0 ? MM.up : popupNet.net < 0 ? MM.down : MM.muted }}>
+                  net {formatMoney(popupNet.net)} · {popupNet.buys}B/{popupNet.sells}S
+                </span>
+              ) : null}
+              <button onClick={() => setDayPopup(null)} style={{ cursor: 'pointer', border: 'none', background: 'transparent', color: MM.dim, fontSize: 13, lineHeight: 1, padding: 0 }}>×</button>
+            </div>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {dayPopup.items.map((item, i) => (
+              <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none' }}>
+                <span style={{ flex: '0 0 auto', borderRadius: 5, padding: '2px 6px', font: '600 8px Inter', letterSpacing: '.06em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
+                <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: MM.textSoft, lineHeight: 1.45 }}>
+                  {item.tone !== 'flat' && <span style={{ fontFamily: mono, fontSize: 10, color: toneColor(item.tone), marginRight: 5 }}>{item.tone === 'up' ? '▲' : '▼'}</span>}
+                  {item.headline}
+                  {item.value != null && <span style={{ fontFamily: mono, fontSize: 10.5, color: toneColor(item.tone), marginLeft: 6 }}>{formatMoney(item.value)}</span>}
+                </span>
+                {item.url && (
+                  <a href={item.url} target="_blank" rel="noreferrer" title="Open the SEC filing" style={{ flex: '0 0 auto', fontSize: 10, color: '#8fb8e8', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+                    filing ↗
+                  </a>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {logScale && (
         <span
           title="Logarithmic price scale — right-click the price axis to switch back to linear"
