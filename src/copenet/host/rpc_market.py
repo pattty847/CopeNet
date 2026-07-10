@@ -42,7 +42,11 @@ async def handle_market_ticker_evidence_get(request_id: str, params: dict[str, A
     if not symbol:
         raise ValueError("symbol is required")
     refresh = bool(raw.get("refresh"))
-    payload = await fetch_ticker_evidence(symbol, refresh=refresh)
+    try:
+        days_back = int(raw.get("daysBack") or 180)
+    except (TypeError, ValueError):
+        days_back = 180
+    payload = await fetch_ticker_evidence(symbol, refresh=refresh, days_back=days_back)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload.to_wire())))
 
 

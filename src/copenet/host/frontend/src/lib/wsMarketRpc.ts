@@ -31,8 +31,8 @@ export async function marketTickerRpc(request: WsRpcRequest, symbol: string): Pr
   return payload as unknown as TickerDetailPayload;
 }
 
-export async function marketTickerEvidenceRpc(request: WsRpcRequest, symbol: string, refresh = false): Promise<TickerEvidencePayload> {
-  const payload = await request<Record<string, unknown>>('market.ticker.evidence.get', { symbol, refresh });
+export async function marketTickerEvidenceRpc(request: WsRpcRequest, symbol: string, refresh = false, daysBack = 180): Promise<TickerEvidencePayload> {
+  const payload = await request<Record<string, unknown>>('market.ticker.evidence.get', { symbol, refresh, daysBack });
   return payload as unknown as TickerEvidencePayload;
 }
 

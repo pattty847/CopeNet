@@ -5,7 +5,7 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { MorningBrief } from './MorningBrief';
 import { ForwardLedger } from './ForwardLedger';
 import { BacktestLab } from './BacktestLab';
@@ -67,6 +67,8 @@ function SecActivityPanel({
   loading,
   refreshing,
   error,
+  depthDays,
+  onDepthChange,
   onRefresh,
 }: {
   evidence: EvidenceItem[];
@@ -75,6 +77,8 @@ function SecActivityPanel({
   loading: boolean;
   refreshing: boolean;
   error: string | null;
+  depthDays: number;
+  onDepthChange: (days: number) => void;
   onRefresh: () => void;
 }) {
   return (
@@ -83,13 +87,26 @@ function SecActivityPanel({
       status={loading ? 'preview' : error ? 'error' : 'live'}
       style={{ flex: 1.25, minWidth: 320 }}
       right={
-        <button
-          onClick={onRefresh}
-          disabled={refreshing}
-          style={{ cursor: refreshing ? 'default' : 'pointer', border: `1px solid rgba(251,148,35,.3)`, background: refreshing ? 'rgba(251,148,35,.07)' : 'transparent', color: MM.accent, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', opacity: refreshing ? 0.65 : 1 }}
-        >
-          {refreshing ? 'Checking…' : 'Check SEC now'}
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }} title="How far back to pull Form 4 / 144 / 8-K history — deep first pulls take a while, then cache">
+            {SEC_DEPTHS.map((d) => (
+              <button
+                key={d.label}
+                onClick={() => onDepthChange(d.days)}
+                style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 8px', font: '600 9px Inter', background: depthDays === d.days ? MM.accent : 'transparent', color: depthDays === d.days ? '#1a1205' : MM.muted }}
+              >
+                {d.label}
+              </button>
+            ))}
+          </div>
+          <button
+            onClick={onRefresh}
+            disabled={refreshing}
+            style={{ cursor: refreshing ? 'default' : 'pointer', border: `1px solid rgba(251,148,35,.3)`, background: refreshing ? 'rgba(251,148,35,.07)' : 'transparent', color: MM.accent, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', opacity: refreshing ? 0.65 : 1, whiteSpace: 'nowrap' }}
+          >
+            {refreshing ? 'Checking…' : 'Check SEC now'}
+          </button>
+        </div>
       }
       subtitle={asOf ? `cached as of ${formatSecAsOf(asOf)}` : 'cached Form 4 and 8-K evidence'}
     >
@@ -366,6 +383,8 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
           loading={sec.loading}
           refreshing={sec.refreshing}
           error={sec.error}
+          depthDays={sec.depthDays}
+          onDepthChange={sec.setDepthDays}
           onRefresh={() => void sec.refresh()}
         />
         <PanelCard title="Signal Readout" status="preview" style={{ flex: 1, minWidth: 260 }}>

@@ -155,8 +155,8 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
     assert payload.insider_net["d90"]["tone"] == "down"
     assert FakeFetcher.calls == [
         "cached-insider:AAPL:180:40",
-        "144:AAPL:90:25:cached",
-        "cached-8k:AAPL:180:5",
+        "144:AAPL:180:25:cached",
+        "cached-8k:AAPL:180:6",
     ]
 
 
@@ -170,8 +170,8 @@ async def test_fetch_ticker_evidence_refresh_uses_incremental_copetech_paths(mon
     assert payload.refreshed is True
     assert FakeFetcher.calls == [
         "refresh-insider:AAPL:180:40",
-        "144:AAPL:90:25:live",
-        "refresh-8k:AAPL:180:5",
+        "144:AAPL:180:25:live",
+        "refresh-8k:AAPL:180:6",
     ]
 
 

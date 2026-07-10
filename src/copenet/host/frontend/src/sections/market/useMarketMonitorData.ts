@@ -424,11 +424,20 @@ export function useTickerFundamentals(symbol: string): TickerFundamentalsState {
   return { data, loading, unavailable, load };
 }
 
+/** SEC history depth presets for the ticker page — days of Form 4/144/8-K history. */
+export const SEC_DEPTHS = [
+  { label: '6M', days: 180 },
+  { label: '2Y', days: 730 },
+  { label: '5Y', days: 1825 },
+] as const;
+
 export interface TickerEvidenceState {
   payload: TickerEvidencePayload | null;
   loading: boolean;
   refreshing: boolean;
   error: string | null;
+  depthDays: number;
+  setDepthDays: (days: number) => void;
   refresh: () => Promise<void>;
 }
 
@@ -438,46 +447,56 @@ export function useTickerEvidence(symbol: string): TickerEvidenceState {
   const [loading, setLoading] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const latestSymbol = useRef(normalized);
+  const [depthDays, setDepthDays] = useState<number>(180);
+  const latestKey = useRef(`${normalized}:180`);
 
   useEffect(() => {
     let alive = true;
-    latestSymbol.current = normalized;
-    setPayload(null);
+    const key = `${normalized}:${depthDays}`;
+    latestKey.current = key;
     setError(null);
     setLoading(Boolean(normalized));
     if (!normalized) return () => {
       alive = false;
     };
     wsClient
-      .marketTickerEvidence(normalized, false)
+      .marketTickerEvidence(normalized, false, depthDays)
       .then((next) => {
-        if (alive && latestSymbol.current === normalized) setPayload(next);
+        if (alive && latestKey.current === key) setPayload(next);
       })
       .catch((err) => {
-        if (alive && latestSymbol.current === normalized) setError(err instanceof Error ? err.message : String(err));
+        if (alive && latestKey.current === key) {
+          const message = err instanceof Error ? err.message : String(err);
+          // Deep first pulls can outlive the RPC timeout while the server keeps caching —
+          // an immediate retry usually lands on the cache.
+          setError(/timed?\s?out/i.test(message) ? 'Deep SEC pull is still caching server-side — try again in ~30s.' : message);
+        }
       })
       .finally(() => {
-        if (alive && latestSymbol.current === normalized) setLoading(false);
+        if (alive && latestKey.current === key) setLoading(false);
       });
     return () => {
       alive = false;
     };
-  }, [normalized]);
+  }, [normalized, depthDays]);
 
   const refresh = useCallback(async () => {
     if (!normalized) return;
+    const key = `${normalized}:${depthDays}`;
     setRefreshing(true);
     setError(null);
     try {
-      const next = await wsClient.marketTickerEvidence(normalized, true);
-      if (latestSymbol.current === normalized) setPayload(next);
+      const next = await wsClient.marketTickerEvidence(normalized, true, depthDays);
+      if (latestKey.current === key) setPayload(next);
     } catch (err) {
-      if (latestSymbol.current === normalized) setError(err instanceof Error ? err.message : String(err));
+      if (latestKey.current === key) {
+        const message = err instanceof Error ? err.message : String(err);
+        setError(/timed?\s?out/i.test(message) ? 'Deep SEC pull is still caching server-side — try again in ~30s.' : message);
+      }
     } finally {
-      if (latestSymbol.current === normalized) setRefreshing(false);
+      if (latestKey.current === key) setRefreshing(false);
     }
-  }, [normalized]);
+  }, [normalized, depthDays]);
 
-  return { payload, loading, refreshing, error, refresh };
+  return { payload, loading, refreshing, error, depthDays, setDepthDays, refresh };
 }

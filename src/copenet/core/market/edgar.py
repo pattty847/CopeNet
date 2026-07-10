@@ -8,14 +8,24 @@ from typing import Any
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
 
 SEC_API_USER_AGENT = "Patrick McDermott (CopeNet) pattty847@gmail.com"
-TICKER_FORM4_EVENT_LIMIT = 20
-TICKER_FORM4_FILING_LIMIT = 40
-TICKER_8K_EVENT_LIMIT = 5
-TICKER_144_RECORD_LIMIT = 5
-TICKER_144_FILING_LIMIT = 25
 TICKER_CLUSTER_LIMIT = 2
-TICKER_SEC_DAYS_BACK = 180
+TICKER_SEC_DAYS_BACK = 180  # default depth; the ticker page can ask deeper
+MAX_SEC_DAYS_BACK = 3650  # ~10y — beyond that SEC submissions "recent" coverage runs out anyway
+# Dashboard-sweep limits (per-symbol, kept small — it walks the whole watchlist)
+TICKER_FORM4_FILING_LIMIT = 40
 FORM_144_DAYS_BACK = 90
+
+
+def _depth_limits(days_back: int) -> dict[str, int]:
+    """Filing/display limits scaled to the requested history window. Deeper pulls mean
+    more Form 4 XML downloads (rate-limited) — a 5y first pull on a busy ticker can take
+    a minute, then it's cached daily. Events shown scale with depth so a multi-year chart
+    actually carries multi-year insider history, not the last 20 trades."""
+    if days_back <= 200:
+        return {"form4_filings": 40, "form4_events": 40, "f144_filings": 25, "f144_records": 8, "f8k_events": 6}
+    if days_back <= 800:
+        return {"form4_filings": 160, "form4_events": 150, "f144_filings": 60, "f144_records": 20, "f8k_events": 12}
+    return {"form4_filings": 400, "form4_events": 400, "f144_filings": 120, "f144_records": 40, "f8k_events": 20}
 
 
 async def fetch_evidence(symbols: list[str], *, limit_per_symbol: int = 2) -> list[EvidenceItem]:
@@ -29,23 +39,29 @@ async def fetch_evidence(symbols: list[str], *, limit_per_symbol: int = 2) -> li
     return evidence
 
 
-async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False) -> TickerEvidencePayload:
+async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back: int = TICKER_SEC_DAYS_BACK) -> TickerEvidencePayload:
     normalized = symbol.strip().upper()
+    days_back = max(30, min(int(days_back), MAX_SEC_DAYS_BACK))
+    limits = _depth_limits(days_back)
     fetcher_cls = _sec_fetcher_class()
     if fetcher_cls is None:
         return TickerEvidencePayload(symbol=normalized, evidence=[], events=[], as_of=_now_iso(), refreshed=refresh)
     fetcher = fetcher_cls(user_agent=SEC_API_USER_AGENT)
     evidence: list[EvidenceItem] = []
-    insider_payload = await _fetch_insider_payload(fetcher, normalized, refresh=refresh)
+    insider_payload = await _fetch_insider_payload(
+        fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["form4_filings"]
+    )
     for cluster in _clusters_from_payload(insider_payload)[:TICKER_CLUSTER_LIMIT]:
         evidence.append(_cluster_evidence(normalized, cluster))
-    for event in _events_from_payload(insider_payload)[:TICKER_FORM4_EVENT_LIMIT]:
+    for event in _events_from_payload(insider_payload)[: limits["form4_events"]]:
         evidence.append(_insider_evidence(normalized, event))
-    form144_payload = await _fetch_144_payload(fetcher, normalized, refresh=refresh)
-    for record in _records_from_payload(form144_payload)[:TICKER_144_RECORD_LIMIT]:
+    form144_payload = await _fetch_144_payload(
+        fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f144_filings"]
+    )
+    for record in _records_from_payload(form144_payload)[: limits["f144_records"]]:
         evidence.append(_planned_sale_evidence(normalized, record))
-    form8k_payload = await _fetch_8k_payload(fetcher, normalized, refresh=refresh)
-    for event in _events_from_payload(form8k_payload)[:TICKER_8K_EVENT_LIMIT]:
+    form8k_payload = await _fetch_8k_payload(fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f8k_events"])
+    for event in _events_from_payload(form8k_payload)[: limits["f8k_events"]]:
         evidence.append(_form8k_evidence(normalized, event))
     return TickerEvidencePayload(
         symbol=normalized,
@@ -139,7 +155,7 @@ async def _evidence_for_symbol(fetcher: Any, symbol: str, *, limit: int) -> list
     for event in _events_from_payload(payload)[:limit]:
         rows.append(_insider_evidence(symbol, event))
     try:
-        form144 = await fetcher.get_planned_insider_sales(symbol, days_back=FORM_144_DAYS_BACK, filing_limit=TICKER_144_FILING_LIMIT)
+        form144 = await fetcher.get_planned_insider_sales(symbol, days_back=FORM_144_DAYS_BACK, filing_limit=25)
     except Exception:
         form144 = None
     for record in _records_from_payload(form144)[:1]:
@@ -156,48 +172,32 @@ async def _evidence_for_symbol(fetcher: Any, symbol: str, *, limit: int) -> list
     return rows
 
 
-async def _fetch_insider_payload(fetcher: Any, symbol: str, *, refresh: bool) -> Any:
+async def _fetch_insider_payload(fetcher: Any, symbol: str, *, refresh: bool, days_back: int, filing_limit: int) -> Any:
     try:
         if refresh:
-            return await fetcher.refresh_insider_signal_payload(
-                symbol,
-                days_back=TICKER_SEC_DAYS_BACK,
-                filing_limit=TICKER_FORM4_FILING_LIMIT,
-            )
-        return await fetcher.get_insider_signal_payload(
-            symbol,
-            days_back=TICKER_SEC_DAYS_BACK,
-            filing_limit=TICKER_FORM4_FILING_LIMIT,
-        )
+            return await fetcher.refresh_insider_signal_payload(symbol, days_back=days_back, filing_limit=filing_limit)
+        return await fetcher.get_insider_signal_payload(symbol, days_back=days_back, filing_limit=filing_limit)
     except Exception:
         return None
 
 
-async def _fetch_8k_payload(fetcher: Any, symbol: str, *, refresh: bool) -> Any:
+async def _fetch_8k_payload(fetcher: Any, symbol: str, *, refresh: bool, days_back: int, filing_limit: int) -> Any:
     try:
         if refresh:
-            return await fetcher.refresh_8k_events(
-                symbol,
-                days_back=TICKER_SEC_DAYS_BACK,
-                filing_limit=TICKER_8K_EVENT_LIMIT,
-            )
-        return await fetcher.get_8k_events(
-            symbol,
-            days_back=TICKER_SEC_DAYS_BACK,
-            filing_limit=TICKER_8K_EVENT_LIMIT,
-        )
+            return await fetcher.refresh_8k_events(symbol, days_back=days_back, filing_limit=filing_limit)
+        return await fetcher.get_8k_events(symbol, days_back=days_back, filing_limit=filing_limit)
     except Exception:
         return None
 
 
-async def _fetch_144_payload(fetcher: Any, symbol: str, *, refresh: bool) -> Any:
+async def _fetch_144_payload(fetcher: Any, symbol: str, *, refresh: bool, days_back: int, filing_limit: int) -> Any:
     """Form 144 has no incremental refresh path (records are light) — refresh just bypasses
     the daily cache for a full refetch."""
     try:
         return await fetcher.get_planned_insider_sales(
             symbol,
-            days_back=FORM_144_DAYS_BACK,
-            filing_limit=TICKER_144_FILING_LIMIT,
+            days_back=days_back,
+            filing_limit=filing_limit,
             use_cache=not refresh,
         )
     except Exception:

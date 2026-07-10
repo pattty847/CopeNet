@@ -606,8 +606,8 @@ class WsClient {
     return marketTickerRpc(this.request.bind(this), symbol);
   }
 
-  async marketTickerEvidence(symbol: string, refresh = false) {
-    return marketTickerEvidenceRpc(this.request.bind(this), symbol, refresh);
+  async marketTickerEvidence(symbol: string, refresh = false, daysBack = 180) {
+    return marketTickerEvidenceRpc(this.request.bind(this), symbol, refresh, daysBack);
   }
 
   async marketTickerFundamentals(symbol: string) {

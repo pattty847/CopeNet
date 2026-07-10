@@ -46,19 +46,36 @@ function normalize(bars: Ohlcv[]): Ohlcv[] {
 
 /** Insider/8-K event dates rarely land exactly on a candle's timestamp, but lightweight-charts
  *  markers only render on a time that matches an existing data point — so snap each event to its
- *  nearest bar and drop events that fall outside the visible series entirely. */
-function markersFor(events: ChartEvent[], bars: Ohlcv[]): SeriesMarker<Time>[] {
-  if (!events.length || !bars.length) return [];
+ *  nearest bar. Future-dated planned sales (Form 144) get their own treatment: the time scale is
+ *  extended with whitespace points past the last candle and the marker is anchored at the last
+ *  close via a price-positioned marker, so upcoming sales are visible ON the chart, in the future. */
+function decorationsFor(events: ChartEvent[], bars: Ohlcv[]): { markers: SeriesMarker<Time>[]; futureTimes: number[] } {
+  if (!events.length || !bars.length) return { markers: [], futureTimes: [] };
   const times = bars.map((b) => b.t);
-  // Future-dated events (e.g. a Form 144 sale scheduled ahead) have no candle to live on —
-  // snapping them would pile everything onto the last bar. Anything beyond one bar-width past
-  // the newest candle is dropped here; the SEC Activity panel shows those with an "upcoming" chip.
   const lastTime = times[times.length - 1];
+  const lastClose = bars[bars.length - 1].c;
   const barSpacing = times.length > 1 ? lastTime - times[times.length - 2] : 86400;
+  const futureMarkers: SeriesMarker<Time>[] = [];
+  const futureTimes = new Set<number>();
   const grouped = new Map<number, ChartEvent[]>();
   for (const event of events) {
     if (!Number.isFinite(event.t)) continue;
-    if (event.t > lastTime + barSpacing) continue;
+    if (event.t > lastTime + barSpacing) {
+      // Only planned sales are meaningfully future-dated; anchor at the last close.
+      if (event.kind === 'planned-sale') {
+        futureTimes.add(event.t);
+        futureMarkers.push({
+          time: event.t as UTCTimestamp,
+          position: 'atPriceMiddle',
+          price: lastClose,
+          shape: 'circle',
+          color: MM.down,
+          size: 1,
+          text: 'planned sale (144)',
+        });
+      }
+      continue;
+    }
     let nearest = times[0];
     let bestDiff = Math.abs(times[0] - event.t);
     for (const t of times) {
@@ -119,7 +136,8 @@ function markersFor(events: ChartEvent[], bars: Ohlcv[]): SeriesMarker<Time>[] {
       });
     }
   }
-  return markers.sort((a, z) => (a.time as number) - (z.time as number));
+  const all = [...markers, ...futureMarkers].sort((a, z) => (a.time as number) - (z.time as number));
+  return { markers: all, futureTimes: [...futureTimes].sort((a, z) => a - z) };
 }
 
 export function CandleChart({
@@ -231,7 +249,13 @@ export function CandleChart({
     const chart = chartRef.current;
     if (!candle || !volume || !chart) return;
     const rows = normalize(bars);
-    candle.setData(rows.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })));
+    const { markers, futureTimes } = decorationsFor(events, rows);
+    // Whitespace points extend the time scale past the last candle so future-dated
+    // planned-sale markers have a coordinate to land on.
+    candle.setData([
+      ...rows.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })),
+      ...futureTimes.map((t) => ({ time: t as UTCTimestamp })),
+    ]);
     volume.setData(
       rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
     );
@@ -240,7 +264,7 @@ export function CandleChart({
       .sort((a, z) => a.t - z.t);
     revenueRef.current?.setData(revenuePoints.map((p) => ({ time: p.t as UTCTimestamp, value: p.value })));
     chart.timeScale().fitContent();
-    markersRef.current?.setMarkers(markersFor(events, rows));
+    markersRef.current?.setMarkers(markers);
   }, [bars, events, revenue]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
