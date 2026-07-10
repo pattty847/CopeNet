@@ -237,7 +237,6 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 ### Prototypes & Investigations
 
 - [Browser Agent Prototype](docs/BROWSER-AGENT-PROTOTYPE.md)
-- [Hermes Harness Investigation](docs/investigations/hermes-harness/README.md)
 
 ## Troubleshooting
 

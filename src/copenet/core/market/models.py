@@ -379,6 +379,9 @@ class TickerEvidencePayload:
     events: list[ChartEvent]
     as_of: str
     refreshed: bool
+    # Net insider Form 4 activity per trailing window: {"d30": {...}, "d90": {...}} —
+    # each {days, buys, sells, net_shares, net_value, tone}. None when no Form 4 data.
+    insider_net: dict[str, Any] | None = None
 
     def to_wire(self) -> dict[str, Any]:
         return _to_wire(self)

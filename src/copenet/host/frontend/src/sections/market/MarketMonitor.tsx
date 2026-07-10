@@ -11,7 +11,7 @@ import { ForwardLedger } from './ForwardLedger';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { useIsMobile } from '../../lib/responsive';
-import type { EvidenceItem } from './types';
+import type { EvidenceItem, InsiderNetWindow } from './types';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
 const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
@@ -25,8 +25,44 @@ function formatSecAsOf(value?: string) {
   return parsed.toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
+function formatShares(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  if (abs >= 1e6) return `${sign}${(abs / 1e6).toFixed(1)}M sh`;
+  if (abs >= 1e3) return `${sign}${(abs / 1e3).toFixed(0)}K sh`;
+  return `${sign}${abs.toLocaleString()} sh`;
+}
+
+function formatNetValue(n: number): string {
+  const abs = Math.abs(n);
+  const sign = n > 0 ? '+' : n < 0 ? '-' : '';
+  if (abs >= 1e9) return `${sign}$${(abs / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
+  return `${sign}$${(abs / 1e3).toFixed(0)}K`;
+}
+
+function InsiderNetStrip({ net }: { net?: Record<string, InsiderNetWindow> }) {
+  if (!net || Object.keys(net).length === 0) return null;
+  const windows = Object.values(net).sort((a, z) => a.days - z.days);
+  return (
+    <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginBottom: 10 }}>
+      {windows.map((w) => (
+        <div key={w.days} style={{ flex: 1, minWidth: 140, border: `1px solid ${w.tone === 'up' ? 'rgba(105,197,137,.25)' : w.tone === 'down' ? 'rgba(217,109,95,.25)' : MM.border}`, background: w.tone === 'up' ? 'rgba(105,197,137,.05)' : w.tone === 'down' ? 'rgba(217,109,95,.05)' : 'transparent', borderRadius: 9, padding: '7px 10px' }}>
+          <div style={{ font: '600 8px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 3 }}>Insider net · {w.days}d</div>
+          <div style={{ fontFamily: mono, fontSize: 12.5, color: toneColor(w.tone) }}>
+            {formatShares(w.netShares)}
+            {w.netValue != null && <span style={{ fontSize: 10.5, marginLeft: 6 }}>({formatNetValue(w.netValue)})</span>}
+          </div>
+          <div style={{ fontFamily: mono, fontSize: 9.5, color: MM.dim, marginTop: 2 }}>{w.buys} buys · {w.sells} sells</div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 function SecActivityPanel({
   evidence,
+  insiderNet,
   asOf,
   loading,
   refreshing,
@@ -34,6 +70,7 @@ function SecActivityPanel({
   onRefresh,
 }: {
   evidence: EvidenceItem[];
+  insiderNet?: Record<string, InsiderNetWindow>;
   asOf?: string;
   loading: boolean;
   refreshing: boolean;
@@ -57,6 +94,7 @@ function SecActivityPanel({
       subtitle={asOf ? `cached as of ${formatSecAsOf(asOf)}` : 'cached Form 4 and 8-K evidence'}
     >
       {error && <div style={{ fontSize: 11, color: MM.down, marginBottom: 8 }}>{error}</div>}
+      {!loading && <InsiderNetStrip net={insiderNet} />}
       {loading ? (
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>Loading cached SEC evidence…</div>
       ) : evidence.length === 0 ? (
@@ -197,13 +235,15 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
     setShowRevenue(next);
     if (next) void fundamentals.load();
   };
+  const revenueIsAnnual = Boolean(fundamentals.data && !fundamentals.data.revenueQuarterly?.length && fundamentals.data.revenueAnnual?.length);
+  const revenueSeriesSource = revenueIsAnnual ? fundamentals.data?.revenueAnnual : fundamentals.data?.revenueQuarterly;
   const revenuePoints =
-    showRevenue && fundamentals.data
-      ? fundamentals.data.revenueQuarterly
+    showRevenue && revenueSeriesSource
+      ? revenueSeriesSource
           .filter((q) => q.date && Number.isFinite(q.value))
           .map((q) => ({ t: Math.floor(Date.parse(`${q.date}T00:00:00Z`) / 1000), value: q.value }))
       : undefined;
-  const latestQuarter = fundamentals.data?.revenueQuarterly?.[0];
+  const latestQuarter = revenueSeriesSource?.[0];
   const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
     <button
       key={key}
@@ -279,7 +319,8 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         )}
         {showRevenue && latestQuarter && (
           <div style={{ fontSize: 11, color: '#8fb8e8', marginTop: 6 }}>
-            ∿ Quarterly revenue (SEC XBRL) · latest {latestQuarter.period}: ${(latestQuarter.value / 1e6).toFixed(0)}M
+            ∿ {revenueIsAnnual ? 'Annual revenue (SEC XBRL — foreign filer, annual-only 20-F)' : 'Quarterly revenue (SEC XBRL)'} · latest {latestQuarter.period}:{' '}
+            {latestQuarter.value >= 1e9 ? `$${(latestQuarter.value / 1e9).toFixed(1)}B` : `$${(latestQuarter.value / 1e6).toFixed(0)}M`}
             {latestQuarter.yoy_pct != null ? ` (${latestQuarter.yoy_pct >= 0 ? '+' : ''}${(latestQuarter.yoy_pct * 100).toFixed(1)}% YoY)` : ''}
           </div>
         )}
@@ -320,6 +361,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         )}
         <SecActivityPanel
           evidence={secEvidence}
+          insiderNet={sec.payload?.insiderNet}
           asOf={sec.payload?.asOf}
           loading={sec.loading}
           refreshing={sec.refreshing}
@@ -476,6 +518,7 @@ export function MarketMonitor() {
               loading={watchlist.loading}
               onOpen={open}
               onRemove={(s) => void watchlist.remove(s)}
+              onAdd={(s, n) => void watchlist.add(s, n)}
               onSelectList={(n) => void watchlist.selectList(n)}
               onCreateList={(n) => void watchlist.createList(n)}
               onDeleteList={(n) => void watchlist.deleteList(n)}

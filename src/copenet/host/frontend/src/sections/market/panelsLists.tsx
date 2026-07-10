@@ -12,6 +12,7 @@ import type {
 import { useState } from 'react';
 import { EvidenceFlagBadge, EvidenceToneGlyph, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, label, mono, toneColor, valueTone } from './marketUi';
 import { Sparkline } from './panelsTop';
+import { TickerSearch } from './TickerSearch';
 
 export function SoftBottomingWatch({ panel, onOpen }: { panel: Panel<SoftBottomItem[]>; onOpen: (s: string) => void }) {
   return (
@@ -303,6 +304,7 @@ export function Watchlist({
   loading,
   onOpen,
   onRemove,
+  onAdd,
   onSelectList,
   onCreateList,
   onDeleteList,
@@ -313,6 +315,7 @@ export function Watchlist({
   loading: boolean;
   onOpen: (s: string) => void;
   onRemove: (s: string) => void;
+  onAdd: (symbol: string, name: string) => void;
   onSelectList: (name: string) => void;
   onCreateList: (name: string) => void;
   onDeleteList: (name: string) => void;
@@ -322,12 +325,12 @@ export function Watchlist({
       title="Watchlist"
       status={items.length ? 'live' : 'preview'}
       right={<WatchlistTabs lists={lists} active={active} onSelect={onSelectList} onCreate={onCreateList} onDelete={onDeleteList} />}
-      subtitle={items.length ? undefined : loading ? 'Loading…' : `"${active}" is empty — search a ticker above and add it.`}
+      subtitle={items.length || loading ? undefined : `"${active}" is empty — add a symbol below.`}
     >
       {items.length === 0 && !loading ? (
-        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>Nothing tracked yet.</div>
+        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', marginBottom: 10 }}>Nothing tracked yet.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', flexDirection: 'column', marginBottom: 10 }}>
           {items.map((it) => (
             <div key={it.symbol} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '9px 0', borderTop: `1px solid rgba(254,252,244,.05)` }}>
               <button
@@ -351,6 +354,7 @@ export function Watchlist({
           ))}
         </div>
       )}
+      <TickerSearch onSelect={(symbol, name) => onAdd(symbol, name)} fullWidth placeholder={`＋ Add a symbol to "${active}"…`} />
     </PanelCard>
   );
 }

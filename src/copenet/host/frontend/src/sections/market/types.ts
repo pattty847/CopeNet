@@ -194,12 +194,23 @@ export interface ChartEvent {
   glyph: string;
 }
 
+export interface InsiderNetWindow {
+  days: number;
+  buys: number;
+  sells: number;
+  netShares: number;
+  netValue?: number | null;
+  tone: Tone;
+}
+
 export interface TickerEvidencePayload {
   symbol: string;
   evidence: EvidenceItem[];
   events: ChartEvent[];
   asOf: string;
   refreshed: boolean;
+  /** Net Form 4 activity per trailing window (d30/d90); absent when no insider data. */
+  insiderNet?: Record<string, InsiderNetWindow>;
 }
 
 // ---------- morning brief (overnight sentinel delta) ----------
@@ -260,6 +271,9 @@ export interface TickerFundamentals {
   entityName?: string;
   revenueQuarterly: FundamentalsQuarter[];
   epsQuarterly: FundamentalsQuarter[];
+  /** Foreign 20-F filers report annual-only XBRL — the overlay falls back to these. */
+  revenueAnnual?: FundamentalsQuarter[];
+  epsAnnual?: FundamentalsQuarter[];
 }
 
 // ---------- forward ledger (model calls scored at horizon) ----------

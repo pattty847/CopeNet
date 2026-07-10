@@ -3,7 +3,7 @@
 // picture lives in the panels below. Honest empty state until the first sweep lands.
 
 import type { ReactNode } from 'react';
-import { MM, mono, toneColor } from './marketUi';
+import { MM, evidenceDate, mono, toneColor } from './marketUi';
 import type { MorningBriefPayload } from './types';
 
 const SECTION_LABEL = { font: '600 9px Inter', letterSpacing: '.12em', textTransform: 'uppercase' as const, color: MM.dim, marginBottom: 6 };
@@ -101,6 +101,7 @@ export function MorningBrief({
                     <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '2px 6px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: e.type === 'Insider' ? MM.accentSoft : 'rgba(254,252,244,.06)', color: e.type === 'Insider' ? MM.accent : MM.textSoft }}>{e.type}</span>
                     <span style={{ fontFamily: mono, fontSize: 11, color: MM.text, flex: '0 0 auto' }}>{e.symbol}</span>
                     <span style={{ fontSize: 11.5, lineHeight: 1.4, minWidth: 0 }}>{e.headline}</span>
+                    {evidenceDate(e.t) && <span style={{ marginLeft: 'auto', fontFamily: mono, fontSize: 9.5, color: MM.dimmer, flex: '0 0 auto' }}>{evidenceDate(e.t)}</span>}
                   </>,
                 ),
               )}

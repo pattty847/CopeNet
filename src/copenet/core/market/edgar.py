@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
@@ -53,6 +53,7 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False) -> Ticker
         events=chart_events_from_evidence(evidence),
         as_of=_payload_as_of(insider_payload, form8k_payload, form144_payload) or _now_iso(),
         refreshed=refresh,
+        insider_net=_insider_net_windows(_events_from_payload(insider_payload)),
     )
 
 
@@ -74,7 +75,12 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
     metrics = trend.get("metrics") or {}
     revenue = (metrics.get("revenue") or {}).get("quarterly") or []
     eps = (metrics.get("eps") or {}).get("quarterly") or []
-    if not revenue and not eps:
+    # Foreign private issuers (20-F filers like ASE Technology) file ANNUAL XBRL only —
+    # no quarterly facts exist at the SEC. Carry the annual series so consumers (chart
+    # overlay, fact packets) can fall back rather than reading "no fundamentals".
+    revenue_annual = (metrics.get("revenue") or {}).get("annual") or []
+    eps_annual = (metrics.get("eps") or {}).get("annual") or []
+    if not revenue and not eps and not revenue_annual and not eps_annual:
         return None
     return {
         "entityName": trend.get("entityName"),
@@ -82,6 +88,8 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
         "periodEnd": trend.get("period_end"),
         "revenueQuarterly": revenue,
         "epsQuarterly": eps,
+        "revenueAnnual": revenue_annual,
+        "epsAnnual": eps_annual,
     }
 
 
@@ -298,6 +306,51 @@ def _planned_sale_evidence(symbol: str, record: dict[str, Any]) -> EvidenceItem:
         url=record.get("form_url"),
         t=_to_unix(record.get("signature_date") or record.get("filing_date")),
     )
+
+
+def _insider_net_windows(events: list[dict[str, Any]], *, windows: tuple[int, ...] = (30, 90)) -> dict[str, Any] | None:
+    """Net Form 4 buying-vs-selling over trailing windows — "are insiders dumping lately?"
+    at a glance. Uses ALL fetched events (not the display-trimmed slice)."""
+    if not events:
+        return None
+    now = datetime.now(timezone.utc)
+    out: dict[str, Any] = {}
+    for days in windows:
+        cutoff = int((now - timedelta(days=days)).timestamp())
+        buys = sells = 0
+        net_shares = 0.0
+        net_value = 0.0
+        has_value = False
+        for event in events:
+            t = _to_unix(event.get("transaction_date") or event.get("filing_date"))
+            if t is None or t < cutoff:
+                continue
+            shares = event.get("shares")
+            share_count = float(shares) if isinstance(shares, (int, float)) else 0.0
+            value = event.get("gross_value")
+            signed = 0
+            if event.get("is_acquisition"):
+                buys += 1
+                signed = 1
+            elif event.get("is_disposition"):
+                sells += 1
+                signed = -1
+            else:
+                continue
+            net_shares += signed * share_count
+            if isinstance(value, (int, float)) and value:
+                net_value += signed * float(value)
+                has_value = True
+        if buys or sells:
+            out[f"d{days}"] = {
+                "days": days,
+                "buys": buys,
+                "sells": sells,
+                "net_shares": round(net_shares),
+                "net_value": round(net_value) if has_value else None,
+                "tone": "up" if net_shares > 0 else "down" if net_shares < 0 else "flat",
+            }
+    return out or None
 
 
 def _fmt_value(value: float) -> str:

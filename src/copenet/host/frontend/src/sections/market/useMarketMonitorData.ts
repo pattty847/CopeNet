@@ -412,7 +412,7 @@ export function useTickerFundamentals(symbol: string): TickerFundamentalsState {
       if (!alive.current) return;
       loadedFor.current = normalized;
       setData(next);
-      setUnavailable(next === null || !(next.revenueQuarterly?.length));
+      setUnavailable(next === null || (!next.revenueQuarterly?.length && !next.revenueAnnual?.length));
     } catch {
       /* backend offline — leave untouched so a later toggle retries */
     } finally {

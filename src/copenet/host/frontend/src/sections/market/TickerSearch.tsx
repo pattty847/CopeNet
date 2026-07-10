@@ -6,7 +6,15 @@ import type { SymbolSearchResult } from './types';
 /** Debounced ticker/company-name typeahead (market.symbols.search — live yfinance lookup, not
  * limited to the fixed dashboard UNIVERSE). Selecting a result navigates straight to the ticker
  * chart page via onSelect, same as clicking any symbol elsewhere on the dashboard. */
-export function TickerSearch({ onSelect, fullWidth }: { onSelect: (symbol: string, name: string) => void; fullWidth?: boolean }) {
+export function TickerSearch({
+  onSelect,
+  fullWidth,
+  placeholder = 'Look up a ticker or company…',
+}: {
+  onSelect: (symbol: string, name: string) => void;
+  fullWidth?: boolean;
+  placeholder?: string;
+}) {
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<SymbolSearchResult[]>([]);
   const [open, setOpen] = useState(false);
@@ -63,7 +71,7 @@ export function TickerSearch({ onSelect, fullWidth }: { onSelect: (symbol: strin
           if (e.key === 'Enter' && results.length) pick(results[0]);
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder="Look up a ticker or company…"
+        placeholder={placeholder}
         style={{
           width: '100%',
           boxSizing: 'border-box',

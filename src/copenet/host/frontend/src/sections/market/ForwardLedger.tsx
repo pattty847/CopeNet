@@ -56,6 +56,12 @@ export function ForwardLedger({ report, loading }: { report: LedgerReport | null
             {(Object.keys(KIND_LABEL) as LedgerClaim['kind'][]).map((kind) => {
               const h4 = report.stats[kind]?.['4w'];
               const scored = (h4?.correct ?? 0) + (h4?.incorrect ?? 0);
+              const kindClaims = recent.filter((c) => c.kind === kind);
+              const pending = kindClaims.filter((c) => !c.horizons?.['4w']?.resolved_at);
+              const nextDue = pending
+                .map((c) => c.horizons?.['4w']?.due_at)
+                .filter(Boolean)
+                .sort()[0];
               return (
                 <div key={kind} style={{ flex: 1, minWidth: 150, border: `1px solid ${MM.border}`, borderRadius: 10, padding: '9px 12px' }}>
                   <div style={{ font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 4 }}>{KIND_LABEL[kind]}</div>
@@ -64,8 +70,13 @@ export function ForwardLedger({ report, loading }: { report: LedgerReport | null
                       {h4!.correct}/{scored}
                       <span style={{ fontSize: 10.5, color: MM.muted, marginLeft: 6 }}>correct · 4w{h4!.push ? ` · ${h4!.push} neutral` : ''}</span>
                     </div>
+                  ) : pending.length > 0 ? (
+                    <div style={{ fontFamily: mono, fontSize: 12, color: MM.muted }}>
+                      {pending.length} pending
+                      {nextDue && <span style={{ fontSize: 10, color: MM.dim, marginLeft: 6 }}>first scores {claimDate(nextDue)}</span>}
+                    </div>
                   ) : (
-                    <div style={{ fontFamily: mono, fontSize: 12, color: MM.dim }}>collecting…</div>
+                    <div style={{ fontFamily: mono, fontSize: 12, color: MM.dim }}>no claims yet</div>
                   )}
                 </div>
               );

@@ -43,6 +43,10 @@ class FakeOrchestrator:
 
 
 def _insider_payload(symbol: str) -> dict[str, Any]:
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+    older = (datetime.now(timezone.utc) - timedelta(days=60)).strftime("%Y-%m-%d")
     return {
         "symbol": symbol,
         "as_of": "2026-07-08T12:00:00Z",
@@ -51,12 +55,24 @@ def _insider_payload(symbol: str) -> dict[str, Any]:
                 "owner_name": "Jane Director",
                 "owner_role": "Director",
                 "shares": 1200,
+                "gross_value": 24_000.0,
                 "is_acquisition": True,
                 "is_disposition": False,
-                "transaction_date": "2026-07-07",
-                "filing_date": "2026-07-08",
+                "transaction_date": recent,
+                "filing_date": recent,
                 "form_url": "https://sec.example/form4",
-            }
+            },
+            {
+                "owner_name": "Sam Officer",
+                "owner_role": "Officer",
+                "shares": 5000,
+                "gross_value": 100_000.0,
+                "is_acquisition": False,
+                "is_disposition": True,
+                "transaction_date": older,
+                "filing_date": older,
+                "form_url": "https://sec.example/form4b",
+            },
         ],
         "clusters": [
             {
@@ -123,12 +139,20 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
     assert [item.headline for item in payload.evidence] == [
         "Cluster buy — 3 insiders ~$1.2M (2026-07-01 → 2026-07-05)",
         "Jane Director (Director) bought 1,200 shares",
+        "Sam Officer (Officer) sold 5,000 shares",
         "John CFO filed to sell 50,000 shares (~$900K)",
         "Departure or Election of Directors / Officers",
     ]
-    assert [item.flag for item in payload.evidence] == ["cluster", None, None, "high-signal"]
-    assert [item.type for item in payload.evidence] == ["Insider", "Insider", "Form 144", "8-K"]
-    assert [event.kind for event in payload.events] == ["insider", "insider", "planned-sale", "8-K"]
+    assert [item.flag for item in payload.evidence] == ["cluster", None, None, None, "high-signal"]
+    assert [item.type for item in payload.evidence] == ["Insider", "Insider", "Insider", "Form 144", "8-K"]
+    assert [event.kind for event in payload.events] == ["insider", "insider", "insider", "planned-sale", "8-K"]
+    # Net insider windows: recent buy only in 30d; buy + older sell in 90d.
+    assert payload.insider_net is not None
+    assert payload.insider_net["d30"]["net_shares"] == 1200
+    assert payload.insider_net["d30"]["tone"] == "up"
+    assert payload.insider_net["d90"]["net_shares"] == -3800
+    assert payload.insider_net["d90"]["net_value"] == -76000
+    assert payload.insider_net["d90"]["tone"] == "down"
     assert FakeFetcher.calls == [
         "cached-insider:AAPL:180:40",
         "144:AAPL:90:25:cached",
