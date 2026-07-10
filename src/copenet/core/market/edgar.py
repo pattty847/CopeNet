@@ -321,6 +321,7 @@ def _insider_net_windows(events: list[dict[str, Any]], *, windows: tuple[int, ..
     for days in windows:
         cutoff = int((now - timedelta(days=days)).timestamp())
         buys = sells = 0
+        open_market_buys = 0
         net_shares = 0.0
         net_value = 0.0
         has_value = False
@@ -335,6 +336,8 @@ def _insider_net_windows(events: list[dict[str, Any]], *, windows: tuple[int, ..
             if event.get("is_acquisition"):
                 buys += 1
                 signed = 1
+                if event.get("signal_class") == "open_market_buy":
+                    open_market_buys += 1
             elif event.get("is_disposition"):
                 sells += 1
                 signed = -1
@@ -353,6 +356,9 @@ def _insider_net_windows(events: list[dict[str, Any]], *, windows: tuple[int, ..
                 "days": days,
                 "buys": buys,
                 "sells": sells,
+                # Buys made with the insider's own cash — grants/vesting/option exercises
+                # count as Form 4 acquisitions but carry no conviction.
+                "open_market_buys": open_market_buys,
                 "net_shares": round(net_shares),
                 "net_value": round(net_value) if has_value else None,
                 "tone": "up" if tone_signal > 0 else "down" if tone_signal < 0 else "flat",

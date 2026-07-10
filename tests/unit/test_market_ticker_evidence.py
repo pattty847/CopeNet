@@ -172,13 +172,23 @@ def test_insider_net_tone_follows_dollars_when_shares_and_value_diverge() -> Non
             "gross_value": 0,
             "is_acquisition": True,
             "is_disposition": False,
+            "signal_class": "option_exercise",
             "transaction_date": recent,
         },
         {
-            "shares": 68_000,
-            "gross_value": 230_000_000.0,
+            "shares": 2_000,
+            "gross_value": 50_000.0,
+            "is_acquisition": True,
+            "is_disposition": False,
+            "signal_class": "open_market_buy",
+            "transaction_date": recent,
+        },
+        {
+            "shares": 70_000,
+            "gross_value": 230_050_000.0,
             "is_acquisition": False,
             "is_disposition": True,
+            "signal_class": "open_market_sell",
             "transaction_date": recent,
         },
     ]
@@ -189,6 +199,8 @@ def test_insider_net_tone_follows_dollars_when_shares_and_value_diverge() -> Non
     assert windows["d30"]["net_shares"] == 332_000
     assert windows["d30"]["net_value"] == -230_000_000
     assert windows["d30"]["tone"] == "down"
+    assert windows["d30"]["buys"] == 2
+    assert windows["d30"]["open_market_buys"] == 1
 
 
 def test_insider_net_tone_falls_back_to_shares_without_values() -> None:

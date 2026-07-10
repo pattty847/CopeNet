@@ -200,6 +200,9 @@ export interface InsiderNetWindow {
   days: number;
   buys: number;
   sells: number;
+  /** Buys made with the insider's own cash (grants/vesting count as Form 4 "buys" but aren't).
+   *  Absent on payloads cached before this field shipped. */
+  openMarketBuys?: number;
   netShares: number;
   netValue?: number | null;
   tone: Tone;
