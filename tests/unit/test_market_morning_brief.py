@@ -81,10 +81,24 @@ def test_rrg_shift_and_regime_shift() -> None:
     assert brief.regime_shift == {"from": "risk-on", "to": "chop"}
 
 
-def test_quiet_overnight_headline() -> None:
+def test_quiet_tape_headline() -> None:
     same = _wire(evidence=[_evidence_row("SOFI", "CFO bought 10k shares")])
     brief = build_morning_brief(same, same, movers=[])
-    assert brief.headline.startswith("Quiet overnight")
+    assert brief.headline.startswith("Quiet tape")
+
+
+def test_small_mover_does_not_break_quiet_headline() -> None:
+    # Honest-quiet rule: ordinary drift stays in the movers row; only a material move
+    # (>= 3%) may claim the headline when nothing thesis-relevant changed.
+    same = _wire(evidence=[_evidence_row("SOFI", "CFO bought 10k shares")])
+    drift = [{"symbol": "NVDA", "name": "NVIDIA", "last": "$204.61", "change_pct": 0.9, "tone": "up"}]
+    brief = build_morning_brief(same, same, movers=drift)
+    assert brief.headline.startswith("Quiet tape")
+    assert brief.movers == drift
+
+    big = [{"symbol": "INTC", "name": "Intel", "last": "$108.56", "change_pct": -9.7, "tone": "down"}]
+    brief = build_morning_brief(same, same, movers=big)
+    assert "INTC -9.7% last session" in brief.headline
 
 
 def test_first_sweep_does_not_spam_deltas() -> None:

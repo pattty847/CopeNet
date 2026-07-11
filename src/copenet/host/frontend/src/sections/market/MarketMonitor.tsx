@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { EvidenceFlagBadge, EvidenceToneGlyph, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
 import { Rrg } from './RrgChart';
@@ -15,6 +15,44 @@ import type { EvidenceItem, InsiderNetWindow } from './types';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
 const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
+
+const DETAIL_OPEN_KEY = 'copenet.market.detailOpen';
+
+// Brief-first layout (design review §5): the standing panels live behind one click so the
+// 60-second brief owns the first viewport. Expanded state persists per device.
+function MarketDetail({ children }: { children: ReactNode }) {
+  const [open, setOpen] = useState(() => {
+    try {
+      return localStorage.getItem(DETAIL_OPEN_KEY) === '1';
+    } catch {
+      return false;
+    }
+  });
+  const toggle = () =>
+    setOpen((v) => {
+      const next = !v;
+      try {
+        localStorage.setItem(DETAIL_OPEN_KEY, next ? '1' : '0');
+      } catch {
+        /* private mode */
+      }
+      return next;
+    });
+  return (
+    <>
+      <button
+        onClick={toggle}
+        style={{ cursor: 'pointer', width: '100%', textAlign: 'left', border: `1px solid ${MM.border}`, background: 'rgba(254,252,244,.02)', color: MM.muted, borderRadius: 12, padding: '11px 14px', font: '600 10.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase' }}
+      >
+        {open ? '▾' : '▸'} Market detail
+        <span style={{ color: MM.dimmer, fontWeight: 500, textTransform: 'none', letterSpacing: '.02em', marginLeft: 8 }}>
+          watchlist · macro · rotation · portfolio · evidence · ledger
+        </span>
+      </button>
+      {open && children}
+    </>
+  );
+}
 
 const CONFIDENCE_COLORS: Record<string, string> = { low: '#d96d5f', medium: '#a29b90', high: '#69c589' };
 
@@ -570,44 +608,54 @@ export function MarketMonitor() {
           <BacktestLab />
         ) : (
           <>
-            <MorningBrief brief={morningBrief.brief} generating={morningBrief.generating} onRunNow={() => void morningBrief.runNow()} onOpen={open} />
-            <Watchlist
-              items={watchlist.items}
-              lists={watchlist.lists}
-              active={watchlist.active}
-              loading={watchlist.loading}
+            <MorningBrief
+              brief={morningBrief.brief}
+              generating={morningBrief.generating}
+              onRunNow={() => void morningBrief.runNow()}
               onOpen={open}
-              onRemove={(s) => void watchlist.remove(s)}
-              onAdd={(s, n) => void watchlist.add(s, n)}
-              onSelectList={(n) => void watchlist.selectList(n)}
-              onCreateList={(n) => void watchlist.createList(n)}
-              onDeleteList={(n) => void watchlist.deleteList(n)}
+              regime={dash.regime}
+              ledger={ledger.report}
+              onExplain={() => setReasoningOpen(true)}
             />
             <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
-            <MacroBoard panel={dash.macro} />
-            {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
-            <div style={ROTATION_ROW}>
-              <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
-              <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                <AccumulationWatch panel={dash.accumulation} onOpen={open} />
-                <TrendWatch panel={dash.trend} onOpen={open} />
-              </div>
-            </div>
-            <div style={ROW}>
-              <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
-              <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
-            </div>
-            <ForwardLedger report={ledger.report} loading={ledger.loading} />
-            <div style={ROW}>
-              <Evidence panel={dash.evidence} onOpen={open} />
-              <Contrarian
-                panel={
-                  marketRead && marketRead.thesisKillers.length
-                    ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
-                    : dash.contrarian
-                }
+            <MarketDetail>
+              <Watchlist
+                items={watchlist.items}
+                lists={watchlist.lists}
+                active={watchlist.active}
+                loading={watchlist.loading}
+                onOpen={open}
+                onRemove={(s) => void watchlist.remove(s)}
+                onAdd={(s, n) => void watchlist.add(s, n)}
+                onSelectList={(n) => void watchlist.selectList(n)}
+                onCreateList={(n) => void watchlist.createList(n)}
+                onDeleteList={(n) => void watchlist.deleteList(n)}
               />
-            </div>
+              <MacroBoard panel={dash.macro} />
+              {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
+              <div style={ROTATION_ROW}>
+                <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
+                <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <AccumulationWatch panel={dash.accumulation} onOpen={open} />
+                  <TrendWatch panel={dash.trend} onOpen={open} />
+                </div>
+              </div>
+              <div style={ROW}>
+                <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
+                <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
+              </div>
+              <ForwardLedger report={ledger.report} loading={ledger.loading} />
+              <div style={ROW}>
+                <Evidence panel={dash.evidence} onOpen={open} />
+                <Contrarian
+                  panel={
+                    marketRead && marketRead.thesisKillers.length
+                      ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
+                      : dash.contrarian
+                  }
+                />
+              </div>
+            </MarketDetail>
           </>
         )}
         <div style={{ textAlign: 'center', fontSize: 10.5, color: MM.dimmer, padding: '6px 0 14px' }}>

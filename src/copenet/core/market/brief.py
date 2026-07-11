@@ -22,6 +22,8 @@ _MAX_EVIDENCE = 8
 _MAX_FLIPS = 8
 _MAX_SHIFTS = 6
 _MAX_MOVERS = 5
+# Minimum |move| for the top mover to claim the headline (honest-quiet rule).
+_HEADLINE_MOVER_PCT = 3.0
 
 _UP_QUADRANTS = {"improving", "leading"}
 
@@ -276,7 +278,10 @@ def _headline(
         bits.append(f"{len(signal_flips)} signal flip{plural}")
     if movers:
         top = movers[0]
-        bits.append(f"{top['symbol']} {top['change_pct']:+.1f}% last session")
+        # A mover claims the headline only when it's material — ordinary drift stays in
+        # the movers row so a quiet headline stays trustworthy (honest-quiet rule).
+        if abs(top["change_pct"]) >= _HEADLINE_MOVER_PCT:
+            bits.append(f"{top['symbol']} {top['change_pct']:+.1f}% last session")
     if not bits:
-        return "Quiet overnight — no material changes since the last sweep."
+        return "Quiet tape — nothing thesis-relevant changed since the last sweep."
     return " · ".join(bits[:4])
