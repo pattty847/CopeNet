@@ -89,13 +89,13 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
     if not trend:
         return None
     metrics = trend.get("metrics") or {}
-    revenue = (metrics.get("revenue") or {}).get("quarterly") or []
-    eps = (metrics.get("eps") or {}).get("quarterly") or []
+    revenue = _dedup_periods((metrics.get("revenue") or {}).get("quarterly") or [])
+    eps = _dedup_periods((metrics.get("eps") or {}).get("quarterly") or [])
     # Foreign private issuers (20-F filers like ASE Technology) file ANNUAL XBRL only —
     # no quarterly facts exist at the SEC. Carry the annual series so consumers (chart
     # overlay, fact packets) can fall back rather than reading "no fundamentals".
-    revenue_annual = (metrics.get("revenue") or {}).get("annual") or []
-    eps_annual = (metrics.get("eps") or {}).get("annual") or []
+    revenue_annual = _dedup_periods((metrics.get("revenue") or {}).get("annual") or [])
+    eps_annual = _dedup_periods((metrics.get("eps") or {}).get("annual") or [])
     if not revenue and not eps and not revenue_annual and not eps_annual:
         return None
     return {
@@ -107,6 +107,22 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
         "revenueAnnual": revenue_annual,
         "epsAnnual": eps_annual,
     }
+
+
+def _dedup_periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """One row per period-end date. XBRL frames can label the same fact under two fiscal
+    years (e.g. NVDA 2025-04-27 as both "Q1 2025" and "Q1 2026"); duplicates would draw
+    doubled chart steps and double-count quarters in trailing-EPS sums. Rows arrive
+    newest-first; keep the first occurrence per date."""
+    seen: set[str] = set()
+    out: list[dict[str, Any]] = []
+    for row in rows:
+        date = str(row.get("date") or "")
+        if date in seen:
+            continue
+        seen.add(date)
+        out.append(row)
+    return out
 
 
 _CHART_KIND_BY_TYPE = {"Insider": "insider", "8-K": "8-K", "Form 144": "planned-sale"}
@@ -224,19 +240,33 @@ def _dict_rows(payload: Any, key: str) -> list[dict[str, Any]]:
     return []
 
 
+# Headline verb + tone by CopeTech signal_class. "bought 59M shares" for a Code G trust
+# transfer (Jensen Huang, 2026-06) reads as a $12B conviction buy when no money moved —
+# mechanical transactions (gifts, tax withholding, exercises, conversions) get an honest
+# verb and a flat tone; only real open-market cash keeps the up/down signal.
+_INSIDER_ACTION_BY_CLASS: dict[str, tuple[str, Tone]] = {
+    "open_market_buy": ("bought", "up"),
+    "open_market_sell": ("sold", "down"),
+    "gift": ("transferred (gift)", "flat"),
+    "tax_sale": ("sold (tax withholding)", "flat"),
+    "option_exercise": ("exercised options into", "flat"),
+    "derivative_conversion": ("converted derivatives into", "flat"),
+}
+
+
 def _insider_evidence(symbol: str, event: dict[str, Any]) -> EvidenceItem:
     owner = str(event.get("owner_name") or "Insider").strip()
     role = str(event.get("owner_role") or "").strip()
     shares = event.get("shares")
-    tone: Tone = "flat"
-    if event.get("is_acquisition"):
-        tone = "up"
-        action = "bought"
+    classed = _INSIDER_ACTION_BY_CLASS.get(str(event.get("signal_class") or ""))
+    if classed:
+        action, tone = classed
+    elif event.get("is_acquisition"):
+        action, tone = "bought", "up"
     elif event.get("is_disposition"):
-        tone = "down"
-        action = "sold"
+        action, tone = "sold", "down"
     else:
-        action = "transacted"
+        action, tone = "transacted", "flat"
     who = f"{owner} ({role})" if role else owner
     share_text = f" {int(shares):,} shares" if isinstance(shares, (int, float)) and shares else ""
     headline = f"{who} {action}{share_text}".strip()
@@ -328,6 +358,11 @@ def _insider_net_windows(events: list[dict[str, Any]], *, windows: tuple[int, ..
         for event in events:
             t = _to_unix(event.get("transaction_date") or event.get("filing_date"))
             if t is None or t < cutoff:
+                continue
+            # Gifts are transfers, not market activity — a CEO gifting 59M shares to a
+            # trust is neither buying pressure nor selling pressure and would dwarf every
+            # real transaction in the window.
+            if event.get("signal_class") == "gift":
                 continue
             shares = event.get("shares")
             share_count = float(shares) if isinstance(shares, (int, float)) else 0.0

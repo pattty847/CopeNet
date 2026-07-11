@@ -168,3 +168,33 @@ def _format_value(label: str, value: float) -> str:
     if label == "DXY":
         return f"{value:.2f}"
     return f"${value:,.2f}"
+
+
+def fetch_key_stats(symbol: str) -> dict[str, Any] | None:
+    """Headline stats from yfinance fast_info — market cap, 52-week range, average volume —
+    for the ticker page's Signal Readout. Tolerant by design: returns None on any failure or
+    when nothing resolves (index/ETF symbols may lack a market cap), and callers treat None
+    as "unavailable" rather than zero."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        return None
+    try:
+        info = yf.Ticker(yf_symbol(symbol)).fast_info
+        stats = {
+            "market_cap": _fast_info_number(info, "market_cap"),
+            "year_high": _fast_info_number(info, "year_high"),
+            "year_low": _fast_info_number(info, "year_low"),
+            "avg_volume_3m": _fast_info_number(info, "three_month_average_volume"),
+        }
+    except Exception:
+        return None
+    return stats if any(value is not None for value in stats.values()) else None
+
+
+def _fast_info_number(info: Any, attr: str) -> float | None:
+    try:
+        value = getattr(info, attr)
+    except Exception:
+        return None
+    return float(value) if isinstance(value, (int, float)) else None

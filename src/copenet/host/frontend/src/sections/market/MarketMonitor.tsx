@@ -11,7 +11,7 @@ import { ForwardLedger } from './ForwardLedger';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { useIsMobile } from '../../lib/responsive';
-import type { EvidenceItem, InsiderNetWindow } from './types';
+import type { EvidenceItem, InsiderNetWindow, TickerDetailPayload, Tone } from './types';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
 const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
@@ -81,6 +81,25 @@ function formatNetValue(n: number): string {
 
 function signTone(n: number): 'up' | 'down' | 'flat' {
   return n > 0 ? 'up' : n < 0 ? 'down' : 'flat';
+}
+
+function formatBigNumber(n: number, prefix = ''): string {
+  const abs = Math.abs(n);
+  if (abs >= 1e12) return `${prefix}${(n / 1e12).toFixed(2)}T`;
+  if (abs >= 1e9) return `${prefix}${(n / 1e9).toFixed(1)}B`;
+  if (abs >= 1e6) return `${prefix}${(n / 1e6).toFixed(1)}M`;
+  return `${prefix}${Math.round(n).toLocaleString()}`;
+}
+
+function keyStatRows(stats?: TickerDetailPayload['stats']): { key: string; value: string; tone: Tone }[] {
+  if (!stats) return [];
+  const rows: { key: string; value: string; tone: Tone }[] = [];
+  if (stats.marketCap != null) rows.push({ key: 'Market cap', value: formatBigNumber(stats.marketCap, '$'), tone: 'flat' });
+  if (stats.yearHigh != null && stats.yearLow != null) {
+    rows.push({ key: '52-week range', value: `$${stats.yearLow.toFixed(2)} – $${stats.yearHigh.toFixed(2)}`, tone: 'flat' });
+  }
+  if (stats.avgVolume3m != null) rows.push({ key: 'Avg volume · 3m', value: formatBigNumber(stats.avgVolume3m), tone: 'flat' });
+  return rows;
 }
 
 const INSIDER_NET_EXPLAINER =
@@ -468,7 +487,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         />
         <PanelCard title="Signal Readout" status="preview" style={{ flex: 1, minWidth: 260 }}>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {td.signals.map((s, i) => (
+            {[...keyStatRows(td.stats), ...td.signals.map((s) => ({ key: s.key, value: s.value, tone: s.tone }))].map((s, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '7px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none' }}>
                 <span style={{ fontSize: 11.5, color: MM.muted }}>{s.key}</span>
                 <span style={{ fontFamily: mono, fontSize: 11.5, color: toneColor(s.tone) }}>{s.value}</span>

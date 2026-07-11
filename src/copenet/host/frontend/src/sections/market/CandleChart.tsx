@@ -150,6 +150,19 @@ function decorationsFor(events: ChartEvent[], bars: Ohlcv[]): { markers: SeriesM
         text: insiderSells > 1 ? `${insiderSells} insider sells` : 'insider sell',
       });
     }
+    const insiderNeutral = bucket.filter((e) => e.kind === 'insider' && e.glyph === '●').length;
+    if (insiderNeutral) {
+      // Mechanical activity — gifts, tax withholding, option exercises. No cash conviction,
+      // so no arrow: a small dim dot that still opens the day popup for the detail.
+      markers.push({
+        time: time as UTCTimestamp,
+        position: 'aboveBar',
+        shape: 'circle',
+        color: MM.dim,
+        size: 0.6,
+        text: insiderNeutral > 1 ? `${insiderNeutral} insider transfers` : 'insider transfer',
+      });
+    }
     if (plannedSales) {
       markers.push({
         time: time as UTCTimestamp,
@@ -392,7 +405,8 @@ export function CandleChart({
                 <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: MM.textSoft, lineHeight: 1.45 }}>
                   {item.tone !== 'flat' && <span style={{ fontFamily: mono, fontSize: 10, color: toneColor(item.tone), marginRight: 5 }}>{item.tone === 'up' ? '▲' : '▼'}</span>}
                   {item.headline}
-                  {item.value != null && <span style={{ fontFamily: mono, fontSize: 10.5, color: toneColor(item.tone), marginLeft: 6 }}>{formatMoney(item.value)}</span>}
+                  {item.value != null && item.value !== 0 && <span style={{ fontFamily: mono, fontSize: 10.5, color: toneColor(item.tone), marginLeft: 6 }}>{formatMoney(item.value)}</span>}
+                  {item.value === 0 && <span style={{ fontFamily: mono, fontSize: 10, color: MM.dim, marginLeft: 6 }}>no cash moved</span>}
                 </span>
                 {item.url && (
                   <a href={item.url} target="_blank" rel="noreferrer" title="Open the SEC filing" style={{ flex: '0 0 auto', fontSize: 10, color: '#8fb8e8', textDecoration: 'none', whiteSpace: 'nowrap' }}>

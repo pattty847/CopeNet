@@ -383,4 +383,6 @@ export interface TickerDetailPayload {
   events: ChartEvent[];
   kill: string;
   insight?: TickerInsight | null;
+  /** Headline stats from yfinance; keys absent when unresolvable (indexes, some ETFs). */
+  stats?: { marketCap?: number; yearHigh?: number; yearLow?: number; avgVolume3m?: number } | null;
 }

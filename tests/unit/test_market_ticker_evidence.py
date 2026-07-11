@@ -203,6 +203,57 @@ def test_insider_net_tone_follows_dollars_when_shares_and_value_diverge() -> Non
     assert windows["d30"]["open_market_buys"] == 1
 
 
+def test_gift_transfers_are_neutral_and_excluded_from_net_windows() -> None:
+    # Jensen Huang's Code G trust transfers (59M shares, $0) must not read as conviction
+    # buys: the headline says what happened, the tone is flat, and net windows skip them.
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+    gift = {
+        "owner_name": "HUANG JEN HSUN",
+        "owner_role": "Director, Officer (President and CEO)",
+        "shares": 58_962_602,
+        "gross_value": 0,
+        "price_per_share": 0.0,
+        "is_acquisition": True,
+        "is_disposition": False,
+        "signal_class": "gift",
+        "transaction_date": recent,
+    }
+
+    item = edgar._insider_evidence("NVDA", gift)
+    assert "transferred (gift)" in item.headline
+    assert "bought" not in item.headline
+    assert item.tone == "flat"
+
+    real_sell = {
+        "shares": 1_000,
+        "gross_value": 200_000.0,
+        "is_acquisition": False,
+        "is_disposition": True,
+        "signal_class": "open_market_sell",
+        "transaction_date": recent,
+    }
+    windows = edgar._insider_net_windows([gift, real_sell])
+    assert windows is not None
+    assert windows["d30"]["buys"] == 0  # the gift is not a buy
+    assert windows["d30"]["net_shares"] == -1_000
+    assert windows["d30"]["tone"] == "down"
+
+
+def test_mechanical_transactions_get_honest_verbs() -> None:
+    from datetime import datetime, timedelta, timezone
+
+    recent = (datetime.now(timezone.utc) - timedelta(days=3)).strftime("%Y-%m-%d")
+    base = {"shares": 500, "is_acquisition": False, "is_disposition": True, "transaction_date": recent}
+    tax = edgar._insider_evidence("NVDA", {**base, "signal_class": "tax_sale"})
+    assert "sold (tax withholding)" in tax.headline and tax.tone == "flat"
+    exercise = edgar._insider_evidence("NVDA", {**base, "is_acquisition": True, "is_disposition": False, "signal_class": "option_exercise"})
+    assert "exercised options into" in exercise.headline and exercise.tone == "flat"
+    buy = edgar._insider_evidence("NVDA", {**base, "is_acquisition": True, "is_disposition": False, "signal_class": "open_market_buy"})
+    assert "bought" in buy.headline and buy.tone == "up"
+
+
 def test_insider_net_tone_falls_back_to_shares_without_values() -> None:
     from datetime import datetime, timedelta, timezone
 

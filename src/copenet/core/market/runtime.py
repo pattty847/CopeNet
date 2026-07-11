@@ -16,7 +16,7 @@ from copenet._paths import default_sessions_dir
 from copenet.core.tools.handlers.web import run_web_search
 
 from .benchmark import benchmark_verdict
-from .data_sources import fetch_fund_profile, fetch_ohlcv, frame_to_bars, macro_item_from_frame
+from .data_sources import fetch_fund_profile, fetch_key_stats, fetch_ohlcv, frame_to_bars, macro_item_from_frame
 from .edgar import chart_events_from_evidence, fetch_evidence, fetch_fundamentals
 from .models import (
     AccumulationRow,
@@ -138,6 +138,7 @@ class MarketRuntime:
             kill="This read is wrong if price, volume, and benchmark-relative behavior stop confirming the thesis.",
             insight=insight,
             intelligence=intelligence,
+            stats=fetch_key_stats(normalized),
         )
 
     def compare(self, symbols: list[str]) -> CompareResult:
