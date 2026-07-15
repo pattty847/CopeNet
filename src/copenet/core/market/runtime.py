@@ -773,6 +773,8 @@ def _evidence_from_dashboard(payload: dict[str, Any]) -> list[EvidenceItem]:
                     t=row.get("t"),
                     flag=row.get("flag"),
                     value=row.get("value"),
+                    price=row.get("price"),
+                    shares=row.get("shares"),
                 )
             )
     return evidence

@@ -137,6 +137,10 @@ export interface EvidenceItem {
   flag?: 'cluster' | 'high-signal';
   /** Transaction dollar value (Form 4 gross / 144 aggregate / cluster total). */
   value?: number | null;
+  /** Per-share transaction price (Form 4 / implied for 144) — anchors chart cluster boxes. */
+  price?: number | null;
+  /** Share count for the transaction. */
+  shares?: number | null;
 }
 
 export interface ContrarianNote {

@@ -270,6 +270,7 @@ def _insider_evidence(symbol: str, event: dict[str, Any]) -> EvidenceItem:
     who = f"{owner} ({role})" if role else owner
     share_text = f" {int(shares):,} shares" if isinstance(shares, (int, float)) and shares else ""
     headline = f"{who} {action}{share_text}".strip()
+    price = event.get("price_per_share")
     return EvidenceItem(
         type="Insider",
         symbol=symbol,
@@ -279,6 +280,8 @@ def _insider_evidence(symbol: str, event: dict[str, Any]) -> EvidenceItem:
         url=event.get("form_url"),
         t=_to_unix(event.get("transaction_date") or event.get("filing_date")),
         value=float(event["gross_value"]) if isinstance(event.get("gross_value"), (int, float)) else None,
+        price=float(price) if isinstance(price, (int, float)) and price else None,
+        shares=float(shares) if isinstance(shares, (int, float)) and shares else None,
     )
 
 
@@ -329,6 +332,8 @@ def _planned_sale_evidence(symbol: str, record: dict[str, Any]) -> EvidenceItem:
     approx = str(record.get("approx_sale_date") or "").strip()
     signature = str(record.get("signature_date") or "").strip()
     sale_text = f" · sale ~{approx}" if approx and approx != signature else ""
+    has_shares = isinstance(shares, (int, float)) and shares
+    has_value = isinstance(value, (int, float)) and value
     return EvidenceItem(
         type="Form 144",
         symbol=symbol,
@@ -337,7 +342,10 @@ def _planned_sale_evidence(symbol: str, record: dict[str, Any]) -> EvidenceItem:
         tone="down",
         url=record.get("form_url"),
         t=_to_unix(record.get("signature_date") or record.get("filing_date")),
-        value=float(value) if isinstance(value, (int, float)) and value else None,
+        value=float(value) if has_value else None,
+        # 144s state aggregate market value, not a per-share print — derive the implied price.
+        price=float(value) / float(shares) if has_shares and has_value else None,
+        shares=float(shares) if has_shares else None,
     )
 
 

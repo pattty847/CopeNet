@@ -155,6 +155,10 @@ class EvidenceItem:
     # Transaction dollar value (Form 4 gross_value / 144 aggregate value / cluster total) —
     # the difference between a $10K trade and a $1B one belongs in the data, not the prose.
     value: float | None = None
+    # Per-share transaction price and share count (Form 4 / 144) — lets the chart place
+    # cluster boxes at real transaction levels and compute a value-weighted average price.
+    price: float | None = None
+    shares: float | None = None
 
 
 @dataclass

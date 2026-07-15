@@ -145,6 +145,10 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
     ]
     assert [item.flag for item in payload.evidence] == ["cluster", None, None, None, "high-signal"]
     assert [item.type for item in payload.evidence] == ["Insider", "Insider", "Insider", "Form 144", "8-K"]
+    # price/shares thread through for chart cluster boxes (144 price is implied from aggregate).
+    assert payload.evidence[1].shares == 1200
+    assert payload.evidence[3].shares == 50_000
+    assert payload.evidence[3].price == 18.0
     assert [event.kind for event in payload.events] == ["insider", "insider", "insider", "planned-sale", "8-K"]
     # Net insider windows: recent buy only in 30d; buy + older sell in 90d.
     assert payload.insider_net is not None
