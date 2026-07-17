@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
+import pytest
+
+from copenet.core.market import runtime as runtime_module
 from copenet.core.market.models import DashboardPayload
+from copenet.core.market.runtime import MarketRuntime
 from copenet.core.market.store import MarketStore
 from copenet.host.rpc_market import (
     handle_market_dashboard_get,
@@ -16,16 +21,23 @@ from copenet.host.rpc_market import (
 class FakeOrchestrator:
     def __init__(self, root: Path) -> None:
         self.market_store = MarketStore(root / "market")
+        self._background_tasks: set[asyncio.Task] = set()
 
 
-async def _capture(handler, *args) -> dict[str, Any]:
-    frames: list[dict[str, Any]] = []
+@pytest.fixture(autouse=True)
+def offline_market(monkeypatch: pytest.MonkeyPatch) -> None:
+    """These tests assert RPC wire shapes only — never let them reach Yahoo or SEC EDGAR.
 
-    async def send_json(frame: dict[str, Any]) -> None:
-        frames.append(frame)
+    ticker() fetches live OHLCV/fund-profile/key-stats with store fallbacks, and
+    refresh() sweeps the whole universe (yfinance + SEC evidence into the shared
+    data/edgar cache). Unpatched, this suite made real network calls on every run."""
 
-    await handler("req-1", *args, send_json, FakeOrchestrator(Path(args[-1]) if args and isinstance(args[-1], str) else Path.cwd()))
-    return frames[0]
+    def _no_network(*args: Any, **kwargs: Any) -> Any:
+        raise RuntimeError("network disabled in unit tests")
+
+    monkeypatch.setattr(runtime_module, "fetch_ohlcv", _no_network)
+    monkeypatch.setattr(runtime_module, "fetch_fund_profile", lambda symbol: None)
+    monkeypatch.setattr(runtime_module, "fetch_key_stats", lambda symbol: None)
 
 
 async def test_market_dashboard_get_returns_contract_payload(tmp_path: Path) -> None:
@@ -65,16 +77,26 @@ async def test_market_universe_and_ticker_get_return_camel_case_shapes(tmp_path:
     assert "softBottoming" in ticker["insight"]
 
 
-async def test_market_refresh_returns_run_identifier(tmp_path: Path) -> None:
+async def test_market_refresh_returns_run_identifier(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     orchestrator = FakeOrchestrator(tmp_path)
+    refresh_scopes: list[str] = []
+
+    def _fake_refresh(self: MarketRuntime, *, scope: str = "all") -> DashboardPayload:
+        refresh_scopes.append(scope)
+        return DashboardPayload.empty(as_of="test")
+
+    monkeypatch.setattr(MarketRuntime, "refresh", _fake_refresh)
     frames: list[dict[str, Any]] = []
 
     async def send_json(frame: dict[str, Any]) -> None:
         frames.append(frame)
 
     await handle_market_refresh("refresh", {"scope": "macro"}, send_json, orchestrator)
+    # The handler fire-and-forgets the refresh; drain it so nothing outlives the test.
+    await asyncio.gather(*orchestrator._background_tasks)
 
     payload = frames[0]["payload"]
     assert frames[0]["ok"] is True
     assert payload["runId"].startswith("market-refresh-")
     assert payload["startedAt"].endswith("Z")
+    assert refresh_scopes == ["macro"]
