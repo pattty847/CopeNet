@@ -1,8 +1,11 @@
 import { create } from 'zustand';
-import { ApprovalOutcome, ApprovalRequest, DataToolsRoute, DraftSettings, IdentityContextRuntime, LiveToolCall, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, TurnStateSnapshot, UserNoteProposal, WsStatus } from '../types/backend';
+import { DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } from '../components/home/homeLayout';
+import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
+import { createFleetSlice, type FleetSlice } from './fleetSlice';
+import { createComposerSlice, type ComposerSlice } from './composerSlice';
 
 export type AppSection = 'home' | 'agents' | 'market' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
@@ -97,16 +100,14 @@ export interface DraftStarterIntent {
   id: PersonalStarterIntentId;
 }
 
-interface AppState {
+interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   wsStatus: WsStatus;
   authError: string | null;
   appError: string | null;
-  activeRunId: string | null;
   setWsStatus: (status: WsStatus) => void;
   setAuthError: (message: string | null) => void;
   setAppError: (message: string | null) => void;
   clearAppError: () => void;
-  setActiveRunId: (id: string | null) => void;
   currentSection: AppSection;
   setCurrentSection: (section: AppSection) => void;
   themeMode: ThemeMode;
@@ -217,16 +218,6 @@ interface AppState {
   registerPendingAssistant: (runId: string, sessionKey: string, localId: string) => void;
   clearPendingAssistant: (runId: string) => void;
 
-  // Approval subsystem
-  pendingApproval: ApprovalRequest | null;
-  runPausedReason: 'awaiting_approval' | null;
-  approvalHistory: ApprovalRequest[];
-  setPendingApproval: (req: ApprovalRequest | null) => void;
-  resolveApproval: (approvalId: string, outcome: ApprovalOutcome) => void;
-  setRunPausedReason: (reason: 'awaiting_approval' | null) => void;
-  upsertApprovalInHistory: (req: ApprovalRequest) => void;
-  loadApprovalHistory: (history: ApprovalRequest[]) => void;
-
   // Messaging destinations
   destinations: MessageDestination[];
   setDestinations: (destinations: MessageDestination[]) => void;
@@ -251,16 +242,6 @@ interface AppState {
   homeLayout: HomeCardLayoutItem[];
   setHomeLayout: (layout: HomeCardLayoutItem[]) => void;
   resetHomeLayout: () => void;
-
-  // Live tool execution (in-flight run streaming)
-  // Populated from toolExecution payloads on delta events; cleared on run start/finish.
-  liveToolCalls: LiveToolCall[];
-  pushLiveToolCall: (call: LiveToolCall) => void;
-  clearLiveToolCalls: () => void;
-
-  // Last turn-state snapshot (populated from the final event's turnState payload)
-  lastTurnState: TurnStateSnapshot | null;
-  setLastTurnState: (snapshot: TurnStateSnapshot | null) => void;
 
   // Provider auth statuses (keyed by provider id, e.g. "openai-codex")
   providerAuthStatuses: Record<string, ProviderAuthStatus>;
@@ -300,16 +281,6 @@ function sortSessions(sessions: Session[]) {
   return [...sessions].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || '')));
 }
 
-function upsertInHistory(history: ApprovalRequest[], req: ApprovalRequest): ApprovalRequest[] {
-  const idx = history.findIndex((r) => r.approvalId === req.approvalId);
-  if (idx >= 0) {
-    const next = [...history];
-    next[idx] = req;
-    return next;
-  }
-  return [req, ...history];
-}
-
 const storedDraftRuntime = readStoredDraftRuntime();
 const storedHomeLayout = readStoredHomeLayout();
 
@@ -325,15 +296,16 @@ const DEFAULT_DRAFT: DraftSettings = {
 };
 
 export const useAppStore = create<AppState>((set) => ({
+  ...createSessionRuntimeSlice<AppState>(set),
+  ...createFleetSlice<AppState>(set),
+  ...createComposerSlice<AppState>(set),
   wsStatus: 'disconnected',
   authError: null,
   appError: null,
-  activeRunId: null,
   setWsStatus: (status) => set({ wsStatus: status }),
   setAuthError: (message) => set({ authError: message }),
   setAppError: (message) => set({ appError: message }),
   clearAppError: () => set({ appError: null }),
-  setActiveRunId: (id) => set({ activeRunId: id }),
   currentSection: 'home',
   setCurrentSection: (section) => set({ currentSection: section }),
   themeMode: readStoredThemeMode(),
@@ -580,37 +552,6 @@ export const useAppStore = create<AppState>((set) => ({
       return { pendingAssistants: next };
     }),
 
-  pendingApproval: null,
-  runPausedReason: null,
-  approvalHistory: [],
-  setPendingApproval: (req) =>
-    set((state) => ({
-      pendingApproval: req,
-      runPausedReason: req ? 'awaiting_approval' : null,
-      approvalHistory: req
-        ? upsertInHistory(state.approvalHistory, req)
-        : state.approvalHistory,
-    })),
-  resolveApproval: (approvalId, outcome) =>
-    set((state) => {
-      if (!state.pendingApproval || state.pendingApproval.approvalId !== approvalId) return state;
-      const resolved: ApprovalRequest = {
-        ...state.pendingApproval,
-        status: outcome.decision === 'modified' ? 'modified' : outcome.decision === 'approved' ? 'approved' : 'rejected',
-        outcome,
-        resolvedAt: outcome.decidedAt,
-      };
-      return {
-        pendingApproval: resolved,
-        runPausedReason: null,
-        approvalHistory: upsertInHistory(state.approvalHistory, resolved),
-      };
-    }),
-  setRunPausedReason: (reason) => set({ runPausedReason: reason }),
-  upsertApprovalInHistory: (req) =>
-    set((state) => ({ approvalHistory: upsertInHistory(state.approvalHistory, req) })),
-  loadApprovalHistory: (history) => set({ approvalHistory: history }),
-
   destinations: [],
   setDestinations: (destinations) => set({ destinations }),
 
@@ -638,18 +579,6 @@ export const useAppStore = create<AppState>((set) => ({
     persistHomeLayout(DEFAULT_HOME_LAYOUT);
     set({ homeLayout: DEFAULT_HOME_LAYOUT });
   },
-
-  liveToolCalls: [],
-  pushLiveToolCall: (call) =>
-    set((state) => {
-      // Dedupe: if a call with the same id already exists, replace it
-      const next = state.liveToolCalls.filter((c) => c.id !== call.id);
-      return { liveToolCalls: [...next, call] };
-    }),
-  clearLiveToolCalls: () => set({ liveToolCalls: [] }),
-
-  lastTurnState: null,
-  setLastTurnState: (snapshot) => set({ lastTurnState: snapshot }),
 
   providerAuthStatuses: {},
   setProviderAuthStatus: (providerId, status) =>

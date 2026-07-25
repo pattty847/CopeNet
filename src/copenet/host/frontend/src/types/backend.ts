@@ -20,6 +20,49 @@ export interface Session {
   updatedAt: string;
   lastRunId: string | null;
   inFlightRunId: string | null;
+  sessionType?: 'standard' | 'fleet_lane';
+  parentSessionKey?: string | null;
+  participantId?: string | null;
+}
+
+export interface FleetToolReceipt {
+  toolId: string | null;
+  ok: boolean;
+  summary: string | null;
+  preview: unknown;
+}
+
+export interface FleetRoomEvent {
+  eventId: string;
+  seq: number;
+  kind: 'operator' | 'assistant' | 'error';
+  author: 'operator' | 'chatgpt' | 'claude' | string;
+  content: string;
+  metadata: {
+    target?: string;
+    runId?: string | null;
+    toolReceipts?: FleetToolReceipt[];
+  };
+  createdAt: string;
+}
+
+export interface FleetParticipant {
+  participantId: 'chatgpt' | 'claude' | string;
+  provider: string;
+  model: string | null;
+  laneSessionKey: string;
+}
+
+export interface FleetRoom {
+  roomId: string;
+  title: string;
+  status: 'active' | 'archived';
+  mode: 'manual';
+  participants: Record<string, FleetParticipant>;
+  deliveryCursors: Record<string, number>;
+  events: FleetRoomEvent[];
+  createdAt: string;
+  updatedAt: string;
 }
 
 export type ToolEffectKind = 'file_read' | 'repo_search' | 'shell_command' | 'file_write' | 'file_edit' | 'artifact' | 'context' | 'raw';

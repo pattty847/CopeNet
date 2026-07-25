@@ -38,6 +38,7 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
   const setMergeDraft = useAppStore((state) => state.setMergeDraft);
   const providers = useAppStore((state) => state.providers);
   const sessionStates = useAppStore((state) => state.sessionStates);
+  const activeRunsBySession = useAppStore((state) => state.activeRunsBySession);
   const upsertSessionState = useAppStore((state) => state.upsertSessionState);
   const filteredSessions = sessions.filter((session) => session.archived === showArchived);
 
@@ -69,7 +70,13 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
     clearSelectedSessionKeys();
     setSessionSelectMode(false);
     setMergeDraft(null);
-    wsClient.beginDraft();
+    // The Chat|Fleet toggle is the context: New in Fleet mode means a new
+    // Fleet room (the create screen handles archiving the current one).
+    if (useAppStore.getState().agentsWorkspaceMode === 'fleet') {
+      useAppStore.getState().setFleetCreateOpen(true);
+    } else {
+      wsClient.beginDraft();
+    }
     onNavigate?.();   // close the mobile sessions sheet after starting a draft
   };
 
@@ -80,6 +87,7 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
     }
     setDraftOpen(false);
     setMergeDraft(null);
+    useAppStore.getState().setAgentsWorkspaceMode('chat');
     setActiveSessionKey(sessionKey);
     onNavigate?.();   // close the mobile sessions sheet and go straight to the session
   };
@@ -225,6 +233,9 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
                   <span className={`font-semibold truncate text-[12px] ${isActive || isSelected ? 'text-operator-text' : 'text-operator-muted group-hover:text-operator-text'} transition-colors duration-150`}>
                     {session.title || session.key || 'New Chat'}
                   </span>
+                  {activeRunsBySession[session.key] && (
+                    <span className="mt-1 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-operator-accent" title="Run in progress" />
+                  )}
                 </div>
                 {!sessionSelectMode && (
                   <button

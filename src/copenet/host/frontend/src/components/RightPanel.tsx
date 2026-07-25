@@ -11,6 +11,8 @@ import { ApprovalQueuePanel } from './ApprovalQueuePanel';
 import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
 import { InspectorOverview } from './agents/InspectorOverview';
+import { ToolPromptPalette } from './ToolPromptPalette';
+import { DRAFT_TRANSCRIPT_SESSION_KEY } from '../lib/personaCommands';
 import { usePendingApproval, useApprovalHistory, useInboxItems } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
 
@@ -34,7 +36,7 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
   const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
   const rightPanelTab = useAppStore((state) => state.rightPanelTab);
   const setRightPanelTab = useAppStore((state) => state.setRightPanelTab);
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunId = useAppStore((state) => activeSessionKey ? state.activeRunsBySession[activeSessionKey] || null : null);
 
   const pendingApproval = usePendingApproval(activeSessionKey);
   const approvalHistory = useApprovalHistory(activeSessionKey);
@@ -187,6 +189,19 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
           </div>
           <div className="flex-1 overflow-y-auto">
             <InspectorOverview overviewOnly />
+            {/* Tool prompts — click a tool to drop a "use this tool" directive
+                into the active composer; the operator finishes the sentence. */}
+            <section className="border-t border-operator-border/70 px-3 py-3">
+              <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+                <Activity className="w-3.5 h-3.5" />
+                <h3 className="font-semibold text-[10px] uppercase tracking-wider">Tool Prompts</h3>
+              </div>
+              <ToolPromptPalette
+                onInsert={(text) =>
+                  useAppStore.getState().appendComposerDraft(activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY, text)
+                }
+              />
+            </section>
           </div>
         </aside>
       </>
@@ -326,7 +341,7 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
         {/* 2. Live tool feed — only renders when a run is in progress */}
         {activeRunId && (
           <section className="mx-2.5 mt-2.5 overflow-hidden border-b border-operator-border/70 pb-2.5">
-            <LiveToolFeed />
+            <LiveToolFeed sessionKey={activeSessionKey} />
           </section>
         )}
 
@@ -359,6 +374,22 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
                 <span className="text-operator-muted">Updated:</span>
                 <span className="text-operator-text">{formatRelativeMinutes(activeSession?.updatedAt)}</span>
               </div>
+            </div>
+          </section>
+
+          {/* 3.5 Tool prompts — click a tool to drop a "use this tool" directive
+              into the active composer; the operator finishes the sentence. */}
+          <section>
+            <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
+              <Activity className="w-3.5 h-3.5" />
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Tool Prompts</h3>
+            </div>
+            <div className="border-b border-operator-border/70 pb-2.5">
+              <ToolPromptPalette
+                onInsert={(text) =>
+                  useAppStore.getState().appendComposerDraft(activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY, text)
+                }
+              />
             </div>
           </section>
 

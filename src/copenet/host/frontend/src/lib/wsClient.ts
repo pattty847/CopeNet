@@ -105,7 +105,8 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketBriefGetRpc, marketBriefRunRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import type { YieldCurveRange } from '../sections/market/types';
 import {
   createMergedSessionRpc,
   exportSessionRpc,
@@ -121,6 +122,13 @@ import { bootstrapAction } from './wsBootstrapAction';
 import { loadModelsAction } from './wsCatalogActions';
 import { abortActiveRunAction, decideApprovalAction, sendMessageAction } from './wsChatActions';
 import { handleChatEventAction } from './wsChatEvents';
+import {
+  archiveFleetRoomAction,
+  createFleetRoomAction,
+  handleFleetEventAction,
+  refreshFleetRoomsAction,
+  sendFleetMessageAction,
+} from './wsFleetActions';
 import {
   archiveSessionAction,
   beginDraftAction,
@@ -223,7 +231,7 @@ class WsClient {
       this.rejectAllPending(new Error('connection closed'));
       // Phase 4.6: the backend keeps in-flight runs alive across a socket drop,
       // so do NOT false-abort pending assistants here. Mark them "reconnecting"
-      // and KEEP them tracked + keep activeRunId, so bootstrap() can reattach /
+      // and KEEP them tracked + keep keyed active runs, so bootstrap() can reattach /
       // reconcile against the persisted run on reconnect. A run is only marked
       // aborted when the backend confirms it (chat.aborted) or its final record.
       const pending = store.pendingAssistants;
@@ -338,6 +346,11 @@ class WsClient {
       return;
     }
 
+    if (frame.event === 'fleet.event') {
+      handleFleetEventAction((frame.payload || {}) as Record<string, unknown>);
+      return;
+    }
+
 
     if (frame.event === 'memory.changed') {
       const payload = (frame.payload || {}) as Record<string, unknown>;
@@ -426,16 +439,21 @@ class WsClient {
       if (approval) {
         const store = useAppStore.getState();
         store.setPendingApproval(approval);
-        store.setRunPausedReason('awaiting_approval');
-        store.upsertApprovalInHistory(approval);
       }
       return;
     }
 
     if (frame.event === 'approval.resolved') {
+      const payload = (frame.payload || {}) as Record<string, unknown>;
+      const approvalId = String(payload.approvalId || '');
       const store = useAppStore.getState();
-      store.setPendingApproval(null);
-      store.setRunPausedReason(null);
+      if (approvalId) {
+        const decision = String(payload.decision || 'rejected');
+        store.resolveApproval(approvalId, {
+          decision: decision === 'approved' || decision === 'approved_always' ? 'approved' : 'rejected',
+          decidedAt: new Date().toISOString(),
+        });
+      }
       return;
     }
   }
@@ -535,14 +553,28 @@ class WsClient {
       }
       store.updateMessage(target.sessionKey, target.localId, { reconnecting: false });
       store.clearPendingAssistant(runId);
-      if (store.activeRunId === runId) {
-        store.setActiveRunId(null);
-      }
+      store.clearActiveRun(target.sessionKey, runId);
     }
   }
 
   async refreshSessions() {
     return refreshSessionsAction(this.request.bind(this));
+  }
+
+  async refreshFleetRooms(includeArchived = false) {
+    return refreshFleetRoomsAction(this.request.bind(this), includeArchived);
+  }
+
+  async createFleetRoom(title: string, workspaceRoot?: string | null) {
+    return createFleetRoomAction(this.request.bind(this), title, workspaceRoot);
+  }
+
+  async sendFleetMessage(roomId: string, target: string, message: string) {
+    return sendFleetMessageAction(this.request.bind(this), roomId, target, message);
+  }
+
+  async archiveFleetRoom(roomId: string) {
+    return archiveFleetRoomAction(this.request.bind(this), roomId);
   }
 
   async loadModels(providerId: string): Promise<Model[]> {
@@ -636,6 +668,14 @@ class WsClient {
 
   async marketBriefRun(force = true) {
     return marketBriefRunRpc(this.request.bind(this), force);
+  }
+
+  async marketCalendarGet(days = 7, refresh = false) {
+    return marketCalendarGetRpc(this.request.bind(this), days, refresh);
+  }
+
+  async marketYieldCurveGet(selectedRange: YieldCurveRange = '1d', refresh = false) {
+    return marketYieldCurveGetRpc(this.request.bind(this), selectedRange, refresh);
   }
 
   async marketLedgerGet() {
@@ -978,8 +1018,8 @@ class WsClient {
     return sendMessageAction(this.request.bind(this), message, attachments);
   }
 
-  async abortActiveRun() {
-    return abortActiveRunAction(this.request.bind(this));
+  async abortRun(sessionKey: string, runId: string) {
+    return abortActiveRunAction(this.request.bind(this), sessionKey, runId);
   }
 
   // ---------------------------------------------------------------------------

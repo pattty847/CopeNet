@@ -389,6 +389,7 @@ function PromptOptimizerModal({
 }
 
 export function AgentComposer({
+  composerKey,
   value,
   onChange,
   onKeyDown,
@@ -401,10 +402,11 @@ export function AgentComposer({
   runtimeSummary,
   onStartNewSession,
 }: {
+  composerKey: string;
   value: string;
   onChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  onSend: (messageOverride?: string, attachments?: ChatAttachment[]) => void;
+  onSend: (messageOverride?: string, attachments?: ChatAttachment[]) => Promise<boolean>;
   optimizationProviderId: string;
   optimizationModelId?: string | null;
   disabled: boolean;
@@ -448,13 +450,21 @@ export function AgentComposer({
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
   const sessionRuntimeOverrides = useAppStore((state) => state.sessionRuntimeOverrides);
   const setSessionRuntimeOverride = useAppStore((state) => state.setSessionRuntimeOverride);
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunId = useAppStore((state) => activeSessionKey ? state.activeRunsBySession[activeSessionKey] || null : null);
 
   const [aborting, setAborting] = useState(false);
   const isRunning = Boolean(activeRunId);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
-  const [attachments, setAttachments] = useState<PendingAttachment[]>([]);
+  const [attachmentsByComposer, setAttachmentsByComposer] = useState<Record<string, PendingAttachment[]>>({});
+  const attachments = attachmentsByComposer[composerKey] || [];
+  const setAttachments = (nextValue: React.SetStateAction<PendingAttachment[]>) => {
+    setAttachmentsByComposer((current) => {
+      const currentAttachments = current[composerKey] || [];
+      const next = typeof nextValue === 'function' ? nextValue(currentAttachments) : nextValue;
+      return { ...current, [composerKey]: next };
+    });
+  };
   const [isDragging, setIsDragging] = useState(false);
   const hasUploadingAttachment = attachments.some((item) => item.status === 'uploading');
   const readyAttachments = attachments.filter((item) => item.status === 'ready' && item.attachment);
@@ -606,7 +616,7 @@ export function AgentComposer({
     if (aborting) return;
     setAborting(true);
     try {
-      await wsClient.abortActiveRun();
+      if (activeSessionKey && activeRunId) await wsClient.abortRun(activeSessionKey, activeRunId);
     } catch (error) {
       useAppStore.getState().setAppError(error instanceof Error ? error.message : 'Unable to stop the run.');
     } finally {
@@ -779,15 +789,15 @@ export function AgentComposer({
     }
   };
 
-  // Pass ready attachments (carrying their local previewUrl so the sent bubble
-  // renders instantly) up to the parent, then clear the composer tray.
-  const submitMessage = (text: string) => {
+  // Preserve the tray when the RPC fails so an operator can retry without
+  // reattaching evidence. Clear only after the backend accepts the send.
+  const submitMessage = async (text: string) => {
     const ready: ChatAttachment[] = readyAttachments.map((item) => ({
       ...(item.attachment as ChatAttachment),
       previewUrl: item.previewUrl,
     }));
-    onSend(text, ready.length > 0 ? ready : undefined);
-    clearAttachments();
+    const accepted = await onSend(text, ready.length > 0 ? ready : undefined);
+    if (accepted) clearAttachments();
   };
 
   const canSend = (Boolean(value.trim()) || readyAttachments.length > 0) && !disabled && !hasUploadingAttachment;
@@ -797,7 +807,7 @@ export function AgentComposer({
     const now = Date.now();
     if (now - lastDirectSendAtRef.current < 700) return;
     lastDirectSendAtRef.current = now;
-    submitMessage(value);
+    void submitMessage(value);
   };
 
   return (

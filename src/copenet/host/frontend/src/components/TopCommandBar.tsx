@@ -17,7 +17,6 @@ const iconBtn =
 
 export function TopCommandBar() {
   const currentSection = useAppStore((state) => state.currentSection);
-  const activeRunId = useAppStore((state) => state.activeRunId);
   const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
 
   return (

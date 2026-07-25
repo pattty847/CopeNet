@@ -17,12 +17,14 @@ export async function decideApprovalAction(
   return request<{ ok: boolean; error?: string }>('chat.decideApproval', { approvalId, decision, note });
 }
 
-export async function abortActiveRunAction(request: WsRpcRequest): Promise<void> {
-  const store = useAppStore.getState();
-  if (!store.activeRunId && !store.activeSessionKey) return;
+export async function abortActiveRunAction(
+  request: WsRpcRequest,
+  sessionKey: string,
+  runId: string,
+): Promise<void> {
   await request('chat.abort', {
-    sessionKey: store.activeSessionKey || undefined,
-    runId: store.activeRunId || undefined,
+    sessionKey,
+    runId,
   });
 }
 
@@ -108,8 +110,8 @@ export async function sendMessageAction(
 
     if (runId) {
       // Clear live tool calls and turn state from the previous run.
-      store.clearLiveToolCalls();
-      store.setLastTurnState(null);
+      store.clearLiveToolCalls(runId);
+      store.setLastTurnState(session.key, null);
 
       const assistantMessage: Message = {
         localId: makeLocalId('assistant'),
@@ -128,7 +130,7 @@ export async function sendMessageAction(
       };
       store.addMessage(session.key, assistantMessage);
       store.registerPendingAssistant(runId, session.key, assistantMessage.localId);
-      store.setActiveRunId(runId);
+      store.setActiveRun(session.key, runId);
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unable to send message.';

@@ -20,6 +20,7 @@ import {
   normalizeTool,
 } from './wsNormalizers';
 import { ensureDraftDefaultsAction } from './wsSessionActions';
+import { normalizeFleetRoom } from './wsFleetRpc';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
@@ -46,6 +47,7 @@ export async function bootstrapAction(
       pulsePayload,
       messagingPayload,
       approvalsPayload,
+      fleetPayload,
     ] = await Promise.all([
       request<{ providers: unknown[] }>('providers.list', {}),
       request<{ tools: unknown[] }>('tools.list', {}),
@@ -59,6 +61,9 @@ export async function bootstrapAction(
       request<{ pulses?: unknown[] }>('pulse.list', {}),
       request<{ config?: unknown | null }>('messaging.config.get', {}),
       request<{ approvals?: unknown[] }>('approvals.list', {}),
+      // Fleet is additive: an older backend without fleet.* must not take down
+      // the whole bootstrap (pulse, sessions, briefing) with one rejection.
+      request<{ rooms?: unknown[] }>('fleet.list', {}).catch(() => ({ rooms: [] as unknown[] })),
     ]);
 
     const store = useAppStore.getState();
@@ -71,6 +76,7 @@ export async function bootstrapAction(
       (promptsPayload.taskModes || []).map(normalizePrompt),
     );
     store.setSessions(sessions);
+    store.syncActiveRuns(sessions);
     store.setPersonaHome(normalizePersonaHome(personaPayload.persona));
     store.setPersonaSettings(normalizePersonaSettings(personaSettingsPayload.settings));
     store.setMemoryItems(
@@ -93,12 +99,8 @@ export async function bootstrapAction(
     const pendingApprovals = Array.isArray(approvalsPayload.approvals)
       ? approvalsPayload.approvals.map(normalizeApprovalRequest).filter((item): item is ApprovalRequest => item != null)
       : [];
-    const recoveredApproval = pendingApprovals[0] || null;
-    if (recoveredApproval) {
-      store.setPendingApproval(recoveredApproval);
-      store.setRunPausedReason('awaiting_approval');
-      store.upsertApprovalInHistory(recoveredApproval);
-    }
+    store.setPendingApprovals(pendingApprovals);
+    store.setFleetRooms(Array.isArray(fleetPayload.rooms) ? fleetPayload.rooms.map(normalizeFleetRoom) : []);
     ensureDraftDefaultsAction();
 
     const currentKey = store.activeSessionKey;

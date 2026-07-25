@@ -3,7 +3,8 @@ import { useAppStore } from '../store/useAppStore';
 import { ConnectionBanner } from './ConnectionBanner';
 
 export function TopStatusBar() {
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunsBySession = useAppStore((state) => state.activeRunsBySession);
+  const activeRunIds = Object.values(activeRunsBySession);
   const wsStatus = useAppStore((state) => state.wsStatus);
 
   const systemLabel =
@@ -21,10 +22,10 @@ export function TopStatusBar() {
         </div>
 
         <div className="flex items-center gap-4 text-xs font-mono text-operator-muted">
-          {activeRunId && (
+          {activeRunIds.length > 0 && (
             <div className="flex items-center gap-2 text-operator-accent">
               <Activity className="w-3 h-3 animate-pulse" />
-              <span>RUN: {activeRunId.slice(0, 8)}</span>
+              <span>{activeRunIds.length === 1 ? `RUN: ${activeRunIds[0].slice(0, 8)}` : `${activeRunIds.length} RUNS`}</span>
             </div>
           )}
           <div className="flex items-center gap-2">

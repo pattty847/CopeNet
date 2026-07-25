@@ -47,7 +47,10 @@ export async function refreshSessionsAction(request: WsRpcRequest): Promise<void
   const payload = await request<{ sessions: unknown[] }>('sessions.list', {
     includeArchived: useAppStore.getState().showArchived,
   });
-  useAppStore.getState().setSessions((payload.sessions || []).map(normalizeSession));
+  const sessions = (payload.sessions || []).map(normalizeSession);
+  const store = useAppStore.getState();
+  store.setSessions(sessions);
+  store.syncActiveRuns(sessions);
 }
 
 export async function loadHistoryAction(request: WsRpcRequest, sessionKey: string): Promise<void> {
@@ -69,6 +72,8 @@ export async function loadHistoryAction(request: WsRpcRequest, sessionKey: strin
 
 export function beginDraftAction(): void {
   const store = useAppStore.getState();
+  // A new draft is always a standard chat; leave Fleet mode so the draft is visible.
+  store.setAgentsWorkspaceMode('chat');
   store.setActiveSessionKey(null);
   store.setDraftOpen(true);
   store.setDraftStarterIntent(null);

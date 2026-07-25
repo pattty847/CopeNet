@@ -3,13 +3,9 @@ import test from 'node:test';
 
 import { useAppStore } from '../src/store/useAppStore';
 
-test('identity and memory state can be updated and tracked per session', () => {
+test('memory state can be updated and identity usage tracked per session', () => {
   const state = useAppStore.getState() as any;
 
-  state.setIdentityContext({
-    stableIdentity: 'CopeNet is a friend with a workshop.',
-    situationalBriefing: 'Current priority: keep chat fluid.',
-  });
   state.setMemoryItems([
     {
       id: 'memory-1',
@@ -52,7 +48,6 @@ test('identity and memory state can be updated and tracked per session', () => {
   });
 
   const next = useAppStore.getState() as any;
-  assert.equal(next.identityContext.stableIdentity, 'CopeNet is a friend with a workshop.');
   assert.equal(next.memoryItems.length, 1);
   assert.equal(next.sessionIdentityUsage['session-alpha'].memoryCount, 1);
   assert.equal(next.lastMemoryChange.reason, 'run_extraction');

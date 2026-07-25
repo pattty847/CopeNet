@@ -35,9 +35,10 @@ export function handleChatEventAction(
   if (payload.state === 'tool_called') {
     const rawToolCall = payload.toolCall as Record<string, unknown> | null | undefined;
     if (rawToolCall && runId) {
+      const liveToolCalls = store.liveToolCallsByRun[runId] || [];
       const toolId = String(rawToolCall.toolId ?? rawToolCall.tool_id ?? 'tool');
-      const liveId = String(rawToolCall.callId ?? rawToolCall.call_id ?? `${runId}:${rawToolCall.step ?? store.liveToolCalls.length}:${toolId}`);
-      store.pushLiveToolCall({
+      const liveId = String(rawToolCall.callId ?? rawToolCall.call_id ?? `${runId}:${rawToolCall.step ?? liveToolCalls.length}:${toolId}`);
+      store.pushLiveToolCall(runId, {
         id: liveId,
         toolId,
         state: 'running',
@@ -48,7 +49,7 @@ export function handleChatEventAction(
       });
       const target = store.pendingAssistants[runId];
       if (target) {
-        const callId = String(rawToolCall.callId ?? rawToolCall.call_id ?? `${runId}:${rawToolCall.step ?? store.liveToolCalls.length}:${rawToolCall.toolId ?? rawToolCall.tool_id ?? 'tool'}`);
+        const callId = String(rawToolCall.callId ?? rawToolCall.call_id ?? `${runId}:${rawToolCall.step ?? liveToolCalls.length}:${rawToolCall.toolId ?? rawToolCall.tool_id ?? 'tool'}`);
         const hint = rawToolCall.hint
           ? String(rawToolCall.hint)
           : rawToolCall.arguments && typeof rawToolCall.arguments === 'object'
@@ -71,11 +72,12 @@ export function handleChatEventAction(
 
   if (payload.state === 'tool_result') {
     if (toolExecution && runId) {
-      const existingMatch = [...store.liveToolCalls]
+      const liveToolCalls = store.liveToolCallsByRun[runId] || [];
+      const existingMatch = [...liveToolCalls]
         .reverse()
         .find((call) => call.state === 'running' && call.toolId === toolExecution.toolId);
-      store.pushLiveToolCall({
-        id: existingMatch?.id || toolExecution.callId || `${runId}:${toolExecution.toolId}:${store.liveToolCalls.length}`,
+      store.pushLiveToolCall(runId, {
+        id: existingMatch?.id || toolExecution.callId || `${runId}:${toolExecution.toolId}:${liveToolCalls.length}`,
         toolId: toolExecution.toolId,
         state: toolExecution.ok
           ? 'success'
@@ -238,8 +240,9 @@ export function handleChatEventAction(
       });
     }
 
-    if (runId && store.activeRunId === runId) {
-      store.setActiveRunId(null);
+    if (runId) {
+      store.clearActiveRun(sessionKey, runId);
+      store.clearLiveToolCalls(runId);
     }
 
     // Capture turnState snapshot from final event before clearing live calls.
@@ -262,15 +265,12 @@ export function handleChatEventAction(
           terminalReason: t.terminalReason != null ? String(t.terminalReason) : null,
           transitionReason: String(t.transitionReason ?? 'completed'),
         };
-        store.setLastTurnState(snapshot);
+        store.setLastTurnState(sessionKey, snapshot);
       }
       const identityContext = normalizeIdentityContextRuntime((payload as unknown as Record<string, unknown>).identityContext);
       if (identityContext) {
         store.setSessionIdentityUsage(sessionKey, identityContext);
       }
-      // Don't clear liveToolCalls immediately - RunActivityPanel takes over after
-      // a short delay when the activity data reloads. Components that display
-      // live calls should switch to the run record once it's available.
     }
 
     // Only close the draft if the completed run belongs to the currently active session.

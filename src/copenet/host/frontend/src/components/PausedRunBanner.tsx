@@ -8,14 +8,16 @@ import { useIsMobile } from '../lib/responsive';
  * operator can see and act on the pending ApprovalRequestCard.
  */
 export function PausedRunBanner() {
-  const runPausedReason = useAppStore((s) => s.runPausedReason);
-  const pendingApproval = useAppStore((s) => s.pendingApproval);
+  const activeSessionKey = useAppStore((s) => s.activeSessionKey);
+  const pendingApprovalsById = useAppStore((s) => s.pendingApprovalsById);
+  const pendingApproval = Object.values(pendingApprovalsById)
+    .find((approval) => approval.sessionKey === activeSessionKey) || null;
   const setRightPanelTab = useAppStore((s) => s.setRightPanelTab);
   const setRightPanelOpen = useAppStore((s) => s.setRightPanelOpen);
   const setMobileInspectorOpen = useAppStore((s) => s.setMobileInspectorOpen);
   const isMobile = useIsMobile();
 
-  if (runPausedReason !== 'awaiting_approval') return null;
+  if (!pendingApproval) return null;
 
   const toolLabel = pendingApproval?.toolId ?? 'action';
   const actionClass = pendingApproval?.actionClass ?? '';

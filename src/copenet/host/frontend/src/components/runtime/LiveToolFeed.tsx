@@ -161,9 +161,9 @@ function TurnSummaryStrip({ callCount, failedCount }: { callCount: number; faile
 // LiveToolFeed
 // ---------------------------------------------------------------------------
 
-export function LiveToolFeed() {
-  const activeRunId = useAppStore((s) => s.activeRunId);
-  const liveToolCalls = useLiveToolCalls();
+export function LiveToolFeed({ sessionKey }: { sessionKey: string | null }) {
+  const activeRunId = useAppStore((s) => sessionKey ? s.activeRunsBySession[sessionKey] || null : null);
+  const liveToolCalls = useLiveToolCalls(sessionKey);
 
   // Not rendered when no run is active
   if (!activeRunId) return null;

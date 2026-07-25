@@ -16,9 +16,10 @@ import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown 
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
+  const draftOpen = useAppStore((state) => state.draftOpen);
   const sessions = useAppStore((state) => state.sessions);
   const messagesMap = useAppStore((state) => state.messages);
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunId = useAppStore((state) => activeSessionKey ? state.activeRunsBySession[activeSessionKey] || null : null);
   const appError = useAppStore((state) => state.appError);
   const clearAppError = useAppStore((state) => state.clearAppError);
   const setAppError = useAppStore((state) => state.setAppError);
@@ -49,12 +50,26 @@ export function ChatWorkspace() {
   const isMobile = useIsMobile();
   // On mobile the right-panel approval card lives behind an opt-in sheet, so a
   // paused run never surfaces its prompt. Render it inline here instead.
-  const pendingApproval = useAppStore((s) => s.pendingApproval);
+  const pendingApprovalsById = useAppStore((s) => s.pendingApprovalsById);
+  const pendingApproval = Object.values(pendingApprovalsById)
+    .find((approval) => approval.sessionKey === activeSessionKey) || null;
   const activeSessions = sessions.filter((session) => !session.archived).length;
   const archivedSessions = sessions.filter((session) => session.archived).length;
   const connectedProviders = new Set(sessions.filter((session) => !session.archived).map((session) => session.provider).filter(Boolean)).size;
 
-  const [input, setInput] = useState('');
+  const composerKey = activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY;
+  const composerDrafts = useAppStore((s) => s.composerDrafts);
+  const setComposerDraft = useAppStore((s) => s.setComposerDraft);
+  const input = composerDrafts[composerKey] || '';
+  const setInput = (nextValue: React.SetStateAction<string>) => {
+    const currentValue = useAppStore.getState().composerDrafts[composerKey] || '';
+    setComposerDraft(composerKey, typeof nextValue === 'function' ? nextValue(currentValue) : nextValue);
+  };
+
+  useEffect(() => {
+    if (!draftOpen) return;
+    setComposerDraft(DRAFT_TRANSCRIPT_SESSION_KEY, '');
+  }, [draftOpen, setComposerDraft]);
   const [isEditingTitle, setIsEditingTitle] = useState(false);
   const [editTitleValue, setEditTitleValue] = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
@@ -220,18 +235,20 @@ export function ChatWorkspace() {
   const handleSend = async (messageOverride?: string, attachments?: ChatAttachment[]) => {
     const message = (messageOverride ?? input).trim();
     const hasAttachments = (attachments?.length || 0) > 0;
-    if ((!message && !hasAttachments) || activeRunId) return;
+    if ((!message && !hasAttachments) || activeRunId) return false;
     // Persona slash commands are text-only; only intercept when there's no image.
     const handledPersonaCommand = message && !hasAttachments ? await handlePersonaCommand(message) : false;
     if (handledPersonaCommand) {
       setInput('');
-      return;
+      return true;
     }
     try {
       await wsClient.sendMessage(message, attachments);
       setInput('');
+      return true;
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to send message.');
+      return false;
     }
   };
 
@@ -757,10 +774,11 @@ export function ChatWorkspace() {
 
       {/* Composer */}
       <AgentComposer
+        composerKey={composerKey}
         value={input}
         onChange={setInput}
         onKeyDown={handleKeyDown}
-        onSend={(messageOverride, attachments) => void handleSend(messageOverride, attachments)}
+        onSend={handleSend}
         optimizationProviderId={isDraft ? draftSettings.provider : activeSession?.provider || draftSettings.provider}
         optimizationModelId={isDraft ? draftSettings.model : activeSession?.model || draftSettings.model}
         disabled={composerDisabled}

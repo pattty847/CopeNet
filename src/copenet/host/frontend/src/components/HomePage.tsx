@@ -22,7 +22,7 @@ export function HomePage() {
   const pulses = useAppStore((state) => state.pulses);
   const sessionStates = useAppStore((state) => state.sessionStates);
   const upsertSessionState = useAppStore((state) => state.upsertSessionState);
-  const pendingApproval = useAppStore((state) => state.pendingApproval);
+  const pendingApprovalsById = useAppStore((state) => state.pendingApprovalsById);
   const approvalHistory = useAppStore((state) => state.approvalHistory);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
   const setActiveSessionKey = useAppStore((state) => state.setActiveSessionKey);
@@ -85,9 +85,9 @@ export function HomePage() {
 
   const missionApprovals = useMemo(() => {
     const byId = new Map(approvalHistory.map((approval) => [approval.approvalId, approval]));
-    if (pendingApproval) byId.set(pendingApproval.approvalId, pendingApproval);
+    for (const pendingApproval of Object.values(pendingApprovalsById)) byId.set(pendingApproval.approvalId, pendingApproval);
     return [...byId.values()];
-  }, [approvalHistory, pendingApproval]);
+  }, [approvalHistory, pendingApprovalsById]);
 
   const missionItems = useMemo(
     () =>

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { ChatWorkspace } from './ChatWorkspace';
+import { AgentsWorkspaceSurface } from './AgentsWorkspaceSurface';
 import { RightPanel } from './RightPanel';
 import { SessionSidebar } from './SessionSidebar';
 import { SessionDrawer } from './SessionDrawer';
@@ -8,6 +8,7 @@ import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { MobileSheet } from './mobile/MobileSheet';
 import { PanelLeft, SlidersHorizontal } from 'lucide-react';
+import { FleetInspector } from './fleet/FleetInspector';
 
 const RIGHT_MIN = 270;
 const RIGHT_MAX = 420;
@@ -27,6 +28,7 @@ export function AgentsPage() {
   const mobileInspectorOpen = useAppStore((state) => state.mobileInspectorOpen);
   const setMobileInspectorOpen = useAppStore((state) => state.setMobileInspectorOpen);
   const rightPanelOpen = useAppStore((state) => state.rightPanelOpen);
+  const agentsWorkspaceMode = useAppStore((state) => state.agentsWorkspaceMode);
   const setRightPanelOpen = useAppStore((state) => state.setRightPanelOpen);
   const stageRef = useRef<HTMLDivElement | null>(null);
   const [rightWidth, setRightWidth] = useState(RIGHT_DEFAULT);
@@ -131,7 +133,7 @@ export function AgentsPage() {
           </div>
 
           <div className="shell-operator-pane shell-operator-pane--main min-h-0 flex-1">
-            <ChatWorkspace />
+            <AgentsWorkspaceSurface />
           </div>
         </div>
 
@@ -140,7 +142,7 @@ export function AgentsPage() {
         </MobileSheet>
 
         <MobileSheet open={mobileInspectorOpen} onClose={() => setMobileInspectorOpen(false)} title="Inspector" fullHeight>
-          <RightPanel mobile />
+          {agentsWorkspaceMode === 'fleet' ? <FleetInspector mobile /> : <RightPanel mobile />}
         </MobileSheet>
 
         <InspectorDrawer />
@@ -152,7 +154,7 @@ export function AgentsPage() {
     <>
       <div ref={stageRef} className="shell-operator-stage relative h-full" style={desktopGrid}>
         <div className="shell-operator-pane shell-operator-pane--main min-h-0 flex-1">
-          <ChatWorkspace />
+          <AgentsWorkspaceSurface />
         </div>
         <div
           role="separator"
@@ -166,7 +168,7 @@ export function AgentsPage() {
           <div className="pointer-events-none absolute inset-y-1.5 left-1/2 w-px -translate-x-1/2 bg-shell-border/70 transition-colors duration-150 group-hover:bg-shell-accent/75 group-active:bg-shell-accent" />
         </div>
         <div className="shell-operator-pane shell-operator-pane--inspector min-h-0 shrink-0">
-          <RightPanel overviewOnly />
+          {agentsWorkspaceMode === 'fleet' ? <FleetInspector /> : <RightPanel overviewOnly />}
         </div>
         <SessionDrawer />
       </div>

@@ -49,6 +49,7 @@ function SessionRow({
 }) {
   const providers = useAppStore((state) => state.providers);
   const sessionStates = useAppStore((state) => state.sessionStates);
+  const isRunning = useAppStore((state) => Boolean(state.activeRunsBySession[session.key]));
   const providerName = providers.find((provider) => provider.id === session.provider)?.displayName || session.provider;
   const modelLabel = compactModelName(session.model);
   const sessionState = sessionStates[session.key];
@@ -80,7 +81,14 @@ function SessionRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-semibold text-shell-text">{session.title || session.key || 'New Chat'}</div>
+              <div className="flex items-center gap-2">
+                <div className="truncate text-[13px] font-semibold text-shell-text">{session.title || session.key || 'New Chat'}</div>
+                {isRunning && (
+                  <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-shell-accent">
+                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-shell-accent" /> Running
+                  </span>
+                )}
+              </div>
               <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-shell-muted/85">
                 <div className="min-w-0 truncate" title={returnCue.primary}>{returnCue.primary}</div>
                 <span className="text-shell-muted/50 tabular-nums">{formatSessionAge(session.updatedAt || session.createdAt)}</span>
@@ -274,7 +282,13 @@ export function SessionDrawer() {
       clearSelectedSessionKeys();
       setSessionSelectMode(false);
       setMergeDraft(null);
-      wsClient.beginDraft();
+      // The Chat|Fleet toggle is the context: New in Fleet mode means a new
+      // Fleet room (the create screen handles archiving the current one).
+      if (useAppStore.getState().agentsWorkspaceMode === 'fleet') {
+        useAppStore.getState().setFleetCreateOpen(true);
+      } else {
+        wsClient.beginDraft();
+      }
     });
   };
 
@@ -283,6 +297,7 @@ export function SessionDrawer() {
       setDraftOpen(false);
       setMergeDraft(null);
       useAppStore.getState().setInspectorTarget(null);
+      useAppStore.getState().setAgentsWorkspaceMode('chat');
       setActiveSessionKey(sessionKey);
     });
   };

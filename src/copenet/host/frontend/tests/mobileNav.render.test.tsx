@@ -17,10 +17,10 @@ test('mobile bottom nav renders the primary phone sections', () => {
   assert.match(html, /aria-label=\"Home\"/);
   assert.match(html, /aria-label=\"Agents\"/);
   assert.match(html, /aria-label=\"Workflows\"/);
-  assert.match(html, /aria-label=\"Media\"/);
+  assert.match(html, /aria-label=\"Market\"/);
   assert.match(html, /aria-label=\"More\"/);
   assert.match(html, />Home</);
   assert.match(html, />Agents</);
   assert.match(html, />Workflows</);
-  assert.match(html, />Media</);
+  assert.match(html, />Market</);
 });

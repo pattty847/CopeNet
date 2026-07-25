@@ -109,12 +109,19 @@ function makeComponents(density: Density): React.ComponentProps<typeof ReactMark
 
 const COZY_COMPONENTS = makeComponents('cozy');
 const COMPACT_COMPONENTS = makeComponents('compact');
+// Financial conversations routinely contain multiple dollar amounts in one
+// paragraph. Treating the text between two "$" characters as inline math
+// mangles values like "$92.4M ... $71.2M". Display math still uses $$ blocks.
+const MATH_PLUGIN: [typeof remarkMath, { singleDollarTextMath: boolean }] = [
+  remarkMath,
+  { singleDollarTextMath: false },
+];
 
 export function ChatMarkdown({ content, density = 'cozy' }: { content: string; density?: Density }) {
   return (
     <div className="markdown-body break-words">
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkMath]}
+        remarkPlugins={[remarkGfm, MATH_PLUGIN]}
         rehypePlugins={[rehypeKatex]}
         components={density === 'compact' ? COMPACT_COMPONENTS : COZY_COMPONENTS}
       >

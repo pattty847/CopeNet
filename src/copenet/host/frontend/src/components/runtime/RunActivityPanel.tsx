@@ -147,7 +147,7 @@ function ActivityRow({ item }: { item: ActivityItem }) {
 }
 
 export function RunActivityPanel({ sessionKey }: { sessionKey: string | null }) {
-  const activeRunId = useAppStore((s) => s.activeRunId);
+  const activeRunId = useAppStore((s) => sessionKey ? s.activeRunsBySession[sessionKey] || null : null);
   const activity = useRunActivity(sessionKey);
 
   // Hand-off: while a run is live, LiveToolFeed owns the space. This panel is

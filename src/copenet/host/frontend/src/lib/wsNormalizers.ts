@@ -279,6 +279,9 @@ export function normalizeSession(raw: unknown): Session {
     updatedAt: String(payload.updatedAt || new Date().toISOString()),
     lastRunId: payload.lastRunId ? String(payload.lastRunId) : null,
     inFlightRunId: payload.inFlightRunId ? String(payload.inFlightRunId) : null,
+    sessionType: payload.sessionType === 'fleet_lane' ? 'fleet_lane' : 'standard',
+    parentSessionKey: payload.parentSessionKey ? String(payload.parentSessionKey) : null,
+    participantId: payload.participantId ? String(payload.participantId) : null,
   };
 }
 

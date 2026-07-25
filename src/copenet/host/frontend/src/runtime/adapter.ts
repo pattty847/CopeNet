@@ -41,7 +41,7 @@ function loading<T>(): AsyncResource<T> {
 }
 
 export function useArtifact(sessionKey: string | null, id: string | null): AsyncResource<Artifact> {
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunId = useAppStore((state) => sessionKey ? state.activeRunsBySession[sessionKey] || null : null);
   const sessionUpdatedAt = useAppStore(
     (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
   );
@@ -75,7 +75,7 @@ export function useArtifact(sessionKey: string | null, id: string | null): Async
 }
 
 export function useRunActivity(sessionKey: string | null): AsyncResource<RunActivity> {
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunId = useAppStore((state) => sessionKey ? state.activeRunsBySession[sessionKey] || null : null);
   const sessionUpdatedAt = useAppStore(
     (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
   );
@@ -112,7 +112,7 @@ export function useRunActivity(sessionKey: string | null): AsyncResource<RunActi
 }
 
 export function useBatch(sessionKey: string | null, id: string | null): AsyncResource<BatchResource> {
-  const activeRunId = useAppStore((state) => state.activeRunId);
+  const activeRunId = useAppStore((state) => sessionKey ? state.activeRunsBySession[sessionKey] || null : null);
   const sessionUpdatedAt = useAppStore(
     (state) => state.sessions.find((session) => session.key === sessionKey)?.updatedAt || null,
   );
@@ -186,14 +186,22 @@ function mapSessionArtifact(record: SessionArtifactRecord): Artifact {
 
 // Returns the live pending approval from the store.
 // Returns null when no real backend approval has been pushed.
-export function usePendingApproval(_sessionKey: string | null): ApprovalRequest | null {
-  return useAppStore((state) => state.pendingApproval);
+export function usePendingApproval(sessionKey: string | null): ApprovalRequest | null {
+  const pendingApprovalsById = useAppStore((state) => state.pendingApprovalsById);
+  return Object.values(pendingApprovalsById)
+    .find((approval) => approval.sessionKey === sessionKey) || null;
 }
 
 // Returns the full approval history from the store.
 // Empty until the backend pushes approval events for this session.
-export function useApprovalHistory(_sessionKey: string | null): ApprovalRequest[] {
-  return useAppStore((state) => state.approvalHistory);
+export function useApprovalHistory(sessionKey: string | null): ApprovalRequest[] {
+  const approvalHistory = useAppStore((state) => state.approvalHistory);
+  return useMemo(
+    () => sessionKey
+      ? approvalHistory.filter((approval) => approval.sessionKey === sessionKey)
+      : approvalHistory,
+    [approvalHistory, sessionKey],
+  );
 }
 
 // Returns the configured messaging destinations from the store.
@@ -248,7 +256,8 @@ export function useReturnBriefing(): ReturnBriefingPayload | null {
 // Aggregates: paused run, pending approvals, recently resolved approvals.
 // When the backend ships, replace buildInboxItems() with a real RPC call.
 export function useInboxItems(sessionKey: string | null): InboxItem[] {
-  const runPausedReason = useAppStore((s) => s.runPausedReason);
+  const runPausedReason = useAppStore((s) => Object.values(s.pendingApprovalsById)
+    .some((approval) => approval.sessionKey === sessionKey) ? 'awaiting_approval' as const : null);
   const approvalHistory = useApprovalHistory(sessionKey);
   const pulses = useAppStore((s) => s.pulses);
   return useMemo(
@@ -284,8 +293,10 @@ function mapPulsesToInboxItems(pulses: PulseRecord[]): InboxItem[] {
 // Returns live tool calls streaming in during the active run.
 // Populated by wsClient from toolExecution payloads on delta/final events.
 // Empty when no run is active (components should switch to RunActivityPanel).
-export function useLiveToolCalls(): LiveToolCall[] {
-  return useAppStore((s) => s.liveToolCalls);
+export function useLiveToolCalls(sessionKey: string | null): LiveToolCall[] {
+  const runId = useAppStore((s) => sessionKey ? s.activeRunsBySession[sessionKey] || null : null);
+  const liveToolCallsByRun = useAppStore((s) => s.liveToolCallsByRun);
+  return useMemo(() => runId ? liveToolCallsByRun[runId] || [] : [], [liveToolCallsByRun, runId]);
 }
 
 // Returns the auth status for a provider, fetching from the backend on mount.
