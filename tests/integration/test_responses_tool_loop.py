@@ -213,7 +213,12 @@ async def test_responses_loop_executes_tool_then_finalizes(tmp_path: Path) -> No
     fco_item = next(i for i in second_input if i.get("type") == "function_call_output")
     assert fc_item["call_id"] == "call_1"
     assert fco_item["call_id"] == "call_1"
-    assert fco_item["output"] == "Hello, world!"
+    # One canonical envelope on every loop: ok/summary/error travel with the body so
+    # a policy block or handler error is legible instead of arriving as `{}`.
+    envelope = json.loads(fco_item["output"])
+    assert envelope["ok"] is True
+    assert envelope["summary"] == "Read foo.txt"
+    assert envelope["body"] == "Hello, world!"
     # prompt_cache_key threaded through.
     assert provider.seen_cache_keys[0] == "s1"
     # tools schema is the flat Responses shape (name at top level), with the
@@ -264,7 +269,12 @@ async def test_responses_loop_compacts_stale_tool_outputs(tmp_path: Path) -> Non
     # First 2 (stale) are compacted well below the full 5000-char body.
     assert all(size < 1000 for size in sizes[:2]), sizes
     # Most recent 6 stay full-size, byte-identical to what the tool actually returned.
-    assert all(item["output"] == big_body for item in fco_items[2:])
+    assert all(json.loads(item["output"])["body"] == big_body for item in fco_items[2:])
+    # Compaction keeps the actionable envelope fields on the stale ones too.
+    for item in fco_items[:2]:
+        stale = json.loads(item["output"])
+        assert stale["ok"] is True
+        assert stale["summary"] == "Read file"
 
 
 @pytest.mark.asyncio

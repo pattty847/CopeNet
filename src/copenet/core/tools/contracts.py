@@ -139,8 +139,14 @@ class ToolExecutionResult:
     error: str | None = None
     artifact_id: str | None = None
 
-    def to_prompt_payload(self) -> str:
-        """Return a compact JSON payload suitable for feeding back to a model."""
+    def to_model_payload(self) -> dict[str, Any]:
+        """The one model-facing tool-result shape, identical on every tool loop.
+
+        Prompted, native Chat Completions, and Responses all send this. Before it
+        existed the native paths sent only `body`, so a policy-blocked call with an
+        explicit reason reached the model as `{}` and it simply retried. `ok`,
+        `summary`, and `error` are what make a failure actionable.
+        """
         payload: dict[str, Any] = {
             "callId": self.call_id,
             "toolId": self.tool_id,
@@ -153,7 +159,11 @@ class ToolExecutionResult:
             payload["error"] = self.error
         if self.artifact_id:
             payload["artifactId"] = self.artifact_id
-        return json.dumps(payload, ensure_ascii=False, indent=2)
+        return payload
+
+    def to_prompt_payload(self) -> str:
+        """Return a compact JSON payload suitable for feeding back to a model."""
+        return json.dumps(self.to_model_payload(), ensure_ascii=False, indent=2)
 
     def to_event_payload(
         self,
