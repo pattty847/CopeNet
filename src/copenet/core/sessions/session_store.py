@@ -17,6 +17,19 @@ from copenet._paths import default_sessions_dir
 UTC = timezone.utc
 
 
+def _is_safe_store_key(value: str) -> bool:
+    """True when `value` survives every durable per-session store's filename sanitizer unchanged.
+
+    The runs/artifacts/state stores each turn a session_key into a filename via a sanitizer
+    that deletes any character outside [A-Za-z0-9._-]. This index itself accepts any
+    non-empty string as a dict key, so two different keys that sanitize to the same string
+    (e.g. "a/b" and "ab") would silently share one runs/artifacts/state file across two
+    otherwise-distinct sessions. Reject anything that isn't already sanitizer-stable here,
+    at the single session-creation boundary, so an accepted key can never collide downstream.
+    """
+    return bool(value) and all(ch.isalnum() or ch in ("-", "_", ".") for ch in value)
+
+
 class SessionIndexError(RuntimeError):
     """Raised when the session index exists but cannot be parsed.
 
@@ -176,6 +189,11 @@ class SessionStore:
         normalized_workspace_root = workspace_root.strip() if workspace_root else None
         if not normalized_key:
             raise ValueError("session_key is required")
+        if not _is_safe_store_key(normalized_key):
+            raise ValueError(
+                f"session_key contains characters unsafe for durable storage: {normalized_key!r} "
+                "(allowed: letters, digits, '-', '_', '.')"
+            )
         if not normalized_provider:
             raise ValueError("provider is required")
 

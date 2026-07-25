@@ -3,16 +3,32 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from copenet.core._json_store import append_jsonl, read_json, write_json_atomic
+import pytest
+
+from copenet.core._json_store import JsonStoreError, append_jsonl, read_json, write_json_atomic
 
 
-def test_read_json_returns_fallback_for_missing_or_invalid_file(tmp_path: Path) -> None:
+def test_read_json_returns_fallback_for_missing_or_blank_file(tmp_path: Path) -> None:
     missing = tmp_path / "missing.json"
     assert read_json(missing, {"ok": False}) == {"ok": False}
 
+    blank = tmp_path / "blank.json"
+    blank.write_text("   \n", encoding="utf-8")
+    assert read_json(blank, []) == []
+
+
+def test_read_json_quarantines_and_raises_on_corrupt_file(tmp_path: Path) -> None:
     broken = tmp_path / "broken.json"
     broken.write_text("{not-json", encoding="utf-8")
-    assert read_json(broken, []) == []
+
+    with pytest.raises(JsonStoreError):
+        read_json(broken, [])
+
+    # The corrupt bytes are preserved for forensics instead of being silently
+    # treated as "empty" and destroyed by the next load->modify->save.
+    backup = broken.with_suffix(".json.corrupt")
+    assert backup.exists()
+    assert backup.read_text(encoding="utf-8") == "{not-json"
 
 
 def test_write_json_atomic_writes_indented_json_and_removes_temp_file(tmp_path: Path) -> None:

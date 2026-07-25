@@ -46,6 +46,25 @@ def test_create_session_raises_on_duplicate_key(session_store: SessionStore) -> 
         session_store.create_session(session_key="alpha", provider="fake")
 
 
+@pytest.mark.parametrize("unsafe_key", ["a/b", "a b", "a:b", "a\\b", "a?b"])
+def test_create_session_rejects_keys_unsafe_for_durable_storage(
+    session_store: SessionStore, unsafe_key: str
+) -> None:
+    # Confirmed audit finding (C-A-003): the runs/artifacts/state stores each turn a
+    # session_key into a filename by deleting unsafe characters, so an accepted key like
+    # "a/b" and an unrelated "ab" session would silently share one runs/artifacts/state
+    # file. Reject anything that isn't already sanitizer-stable at creation time.
+    with pytest.raises(ValueError, match="unsafe for durable storage"):
+        session_store.create_session(session_key=unsafe_key, provider="fake")
+
+
+def test_create_session_accepts_keys_stable_under_the_durable_store_sanitizer(
+    session_store: SessionStore,
+) -> None:
+    created = session_store.create_session(session_key="alpha-2.beta_3", provider="fake")
+    assert session_store.get(created.session_key) is not None
+
+
 def test_assert_session_binding_raises_for_locked_field_mismatches(session_store: SessionStore) -> None:
     # Provider and profile stay locked after first use; model and Access do not.
     session_store.create_session(

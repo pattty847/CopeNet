@@ -5,11 +5,12 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 import hashlib
-import json
 import secrets
 from pathlib import Path
 import threading
 from typing import Any
+
+from copenet.core._json_store import read_json, write_json_atomic
 
 
 UTC = timezone.utc
@@ -194,12 +195,7 @@ class AppStore:
         return mapping
 
     def _load_payload(self) -> dict[str, dict[str, Any]]:
-        if not self._path.exists():
-            return {"apps": {}, "mappings": {}}
-        try:
-            raw = json.loads(self._path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError):
-            return {"apps": {}, "mappings": {}}
+        raw = read_json(self._path, {"apps": {}, "mappings": {}})
         raw_apps = raw.get("apps") if isinstance(raw, dict) else None
         raw_mappings = raw.get("mappings") if isinstance(raw, dict) else None
         apps: dict[str, AppRegistryEntry] = {}
@@ -223,6 +219,4 @@ class AppStore:
             "apps": [entry.to_json() for entry in payload["apps"].values()],
             "mappings": [mapping.to_json() for mapping in payload["mappings"].values()],
         }
-        tmp_path = self._path.with_suffix(self._path.suffix + ".tmp")
-        tmp_path.write_text(json.dumps(raw, ensure_ascii=False, indent=2), encoding="utf-8")
-        tmp_path.replace(self._path)
+        write_json_atomic(self._path, raw)

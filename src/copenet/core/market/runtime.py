@@ -297,8 +297,17 @@ class MarketRuntime:
             except Exception:
                 weekly[symbol] = pd.DataFrame()
                 daily[symbol] = pd.DataFrame()
-            self.store.save_bars(symbol, "weekly", frame_to_bars(weekly[symbol]))
-            self.store.save_bars(symbol, "daily", frame_to_bars(daily[symbol]))
+            # A failed/empty fetch must never overwrite a previously good cache entry — the
+            # next reader (ticker(), interpret(), backtester, ledger) falls back to the cache,
+            # and a transient rate-limit/network blip shouldn't silently erase real bars.
+            if not weekly[symbol].empty:
+                self.store.save_bars(symbol, "weekly", frame_to_bars(weekly[symbol]))
+            else:
+                logging.warning("market refresh: %s weekly fetch failed/empty — keeping cached bars", symbol)
+            if not daily[symbol].empty:
+                self.store.save_bars(symbol, "daily", frame_to_bars(daily[symbol]))
+            else:
+                logging.warning("market refresh: %s daily fetch failed/empty — keeping cached bars", symbol)
             if pace > 0:
                 time.sleep(pace)
 
@@ -416,10 +425,22 @@ class MarketRuntime:
 
         breadth_pct = (above_trend / total_trend * 100) if total_trend else 0.0
         briefing, contrarian = synthesize_briefing(macro=macro, evidence=evidence, breadth_pct=breadth_pct)
-        dashboard.briefing = MarketPanel(status="live", data=briefing, as_of=_now_iso())
-        dashboard.contrarian = MarketPanel(status="live", data=contrarian, as_of=_now_iso())
+
+        regime_status: str = "live"
+        regime_note: str | None = None
+        if total_trend == 0:
+            # No symbol had trend data this cycle — every fetch failed/was empty. 0.0 breadth
+            # is a fetch-failure artifact, not a genuine "everything is risk-off" reading;
+            # publishing it as live would be a confident false regime call. Mark it stale
+            # instead, mirroring the evidence-panel fetch-failure guard above.
+            logging.warning("market refresh: no symbols had trend data this cycle — regime/briefing marked stale")
+            regime_status = "stale"
+            regime_note = "no trend data this cycle (fetch failure) — regime is unknown, not risk-off"
+
+        dashboard.briefing = MarketPanel(status=regime_status, data=briefing, as_of=_now_iso(), note=regime_note)
+        dashboard.contrarian = MarketPanel(status=regime_status, data=contrarian, as_of=_now_iso(), note=regime_note)
         dashboard.regime = MarketPanel(
-            status="live",
+            status=regime_status,
             data={
                 "current": "risk-on" if breadth_pct >= 55 else "risk-off" if breadth_pct < 40 else "chop",
                 "scale": [
@@ -430,6 +451,7 @@ class MarketRuntime:
                 ],
             },
             as_of=_now_iso(),
+            note=regime_note,
         )
         return dashboard
 
