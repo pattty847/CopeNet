@@ -134,6 +134,31 @@ async def test_claude_cli_run_streams_jsonl_and_persists_session(
 
 
 @pytest.mark.asyncio
+async def test_claude_cli_run_does_not_render_system_prompt_itself(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The harness embeds Claude's system text into prompt before this boundary."""
+    monkeypatch.setattr("shutil.which", lambda name: "/opt/homebrew/bin/claude" if name == "claude" else None)
+    runner = RecordingRunner([RunnerResult(returncode=0, stdout_tail="", stderr_tail="")])
+    subject = ClaudeCliProvider(runner=runner)
+
+    _ = [
+        event
+        async for event in subject.run(
+            prompt="USER_PROMPT_SENTINEL",
+            provider_session_id=None,
+            abort_event=asyncio.Event(),
+            model=None,
+            system_prompt="SYSTEM_PROMPT_SENTINEL",
+        )
+    ]
+
+    args = runner.calls[0]["args"]
+    assert args[args.index("-p") + 1] == "USER_PROMPT_SENTINEL"
+    assert "SYSTEM_PROMPT_SENTINEL" not in args
+
+
+@pytest.mark.asyncio
 async def test_claude_cli_run_does_not_duplicate_result_text(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("shutil.which", lambda name: "/opt/homebrew/bin/claude" if name == "claude" else None)
     runner = RecordingRunner(

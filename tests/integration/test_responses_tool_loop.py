@@ -60,6 +60,7 @@ class ScriptedResponsesProvider:
         self._index = 0
         self.seen_messages: list[list[dict[str, Any]]] = []
         self.seen_tools: list[list[dict[str, Any]] | None] = []
+        self.seen_instructions: list[str | None] = []
         self.seen_cache_keys: list[str | None] = []
         self.seen_reasoning: list[dict[str, Any] | None] = []
 
@@ -77,6 +78,7 @@ class ScriptedResponsesProvider:
     ) -> AsyncIterator[ProviderEvent]:
         self.seen_messages.append([dict(m) for m in messages])
         self.seen_tools.append([dict(t) for t in tools] if tools else None)
+        self.seen_instructions.append(instructions)
         self.seen_cache_keys.append(prompt_cache_key)
         self.seen_reasoning.append(dict(reasoning) if reasoning else None)
         events = self._turns[min(self._index, len(self._turns) - 1)]
@@ -381,39 +383,62 @@ def test_compose_responses_tool_instructions_tells_model_to_use_tools() -> None:
 
 @pytest.mark.asyncio
 async def test_harness_sends_agent_instructions_on_responses_path(tmp_path: Path) -> None:
-    """The responses path must hand the provider agent instructions that tell the
-    model to USE its tools — without them gpt-5.5 hedges instead of calling them."""
+    """Characterize the complete model input assembled for OpenAI Responses."""
     from copenet.core.harness import ChatHarness
 
-    captured: dict[str, str | None] = {}
-
-    class InstrCapturingProvider(ScriptedResponsesProvider):
-        async def stream_responses(self, *, instructions, **kwargs):
-            captured["instructions"] = instructions
-            async for event in super().stream_responses(instructions=instructions, **kwargs):
-                yield event
-
-    provider = InstrCapturingProvider(turns=[[ProviderEvent(kind="delta", text="hi"), _COMPLETED]])
+    provider = ScriptedResponsesProvider(turns=[[ProviderEvent(kind="delta", text="hi"), _COMPLETED]])
 
     async def tool_executor(request, context):  # pragma: no cover
         raise AssertionError("no tool expected")
 
+    input_items = [
+        {"role": "user", "content": [{"type": "input_text", "text": "Earlier request"}]},
+        {"role": "assistant", "content": [{"type": "output_text", "text": "Earlier answer"}]},
+        {"role": "user", "content": [{"type": "input_text", "text": "Read it"}]},
+    ]
     _, stream = await ChatHarness().run_turn(
         provider=provider,
-        prompt="read it",
-        messages=[{"role": "user", "content": [{"type": "input_text", "text": "read it"}]}],
+        prompt="Read it",
+        messages=input_items,
         session_id="s1",
         provider_session_id=None,
         abort_event=asyncio.Event(),
         model="gpt-5.5",
+        system_prompt="PROFILE_SENTINEL\n\nACCESS_SENTINEL",
+        prompt_context_builder=lambda _plan: "PERSONA_SENTINEL\n\nMEMORY_SENTINEL",
         available_tools=_make_plan().tools,
         tool_executor=tool_executor,
         tool_context=_make_context(tmp_path),
     )
     _ = [e async for e in stream]
-    assert captured["instructions"]
-    assert "files.read" in captured["instructions"]
-    assert "REAL workspace" in captured["instructions"]
+
+    assert provider.seen_messages == [input_items]
+    assert provider.seen_tools == [
+        [
+            {
+                "type": "function",
+                "name": "files_read",
+                "description": "Read a file.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"path": {"type": "string"}},
+                },
+            }
+        ]
+    ]
+    instructions = provider.seen_instructions[0]
+    assert instructions is not None
+    assert instructions.startswith(
+        "PROFILE_SENTINEL\n\nACCESS_SENTINEL\n\n"
+        "PERSONA_SENTINEL\n\nMEMORY_SENTINEL\n\n"
+    )
+    assert f"operating in a REAL workspace rooted at {tmp_path}" in instructions
+    assert "You have working tools: files.read." in instructions
+    assert instructions.index("PROFILE_SENTINEL") < instructions.index("ACCESS_SENTINEL")
+    assert instructions.index("ACCESS_SENTINEL") < instructions.index("PERSONA_SENTINEL")
+    assert instructions.index("PERSONA_SENTINEL") < instructions.index("MEMORY_SENTINEL")
+    assert instructions.index("MEMORY_SENTINEL") < instructions.index("REAL workspace")
+    assert provider.seen_cache_keys == ["s1"]
 
 
 @pytest.mark.asyncio
