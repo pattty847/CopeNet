@@ -7,9 +7,12 @@ import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
 import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { MorningBrief } from './MorningBrief';
+import { EconomicCalendarWidget } from './EconomicCalendarWidget';
+import { useEconomicCalendar } from './useEconomicCalendar';
 import { ForwardLedger } from './ForwardLedger';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
+import { TreasuryYieldCurve } from './TreasuryYieldCurve';
 import { useIsMobile } from '../../lib/responsive';
 import type { EvidenceItem, InsiderNetWindow, TickerDetailPayload, Tone } from './types';
 
@@ -514,6 +517,7 @@ export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
   const { read: marketRead, running: reading, run: runRead } = useMarketRead();
   const morningBrief = useMorningBrief(reload);
+  const economicCalendar = useEconomicCalendar();
   const ledger = useForwardLedger();
   const watchlist = useMarketWatchlist();
   const isMobile = useIsMobile();
@@ -640,8 +644,18 @@ export function MarketMonitor() {
               regime={dash.regime}
               ledger={ledger.report}
               onExplain={() => setReasoningOpen(true)}
+              calendar={
+                <EconomicCalendarWidget
+                  calendar={economicCalendar.calendar}
+                  loading={economicCalendar.loading}
+                  refreshing={economicCalendar.refreshing}
+                  error={economicCalendar.error}
+                  onRefresh={() => void economicCalendar.refresh()}
+                />
+              }
             />
             <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
+            <TreasuryYieldCurve />
             <MarketDetail>
               <Watchlist
                 items={watchlist.items}

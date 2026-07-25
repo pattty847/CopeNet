@@ -1,7 +1,7 @@
 """DTOs for the Market Monitor wire contract.
 
 Internal field names stay Pythonic. ``to_wire`` emits the camelCase JSON shape
-from docs/plans/MARKET_MONITOR_BUILD_BLUEPRINT.md §2.
+consumed by ``host/frontend/src/sections/market/types.ts``.
 """
 
 from __future__ import annotations
@@ -284,8 +284,10 @@ class TickerInsight:
 
 @dataclass
 class TickerIntelligence:
-    """Compact, agent-facing summary of a symbol's condition — the FeatureSet reshaped for reasoning
-    instead of buried under a raw OHLCV dump. See docs/plans/MARKET_TICKER_INTELLIGENCE.md."""
+    """Compact, agent-facing summary of a symbol's condition.
+
+    This reshapes FeatureSet for reasoning instead of burying it under raw OHLCV.
+    """
 
     as_of: str | None
     asset_role: str

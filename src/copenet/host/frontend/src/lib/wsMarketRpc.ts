@@ -4,6 +4,7 @@
 
 import type {
   DashboardPayload,
+  EconomicCalendarPayload,
   LedgerReport,
   MarketRead,
   MorningBriefPayload,
@@ -14,6 +15,8 @@ import type {
   TickerRead,
   UniverseAsset,
   WatchlistItem,
+  TreasuryYieldCurvePayload,
+  YieldCurveRange,
 } from '../sections/market/types';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
@@ -80,6 +83,24 @@ export async function marketBriefGetRpc(request: WsRpcRequest): Promise<MorningB
 export async function marketBriefRunRpc(request: WsRpcRequest, force = true): Promise<{ startedAt: string }> {
   const payload = await request<Record<string, unknown>>('market.brief.run', { force });
   return { startedAt: String(payload.startedAt || '') };
+}
+
+export async function marketCalendarGetRpc(
+  request: WsRpcRequest,
+  days = 7,
+  refresh = false,
+): Promise<EconomicCalendarPayload> {
+  const payload = await request<Record<string, unknown>>('market.calendar.get', { days, refresh });
+  return payload as unknown as EconomicCalendarPayload;
+}
+
+export async function marketYieldCurveGetRpc(
+  request: WsRpcRequest,
+  selectedRange: YieldCurveRange = '1d',
+  refresh = false,
+): Promise<TreasuryYieldCurvePayload> {
+  const payload = await request<Record<string, unknown>>('market.yield_curve.get', { range: selectedRange, refresh });
+  return payload as unknown as TreasuryYieldCurvePayload;
 }
 
 export interface WebullStatus {

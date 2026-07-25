@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any
 
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
+from .sec_fetcher import managed_sec_fetcher
 
 SEC_API_USER_AGENT = "Patrick McDermott (CopeNet) pattty847@gmail.com"
 TICKER_CLUSTER_LIMIT = 2
@@ -33,9 +34,9 @@ async def fetch_evidence(symbols: list[str], *, limit_per_symbol: int = 2) -> li
     if fetcher_cls is None:
         return []
     evidence: list[EvidenceItem] = []
-    fetcher = fetcher_cls(user_agent=SEC_API_USER_AGENT)
-    for symbol in symbols:
-        evidence.extend(await _evidence_for_symbol(fetcher, symbol, limit=limit_per_symbol))
+    async with managed_sec_fetcher(fetcher_cls, user_agent=SEC_API_USER_AGENT) as fetcher:
+        for symbol in symbols:
+            evidence.extend(await _evidence_for_symbol(fetcher, symbol, limit=limit_per_symbol))
     return evidence
 
 
@@ -46,23 +47,23 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back
     fetcher_cls = _sec_fetcher_class()
     if fetcher_cls is None:
         return TickerEvidencePayload(symbol=normalized, evidence=[], events=[], as_of=_now_iso(), refreshed=refresh)
-    fetcher = fetcher_cls(user_agent=SEC_API_USER_AGENT)
     evidence: list[EvidenceItem] = []
-    insider_payload = await _fetch_insider_payload(
-        fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["form4_filings"]
-    )
-    for cluster in _clusters_from_payload(insider_payload)[:TICKER_CLUSTER_LIMIT]:
-        evidence.append(_cluster_evidence(normalized, cluster))
-    for event in _events_from_payload(insider_payload)[: limits["form4_events"]]:
-        evidence.append(_insider_evidence(normalized, event))
-    form144_payload = await _fetch_144_payload(
-        fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f144_filings"]
-    )
-    for record in _records_from_payload(form144_payload)[: limits["f144_records"]]:
-        evidence.append(_planned_sale_evidence(normalized, record))
-    form8k_payload = await _fetch_8k_payload(fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f8k_events"])
-    for event in _events_from_payload(form8k_payload)[: limits["f8k_events"]]:
-        evidence.append(_form8k_evidence(normalized, event))
+    async with managed_sec_fetcher(fetcher_cls, user_agent=SEC_API_USER_AGENT) as fetcher:
+        insider_payload = await _fetch_insider_payload(
+            fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["form4_filings"]
+        )
+        for cluster in _clusters_from_payload(insider_payload)[:TICKER_CLUSTER_LIMIT]:
+            evidence.append(_cluster_evidence(normalized, cluster))
+        for event in _events_from_payload(insider_payload)[: limits["form4_events"]]:
+            evidence.append(_insider_evidence(normalized, event))
+        form144_payload = await _fetch_144_payload(
+            fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f144_filings"]
+        )
+        for record in _records_from_payload(form144_payload)[: limits["f144_records"]]:
+            evidence.append(_planned_sale_evidence(normalized, record))
+        form8k_payload = await _fetch_8k_payload(fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f8k_events"])
+        for event in _events_from_payload(form8k_payload)[: limits["f8k_events"]]:
+            evidence.append(_form8k_evidence(normalized, event))
     return TickerEvidencePayload(
         symbol=normalized,
         evidence=evidence,
@@ -81,11 +82,11 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
         from copetech_sec import SECDataFetcher
     except ImportError:
         return None
-    fetcher = SECDataFetcher(user_agent=SEC_API_USER_AGENT)
-    try:
-        trend = await fetcher.get_financial_trend(symbol, periods=periods)
-    except Exception:
-        return None
+    async with managed_sec_fetcher(SECDataFetcher, user_agent=SEC_API_USER_AGENT) as fetcher:
+        try:
+            trend = await fetcher.get_financial_trend(symbol, periods=periods)
+        except Exception:
+            return None
     if not trend:
         return None
     metrics = trend.get("metrics") or {}

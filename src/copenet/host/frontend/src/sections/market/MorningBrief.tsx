@@ -85,6 +85,7 @@ export function MorningBrief({
   regime,
   ledger,
   onExplain,
+  calendar,
 }: {
   brief: MorningBriefPayload | null;
   generating: boolean;
@@ -93,6 +94,7 @@ export function MorningBrief({
   regime?: Panel<Regime>;
   ledger?: LedgerReport | null;
   onExplain?: () => void;
+  calendar?: ReactNode;
 }) {
   const [allMatters, setAllMatters] = useState(false);
   const frame = {
@@ -227,6 +229,8 @@ export function MorningBrief({
             <span style={{ fontSize: 11.5, color: MM.muted }}>{brief.portfolioNote}</span>
           </BriefRow>
         )}
+
+        {calendar && <BriefRow label="Next 7d">{calendar}</BriefRow>}
 
         {ledger && ledger.totalClaims > 0 && (
           <BriefRow label="Ledger">

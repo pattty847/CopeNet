@@ -1,7 +1,6 @@
 // Market Monitor — shared data contract.
-// Source of truth: docs/plans/MARKET_MONITOR_BUILD_BLUEPRINT.md §2.
-// The backend (Codex) emits JSON matching these shapes via the market.* RPCs;
-// the frontend consumes them through useMarketMonitorData(). Keep in sync with the blueprint.
+// The backend emits matching JSON via the market.* RPCs; these types and
+// core/market/models.py form the maintained wire contract.
 
 export type Tone = 'up' | 'down' | 'flat'; // drives green / red / muted ONLY
 export type Direction = 'up' | 'down';
@@ -68,6 +67,30 @@ export interface MacroItem {
   change: string;
   tone: Tone;
   spark: number[];
+}
+
+export type YieldCurveRange = '1d' | '1w' | '1m';
+
+export interface TreasuryYieldPoint {
+  label: string;
+  years: number;
+  symbol: string;
+  name: string;
+  yield: number;
+  changeBps: number;
+}
+
+export interface TreasuryYieldCurvePayload {
+  status: 'live';
+  source: 'us-treasury';
+  sourceUrl: string;
+  range: YieldCurveRange;
+  asOf: string;
+  comparisonAsOf: string;
+  points: TreasuryYieldPoint[];
+  spreads: { label: string; valueBps: number }[];
+  shape: { label: string; detail: string };
+  coverageNote: string;
 }
 
 export type RrgMode = 'fast' | 'default' | 'slow';
@@ -263,6 +286,36 @@ export interface MorningBriefPayload {
   previousAsOf?: string;
   firstSweep: boolean;
   note?: string;
+}
+
+// ---------- economic calendar (Trading Economics, normalized by CopeNet) ----------
+export interface EconomicCalendarEvent {
+  id: string;
+  date: string;
+  country: string;
+  event: string;
+  category: string;
+  importance: 1 | 2 | 3;
+  actual?: string | null;
+  forecast?: string | null;
+  previous?: string | null;
+  revised?: string | null;
+  unit?: string | null;
+  reference?: string | null;
+  source?: string | null;
+  sourceUrl?: string | null;
+}
+
+export interface EconomicCalendarPayload {
+  configured: boolean;
+  provider: string;
+  sourceUrl: string;
+  retrievedAt?: string;
+  windowStart: string;
+  windowEnd: string;
+  stale: boolean;
+  error?: string;
+  events: EconomicCalendarEvent[];
 }
 
 // ---------- fundamentals (SEC XBRL, for the chart overlay) ----------

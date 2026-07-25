@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from datetime import timezone
 from typing import Any
+from urllib.request import Request, urlopen
+from xml.etree import ElementTree
 
 import pandas as pd
 
@@ -36,6 +38,58 @@ def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: 
     if "close" not in frame and "adj_close" in frame:
         frame["close"] = frame["adj_close"]
     return frame[["date", "open", "high", "low", "close", "volume"]].dropna(subset=["close"])
+
+
+TREASURY_YIELD_CURVE_URL = (
+    "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml"
+    "?data=daily_treasury_yield_curve&field_tdr_date_value={year}"
+)
+
+
+def fetch_treasury_par_yield_history(year: int) -> pd.DataFrame:
+    """Official daily Constant Maturity Treasury par yields for one calendar year."""
+    request = Request(
+        TREASURY_YIELD_CURVE_URL.format(year=year),
+        headers={"User-Agent": "CopeNet/0.1 Treasury curve"},
+    )
+    try:
+        with urlopen(request, timeout=20) as response:
+            payload = response.read()
+    except OSError as exc:
+        raise RuntimeError(f"U.S. Treasury yield-curve feed unavailable for {year}: {exc}") from exc
+    try:
+        return parse_treasury_par_yield_xml(payload)
+    except ElementTree.ParseError as exc:
+        raise RuntimeError("U.S. Treasury returned malformed yield-curve XML") from exc
+
+
+def parse_treasury_par_yield_xml(payload: bytes) -> pd.DataFrame:
+    """Normalize the Treasury Atom/XML feed at its external-data trust boundary."""
+    root = ElementTree.fromstring(payload)
+    namespaces = {
+        "m": "http://schemas.microsoft.com/ado/2007/08/dataservices/metadata",
+        "d": "http://schemas.microsoft.com/ado/2007/08/dataservices",
+    }
+    rows: list[dict[str, Any]] = []
+    for properties in root.findall(".//m:properties", namespaces):
+        raw_date = properties.findtext("d:NEW_DATE", namespaces=namespaces)
+        if not raw_date:
+            continue
+        row: dict[str, Any] = {"date": raw_date}
+        for element in list(properties):
+            field = element.tag.rsplit("}", 1)[-1]
+            if not field.startswith("BC_") or field.endswith("DISPLAY") or not element.text:
+                continue
+            try:
+                row[field] = float(element.text)
+            except ValueError:
+                continue
+        rows.append(row)
+    if not rows:
+        return pd.DataFrame()
+    frame = pd.DataFrame(rows)
+    frame["date"] = pd.to_datetime(frame["date"], utc=True, errors="coerce")
+    return frame.dropna(subset=["date"]).drop_duplicates("date", keep="last").sort_values("date").set_index("date")
 
 
 def frame_to_bars(frame: pd.DataFrame) -> list[MarketBar]:

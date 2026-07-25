@@ -359,3 +359,10 @@ HANDLERS = {
     "market.compare": compare_market_tickers,
     "market.backtest": run_market_backtest,
 }
+
+# Kept in a focused module so this already-large handler stays navigable while
+# market.* continues to have one canonical registration point.
+from .market_evidence import DESCRIPTORS as EVIDENCE_DESCRIPTORS, HANDLERS as EVIDENCE_HANDLERS  # noqa: E402
+
+DESCRIPTORS += EVIDENCE_DESCRIPTORS
+HANDLERS.update(EVIDENCE_HANDLERS)
