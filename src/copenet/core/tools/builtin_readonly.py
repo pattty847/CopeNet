@@ -16,14 +16,16 @@ from .handlers.web import DESCRIPTORS as WEB_DESCRIPTORS, HANDLERS as WEB_HANDLE
 from .handlers.workspace_intel import DESCRIPTORS as WORKSPACE_INTEL_DESCRIPTORS, HANDLERS as WORKSPACE_INTEL_HANDLERS
 
 
-# Phase 3 (HARNESS_REBUILD_V2): trim the MODEL-FACING tool manifest to the five
-# primitives. The model now sees exactly: files.read, files.write, files.edit,
-# files.rg, shell.exec. context.prepare was retired in Phase 0.3.
+# The MODEL-FACING tool manifest started as the five harness-rebuild primitives
+# (files.read/write/edit/rg + shell.exec) and now includes deliberately approved
+# plan, web, Market, persona, memory, and user-note tools. This explicit set is
+# canonical; policy still filters it for each run. context.prepare was retired
+# in Phase 0.3.
 #
 # git.* (use shell.exec git), repo.map / test.discover (explore via primitives),
 # files.list (shell.exec ls) and files.search (duplicate of files.rg) are dropped
-# from the manifest. memory.* and artifact.create are DEFERRED per §3.6 — they
-# come back when redesigned with explicit opt-in.
+# from the manifest. artifact.create remains deferred. memory.* returned only
+# after being redesigned as draft-first operator-approved behavior.
 #
 # Handlers for the dropped tools are intentionally still registered so internal
 # callers and the probe/characterization test suite keep working; the dead
@@ -42,6 +44,7 @@ MANIFEST_TOOL_IDS = {
     "market.ticker",
     "market.compare",
     "market.backtest",
+    "market.evidence",
     "persona.author",
     # Memory came back into the manifest redesigned as draft-first (§3.6 opt-in):
     # memory.read recalls, memory.write PROPOSES a draft that the operator approves.

@@ -221,6 +221,51 @@ async def test_responses_loop_executes_tool_then_finalizes(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
+async def test_responses_loop_compacts_stale_tool_outputs(tmp_path: Path) -> None:
+    """A long tool-heavy turn must not resend every prior tool result at full size.
+
+    8 files.read calls, each returning a large body. By the time the model is
+    asked for its 9th response, the first 2 (8 - KEEP_RECENT_TOOL_RESULTS=6)
+    function_call_output items in the outbound message list must be compacted;
+    the most recent 6 must remain untouched, full-size.
+    """
+    big_body = "x" * 5000
+
+    async def tool_executor(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
+        return ToolExecutionResult(tool_id="files.read", ok=True, summary="Read file", body=big_body)
+
+    turns = [
+        [_fc(f"call_{i}", "files.read", {"path": f"file_{i}.txt"}), _COMPLETED] for i in range(8)
+    ]
+    turns.append([ProviderEvent(kind="delta", text="done"), _COMPLETED])
+    provider = ScriptedResponsesProvider(turns=turns)
+
+    await _drain(
+        run_with_responses_tools(
+            provider=provider,
+            messages=[{"role": "user", "content": [{"type": "input_text", "text": "read all the files"}]}],
+            abort_event=asyncio.Event(),
+            model="gpt-5.5",
+            instructions="be helpful",
+            plan=_make_plan(),
+            tool_executor=tool_executor,
+            tool_context=_make_context(tmp_path),
+            session_id="s1",
+        )
+    )
+
+    assert len(provider.seen_messages) == 9
+    final_input = provider.seen_messages[-1]
+    fco_items = [item for item in final_input if item.get("type") == "function_call_output"]
+    assert len(fco_items) == 8
+    sizes = [len(item["output"]) for item in fco_items]
+    # First 2 (stale) are compacted well below the full 5000-char body.
+    assert all(size < 1000 for size in sizes[:2]), sizes
+    # Most recent 6 stay full-size, byte-identical to what the tool actually returned.
+    assert all(item["output"] == big_body for item in fco_items[2:])
+
+
+@pytest.mark.asyncio
 async def test_responses_loop_reverse_maps_sanitized_tool_name(tmp_path: Path) -> None:
     """The model calls the Responses-safe name (files_read); the loop must
     execute the real dotted tool id (files.read)."""

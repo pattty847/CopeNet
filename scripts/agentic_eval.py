@@ -542,7 +542,9 @@ async def main_async(args: argparse.Namespace) -> int:
     print("=" * 64)
 
     if args.out:
-        Path(args.out).write_text(
+        output_path = Path(args.out)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
             json.dumps(
                 {
                     "ranAtEpoch": int(time.time()),
@@ -578,7 +580,7 @@ def main() -> int:
     parser.add_argument("--only", nargs="*", help="Scenario id(s) to run")
     parser.add_argument("--tier", choices=["core", "product"], help="Run only one tier")
     parser.add_argument("--list", action="store_true", help="List available scenarios and exit")
-    parser.add_argument("--out", default="docs/investigations/agentic-eval/last-run.json")
+    parser.add_argument("--out", default="tmp/agentic_eval/last-run.json")
     args = parser.parse_args()
     if args.list:
         id_width = max(len(s.id) for s in SCENARIOS)

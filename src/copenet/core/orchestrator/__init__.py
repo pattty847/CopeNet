@@ -171,6 +171,9 @@ class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacade
         # Pending tool approvals awaiting an operator decision. Keyed by
         # approvalId -> {"event": asyncio.Event, "decision": str|None, "note": str|None}.
         self._pending_approvals: dict[str, dict] = {}
+        from copenet.core.fleet import FleetCoordinator
+
+        self._fleet = FleetCoordinator(self, root_dir=base / "fleet")
 
         # Crash recovery: clear any in_flight markers stranded by a previous
         # crash/kill so they can't brick the session forever, and record each as

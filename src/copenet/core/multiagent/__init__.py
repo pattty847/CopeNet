@@ -10,7 +10,7 @@ executes against a single provider. It is intentionally decoupled from the live
 send_chat runtime via an injected `run_on_provider` callable, so it can be
 unit-tested and wired in incrementally.
 
-See docs/plans/MULTI_AGENT_ORCHESTRATOR.md.
+Remaining product decisions are tracked in docs/plans/ROADMAP.md.
 """
 
 from __future__ import annotations

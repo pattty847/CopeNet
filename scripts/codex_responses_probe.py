@@ -10,8 +10,8 @@ Usage:
     uv run python scripts/codex_responses_probe.py
 
 Outputs:
-    docs/investigations/harness-rebuild/probe-results/scenario-{a,b,c}-events.jsonl
-    docs/investigations/harness-rebuild/probe-results/summary.json
+    tmp/codex_responses_probe/scenario-{a,b,c}-events.jsonl
+    tmp/codex_responses_probe/summary.json
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ CODEX_URL = "https://chatgpt.com/backend-api/codex/responses"
 MODEL = "gpt-5.5"
 RESULTS_DIR = (
     Path(__file__).resolve().parent.parent
-    / "docs/investigations/harness-rebuild/probe-results"
+    / "tmp/codex_responses_probe"
 )
 
 

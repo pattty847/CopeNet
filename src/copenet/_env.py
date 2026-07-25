@@ -11,34 +11,37 @@ import os
 from pathlib import Path
 
 
-def _find_env_file() -> Path | None:
-    """Locate a `.env`: walk up from cwd, then fall back to the repo root."""
+def _find_env_files() -> list[Path]:
+    """Locate `.env` plus optional ignored `.env.local` for feature credentials."""
+    root: Path | None = None
     for directory in (Path.cwd(), *Path.cwd().parents):
         candidate = directory / ".env"
         if candidate.is_file():
-            return candidate
-    # Editable/source layout: this file lives at <repo>/src/copenet/_env.py
-    repo_root_candidate = Path(__file__).resolve().parents[2] / ".env"
-    if repo_root_candidate.is_file():
-        return repo_root_candidate
-    return None
+            root = directory
+            break
+    if root is None:
+        # Editable/source layout: this file lives at <repo>/src/copenet/_env.py
+        repo_root = Path(__file__).resolve().parents[2]
+        if (repo_root / ".env").is_file():
+            root = repo_root
+    if root is None:
+        return []
+    return [path for path in (root / ".env", root / ".env.local") if path.is_file()]
 
 
 def load_project_env() -> None:
     """Populate `os.environ` from the project `.env` for keys not already set."""
-    env_path = _find_env_file()
-    if env_path is None:
-        return
-    try:
-        lines = env_path.read_text(encoding="utf-8").splitlines()
-    except OSError:
-        return
-    for line in lines:
-        stripped = line.strip()
-        if not stripped or stripped.startswith("#") or "=" not in stripped:
+    for env_path in _find_env_files():
+        try:
+            lines = env_path.read_text(encoding="utf-8").splitlines()
+        except OSError:
             continue
-        key, _, value = stripped.partition("=")
-        key = key.strip()
-        if not key or key in os.environ:
-            continue
-        os.environ[key] = value.strip().strip('"').strip("'")
+        for line in lines:
+            stripped = line.strip()
+            if not stripped or stripped.startswith("#") or "=" not in stripped:
+                continue
+            key, _, value = stripped.partition("=")
+            key = key.strip()
+            if not key or key in os.environ:
+                continue
+            os.environ[key] = value.strip().strip('"').strip("'")

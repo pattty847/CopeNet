@@ -28,6 +28,8 @@ from .rpc_catalog import (
     handle_messaging_test,
     handle_market_brief_get,
     handle_market_brief_run,
+    handle_market_calendar_get,
+    handle_market_yield_curve_get,
     handle_market_ledger_get,
     handle_market_ticker_fundamentals_get,
     handle_market_dashboard_get,
@@ -77,6 +79,7 @@ from .rpc_catalog import (
     handle_tools_list,
 )
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
+from .rpc_fleet import handle_fleet_archive, handle_fleet_create, handle_fleet_get, handle_fleet_list, handle_fleet_send
 from .rpc_nasa import handle_nasa_apod, handle_nasa_apod_list
 from .rpc_permissions import (
     handle_permissions_allowlist_add,
@@ -161,6 +164,16 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_chat_abort(req.id, req.params, send_json, orchestrator)
     elif req.method == "chat.history":
         await handle_chat_history(req.id, req.params, send_json, orchestrator)
+    elif req.method == "fleet.list":
+        await handle_fleet_list(req.id, req.params, send_json, orchestrator)
+    elif req.method == "fleet.get":
+        await handle_fleet_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "fleet.create":
+        await handle_fleet_create(req.id, req.params, send_json, orchestrator)
+    elif req.method == "fleet.send":
+        await handle_fleet_send(req.id, req.params, send_json, tasks, orchestrator, broadcast)
+    elif req.method == "fleet.archive":
+        await handle_fleet_archive(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.list":
         await handle_sessions_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "prompts.list":
@@ -270,6 +283,10 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_brief_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.brief.run":
         await handle_market_brief_run(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.calendar.get":
+        await handle_market_calendar_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.yield_curve.get":
+        await handle_market_yield_curve_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ledger.get":
         await handle_market_ledger_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.status":

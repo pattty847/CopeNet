@@ -282,6 +282,16 @@ def rpc_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         sessions_dir=tmp_path,
         providers={
             "fake": FakeProvider(),
+            "openai-codex": FakeProvider(
+                name="openai-codex",
+                display_name="OpenAI Codex",
+                response_text="ChatGPT independent view",
+            ),
+            "claude-cli": FakeProvider(
+                name="claude-cli",
+                display_name="Claude CLI",
+                response_text="Claude independent view",
+            ),
             "slow": FakeProvider(name="slow", display_name="Slow", response_text="slow response persisted", delay_sec=0.05),
             "blocking": FakeProvider(name="blocking", display_name="Blocking", wait_for_abort=True),
             "merge": MergeSummaryProvider(),
@@ -341,7 +351,10 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "messaging.routes.delete" in response["payload"]["features"]["methods"]
         assert "messaging.routes.resolve" in response["payload"]["features"]["methods"]
         assert "approvals.list" in response["payload"]["features"]["methods"]
+        assert "fleet.create" in response["payload"]["features"]["methods"]
+        assert "fleet.send" in response["payload"]["features"]["methods"]
         assert "chat" in response["payload"]["features"]["events"]
+        assert "fleet.event" in response["payload"]["features"]["events"]
         assert "sessions.merge.updated" in response["payload"]["features"]["events"]
         assert "messaging.updated" in response["payload"]["features"]["events"]
 
@@ -360,6 +373,63 @@ def test_approvals_list_rpc_returns_recovery_shape(rpc_client: TestClient) -> No
         assert failure["ok"] is False
         assert failure["error"]["code"] == "UNAUTHORIZED"
         assert failure["error"]["message"] == "invalid token"
+
+
+def test_manual_fleet_rpc_runs_independent_lanes_and_hides_lane_sessions(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        create_id = socket.request(
+            "fleet.create",
+            {
+                "title": "Market Debate",
+                "chatgptModel": "model-a",
+                "claudeModel": "model-a",
+            },
+        )
+        created = socket.recv_response(create_id)
+        assert created["ok"] is True
+        room = created["payload"]["room"]
+        assert set(room["participants"]) == {"chatgpt", "claude"}
+
+        duplicate_id = socket.request("fleet.create", {"title": "Duplicate"})
+        duplicate = socket.recv_response(duplicate_id)
+        assert duplicate["ok"] is False
+        assert duplicate["error"]["code"] == "INVALID_REQUEST"
+        assert "only one active" in duplicate["error"]["message"]
+
+        sessions_id = socket.request("sessions.list", {"includeArchived": True})
+        sessions = socket.recv_response(sessions_id)
+        assert sessions["payload"]["sessions"] == []
+
+        send_id = socket.request(
+            "fleet.send",
+            {
+                "roomId": room["roomId"],
+                "target": "@everyone",
+                "message": "Independently assess today's market action.",
+            },
+        )
+        accepted = socket.recv_response(send_id)
+        assert accepted["payload"]["status"] == "accepted"
+
+        fleet_events: list[dict[str, Any]] = []
+        while len(fleet_events) < 3:
+            frame = socket._next_matching(
+                lambda candidate: candidate.get("type") == "event"
+                and candidate.get("event") == "fleet.event"
+                and (candidate.get("payload") or {}).get("roomId") == room["roomId"]
+            )
+            fleet_events.append(frame["payload"]["event"])
+        assert [event["kind"] for event in fleet_events] == ["operator", "assistant", "assistant"]
+        assert {event["author"] for event in fleet_events[1:]} == {"chatgpt", "claude"}
+
+        get_id = socket.request("fleet.get", {"roomId": room["roomId"]})
+        persisted = socket.recv_response(get_id)["payload"]["room"]
+        assert len(persisted["events"]) == 3
+        assert persisted["deliveryCursors"] == {"chatgpt": 1, "claude": 1}
+
+        archive_id = socket.request("fleet.archive", {"roomId": room["roomId"]})
+        archived = socket.recv_response(archive_id)
+        assert archived["payload"]["room"]["status"] == "archived"
 
 
 def test_persona_rpcs_expose_settings_context_and_flavor_save(rpc_client: TestClient) -> None:
@@ -468,6 +538,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "market.ticker",
             "market.compare",
             "market.backtest",
+            "market.evidence",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
 
@@ -942,7 +1013,7 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         # Phase 3: the run's tool manifest is the small primitive set (+ plan.write).
         manifest_ids = {tool["id"] for tool in runs[0]["metadata"]["toolManifest"]}
         assert "files.read" in manifest_ids
-        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write", "user.remember", "market.dashboard", "market.ticker", "market.compare", "market.backtest"}
+        assert manifest_ids <= {"files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write", "user.remember", "market.dashboard", "market.ticker", "market.compare", "market.backtest", "market.evidence"}
         assert "repo.map" not in manifest_ids
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})

@@ -69,6 +69,9 @@ def session_payload(entry) -> dict:
         "updatedAt": entry.updated_at,
         "lastRunId": entry.last_run_id,
         "inFlightRunId": entry.in_flight_run_id,
+        "sessionType": entry.session_type,
+        "parentSessionKey": entry.parent_session_key,
+        "participantId": entry.participant_id,
     }
 
 
@@ -134,6 +137,9 @@ def rename_session(orchestrator: "Orchestrator", session_key: str, title: str | 
 
 
 def archive_session(orchestrator: "Orchestrator", session_key: str, archived: bool = True) -> dict:
+    existing = orchestrator._session_store.get(session_key)
+    if existing is not None and existing.session_type == "fleet_lane":
+        raise ValueError("Fleet lanes are managed by their parent room")
     entry = orchestrator._session_store.set_archived(session_key=session_key, archived=archived)
     return session_payload(entry)
 

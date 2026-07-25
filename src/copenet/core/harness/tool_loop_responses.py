@@ -22,6 +22,7 @@ from .tool_loop_common import (
     _parse_native_tool_arguments,
     _tool_call_event_payload,
     _tool_result_event_payload,
+    compact_stale_responses_items,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
 
@@ -86,7 +87,7 @@ async def run_with_responses_tools(
         function_calls: list[dict[str, Any]] = []
         assistant_text_chunks: list[str] = []
         async for event in provider.stream_responses(
-            messages=working_messages,
+            messages=compact_stale_responses_items(working_messages),
             tools=tool_schemas or None,
             model=model,
             instructions=instructions,

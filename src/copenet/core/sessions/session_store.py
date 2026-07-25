@@ -79,6 +79,9 @@ class SessionIndexEntry:
     updated_at: str
     last_run_id: str | None = None
     in_flight_run_id: str | None = None
+    session_type: str = "standard"
+    parent_session_key: str | None = None
+    participant_id: str | None = None
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> SessionIndexEntry:
@@ -104,6 +107,9 @@ class SessionIndexEntry:
             updated_at=_required_str(raw, "updated_at") or utc_now_iso(),
             last_run_id=_optional_str(raw, "last_run_id"),
             in_flight_run_id=_optional_str(raw, "in_flight_run_id"),
+            session_type=_optional_str(raw, "session_type") or "standard",
+            parent_session_key=_optional_str(raw, "parent_session_key"),
+            participant_id=_optional_str(raw, "participant_id"),
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -125,12 +131,14 @@ class SessionStore:
         """Return backing file path."""
         return self._path
 
-    def list_sessions(self, include_archived: bool = False) -> list[SessionIndexEntry]:
+    def list_sessions(self, include_archived: bool = False, include_lanes: bool = False) -> list[SessionIndexEntry]:
         """Return all sessions sorted by most recent update."""
         with self._lock:
             entries = list(self._load_map().values())
         if not include_archived:
             entries = [entry for entry in entries if not entry.archived]
+        if not include_lanes:
+            entries = [entry for entry in entries if entry.session_type != "fleet_lane"]
         entries.sort(key=lambda item: item.updated_at, reverse=True)
         return entries
 
@@ -151,6 +159,9 @@ class SessionStore:
         persona_flavor_id: str | None = None,
         persona_privacy_tier: str | None = None,
         workspace_root: str | None = None,
+        session_type: str = "standard",
+        parent_session_key: str | None = None,
+        participant_id: str | None = None,
     ) -> SessionIndexEntry:
         """Create a new locked session."""
         normalized_key = session_key.strip()
@@ -193,6 +204,9 @@ class SessionStore:
                 updated_at=now,
                 last_run_id=None,
                 in_flight_run_id=None,
+                session_type=session_type.strip() or "standard",
+                parent_session_key=parent_session_key.strip() if parent_session_key else None,
+                participant_id=participant_id.strip() if participant_id else None,
             )
             sessions[normalized_key] = created
             self._save_map(sessions)

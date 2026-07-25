@@ -25,6 +25,7 @@ from copenet.core.nasa.wallpaper import (
     uninstall_launch_agent,
 )
 from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuthService
+from copenet.host.cli_movies import configure_movies_parser, run_movies_command
 
 
 def _resolve_bind_host(raw: str) -> str:
@@ -114,7 +115,7 @@ def _build_parser() -> argparse.ArgumentParser:
     send = chat_subparsers.add_parser("send", help="Create or continue a CopeNet chat session")
     send.add_argument("message", nargs="*", help="Message to send. If omitted, stdin is used.")
     send.add_argument("--session", default=os.environ.get("COPNET_CLI_SESSION", "69696469"), help="CopeNet session key to create or continue")
-    send.add_argument("--provider", default=os.environ.get("COPNET_CLI_PROVIDER", OPENAI_CODEX_PROVIDER_ID))
+    send.add_argument("--provider", default=os.environ.get("COPNET_CLI_PROVIDER"))
     send.add_argument("--model", default=os.environ.get("COPNET_CLI_MODEL"))
     send.add_argument("--profile", dest="system_prompt_id", default=os.environ.get("COPNET_CLI_PROFILE"))
     send.add_argument("--task-mode", dest="task_prompt_id", default=os.environ.get("COPNET_CLI_TASK_MODE"))
@@ -153,6 +154,8 @@ def _build_parser() -> argparse.ArgumentParser:
     webull_select.add_argument("--account-id", required=True, help="Webull account id from `webull accounts`")
     webull_subparsers.add_parser("sync", help="Pull balances + positions (read-only) into the local snapshot")
     webull_subparsers.add_parser("context", help="Dry-run: print the sanitized AI portfolio context pack (never sends anything)")
+
+    configure_movies_parser(subparsers)
 
     return parser
 
@@ -239,6 +242,15 @@ def _event_line(event: dict[str, Any]) -> str | None:
 async def _run_chat_send(args: argparse.Namespace) -> None:
     events: list[dict[str, Any]] = []
     orchestrator = Orchestrator()
+    session_key = str(args.session).strip()
+    existing_session = orchestrator.resolve_session(session_key)
+
+    def runtime_value(argument: Any, session_field: str) -> str | None:
+        if argument is not None and str(argument).strip():
+            return str(argument).strip()
+        if existing_session and existing_session.get(session_field) is not None:
+            return str(existing_session[session_field]).strip() or None
+        return None
 
     async def emit(payload: dict[str, Any]) -> None:
         events.append(dict(payload))
@@ -248,16 +260,16 @@ async def _run_chat_send(args: argparse.Namespace) -> None:
                 print(line)
 
     request = ChatSendRequest(
-        session_key=str(args.session).strip(),
+        session_key=session_key,
         message=_read_cli_message(args),
-        provider=str(args.provider).strip() or OPENAI_CODEX_PROVIDER_ID,
-        model=str(args.model).strip() if args.model else None,
-        system_prompt_id=str(args.system_prompt_id).strip() if args.system_prompt_id else None,
-        task_prompt_id=str(args.task_prompt_id).strip() if args.task_prompt_id else None,
-        persona_id=str(args.persona_id).strip() if args.persona_id else None,
-        persona_flavor_id=str(args.persona_flavor_id).strip() if args.persona_flavor_id else None,
-        persona_privacy_tier=str(args.persona_privacy_tier).strip() if args.persona_privacy_tier else None,  # type: ignore[arg-type]
-        workspace_root=str(args.workspace_root).strip() if args.workspace_root else None,
+        provider=runtime_value(args.provider, "provider") or OPENAI_CODEX_PROVIDER_ID,
+        model=runtime_value(args.model, "model"),
+        system_prompt_id=runtime_value(args.system_prompt_id, "systemPromptId"),
+        task_prompt_id=runtime_value(args.task_prompt_id, "taskPromptId"),
+        persona_id=runtime_value(args.persona_id, "personaId"),
+        persona_flavor_id=runtime_value(args.persona_flavor_id, "personaFlavorId"),
+        persona_privacy_tier=runtime_value(args.persona_privacy_tier, "personaPrivacyTier"),  # type: ignore[arg-type]
+        workspace_root=runtime_value(args.workspace_root, "workspaceRoot"),
         allow_tools=not bool(args.no_tools),
     )
     if not args.json:
@@ -450,6 +462,9 @@ def main() -> None:
         return
     if args.command == "webull":
         _run_webull_command(args)
+        return
+    if args.command == "movies":
+        run_movies_command(args)
         return
 
     host = _resolve_bind_host(os.environ.get("COPNET_HOST", "127.0.0.1"))

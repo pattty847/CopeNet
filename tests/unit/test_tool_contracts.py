@@ -112,3 +112,4 @@ def test_tool_registry_does_not_expose_removed_experimental_tools() -> None:
 
     assert "patch.plan" not in tool_ids
     assert "tools.describe" not in tool_ids
+    assert "market.evidence" in tool_ids

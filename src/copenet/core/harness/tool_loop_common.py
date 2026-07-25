@@ -18,6 +18,15 @@ TraceRecorder = Callable[[str, dict[str, Any] | None], None]
 # Frontier harnesses leave step-count to the model. 100 is high enough that
 # real work never hits it, low enough that runaway loops eventually stop.
 MAX_TOOL_STEPS = 100
+# A long tool-heavy turn (e.g. deep web research) re-sends its whole growing
+# message list to the provider on every step — every full-size web.fetch dump
+# from step 3 gets reprocessed (and billed) again on steps 4 through 20. Only
+# the most recent N tool results stay full-size on replay; older ones are
+# compacted to a short identifying stub (see _compact_tool_output_text). This
+# never touches what CopeNet persists to the transcript — only the outbound
+# view sent to the provider.
+KEEP_RECENT_TOOL_RESULTS = 6
+TOOL_OUTPUT_COMPACT_CHARS = 600
 # Default reasoning config for the native Responses path. summary="auto" is
 # the gate that makes the endpoint stream response.reasoning_summary_text.delta
 # events — the Phase 4 inline-thinking UX. Verified live against
@@ -202,6 +211,95 @@ def _native_tool_message_content(tool_result: ToolExecutionResult) -> str:
     if isinstance(body, str):
         return body
     return json.dumps(body, ensure_ascii=False, indent=2)
+
+
+def _compact_tool_output_text(raw: str, *, max_chars: int = TOOL_OUTPUT_COMPACT_CHARS) -> str:
+    """Shrink a stale tool result string for replay to the provider.
+
+    Recognizes web.fetch/web.search shapes and keeps their identifying fields
+    (url, title, word count, top results) so the model knows what it already
+    looked at without needing to re-fetch just to remember. Anything else falls
+    back to a head-truncation with an explicit note. Never called on the copy
+    CopeNet persists — only on the outbound message view built per provider call.
+    """
+    if len(raw) <= max_chars:
+        return raw
+    note = (
+        f"[full result was {len(raw)} chars; compacted for context budget after "
+        "several more tool calls — re-fetch the same URL/query if the full "
+        "content is still needed]"
+    )
+    try:
+        parsed = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        parsed = None
+    if isinstance(parsed, dict):
+        if isinstance(parsed.get("text"), str):  # web.fetch shape
+            compact = {
+                "url": parsed.get("url"),
+                "title": parsed.get("title"),
+                "wordCount": parsed.get("wordCount"),
+                "excerpt": parsed.get("excerpt") or str(parsed.get("text") or "")[:280],
+                "note": note,
+            }
+            return json.dumps(compact, ensure_ascii=False)
+        if isinstance(parsed.get("results"), list):  # web.search shape
+            compact = {
+                "query": parsed.get("query"),
+                "resultCount": len(parsed["results"]),
+                "topResults": [
+                    {"title": item.get("title"), "url": item.get("url")}
+                    for item in parsed["results"][:3]
+                    if isinstance(item, dict)
+                ],
+                "note": note,
+            }
+            return json.dumps(compact, ensure_ascii=False)
+    return raw[:max_chars].rstrip() + "\n" + note
+
+
+def compact_stale_responses_items(
+    items: list[dict[str, Any]], *, keep_recent: int = KEEP_RECENT_TOOL_RESULTS
+) -> list[dict[str, Any]]:
+    """Compact all but the most recent `keep_recent` function_call_output items.
+
+    Returns the same list object unchanged when nothing is stale yet, so callers
+    with short histories pay no cost and existing exact-match tests are unaffected.
+    """
+    output_indices = [index for index, item in enumerate(items) if item.get("type") == "function_call_output"]
+    stale_count = len(output_indices) - keep_recent
+    if stale_count <= 0:
+        return items
+    stale_indices = set(output_indices[:stale_count])
+    compacted: list[dict[str, Any]] = []
+    for index, item in enumerate(items):
+        if index in stale_indices and isinstance(item.get("output"), str):
+            new_item = dict(item)
+            new_item["output"] = _compact_tool_output_text(item["output"])
+            compacted.append(new_item)
+        else:
+            compacted.append(item)
+    return compacted
+
+
+def compact_stale_chat_messages(
+    messages: list[dict[str, Any]], *, keep_recent: int = KEEP_RECENT_TOOL_RESULTS
+) -> list[dict[str, Any]]:
+    """Same idea as compact_stale_responses_items for OpenAI-compatible `role: "tool"` messages."""
+    tool_indices = [index for index, message in enumerate(messages) if message.get("role") == "tool"]
+    stale_count = len(tool_indices) - keep_recent
+    if stale_count <= 0:
+        return messages
+    stale_indices = set(tool_indices[:stale_count])
+    compacted: list[dict[str, Any]] = []
+    for index, message in enumerate(messages):
+        if index in stale_indices and isinstance(message.get("content"), str):
+            new_message = dict(message)
+            new_message["content"] = _compact_tool_output_text(message["content"])
+            compacted.append(new_message)
+        else:
+            compacted.append(message)
+    return compacted
 
 
 def compose_prompted_tool_system_prompt(

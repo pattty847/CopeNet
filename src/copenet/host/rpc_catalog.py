@@ -90,6 +90,8 @@ from .rpc_market_watchlist import (
     handle_market_watchlist_list_select,
     handle_market_symbols_search,
 )
+from .rpc_market_calendar import handle_market_calendar_get
+from .rpc_market_yield_curve import handle_market_yield_curve_get
 
 
 __all__ = [
@@ -161,4 +163,6 @@ __all__ = [
     "handle_market_watchlist_list_delete",
     "handle_market_watchlist_list_select",
     "handle_market_symbols_search",
+    "handle_market_calendar_get",
+    "handle_market_yield_curve_get",
 ]

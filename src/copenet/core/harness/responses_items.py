@@ -1,8 +1,7 @@
 """Canonical Responses API item shapes for the CopeNet harness.
 
 These are the exact shapes accepted by the chatgpt.com/backend-api/codex/responses
-endpoint, verified against live probe data captured in PASS-7
-(docs/investigations/harness-rebuild/probe-results/).
+endpoint, verified against live probe data and covered by integration tests.
 
 Used by:
 - Phase 1: build_chat_messages() walks transcript parts and emits these items
@@ -21,6 +20,8 @@ from __future__ import annotations
 
 import json
 from typing import Any, Callable, TypedDict
+
+from .tool_loop_common import compact_stale_responses_items
 
 
 # Resolves a transcript message's stored attachment refs (list of dicts carrying
@@ -248,7 +249,7 @@ def transcript_to_input_array(
                 if content:
                     items.append(assistant_message_item(message_id=f"msg_{run_id}", text=content))
     items.append(user_input_item(current_user_message, current_user_image_parts))
-    return items
+    return compact_stale_responses_items(items)
 
 
 # -- Helpers --------------------------------------------------------------------

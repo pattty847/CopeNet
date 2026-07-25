@@ -79,3 +79,11 @@ def default_workspace_intel_path() -> Path:
     if base:
         return Path(base).expanduser() / "workspace-intel.json"
     return Path.home() / ".copenet" / "workspace-intel.json"
+
+
+def default_movies_dir() -> Path:
+    """Return Movie Lab root: COPNET_DATA_DIR/movies or ~/.copenet/movies."""
+    base = os.environ.get("COPNET_DATA_DIR", "").strip()
+    if base:
+        return Path(base).expanduser() / "movies"
+    return Path.home() / ".copenet" / "movies"

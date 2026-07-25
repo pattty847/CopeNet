@@ -24,6 +24,7 @@ from .tool_loop_common import (
     _parse_native_tool_arguments,
     _tool_call_event_payload,
     _tool_result_event_payload,
+    compact_stale_chat_messages,
     compose_native_tool_system_prompt,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
@@ -74,7 +75,7 @@ async def run_with_native_tools(
 
     for step_index in range(MAX_TOOL_STEPS):
         response = await provider.chat_completion(
-            messages=messages,
+            messages=compact_stale_chat_messages(messages),
             model=model,
             tools=tool_schemas or None,
         )

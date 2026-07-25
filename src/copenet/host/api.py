@@ -17,13 +17,8 @@ from copenet.host.agents_api import create_agents_router
 from copenet.host.app_api import create_app_router
 from copenet.host.ws_server import CopeNetWsServer
 
-_STATIC_DIR = Path(__file__).resolve().parent / "static"
 _FRONTEND_DIST_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
 
-
-def _root_index_path() -> Path:
-    dist_index = _FRONTEND_DIST_DIR / "index.html"
-    return dist_index if dist_index.is_file() else (_STATIC_DIR / "index.html")
 
 def create_app(
     orchestrator: Orchestrator | None = None,
@@ -63,7 +58,6 @@ def create_app(
     )
     app.include_router(create_agents_router())
 
-    app.mount("/static", StaticFiles(directory=_STATIC_DIR), name="static")
     if (_FRONTEND_DIST_DIR / "assets").is_dir():
         app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST_DIR / "assets"), name="assets")
     if (_FRONTEND_DIST_DIR / "imgs").is_dir():
@@ -80,7 +74,16 @@ def create_app(
 
     @app.get("/")
     def index() -> FileResponse:
-        return FileResponse(_root_index_path())
+        path = _FRONTEND_DIST_DIR / "index.html"
+        if not path.is_file():
+            raise HTTPException(
+                status_code=503,
+                detail=(
+                    "React frontend build not found. Run "
+                    "`cd src/copenet/host/frontend && npm ci && npm run build`."
+                ),
+            )
+        return FileResponse(path)
 
     # PWA root assets: iOS/Android fetch these from the site root, not /assets.
     # Without explicit routes they'd 404 and "Add to Home Screen" would break.

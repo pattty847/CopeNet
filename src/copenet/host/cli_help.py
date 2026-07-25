@@ -75,6 +75,8 @@ _ENV_VARS: list[tuple[str, str]] = [
     ("COPNET_TRACE", "set to 1 to write per-run JSONL traces"),
     ("COPNET_WEB_FETCH_ALLOWLIST", "comma-separated domains web.fetch/web.search may reach (default: unrestricted)"),
     ("NASA_API_KEY", "key for the NASA Picture of the Day feature (loaded from .env)"),
+    ("TMDB_ACCESS_TOKEN", "TMDB API read-access token for the personal Movie Lab"),
+    ("TMDB_WATCHED_FILE", "watched XLSX path (default: ~/Downloads/Watched Movies.xlsx)"),
 ]
 
 class _Palette:

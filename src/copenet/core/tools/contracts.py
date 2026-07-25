@@ -358,6 +358,18 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
         rows = body.get("rows")
         symbols = [row.get("symbol") for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
         return {"type": "market_compare", "symbols": symbols}
+    if tool_id == "market.evidence":
+        evidence = body.get("evidence")
+        return {
+            "type": "market_evidence",
+            "symbol": body.get("symbol"),
+            "asOf": body.get("asOf"),
+            "evidenceCount": body.get("evidenceCount"),
+            "insiderNet": body.get("insiderNet"),
+            "headlines": [row.get("headline") for row in evidence[:5] if isinstance(row, dict)]
+            if isinstance(evidence, list)
+            else [],
+        }
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")
@@ -552,13 +564,13 @@ def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
         return "web_search"
     if tool_id == "web.fetch":
         return "web_fetch"
-    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker", "market.compare"}:
+    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker", "market.compare", "market.evidence"}:
         return "context"
     return "raw"
 
 
 def _tool_effect_target(*, arguments: dict[str, Any], body: Any) -> str | None:
-    for key in ("path", "target", "command", "query", "url", "pattern", "title"):
+    for key in ("path", "target", "command", "query", "url", "pattern", "title", "symbol"):
         value = arguments.get(key)
         if isinstance(value, str) and value.strip():
             return value.strip()
