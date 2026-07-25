@@ -15,6 +15,7 @@ import pytest
 
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.orchestrator.runtime import _make_approval_gated_executor
+from copenet.core.permissions.store import PermissionStore
 from copenet.core.sessions.session_store import SessionStore
 from copenet.core.sessions.transcript_store import TranscriptStore
 from copenet.core.tools import ToolExecutionRequest, ToolPolicy, ToolRegistry, policy_for_task_mode
@@ -29,7 +30,9 @@ def _orch(tmp_path: Path) -> Orchestrator:
     )
 
 
-def _full_access_context(tmp_path: Path) -> ToolExecutionContext:
+def _full_access_context(
+    tmp_path: Path, *, permission_store: PermissionStore | None = None, ephemeral: dict | None = None
+) -> ToolExecutionContext:
     return ToolExecutionContext(
         workdir=tmp_path,
         session_workspace_root=tmp_path,
@@ -41,6 +44,8 @@ def _full_access_context(tmp_path: Path) -> ToolExecutionContext:
         providers={},
         policy=policy_for_task_mode("full-access"),
         run_id="run-appr",
+        permission_store=permission_store,
+        ephemeral=ephemeral if ephemeral is not None else {},
     )
 
 
@@ -131,3 +136,58 @@ async def test_no_emit_event_falls_back_to_blocked(tmp_path: Path) -> None:
     )
     output = result.output if isinstance(result.output, dict) else {}
     assert output.get("policyDecision") == "approval_required"
+
+
+@pytest.mark.asyncio
+async def test_approving_a_non_shell_write_does_not_grant_standing_shell_authority(
+    tmp_path: Path,
+) -> None:
+    # Confirmed audit finding (C-A-009): "always allow" on a non-shell tool used to
+    # persist the tool's TARGET (e.g. a file path) into the global, cross-session
+    # shell.exec permission store, because the fallback `command or target` picked
+    # up the file path when the approval came from a non-shell gate (e.g. the
+    # Barricade's tainted-write approval). A later, unrelated run could then run
+    # that path as a standing-approved shell command with no further prompt.
+    orch = _orch(tmp_path)
+    abort = asyncio.Event()
+    permission_store = PermissionStore(tmp_path / "permissions.json")
+
+    async def emit_event(name, payload):
+        if name == "approval.pending":
+            approval_id = payload["approval"]["approvalId"]
+            orch.decide_approval(approval_id=approval_id, decision="approved_always")
+
+    gated = _make_approval_gated_executor(
+        ToolRegistry().execute,
+        orchestrator=orch,
+        emit_event=emit_event,
+        session_key="appr-sess",
+        run_id="run-appr",
+        abort_event=abort,
+    )
+
+    context = _full_access_context(
+        tmp_path,
+        permission_store=permission_store,
+        ephemeral={"security": _tainted_security_state()},
+    )
+
+    write_path = str(tmp_path / "script.sh")
+    result = await gated(
+        ToolExecutionRequest(tool_id="files.write", arguments={"path": write_path, "content": "x"}),
+        context,
+    )
+
+    assert result.ok is True
+    # The write's target must never appear as an approved shell command.
+    assert permission_store.is_allowed(write_path) is False
+    assert permission_store.is_allowed("script.sh") is False
+
+
+def _tainted_security_state():
+    from copenet.core.tools.barricade import RunSecurityState
+
+    state = RunSecurityState()
+    state.untrusted_context = True
+    state.untrusted_sources = ["web.search"]
+    return state

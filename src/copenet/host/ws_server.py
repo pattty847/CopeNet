@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import secrets
 from typing import Any
 from uuid import uuid4
 
@@ -134,7 +135,7 @@ class CopeNetWsServer:
     ) -> bool:
         auth = (params or {}).get("auth")
         token = auth.get("token") if isinstance(auth, dict) else None
-        if self._token and token != self._token:
+        if self._token and not secrets.compare_digest(str(token or ""), self._token):
             await send_json(
                 make_response_frame(
                     ResponseFrame(

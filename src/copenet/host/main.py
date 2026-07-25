@@ -59,6 +59,26 @@ def _resolve_bind_host(raw: str) -> str:
     raise SystemExit(
         "COPNET_HOST=tailscale: could not resolve a Tailscale IPv4 — is Tailscale running and logged in?"
     )
+
+
+def _default_token_beyond_loopback_refusal(*, host: str, port: int, token: str, host_env: str | None) -> str | None:
+    """Return a refusal message when binding beyond loopback with the default token.
+
+    Reachable beyond localhost (tailnet, LAN) using the well-known literal
+    "dev-token" default would let anyone who can reach the port authenticate as a
+    full-access operator. Returns None when it's safe to proceed.
+    """
+    if host == "127.0.0.1" or token.strip():
+        return None
+    return (
+        f"\n  Refusing to start: CopeNet would be reachable beyond localhost "
+        f"(http://{host}:{port}) using the well-known default token.\n"
+        "  Set your own token first, e.g.:\n\n"
+        "      export COPNET_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')\n\n"
+        f"  Then start CopeNet again with COPNET_HOST={host_env or host!r} set as before.\n"
+    )
+
+
 from copenet.host.api import create_app
 
 
@@ -469,6 +489,13 @@ def main() -> None:
 
     host = _resolve_bind_host(os.environ.get("COPNET_HOST", "127.0.0.1"))
     port = int(os.environ.get("COPNET_PORT", "17123"))
+
+    refusal = _default_token_beyond_loopback_refusal(
+        host=host, port=port, token=os.environ.get("COPNET_TOKEN", ""), host_env=os.environ.get("COPNET_HOST")
+    )
+    if refusal is not None:
+        print(refusal)
+        raise SystemExit(1)
 
     app = create_app()
     if host != "127.0.0.1":

@@ -1,6 +1,8 @@
 """The CopeNet Barricade — taint-tracking + egress hardening for tool use.
 
-Toggle with the ``COPENET_BARRICADE=1`` environment variable.
+Always on. ``COPENET_BARRICADE=0`` (or false/no/off) is a deliberate, loud escape
+hatch for local debugging of the guard itself — it is not a supported deployment
+mode, and every disabled check logs a warning so it's never silently off.
 
 The threat this defends (see docs/THREAT_MODEL.md): an autonomous agent ingests
 content an attacker controls (a fetched web page, a poisoned file) and that
@@ -32,6 +34,7 @@ from __future__ import annotations
 import hashlib
 import ipaddress
 import json
+import logging
 import os
 import re
 from dataclasses import dataclass, field
@@ -39,6 +42,8 @@ from typing import Any
 from urllib.parse import urlparse
 
 from .contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
+
+_LOG = logging.getLogger(__name__)
 
 _SECURITY_KEY = "security"
 
@@ -81,27 +86,89 @@ _SECRET_HINTS = (
 )
 
 # Paths whose contents are treated as sensitive — values read from them become
-# canaries the egress guard watches for in outbound URLs.
+# canaries the egress guard watches for in outbound URLs. Filename-pattern match
+# (".env", "token", ...) catches the common naming case; directory-pattern match
+# catches durable credential stores whose filenames don't look secret-shaped —
+# e.g. provider OAuth tokens live at .copenet/providers/auth/<provider>.json.
 _SENSITIVE_PATH_RE = re.compile(r"(\.env|secret|credential|password|token|\.pem|id_rsa)", re.IGNORECASE)
+_SENSITIVE_PATH_DIR_RE = re.compile(r"providers[\\/]+auth", re.IGNORECASE)
 _SENSITIVE_VALUE_RE = re.compile(r"[A-Za-z0-9_\-]{6,}")
+
+_BARRICADE_DISABLE_VALUES = {"0", "false", "no", "off"}
+_disabled_warning_logged = False
+
+# Destinations web.fetch/web.search may reach WITHOUT an operator approval prompt.
+# Curated from what CopeNet's own subsystems already talk to (its configured
+# search backends) plus common, low-risk reference sources. Anything else public
+# still works — it just pauses for a one-time operator approval instead of being
+# silently allowed, per the "read broadly, but ask about places you haven't
+# vetted" model. Extend via COPNET_WEB_FETCH_ALLOWLIST (comma-separated apex
+# domains, additive) rather than editing this constant.
+DEFAULT_ALLOWED_FETCH_DOMAINS: frozenset[str] = frozenset(
+    {
+        # search backends CopeNet is already configured to call
+        "api.exa.ai",
+        "api.search.brave.com",
+        "html.duckduckgo.com",
+        # general reference / docs
+        "en.wikipedia.org",
+        "wikipedia.org",
+        "github.com",
+        "raw.githubusercontent.com",
+        "developer.mozilla.org",
+        # finance/market reference (aligned with Market Monitor's own data sources)
+        "www.sec.gov",
+        "data.sec.gov",
+        "home.treasury.gov",
+        "finance.yahoo.com",
+    }
+)
+
+_FETCH_ALLOWLIST_ENV = "COPNET_WEB_FETCH_ALLOWLIST"
+_LEGACY_PRIVATE_ALLOWLIST_ENV = "COPENET_BARRICADE_FETCH_ALLOWLIST"
 
 
 def barricade_enabled() -> bool:
-    """Return True when the Barricade hardening is switched on."""
-    return os.environ.get("COPENET_BARRICADE", "").strip().lower() in {"1", "true", "yes", "on"}
+    """Return True when the Barricade hardening is switched on (the default).
 
-
-def _fetch_host_allowlist() -> set[str]:
-    """Operator-trusted hosts the egress guard may fetch despite being private.
-
-    Real operators sometimes need the agent to reach a specific internal host
-    (a docs server, an intranet wiki). `COPENET_BARRICADE_FETCH_ALLOWLIST` is a
-    comma-separated host allowlist that exempts ONLY the private-address check —
-    the secret-parameter and canary-value checks still apply, so an allowlisted
-    host still can't be used to smuggle a freshly-read secret.
+    Logs a warning (once per process) when it's off, so a disabled guard never
+    goes unnoticed.
     """
-    raw = os.environ.get("COPENET_BARRICADE_FETCH_ALLOWLIST", "")
-    return {host.strip().lower() for host in raw.split(",") if host.strip()}
+    global _disabled_warning_logged
+    raw = os.environ.get("COPENET_BARRICADE", "").strip().lower()
+    enabled = raw not in _BARRICADE_DISABLE_VALUES
+    if not enabled and not _disabled_warning_logged:
+        _disabled_warning_logged = True
+        _LOG.warning(
+            "CopeNet Barricade is DISABLED (COPENET_BARRICADE=%r) — taint tracking, the "
+            "egress guard, and secret-exfiltration checks are NOT active for this process.",
+            raw,
+        )
+    return enabled
+
+
+def fetch_allowlist() -> set[str]:
+    """Destinations web.fetch/web.search may reach without an approval prompt.
+
+    Built-in defaults, unioned with operator-configured entries from
+    COPNET_WEB_FETCH_ALLOWLIST (and the legacy COPENET_BARRICADE_FETCH_ALLOWLIST
+    name, merged in for back-compat). Additive: operators extend the safe
+    defaults, they don't need to restate them.
+    """
+    operator_raw = os.environ.get(_FETCH_ALLOWLIST_ENV, "")
+    legacy_raw = os.environ.get(_LEGACY_PRIVATE_ALLOWLIST_ENV, "")
+    operator_entries = {
+        host.strip().lower() for host in f"{operator_raw},{legacy_raw}".split(",") if host.strip()
+    }
+    return DEFAULT_ALLOWED_FETCH_DOMAINS | operator_entries
+
+
+def host_matches_allowlist(hostname: str | None, allowlist: set[str]) -> bool:
+    """True when `hostname` equals or is a subdomain of an entry in `allowlist`."""
+    host = (hostname or "").lower().strip(".")
+    if not host:
+        return False
+    return any(host == domain or host.endswith(f".{domain}") for domain in allowlist)
 
 
 @dataclass
@@ -314,7 +381,10 @@ def _egress_guard(
     parsed = urlparse(candidate)
     state = get_security_state(context)
 
-    allowlisted = (parsed.hostname or "").lower() in _fetch_host_allowlist()
+    # An operator-configured allowlist entry means "trusted" for both purposes:
+    # it exempts a private host from the loopback/metadata block below, AND it
+    # skips the approval prompt for an otherwise-unknown public destination.
+    allowlisted = host_matches_allowlist(parsed.hostname, fetch_allowlist())
     reason: str | None = None
     if parsed.scheme not in {"http", "https"}:
         reason = f"non-web scheme '{parsed.scheme or '?'}' is blocked"
@@ -329,11 +399,35 @@ def _egress_guard(
             if hint:
                 reason = f"URL query carries secret-like parameter '{hint}=' — possible exfiltration"
 
-    if reason is None:
-        return None
+    if reason is not None:
+        state.record(SecurityEvent("egress_blocked", "web.fetch", reason))
+        return _egress_blocked_result("web.fetch", raw_url, reason, state)
 
-    state.record(SecurityEvent("egress_blocked", "web.fetch", reason))
-    return _egress_blocked_result("web.fetch", raw_url, reason, state)
+    if not allowlisted:
+        # Not private, no leaked secret, no secret-shaped query param — but not a
+        # destination the operator has vetted either. Ask instead of silently
+        # fetching an unknown host (this is the "approval-escapable" tier, not a
+        # hard block — unlike the reasons above, which can never be approved).
+        approval_id_target = parsed.hostname or raw_url
+        state.record(SecurityEvent("egress_approval_required", "web.fetch", approval_id_target))
+        return ToolExecutionResult(
+            tool_id=request.tool_id,
+            ok=False,
+            summary=f"Approval required: fetch '{approval_id_target}' is not on the trusted fetch allowlist",
+            error="barricade_fetch_not_allowlisted",
+            output={
+                "command": None,
+                "target": raw_url,
+                "policyDecision": "approval_required",
+                "policySummary": (
+                    f"Barricade: '{approval_id_target}' is not on the fetch allowlist "
+                    f"(extend it via {_FETCH_ALLOWLIST_ENV})."
+                ),
+                "barricade": {"reason": "fetch_not_allowlisted", "hostname": approval_id_target},
+            },
+        )
+
+    return None
 
 
 def _search_egress_guard(
@@ -439,7 +533,7 @@ def _record_sensitive_read(
     state: RunSecurityState,
 ) -> None:
     path = str((request.arguments or {}).get("path") or "")
-    if not _SENSITIVE_PATH_RE.search(path):
+    if not (_SENSITIVE_PATH_RE.search(path) or _SENSITIVE_PATH_DIR_RE.search(path)):
         return
     body = result.body if result.body is not None else result.output
     content = body.get("content") if isinstance(body, dict) else None

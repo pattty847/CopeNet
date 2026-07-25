@@ -6,6 +6,7 @@ import asyncio
 import json
 import mimetypes
 import os
+import secrets
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
 from uuid import uuid4
@@ -159,7 +160,7 @@ def create_app_router(
         token = _bearer_token(authorization)
         if not token:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
-        if gateway_token and token == gateway_token:
+        if gateway_token and secrets.compare_digest(token, gateway_token):
             return AuthenticatedApp(
                 app_id="copenet-web",
                 display_name="CopeNet Web",
@@ -173,7 +174,7 @@ def create_app_router(
         token = _bearer_token(authorization)
         if not token:
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="missing bearer token")
-        if gateway_token and token == gateway_token:
+        if gateway_token and secrets.compare_digest(token, gateway_token):
             return
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="invalid bearer token")
 

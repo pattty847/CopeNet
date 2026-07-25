@@ -7,12 +7,44 @@ from dataclasses import dataclass
 from html.parser import HTMLParser
 from typing import Any
 from urllib import error, request
+from urllib.parse import urlparse
 
-# Jina Reader (r.jina.ai): free, no-key URL→clean-markdown proxy — this is the primary
-# extraction path. Optional JINA_API_KEY raises the rate limit but isn't required; any
-# failure (network, rate limit, target error) falls back to the homegrown HTML parser
-# below, so a Jina outage degrades quality rather than breaking web.fetch outright.
+from copenet.core.net_safety import hostname_resolves_unsafe
+
+# Jina Reader (r.jina.ai): a third-party URL->clean-markdown proxy. It receives the
+# FULL target URL as a query param on every fetch, which discloses what the agent is
+# reading to a party outside CopeNet — so, unlike the homegrown extractor below, it
+# is opt-in only (COPNET_WEB_FETCH_USE_JINA=1), never a silent default. When enabled,
+# an optional JINA_API_KEY raises the rate limit but isn't required; a failure falls
+# back to the homegrown HTML parser, so a Jina outage degrades quality rather than
+# breaking web.fetch outright.
 _JINA_READER_BASE = "https://r.jina.ai/"
+_JINA_ENABLE_ENV = "COPNET_WEB_FETCH_USE_JINA"
+
+
+def _jina_enabled() -> bool:
+    return os.environ.get(_JINA_ENABLE_ENV, "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+class _GuardedRedirectHandler(request.HTTPRedirectHandler):
+    """Re-validate every redirect hop, not just the originally-requested URL.
+
+    Without this, a URL that's safe on first inspection (public, allowlisted) can
+    redirect to a private/loopback/metadata address and urllib's default opener
+    would follow it transparently — the exact "allowlisted host redirects to
+    169.254.169.254" bypass. Each hop gets the same DNS-resolution-based check
+    fetch() runs on the initial URL.
+    """
+
+    def redirect_request(self, req, fp, code, msg, headers, newurl):  # noqa: ANN001
+        hostname = urlparse(newurl).hostname
+        unsafe, reason = hostname_resolves_unsafe(hostname)
+        if unsafe:
+            raise WebIngestError(f"redirect to unsafe destination refused: {reason}")
+        return super().redirect_request(req, fp, code, msg, headers, newurl)
+
+
+_GUARDED_OPENER = request.build_opener(_GuardedRedirectHandler)
 
 
 class WebIngestError(RuntimeError):
@@ -150,10 +182,15 @@ class WebIngestionService:
         if not raw.startswith(("http://", "https://")):
             raw = f"https://{raw}"
 
-        try:
-            return self._extract_via_jina(raw, max_chars=max_chars)
-        except WebIngestError:
-            pass  # fall back to the direct fetch below
+        unsafe, reason = hostname_resolves_unsafe(urlparse(raw).hostname)
+        if unsafe:
+            raise WebIngestError(f"refusing to fetch unsafe destination: {reason}")
+
+        if _jina_enabled():
+            try:
+                return self._extract_via_jina(raw, max_chars=max_chars)
+            except WebIngestError:
+                pass  # fall back to the direct fetch below
 
         req = request.Request(
             raw,
@@ -163,7 +200,7 @@ class WebIngestionService:
             },
         )
         try:
-            with request.urlopen(req, timeout=20.0) as response:
+            with _GUARDED_OPENER.open(req, timeout=20.0) as response:
                 content_type = str(response.headers.get("Content-Type") or "")
                 charset = response.headers.get_content_charset() or "utf-8"
                 body = response.read()

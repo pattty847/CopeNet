@@ -79,9 +79,19 @@ def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, se
 
             command_key = command or str(output.get("target") or result.tool_id)
             # "Always allow" → persist to the global shell allowlist (Brick E) so
-            # this exact command runs without asking on future runs. Best-effort:
-            # a store failure must not break the in-flight approve.
-            if decision == "approved_always" and command and getattr(context, "permission_store", None) is not None:
+            # this exact command runs without asking on future runs. Scoped to
+            # shell.exec specifically: `command` falls back to `output["target"]`
+            # for non-shell tools (barricade._side_effect_gate sets "command" only
+            # for shell.exec), and a target like a file path must never be written
+            # into the shell allowlist — that would grant standing, cross-session,
+            # cross-Access-mode shell authority from approving an unrelated write.
+            # Best-effort: a store failure must not break the in-flight approve.
+            if (
+                decision == "approved_always"
+                and result.tool_id == "shell.exec"
+                and command
+                and getattr(context, "permission_store", None) is not None
+            ):
                 try:
                     context.permission_store.add(command)
                 except Exception:  # noqa: BLE001 - persistence is best-effort here

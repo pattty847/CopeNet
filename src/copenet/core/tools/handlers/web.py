@@ -18,10 +18,17 @@ monkeypatch it so nothing in the suite reaches the real internet. The Exa path
 ``EXA_API_KEY`` is set, which the test suite never does, so it stays inert
 there without needing its own monkeypatch.
 
-Set ``COPNET_WEB_FETCH_ALLOWLIST`` (comma-separated apex domains) to restrict
-which hosts the model may fetch/surface — unset means unrestricted (today's
-default). ``web.fetch`` hard-blocks any other host; ``web.search`` filters its
-results down to matching hosts instead of erroring.
+``web.fetch``'s destination policy (which hosts are auto-allowed vs. need an
+operator approval prompt vs. are hard-blocked as private/loopback/metadata)
+lives in the Barricade — see core/tools/barricade.py:fetch_allowlist and
+:_egress_guard. Set ``COPNET_WEB_FETCH_ALLOWLIST`` (comma-separated apex
+domains) to add operator-trusted destinations on top of the built-in defaults.
+
+``web.search`` has a separate, narrower, OPT-IN result filter: if
+``COPNET_WEB_FETCH_ALLOWLIST`` is set, search results are additionally
+filtered down to matching hosts (search results are just links shown to the
+model, not fetched, so this has no built-in default — set the env var only if
+you want search results themselves narrowed).
 """
 
 from __future__ import annotations
@@ -52,11 +59,12 @@ SEARCH_RESULT_LIMIT = 8
 SEARCH_SNIPPET_CHARS = 300
 FETCH_MAX_CHARS = 12000
 
-# Model-initiated web.fetch/web.search are the tool where an autonomous agent picks
-# its own URLs — a different trust boundary than user-pasted links (web_ingest.py's
-# other callers, e.g. media ingestion). Comma-separated apex domains; unset/empty
-# means unrestricted (today's default behavior). Matching includes subdomains, so
-# "reuters.com" also allows "www.reuters.com".
+# search_web's OPTIONAL result-narrowing only — web.fetch's own destination policy
+# lives in barricade.py (fetch_allowlist/_egress_guard), which always runs first and
+# has built-in defaults. This one has no defaults and only applies when the operator
+# explicitly sets it, since a search result is just a link shown to the model (not
+# fetched) and narrowing it isn't needed for safety. Comma-separated apex domains;
+# matching includes subdomains, so "reuters.com" also allows "www.reuters.com".
 _FETCH_ALLOWLIST_ENV = "COPNET_WEB_FETCH_ALLOWLIST"
 
 
@@ -366,13 +374,10 @@ async def fetch_web(request: ToolExecutionRequest, context: ToolExecutionContext
     url = str(request.arguments.get("url") or "").strip()
     if not url:
         raise ValueError("url is required")
-    allowlist = _fetch_allowlist()
-    if allowlist:
-        hostname = parse.urlparse(url if "://" in url else f"https://{url}").hostname or ""
-        if not _host_allowed(hostname, allowlist):
-            raise RuntimeError(
-                f"'{hostname}' is not in the configured fetch allowlist ({_FETCH_ALLOWLIST_ENV})"
-            )
+    # Fetch-destination policy (allowlist / private-host / secret-exfil checks) lives
+    # solely in the Barricade's pre-dispatch gate now, which always runs before this
+    # handler — see core/tools/barricade.py:_egress_guard. Keeping a second, narrower
+    # copy here risked the two silently disagreeing.
     raw_max = request.arguments.get("maxChars")
     try:
         max_chars = int(raw_max) if raw_max is not None else FETCH_MAX_CHARS

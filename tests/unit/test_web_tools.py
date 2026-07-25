@@ -19,6 +19,15 @@ from copenet.core.sessions.transcript_store import TranscriptStore
 from copenet.core.web_ingest import WebExtractResult, WebIngestError
 
 
+@pytest.fixture(autouse=True)
+def _no_barricade(monkeypatch: pytest.MonkeyPatch) -> None:
+    # This file exercises fetch_web/search_web's OWN logic (fallback routing,
+    # content-type handling, result parsing) against arbitrary test/example
+    # domains — that's orthogonal to the Barricade's allowlist/approval gate,
+    # which has its own dedicated coverage in test_barricade.py.
+    monkeypatch.setenv("COPENET_BARRICADE", "0")
+
+
 def _ctx(tmp_path: Path) -> ToolExecutionContext:
     return ToolExecutionContext(
         workdir=tmp_path,

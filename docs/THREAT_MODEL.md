@@ -134,12 +134,34 @@ egress-contract gaps that a parallel review (Codex) surfaced. What remains:
    `web.search` are guarded against secret-bearing URLs/queries and canary values
    read from sensitive files; egress is a hard block. *Residual:* see SSRF below.
 
-3. **SSRF — syntactic host only.** The guard checks the literal hostname/IP, not
-   the **resolved** IP, and does not re-validate **redirects**. A public-looking
-   attacker domain that resolves to private space, or a public URL that 30x-redirects
-   to `169.254.169.254`/loopback after the pre-dispatch check, would slip through.
-   Low-impact on a single-user Mac mini; real if CopeNet runs server-side. Fix:
-   resolve+check the IP and pin/inspect redirects.
+3. ✅ *Closed (2026-07-25):* **SSRF via DNS rebinding / redirect.** The fast
+   pre-dispatch gate (`barricade._egress_guard`) still checks the literal
+   hostname/IP only — kept fast and network-free by design — but the actual
+   fetch execution (`web_ingest.py`, `core/net_safety.py`) now resolves the
+   hostname and rejects any address in private/loopback/link-local/reserved/
+   multicast space, and re-validates **every redirect hop** the same way via a
+   custom `HTTPRedirectHandler` before following it. A public-looking domain
+   that resolves to private space, or a public URL that 30x-redirects to
+   `169.254.169.254`/loopback, is now refused at connect time either way.
+
+3a. ✅ *Closed (2026-07-25):* **egress guard was opt-in.** `COPENET_BARRICADE`
+    now defaults to **on**; `=0`/`false`/`no`/`off` is a deliberate, loud
+    opt-out (logs a warning) for local debugging of the guard itself, not a
+    supported deployment mode.
+
+3b. ✅ *Closed (2026-07-25):* **fetch destination was unrestricted by default.**
+    `web.fetch`/`web.search` now check against a built-in default allowlist
+    (`barricade.DEFAULT_ALLOWED_FETCH_DOMAINS`, extend via
+    `COPNET_WEB_FETCH_ALLOWLIST`); a public, non-secret-carrying destination
+    that isn't on it now pauses for a one-time operator approval instead of
+    being silently fetched.
+
+3c. ✅ *Closed (2026-07-25):* **canary recording missed the provider-auth
+    store.** Sensitive-file detection was filename-pattern-only (`.env`,
+    `token`, ...), which never matched the OAuth token file at
+    `~/.copenet/providers/auth/<provider>.json`. It's now also matched by
+    directory (`providers/auth`), so reading that file registers its token
+    value as a canary the egress guard watches for.
 
 4. **Approval fatigue / scope creep.** The high-risk shell gate is pattern-based;
    a creative command achieving a risky effect without matching a pattern (e.g. a
@@ -156,10 +178,10 @@ egress-contract gaps that a parallel review (Codex) surfaced. What remains:
 
 ## 7. Recommended hardening (in priority order)
 
-> **Shipped: the CopeNet Barricade** (`COPENET_BARRICADE=1`,
-> `core/tools/barricade.py`). Items 1 and 2 below are built and tested behind a
-> toggle; see `docs/redteam-demo/` for a runnable before/after proof. They are
-> opt-in today and should graduate to default-on after broader soak.
+> **Shipped: the CopeNet Barricade** (`core/tools/barricade.py`) — **default-on**
+> since 2026-07-25. Items 1–2 below are built and tested; see
+> `docs/redteam-demo/` for a runnable before/after proof. `COPENET_BARRICADE=0`
+> is a loud, logged opt-out for local debugging, not a supported deployment mode.
 
 1. ✅ **Taint-tracking on side effects** *(the headline fix for gap #1)*. When a
    run ingests untrusted external content (`web.search` / `web.fetch`), the
@@ -174,12 +196,15 @@ egress-contract gaps that a parallel review (Codex) surfaced. What remains:
 
 2. ✅ **Egress guard on the network tools** *(gap #2)*. Both `web.fetch` **and**
    `web.search` are guarded: refuse non-http(s) schemes and private/loopback/metadata
-   hosts, block secret-like query params, and — the strong check — block any
-   URL/query that embeds a value previously read from a sensitive file. **Tier-A:**
-   egress is now a **hard block** (`policyDecision: "egress_blocked"`), not an
-   un-clearable `approval_required` that would park the run. Trusted internal hosts
-   use `COPENET_BARRICADE_FETCH_ALLOWLIST`. *(`barricade._egress_guard` /
-   `_search_egress_guard`.)* Remaining: resolved-IP + redirect SSRF (gap #3).
+   hosts (by resolved IP, not just literal hostname — see gap #3), block secret-like
+   query params, and — the strong check — block any URL/query that embeds a value
+   previously read from a sensitive file. **Tier-A:** egress is now a **hard block**
+   (`policyDecision: "egress_blocked"`), not an un-clearable `approval_required` that
+   would park the run. A destination that's safe but not on the trusted allowlist
+   pauses for a one-time operator approval instead (`policyDecision:
+   "approval_required"`, `barricade.reason: "fetch_not_allowlisted"`). Trusted hosts
+   (private or public) go in `COPNET_WEB_FETCH_ALLOWLIST`. *(`barricade._egress_guard`
+   / `_search_egress_guard` / `fetch_allowlist`.)*
 
 3. **Provenance envelope on tool results** *(reinforces §2)*. Wrap web/file tool
    output fed back to the model in an explicit `<untrusted-data source=...>` frame

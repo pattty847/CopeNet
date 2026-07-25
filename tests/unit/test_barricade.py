@@ -53,7 +53,8 @@ def _enable(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def _disable(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.delenv("COPENET_BARRICADE", raising=False)
+    # Barricade defaults to ON now — disabling it is an explicit, loud opt-out.
+    monkeypatch.setenv("COPENET_BARRICADE", "0")
     monkeypatch.setattr(web_handler, "_http_get_text", lambda *a, **k: _DDG)
 
 
@@ -187,7 +188,24 @@ async def test_egress_guard_catches_canary_from_prior_read(tmp_path: Path, monke
 
 
 @pytest.mark.asyncio
-async def test_egress_guard_allows_normal_url(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_egress_guard_requires_approval_for_a_domain_not_on_the_allowlist(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # A domain that's safe (not private, no leaked secret) but not on the trusted
+    # allowlist pauses for operator approval instead of being silently fetched.
+    _enable(monkeypatch)
+    reg = ToolRegistry()
+    ctx = _ctx(tmp_path)
+    res = await reg.execute(ToolExecutionRequest("web.fetch", {"url": "https://docs.python.org/3/"}), ctx)
+    assert res.ok is False
+    assert res.output["policyDecision"] == "approval_required"
+    assert res.output["barricade"]["reason"] == "fetch_not_allowlisted"
+
+
+@pytest.mark.asyncio
+async def test_egress_guard_allows_a_default_allowlisted_domain_without_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     _enable(monkeypatch)
 
     async def fake_extract(self, *, url: str, max_chars: int = 20000):  # noqa: ANN001
@@ -198,8 +216,43 @@ async def test_egress_guard_allows_normal_url(tmp_path: Path, monkeypatch: pytes
     monkeypatch.setattr("copenet.core.web_ingest.WebIngestionService.extract_url", fake_extract)
     reg = ToolRegistry()
     ctx = _ctx(tmp_path)
-    res = await reg.execute(ToolExecutionRequest("web.fetch", {"url": "https://docs.python.org/3/"}), ctx)
+    res = await reg.execute(
+        ToolExecutionRequest("web.fetch", {"url": "https://en.wikipedia.org/wiki/CopeNet"}), ctx
+    )
     assert res.ok is True
+
+
+@pytest.mark.asyncio
+async def test_egress_guard_allows_an_operator_configured_domain_without_approval(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _enable(monkeypatch)
+    monkeypatch.setenv("COPNET_WEB_FETCH_ALLOWLIST", "example.com")
+
+    async def fake_extract(self, *, url: str, max_chars: int = 20000):  # noqa: ANN001
+        from copenet.core.web_ingest import WebExtractResult
+
+        return WebExtractResult(url=url, title="T", text="body", markdown="b", excerpt="b", word_count=1)
+
+    monkeypatch.setattr("copenet.core.web_ingest.WebIngestionService.extract_url", fake_extract)
+    reg = ToolRegistry()
+    ctx = _ctx(tmp_path)
+    res = await reg.execute(ToolExecutionRequest("web.fetch", {"url": "https://example.com/page"}), ctx)
+    assert res.ok is True
+
+
+def test_barricade_defaults_to_enabled_with_no_env_var_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    from copenet.core.tools import barricade
+
+    monkeypatch.delenv("COPENET_BARRICADE", raising=False)
+    assert barricade.barricade_enabled() is True
+
+
+def test_barricade_disabled_only_via_explicit_falsy_value(monkeypatch: pytest.MonkeyPatch) -> None:
+    from copenet.core.tools import barricade
+
+    monkeypatch.setenv("COPENET_BARRICADE", "0")
+    assert barricade.barricade_enabled() is False
 
 
 @pytest.mark.asyncio
