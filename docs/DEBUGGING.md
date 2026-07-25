@@ -38,7 +38,10 @@ jq 'select(.event == "harness_planned")' <run-id>.jsonl
 Look at:
 - `willAttemptToolLoop` — `true` only when policy-visible tools exist and the provider/model reports native tool-call support
 - `capabilityProfile.toolCalls` — the provider model must report native tool capability
-- `availableToolIds` — write tools (`files.edit`, `files.write`) only appear when the session task mode is **`full-access`** (`policy_for_task_mode` in `core/tools/policy.py`). If the model tries to call writes in another mode you will see **`write tool unavailable in current mode`** in traces / `toolExecution.policyDecision = write_blocked` on the client payload.
+- `availableToolIds` — write tools (`files.edit`, `files.write`) only appear when session
+  Access is **`full-access`** (`task_prompt_id` in `policy_for_task_mode`). If the model
+  tries to call writes under another Access level, traces/client payloads report
+  `write tool unavailable in current mode` / `policyDecision = write_blocked`.
 
 CLI providers (`codex-cli`, `claude-cli`) and non-native local providers stream through provider passthrough here. If they use tools internally, that is provider-managed rather than a CopeNet tool loop.
 
@@ -87,7 +90,7 @@ The `payload.reason` field tells you exactly why. Known reasons:
 | `command not allowed: <cmd>` | The shell command is not in `ToolPolicy.shell_allowlist`. Default: `git`, `rg`, `ls`, `pwd`, `find`. |
 | `shell execution disabled by policy` | `ToolPolicy.allow_shell` is false. |
 | `unknown tool` | Tool id not registered. Check `tools.list` in the UI or client. |
-| `write tool unavailable in current mode` | Task mode is not `full-access`, so `repo-write` tools are filtered out of the manifest. Start a session with task mode **`full-access`** or avoid write tools. |
+| `write tool unavailable in current mode` | Access is not `full-access`, so `repo-write` tools are filtered out of the manifest. Select **Full Access** or avoid write tools. |
 | `artifact tool unavailable in current mode` | Reserved for narrowed policies that drop the `artifact` category. |
 | `unsafe or unsupported batch request` | The batch had no read/context calls the harness could legally run together. |
 
@@ -118,7 +121,7 @@ jq 'select(.event == "run_failed")' <run-id>.jsonl
 | error | cause |
 |---|---|
 | `provider unavailable: <name> (<reason>)` | Provider not reachable or not configured |
-| `session binding mismatch` | Request tried to change provider/model for a locked session — start a new chat |
+| `session binding mismatch` | Request tried to change provider, profile, persona, or workspace for a locked session. Same-provider model and Access changes are allowed. |
 | `session in-flight` | Another run is active for this session — wait or abort it |
 | `message is required` | Empty prompt submitted |
 
@@ -140,7 +143,9 @@ If a follow-up turn is very slow, the tool result may have been large. Check `to
 
 ## Symptom: `model: null` in traces
 
-No model was specified in the request. The provider selected a default model but that resolved value is not currently surfaced in the trace. This is a known gap — see [TRACE-FINDINGS.md](TRACE-FINDINGS.md) F3.
+No model was specified in the request. The provider selected a default model but that
+resolved value is not currently surfaced in the trace. This remains tracked in
+[ROADMAP.md](plans/ROADMAP.md).
 
 Workaround: explicitly specify a model in the session or check the provider's logs for which model it used.
 
@@ -162,7 +167,7 @@ Check whether `run_completed` appears with `toolExecutionAttached: true` while t
 
 ```
 [ ] Trace file exists?          → if not, provider init failed
-[ ] harness_planned present?    → willAttemptToolLoop + tool ids match task mode (writes need full-access)?
+[ ] harness_planned present?    → willAttemptToolLoop + tool ids match Access (writes need full-access)?
 [ ] Native tool capability?     → toolCalls must be true for CopeNet-managed tools
 [ ] tool_requested present?     → if expected but missing, the model chose plain text or the provider did not expose native tool calls
 [ ] tool_executed or blocked?   → check reason
@@ -177,9 +182,6 @@ Check whether `run_completed` appears with `toolExecutionAttached: true` while t
 ```bash
 # syntax check all Python
 python3 -m py_compile $(rg --files src/copenet -g '*.py')
-
-# syntax check app.js
-node --check src/copenet/host/static/app.js
 
 # start server
 uv run copenet

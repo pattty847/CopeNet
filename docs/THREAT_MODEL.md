@@ -89,7 +89,7 @@ These are real, in the code — not aspirational:
   has **no write and no shell capability**. A poisoned page can talk to the model
   but cannot *itself* touch the disk or the OS. The category choice is the wall.
   (`core/tools/handlers/web.py`, `core/tools/contracts.py`)
-- **Capability gating by task mode** — `policy_for_task_mode()` grants
+- **Capability gating by Access** — `policy_for_task_mode()` grants
   `repo-write` and unrestricted shell **only in `full-access`**. Default modes
   cannot write files or run arbitrary commands at all.
   (`core/tools/policy.py`)

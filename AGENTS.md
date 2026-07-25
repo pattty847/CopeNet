@@ -4,10 +4,10 @@ This document is the shared working agreement for human contributors and coding 
 
 ## What CopeNet Is
 
-CopeNet is a local agent gateway. It provides:
+CopeNet is an agent harness. It provides:
 
 - a FastAPI + WebSocket host (with a secondary REST + SSE `/api/v1` lane for external apps)
-- pluggable provider adapters for Codex CLI, Claude CLI, OpenAI Codex (OAuth), LM Studio, and Ollama
+- pluggable provider adapters for Claude CLI, OpenAI Codex (OAuth), LM Studio, and Ollama
 - persisted session and transcript storage, plus per-run records and per-session artifacts
 - operator-side stores for Pulse, memory, messaging routes, profile, and external-app credentials
 - a React operator workspace UI with a Home dashboard and agent console
@@ -15,7 +15,8 @@ CopeNet is a local agent gateway. It provides:
 
 The current product direction is:
 
-- sessions lock to provider, model, profile, and task mode after the first send
+- sessions lock provider/profile/persona/workspace after first send; the operator may
+  change model within that provider and may change Access
 - local runtimes should feel plug-and-play
 - prompt behavior should be layered but simple
 - harness/tooling should stay provider-agnostic
@@ -31,7 +32,12 @@ The current product direction is:
 | Runtime        | `src/copenet/core/runtime/`                  | RunStore (durable run records), ArtifactStore, per-turn state |
 | Tools          | `src/copenet/core/tools/`                    | Tool contracts, policy (`policy_for_task_mode`), registry, built-in handlers |
 | Tracing        | `src/copenet/core/tracing/`                  | Per-run JSONL trace writer |
+| Coordination   | `src/copenet/core/coordination/`             | Shared provider-lane execution primitive |
+| Fleet          | `src/copenet/core/fleet/`                    | Durable multi-provider rooms and attributed lane events |
 | Market Monitor | `src/copenet/core/market/`                   | Slow-timeframe market radar: yfinance price signals, CopeTech-Edgar fundamentals/insider evidence, model reads, portfolio backtesting/scenario simulation. See "Market Monitor" under Working In Each Area. |
+| Research Lab   | `src/copenet/core/research_lab/`             | Evidence snapshots, benchmark calculations, and durable research dossiers |
+| Movie Lab      | `src/copenet/core/movies/`                   | Spreadsheet import, TMDB enrichment, analysis, and recommendations |
+| NASA           | `src/copenet/core/nasa/`                     | APOD persistence, fetching, and wallpaper support |
 | Profile        | `src/copenet/core/profile/`                  | Pat Profile loader, changelog, return-briefing builder |
 | Memory         | `src/copenet/core/memory/`                   | User-visible memory items (preferences, conventions, facts) |
 | Pulse          | `src/copenet/core/pulse/`                    | Inbox pulse store |
@@ -43,10 +49,9 @@ The current product direction is:
 | Provider auth  | `src/copenet/core/provider_auth/`            | Provider-owned auth state (e.g. OpenAI Codex OAuth) |
 | Providers      | `src/copenet/providers/`                     | Adapters: `codex-cli`, `claude-cli`, `openai-codex`, `lm-studio`, `ollama` |
 | CLI runner     | `src/copenet/runner/cli_runner.py`           | Shared CLI subprocess runner used by Codex/Claude CLI providers |
-| Prompts        | `src/copenet/prompts/`                       | Profile + task-mode loaders, optimizer, preset markdown |
+| Prompts        | `src/copenet/prompts/`                       | Profile + Access-overlay loaders, optimizer, preset markdown |
 | Client         | `src/copenet/client.py`                      | Programmatic GatewayClient |
 | Web UI         | `src/copenet/host/frontend/`                 | React + Vite workspace app (primary surface) |
-| Legacy UI      | `src/copenet/host/static/`                   | Vanilla fallback UI kept for compatibility |
 | Browser agent  | `src/copenet/browser_agent/`                 | Playwright-backed deterministic browser-control prototype (separate CLI lane) |
 | Probes         | `src/copenet/probes/`                        | Runtime probe payload helper for `scripts/live_probe_matrix.py` |
 
@@ -54,7 +59,7 @@ The `src/copenet/core/` package owns all business logic and run lifecycle. Trans
 
 Old top-level shims (`orchestrator.py`, `harness.py`, `tracing.py`, `sessions/`, `tools/`) re-export from `core/` for backward compatibility.
 
-See [docs/architecture.md](docs/architecture.md) for the current request flow.
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current request flow.
 
 ## Architectural Principles
 
@@ -177,7 +182,7 @@ Rules:
 - never write `index.json` directly
 - never edit or delete stored transcript entries
 - preserve `in_flight_run_id` locking
-- preserve provider/model/profile/task-mode binding checks
+- preserve provider/profile/persona/workspace locks and explicit model/Access reconciliation
 - if you add a new session field, give old entries a safe fallback
 
 For current behavior, assume:
@@ -204,7 +209,7 @@ For current behavior, assume:
 
 ### Prompts
 
-- Profiles and task modes are authored as `.md` files under `src/copenet/prompts/presets/`.
+- Profiles and Access overlays are authored as `.md` files under `src/copenet/prompts/presets/`.
 - Composition logic belongs in `src/copenet/prompts/loader.py`.
 - Avoid turning prompt authoring into a config DSL.
 - Keep prompts readable and editable by humans first.
@@ -219,8 +224,8 @@ For current behavior, assume:
 
 ### Tools runtime
 
-- Handlers live under `src/copenet/core/tools/handlers/` (`files.py`, `git.py`, `shell.py`, `plan.py`, `artifacts.py`); `builtin_readonly.py` aggregates them (name is historical — write + artifact tools are included). `context.py` / `context.prepare` were retired in Phase 0.3. The model-facing manifest (`MANIFEST_TOOL_IDS`) is 8 tools: `files.read`, `files.write`, `files.edit`, `files.rg`, `shell.exec`, `plan.write`, `web.search`, `web.fetch` (`files.list`/`files.search` were consolidated into `files.rg`; `artifact.create` is registered but deferred out of the manifest).
-- Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: default modes allow read/shell/context/artifact; task mode **`full-access`** adds **`repo-write`** (`files.edit`, `files.write`) and unrestricted user-level `shell.exec`.
+- Handlers live under `src/copenet/core/tools/handlers/`; `builtin_readonly.py` aggregates them (the filename is historical). `context.py` / `context.prepare` were retired in Phase 0.3. The model-facing surface is the explicit `MANIFEST_TOOL_IDS` set: core file/shell/plan/web tools plus approved Market, persona, memory, and user-note tools. Treat that set—not an old numeric count in documentation—as canonical. `files.list`/`files.search` were consolidated into `files.rg`; `artifact.create` remains registered but off-manifest.
+- Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: baseline Access allows read/shell/context/artifact; **Full Access** (`full-access`) adds **`repo-write`** (`files.edit`, `files.write`) and unrestricted user-level `shell.exec`.
 - Full-access shell commands run with the current OS user's permissions and may use normal shell syntax (`|`, `&&`, redirects, scripts, etc.). High-risk command patterns return `policyDecision: "approval_required"` instead of executing; wire operator confirmation before allowing those proposal records to resume.
 - Permission claims should be tested with the direct matrix before trusting a live model's self-report: `uv run python scripts/permission_probe_matrix.py`. A model that only proves `pwd` works has proven shell-read, not full-access.
 - **`artifact.create`** persists session artifacts when `artifact_store`, `session_key`, and `run_id` are present.
@@ -251,17 +256,16 @@ For current behavior, assume:
 - Real backend wiring is still concentrated in `Agents`; the other sections are intentional direction-setting shells for now.
 - Global app state lives in `src/copenet/host/frontend/src/store/useAppStore.ts`. Keep it explicit and small.
 - If a feature needs backend support, add and verify the RPC first.
-- Make session state obvious: active section, active session, provider, model, profile, task mode, lock state, and connection state.
+- Make session state obvious: active section, active session, provider, model, profile, Access, lock state, and connection state.
 - Prefer Browser Use against the Codex in-app browser for localhost UI verification when the plugin is available. Use it to reproduce interaction bugs, verify fixes, and catch runtime UI failures that lint/build will miss.
 - For Codex specifically, treat `[@Browser](plugin://browser-use@openai-bundled)` as the canonical browser-validation path when the plugin is available. Read the Browser skill first, use the in-app browser workflow for localhost verification, and only fall back to Playwright or Computer Use if that path is genuinely unavailable. Claude and Gemini do not share this Codex-only browser surface, so do not assume they can follow the same workflow.
 - When a UI pass materially improves the product surface, capture a fresh product screenshot right away, store it under `docs/imgs/`, and update the matching `README.md` section in the canonical GitHub repo (`github.com/pattty847/CopeNet`). Prefer Browser Use for the capture flow when available; otherwise use a trustworthy automated localhost fallback such as Playwright. `gh` is installed, so repo docs/screenshot refreshes should be treated as part of finishing polished UI work rather than a nice-to-have.
-- Treat the legacy UI in `src/copenet/host/static/` as fallback compatibility code, not the primary product surface.
 
 ### Market Monitor
 
 - Lives in `src/copenet/core/market/`: `data_sources.py` (yfinance — includes `search_symbols()` for live ticker/company lookup and `fetch_quote_row()` for a single-symbol last-price+change+sparkline), `signals.py`/`features.py` (technical signals, RRG, soft-bottoming pattern), `edgar.py` (CopeTech-Edgar adapter — insider Form 4/8-K evidence, fundamentals via `fetch_fundamentals`), `interpretation.py`/`fact_packets.py` (the LLM read pipeline), `replay.py`/`base_rates.py` (point-in-time pattern calibration), `backtester.py` (portfolio backtesting + scenario stress simulation), `webull/` (read-only broker sync), `store.py` (`MarketStore`, caches bars/signals/dashboard/reads to disk), `watchlist_store.py` (`WatchlistStore` — user-curated add/remove ticker list, distinct from the fixed `UNIVERSE` in `universe.py`; RPC handlers in `host/rpc_market_watchlist.py`: `market.watchlist.get/add/remove`, `market.symbols.search`).
 - **Load-bearing invariant: every `fetch_ohlcv()` call must be split-adjusted.** The function defaults to `auto_adjust=True`; do not call it with `auto_adjust=False` and do not add a new caller that skips this. Every consumer — the dashboard refresh, the ticker chart, `replay.py`'s calibration, and the backtester — shares `MarketStore`'s bar cache under the same `(symbol, timeframe)` key with no adjustment-basis tag on the key itself. If any caller writes unadjusted bars, every other caller sharing that cache key silently inherits them, including fake price cliffs on stock splits (this happened for real, 2026-07-06 — see `[[project_market_monitor]]` memory for the full incident and fix).
-- The model-facing `market.*` tools (`market.dashboard`, `market.ticker`, `market.compare`, `market.backtest`) are registered in `core/tools/handlers/market.py`, category `context` (read-only, auto-allowed in every task mode) — add new read-only market tools there, not under a new category.
+- The model-facing `market.*` tools (`market.dashboard`, `market.ticker`, `market.compare`, `market.backtest`, `market.evidence`) are registered through `core/tools/handlers/market.py`, category `context` (read-only, auto-allowed at every Access level) — add new read-only market tools there, not under a new category.
 - The backtest lab's named scenario presets (`2022_tech_dump`, `2020_covid_crash` in `backtester.py`'s `SCENARIOS` dict) are **hand-typed shock magnitudes projected onto a synthetic cosine curve, not a real historical replay** — `run_portfolio_backtest` (the real engine, already correct) could replay the actual historical window instead; this just hasn't been done yet.
 - Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`, and this session's memory (`project_market_monitor.md`) for the blow-by-blow of what shipped and why.
 
@@ -282,36 +286,17 @@ CopeNet contributors should actively use parallel review capacity when it helps 
 - Use those extra reviewers for fresh eyes on traces, provider behavior, UI/UX flows, or patch plans when the problem feels ambiguous or suspicious.
 - Treat outside-model reviews as advisory, not authoritative. Always verify claims against CopeNet code, traces, and runtime behavior before acting.
 - Prefer giving parallel reviewers tightly scoped questions, concrete file paths, and exact run bundle directories instead of broad “figure it out” prompts.
-- Record useful findings from outside reviewers in repo docs or investigation notes so the team can build on them rather than re-discovering them.
+- Record durable findings in the relevant canonical document or `docs/plans/ROADMAP.md` so the team can build on them rather than re-discovering them.
 
-### External AI Lanes
+### AI Collaboration
 
-CopeNet also has access to a separate paid Claude subscription outside the built-in sub-agent system. Treat Claude as an available parallel worker, not as an occasional novelty.
+Codex, Claude, and Gemini are all capable full-stack collaborators. Do not assign permanent frontend, backend, product, or architecture ownership based on the model name. The agent actively leading a task owns its implementation, integration, and verification unless the human explicitly assigns those responsibilities differently.
 
-- The human may mostly act as prompt/orchestration support while juggling work and life. The lead coding agent is expected to carry more autonomous project-management load: propose the next work, use Claude when helpful, and keep progress moving without waiting for repeated reminders.
-- The lead coding agent should proactively think about using Claude whenever parallel frontend, UX, or product-surface work would accelerate the project without blocking backend integration.
+- The human may mostly act as prompt/orchestration support while juggling work and life. The active lead agent is expected to carry autonomous project-management load: propose the next work, use available collaborators when helpful, and keep progress moving without repeated reminders.
 - The lead coding agent should default toward action, implementation, debugging, and cleanup. Do not sit idle waiting for the human to remember available help, enumerate every next step, or manually orchestrate every lane.
-- Default Claude lane:
-  - frontend implementation
-  - product shell/layout refinement
-  - operator UX polish
-  - mock-to-real UI cleanup
-  - experiments / observability presentation work
-- Claude may work in its own worktree by default. If the lead agent decides the main workspace is the better fit, that is allowed, but should be a deliberate choice.
-- The lead agent should not wait for the human to remember Claude every time. If Claude would materially help, bring it up and propose the scoped task.
-- When frontend or UX work can proceed in parallel with backend/integration work, the lead agent should actively consider assigning Claude a bounded task and then continue local implementation instead of waiting.
-- Keep Claude on bounded, mergeable assignments with explicit files, goals, and constraints. Avoid vague “make the UI better” prompts.
-- Treat Claude output the same way we treat any outside reviewer or implementer:
-  - useful
-  - fast
-  - worth exploiting
-  - but always verified against the real repo state before merge
-- Gemini remains the preferred long-context investigator when the problem is trace-heavy, cross-run, or suspiciously subtle.
-- The intent is to maximize value from the paid tool stack. If Claude or Gemini can materially accelerate delivery, the lead agent should surface and use that lane rather than acting as if only one coding surface exists.
-- Working team default:
-  - Codex: lead engineer, backend owner, integration owner, final architecture decisions
-  - Claude: frontend/product implementation lane
-  - Gemini: long-context backend investigation and weird-runtime forensics
+- Choose collaborators by the task at hand, current context, and available tools. Familiar strengths can inform an assignment, but they are preferences rather than ownership boundaries.
+- When parallel work would materially accelerate delivery, give collaborators bounded, mergeable assignments with explicit files, goals, and constraints. 
+- Treat every collaborator's output as useful but advisory until it is verified against the current code, traces, tests, and runtime behavior.
 
 ## Verification Expectations
 
@@ -323,7 +308,7 @@ Common checks:
 - `npm run lint` in `src/copenet/host/frontend`
 - `npm run build` in `src/copenet/host/frontend`
 - `uv run copenet`
-- Browser Use validation in the Codex in-app browser for the affected session/runtime flow when available
+- Browser Use validation in the Codex/Claude in-app browser for the affected session/runtime flow when available
 - browser validation of the affected session/runtime flow
 
 For current integration coverage, also know about:
@@ -350,11 +335,11 @@ When `COPNET_TRACE=1` is enabled, CopeNet writes one JSONL trace per run to `~/.
 
 Full event reference: [docs/TRACING.md](docs/TRACING.md)
 Debugging runbook: [docs/DEBUGGING.md](docs/DEBUGGING.md)
-Known gaps and past findings: [docs/TRACE-FINDINGS.md](docs/TRACE-FINDINGS.md)
+Open trace and observability work: [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md)
 
 **Triage order for a bad run:**
 
-1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`? Does `availableToolIds` match task mode expectations (**write tools only with `full-access`**)?
+1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`? Does `availableToolIds` match Access expectations (**write tools only with `full-access`**)?
 2. Check `harness_decision_recorded` when present — it is trace/UI data only, not a steering gate.
 3. Check `tool_requested` — did the model invoke an exact registered tool id with correct structured arguments?
 4. Check `tool_executed` or `tool_blocked` — was this a policy rejection or a real failure?

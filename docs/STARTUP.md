@@ -45,10 +45,12 @@ Open:
 
 1. Click **New Chat**
 2. Choose provider + model
-3. Choose profile + task mode
+3. Choose profile + Access
 4. Send your first prompt
 
-After first send, runtime/model/profile/task mode are treated as locked for that session.
+After first send, provider/profile/persona/workspace remain locked. The operator may
+change model within the same provider and may change Access; each run records what it
+actually used. See [SESSION-CONTINUITY.md](SESSION-CONTINUITY.md).
 
 ## 6) Recommended production-ish baseline
 
@@ -69,9 +71,9 @@ uv run copenet
 ## Useful commands
 
 ```bash
-# Build the React UI first (the host serves frontend/dist; without it you
-# silently get the legacy vanilla fallback UI from host/static/).
-cd src/copenet/host/frontend && npm install && npm run build && cd -
+# Build the React UI first. Without frontend/dist, the host returns 503 at /.
+# Run this before packaging a wheel so the production UI is included.
+cd src/copenet/host/frontend && npm ci && npm run build && cd -
 
 # Full app (only `copenet` and `copenet-browser-demo` entry points exist)
 uv run copenet

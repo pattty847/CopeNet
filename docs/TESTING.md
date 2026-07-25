@@ -8,12 +8,14 @@ Recommended order:
    - `python3 -m py_compile $(rg --files src/copenet tests -g '*.py')`
 2. Backend unit + integration suite
    - `uv run --extra dev pytest -q`
-3. WebSocket / RPC transport suite
+3. Frontend typecheck + unit/render tests
+   - `cd src/copenet/host/frontend && npm run lint && npm test`
+4. WebSocket / RPC transport suite
    - `uv run --extra dev pytest -q tests/integration/test_ws_rpc.py`
-4. Manual app smoke
+5. Manual app smoke
    - use this when touching behavior the current test suite does not yet cover, especially UI flows
 
-Suggested usage while the React frontend is in flight:
+Suggested usage:
 
 - Run the compile check first after any backend edit.
 - Run `tests/integration/test_ws_rpc.py` when touching WebSocket, RPC, session transport, or chat event shapes.
@@ -36,9 +38,8 @@ Current RPC transport coverage:
 - chat abort
 - tool execution metadata on public chat events
 
-Known gap kept out of this runbook on purpose:
-
-- browser automation is not part of the default safety loop yet
+Browser validation is part of the final safety loop for affected interaction flows,
+but it does not replace deterministic lint, unit, render, and integration checks.
 
 ## Live Provider Probe Runner
 

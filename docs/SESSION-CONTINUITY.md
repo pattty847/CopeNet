@@ -4,114 +4,86 @@ This page defines the continuity rules that matter most for product correctness.
 
 ## Core Model
 
-A CopeNet session contain durable conversation identity with:
+A CopeNet session is a durable conversation container with:
 
-- `sessionKey`
-- locked provider binding
-- locked model binding
-- locked profile binding
-- locked task-mode binding
-- append-only transcript history
-- optional provider session continuity metadata
+- a stable `sessionKey`;
+- a locked provider, profile, persona, and workspace after first send;
+- an operator-changeable model within the same provider;
+- an operator-changeable Access level (`taskPromptId`);
+- append-only transcript history;
+- per-run provider/model stamps;
+- optional provider-native session continuity metadata.
+
+The model cannot change its own runtime or Access. Mid-session changes come from an
+explicit operator request and affect future runs only; historical run metadata and
+transcript entries never change.
 
 ## What Locks And When
 
-Before first send:
-
-- provider is editable
-- model is editable
-- profile is editable
-- task mode is editable
-- title is editable
+Before first send, the draft may change provider, model, profile, persona, workspace,
+Access, and title.
 
 After first send:
 
-- provider is locked
-- model is locked
-- profile is locked
-- task mode is locked
-- title remains editable
-- archived state remains editable
+- provider, profile, persona, and workspace remain locked;
+- model may change only within the locked provider;
+- Access may change;
+- title and archived state may change.
 
-This is a product invariant, not just a UI preference.
+Cross-provider switching is not implemented. It requires an explicit continuity design
+because some providers retain server-side session state while others rely on transcript
+replay.
 
 ## Provider Session Id
 
-Some providers may emit a provider-native session/thread id. CopeNet stores that as `providerSessionId`.
+Some providers emit a provider-native session or thread id. CopeNet stores it as
+`providerSessionId`.
 
-Important behavior:
+- If a provider emits a new id, CopeNet updates session metadata through `SessionStore`.
+- If a provider never emits one, CopeNet still maintains continuity through its durable
+  transcript.
+- A provider session id is useful metadata, not the sole source of truth.
 
-- if a provider emits a new session id, CopeNet updates stored session metadata
-- if a provider never emits one, CopeNet still maintains continuity at the CopeNet session layer
-- provider session id is helpful, but not the sole source of continuity truth
-
-## Continuity Failure Philosophy
-
-Silent continuity fallback should be treated as unsafe.
-
-Preferred rule:
-
-- if continuity cannot be preserved, surface it clearly
-- do not silently pretend an existing conversation resumed when it actually restarted fresh
-
-This matters most for:
-
-- resumed CLI-backed threads
-- provider-side session expiry
-- broken or missing provider-native session ids
+If provider-native resume fails, CopeNet must not silently pretend that a fresh provider
+conversation resumed the old context.
 
 ## Allowed Session Mutations
 
-Allowed after lock:
+Allowed after first send:
 
-- rename session title
-- archive / unarchive
-- provider session id update when emitted by the provider
-- run lifecycle metadata updates
+- rename or archive/unarchive the session;
+- change model within the existing provider;
+- change Access;
+- update provider-session and run-lifecycle metadata.
 
-Not allowed after lock:
+Not allowed after first send:
 
-- changing provider in place
-- changing model in place
-- changing profile in place
-- changing task mode in place
-- rewriting old transcript messages
+- change provider, profile, persona, or workspace in place;
+- rewrite or delete stored transcript entries;
+- let a model alter runtime or policy selection.
 
-## Draft Session Semantics
+## Auditability
 
-Draft sessions exist so users can stage a conversation before committing to it.
+Every run records the provider and model it actually used. A later model or Access change
+does not rewrite earlier messages or run records. Missing current catalog availability
+does not make historical metadata mutable.
 
-Required behavior:
+## Concurrency And Recovery
 
-- a draft may be configured before first send
-- first successful send commits the binding
-- later switching runtime/model should become a new chat or future branch flow, not an in-place mutation
+Only one run may be in flight for a session. Concurrent sends must use the existing
+in-flight/idempotency behavior rather than starting a second execution.
 
-## Failure Cases To Handle Carefully
+On process startup, stale persisted in-flight markers are recovered because no run from
+the previous process can still be executing. Storage failures must fail loudly; a corrupt
+session index must never be treated as an empty index and overwritten.
 
-### Provider session id missing
+## Future Work Must Preserve
 
-Not automatically a bug. Some providers do not support continuity the same way. CopeNet should still preserve the session identity at its own layer.
+Branching, cross-provider switching, Fleet coordination, and other handoff features must
+preserve:
 
-### Provider resume fails
-
-Do not silently start a fresh context while pretending it is the same conversation. Surface the failure.
-
-### Model catalog changes
-
-Previously locked sessions should remain intelligible even if a model disappears from current discovery output. Missing current availability is not permission to mutate historical session metadata.
-
-### Concurrent sends
-
-One in-flight run per session is allowed. A second send against the same session should be blocked, rejected, or explicitly routed through the existing in-flight semantics.
-
-## What Future Work Must Preserve
-
-Any future branching, resume, Sentinel integration, or multi-agent handoff work should preserve:
-
-- session identity clarity
-- explicit continuity state
-- append-only history
-- no silent fallback-to-fresh-session behavior
-
-That is the difference between “chat app glue” and a real orchestration substrate.
+- clear session and lane identity;
+- append-only history;
+- per-run runtime provenance;
+- explicit continuity failures;
+- no silent fallback to a fresh context.

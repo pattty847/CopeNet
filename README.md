@@ -19,9 +19,14 @@ The Home dashboard is the front door to CopeNet: the operator console with live 
 ![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
 
 ### Agents Console — persistent sessions with inspectable runtime context
-The Agents view keeps the live conversation and the runtime inspector together so a run stays understandable instead of turning into opaque chat history. Here a sub-agent delegation session shows the model's actual tool calls (test runs, `py_compile`, `git status`) and reasoning inline, while the inspector on the right rolls the run up into grouped activity — "Edited 6 files · Read 10 files" — plus the locked provider, model, mode, and persona.
+The Agents view keeps the live conversation and the runtime inspector together so a run stays understandable instead of turning into opaque chat history. Here a sub-agent delegation session shows the model's actual tool calls (test runs, `py_compile`, `git status`) and reasoning inline, while the inspector on the right rolls the run up into grouped activity — "Edited 6 files · Read 10 files" — plus the session provider, model, Access, and persona.
 
 ![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+
+### Fleet Rooms — ChatGPT and Claude collaborate without agreement theater
+Fleet is a durable multi-model room inside Agents. An `@everyone` prompt runs ChatGPT and Claude from the same room snapshot behind an independent-first reveal barrier, then commits both answers with attributed tool receipts. Follow up with `@chatgpt` or `@claude` to challenge a claim directly; each provider keeps its own resumable lane while the room remains the product-visible source of truth.
+
+![CopeNet Fleet room — independent AAPL market analysis](docs/imgs/fleet/fleet-room.png)
 
 ### Workflows — purpose-built operator surfaces beyond a single chat
 The Workflows section is where CopeNet starts feeling like an operator studio instead of a prompt box: focused workflow entrypoints, scoped task surfaces, and room for productized agent behaviors that deserve more than one conversation pane.
@@ -53,7 +58,39 @@ Permissions are their own axis, separate from behavior. Every session picks an *
 
 ![CopeNet Access & Permissions](docs/imgs/copenet-access-permissions.png)
 
+### Market Monitor — a daily brief, not a wall of tickers
+Market Monitor is the current favorite: a 60-second morning brief on your watchlist, backed by live SEC filings (Form 4, Form 144, 8-K), sector rotation (RRG), an accumulation watch, and a model-generated daily read that shows its work — regime call, evidence considered, and "what would make this wrong" laid out explicitly instead of buried in a chat reply. Every claim the model makes gets logged to a forward ledger and scored later, so the read is accountable, not just confident.
+
+![CopeNet Market Monitor — daily brief](docs/imgs/market-panel/copenet-market-brief.png)
+
+**Treasury curve** — official U.S. Treasury Constant Maturity rates for the 3M, 2Y, 5Y, 10Y, and 30Y benchmarks, with selectable basis-point moves, curve-shape context, and the key 10Y–2Y and 10Y–3M spreads. The feed is cached for 15 minutes and every plotted tenor is aligned to the same Treasury observation date.
+
+![CopeNet Market Monitor — Treasury yield curve](docs/imgs/market-panel/copenet-treasury-curve.png)
+
+<details>
+<summary>More Market Monitor views — why-this-read drill-down, watchlist, sector rotation, forward ledger</summary>
+
+**Why this read** — every model call expands into its reasoning: regime inputs, evidence considered (with SEC filing citations), and explicit falsification conditions.
+
+![CopeNet Market Monitor — why this read](docs/imgs/market-panel/copenet-market-why-this-read.png)
+
+**Watchlist + macro board** — sector ETFs, custom watchlists, and a macro weather strip (DXY, VIX, oil, BTC, ETH) at a glance.
+
+![CopeNet Market Monitor — watchlist and macro board](docs/imgs/market-panel/copenet-market-watchlist-macro.png)
+
+**Sector rotation (RRG) + accumulation watch** — relative-strength rotation quadrants and a confluence-ranked list of names sitting in pullback zones.
+
+![CopeNet Market Monitor — sector rotation and accumulation watch](docs/imgs/market-panel/copenet-market-rotation-accumulation.png)
+
+**Forward ledger + evidence/contrarian** — every regime and ticker call is pre-registered and scored at 4w/8w, no backfilling; a dedicated panel argues the other side of every highlighted signal.
+
+![CopeNet Market Monitor — forward ledger and evidence](docs/imgs/market-panel/copenet-market-ledger-evidence.png)
+
+</details>
+
 ## Why CopeNet
+
+CopeNet started as a local-only project — small models on-device, no cloud dependency. That fell apart fast: small local models can't reliably plan multi-step tool use or hold an operator workflow together, so CopeNet grew a CLI-backed and subscription-backed provider layer (`codex-cli`, `claude-cli`, `openai-codex`) alongside the local runtimes. Local-first is still the default posture — sessions, transcripts, and control stay on your machine — but the models doing the actual reasoning are frontier-capable now.
 
 Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built for the workflows that happen after that:
 
@@ -68,11 +105,13 @@ Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built f
 CopeNet is evolving into an operator workspace, not just a chat client. Today it already supports:
 
 - **Agent sessions** with persistent transcripts, first-send runtime binding (provider/profile lock; model + Access changeable mid-session), archive/restore, and inline tool execution
+- **Fleet rooms** where ChatGPT and Claude independently research the same question, share evidence receipts after reveal, and critique each other in attributed follow-up turns
 - **Observability** with run pulse views, recent traces, provider/tool distributions, and session activity inspection
 - **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured local-model generation
 - **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
 - **Experiments** for comparing provider/model behavior across real runs
 - **Profile + Access layering**: behavioral Profiles (markdown presets) plus a separate **Read-only · Ask · Full Access** permission axis with operator approvals and a persisted shell allowlist
+- **Market Monitor**: a daily model-generated brief backed by live SEC filings, sector rotation, and a pre-registered forward ledger that scores its own calls
 
 ## Providers
 
@@ -132,10 +171,11 @@ Then open it from another device using your Tailscale hostname or tailnet IP.
 1. Start your local runtimes first (Ollama and/or LM Studio).
 2. Run `uv run copenet`.
 3. Open the UI and create a new session.
-4. Pick provider, model, profile, and task mode.
-5. Send the first message to create and lock that session.
+4. Pick provider, model, profile, and Access.
+5. Send the first message to create the session and lock provider/profile/persona/workspace.
 
-If you want to compare another runtime/model combination, start a new chat rather than mutating the existing one.
+The operator may change model within the same provider and may change Access on later
+runs. Start a new chat for another provider, profile, persona, or workspace.
 
 ## Configuration
 
@@ -184,7 +224,7 @@ Prompt presets are markdown files under:
 The loader composes:
 
 - **profile** for base behavior
-- **task mode** for situational instruction
+- **Access overlay** for runtime authority (`none`, `ask`, or `full-access`)
 
 Add your own by dropping `.md` files into those directories.
 
@@ -196,11 +236,9 @@ Add your own by dropping `.md` files into those directories.
 uv run copenet
 ```
 
-- Backend host only:
+- Direct module entrypoint (normally unnecessary):
 
 ```bash
-uv run copenet-host
-# or
 python -m copenet.host
 ```
 
@@ -220,19 +258,18 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 
 ### Architecture
 
-- [Architecture](docs/architecture.md)
+- [Architecture](docs/ARCHITECTURE.md)
 - [App API](docs/APP-API.md) — `/api/v1` REST + SSE for external apps
 - [Event Contract](docs/EVENT-CONTRACT.md) — `/ws` frame protocol
 - [Session Continuity](docs/SESSION-CONTINUITY.md)
 - [Capability Matrix](docs/CAPABILITY-MATRIX.md)
-- [Operator UX Model](docs/operator-ux-model.md) — three-layer tool truth (transcript / activity / inspector)
+- [Operator UX Model](docs/OPERATOR-UX-MODEL.md) — three-layer tool truth (transcript / activity / inspector)
 
 ### Runtime Debugging
 
 - [Tracing](docs/TRACING.md)
 - [Debugging](docs/DEBUGGING.md)
 - [Runbook](docs/RUNBOOK.md)
-- [Trace Findings](docs/TRACE-FINDINGS.md)
 
 ### Prototypes & Investigations
 
@@ -263,7 +300,8 @@ See [`docs/TRACING.md`](docs/TRACING.md) for the trace schema and workflow.
 
 ### Prompt/profile changes not applying
 
-- Start a new session after changing profile/task mode
+- Start a new session after changing the profile of a locked session
+- Change Access explicitly in the runtime control; it applies to the next run
 - Ensure preset markdown files are in the correct preset directories
 
 ### Port already in use
@@ -277,6 +315,23 @@ COPNET_PORT=17124 uv run copenet
 CopeNet is actively evolving, but it is already a real operator workspace: persistent sessions, local-provider support, workflow surfaces, observability, and mobile-friendly remote access are all in place.
 
 The direction is simple: make local agent systems inspectable, composable, and actually useful for real workflows.
+
+## Market economic calendar
+
+The Market morning brief includes a compact **Next 7d** calendar for medium- and high-impact
+United States releases. It uses Trading Economics' documented calendar API, converts timestamps
+to the operator's local time in the browser, caches successful responses for 15 minutes, and keeps
+the last successful snapshot visible if the provider is temporarily unavailable.
+
+Add the server-side credential to the root `.env` and restart CopeNet:
+
+```bash
+TRADING_ECONOMICS_API_KEY=your-key
+```
+
+The credential never reaches the browser. Without it, the widget shows an explicit setup-ready
+state rather than sample events. Calendar rows link to the official release source when the
+provider supplies one; the Trading Economics calendar remains available as the source receipt.
 
 ## Webull Portfolio Sync (read-only)
 

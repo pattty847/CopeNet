@@ -1,6 +1,8 @@
 # Market Insight Engine — Concept Note (Claude's take, for Codex review)
 
-**Status:** discussion / vision alignment. No code. Patrick wants Claude + Codex to comment.
+**Status:** Major phases are implemented, including shared feature extraction, replay/base
+rates, model reads, and backtesting. Later sections record shipped milestones; remaining
+research work is tracked in [ROADMAP.md](ROADMAP.md).
 **Spawned from:** Patrick's note (2026-06-30) — extract rich derived facts from OHLCV to feed models;
 backtest to refine the textual descriptions; "listen to the past, which is real."
 

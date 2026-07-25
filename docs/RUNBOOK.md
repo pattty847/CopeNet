@@ -33,7 +33,6 @@ Then reproduce one run and inspect:
 
 - [TRACING.md](TRACING.md)
 - [DEBUGGING.md](DEBUGGING.md)
-- [TRACE-FINDINGS.md](TRACE-FINDINGS.md)
 
 ## Common Failure Causes
 

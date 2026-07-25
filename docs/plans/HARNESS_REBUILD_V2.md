@@ -1,8 +1,12 @@
 # Harness Rebuild V2
 
-**Supersedes:** [`HARNESS_FIXING_V1.md`](./HARNESS_FIXING_V1.md). V1 was a trace-only HarnessDecision patch on top of the existing broken loop. V2 rebuilds the loop.
+**Status:** implemented architecture record. Current behavior is authoritative in code,
+[ARCHITECTURE.md](../ARCHITECTURE.md), and `AGENTS.md`; unfinished cleanup belongs in
+[ROADMAP.md](ROADMAP.md).
 
-**Grounded in:** the seven investigation passes at [`docs/investigations/harness-rebuild/`](../investigations/harness-rebuild/) and the live-verified probe results at [`docs/investigations/harness-rebuild/probe-results/`](../investigations/harness-rebuild/probe-results/).
+This superseded the earlier trace-only HarnessDecision patch and rebuilt the tool loop.
+The temporary investigation passes and raw live-probe artifacts used during implementation
+have been removed.
 
 **Date sealed:** 2026-05-21
 
@@ -10,9 +14,14 @@
 
 ## TL;DR
 
-CopeNet's chat loop today sends ONE synthetic user message per turn to a Responses API endpoint that supports full conversation arrays and native tools. The result: no message history, no native function calling, hard cap of 4 tool calls per turn, silent file/search clamps, model amnesia between turns, and a thicket of keyword-scaffolded auto-mutations on session state.
+Before V2, CopeNet's chat loop sent one synthetic user message per turn to a Responses
+API endpoint that supported full conversation arrays and native tools. The result was no
+message history, no native function calling, a four-tool cap, silent file/search clamps,
+model amnesia, and keyword-scaffolded session-state mutations.
 
-V2 replaces that loop with the OpenClaw-style pattern (live-verified in PASS-7): build a real `input` array from durable transcript parts, send it with native `tools`, handle streaming `function_call` events, inject `function_call_output` items into the next turn. Drop ~67% of the tool surface. Kill the synthetic working-set and the keyword auto-mutation. Restore the chat-column UX so the model narrates between tool calls like Claude Code does.
+V2 replaced that loop with the live-verified pattern: build a real `input` array from
+durable transcript parts, send it with native `tools`, handle streaming `function_call`
+events, and inject `function_call_output` items into the next turn.
 
 Six phases. Phase -1 is prerequisite cleanup (transcript persistence, idempotency scoping, replay schema). Phase 0 is sub-hour quick wins. Phase 1 is the message-history rebuild (the foundation). Phase 2 is the new Responses-native tool loop. Phase 3 trims the tool surface. Phase 4 lands the chat UX. Phase 5 sweeps dead code and tests. Each phase is independently shippable, reviewable, and revertable.
 
@@ -51,7 +60,8 @@ On final text: append assistant message (with parts[]) to transcript
               done
 ```
 
-Reference shapes verified in [`PASS-7-codex-api-probe.md`](../investigations/harness-rebuild/PASS-7-codex-api-probe.md). Conversation continuity is fully client-side via full replay each turn. Native function calling is supported by the subscription endpoint.
+Reference shapes were verified against the live subscription endpoint and are covered by
+the Responses-loop integration tests. Conversation continuity uses full replay each turn.
 
 ---
 
@@ -65,7 +75,8 @@ files.rg     — offset/limit/context_lines + English pagination hints
 shell.exec   — unchanged structurally; no silent stdout clamp
 ```
 
-Five primitives. Down from fifteen. See [`PASS-4-tool-surface-audit.md`](../investigations/harness-rebuild/PASS-4-tool-surface-audit.md) for kill list and rationale.
+The initial rebuild exposed five primitives, down from fifteen. Approved domain tools were
+added later; `MANIFEST_TOOL_IDS` is now canonical.
 
 ---
 
@@ -176,7 +187,8 @@ Also: change the loop-end behavior so that when the cap IS hit, the assistant me
 
 ### 0.3 Delete `context.prepare` tool
 
-Per [`PASS-4`](../investigations/harness-rebuild/PASS-4-tool-surface-audit.md): pure scaffolding. Conversation history IS the context.
+The implementation audit classified this as pure scaffolding. Conversation history is the
+context.
 
 **Files:**
 - Delete entire `src/copenet/core/tools/handlers/context.py`
@@ -259,7 +271,8 @@ For Phase 1, the harness signature change is additive — `prompt` stays for the
 - Delete `src/copenet/core/orchestrator/personal_history.py` entirely
 - Narrow `SessionStateRecord` to: `session_key`, `relevant_asset_ids`, `relevant_artifact_ids`, `merge_state`, `pulse_state`, `created_at`, `updated_at`. Everything else dies.
 
-Per [`PASS-2`](../investigations/harness-rebuild/PASS-2-vestige-audit.md). Pulse and Merge degrade gracefully (per Bucket B disposition); they're rewired later.
+The implementation audit found that Pulse and Merge could degrade gracefully; they were
+deferred for a later rewire.
 
 ### 1.4 Update RunRecord shape
 
@@ -380,7 +393,7 @@ Per Codex's first-round finding: the existing `run_with_native_tools` is Chat Co
 
 ## Phase 3: Tool surface trim
 
-**Purpose:** drop the 10 redundant/vestigial tools. Polish the 5 remaining. Per [`PASS-4`](../investigations/harness-rebuild/PASS-4-tool-surface-audit.md).
+**Purpose:** drop the redundant/vestigial tools and polish the initial five primitives.
 
 ### 3.1 Delete tool handlers
 
@@ -544,10 +557,10 @@ Per your screenshots — keep the Telegram-style approve/deny UX intact. `Operat
 - Update `CLAUDE.md`:
   - Update the "Backend Gaps Known to Claude" table — most are resolved
   - Update "High-Conflict Files" list
-- Update `docs/architecture.md`:
+- Update `docs/ARCHITECTURE.md`:
   - Subsystem map: remove deleted modules
   - Update tool loop description
-- Mark `docs/plans/HARNESS_FIXING_V1.md` as superseded with link to V2
+- Remove the superseded V1 plan after V2 is established as the architecture record
 
 ### 5.4 Optional: `TARGET.md`
 
@@ -671,12 +684,14 @@ backend suite (294 tests) green; frontend `tsc` clean; frontend unit suite green
 - **2** `run_with_responses_tools` + openai-codex `stream_responses` (native
   Responses function_call lifecycle, prompt_cache_key, reasoning, parallel calls),
   `responses` tool-execution mode, `reasoning_delta` event.
-- **3** model-facing manifest trimmed to five primitives via
-  `ToolRegistry.list_tools()` (handlers still registered for routing);
+- **3** model-facing manifest initially trimmed to five primitives via
+  `ToolRegistry.list_tools()` (handlers still registered for routing). Approved plan,
+  web, Market, persona, memory, and user-note tools were added later; the current source
+  of truth is `MANIFEST_TOOL_IDS` in `core/tools/builtin_readonly.py`.
   `files.rg` gained `context_lines`.
 - **4** inline thinking parts (backend emit → wsClient → renderer), reconnect
   reconciliation (no more false-abort), WorkingSetCard removed from chat.
-- **5** docs (architecture.md, AGENTS.md, V1 superseded), `docs/TARGET.md`.
+- **5** docs (`ARCHITECTURE.md`, `AGENTS.md`), `docs/TARGET.md`.
 
 **Documented deviations (deliberate, see commit messages):**
 - `SessionStateRecord` was NOT narrowed. Pulse/Merge still read+write its text

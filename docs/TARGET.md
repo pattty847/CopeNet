@@ -1,66 +1,52 @@
-# TARGET — what CopeNet is building toward
+# CopeNet Target
 
-This is the standing "north star" doc. It describes the destination, not the
-current state (that's `AGENTS.md` / `docs/architecture.md`). Every PR description
-should reference which TARGET section it serves.
+This is the durable north star. [ROADMAP.md](plans/ROADMAP.md) contains unfinished
+work; [ARCHITECTURE.md](ARCHITECTURE.md) describes the current implementation.
 
-Created during the harness rebuild (see `docs/plans/HARNESS_REBUILD_V2.md`).
+## Product Thesis
 
----
+CopeNet is a local operator gateway for frontier and local models: durable sessions,
+provider-agnostic tools, explicit operator authority, inspectable evidence, and
+purpose-built workspaces beyond chat.
 
-## The one-line target
+The system should feel as capable as a coding-agent harness while remaining understandable
+to someone who does not live in a terminal.
 
-CopeNet is a **personal continuity engine** built around frontier-model
-orchestration over OAuth — a harness that works as well as Claude Code / Codex
-CLI / OpenClaw, with personal layers (persona, memory, briefing, return cues)
-built on top once redesigned around explicit operator opt-in.
+## Runtime
 
----
+- Durable, append-only conversation history with honest provider continuity.
+- Native tool calling where providers support it and a compatible fallback elsewhere.
+- A small explicit core tool surface with approved domain tools added deliberately.
+- Per-run provider/model provenance and operator-controlled runtime/Access changes.
+- Policy—not model prose—controls authority.
+- Observable tool activity, approvals, errors, and finalization.
 
-## Layer 1 — Harness (the foundation)
+## Personal Continuity
 
-**Target: Claude Code / Codex CLI / OpenClaw parity.**
+- Personas, memory, user notes, briefings, and return cues remain operator-visible.
+- Model-proposed durable changes use draft → review/edit → approve.
+- Global and project scope are explicit.
+- Nothing silently rewrites identity, memory, or previous conversation history.
 
-- Real multi-turn conversation history sent every turn (✅ Phase 1).
-- Native function calling via the provider's tool interface, not text parsing
-  (✅ Phase 2 for openai-codex Responses API).
-- A small, sharp tool surface — five primitives the model composes
-  (✅ Phase 3: files.read/write/edit/rg + shell.exec).
-- A chat experience that narrates: inline thinking between tool calls, grouped
-  tool chips, diff previews, robust reconnect (◑ Phase 4 — thinking + reconnect
-  landed; chip grouping / diff preview are follow-ups).
-- Prompt caching, reasoning effort, and parallel tool calls used where the
-  endpoint supports them (✅ wired on the Responses path).
+## Multi-Model Work
 
-**Not yet / deferred:** token-budget compaction, progressive tool-schema
-disclosure, local-model (LM Studio/Ollama) Responses parity, multi-agent
-orchestration (see Layer 3).
+- Fleet and Research Lab coordinate models through explicit product workflows.
+- Independent analysis remains independent until the workflow intentionally reveals it.
+- Provider fallback, review, debate, and synthesis are visible rather than hidden routing.
+- Shared coordination primitives preserve each lane's evidence and runtime provenance.
 
-## Layer 2 — Personal layers (dormant, preserved)
+## Domain Workspaces
 
-Persona, identity, memory, and profile auto-update are **gated off** during the
-rebuild (`COPNET_AUTO_MEMORY_EXTRACTION` / `COPNET_AUTO_PROFILE_EXTRACTION`,
-default false). They come back through a clean redesign with explicit operator
-opt-in — never silent keyword auto-mutation of session state.
-
-Briefing, return cues, Pulse, and Merge are live but degraded; each gets its
-own focused pass when it's worth attention.
-
-## Layer 3 — Multi-agent orchestration (the next frontier)
-
-Multiple frontier models (Codex / Claude / Gemini) working together on one
-project, coordinated by a "head honcho" router that selects or chains providers
-by turn semantics. CopeNet's provider registry + the Phase 1/2 shared
-transcript + native tool loop are the substrate. See
-`docs/plans/MULTI_AGENT_ORCHESTRATOR.md`.
-
----
+- Market Monitor, Research Lab, Meme Lab, and future domain workspaces combine data,
+  tools, prompts, layouts, and durable outputs.
+- A future declarative workspace manifest should let a model draft a workspace while the
+  runtime validates capabilities and the operator approves what is instantiated.
+- Domain workflows should answer recurring operator questions, not merely display data.
 
 ## Principles
 
-- The transcript is the context. No synthetic state blobs.
-- The model decides routing and when it's done. The runtime enforces authority
-  (policy), not intent.
-- Each change is independently shippable, reviewable, revertable.
-- Working paths are kept until their replacement is proven; dead code is swept,
-  not left half-removed.
+- The transcript is context; summaries and compaction must remain inspectable.
+- Providers stay thin and the harness stays provider-agnostic.
+- Stored history is append-only.
+- UI state tells the truth about what is live, mocked, blocked, or unavailable.
+- Every automation has provenance, a failure state, and an operator control boundary.

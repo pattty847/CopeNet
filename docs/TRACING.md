@@ -58,7 +58,9 @@ Every line is a JSON object:
 }
 ```
 
-**Known gap:** `model` reflects the request field, not the provider-resolved default. If no model was specified, this field is `null`. See [TRACE-FINDINGS.md](TRACE-FINDINGS.md).
+**Known gap:** `model` reflects the request field, not the provider-resolved default.
+If no model was specified, this field may be `null`. The provider-resolved model is
+tracked as open observability work in [ROADMAP.md](plans/ROADMAP.md).
 
 ## Event Sequences
 
@@ -141,24 +143,34 @@ run_failed               phase: "send_chat", error: "..."
   "turnId": "turn-...",
   "decisionId": "decision-...",
   "availableToolIds": [
-    "artifact.create",
-    "context.prepare",
     "files.edit",
-    "files.list",
     "files.read",
     "files.rg",
-    "files.search",
     "files.write",
-    "git.diff",
-    "git.status",
-    "shell.exec"
+    "market.backtest",
+    "market.compare",
+    "market.dashboard",
+    "market.evidence",
+    "market.ticker",
+    "memory.read",
+    "memory.write",
+    "persona.author",
+    "plan.write",
+    "shell.exec",
+    "user.remember",
+    "web.fetch",
+    "web.search"
   ]
 }
 ```
 
 **Critical distinction:** `availableToolIds` is populated even when `willAttemptToolLoop: false`. The gate is `capabilityProfile.promptedToolUse`, not the presence of registered tools. If a model doesn't report `toolCalls: true` in its capabilities, the tool loop won't trigger regardless of which tools are registered.
 
-**Concrete tool list:** Registered built-ins live in `core/tools/handlers/` and `builtin_readonly.py`. **Write tools (`files.edit`, `files.write`) only appear here when task mode policy allows category `repo-write`** (currently `full-access`). **Artifact tooling (`artifact.create`)** stays available under default policy whenever tools are enabled; it still requires a live session, `run_id`, and `artifact_store` or the handler blocks with its own diagnostic.
+**Concrete tool list:** Registered built-ins live in `core/tools/handlers/`; the
+model-facing source of truth is `MANIFEST_TOOL_IDS` in `builtin_readonly.py`.
+**Write tools (`files.edit`, `files.write`) only appear here when Access policy allows
+category `repo-write`** (currently `full-access`). `artifact.create` remains registered
+for internal/compatibility routing but is not offered in the model-facing manifest.
 
 ### `harness_decision_recorded`
 
@@ -231,9 +243,10 @@ Known `reason` values:
 | `command not allowed: <cmd>` | shell command not in `ToolPolicy.shell_allowlist` |
 | `shell execution disabled by policy` | `ToolPolicy.allow_shell` is false |
 | `unknown tool` | tool id not in the registry |
-| `write tool unavailable in current mode` | Registry-level block: `repo-write` category not allowed for this session’s task mode (not `full-access`) |
+| `write tool unavailable in current mode` | Registry-level block: `repo-write` category not allowed at the current Access level (not `full-access`) |
 | `artifact tool unavailable in current mode` | Registry-level block: `artifact` category not allowed (reserved for narrowed policies) |
-Default shell allowlist: `git`, `rg`, `ls`, `pwd`, `find`.
+Default shell allowlist: `git`, `rg`, `ls`, `pwd`, `find`, `grep`, `head`, `cat`,
+`tail`, `wc`, `tree`, `file`, `which`, `diff`.
 
 ### `assistant_finalized`
 
@@ -262,7 +275,7 @@ For a full debugging playbook, see [DEBUGGING.md](DEBUGGING.md).
 Quick order for an unexpected run:
 
 1. **Find the trace** — newest file in `~/.copenet/logs/runs/`
-2. **`harness_planned`** — was the tool loop planned? Was `promptedToolUse: true`? Do `availableToolIds` reflect the session task mode (**`full-access` needed for write tools**)?
+2. **`harness_planned`** — was the tool loop planned? Was `promptedToolUse: true`? Do `availableToolIds` reflect session Access (**`full-access` needed for write tools**)?
 3. **`tool_requested`** — did the model call the expected tool with correct arguments?
 4. **`tool_executed` or `tool_blocked`** — policy rejection or execution failure?
 5. **`assistant_finalized`** — was `toolExecutionAttached` as expected? Is `responseLength` plausible?

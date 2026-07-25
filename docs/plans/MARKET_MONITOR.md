@@ -1,7 +1,8 @@
 # CopeNet Market Monitor — Vision & Build Plan
 
-**Status:** Direction agreed, not started. This doc exists to align Patrick + Claude + Codex
-before any code lands.
+**Status:** Core monitor, evidence, watchlist, model reads, backtesting, SEC data,
+economic calendar, and operator UI are implemented. This document preserves product
+principles and remaining direction; current behavior is authoritative in code.
 **Owners:** Patrick (director) · Codex (backend/plumbing) · Claude (frontend + spec/direction)
 **Last updated:** 2026-06-27
 

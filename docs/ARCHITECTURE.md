@@ -1,6 +1,7 @@
 # CopeNet Architecture
 
-This is a concise map of the current system. For contributor rules and working norms, see [AGENTS.md](../AGENTS.md). For per-subsystem scope and ownership intended for multi-agent routing, see [SUBSYSTEMS.md](SUBSYSTEMS.md) when present.
+This is a concise map of the current system. For contributor rules and working norms,
+see [AGENTS.md](../AGENTS.md).
 
 ## Subsystem Map
 
@@ -13,6 +14,11 @@ copenet/
 ├── core/                              ← business logic and run lifecycle (no imports from host/)
 │   ├── apps/
 │   │   └── app_store.py               ← external-app registry (bearer tokens, mappings)
+│   ├── attachments/                    ← chat attachment persistence and resolution
+│   ├── briefing/                       ← return-briefing assembly
+│   ├── coordination/
+│   │   └── lane_runner.py              ← shared provider-lane execution primitive
+│   ├── fleet/                          ← durable multi-provider rooms and lane events
 │   ├── harness/
 │   │   ├── capabilities.py            ← capability profiles and routing
 │   │   ├── planning.py                ← provider capability plan ahead of execution
@@ -26,12 +32,15 @@ copenet/
 │   │   ├── transcriber.py             ← audio transcription
 │   │   ├── store.py                   ← media asset persistence
 │   │   └── service.py                 ← MediaIngestionService facade
+│   ├── market/                         ← Market Monitor data, evidence, signals, replay, reads
 │   ├── memory/
 │   │   ├── store.py                   ← MemoryStore (preferences, conventions, facts)
 │   │   └── service.py                 ← MemoryService API
 │   ├── messaging/
 │   │   ├── store.py                   ← MessagingConfigStore
 │   │   └── routing_store.py           ← TelegramSessionRouteStore
+│   ├── movies/                         ← Movie Lab import, enrichment, analysis, recommendations
+│   ├── nasa/                           ← APOD store, fetch, and wallpaper support
 │   ├── orchestrator/
 │   │   ├── __init__.py                ← Orchestrator facade, ChatSendRequest
 │   │   ├── facade_*.py                ← identity, messaging, provider auth, runtime workspace, approvals, apps
@@ -47,11 +56,14 @@ copenet/
 │   │   ├── __init__.py                ← Pat Profile public exports
 │   │   ├── service.py                 ← layered profile loader, changelog, briefing builder
 │   │   └── templates/                 ← repo-visible generic profile templates
+│   ├── permissions/                    ← persisted operator shell approvals
+│   ├── persona/                        ← persona storage, resolution, and authoring
 │   ├── provider_auth/
 │   │   ├── openai_codex.py            ← OpenAI Codex OAuth flow
 │   │   └── store.py                   ← provider auth credential store
 │   ├── pulse/
 │   │   └── store.py                   ← PulseStore (Inbox pulses)
+│   ├── research_lab/                   ← evidence-first research dossiers and calculations
 │   ├── runtime/
 │   │   ├── runs.py                    ← RunStore (durable run records)
 │   │   ├── artifacts.py               ← ArtifactStore (per-session artifacts)
@@ -72,10 +84,11 @@ copenet/
 │   │       ├── artifacts.py           ← artifact.create (off-manifest, deferred)
 │   │       ├── workspace_intel.py     ← repo.map + test.discover (off-manifest)
 │   │       └── _shared.py
-│   │   (context.py / context.prepare removed in Phase 0.3.
-│   │    Model-facing manifest is 5 tools: files.read/write/edit/rg + shell.exec.)
+│   │   (context.py / context.prepare removed in Phase 0.3. The model-facing
+│   │    manifest is the explicit MANIFEST_TOOL_IDS set in builtin_readonly.py.)
 │   ├── tracing/
 │   │   └── __init__.py                ← RunTraceWriter
+│   ├── user_notes/                     ← draft-first USER.md change proposals
 │   ├── workspace_intel/
 │   │   ├── models.py                  ← workspace intel DTOs
 │   │   ├── service.py                 ← repo mapping + verification discovery
@@ -94,6 +107,10 @@ copenet/
 │   ├── rpc_dispatch.py                ← method routing
 │   ├── rpc_chat.py                    ← chat.send/abort/history handlers
 │   ├── rpc_sessions.py                ← session + pulse + artifact handlers
+│   ├── rpc_fleet.py                    ← Fleet room handlers
+│   ├── rpc_market*.py                  ← Market dashboard/watchlist/calendar/yield handlers
+│   ├── rpc_nasa.py                     ← NASA APOD handlers
+│   ├── rpc_permissions.py              ← persisted approval allowlist handlers
 │   ├── rpc_catalog.py                 ← compatibility export for catalog-style handlers
 │   ├── rpc_catalog_core.py            ← provider/model/tool catalogs
 │   ├── rpc_profile.py                 ← profile + briefing handlers
@@ -113,8 +130,7 @@ copenet/
 │   │   │   ├── lib/                   ← wsClient facade, normalizers, RPC/action/event helpers
 │   │   │   └── types/                 ← backend.ts (typed RPC payloads)
 │   │   ├── vite.config.ts
-│   │   └── dist/                      ← production build (served when present; see note below)
-│   └── static/                        ← legacy vanilla ES module UI + assets under `/static`
+│   │   └── dist/                      ← production build served by the host
 │
 ├── providers/                         ← runtime adapters
 │   ├── base.py                        ← Provider, ProviderEvent, ProviderModel
@@ -124,7 +140,7 @@ copenet/
 │   └── local_http.py                  ← LM Studio + Ollama (HTTP)
 │
 ├── prompts/
-│   ├── loader.py                      ← profile + task-mode composition
+│   ├── loader.py                      ← profile + Access-overlay composition
 │   ├── optimizer.py                   ← prompt optimization variants
 │   └── presets/                       ← profiles/, task-modes/, shared markdown
 │
@@ -141,7 +157,7 @@ copenet/
    sessions/, tools/  — re-export from core/ for backward compatibility)
 ```
 
-**Web UI:** `host/api.py` serves the SPA from `host/frontend/dist/` at `/` (and `/assets` for hashed bundles) when the dist exists; otherwise it falls back to `host/static/index.html`. The legacy tree under `host/static/` remains available at `/static/` for the vanilla client and shared assets. The React app is the primary surface; the vanilla UI is fallback only.
+**Web UI:** `host/api.py` serves the React SPA from `host/frontend/dist/` at `/`, with `/assets` for hashed bundles and `/imgs` for public images. If the production build is missing, `/` returns an actionable `503`; build the frontend before starting a UI-serving host or packaging a wheel.
 
 The `core/` boundary is strict: nothing under `core/` imports from `host/`. Transport concerns never leak into business logic.
 
@@ -233,7 +249,9 @@ The browser UI consumes provider and model catalogs so the user can start a sess
 
 ## Harness Control Model
 
-CopeNet is moving toward a model-driven harness with runtime-enforced policy. The active design note is [Model-Driven Harness, Policy-Enforced Runtime](roadmaps/model-driven-harness-policy-runtime.md).
+CopeNet uses a model-driven harness with runtime-enforced policy. The current
+implementation is described here and in
+[HARNESS_REBUILD_V2.md](plans/HARNESS_REBUILD_V2.md).
 
 The operating rule is:
 
@@ -260,7 +278,7 @@ In practice that means:
 Sessions carry:
 
 - session key and session id
-- provider, model, profile (`systemPromptId`), task mode (`taskPromptId`)
+- provider, model, profile (`systemPromptId`), Access (`taskPromptId`)
 - workspace root
 - title, archived state
 - provider session id (when the provider emits one)
@@ -270,7 +288,9 @@ Sessions carry:
 Important invariants:
 
 - sessions are draft-editable before first send
-- after first send, provider/model/profile/task mode/workspace are treated as locked
+- after first send, provider/profile/persona/workspace remain locked
+- the operator may change model within the same provider and may change Access
+- every run records the provider/model it actually used
 - transcripts are append-only
 - only one in-flight run is allowed per session
 
@@ -279,7 +299,7 @@ Important invariants:
 Prompt behavior splits into:
 
 - base profiles
-- task-mode overlays
+- Access overlays (stored under the historical `task-modes/` directory)
 
 `prompts/loader.py` composes them into the final system prompt sent with a turn. Authoring stays in markdown files under `prompts/presets/`. `prompts/optimizer.py` produces optimized variant suggestions.
 
@@ -319,8 +339,17 @@ These subsystems are owned by `core/` but are not part of the core chat path. Th
 - **`core/apps`** — external-app registry and bearer-token mapping for `/api/v1` clients (e.g. Subtext).
 - **`core/provider_auth`** — provider-owned auth state (currently OpenAI Codex OAuth).
 - **`core/knowledge_runtime` / `meme_*`** — Meme Lab knowledge runtime + ideation workflow.
+- **`core/market`** — Market Monitor data, evidence, signals, model reads, replay, and
+  backtesting.
+- **`core/fleet` + `core/coordination`** — durable multi-provider rooms over shared lane
+  execution.
+- **`core/research_lab`** — evidence snapshots, benchmark calculations, and research
+  dossiers.
+- **`core/nasa` / `core/movies`** — APOD and Movie Lab operator workflows.
 
-These are surfaced through dedicated RPC namespaces (`pulse.*`, `memory.*`, `messaging.*`, `runtime.*`, `providerAuth.*`, `sessions.merge.*`) — see `host/rpc_dispatch.py` for the canonical method list.
+These are surfaced through dedicated RPC namespaces (`pulse.*`, `memory.*`,
+`messaging.*`, `runtime.*`, `providerAuth.*`, `sessions.merge.*`, `fleet.*`,
+`market.*`, `nasa.*`) — see `host/rpc_dispatch.py` for the canonical method list.
 
 ## Browser Agent (prototype lane)
 
@@ -334,7 +363,11 @@ The harness keeps provider execution normalized and prepares for richer capabili
 
 - **Categories** (`ToolCategory` in `core/tools/contracts.py`): `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, and reserved `mcp`.
 - **Task mode drives policy**: `policy_for_task_mode()` in `core/tools/policy.py` builds the effective policy from the persisted session **`task_prompt_id`**. Baseline modes allow **`repo-read`**, **`shell-read`**, **`context`**, **`artifact`**. **`full-access`** adds **`repo-write`** so `files.edit` / `files.write` register in `available_tools` for that run.
-- **Model-facing manifest (Phase 3)** is five primitives: **`files.read`**, **`files.write`**, **`files.edit`**, **`files.rg`**, **`shell.exec`**. Other handlers (`files.list`, `files.search`, `git.*`, `repo.map`, `test.discover`, `memory.*`, `artifact.create`) remain registered for execution/probe routing but are off-manifest, so the model is not offered them. `ToolRegistry.list_tools()` returns the manifest; `list_registered_tools()` returns the full set.
+- **Model-facing manifest** is the explicit `MANIFEST_TOOL_IDS` set in
+  `core/tools/builtin_readonly.py`. It includes the core file/shell/plan/web tools plus
+  approved domain tools for Market, personas, memory, and user-note proposals.
+  `ToolRegistry.list_tools()` returns that policy-filtered manifest;
+  `list_registered_tools()` returns the larger internal/compatibility set.
 - **`ToolExecutionContext`** carries **`task_prompt_id`**, **`run_id`**, and optional **`artifact_store`** so prompts and artifact writes stay session-scoped.
 - Prompted tool use accepts exact JSON tool objects such as `{"tool_id":"files.read","arguments":{"path":"README.md"}}`. The current permissive shorthand parser is retained for compatibility, but the target contract is exact tool ids and structured arguments.
 - Tool manifests attach deterministic capability metadata: registered id, JSON schema, category, evidence role, side effect, and confirmation posture. The harness branches on these enum/id fields and policy decisions, not prose explanations.
@@ -350,5 +383,5 @@ CopeNet is configured primarily through environment variables for host/runtime e
 - [SESSION-CONTINUITY.md](SESSION-CONTINUITY.md) — session lock/draft semantics
 - [CAPABILITY-MATRIX.md](CAPABILITY-MATRIX.md) — provider feature matrix
 - [TRACING.md](TRACING.md) + [DEBUGGING.md](DEBUGGING.md) — run-trace observability
-- [operator-ux-model.md](operator-ux-model.md) — three-layer tool-truth model (transcript / activity / inspector)
+- [OPERATOR-UX-MODEL.md](OPERATOR-UX-MODEL.md) — three-layer tool-truth model (transcript / activity / inspector)
 - [BROWSER-AGENT-PROTOTYPE.md](BROWSER-AGENT-PROTOTYPE.md) — Playwright prototype lane
