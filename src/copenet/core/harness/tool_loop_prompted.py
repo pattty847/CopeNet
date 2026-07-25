@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from typing import AsyncIterator
+from typing import Any, AsyncIterator
 
 from copenet.core.runtime import TurnState
 from copenet.core.tools import ToolExecutionContext
@@ -15,16 +15,20 @@ from .tool_loop_common import (
     ToolExecutor,
     TraceRecorder,
     _compose_prompted_tool_followup,
-    _extract_prompted_tool_requests,
     _force_call_id,
     _max_step_explanation,
     _new_call_id,
     _tool_call_event_payload,
     _tool_result_event_payload,
     collect_provider_turn,
+    compose_prompted_tool_correction,
     compose_prompted_tool_system_prompt,
+    parse_prompted_tool_turn,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
+
+# Bound on consecutive corrective follow-ups for unusable tool syntax.
+MAX_PROMPTED_TOOL_CORRECTIONS = 2
 
 
 async def run_with_prompted_tools(
@@ -49,6 +53,11 @@ async def run_with_prompted_tools(
         tools=plan.tools,
     )
     turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
+    active_tool_ids = [tool.id for tool in plan.tools]
+    active_tool_id_set = set(active_tool_ids)
+    # A model that cannot produce valid tool syntax should not burn the whole step
+    # budget being corrected. After this many consecutive failures, let the turn end.
+    consecutive_corrections = 0
     if trace is not None:
         trace("turn_started", turn_state.to_public_dict())
 
@@ -64,17 +73,39 @@ async def run_with_prompted_tools(
             phase="prompted_tool",
         )
         assistant_text = "".join(event.text or "" for event in events if event.kind == "delta").strip()
-        tool_requests = _extract_prompted_tool_requests(assistant_text)
+        parse = parse_prompted_tool_turn(assistant_text, active_tool_ids=active_tool_id_set)
+        tool_requests = parse.requests
         if trace is not None:
             trace(
                 "prompted_tool_response_interpreted",
                 {
                     "toolCallCount": len(tool_requests),
+                    "malformedBlockCount": len(parse.malformed),
+                    "rejectedToolIds": parse.rejected_tool_ids,
                     "contentLength": len(assistant_text),
                     "step": step_index + 1,
                 },
             )
         if not tool_requests:
+            # A malformed or off-manifest attempt is NOT a finished answer. Correct it
+            # once rather than streaming broken tool syntax to the user as prose.
+            if (
+                parse.attempted
+                and consecutive_corrections < MAX_PROMPTED_TOOL_CORRECTIONS
+                and step_index < MAX_TOOL_STEPS - 1
+            ):
+                consecutive_corrections += 1
+                if trace is not None:
+                    trace(
+                        "prompted_tool_correction_sent",
+                        {"attempt": consecutive_corrections, "step": step_index + 1},
+                    )
+                current_prompt = compose_prompted_tool_correction(
+                    malformed=parse.malformed,
+                    rejected_tool_ids=parse.rejected_tool_ids,
+                    active_tool_ids=active_tool_ids,
+                )
+                continue
             turn_state.terminal_reason = "completed"
             if trace is not None:
                 trace("turn_completed", turn_state.to_public_dict())
@@ -83,6 +114,7 @@ async def run_with_prompted_tools(
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
             return
 
+        consecutive_corrections = 0
         tool_payloads: list[str] = []
         for request in tool_requests:
             call_id = _new_call_id(request.tool_id)

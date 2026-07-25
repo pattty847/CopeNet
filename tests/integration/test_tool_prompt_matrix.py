@@ -9,6 +9,12 @@ from copenet.core.harness.planning import HarnessTurnPlan
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.core.tools import ToolExecutionContext, ToolPolicy, ToolRegistry
 from copenet.providers import ProviderEvent
+from copenet.core.harness.tool_loop_common import PROMPTED_TOOL_CLOSE, PROMPTED_TOOL_OPEN
+
+
+def _tool_block(call_json: str) -> str:
+    """Wrap a scripted tool call in the delimiters the prompted protocol requires."""
+    return f"{PROMPTED_TOOL_OPEN}\n{call_json}\n{PROMPTED_TOOL_CLOSE}"
 
 
 TraceRow = tuple[str, dict[str, Any] | None]
@@ -112,7 +118,7 @@ async def test_prompted_provider_executes_json_tool_request_then_follows_up(tmp_
     (tmp_path / "README.md").write_text("# CopeNet\nLocal agent gateway.\n", encoding="utf-8")
     provider = ScriptedPromptProvider(
         outputs=[
-            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            _tool_block('{"tool_id":"files.read","arguments":{"path":"README.md"}}'),
             "I read README.md and found that CopeNet is a local agent gateway.",
         ]
     )

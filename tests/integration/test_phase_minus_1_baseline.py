@@ -9,6 +9,15 @@ Created per HARNESS_REBUILD_V2.md, Phase -1.5.
 
 from __future__ import annotations
 
+_PROMPTED_TOOL_OPEN = "<copenet:tool>"
+_PROMPTED_TOOL_CLOSE = "</copenet:tool>"
+
+
+def _tool_block(call_json: str) -> str:
+    """Wrap a scripted tool call in the delimiters the prompted protocol requires."""
+    return f"{_PROMPTED_TOOL_OPEN}\n{call_json}\n{_PROMPTED_TOOL_CLOSE}"
+
+
 import asyncio
 import json
 from pathlib import Path
@@ -58,7 +67,7 @@ class ToolOnlyProvider:
         # Emit a prompted-tool JSON request (no human text)
         yield ProviderEvent(
             kind="delta",
-            text='{"tool_id":"shell.exec","arguments":{"command":"pwd"}}',
+            text=_tool_block('{"tool_id":"shell.exec","arguments":{"command":"pwd"}}'),
             provider_session_id=provider_session_id or "ps",
         )
         yield ProviderEvent(kind="final")
@@ -269,7 +278,7 @@ class CountingPromptedProvider:
         self.prompts.append(prompt)
         if self.calls_emitted < self.total_calls:
             self.calls_emitted += 1
-            text = (
+            text = _tool_block(
                 '{"tool_id":"files.read","arguments":{"path":"FILE_'
                 + str(self.calls_emitted)
                 + '.md"}}'

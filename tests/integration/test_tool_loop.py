@@ -8,6 +8,12 @@ from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult, ToolPolicy, ToolRegistry
 from copenet.providers import ProviderEvent
+from copenet.core.harness.tool_loop_common import PROMPTED_TOOL_CLOSE, PROMPTED_TOOL_OPEN
+
+
+def _tool_block(call_json: str) -> str:
+    """Wrap a scripted tool call in the delimiters the prompted protocol requires."""
+    return f"{PROMPTED_TOOL_OPEN}\n{call_json}\n{PROMPTED_TOOL_CLOSE}"
 
 
 class PromptedProvider:
@@ -156,7 +162,7 @@ async def test_orchestrator_runs_prompted_json_tool_loop(monkeypatch, tmp_path: 
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
     (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
     provider = PromptedProvider([
-        '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+        _tool_block('{"tool_id":"files.read","arguments":{"path":"README.md"}}'),
         "I read the README and found Temp Repo.",
     ])
     orchestrator = Orchestrator(
@@ -302,7 +308,7 @@ async def test_harness_native_tool_loop_executes_provider_tool_call_then_plain_t
 @pytest.mark.asyncio
 async def test_harness_prompted_provider_executes_json_tool_requests(tmp_path: Path) -> None:
     provider = PromptedProvider([
-        '{"command":"pwd","timeout":120000}',
+        _tool_block('{"tool_id":"shell.exec","arguments":{"command":"pwd","timeout":120000}}'),
         "The command returned the workspace path.",
     ])
     harness = ChatHarness()
@@ -347,7 +353,7 @@ async def test_harness_prompted_provider_executes_json_tool_requests(tmp_path: P
     assert plan.tool_execution_mode == "prompted"
     assert len(provider.prompts) == 2
     assert executed[0].tool_id == "shell.exec"
-    assert executed[0].arguments == {"command": "pwd"}
+    assert executed[0].arguments == {"command": "pwd", "timeout": 120000}
     assert any(event.kind == "meta" and "toolExecution" in (event.metadata or {}) for event in events)
     assert final_text == "The command returned the workspace path."
 
@@ -404,7 +410,7 @@ async def test_harness_decision_call_tool_does_not_force_tool_execution(tmp_path
 async def test_harness_decision_direct_response_does_not_suppress_tool_loop(tmp_path: Path) -> None:
     provider = DecisionPromptedProvider(
         [
-            '{"tool_id":"files.read","arguments":{"path":"README.md"}}',
+            _tool_block('{"tool_id":"files.read","arguments":{"path":"README.md"}}'),
             "Read the README.",
         ],
         decision_text=(
