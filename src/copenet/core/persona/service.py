@@ -310,6 +310,7 @@ class PersonaHomeService:
         model: str | None,
         privacy_tier: PersonaPrivacyTier | None,
         query: str,
+        include_agent_instructions: bool = True,
     ) -> PersonaPromptContext:
         self._ensure_scaffold()
         settings = self.load_settings()
@@ -327,10 +328,12 @@ class PersonaHomeService:
         for path in (
             persona_root / "core" / "SOUL.md",
             persona_root / "core" / "IDENTITY.md",
-            persona_root / "core" / "AGENTS.md",
         ):
             if text := _read_text(path):
                 sections.append((path.name, text, path))
+        agents_path = persona_root / "core" / "AGENTS.md"
+        if include_agent_instructions and (text := _read_text(agents_path)):
+            sections.append((agents_path.name, text, agents_path))
         if flavor_id:
             for name in ("IDENTITY.md", "SOUL.md", "NOTES.md"):
                 path = persona_root / "models" / flavor_id / name

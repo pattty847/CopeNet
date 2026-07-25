@@ -57,6 +57,11 @@ async def test_send_chat_injects_persona_context_and_locks_session_fields(tmp_pa
         sessions_dir=tmp_path,
         providers={"persona-aware": provider},
     )
+    orchestrator._memory_service.upsert_memory(
+        category="ongoing_priority",
+        title="Persona runtime work",
+        summary="RELEVANCE_MEMORY_SENTINEL",
+    )
 
     async def emit(_: dict[str, Any]) -> None:
         return None
@@ -75,6 +80,8 @@ async def test_send_chat_injects_persona_context_and_locks_session_fields(tmp_pa
     system_prompt = provider.system_prompts[-1] or ""
     assert "CopeNet Home" in system_prompt
     assert "Private CopeNet continuity memory." in system_prompt
+    assert "CopeNet Persona Operating Notes" not in system_prompt
+    assert "RELEVANCE_MEMORY_SENTINEL" not in system_prompt
     session = orchestrator.resolve_session("alpha")
     assert session["personaId"] == "default"
     assert session["personaPrivacyTier"] == "private"
@@ -114,3 +121,34 @@ async def test_send_chat_safe_persona_context_excludes_private_memory(tmp_path: 
     assert "Public-safe operator collaboration style." in system_prompt
     assert "Private operator memory." not in system_prompt
     assert orchestrator.resolve_session("shared-alpha")["personaPrivacyTier"] == "safe"
+
+
+@pytest.mark.asyncio
+async def test_send_chat_code_profile_injects_persona_agent_notes(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COPNET_DATA_DIR", str(tmp_path / "data"))
+    provider = PersonaAwareProvider()
+    orchestrator = Orchestrator(
+        session_store=SessionStore(path=tmp_path / "index.json"),
+        transcript_store=TranscriptStore(root_dir=tmp_path / "history"),
+        sessions_dir=tmp_path,
+        providers={"persona-aware": provider},
+    )
+
+    async def emit(_: dict[str, Any]) -> None:
+        return None
+
+    await orchestrator.send_chat(
+        ChatSendRequest(
+            session_key="code-alpha",
+            message="Fix the code.",
+            provider="persona-aware",
+            model="model-a",
+            system_prompt_id="builder",
+        ),
+        emit=emit,
+    )
+
+    assert "CopeNet Persona Operating Notes" in (provider.system_prompts[-1] or "")

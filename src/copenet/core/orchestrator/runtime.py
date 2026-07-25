@@ -28,6 +28,7 @@ from copenet.core.tools import (
     policy_for_task_mode,
 )
 from copenet.core.tracing import RunTraceWriter
+from copenet.prompts import PromptContextPolicy, prompt_context_policy_for_chat
 
 # Providers that maintain their own conversation thread and resume it via
 # provider_session_id — they must NOT be re-fed the flattened transcript.
@@ -306,6 +307,16 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             },
         )
         effective_system_prompt = request.system_prompt
+        prompt_policy = prompt_context_policy_for_chat(entry.system_prompt_id or request.system_prompt_id)
+        trace.record(
+            "prompt_context_policy_resolved",
+            {
+                "purpose": prompt_policy.purpose.value,
+                "includePersonaContext": prompt_policy.include_persona_context,
+                "includePersonaAgentInstructions": prompt_policy.include_persona_agent_instructions,
+                "includeRelevantMemory": prompt_policy.include_relevant_memory,
+            },
+        )
         # Phase 1 (HARNESS_REBUILD_V2): real multi-turn message history. `chat_history`
         # is read BEFORE the current user message was appended above — wait, the user
         # message IS already appended. So drop the trailing user row and let
@@ -419,6 +430,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 persona_id=entry.persona_id,
                 persona_flavor_id=entry.persona_flavor_id,
                 persona_privacy_tier=entry.persona_privacy_tier,
+                policy=prompt_policy,
                 sink=identity_context_payload,
             ),
         )
@@ -1104,29 +1116,41 @@ def _build_identity_memory_overlay(
     persona_id: str | None,
     persona_flavor_id: str | None,
     persona_privacy_tier: str | None,
+    policy: PromptContextPolicy,
     sink: dict[str, object],
 ) -> str | None:
-    persona_payload = orchestrator._persona_service.build_prompt_context(
-        provider=provider,
-        model=model,
-        privacy_tier=persona_privacy_tier,  # type: ignore[arg-type]
-        query=query,
+    persona_payload = (
+        orchestrator._persona_service.build_prompt_context(
+            provider=provider,
+            model=model,
+            privacy_tier=persona_privacy_tier,  # type: ignore[arg-type]
+            query=query,
+            include_agent_instructions=policy.include_persona_agent_instructions,
+        )
+        if policy.include_persona_context
+        else None
     )
-    memory_payload = orchestrator._memory_service.build_prompt_payload(
-        query=query,
-        limit=3 if plan.will_attempt_tool_loop else 1,
+    memory_payload = (
+        orchestrator._memory_service.build_prompt_payload(
+            query=query,
+            limit=3 if plan.will_attempt_tool_loop else 1,
+        )
+        if policy.include_relevant_memory
+        else None
     )
-    sink["memoryCount"] = len(memory_payload.memory_items)
-    sink["memoryItemIds"] = [item.id for item in memory_payload.memory_items]
-    sink["personaActive"] = bool(persona_payload.prompt)
-    sink["personaId"] = persona_id or persona_payload.persona_id
-    sink["personaFlavorId"] = persona_flavor_id or persona_payload.flavor_id
-    sink["personaPrivacyTier"] = persona_privacy_tier or persona_payload.privacy_tier
+    sink["memoryCount"] = len(memory_payload.memory_items) if memory_payload is not None else 0
+    sink["memoryItemIds"] = [item.id for item in memory_payload.memory_items] if memory_payload is not None else []
+    sink["personaActive"] = bool(persona_payload and persona_payload.prompt)
+    sink["personaId"] = persona_id or (persona_payload.persona_id if persona_payload is not None else None)
+    sink["personaFlavorId"] = persona_flavor_id or (persona_payload.flavor_id if persona_payload is not None else None)
+    sink["personaPrivacyTier"] = persona_privacy_tier or (
+        persona_payload.privacy_tier if persona_payload is not None else None
+    )
     parts = [
         part
         for part in (
-            persona_payload.prompt,
-            memory_payload.digest,
+            persona_payload.prompt if persona_payload is not None else None,
+            memory_payload.digest if memory_payload is not None else None,
         )
         if part
     ]

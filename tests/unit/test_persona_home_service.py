@@ -23,6 +23,30 @@ def test_persona_service_scaffolds_default_home_and_loads_private_context(tmp_pa
     assert (tmp_path / "personas" / "settings.json").exists()
 
 
+def test_persona_service_can_exclude_agent_operating_notes(tmp_path: Path) -> None:
+    service = PersonaHomeService(root_dir=tmp_path / "personas")
+
+    general_context = service.build_prompt_context(
+        provider="openai-codex",
+        model="gpt-5.5",
+        privacy_tier="private",
+        query="Talk with me",
+        include_agent_instructions=False,
+    )
+    code_context = service.build_prompt_context(
+        provider="openai-codex",
+        model="gpt-5.5",
+        privacy_tier="private",
+        query="Fix the code",
+        include_agent_instructions=True,
+    )
+
+    assert "CopeNet Persona Operating Notes" not in general_context.prompt
+    assert not any(path.endswith("/AGENTS.md") for path in general_context.loaded_files)
+    assert "CopeNet Persona Operating Notes" in code_context.prompt
+    assert any(path.endswith("/AGENTS.md") for path in code_context.loaded_files)
+
+
 def test_persona_service_layers_model_flavor_after_shared_core(tmp_path: Path) -> None:
     root = tmp_path / "personas"
     flavor_dir = root / "default" / "models" / "codex-cli" / "gpt-5.4"
