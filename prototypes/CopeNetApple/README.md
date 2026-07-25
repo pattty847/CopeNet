@@ -32,7 +32,13 @@ same session-create/chat-send flow already used by the web client.
 ## Prototype interaction
 
 Selecting an agent updates the workspace and inspector. The enabled toggle is
-live in memory, and **Start New Session** opens a native sheet with a responsive
-message composer.
+live in memory. Opening moves and quick starters populate the composer, sending
+the first message transitions the workspace into a live chat, and the native
+Chat/Fleet segmented control switches workspace modes.
 
-![Native new-session sheet](Screenshots/session-sheet.jpeg)
+The visual direction uses a deep-black operator console, restrained orange
+mission accents, native materials and controls, serif display typography, and
+compact runtime chips. It remains a real adaptive SwiftUI layout rather than a
+fixed screenshot recreation.
+
+![Native live-chat state](Screenshots/live-chat.jpeg)

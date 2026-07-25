@@ -7,9 +7,9 @@ struct CopeNetAppleApp: App {
     var body: some Scene {
         WindowGroup {
             AgentsPanel(model: model)
-                .frame(minWidth: 820, minHeight: 600)
+                .frame(minWidth: 980, minHeight: 680)
         }
-        .defaultSize(width: 1240, height: 780)
+        .defaultSize(width: 1340, height: 820)
 #if os(macOS)
         .windowStyle(.hiddenTitleBar)
         .windowToolbarStyle(.unifiedCompact)
