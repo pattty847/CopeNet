@@ -208,12 +208,21 @@ async def test_openai_codex_run_rejects_unsupported_model() -> None:
             pass
 
 
-def test_openai_codex_payload_includes_default_instructions_when_missing() -> None:
-    from copenet.providers.openai_codex import OPENAI_CODEX_DEFAULT_INSTRUCTIONS, _build_payload
+def test_openai_codex_payload_omits_instructions_rather_than_inventing_an_identity() -> None:
+    """The orchestrator owns instruction text; the provider must never substitute its own."""
+    from copenet.providers.openai_codex import _build_payload
 
     payload = _build_payload(model="gpt-5.4", prompt="Say OK.", system_prompt=None)
 
-    assert payload["instructions"] == OPENAI_CODEX_DEFAULT_INSTRUCTIONS
+    assert "instructions" not in payload
+
+
+def test_openai_codex_payload_passes_caller_instructions_through() -> None:
+    from copenet.providers.openai_codex import _build_payload
+
+    payload = _build_payload(model="gpt-5.4", prompt="Say OK.", system_prompt="  PROFILE_SENTINEL  ")
+
+    assert payload["instructions"] == "PROFILE_SENTINEL"
 
 
 def test_openai_codex_sse_completed_response_uses_deltas() -> None:

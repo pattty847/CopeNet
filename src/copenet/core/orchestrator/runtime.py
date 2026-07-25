@@ -12,6 +12,7 @@ from copenet.core._config import (
     auto_memory_extraction_enabled,
 )
 from copenet.core.harness.responses_items import image_content_part
+from copenet.core.orchestrator.context_budget import resolve_context_budget
 from copenet.core.orchestrator.messages import (
     build_chat_messages,
     estimate_input_tokens,
@@ -29,12 +30,15 @@ from copenet.core.tools import (
     policy_for_task_mode,
 )
 from copenet.core.tracing import RunTraceWriter
-from copenet.prompts import PromptContextPolicy, prompt_context_policy_for_chat
+from copenet.prompts import (
+    PromptContextPolicy,
+    compose_prompt,
+    prompt_context_policy_for_chat,
+)
 
 # Providers that maintain their own conversation thread and resume it via
 # provider_session_id — they must NOT be re-fed the flattened transcript.
 _RESUME_CLI_PROVIDERS = {"claude-cli"}
-MAX_CHAT_INPUT_TOKENS = 48_000
 
 if TYPE_CHECKING:
     from . import ChatSendRequest, Orchestrator
@@ -308,12 +312,23 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "workingSetRefCount": len(session_state.working_set_refs),
             },
         )
-        effective_system_prompt = request.system_prompt
-        prompt_policy = prompt_context_policy_for_chat(entry.system_prompt_id or request.system_prompt_id)
+        # The orchestrator is the single owner of the base instruction text. Every
+        # transport (WS, REST, SSE, CLI, Fleet, coordination lanes) passes ids; only
+        # an explicit `system_prompt` on the request overrides composition, and that
+        # override is traced so it can never be mistaken for the composed default.
+        resolved_system_prompt_id = entry.system_prompt_id or request.system_prompt_id
+        resolved_task_prompt_id = entry.task_prompt_id or request.task_prompt_id
+        composed_system_prompt = compose_prompt(resolved_system_prompt_id, resolved_task_prompt_id)
+        effective_system_prompt = request.system_prompt or composed_system_prompt
+        prompt_policy = prompt_context_policy_for_chat(resolved_system_prompt_id)
         trace.record(
             "prompt_context_policy_resolved",
             {
                 "purpose": prompt_policy.purpose.value,
+                "systemPromptId": resolved_system_prompt_id,
+                "taskPromptId": resolved_task_prompt_id,
+                "systemPromptSource": "request_override" if request.system_prompt else "composed",
+                "baseSystemPromptChars": len(effective_system_prompt or ""),
                 "includePersonaContext": prompt_policy.include_persona_context,
                 "includePersonaAgentInstructions": prompt_policy.include_persona_agent_instructions,
                 "includeRelevantMemory": prompt_policy.include_relevant_memory,
@@ -334,9 +349,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             attachment_resolver=_resolve_attachment_images,
         )
         unbounded_token_estimate = estimate_input_tokens(unbounded_chat_messages)
+        context_budget = resolve_context_budget(provider=provider_name)
         chat_messages = trim_messages_to_token_budget(
             unbounded_chat_messages,
-            max_context_tokens=MAX_CHAT_INPUT_TOKENS,
+            max_context_tokens=context_budget.input_tokens,
         )
         # CLI providers (claude-cli / openai-codex) keep their OWN conversation thread
         # server-side and resume it via provider_session_id. Re-sending the full
@@ -354,10 +370,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "messageCount": message_count,
                 "inputTokenEstimate": input_token_estimate,
                 "unboundedInputTokenEstimate": unbounded_token_estimate,
-                "contextTokenBudget": MAX_CHAT_INPUT_TOKENS,
                 "omittedMessageItemCount": len(unbounded_chat_messages) - len(chat_messages),
                 "historyTurns": len(history_for_replay),
                 "cliResume": cli_resume,
+                **context_budget.to_trace_dict(),
             },
         )
 
@@ -399,6 +415,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             abort_event=abort_event,
             model=request.model,
             system_prompt=effective_system_prompt,
+            purpose=prompt_policy.purpose.value,
+            input_token_budget=context_budget.input_tokens,
             available_tools=available_tools,
             tool_executor=_make_approval_gated_executor(
                 orchestrator._tool_registry.execute,

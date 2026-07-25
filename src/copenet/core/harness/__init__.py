@@ -70,6 +70,8 @@ class ChatHarness:
         prompt_context_builder: Callable[[HarnessTurnPlan], str | None] | None = None,
         messages: list[dict] | None = None,
         session_id: str | None = None,
+        purpose: str | None = None,
+        input_token_budget: int | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
         """Return the normalized plan and provider event stream.
 
@@ -93,6 +95,7 @@ class ChatHarness:
             trace(
                 "prompt_context_assembled",
                 {
+                    "purpose": purpose,
                     "baseSystemPromptChars": len(system_prompt or ""),
                     "contextOverlayChars": len(context_overlay or ""),
                     "combinedSystemPromptChars": len(effective_system_prompt or ""),
@@ -137,6 +140,7 @@ class ChatHarness:
                 tool_context=tool_context,
                 session_id=session_id or provider_session_id,
                 reasoning=DEFAULT_RESPONSES_REASONING,
+                input_token_budget=input_token_budget,
                 trace=trace,
             )
             return plan, stream

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
 from http.client import IncompleteRead
 from typing import Any, AsyncIterator, Iterator
@@ -12,11 +13,30 @@ from urllib import error, request
 from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuthService
 from copenet.providers.base import ProviderEvent, ProviderModel
 
+logger = logging.getLogger(__name__)
+
 OPENAI_CODEX_BASE_URL = "https://chatgpt.com/backend-api/codex"
 OPENAI_CODEX_MODELS = ("gpt-5.5", "gpt-5.4")
 OPENAI_CODEX_DEFAULT_MODEL = OPENAI_CODEX_MODELS[0]
 OPENAI_CODEX_ORIGINATOR = "copenet"
-OPENAI_CODEX_DEFAULT_INSTRUCTIONS = "You are CopeNet's coding assistant. Follow the user's request carefully."
+
+
+def _resolve_instructions(instructions: str | None) -> str | None:
+    """Return caller-owned instructions, or None — never an invented identity.
+
+    The orchestrator owns profile/Access composition for every transport. A
+    provider that substituted its own persona here would give the same session a
+    different identity depending on which lane it entered through, so an empty
+    value is passed through as "no instructions" and logged instead.
+    """
+    resolved = (instructions or "").strip()
+    if resolved:
+        return resolved
+    logger.warning(
+        "openai-codex received no instructions; sending the request without them. "
+        "The caller should compose profile/Access text before reaching the provider."
+    )
+    return None
 
 
 class OpenAICodexProvider:
@@ -270,7 +290,9 @@ def _build_responses_payload(
         "store": False,
         "stream": True,
     }
-    payload["instructions"] = (instructions or "").strip() or OPENAI_CODEX_DEFAULT_INSTRUCTIONS
+    resolved_instructions = _resolve_instructions(instructions)
+    if resolved_instructions:
+        payload["instructions"] = resolved_instructions
     if tools:
         # Sanitize tool names at the boundary too (defense-in-depth; they normally
         # arrive pre-sanitized from build_responses_tool_schemas).
@@ -553,8 +575,9 @@ def _build_payload(*, model: str, prompt: str, system_prompt: str | None) -> dic
         "stream": True,
         "text": {"verbosity": "medium"},
     }
-    instructions = (system_prompt or "").strip() or OPENAI_CODEX_DEFAULT_INSTRUCTIONS
-    payload["instructions"] = instructions
+    resolved_instructions = _resolve_instructions(system_prompt)
+    if resolved_instructions:
+        payload["instructions"] = resolved_instructions
     return payload
 
 

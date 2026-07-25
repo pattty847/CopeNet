@@ -9,7 +9,6 @@ from uuid import uuid4
 
 from copenet.host.rpc_schema import ChatEventPayload, EventFrame, ResponseFrame, RpcError, make_chat_event, make_event_frame, make_response_frame
 from copenet.core.orchestrator import ChatSendRequest, SessionInFlightError
-from copenet.prompts import compose_prompt
 
 
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
@@ -79,7 +78,9 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
         persona_flavor_id=_optional_text(raw, "personaFlavorId"),
         persona_privacy_tier=_optional_text(raw, "personaPrivacyTier"),
         timeout_ms=_optional_int(raw, "timeoutMs"),
-        system_prompt=compose_prompt(system_prompt_id, task_prompt_id),
+        # Profile/Access composition belongs to the orchestrator so every transport
+        # gets the same instructions. Only an explicit `systemPrompt` overrides it.
+        system_prompt=_optional_text(raw, "systemPrompt"),
         workspace_root=_optional_text(raw, "workspaceRoot"),
     )
 
