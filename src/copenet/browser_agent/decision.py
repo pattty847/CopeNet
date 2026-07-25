@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 from dataclasses import dataclass, field
 from typing import Protocol
 
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
+from copenet.prompts import PromptPurpose
 from copenet.providers import LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
 
 from .models import ActionDecision, BROWSER_ACTION_JSON_SCHEMA, BrowserAction, PageState
@@ -174,18 +175,16 @@ def _optional_int(value: object) -> int | None:
 
 
 async def _run_provider_text(*, provider: Provider, prompt: str, model: str, system_prompt: str) -> str:
-    abort_event = asyncio.Event()
-    chunks: list[str] = []
-    async for event in provider.run(
-        prompt=prompt,
-        provider_session_id=None,
-        abort_event=abort_event,
-        model=model,
-        system_prompt=system_prompt,
-    ):
-        if event.kind == "delta" and event.text:
-            chunks.append(event.text)
-    return "".join(chunks).strip()
+    return await collect_provider_text(
+        provider=provider,
+        request=ProviderTextRequest(
+            purpose=PromptPurpose.SPECIALIZED,
+            phase="browser_decision",
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+        ),
+    )
 
 
 def _default_system_prompt() -> str:

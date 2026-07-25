@@ -5,6 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
+from copenet.prompts import PromptPurpose
+
 if TYPE_CHECKING:
     from . import Orchestrator
 
@@ -58,20 +61,16 @@ async def generate_title(
         f"User message:\n{first_user_message}\n\n"
         f"Assistant response:\n{first_assistant_message}\n"
     )
-    abort_event = asyncio.Event()
-    parts: list[str] = []
-    async for event in provider.run(
-        prompt=title_prompt,
-        provider_session_id=None,
-        abort_event=abort_event,
-        model=model,
-        system_prompt="You generate short session titles. Return only the title text.",
-    ):
-        if event.kind == "delta" and event.text:
-            parts.append(event.text)
-        elif event.kind == "final":
-            break
-    title = "".join(parts).strip()
+    title = await collect_provider_text(
+        provider=provider,
+        request=ProviderTextRequest(
+            purpose=PromptPurpose.UTILITY,
+            phase="session_title",
+            prompt=title_prompt,
+            model=model,
+            system_prompt="You generate short session titles. Return only the title text.",
+        ),
+    )
     if not title:
         return None
     title = title.replace("\n", " ").strip().strip("\"'` ")

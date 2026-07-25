@@ -149,10 +149,6 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         "Available tools:\n"
         '- files.read: Read one fixture. Schema: {"properties": {"path": {"type": "string"}}, "type": "object"}'
     )
-    first_prompt = (
-        f"System instructions:\n{prompted_protocol}\n\n"
-        "User request:\nRead fixture"
-    )
     tool_result = json.dumps(
         {
             "callId": "call-fixed",
@@ -174,12 +170,7 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         "Answer the user in plain text when you have enough information, "
         "or request another tool with JSON if you need more."
     )
-    second_prompt = (
-        f"System instructions:\n{prompted_protocol}\n\n"
-        f"User request:\n{followup}"
-    )
-
-    assert [call["args"][2] for call in runner.calls] == [first_prompt, second_prompt]
+    assert [call["args"][2] for call in runner.calls] == ["Read fixture", followup]
     assert "--resume" not in runner.calls[0]["args"]
     assert runner.calls[1]["args"][-2:] == ["--resume", "claude-session"]
     for call in runner.calls:
@@ -187,5 +178,7 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         assert args[:2] == ["/opt/homebrew/bin/claude", "-p"]
         assert args[args.index("--output-format") + 1] == "stream-json"
         assert args[args.index("--tools") + 1] == ""
+        assert "--setting-sources=" in args
         assert args[args.index("--model") + 1] == "claude-sonnet-4-6"
+        assert args[args.index("--system-prompt") + 1] == prompted_protocol
     assert [event.text for event in events if event.kind == "delta"] == ["The fixture says hello."]

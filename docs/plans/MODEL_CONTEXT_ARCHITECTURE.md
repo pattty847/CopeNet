@@ -61,16 +61,33 @@ use an explicit context-window strategy:
 1. preserve recent user/assistant turns
 2. preserve unresolved tool-call/result pairs
 3. compact stale tool output first
-4. add a provenance-linked conversation summary when needed
-5. retain full history in storage for audit and export
+4. omit oldest complete turns from the provider view at the input budget
+5. add a provenance-linked conversation summary when needed
+6. retain full history in storage for audit and export
 
-This phase needs token accounting and its own boundary tests before implementation.
+CopeNet currently uses a conservative 48K estimated-token transcript budget.
+The estimate and omitted item count are traced. Provenance-linked summaries are
+still future work; omission never mutates the stored transcript.
+
+## Claude Transport
+
+Claude CLI 2.1 exposes a native `--system-prompt` flag. CopeNet uses that
+channel instead of embedding system text into `-p`, disables built-in tools,
+and passes `--setting-sources=` so filesystem settings and `CLAUDE.md` do not
+silently become model context.
+
+Anthropic's Agent SDK is the intended transport replacement. Its isolation
+defaults match this policy, it supports typed messages and context-usage
+inspection, and it bundles a compatible CLI. Migrating transport should preserve
+the provider-boundary tests and must not re-enable Claude's independent tool
+harness alongside CopeNet's tool runtime.
 
 ## Delivery Order
 
 1. Characterize provider boundaries. **Done.**
-2. Centralize request-purpose context policy and simplify defaults.
-3. Route utility calls through purpose-specific requests.
-4. Replace Claude CLI prompt embedding with the supported SDK/system-prompt path.
-5. Add context-window budgeting and transcript summarization.
-6. Add safe prompt diagnostics that expose sources and token estimates without secrets.
+2. Centralize request-purpose context policy and simplify defaults. **Done.**
+3. Route utility calls through purpose-specific requests. **Done.**
+4. Replace Claude prompt embedding with its native system-prompt path. **Done.**
+5. Add context-window budgeting. **Done; summaries remain future work.**
+6. Add safe prompt diagnostics that expose source sizes and token estimates. **Done.**
+7. Replace the raw Claude subprocess adapter with the Agent SDK transport.

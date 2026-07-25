@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from dataclasses import dataclass, replace
+import json
 from typing import AsyncIterator, Callable
 
 from copenet.providers import Provider, ProviderEvent
@@ -88,6 +89,22 @@ class ChatHarness:
         context_overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
         combined_system_prompt = "\n\n".join(part for part in (system_prompt, context_overlay) if part)
         effective_system_prompt = combined_system_prompt or None
+        if trace is not None:
+            trace(
+                "prompt_context_assembled",
+                {
+                    "baseSystemPromptChars": len(system_prompt or ""),
+                    "contextOverlayChars": len(context_overlay or ""),
+                    "combinedSystemPromptChars": len(effective_system_prompt or ""),
+                    "messageItemCount": len(messages or []),
+                    "messagePayloadChars": len(json.dumps(messages or [], ensure_ascii=False)),
+                    "toolCount": len(plan.tools),
+                    "toolSchemaChars": sum(
+                        len(json.dumps(tool.to_public_dict(), ensure_ascii=False))
+                        for tool in plan.tools
+                    ),
+                },
+            )
         decision_record = await resolve_harness_decision_record(
             provider=provider,
             prompt=prompt,

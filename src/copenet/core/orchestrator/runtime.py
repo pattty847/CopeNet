@@ -16,6 +16,7 @@ from copenet.core.orchestrator.messages import (
     build_chat_messages,
     estimate_input_tokens,
     flatten_messages_to_prompt,
+    trim_messages_to_token_budget,
 )
 from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
@@ -33,6 +34,7 @@ from copenet.prompts import PromptContextPolicy, prompt_context_policy_for_chat
 # Providers that maintain their own conversation thread and resume it via
 # provider_session_id — they must NOT be re-fed the flattened transcript.
 _RESUME_CLI_PROVIDERS = {"claude-cli"}
+MAX_CHAT_INPUT_TOKENS = 48_000
 
 if TYPE_CHECKING:
     from . import ChatSendRequest, Orchestrator
@@ -325,11 +327,16 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         # and a clean flattened prompt for prompt-only providers (CLI / LM Studio).
         full_history = orchestrator.history(session_key=session_key, limit=400)
         history_for_replay = _history_excluding_current(full_history, run_id=run_id)
-        chat_messages = build_chat_messages(
+        unbounded_chat_messages = build_chat_messages(
             transcript_messages=history_for_replay,
             current_user_message=message,
             current_user_image_parts=current_image_parts or None,
             attachment_resolver=_resolve_attachment_images,
+        )
+        unbounded_token_estimate = estimate_input_tokens(unbounded_chat_messages)
+        chat_messages = trim_messages_to_token_budget(
+            unbounded_chat_messages,
+            max_context_tokens=MAX_CHAT_INPUT_TOKENS,
         )
         # CLI providers (claude-cli / openai-codex) keep their OWN conversation thread
         # server-side and resume it via provider_session_id. Re-sending the full
@@ -346,6 +353,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             {
                 "messageCount": message_count,
                 "inputTokenEstimate": input_token_estimate,
+                "unboundedInputTokenEstimate": unbounded_token_estimate,
+                "contextTokenBudget": MAX_CHAT_INPUT_TOKENS,
+                "omittedMessageItemCount": len(unbounded_chat_messages) - len(chat_messages),
                 "historyTurns": len(history_for_replay),
                 "cliResume": cli_resume,
             },

@@ -69,7 +69,10 @@ tracked as open observability work in [ROADMAP.md](plans/ROADMAP.md).
 ```
 run_started
 session_resolved
+prompt_context_policy_resolved
+chat_messages_built
 harness_planned          willAttemptToolLoop: false
+prompt_context_assembled
 harness_decision_recorded status: "parsed" | "fallback" | "unavailable" (optional)
 provider_turn_started    phase: "provider"
 provider_session_updated (optional — provider assigned or changed session id)
@@ -126,6 +129,23 @@ run_failed               phase: "send_chat", error: "..."
 ```
 
 ## Key Events In Detail
+
+### Prompt and context events
+
+`prompt_context_policy_resolved` records the request purpose and whether persona
+context, persona `AGENTS.md`, and relevance-ranked memory were allowed.
+
+`chat_messages_built` records the bounded and unbounded input estimates,
+the 48K transcript budget, and how many oldest provider-view message items were
+omitted. Stored transcript entries are never removed.
+
+`prompt_context_assembled` records character counts for the base system prompt,
+persona/context overlay, structured message payload, and tool schemas. It never
+records raw prompt text.
+
+Purpose-tagged non-chat calls use the same safe metadata shape when their caller
+supplies a trace recorder: `model_request_started` and `model_request_completed`
+include the purpose, phase, size counts, and system-prompt transport.
 
 ### `harness_planned`
 

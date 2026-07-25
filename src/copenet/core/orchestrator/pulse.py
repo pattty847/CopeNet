@@ -2,18 +2,17 @@
 
 from __future__ import annotations
 
-import asyncio
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
 from copenet.core.orchestrator.catalog import create_session_with_profile, session_payload
 from copenet.core.orchestrator.merge import merge_sessions
 from copenet.core.pulse import PulseRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.session_store import utc_now_iso
-from copenet.prompts import compose_prompt
-from copenet.providers import ProviderEvent
+from copenet.prompts import PromptPurpose, compose_prompt
 
 if TYPE_CHECKING:
     from . import Orchestrator, SideEventEmit
@@ -315,20 +314,16 @@ async def _generate_pulse_copy(
     if provider is None:
         raise ValueError(f"unsupported provider: {provider_id}")
     prompt = _build_pulse_prompt(context)
-    abort_event = asyncio.Event()
-    chunks: list[str] = []
-    async for event in provider.run(
-        prompt,
-        provider_session_id=None,
-        abort_event=abort_event,
-        model=model,
-        system_prompt=compose_prompt(system_prompt_id, task_prompt_id),
-    ):
-        if event.kind == "delta" and event.text:
-            chunks.append(event.text)
-        if event.kind == "error":
-            raise RuntimeError(event.message or "pulse generation failed")
-    text = "".join(chunks).strip()
+    text = await collect_provider_text(
+        provider=provider,
+        request=ProviderTextRequest(
+            purpose=PromptPurpose.SPECIALIZED,
+            phase="pulse_generation",
+            prompt=prompt,
+            model=model,
+            system_prompt=compose_prompt(system_prompt_id, task_prompt_id),
+        ),
+    )
     if not text:
         raise RuntimeError(f"pulse generation returned no text for {context.session_key}")
     parsed = _parse_pulse_copy(text)

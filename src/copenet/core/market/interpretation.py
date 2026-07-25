@@ -14,11 +14,13 @@ Honesty rails (non-negotiable, enforced in prompt + parsing):
 
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from dataclasses import asdict, dataclass, field
 from typing import Any, Protocol
+
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
+from copenet.prompts import PromptPurpose
 
 MARKET_SYSTEM_PROMPT = """You are the market-interpretation layer of a personal market monitor.
 Its owner is a long-term accumulator who checks daily, thinks in weekly candles, and values honest,
@@ -216,20 +218,16 @@ class _ProviderLike(Protocol):
 
 async def _provider_text(provider: _ProviderLike, *, prompt: str, model: str, system_prompt: str) -> str:
     """One-shot provider call (no session) — the proven optimizer/meme-ideation pattern."""
-    abort_event = asyncio.Event()
-    chunks: list[str] = []
-    async for event in provider.run(
-        prompt=prompt,
-        provider_session_id=None,
-        abort_event=abort_event,
-        model=model,
-        system_prompt=system_prompt,
-    ):
-        if event.kind == "delta" and event.text:
-            chunks.append(event.text)
-        elif event.kind == "final" and event.text:
-            chunks.append(event.text)
-    return "".join(chunks).strip()
+    return await collect_provider_text(
+        provider=provider,  # type: ignore[arg-type]
+        request=ProviderTextRequest(
+            purpose=PromptPurpose.SPECIALIZED,
+            phase="market_interpretation",
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+        ),
+    )
 
 
 async def generate_market_read(

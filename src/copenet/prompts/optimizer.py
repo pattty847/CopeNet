@@ -1,10 +1,11 @@
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 from dataclasses import dataclass
 
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
+from copenet.prompts.policy import PromptPurpose
 from copenet.providers import Provider
 
 
@@ -94,20 +95,16 @@ async def _resolve_model(provider: Provider, requested_model: str | None) -> str
 
 
 async def _run_provider_text(*, provider: Provider, prompt: str, model: str, system_prompt: str) -> str:
-    abort_event = asyncio.Event()
-    chunks: list[str] = []
-    async for event in provider.run(
-        prompt=prompt,
-        provider_session_id=None,
-        abort_event=abort_event,
-        model=model,
-        system_prompt=system_prompt,
-    ):
-        if event.kind == "delta" and event.text:
-            chunks.append(event.text)
-        elif event.kind == "final" and event.text:
-            chunks.append(event.text)
-    return "".join(chunks).strip()
+    return await collect_provider_text(
+        provider=provider,
+        request=ProviderTextRequest(
+            purpose=PromptPurpose.UTILITY,
+            phase="prompt_optimizer",
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+        ),
+    )
 
 
 def _optimizer_system_prompt() -> str:

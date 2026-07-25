@@ -41,16 +41,18 @@ def build_chat_messages(
     `input_image` parts; `attachment_resolver` re-inlines images for past user
     turns so multi-turn vision survives replay.
 
-    Token-budget compaction is deferred (see HARNESS_REBUILD_V2 Phase 6+); for now
-    `max_context_tokens` is accepted but unused so callers can pass it through.
+    When `max_context_tokens` is set, oldest complete conversation turns are
+    omitted from the provider view. Durable transcript storage is untouched.
     """
-    del max_context_tokens  # compaction deferred
-    return responses_items.transcript_to_input_array(
+    messages = responses_items.transcript_to_input_array(
         transcript_messages=transcript_messages,
         current_user_message=current_user_message,
         current_user_image_parts=current_user_image_parts,
         attachment_resolver=attachment_resolver,
     )
+    if max_context_tokens is None:
+        return messages
+    return trim_messages_to_token_budget(messages, max_context_tokens=max_context_tokens)
 
 
 def estimate_input_tokens(messages: list[dict[str, Any]]) -> int:
@@ -59,6 +61,35 @@ def estimate_input_tokens(messages: list[dict[str, Any]]) -> int:
     for item in messages:
         total_chars += _item_text_length(item)
     return max(total_chars // 4, 0)
+
+
+def trim_messages_to_token_budget(
+    messages: list[dict[str, Any]],
+    *,
+    max_context_tokens: int,
+) -> list[dict[str, Any]]:
+    """Keep the newest complete user turns within an approximate token budget.
+
+    Tool calls and results stay together because selection happens at user-turn
+    boundaries. The live/current turn is always retained even if it alone
+    exceeds the budget.
+    """
+    if max_context_tokens <= 0 or estimate_input_tokens(messages) <= max_context_tokens:
+        return list(messages)
+    groups = _group_by_user_turn(messages)
+    if not groups:
+        return list(messages)
+
+    selected = [groups[-1]]
+    remaining = max_context_tokens - estimate_input_tokens(groups[-1])
+    for group in reversed(groups[:-1]):
+        group_tokens = estimate_input_tokens(group)
+        if group_tokens > remaining:
+            break
+        selected.append(group)
+        remaining -= group_tokens
+    selected.reverse()
+    return [item for group in selected for item in group]
 
 
 def flatten_messages_to_prompt(messages: list[dict[str, Any]]) -> str:
@@ -98,6 +129,19 @@ def _last_user_index(messages: list[dict[str, Any]]) -> int | None:
         if messages[index].get("role") == "user" and "content" in messages[index]:
             return index
     return None
+
+
+def _group_by_user_turn(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+    groups: list[list[dict[str, Any]]] = []
+    current: list[dict[str, Any]] = []
+    for item in messages:
+        if item.get("role") == "user" and current:
+            groups.append(current)
+            current = []
+        current.append(item)
+    if current:
+        groups.append(current)
+    return groups
 
 
 def _user_item_text(item: dict[str, Any]) -> str:

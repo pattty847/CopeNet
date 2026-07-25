@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-
 from copenet.core.meme_knowledge import build_meme_knowledge_index, build_meme_knowledge_pack
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
+from copenet.prompts import PromptPurpose
 from copenet.providers.base import Provider
 
 from .meme_ideation_constants import (
@@ -36,18 +36,16 @@ async def _resolve_model(provider: Provider, requested_model: str | None) -> str
 
 
 async def _run_provider_text(*, provider: Provider, prompt: str, model: str, system_prompt: str) -> str:
-    abort_event = asyncio.Event()
-    chunks: list[str] = []
-    async for event in provider.run(
-        prompt=prompt,
-        provider_session_id=None,
-        abort_event=abort_event,
-        model=model,
-        system_prompt=system_prompt,
-    ):
-        if event.kind == "delta" and event.text:
-            chunks.append(event.text)
-    return "".join(chunks).strip()
+    return await collect_provider_text(
+        provider=provider,
+        request=ProviderTextRequest(
+            purpose=PromptPurpose.SPECIALIZED,
+            phase="meme_ideation",
+            prompt=prompt,
+            model=model,
+            system_prompt=system_prompt,
+        ),
+    )
 
 
 async def ideate_memes(

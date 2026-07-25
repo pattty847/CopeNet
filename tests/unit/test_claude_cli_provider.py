@@ -66,6 +66,7 @@ def test_claude_cli_build_args_defaults_to_opus(provider: ClaudeCliProvider) -> 
         "--verbose",
         "--tools",
         "",
+        "--setting-sources=",
         "--model",
         "claude-opus-4-7",
     ]
@@ -134,10 +135,10 @@ async def test_claude_cli_run_streams_jsonl_and_persists_session(
 
 
 @pytest.mark.asyncio
-async def test_claude_cli_run_does_not_render_system_prompt_itself(
+async def test_claude_cli_run_uses_native_system_prompt_flag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The harness embeds Claude's system text into prompt before this boundary."""
+    """Claude receives system text separately and filesystem settings stay isolated."""
     monkeypatch.setattr("shutil.which", lambda name: "/opt/homebrew/bin/claude" if name == "claude" else None)
     runner = RecordingRunner([RunnerResult(returncode=0, stdout_tail="", stderr_tail="")])
     subject = ClaudeCliProvider(runner=runner)
@@ -155,7 +156,8 @@ async def test_claude_cli_run_does_not_render_system_prompt_itself(
 
     args = runner.calls[0]["args"]
     assert args[args.index("-p") + 1] == "USER_PROMPT_SENTINEL"
-    assert "SYSTEM_PROMPT_SENTINEL" not in args
+    assert args[args.index("--system-prompt") + 1] == "SYSTEM_PROMPT_SENTINEL"
+    assert "--setting-sources=" in args
 
 
 @pytest.mark.asyncio

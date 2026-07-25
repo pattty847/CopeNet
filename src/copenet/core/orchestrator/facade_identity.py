@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-import asyncio
-
+from copenet.core.model_request import ProviderTextRequest, collect_provider_text
 from copenet.core.persona import PersonaPrivacyTier
+from copenet.prompts import PromptPurpose
 
 from .persona_flavor import parse_persona_flavor_draft as _parse_persona_flavor_draft
 
@@ -79,21 +79,19 @@ class IdentityFacadeMixin:
             "Reflect the operator/workspace reality honestly. "
             "Do not invent new private memories or claim a relationship history you do not have."
         )
-        abort_event = asyncio.Event()
-        parts: list[str] = []
-        async for event in provider.run(
-            prompt=prompt,
-            provider_session_id=None,
-            abort_event=abort_event,
-            model=model,
-            system_prompt=(
-                "You draft concise assistant identity files for local operator review. "
-                "Use the provided Persona Home context carefully and stay grounded in the real workspace."
+        raw_text = await collect_provider_text(
+            provider=provider,
+            request=ProviderTextRequest(
+                purpose=PromptPurpose.SPECIALIZED,
+                phase="persona_flavor_draft",
+                prompt=prompt,
+                model=model,
+                system_prompt=(
+                    "You draft concise assistant identity files for local operator review. "
+                    "Use the provided Persona Home context carefully and stay grounded in the real workspace."
+                ),
             ),
-        ):
-            if event.kind == "delta" and event.text:
-                parts.append(event.text)
-        raw_text = "".join(parts).strip()
+        )
         return {
             "provider": provider_id,
             "model": model,

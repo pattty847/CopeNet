@@ -42,7 +42,13 @@ class ClaudeCliProvider:
             raise ValueError(f"unsupported claude cli model: {normalized}. Supported models: {supported}")
         return normalized
 
-    def _build_args(self, prompt: str, provider_session_id: str | None, model: str | None) -> list[str]:
+    def _build_args(
+        self,
+        prompt: str,
+        provider_session_id: str | None,
+        model: str | None,
+        system_prompt: str | None = None,
+    ) -> list[str]:
         args = [
             self._cli,
             "-p",
@@ -52,9 +58,14 @@ class ClaudeCliProvider:
             "--verbose",
             "--tools",
             "",
+            # Match Agent SDK isolation: do not let user/project/local Claude
+            # settings or CLAUDE.md silently become CopeNet model context.
+            "--setting-sources=",
             "--model",
             self._resolve_model(model),
         ]
+        if system_prompt:
+            args.extend(["--system-prompt", system_prompt])
         if provider_session_id:
             args.extend(["--resume", provider_session_id])
         return args
@@ -141,7 +152,12 @@ class ClaudeCliProvider:
         system_prompt: str | None = None,
     ) -> AsyncIterator[ProviderEvent]:
         """Run a single Claude CLI turn and stream provider events."""
-        args = self._build_args(prompt=prompt, provider_session_id=provider_session_id, model=model)
+        args = self._build_args(
+            prompt=prompt,
+            provider_session_id=provider_session_id,
+            model=model,
+            system_prompt=system_prompt,
+        )
         discovered_session_id: str | None = provider_session_id
         emitted_text = False
 
