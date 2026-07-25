@@ -132,20 +132,45 @@ run_failed               phase: "send_chat", error: "..."
 
 ### Prompt and context events
 
-`prompt_context_policy_resolved` records the request purpose and whether persona
-context, persona `AGENTS.md`, and relevance-ranked memory were allowed.
+`prompt_context_policy_resolved` records the request purpose, the resolved
+profile/Access ids, whether persona context, persona `AGENTS.md`, and
+relevance-ranked memory were allowed, and — importantly — `systemPromptSource`.
 
-`chat_messages_built` records the bounded and unbounded input estimates,
-the 48K transcript budget, and how many oldest provider-view message items were
-omitted. Stored transcript entries are never removed.
+`systemPromptSource` is `"composed"` when the orchestrator built the instructions
+from `(systemPromptId, taskPromptId)`, and `"request_override"` when the caller
+supplied explicit `system_prompt` text. The orchestrator is the single owner, so
+every transport (WebSocket, REST, SSE, CLI, Fleet, coordination lanes) reports
+`"composed"` for the same binding. A `baseSystemPromptChars` of 0 on an
+interactive run means the model received no profile or Access instructions and is
+always a bug.
 
-`prompt_context_assembled` records character counts for the base system prompt,
-persona/context overlay, structured message payload, and tool schemas. It never
-records raw prompt text.
+`chat_messages_built` records the bounded and unbounded input estimates, how many
+oldest provider-view message items were omitted, and the resolved budget:
+`inputTokenBudget`, `modelContextTokens`, `reservedOutputTokens`, and
+`budgetSource` (`model_metadata` | `provider_fallback`, optionally `_floored`).
+The estimator charges text, images, reasoning, and unmodelled item shapes, so a
+vision-heavy conversation reports a real size. Stored transcript entries are
+never removed — the budget bounds only the provider view.
+
+`tool_loop_input_trimmed` fires when a growing tool loop crosses the budget
+mid-turn, after stale-tool-output compaction. Its absence means the turn stayed
+within budget on its own.
+
+`prompt_context_assembled` records the request purpose plus character counts for
+the base system prompt, persona/context overlay, structured message payload, and
+tool schemas. It never records raw prompt text.
+
+`prompted_tool_response_interpreted` records `toolCallCount`,
+`malformedBlockCount`, and `rejectedToolIds`. A reply with zero tool calls but a
+non-zero `malformedBlockCount` or `rejectedToolIds` is an *attempted* call, not a
+finished answer; `prompted_tool_correction_sent` follows when the harness sends
+the model a corrective follow-up instead of shipping broken syntax to the user.
 
 Purpose-tagged non-chat calls use the same safe metadata shape when their caller
 supplies a trace recorder: `model_request_started` and `model_request_completed`
-include the purpose, phase, size counts, and system-prompt transport.
+include the purpose, phase, size counts, and system-prompt transport. No
+production caller passes a recorder yet, so these do not currently appear in run
+traces.
 
 ### `harness_planned`
 

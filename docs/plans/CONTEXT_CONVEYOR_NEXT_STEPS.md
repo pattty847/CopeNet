@@ -157,6 +157,8 @@ verify.
 
 ### Phase 1 — Establish one prompt owner
 
+Status: **implemented** (2026-07-25).
+
 Changes:
 
 1. Compose profile and Access text inside the orchestrator for every
@@ -181,6 +183,8 @@ Tests:
 - Assert no ambient prompt for title generation and other utilities.
 
 ### Phase 2 — Make prompted tools unambiguous and policy-bound
+
+Status: **implemented** (2026-07-25).
 
 Changes:
 
@@ -210,6 +214,8 @@ Tests:
 
 ### Phase 3 — Unify the tool-result contract
 
+Status: **implemented** (2026-07-25).
+
 Changes:
 
 1. Send the same model-facing envelope on prompted, native Chat, and Responses
@@ -236,6 +242,8 @@ Acceptance:
 - All three tool loops pass the same contract test.
 
 ### Phase 4 — Fix budget measurement, then raise the target
+
+Status: **implemented** (2026-07-25).
 
 Changes:
 
@@ -423,6 +431,9 @@ drawing conclusions from model self-report.
 Implement Phases 1–4 as the first coherent unit. They fix the incorrect prompt
 ownership, unsafe prompted-tool parsing, lossy tool results, and false context
 budget—the four issues most likely to create confusing or unsafe model behavior.
+
+**Phases 1–4 are implemented as of 2026-07-25** (653 tests passing). Phase 5 is
+the next unit and is investigation-first.
 
 Stop and review traces/tests before Phase 5. Claude resume behavior must be
 measured before changing its continuation protocol. Then implement Phases 6–8
