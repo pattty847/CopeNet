@@ -11,6 +11,7 @@ from uuid import uuid4
 from copenet.core._config import (
     auto_memory_extraction_enabled,
 )
+from copenet.core.harness import PromptOverlay
 from copenet.core.harness.responses_items import image_content_part
 from copenet.core.orchestrator.context_budget import resolve_context_budget
 from copenet.core.orchestrator.messages import (
@@ -1155,7 +1156,7 @@ def _build_identity_memory_overlay(
     persona_privacy_tier: str | None,
     policy: PromptContextPolicy,
     sink: dict[str, object],
-) -> str | None:
+) -> PromptOverlay:
     persona_payload = (
         orchestrator._persona_service.build_prompt_context(
             provider=provider,
@@ -1183,12 +1184,11 @@ def _build_identity_memory_overlay(
     sink["personaPrivacyTier"] = persona_privacy_tier or (
         persona_payload.privacy_tier if persona_payload is not None else None
     )
-    parts = [
-        part
-        for part in (
-            persona_payload.prompt if persona_payload is not None else None,
-            memory_payload.digest if memory_payload is not None else None,
-        )
-        if part
-    ]
-    return "\n\n".join(parts) if parts else None
+    # Kept separate: persona is spliced into the base contract's `{{persona}}` slot,
+    # while memory is turn context appended after it. Joining them here (the old
+    # behavior) forced both to land at the end, which put voice in the prompt's
+    # strongest position.
+    return PromptOverlay(
+        persona=(persona_payload.prompt or None) if persona_payload is not None else None,
+        memory=(memory_payload.digest or None) if memory_payload is not None else None,
+    )

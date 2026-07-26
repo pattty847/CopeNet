@@ -15,7 +15,25 @@ import pytest
 
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
 from copenet.prompts import compose_prompt
+from copenet.prompts.loader import PERSONA_PLACEHOLDER, get_task_mode_text
 from copenet.providers import ProviderEvent
+
+
+def assert_composed_prompt_delivered(expected: str, delivered: str | None) -> None:
+    """The composed text must reach the provider intact, modulo the persona splice.
+
+    A plain substring check stopped working once persona moved from "appended at the
+    end" to "spliced into `{{persona}}`": the composed string still carries the
+    placeholder, while the delivered one carries resolved voice in its place. Both
+    halves must still appear, in order, so the layering cannot silently drop a layer.
+    """
+    assert delivered is not None, "provider reached with no instructions"
+    head, sep, tail = expected.partition(PERSONA_PLACEHOLDER)
+    assert head and head in delivered, "composed prompt did not reach the provider"
+    if not sep:
+        return
+    assert tail and tail in delivered, "text after the persona slot was dropped"
+    assert delivered.index(head) < delivered.index(tail), "composed layers arrived out of order"
 
 
 class RecordingProvider:
@@ -76,9 +94,7 @@ async def test_every_entry_point_receives_the_composed_profile_and_access_prompt
 
     await orch.send_chat(_request(session_key), emit=_noop_emit)
 
-    system_prompt = provider.calls[-1]["system_prompt"]
-    assert system_prompt is not None, "provider reached with no instructions"
-    assert expected in system_prompt
+    assert_composed_prompt_delivered(expected, provider.calls[-1]["system_prompt"])
 
 
 @pytest.mark.asyncio
@@ -101,10 +117,16 @@ async def test_explicit_system_prompt_is_treated_as_a_deliberate_override(
 async def test_access_overlay_travels_with_the_escalated_tool_policy(
     orchestrator: tuple[Orchestrator, RecordingProvider],
 ) -> None:
-    """Full Access must never grant authority without also stating what it means."""
+    """Full Access must never grant authority without also stating what it means.
+
+    Asserts the Access overlay specifically rather than a whole composed prompt:
+    `compose_prompt(None, ...)` omits the profile and domain layers that a real
+    request carries, so comparing full compositions would only test the layering
+    order, not that the authority statement travelled.
+    """
     orch, provider = orchestrator
-    access_text = compose_prompt(None, "full-access") or ""
-    assert access_text.strip()
+    access_text = (get_task_mode_text("full-access") or "").strip()
+    assert access_text
 
     await orch.send_chat(_request("authority-lane"), emit=_noop_emit)
 

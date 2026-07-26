@@ -6,10 +6,21 @@ from copenet.prompts import (
     prompt_context_policy,
     prompt_context_policy_for_chat,
 )
+from copenet.prompts.loader import PERSONA_PLACEHOLDER
 
 
-def test_default_profile_is_minimal() -> None:
-    assert compose_prompt("default", "none") == "# Default\n\nBe a helpful AI."
+def test_default_profile_composes_the_base_contract_and_a_persona_slot() -> None:
+    """The default composition is the base agent contract, not a bare profile line.
+
+    Previously this asserted the whole prompt was "# Default\n\nBe a helpful AI." —
+    accurate at the time, and the reason the harness shipped with no behavioral
+    contract at all. The profile line is still there; it is now the smallest layer.
+    """
+    composed = compose_prompt("default", "none") or ""
+
+    assert composed.startswith("# CopeNet Agent")
+    assert PERSONA_PLACEHOLDER in composed
+    assert "Be a helpful AI." in composed
 
 
 def test_general_chat_excludes_agent_notes_and_ranked_memory() -> None:

@@ -7,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from copenet.core.harness import ChatHarness
+from copenet.core.harness import ChatHarness, PromptOverlay
 from copenet.core.tools import (
     ToolDescriptor,
     ToolExecutionContext,
@@ -132,7 +132,7 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         abort_event=asyncio.Event(),
         model="claude-sonnet-4-6",
         system_prompt="PROFILE_SENTINEL\n\nACCESS_SENTINEL",
-        prompt_context_builder=lambda _plan: "PERSONA_SENTINEL\n\nMEMORY_SENTINEL",
+        prompt_context_builder=lambda _plan: PromptOverlay(persona="PERSONA_SENTINEL", memory="MEMORY_SENTINEL"),
         available_tools=[tool],
         tool_executor=tool_executor,
         tool_context=_tool_context(tmp_path),

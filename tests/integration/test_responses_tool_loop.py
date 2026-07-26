@@ -16,6 +16,7 @@ from typing import Any, AsyncIterator
 
 import pytest
 
+from copenet.core.harness import PromptOverlay
 from copenet.core.harness.planning import HarnessTurnPlan
 from copenet.core.harness.capabilities import ModelCapabilityProfile
 from copenet.core.harness.tool_loop import run_with_responses_tools
@@ -415,7 +416,7 @@ async def test_harness_sends_agent_instructions_on_responses_path(tmp_path: Path
         abort_event=asyncio.Event(),
         model="gpt-5.5",
         system_prompt="PROFILE_SENTINEL\n\nACCESS_SENTINEL",
-        prompt_context_builder=lambda _plan: "PERSONA_SENTINEL\n\nMEMORY_SENTINEL",
+        prompt_context_builder=lambda _plan: PromptOverlay(persona="PERSONA_SENTINEL", memory="MEMORY_SENTINEL"),
         available_tools=_make_plan().tools,
         tool_executor=tool_executor,
         tool_context=_make_context(tmp_path),

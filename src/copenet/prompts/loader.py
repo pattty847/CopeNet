@@ -90,12 +90,83 @@ def get_task_mode_text(task_mode_id: str) -> str | None:
     return _read_prompt(_prompts_dir() / f"{_safe_id(task_mode_id)}.md")
 
 
-def compose_prompt(profile_id: str | None, task_mode_id: str | None) -> str | None:
-    """Compose a final system prompt from a base profile and optional task overlay."""
+# Where the persona's voice is spliced into the base contract. The base prompt
+# places this deliberately — after the role framing and the precedence rules, but
+# before the working sections — so tone is established without being able to argue
+# with the contract. Appending persona at the end instead (the old behavior) put
+# voice in the strongest position in the prompt, which is backwards.
+PERSONA_PLACEHOLDER = "{{persona}}"
+
+BASE_PROMPT_ID = "default"
+
+# Bridge until `profiles/` is dissolved into domains + personas. A profile id today
+# carries domain intent ("debug", "refactor") mixed with voice ("friendly",
+# "teacher"), so the coding-shaped ones select domains/coding.md. Profiles listed
+# as None are explicitly non-coding and inherit only the base contract; anything
+# unlisted falls back to _DEFAULT_DOMAIN, since CopeNet's default surface is a code
+# workspace. Delete this map once the session carries a real domain field.
+_DEFAULT_DOMAIN = "coding"
+_PROFILE_DOMAINS: dict[str, str | None] = {
+    "direct": None,
+    "friendly": None,
+    "teacher": None,
+}
+
+
+def get_base_text(base_id: str = BASE_PROMPT_ID) -> str | None:
+    """Return the universal agent contract."""
+    return get_prompt_text("base", base_id)
+
+
+def get_domain_text(domain_id: str | None) -> str | None:
+    """Return the domain layer text, if any."""
+    if not domain_id:
+        return None
+    return get_prompt_text("domains", domain_id)
+
+
+def domain_for_profile(profile_id: str | None) -> str | None:
+    """Resolve which domain layer a profile implies."""
+    normalized = (profile_id or "").strip().lower()
+    if normalized in _PROFILE_DOMAINS:
+        return _PROFILE_DOMAINS[normalized]
+    return _DEFAULT_DOMAIN
+
+
+def apply_persona(prompt: str | None, persona_text: str | None) -> str | None:
+    """Splice persona voice into the base contract's slot.
+
+    Falls back to appending when the prompt has no slot — a request-supplied
+    `system_prompt` override or a legacy composition should still receive persona
+    rather than silently dropping it.
+    """
+    if not prompt:
+        return "\n\n".join(part for part in (prompt, persona_text) if part) or None
+    if PERSONA_PLACEHOLDER not in prompt:
+        return "\n\n".join(part for part in (prompt, persona_text) if part)
+    return prompt.replace(PERSONA_PLACEHOLDER, (persona_text or "").strip())
+
+
+def compose_prompt(
+    profile_id: str | None,
+    task_mode_id: str | None,
+    *,
+    domain_id: str | None = None,
+) -> str | None:
+    """Compose the layered system prompt.
+
+    Order is least to most specific, matching the precedence the base contract
+    declares: universal contract, then voice, then domain, then the access
+    overlay. `{{persona}}` is left in place here — the harness substitutes it once
+    the persona service has resolved, since persona depends on provider/model.
+    """
+    base_text = get_base_text()
     profile_text = get_profile_text(profile_id or "")
+    resolved_domain = domain_id if domain_id is not None else domain_for_profile(profile_id)
+    domain_text = get_domain_text(resolved_domain)
     normalized_task_mode = (task_mode_id or "").strip().lower()
     task_text = None if not normalized_task_mode or normalized_task_mode == "none" else get_task_mode_text(task_mode_id or "")
-    parts = [part for part in (profile_text, task_text) if part]
+    parts = [part for part in (base_text, profile_text, domain_text, task_text) if part]
     if not parts:
         return None
     return "\n\n".join(parts)

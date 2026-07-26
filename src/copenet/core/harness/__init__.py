@@ -9,6 +9,7 @@ from typing import AsyncIterator, Callable
 
 from copenet.providers import Provider, ProviderEvent
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext
+from copenet.prompts.loader import PERSONA_PLACEHOLDER, apply_persona
 
 from .capabilities import ModelCapabilityProfile
 from .decision import resolve_harness_decision_record
@@ -32,6 +33,20 @@ class HarnessResult:
 
     plan: HarnessTurnPlan
     provider_session_id: str | None = None
+
+
+@dataclass(frozen=True)
+class PromptOverlay:
+    """Per-turn prompt context, split by where each part belongs.
+
+    Persona and memory used to arrive pre-joined as one appended blob. They are
+    separated because they are different kinds of thing: persona is identity and
+    belongs in the base contract's `{{persona}}` slot, while memory is dynamic
+    context for this turn and belongs after the contract.
+    """
+
+    persona: str | None = None
+    memory: str | None = None
 
 
 class ChatHarness:
@@ -67,7 +82,7 @@ class ChatHarness:
         tool_executor: ToolExecutor | None = None,
         tool_context: ToolExecutionContext | None = None,
         trace: TraceRecorder | None = None,
-        prompt_context_builder: Callable[[HarnessTurnPlan], str | None] | None = None,
+        prompt_context_builder: Callable[[HarnessTurnPlan], PromptOverlay | None] | None = None,
         messages: list[dict] | None = None,
         session_id: str | None = None,
         purpose: str | None = None,
@@ -88,8 +103,13 @@ class ChatHarness:
             prompt=prompt,
             trace=trace,
         )
-        context_overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
-        combined_system_prompt = "\n\n".join(part for part in (system_prompt, context_overlay) if part)
+        overlay = prompt_context_builder(plan) if prompt_context_builder is not None else None
+        # Persona is spliced into the contract's slot rather than appended; memory
+        # follows the contract as turn context. apply_persona falls back to appending
+        # when there is no slot, so a request-supplied system_prompt still gets voice.
+        personalized_prompt = apply_persona(system_prompt, overlay.persona if overlay is not None else None)
+        context_overlay = overlay.memory if overlay is not None else None
+        combined_system_prompt = "\n\n".join(part for part in (personalized_prompt, context_overlay) if part)
         effective_system_prompt = combined_system_prompt or None
         if trace is not None:
             trace(
@@ -97,6 +117,17 @@ class ChatHarness:
                 {
                     "purpose": purpose,
                     "baseSystemPromptChars": len(system_prompt or ""),
+                    # personaChars is spliced INTO the base prompt, so it is not part
+                    # of contextOverlayChars — which now counts memory only. Without
+                    # this field a persona-active run traces as contextOverlayChars: 0
+                    # and reads as "no persona", which is how the splice would hide.
+                    "personaChars": len(overlay.persona or "") if overlay is not None else 0,
+                    "personaSpliced": bool(
+                        overlay is not None
+                        and overlay.persona
+                        and system_prompt
+                        and PERSONA_PLACEHOLDER in system_prompt
+                    ),
                     "contextOverlayChars": len(context_overlay or ""),
                     "combinedSystemPromptChars": len(effective_system_prompt or ""),
                     "messageItemCount": len(messages or []),
