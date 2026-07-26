@@ -1,4 +1,5 @@
 import type { SessionRunRecord } from '../types/backend';
+import { normalizeToolResultPreview, type PreviewLimits } from '../lib/wsNormalizers';
 import type {
   ActivityItem,
   ActivityNote,
@@ -35,10 +36,41 @@ function mapToolStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'][
     policyDecision: step.policyDecision ?? null,
     policySummary: step.policySummary ?? null,
     error: step.error ?? null,
+    preview: previewSummary(step.preview),
+    previewFullChars: previewFullChars(step.preview),
+    arguments: step.arguments ?? null,
+    argumentsTruncated: step.argumentsTruncated ?? null,
   };
 }
 
-function previewSummary(preview: SessionRunRecord['toolSteps'][number]['members'][number]['preview'] | undefined): string | null {
+/**
+ * Budgets for the Inspect drawer. The inline transcript deliberately shows a
+ * teaser; this is the "show me everything" surface, so it keeps whatever the
+ * backend was willing to send. maxChars matches contracts.py's
+ * INSPECTOR_INLINE_BODY_CHARS so nothing survives the wire only to be clipped here.
+ */
+const DRAWER_PREVIEW_LIMITS: PreviewLimits = {
+  maxChars: 4000,
+  maxLines: 2000,
+  maxMatches: 200,
+  maxResults: 50,
+};
+
+/**
+ * Render a tool-result preview to inspectable text.
+ *
+ * Run-record previews arrive as the raw backend dict and MUST be normalized
+ * first. contracts.py::_preview_payload tags diff/plan/web_search/web_doc but
+ * sends files.read as a bare `{path, content}`, files.rg as `{matches}` whose
+ * rows carry `text` (not `snippet`), and shell.exec/artifact.create as
+ * `{preview}`. This function used to tag-dispatch the raw dict, so every one of
+ * those fell through to null — file reads, searches, and shell commands, the
+ * three most common calls, rendered blank in the drawer while the live inline
+ * rows showed them fine (the WS path already normalized). Same normalizer here,
+ * with drawer-sized budgets, closes that gap.
+ */
+function previewSummary(raw: unknown): string | null {
+  const preview = normalizeToolResultPreview(raw, DRAWER_PREVIEW_LIMITS);
   if (!preview) return null;
   if (preview.type === 'file_read') {
     const lines = Array.isArray(preview.lines) ? preview.lines.filter((line) => typeof line === 'string') : [];
@@ -47,9 +79,7 @@ function previewSummary(preview: SessionRunRecord['toolSteps'][number]['members'
   if (preview.type === 'repo_search') {
     const matches = Array.isArray(preview.matches) ? preview.matches : [];
     if (matches.length === 0) return null;
-    return matches
-      .map((match) => `${match.path}:${match.line} ${match.snippet}`)
-      .join('\n');
+    return matches.map((match) => `${match.path}:${match.line} ${match.snippet}`).join('\n');
   }
   if (preview.type === 'diff') {
     return preview.diff || null;
@@ -64,6 +94,19 @@ function previewSummary(preview: SessionRunRecord['toolSteps'][number]['members'
     return preview.text || `${preview.title} (${preview.url})` || null;
   }
   return preview.text || null;
+}
+
+/**
+ * True body length when the backend clipped a preview, so the drawer can say so.
+ *
+ * Reads the RAW payload on purpose: normalizeToolResultPreview's raw fallback
+ * rebuilds `{type, text}` and drops fullChars/truncated along the way.
+ */
+function previewFullChars(raw: unknown): number | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const payload = raw as Record<string, unknown>;
+  if (!payload.truncated) return null;
+  return typeof payload.fullChars === 'number' ? payload.fullChars : null;
 }
 
 function expandRunStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'][number], index: number): ActivityToolCall[] {
@@ -91,6 +134,7 @@ function expandRunStep(run: SessionRunRecord, step: SessionRunRecord['toolSteps'
     policySummary: member.policySummary ?? null,
     error: member.error ?? null,
     preview: previewSummary(member.preview),
+    previewFullChars: previewFullChars(member.preview),
   }));
 }
 
@@ -182,7 +226,17 @@ function callsToGroup(run: SessionRunRecord, kind: ActivityProofGroupKind, calls
       target: call.target ?? null,
       artifactId: call.artifactId ?? null,
       outputPreview: call.summary,
-      fullOutput: call.error ?? call.policySummary ?? call.preview ?? null,
+      // On a failure the error is why the operator opened the drawer, so it leads.
+      // On success the result body leads — policySummary is set on allowed calls
+      // too ("Read stayed inside the home workspace"), and letting it win here hid
+      // every successful result behind a policy note. It gets its own line instead.
+      fullOutput: call.ok
+        ? call.preview ?? call.policySummary ?? null
+        : call.error ?? call.preview ?? call.policySummary ?? null,
+      fullOutputChars: call.previewFullChars ?? null,
+      policySummary: call.policySummary ?? null,
+      arguments: call.arguments ?? null,
+      argumentsTruncated: call.argumentsTruncated ?? null,
       additions: null,
       deletions: null,
       fileCount: null,

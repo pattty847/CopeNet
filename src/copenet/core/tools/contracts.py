@@ -197,6 +197,11 @@ class ToolExecutionResult:
                 value = body.get(key)
                 if value is not None:
                     payload[key] = value
+        if arguments:
+            call_arguments, argument_truncation = _arguments_payload(arguments)
+            payload["arguments"] = call_arguments
+            if argument_truncation:
+                payload["argumentsTruncated"] = argument_truncation
         preview = _preview_payload(self.tool_id, self.body if self.body is not None else self.output)
         if preview is not None:
             payload["preview"] = preview
@@ -313,9 +318,44 @@ class ToolBlockedError(RuntimeError):
         self.policy_summary = policy_summary or message
 
 
+# Inline inspector budget for a tool result that has no hand-written preview
+# branch below. Kept at the harness spill threshold
+# (tool_result_materialization.LARGE_TOOL_RESULT_CHAR_LIMIT, 4000) on purpose:
+# anything larger is already persisted whole as a `tool_output` artifact, so
+# pairing the two means every tool result is recoverable by one route or the
+# other with no gap in between. Raising the spill threshold without raising this
+# reopens that gap.
+INSPECTOR_INLINE_BODY_CHARS = 4000
+
+
+def _generic_preview(body: Any) -> dict[str, Any]:
+    """Structural fallback so a tool with no bespoke branch is still inspectable.
+
+    Every branch in `_preview_payload` is a hand-written lossy projection, which
+    means a tool nobody wrote a branch for used to render as an empty row in the
+    Inspect drawer — indistinguishable from a tool that returned nothing. This
+    reports the real body plus an honest character count instead.
+    """
+    if isinstance(body, str):
+        serialized = body
+    else:
+        serialized = json.dumps(body, ensure_ascii=False, indent=2, default=str)
+    full_chars = len(serialized)
+    if full_chars <= INSPECTOR_INLINE_BODY_CHARS:
+        return {"type": "raw", "text": serialized, "fullChars": full_chars}
+    return {
+        "type": "raw",
+        "text": serialized[:INSPECTOR_INLINE_BODY_CHARS].rstrip(),
+        "fullChars": full_chars,
+        "truncated": True,
+    }
+
+
 def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
-    if not isinstance(body, dict):
+    if body is None:
         return None
+    if not isinstance(body, dict):
+        return _generic_preview(body)
     if tool_id == "plan.write":
         items = body.get("items")
         if isinstance(items, list):
@@ -439,7 +479,28 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             "artifactId": body.get("artifactId"),
             "preview": body.get("preview") or body.get("title"),
         }
-    return None
+    return _generic_preview(body)
+
+
+def _arguments_payload(arguments: dict[str, Any]) -> tuple[dict[str, Any], dict[str, int]]:
+    """Return the call arguments for the inspector, plus a map of what got clipped.
+
+    Arguments are the half of a tool call the run record never carried: it could
+    show that `files.rg` ran but not what it searched for. Keys and structure are
+    always preserved so the shape of the call is never in doubt; only an oversized
+    string value (a `files.write` body, a pasted blob) is clipped, and the second
+    return value names every key that was and its true length — so the drawer can
+    say "clipped from 91,204 chars" instead of quietly showing a partial value.
+    """
+    payload: dict[str, Any] = {}
+    truncated: dict[str, int] = {}
+    for key, value in arguments.items():
+        if isinstance(value, str) and len(value) > INSPECTOR_INLINE_BODY_CHARS:
+            payload[key] = value[:INSPECTOR_INLINE_BODY_CHARS].rstrip()
+            truncated[key] = len(value)
+            continue
+        payload[key] = value
+    return payload, truncated
 
 
 def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:

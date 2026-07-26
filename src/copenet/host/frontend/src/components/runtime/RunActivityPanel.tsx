@@ -33,6 +33,7 @@ import type {
 } from '../../runtime/types';
 import { useRunActivity } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
+import { ToolCallDetail } from './ToolCallDetail';
 
 const GROUP_ICON: Record<ActivityProofGroupKind, typeof FileText> = {
   commands: Terminal,
@@ -67,26 +68,35 @@ function MemberStatusIcon({ status }: { status: ActivityProofMember['status'] })
 }
 
 function ProofMemberRow({ member }: { member: ActivityProofMember }) {
-  const setInspectorTarget = useAppStore((s) => s.setInspectorTarget);
+  const [expanded, setExpanded] = useState(false);
   const label = member.target ? shortTarget(member.target) : member.label;
   const hasDiffStats = member.additions != null || member.deletions != null;
-  const clickable = !!member.artifactId;
+  // Every call expands now, not just the ones that produced an artifact — the
+  // arguments and result body are on the run record for all of them. The artifact
+  // link moved inside ToolCallDetail so it is still one click away.
   return (
-    <div
-      className={`flex items-center gap-1.5 px-2 py-0.5 ${clickable ? 'cursor-pointer hover:bg-operator-panel/25 rounded' : ''}`}
-      onClick={clickable ? () => setInspectorTarget({ kind: 'artifact', artifactId: member.artifactId! }) : undefined}
-    >
-      <MemberStatusIcon status={member.status} />
-      <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-operator-text/70" title={member.detail || member.label}>
-        {label}
-      </span>
-      {hasDiffStats && (
-        <span className="shrink-0 font-mono text-[10px] tabular-nums">
-          {member.additions ? <span className="text-operator-success/80">+{member.additions}</span> : null}
-          {member.deletions ? <span className="text-operator-error/80"> -{member.deletions}</span> : null}
+    <div>
+      <div
+        className="flex cursor-pointer items-center gap-1.5 rounded px-2 py-0.5 hover:bg-operator-panel/25"
+        onClick={() => setExpanded((v) => !v)}
+      >
+        <MemberStatusIcon status={member.status} />
+        <span className="min-w-0 flex-1 truncate font-mono text-[10.5px] text-operator-text/70" title={member.detail || member.label}>
+          {label}
         </span>
-      )}
-      {clickable && <ChevronRight className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />}
+        {hasDiffStats && (
+          <span className="shrink-0 font-mono text-[10px] tabular-nums">
+            {member.additions ? <span className="text-operator-success/80">+{member.additions}</span> : null}
+            {member.deletions ? <span className="text-operator-error/80"> -{member.deletions}</span> : null}
+          </span>
+        )}
+        {expanded ? (
+          <ChevronDown className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />
+        ) : (
+          <ChevronRight className="h-2.5 w-2.5 shrink-0 text-operator-muted/35" />
+        )}
+      </div>
+      {expanded && <ToolCallDetail member={member} />}
     </div>
   );
 }

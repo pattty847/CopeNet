@@ -209,7 +209,11 @@ export interface RepoSearchPreview {
 
 export interface RawPreview {
   type: 'raw';
-  text: string;            // truncated summary
+  text: string;            // the result body; clipped to INSPECTOR_INLINE_BODY_CHARS
+  /** True length of the body before clipping, so the drawer can be honest about it. */
+  fullChars?: number;
+  /** Set when text was clipped. The whole body is in the run's tool_output artifact. */
+  truncated?: boolean;
 }
 /** files.write / files.edit — unified diff of the change, rendered green/red. */
 export interface DiffPreview {
@@ -580,6 +584,12 @@ export interface RunStep {
   turnId?: string | null;
   decisionId?: string | null;
   effect?: ToolEffect | null;
+  /** Exact arguments the model called this tool with. Oversized string values are clipped. */
+  arguments?: Record<string, unknown> | null;
+  /** Argument key -> true character length, present only for values that were clipped. */
+  argumentsTruncated?: Record<string, number> | null;
+  /** The result body. Every tool has one now; large bodies also spill to an artifact. */
+  preview?: ToolResultPreview | null;
 }
 
 export interface SessionRunRecord {

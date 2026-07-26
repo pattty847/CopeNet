@@ -1110,7 +1110,11 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
             if isinstance(preview, dict):
                 member["preview"] = dict(preview)
             members.append(member)
-    return {
+    # arguments/preview are what make a stored run auditable after the fact: without
+    # them a tool step records that files.rg ran but not what it searched for or what
+    # came back. Anything the preview had to clip is still recoverable whole from the
+    # run's `tool_output` artifact (see tool_result_materialization).
+    step: dict[str, object] = {
         "callId": str(tool_payload.get("callId") or "").strip() or None,
         "toolId": str(tool_payload.get("toolId") or "").strip(),
         "channel": str(tool_payload.get("channel") or "tool").strip(),
@@ -1128,6 +1132,11 @@ def _normalize_tool_step(tool_payload: dict) -> dict:
         "batched": str(tool_payload.get("channel") or "") == "batch" or str(tool_payload.get("toolId") or "") == "tool.batch",
         "members": members,
     }
+    for key in ("arguments", "argumentsTruncated", "preview"):
+        value = tool_payload.get(key)
+        if isinstance(value, dict):
+            step[key] = dict(value)
+    return step
 
 
 def _summarize_output(text: str) -> str:

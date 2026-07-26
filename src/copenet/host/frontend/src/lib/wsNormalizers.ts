@@ -109,20 +109,40 @@ export function normalizeToolExecution(raw: unknown): ToolExecution | null {
   };
 }
 
-export function normalizeToolResultPreview(raw: unknown): ToolResultPreview | null {
+/**
+ * How much of a preview to keep. The inline transcript wants a teaser; the
+ * Inspect drawer wants the whole thing the backend bothered to send. Same
+ * normalizer, two budgets — the defaults preserve the inline behavior exactly.
+ */
+export interface PreviewLimits {
+  maxChars?: number;
+  maxLines?: number;
+  maxMatches?: number;
+  maxResults?: number;
+}
+
+const DEFAULT_PREVIEW_LIMITS: Required<PreviewLimits> = {
+  maxChars: 500,
+  maxLines: 600,
+  maxMatches: 8,
+  maxResults: 8,
+};
+
+export function normalizeToolResultPreview(raw: unknown, limits?: PreviewLimits): ToolResultPreview | null {
   if (!raw || typeof raw !== 'object') return null;
+  const { maxChars, maxLines, maxMatches, maxResults } = { ...DEFAULT_PREVIEW_LIMITS, ...limits };
   const payload = raw as Record<string, unknown>;
   const type = String(payload.type || '');
   if (type === 'file_read') {
     return {
       type: 'file_read',
       path: String(payload.path || ''),
-      lines: Array.isArray(payload.lines) ? payload.lines.slice(0, 600).map(String) : [],
+      lines: Array.isArray(payload.lines) ? payload.lines.slice(0, maxLines).map(String) : [],
       totalLines: payload.totalLines != null ? Number(payload.totalLines) : null,
     };
   }
   if (type === 'repo_search') {
-    const rawMatches = Array.isArray(payload.matches) ? payload.matches.slice(0, 8) : [];
+    const rawMatches = Array.isArray(payload.matches) ? payload.matches.slice(0, maxMatches) : [];
     return {
       type: 'repo_search',
       query: String(payload.query || ''),
@@ -165,7 +185,7 @@ export function normalizeToolResultPreview(raw: unknown): ToolResultPreview | nu
     };
   }
   if (type === 'web_search') {
-    const rawResults = Array.isArray(payload.results) ? payload.results.slice(0, 8) : [];
+    const rawResults = Array.isArray(payload.results) ? payload.results.slice(0, maxResults) : [];
     return {
       type: 'web_search',
       query: String(payload.query || ''),
@@ -189,7 +209,7 @@ export function normalizeToolResultPreview(raw: unknown): ToolResultPreview | nu
     };
   }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
-    const lines = String(payload.content).split('\n').slice(0, 600);
+    const lines = String(payload.content).split('\n').slice(0, maxLines);
     return {
       type: 'file_read',
       path: String(payload.path),
@@ -201,7 +221,7 @@ export function normalizeToolResultPreview(raw: unknown): ToolResultPreview | nu
     return {
       type: 'repo_search',
       query: typeof payload.query === 'string' ? payload.query : '',
-      matches: payload.matches.slice(0, 8).map((m: unknown) => {
+      matches: payload.matches.slice(0, maxMatches).map((m: unknown) => {
         const match = (m || {}) as Record<string, unknown>;
         return {
           path: String(match.path || ''),
@@ -213,11 +233,11 @@ export function normalizeToolResultPreview(raw: unknown): ToolResultPreview | nu
     };
   }
   if (typeof payload.preview === 'string') {
-    return { type: 'raw', text: String(payload.preview).slice(0, 500) };
+    return { type: 'raw', text: String(payload.preview).slice(0, maxChars) };
   }
   // Fall back to raw text preview
   const text = payload.text ? String(payload.text) : JSON.stringify(payload);
-  return { type: 'raw', text: text.slice(0, 500) };
+  return { type: 'raw', text: text.slice(0, maxChars) };
 }
 
 export function buildBatchLabel(toolId: string, count: number): string {

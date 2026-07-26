@@ -141,6 +141,14 @@ export interface ActivityProofMember {
   fileCount?: number | null;
   outputPreview?: string | null;
   fullOutput?: string | null;
+  /** True length of the result body, when it was clipped for the wire. */
+  fullOutputChars?: number | null;
+  /** Policy note for the call, shown alongside the result rather than instead of it. */
+  policySummary?: string | null;
+  /** Exact arguments the tool was called with. */
+  arguments?: Record<string, unknown> | null;
+  /** Argument key -> true character length, for values that were clipped. */
+  argumentsTruncated?: Record<string, number> | null;
   artifactKind?: ArtifactKind | null;
 }
 
@@ -163,8 +171,14 @@ export interface ActivityToolCall {
   policySummary?: string | null;
   /** Error string when ok=false. Populated when backend provides RunStep.error. */
   error?: string | null;
-  /** Optional bounded proof preview, especially useful for expanded tool.batch members. */
+  /** The result body, rendered in the Inspect drawer. Present for every tool. */
   preview?: string | null;
+  /** True length of the result body when the preview was clipped. */
+  previewFullChars?: number | null;
+  /** Exact arguments the model called this tool with. */
+  arguments?: Record<string, unknown> | null;
+  /** Argument key -> true character length, for values that were clipped. */
+  argumentsTruncated?: Record<string, number> | null;
 }
 
 export interface ActivityReadBatch {
