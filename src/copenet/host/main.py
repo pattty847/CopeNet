@@ -68,13 +68,18 @@ def _default_token_beyond_loopback_refusal(*, host: str, port: int, token: str, 
     "dev-token" default would let anyone who can reach the port authenticate as a
     full-access operator. Returns None when it's safe to proceed.
     """
-    if host == "127.0.0.1" or token.strip():
+    normalized_token = token.strip()
+    unsafe_tokens = {"", "dev-token", "replace-with-a-random-token"}
+    if host == "127.0.0.1" or normalized_token not in unsafe_tokens:
         return None
     return (
         f"\n  Refusing to start: CopeNet would be reachable beyond localhost "
         f"(http://{host}:{port}) using the well-known default token.\n"
-        "  Set your own token first, e.g.:\n\n"
-        "      export COPNET_TOKEN=$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')\n\n"
+        "  Set a private token first. For a persistent local setup, generate the "
+        "gitignored .copenet.env file and launch with `uv run --env-file .copenet.env ...`.\n\n"
+        "      umask 077\n"
+        "      printf 'COPNET_TOKEN=\"%s\"\\nCOPNET_PORT=17123\\n' "
+        "\"$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')\" > .copenet.env\n\n"
         f"  Then start CopeNet again with COPNET_HOST={host_env or host!r} set as before.\n"
     )
 

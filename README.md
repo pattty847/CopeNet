@@ -161,10 +161,19 @@ Open the desktop UI at:
 CopeNet also works well over your tailnet for private mobile access:
 
 ```bash
-COPNET_HOST=0.0.0.0 COPNET_PORT=17123 uv run copenet
+# One-time setup: keep a random token in the dedicated, gitignored host env file.
+umask 077
+printf 'COPNET_TOKEN="%s"\nCOPNET_PORT=17123\n' \
+  "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" > .copenet.env
+
+# Launch on this Mac's Tailscale IPv4 only (not every local network interface).
+COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 ```
 
-Then open it from another device using your Tailscale hostname or tailnet IP.
+Then open it from another device using your Tailscale hostname or tailnet IP. When
+the authentication banner appears, enter the same token once; CopeNet stores it
+only in that browser and reuses it on later visits. Do not embed the token in a
+shared URL.
 
 ## Local Setup Notes
 
@@ -183,7 +192,7 @@ Environment variables:
 
 - `COPNET_HOST` (default: `127.0.0.1`)
 - `COPNET_PORT` (default: `17123`)
-- `COPNET_TOKEN` (default: `dev-token`)
+- `COPNET_TOKEN` (default: `dev-token` on loopback only; a private token is required beyond localhost)
 - `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
 - `COPNET_TRACE` (`1` to enable per-run JSONL traces)
@@ -195,9 +204,10 @@ Environment variables:
 Example:
 
 ```bash
-export COPNET_TOKEN="change-me"
-export COPNET_PORT=17123
-uv run copenet
+umask 077
+printf 'COPNET_TOKEN="%s"\nCOPNET_PORT=17123\n' \
+  "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" > .copenet.env
+uv run --env-file .copenet.env copenet
 ```
 
 ## Bring Your Own Knowledge Base

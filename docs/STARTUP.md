@@ -55,10 +55,16 @@ actually used. See [SESSION-CONTINUITY.md](SESSION-CONTINUITY.md).
 ## 6) Recommended production-ish baseline
 
 ```bash
-export COPNET_HOST="127.0.0.1"
-export COPNET_PORT="17123"
-export COPNET_TOKEN="set-a-real-token"
-uv run copenet
+umask 077
+printf 'COPNET_TOKEN="%s"\nCOPNET_PORT=17123\n' \
+  "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" > .copenet.env
+uv run --env-file .copenet.env copenet
+```
+
+For a private tailnet bind:
+
+```bash
+COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 ```
 
 ## Common gotchas
@@ -67,6 +73,11 @@ uv run copenet
 - **Profile change didn’t apply**: create a new chat session.
 - **Port conflict**: change `COPNET_PORT`.
 - **Codex provider unavailable**: Codex CLI not installed/authenticated.
+- **Tailnet launch refuses `dev-token`**: put a random `COPNET_TOKEN` in the
+  gitignored root `.copenet.env` and use `uv run --env-file .copenet.env`.
+- **Remote UI says unauthorized**: enter the `.copenet.env` token in the authentication
+  banner. CopeNet stores it only in that browser and reconnects. Never put it in
+  a shared URL.
 
 ## Useful commands
 

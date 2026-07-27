@@ -322,6 +322,25 @@ Common checks:
 - Browser Use validation in the Codex/Claude in-app browser for the affected session/runtime flow when available
 - browser validation of the affected session/runtime flow
 
+### Browser Verification Targets
+
+- Prefer `http://127.0.0.1:17123/` for checks running on the host Mac.
+- The private tailnet URL is also valid when the current browser is already using
+  it or remote-device behavior is what needs verification. Resolve the current
+  address with `tailscale ip -4`; do not hard-code a personal hostname or IP in
+  code, tests, or documentation.
+- Launch the tailnet bind with
+  `COPNET_HOST=tailscale uv run --env-file .copenet.env copenet`. The root
+  `.copenet.env` is gitignored and must contain a private `COPNET_TOKEN`;
+  `dev-token` is loopback-only.
+- Reuse an existing authenticated browser tab when possible. A browser visiting a
+  custom-token host needs the matching value entered through CopeNet's
+  authentication banner once. Never read, print, commit, paste into prompts, or
+  place the token in a shared URL.
+- Choose localhost for ordinary desktop UI verification and Tailscale when testing
+  remote reachability, HTTPS/microphone behavior, or the exact URL the operator is
+  currently using.
+
 For current integration coverage, also know about:
 
 - `uv run --extra dev pytest -q`

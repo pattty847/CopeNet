@@ -27,6 +27,24 @@ def test_non_loopback_bind_with_no_token_is_refused() -> None:
     assert "tailscale" in refusal  # tells the operator how to restart
 
 
+def test_non_loopback_bind_with_explicit_dev_token_is_refused() -> None:
+    refusal = _default_token_beyond_loopback_refusal(
+        host="100.64.0.1", port=17123, token="dev-token", host_env="tailscale"
+    )
+    assert refusal is not None
+    assert ".copenet.env" in refusal
+
+
+def test_non_loopback_bind_with_example_placeholder_is_refused() -> None:
+    refusal = _default_token_beyond_loopback_refusal(
+        host="100.64.0.1",
+        port=17123,
+        token="replace-with-a-random-token",
+        host_env="tailscale",
+    )
+    assert refusal is not None
+
+
 def test_non_loopback_bind_with_an_operator_token_is_allowed() -> None:
     assert (
         _default_token_beyond_loopback_refusal(
