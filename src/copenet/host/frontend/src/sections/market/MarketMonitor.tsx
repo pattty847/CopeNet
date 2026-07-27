@@ -13,6 +13,7 @@ import { ForwardLedger } from './ForwardLedger';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { TreasuryYieldCurve } from './TreasuryYieldCurve';
+import { sortEvidenceNewestFirst } from './marketEvidence';
 import { useIsMobile } from '../../lib/responsive';
 import type { EvidenceItem, InsiderNetWindow, TickerDetailPayload, Tone } from './types';
 
@@ -182,6 +183,8 @@ function SecActivityPanel({
   onDepthChange: (days: number) => void;
   onRefresh: () => void;
 }) {
+  const sortedEvidence = sortEvidenceNewestFirst(evidence);
+
   return (
     <PanelCard
       title="SEC Activity"
@@ -219,7 +222,7 @@ function SecActivityPanel({
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>No recent Form 4 or 8-K activity found.</div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 260, overflowY: 'auto', paddingRight: 4 }}>
-          {evidence.map((item, i) => {
+          {sortedEvidence.map((item, i) => {
             const date = evidenceDate(item.t);
             const upcoming = Boolean(item.t && item.t * 1000 > Date.now());
             const row = (
