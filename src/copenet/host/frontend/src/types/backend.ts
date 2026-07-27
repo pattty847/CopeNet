@@ -146,6 +146,7 @@ export interface Message {
   role: MessageRole;
   content: string;
   attachments?: ChatAttachment[] | null;
+  requestedToolIds?: string[] | null;
   timestamp: string;
   provider: string | null;
   model: string | null;
@@ -481,6 +482,7 @@ export interface PublicMessagePayload {
   state?: string | null;
   toolExecution?: ToolExecution | null;
   attachments?: unknown[] | null;
+  requestedToolIds?: unknown[] | null;
 }
 
 export interface ChatEventPayload {

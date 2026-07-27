@@ -1,6 +1,7 @@
 import json
 
 from copenet.core.sessions import TranscriptMessage, TranscriptStore
+from copenet.core.sessions.transcript_store import to_public_message
 
 
 def _message(run_id: str, content: str) -> TranscriptMessage:
@@ -22,6 +23,29 @@ def test_append_message_and_read_history_roundtrip(transcript_store: TranscriptS
     assert len(history) == 1
     assert history[0]["content"] == "hello"
     assert history[0]["run_id"] == "run-1"
+
+
+def test_requested_tool_ids_roundtrip_as_public_metadata(transcript_store: TranscriptStore) -> None:
+    transcript_store.append_message(
+        "session-tools",
+        TranscriptMessage(
+            run_id="run-tools",
+            role="user",
+            content="Compare these.",
+            provider="fake",
+            model="model-a",
+            provider_session_id=None,
+            timestamp="2024-01-01T00:00:00+00:00",
+            requested_tool_ids=["market.compare", "market.evidence"],
+        ),
+    )
+
+    record = transcript_store.read_history("session-tools")[0]
+    assert record["requested_tool_ids"] == ["market.compare", "market.evidence"]
+    assert to_public_message(record)["requestedToolIds"] == [
+        "market.compare",
+        "market.evidence",
+    ]
 
 
 def test_read_history_respects_limit(transcript_store: TranscriptStore) -> None:

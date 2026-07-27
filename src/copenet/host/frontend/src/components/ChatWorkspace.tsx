@@ -233,7 +233,11 @@ export function ChatWorkspace() {
     return true;
   };
 
-  const handleSend = async (messageOverride?: string, attachments?: ChatAttachment[]) => {
+  const handleSend = async (
+    messageOverride?: string,
+    attachments?: ChatAttachment[],
+    requestedToolIds?: string[],
+  ) => {
     const message = (messageOverride ?? input).trim();
     const hasAttachments = (attachments?.length || 0) > 0;
     if ((!message && !hasAttachments) || activeRunId) return false;
@@ -244,7 +248,7 @@ export function ChatWorkspace() {
       return true;
     }
     try {
-      await wsClient.sendMessage(message, attachments);
+      await wsClient.sendMessage(message, attachments, requestedToolIds);
       setInput('');
       return true;
     } catch (error) {

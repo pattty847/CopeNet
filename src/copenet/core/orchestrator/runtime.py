@@ -20,6 +20,11 @@ from copenet.core.orchestrator.messages import (
     flatten_messages_to_prompt,
     trim_messages_to_token_budget,
 )
+from copenet.core.orchestrator.tool_requests import (
+    append_system_overlay,
+    normalize_requested_tool_ids,
+    requested_tool_overlay,
+)
 from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStateRecord
 from copenet.core.sessions import TranscriptMessage
@@ -277,6 +282,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             "run_started",
             {
                 "messagePreview": message[:200],
+                "requestedToolIds": list(request.requested_tool_ids),
                 "profile": request.system_prompt_id,
                 "taskMode": request.task_prompt_id,
                 "workdir": str(session_workspace_root),
@@ -290,6 +296,28 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             },
         )
 
+        registered_tools = orchestrator._tool_registry.list_tools()
+        requested_tool_ids = normalize_requested_tool_ids(
+            request.requested_tool_ids,
+            registered_tool_ids=(tool.id for tool in registered_tools),
+        )
+        effective_tool_policy = policy_for_task_mode(
+            entry.task_prompt_id or request.task_prompt_id,
+            provider=provider_name,
+        )
+        available_tools = [
+            tool
+            for tool in registered_tools
+            if tool.category in effective_tool_policy.allowed_categories
+        ] if request.allow_tools else []
+        available_tool_ids = {tool.id for tool in available_tools}
+        active_requested_tool_ids = tuple(
+            tool_id for tool_id in requested_tool_ids if tool_id in available_tool_ids
+        )
+        rejected_requested_tool_ids = tuple(
+            tool_id for tool_id in requested_tool_ids if tool_id not in available_tool_ids
+        )
+
         orchestrator._transcript_store.append_message(
             entry.session_id,
             TranscriptMessage(
@@ -301,6 +329,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 provider_session_id=entry.provider_session_id,
                 timestamp=transcript_now(),
                 attachments=attachment_refs or None,
+                requested_tool_ids=list(requested_tool_ids) or None,
             ),
         )
         session_state = orchestrator._session_state_store.get_or_create(session_key)
@@ -320,7 +349,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         resolved_system_prompt_id = entry.system_prompt_id or request.system_prompt_id
         resolved_task_prompt_id = entry.task_prompt_id or request.task_prompt_id
         composed_system_prompt = compose_prompt(resolved_system_prompt_id, resolved_task_prompt_id)
-        effective_system_prompt = request.system_prompt or composed_system_prompt
+        effective_system_prompt = append_system_overlay(
+            request.system_prompt or composed_system_prompt,
+            requested_tool_overlay(active_requested_tool_ids),
+        )
         prompt_policy = prompt_context_policy_for_chat(resolved_system_prompt_id)
         trace.record(
             "prompt_context_policy_resolved",
@@ -330,6 +362,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 "taskPromptId": resolved_task_prompt_id,
                 "systemPromptSource": "request_override" if request.system_prompt else "composed",
                 "baseSystemPromptChars": len(effective_system_prompt or ""),
+                "requestedToolIds": list(requested_tool_ids),
+                "activeRequestedToolIds": list(active_requested_tool_ids),
+                "rejectedRequestedToolIds": list(rejected_requested_tool_ids),
                 "includePersonaContext": prompt_policy.include_persona_context,
                 "includePersonaAgentInstructions": prompt_policy.include_persona_agent_instructions,
                 "includeRelevantMemory": prompt_policy.include_relevant_memory,
@@ -401,12 +436,6 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
             session_state=session_state,
         )
-        effective_tool_policy = policy_for_task_mode(entry.task_prompt_id or request.task_prompt_id, provider=provider_name)
-        available_tools = [
-            tool
-            for tool in orchestrator._tool_registry.list_tools()
-            if tool.category in effective_tool_policy.allowed_categories
-        ] if request.allow_tools else []
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
             prompt=chat_prompt,
@@ -739,6 +768,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "shellAllowlist": list(effective_tool_policy.shell_allowlist),
                 },
                 "workspaceRoot": str(session_workspace_root),
+                "requestedToolIds": list(requested_tool_ids),
+                "activeRequestedToolIds": list(active_requested_tool_ids),
+                "rejectedRequestedToolIds": list(rejected_requested_tool_ids),
                 "turnState": dict(latest_turn_state),
                 "identityContext": dict(identity_context_payload),
             },
@@ -880,6 +912,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 {
                     "workspaceRoot": str(session_workspace_root),
                     "harnessDecision": dict(plan.harness_decision),
+                    "requestedToolIds": list(requested_tool_ids),
+                    "activeRequestedToolIds": list(active_requested_tool_ids),
+                    "rejectedRequestedToolIds": list(rejected_requested_tool_ids),
                     **agent_runtime_payload,
                 }
                 if "session_workspace_root" in locals() and "plan" in locals()

@@ -8,6 +8,7 @@ import { accessOptionsFor, providerAllowsFullAccess } from '../../lib/access';
 import { uploadChatAttachment } from '../../lib/appApi';
 import type { ChatAttachment, DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 import type { UniverseAsset } from '../../sections/market/types';
+import { ComposerToolPickerButton, ComposerToolTray } from './ComposerToolControls';
 
 /** A composer-local image attachment in flight: object-URL preview + upload status. */
 interface PendingAttachment {
@@ -18,6 +19,8 @@ interface PendingAttachment {
   attachment: ChatAttachment | null;
   error?: string;
 }
+
+const EMPTY_REQUESTED_TOOL_IDS: string[] = [];
 
 export interface RuntimePillSummary {
   provider: string;
@@ -406,7 +409,11 @@ export function AgentComposer({
   value: string;
   onChange: (value: string) => void;
   onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
-  onSend: (messageOverride?: string, attachments?: ChatAttachment[]) => Promise<boolean>;
+  onSend: (
+    messageOverride?: string,
+    attachments?: ChatAttachment[],
+    requestedToolIds?: string[],
+  ) => Promise<boolean>;
   optimizationProviderId: string;
   optimizationModelId?: string | null;
   disabled: boolean;
@@ -451,6 +458,8 @@ export function AgentComposer({
   const sessionRuntimeOverrides = useAppStore((state) => state.sessionRuntimeOverrides);
   const setSessionRuntimeOverride = useAppStore((state) => state.setSessionRuntimeOverride);
   const activeRunId = useAppStore((state) => activeSessionKey ? state.activeRunsBySession[activeSessionKey] || null : null);
+  const requestedToolIds = useAppStore((state) => state.composerRequestedToolIds[composerKey]) || EMPTY_REQUESTED_TOOL_IDS;
+  const clearRequestedTools = useAppStore((state) => state.clearComposerRequestedTools);
 
   const [aborting, setAborting] = useState(false);
   const isRunning = Boolean(activeRunId);
@@ -608,6 +617,11 @@ export function AgentComposer({
         setMentionQuery(null);
         return;
       }
+    }
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault();
+      void submitMessage(value);
+      return;
     }
     onKeyDown(event);
   };
@@ -791,14 +805,21 @@ export function AgentComposer({
 
   // Preserve the tray when the RPC fails so an operator can retry without
   // reattaching evidence. Clear only after the backend accepts the send.
-  const submitMessage = async (text: string) => {
+  async function submitMessage(text: string) {
     const ready: ChatAttachment[] = readyAttachments.map((item) => ({
       ...(item.attachment as ChatAttachment),
       previewUrl: item.previewUrl,
     }));
-    const accepted = await onSend(text, ready.length > 0 ? ready : undefined);
-    if (accepted) clearAttachments();
-  };
+    const accepted = await onSend(
+      text,
+      ready.length > 0 ? ready : undefined,
+      requestedToolIds.length > 0 ? requestedToolIds : undefined,
+    );
+    if (accepted) {
+      clearAttachments();
+      clearRequestedTools(composerKey);
+    }
+  }
 
   const canSend = (Boolean(value.trim()) || readyAttachments.length > 0) && !disabled && !hasUploadingAttachment;
 
@@ -915,6 +936,7 @@ export function AgentComposer({
           onDragLeave={(event) => { event.preventDefault(); setIsDragging(false); }}
           onDrop={handleDrop}
         >
+          <ComposerToolTray composerKey={composerKey} />
           {attachments.length > 0 && (
             <div className="flex flex-wrap gap-2 border-b border-operator-border/60 px-3 py-2">
               {attachments.map((item) => (
@@ -962,6 +984,7 @@ export function AgentComposer({
               rows={1}
             />
             <div className="flex items-center gap-0.5 pb-0">
+              <ComposerToolPickerButton composerKey={composerKey} disabled={disabled} />
               <input
                 ref={fileInputRef}
                 type="file"

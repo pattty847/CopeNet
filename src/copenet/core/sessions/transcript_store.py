@@ -39,6 +39,9 @@ class TranscriptMessage:
     # {attachmentId, mimeType, filename}. Bytes live in ChatAttachmentStore; only
     # the refs are persisted here so replay can re-inline the images.
     attachments: list[dict[str, Any]] | None = None
+    # Operator-selected tool chips for this user turn. This is audit metadata;
+    # replay does not turn it back into an instruction on later turns.
+    requested_tool_ids: list[str] | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Convert message into a JSON-serializable dictionary."""
@@ -59,6 +62,8 @@ class TranscriptMessage:
             payload["parts"] = [dict(part) for part in self.parts]
         if self.attachments:
             payload["attachments"] = [dict(ref) for ref in self.attachments]
+        if self.requested_tool_ids:
+            payload["requested_tool_ids"] = list(self.requested_tool_ids)
         return payload
 
 
@@ -76,6 +81,11 @@ def to_public_message(record: dict[str, Any]) -> dict[str, Any]:
         "toolExecution": record.get("tool_execution"),
         "parts": record.get("parts") if isinstance(record.get("parts"), list) else None,
         "attachments": record.get("attachments") if isinstance(record.get("attachments"), list) else None,
+        "requestedToolIds": (
+            record.get("requested_tool_ids")
+            if isinstance(record.get("requested_tool_ids"), list)
+            else None
+        ),
     }
 
 
@@ -147,6 +157,11 @@ class TranscriptStore:
                     tool_execution=dict(record.get("tool_execution")) if isinstance(record.get("tool_execution"), dict) else None,
                     parts=[dict(part) for part in record.get("parts")] if isinstance(record.get("parts"), list) else None,
                     attachments=[dict(ref) for ref in record.get("attachments")] if isinstance(record.get("attachments"), list) else None,
+                    requested_tool_ids=(
+                        [str(tool_id) for tool_id in record.get("requested_tool_ids")]
+                        if isinstance(record.get("requested_tool_ids"), list)
+                        else None
+                    ),
                 ),
             )
             count += 1

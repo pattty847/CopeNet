@@ -32,9 +32,11 @@ export async function sendMessageAction(
   request: WsRpcRequest,
   message: string,
   attachments?: ChatAttachment[],
+  requestedToolIds?: string[],
 ): Promise<void> {
   const trimmed = message.trim();
   const readyAttachments = (attachments || []).filter((item) => item.attachmentId);
+  const requestedTools = [...new Set((requestedToolIds || []).map((toolId) => toolId.trim()).filter(Boolean))];
   // An image-only send (no text) is valid as long as something is attached.
   if (!trimmed && readyAttachments.length === 0) return;
 
@@ -77,6 +79,7 @@ export async function sendMessageAction(
       role: 'user',
       content: trimmed,
       attachments: readyAttachments.length > 0 ? readyAttachments : null,
+      requestedToolIds: requestedTools.length > 0 ? requestedTools : null,
       timestamp: new Date().toISOString(),
       provider: session.provider,
       model: effectiveModel,
@@ -92,6 +95,7 @@ export async function sendMessageAction(
       sessionKey: session.key,
       message: trimmed,
       attachmentIds: readyAttachments.map((item) => item.attachmentId),
+      requestedToolIds: requestedTools,
       provider: session.provider,
       model: effectiveModel || undefined,
       systemPromptId: session.systemPromptId || undefined,

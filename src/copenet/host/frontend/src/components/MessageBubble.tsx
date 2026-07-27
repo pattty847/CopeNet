@@ -10,6 +10,7 @@ import type { MessagePart, ToolBatchPart, ToolCallPart, ToolResultPart } from '.
 import { formatMessageForClipboard } from '../lib/chatExport';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { useAppStore } from '../store/useAppStore';
+import { ToolGlyph, toolDisplayName } from './ToolPromptPalette';
 
 function partsShouldCollapseIntoSingleRow(current: ToolCallPart, next: ToolResultPart | ToolBatchPart): boolean {
   if (next.kind === 'tool_result') {
@@ -131,6 +132,8 @@ export function MessageBubble({ message }: { message: Message }) {
   const isSystem = message.role === 'system';
   const [copied, setCopied] = useState(false);
   const setAppError = useAppStore((state) => state.setAppError);
+  const tools = useAppStore((state) => state.tools);
+  const toolById = new Map(tools.map((tool) => [tool.id, tool]));
 
   const handleCopy = async () => {
     try {
@@ -156,6 +159,23 @@ export function MessageBubble({ message }: { message: Message }) {
     return (
       <div className="animate-message group relative flex w-full justify-end pb-4">
         <div className="relative max-w-[80%] min-w-0">
+          {message.requestedToolIds && message.requestedToolIds.length > 0 ? (
+            <div className="mb-1.5 flex flex-wrap justify-end gap-1">
+              {message.requestedToolIds.map((toolId) => {
+                const tool = toolById.get(toolId);
+                return (
+                  <span
+                    key={toolId}
+                    title={tool?.description || toolId}
+                    className="inline-flex items-center gap-1 rounded-full border border-operator-accent/18 bg-operator-accent/6 px-2 py-1 text-[9.5px] text-operator-muted"
+                  >
+                    <span className="text-operator-accent"><ToolGlyph toolId={toolId} /></span>
+                    {tool ? toolDisplayName(tool) : toolId}
+                  </span>
+                );
+              })}
+            </div>
+          ) : null}
           {message.attachments && message.attachments.length > 0 && (
             <MessageAttachments attachments={message.attachments} />
           )}

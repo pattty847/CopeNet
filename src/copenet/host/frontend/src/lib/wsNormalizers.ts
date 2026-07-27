@@ -749,6 +749,9 @@ export function normalizeMessage(
     optimistic,
     parts: normalizeMessageParts(raw?.parts),
     attachments: normalizeChatAttachments(raw?.attachments),
+    requestedToolIds: Array.isArray(raw?.requestedToolIds)
+      ? [...new Set(raw.requestedToolIds.map((toolId) => String(toolId).trim()).filter(Boolean))]
+      : null,
   };
 }
 

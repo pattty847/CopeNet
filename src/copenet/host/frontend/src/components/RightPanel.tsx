@@ -11,7 +11,7 @@ import { ApprovalQueuePanel } from './ApprovalQueuePanel';
 import { OperatorActionCenter } from './OperatorActionCenter';
 import { ProviderAuthCard } from './ProviderAuthCard';
 import { InspectorOverview } from './agents/InspectorOverview';
-import { ToolPromptPalette } from './ToolPromptPalette';
+import { ComposerToolPalette } from './agents/ComposerToolControls';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from '../lib/personaCommands';
 import { usePendingApproval, useApprovalHistory, useInboxItems } from '../runtime/adapter';
 import type { RightPanelTab } from '../store/useAppStore';
@@ -189,18 +189,13 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
           </div>
           <div className="flex-1 overflow-y-auto">
             <InspectorOverview overviewOnly />
-            {/* Tool prompts — click a tool to drop a "use this tool" directive
-                into the active composer; the operator finishes the sentence. */}
+            {/* Structured tool intent for the next message. */}
             <section className="border-t border-operator-border/70 px-3 py-3">
               <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
                 <Activity className="w-3.5 h-3.5" />
-                <h3 className="font-semibold text-[10px] uppercase tracking-wider">Tool Prompts</h3>
+                <h3 className="font-semibold text-[10px] uppercase tracking-wider">Tools for next message</h3>
               </div>
-              <ToolPromptPalette
-                onInsert={(text) =>
-                  useAppStore.getState().appendComposerDraft(activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY, text)
-                }
-              />
+              <ComposerToolPalette composerKey={activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY} />
             </section>
           </div>
         </aside>
@@ -377,19 +372,14 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
             </div>
           </section>
 
-          {/* 3.5 Tool prompts — click a tool to drop a "use this tool" directive
-              into the active composer; the operator finishes the sentence. */}
+          {/* 3.5 Structured tool intent for the next message. */}
           <section>
             <div className="flex items-center gap-1.5 mb-2 text-operator-muted">
               <Activity className="w-3.5 h-3.5" />
-              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Tool Prompts</h3>
+              <h3 className="font-semibold text-[10px] uppercase tracking-wider">Tools for next message</h3>
             </div>
             <div className="border-b border-operator-border/70 pb-2.5">
-              <ToolPromptPalette
-                onInsert={(text) =>
-                  useAppStore.getState().appendComposerDraft(activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY, text)
-                }
-              />
+              <ComposerToolPalette composerKey={activeSessionKey || DRAFT_TRANSCRIPT_SESSION_KEY} />
             </div>
           </section>
 

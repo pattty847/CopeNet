@@ -83,6 +83,9 @@ class ChatSendRequest:
     # Chat attachment ids (resolved to inline images for the model). Tuple keeps
     # the frozen dataclass hashable; default empty for text-only sends.
     attachment_ids: tuple[str, ...] = ()
+    # Structured operator intent for this turn. These ids are validated against
+    # the registry and Access policy before they influence the hidden prompt.
+    requested_tool_ids: tuple[str, ...] = ()
     provider: str = "openai-codex"
     model: str | None = None
     system_prompt_id: str | None = None

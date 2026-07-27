@@ -1014,8 +1014,8 @@ class WsClient {
     return optimizePromptRpc(this.request.bind(this), options);
   }
 
-  async sendMessage(message: string, attachments?: ChatAttachment[]) {
-    return sendMessageAction(this.request.bind(this), message, attachments);
+  async sendMessage(message: string, attachments?: ChatAttachment[], requestedToolIds?: string[]) {
+    return sendMessageAction(this.request.bind(this), message, attachments, requestedToolIds);
   }
 
   async abortRun(sessionKey: string, runId: string) {

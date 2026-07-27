@@ -14,6 +14,8 @@ class FakeProvider:
 
     def __init__(self, *, wait_for_abort: bool = False) -> None:
         self.wait_for_abort = wait_for_abort
+        self.prompts: list[str] = []
+        self.system_prompts: list[str | None] = []
 
     async def run(
         self,
@@ -23,6 +25,8 @@ class FakeProvider:
         model: str | None = None,
         system_prompt: str | None = None,
     ):
+        self.prompts.append(prompt)
+        self.system_prompts.append(system_prompt)
         if self.wait_for_abort:
             await abort_event.wait()
             return
@@ -298,6 +302,32 @@ async def test_history_returns_stored_messages(fake_orchestrator: Orchestrator) 
 
     history = fake_orchestrator.history("alpha")
     assert [item["role"] for item in history] == ["user", "assistant"]
+
+
+@pytest.mark.asyncio
+async def test_requested_tools_stay_out_of_user_prose_and_enter_turn_system_context(
+    fake_orchestrator: Orchestrator,
+) -> None:
+    await _collect_events(
+        fake_orchestrator,
+        ChatSendRequest(
+            session_key="alpha",
+            message="Find the relevant implementation.",
+            provider="fake",
+            model="model-a",
+            requested_tool_ids=("files.rg", "files.rg", "not.registered"),
+        ),
+    )
+
+    history = fake_orchestrator.history("alpha")
+    assert history[0]["content"] == "Find the relevant implementation."
+    assert history[0]["requestedToolIds"] == ["files.rg"]
+
+    provider = fake_orchestrator._providers["fake"]
+    assert isinstance(provider, FakeProvider)
+    assert "Find the relevant implementation." in provider.prompts[0]
+    assert "files.rg" not in provider.prompts[0]
+    assert "`files.rg`" in (provider.system_prompts[0] or "")
 
 
 @pytest.mark.asyncio

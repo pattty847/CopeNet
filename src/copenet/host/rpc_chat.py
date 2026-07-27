@@ -46,6 +46,7 @@ class ChatSendParams:
     session_key: str
     message: str
     attachment_ids: tuple[str, ...]
+    requested_tool_ids: tuple[str, ...]
     run_id: str
     provider: str
     model: str | None
@@ -69,6 +70,7 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
         session_key=session_key,
         message=message,
         attachment_ids=_string_list(raw, "attachmentIds"),
+        requested_tool_ids=_string_list(raw, "requestedToolIds"),
         run_id=run_id,
         provider=_optional_text(raw, "provider") or "openai-codex",
         model=_optional_text(raw, "model"),
@@ -155,6 +157,7 @@ async def handle_chat_send(
                     session_key=request.session_key,
                     message=request.message,
                     attachment_ids=request.attachment_ids,
+                    requested_tool_ids=request.requested_tool_ids,
                     idempotency_key=request.run_id,
                     provider=request.provider,
                     model=request.model,
