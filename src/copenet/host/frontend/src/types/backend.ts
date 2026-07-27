@@ -196,7 +196,8 @@ export interface ToolCallPart {
 export interface FileReadPreview {
   type: 'file_read';
   path: string;
-  lines: string[];         // max 20 lines shown
+  lines: string[];
+  startLine?: number;
   totalLines?: number | null;
 }
 

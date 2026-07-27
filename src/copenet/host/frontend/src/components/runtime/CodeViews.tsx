@@ -6,6 +6,7 @@
 import { FileDiff, CheckCircle2, Circle, Loader2, ListChecks } from 'lucide-react';
 import type { ToolResultPreview } from '../../types/backend';
 import { parseUnifiedDiff, diffGutterWidth } from '../../lib/diff';
+import { physicalFilePreviewLines } from '../../lib/filePreview';
 import { tokenizeLine, langFromPath, SYNTAX_CLASS } from '../../lib/syntax';
 
 function shortPath(path: string): string {
@@ -38,22 +39,26 @@ export function HighlightedCode({ text, lang }: { text: string; lang: string }) 
 export function FileLinesView({
   lines,
   lang,
+  startLine = 1,
   maxHeightClass = 'max-h-[22rem]',
 }: {
   lines: string[];
   lang: string;
+  startLine?: number;
   maxHeightClass?: string;
 }) {
-  const gutterWidth = String(lines.length || 1).length;
+  const physicalLines = physicalFilePreviewLines(lines);
+  const lastLine = startLine + Math.max(physicalLines.length - 1, 0);
+  const gutterWidth = String(lastLine).length;
   return (
     <div className={`overflow-y-auto rounded-lg border border-operator-border bg-operator-bg text-[10.5px] font-mono leading-[1.6] ${maxHeightClass}`}>
-      {lines.map((line, i) => (
+      {physicalLines.map((line, i) => (
         <div key={i} className="flex text-operator-text/75">
           <span
-            className="shrink-0 select-none border-r border-operator-border/40 px-1.5 text-right tabular-nums text-operator-muted/35"
-            style={{ width: `${gutterWidth}ch` }}
+            className="shrink-0 select-none whitespace-nowrap border-r border-operator-border/40 px-1.5 text-right tabular-nums text-operator-muted/35"
+            style={{ width: `calc(${gutterWidth}ch + 1rem)` }}
           >
-            {i + 1}
+            {startLine + i}
           </span>
           <span className="min-w-0 flex-1 whitespace-pre-wrap break-words px-2">
             <HighlightedCode text={line || ' '} lang={lang} />

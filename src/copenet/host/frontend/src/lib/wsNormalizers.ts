@@ -28,6 +28,7 @@ import type {
   ToolResultPreview,
   WorkspaceIntelSummary,
 } from '../types/backend';
+import { physicalFilePreviewLines } from './filePreview';
 
 // crypto.randomUUID only exists in SECURE contexts (https or localhost). When
 // CopeNet is reached over plain http on the tailnet (e.g. iOS Safari at
@@ -137,7 +138,8 @@ export function normalizeToolResultPreview(raw: unknown, limits?: PreviewLimits)
     return {
       type: 'file_read',
       path: String(payload.path || ''),
-      lines: Array.isArray(payload.lines) ? payload.lines.slice(0, maxLines).map(String) : [],
+      lines: physicalFilePreviewLines(payload.lines, maxLines),
+      startLine: payload.startLine != null ? Math.max(1, Number(payload.startLine)) : 1,
       totalLines: payload.totalLines != null ? Number(payload.totalLines) : null,
     };
   }
@@ -209,12 +211,13 @@ export function normalizeToolResultPreview(raw: unknown, limits?: PreviewLimits)
     };
   }
   if (typeof payload.path === 'string' && typeof payload.content === 'string') {
-    const lines = String(payload.content).split('\n').slice(0, maxLines);
+    const lines = physicalFilePreviewLines(payload.content, maxLines);
     return {
       type: 'file_read',
       path: String(payload.path),
       lines,
-      totalLines: String(payload.content).split('\n').length,
+      startLine: payload.startLine != null ? Math.max(1, Number(payload.startLine)) : 1,
+      totalLines: payload.totalLines != null ? Number(payload.totalLines) : physicalFilePreviewLines(payload.content).length,
     };
   }
   if (Array.isArray(payload.matches)) {

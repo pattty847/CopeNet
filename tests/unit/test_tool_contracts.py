@@ -34,6 +34,15 @@ def test_describe_available_tools_can_filter_by_tool_id() -> None:
     assert [tool["id"] for tool in described] == ["files.edit"]
 
 
+def test_files_rg_description_distinguishes_content_search_from_path_lookup() -> None:
+    descriptor = next(tool for tool in ToolRegistry().list_tools() if tool.id == "files.rg")
+
+    assert "contents only" in descriptor.description
+    assert "filenames or directory paths" in descriptor.description
+    assert "shell.exec with find" in descriptor.description
+    assert "file contents only" in descriptor.input_schema["properties"]["pattern"]["description"]
+
+
 def test_build_openai_tool_schemas_uses_tool_ids_as_function_names() -> None:
     tools = [
         ToolDescriptor(
@@ -101,7 +110,12 @@ def test_build_tool_effect_payload_links_turn_decision_and_evidence_role() -> No
         "tool_id": "files.read",
         "kind": "file_read",
         "target": "README.md",
-        "preview": {"path": "README.md", "content": "# Title\nhello"},
+        "preview": {
+            "path": "README.md",
+            "content": "# Title\nhello",
+            "startLine": 1,
+            "totalLines": 2,
+        },
         "artifact_id": None,
         "evidence_role": "grounding",
     }

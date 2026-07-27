@@ -162,7 +162,12 @@ function FileReadPreviewBlock({ preview }: { preview: Extract<ToolResultPreview,
         <span className="font-mono truncate">{shortPath(preview.path)}</span>
         {hidden > 0 && <span className="shrink-0 ml-auto pl-2">+{hidden} more lines · Inspect to read</span>}
       </div>
-      <FileLinesView lines={displayLines} lang={langFromPath(preview.path)} maxHeightClass="max-h-[22rem]" />
+      <FileLinesView
+        lines={displayLines}
+        lang={langFromPath(preview.path)}
+        startLine={preview.startLine}
+        maxHeightClass="max-h-[22rem]"
+      />
     </div>
   );
 }

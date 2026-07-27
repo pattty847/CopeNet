@@ -45,16 +45,24 @@ DESCRIPTORS = [
         id="files.rg",
         name="Ripgrep Search",
         description=(
-            "Search file contents under the current workdir with ripgrep (regex pattern). "
+            "Search text inside files under the current workdir with a ripgrep regex pattern. "
             "Supports offset/limit paging and context_lines (lines of context around each match); "
-            "returns a continuation hint when matches are truncated."
+            "returns a continuation hint when matches are truncated. "
+            "Note: searches file contents only, not filenames or directory paths. "
+            "To locate files or directories by name, use shell.exec with find."
         ),
         category="repo-read",
         input_schema={
             "type": "object",
             "properties": {
-                "pattern": {"type": "string"},
-                "path": {"type": "string"},
+                "pattern": {
+                    "type": "string",
+                    "description": "Regex matched against file contents only; not against filenames or directory paths.",
+                },
+                "path": {
+                    "type": "string",
+                    "description": "File or directory subtree to search inside; not a filename search pattern.",
+                },
                 "offset": {"type": "integer", "minimum": 0},
                 "limit": {"type": "integer", "minimum": 1},
                 "context_lines": {"type": "integer", "minimum": 0},

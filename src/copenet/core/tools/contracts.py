@@ -427,7 +427,16 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             # Carry what the MODEL actually read (bounded by file_output_limit) so
             # the Inspect drawer can show the full read; the inline transcript caps
             # the DISPLAY to a 200-line teaser. Not a 240-char receipt anymore.
-            return {"path": path, "content": content.rstrip()[:24000]}
+            preview_content = content.rstrip()[:24000]
+            return {
+                "path": path,
+                "content": preview_content,
+                "startLine": body.get("startLine", 1),
+                # Number of lines actually carried in this preview, not the
+                # whole file. Inline "more lines" must never promise content
+                # the Inspect drawer does not have.
+                "totalLines": preview_content.count("\n") + 1,
+            }
     if tool_id in {"files.write", "files.edit"}:
         diff = body.get("diff")
         if isinstance(diff, str) and diff.strip():

@@ -415,7 +415,12 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
             <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">output</span>
             <CopyButton getValue={() => tool.preview?.type === 'file_read' ? tool.preview.lines.join('\n') : ''} />
           </div>
-          <FileLinesView lines={tool.preview.lines} lang={langFromPath(tool.preview.path)} maxHeightClass="max-h-[60vh]" />
+          <FileLinesView
+            lines={tool.preview.lines}
+            lang={langFromPath(tool.preview.path)}
+            startLine={tool.preview.startLine}
+            maxHeightClass="max-h-[60vh]"
+          />
         </div>
       ) : previewValue ? (
         <div className="space-y-1.5">
