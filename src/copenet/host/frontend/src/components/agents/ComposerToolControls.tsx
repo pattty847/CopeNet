@@ -91,7 +91,7 @@ export function ComposerToolPickerButton({
   }, [open]);
 
   return (
-    <div className="relative" ref={rootRef}>
+    <div className="relative lg:hidden" ref={rootRef}>
       {open ? (
         <div className="absolute bottom-full right-0 z-40 mb-2 w-[min(22rem,calc(100vw-2rem))] rounded-2xl border border-operator-border bg-operator-panel p-2.5 shadow-shell-xl backdrop-blur">
           <div className="mb-2 flex items-center justify-between px-1">
