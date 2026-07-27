@@ -18,6 +18,14 @@ from copenet.host.app_api import create_app_router
 from copenet.host.ws_server import CopeNetWsServer
 
 _FRONTEND_DIST_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
+_FRONTEND_SECTION_PATHS = {
+    "agents",
+    "market",
+    "workflows",
+    "data-tools",
+    "observability",
+    "experiments",
+}
 
 
 def create_app(
@@ -72,8 +80,7 @@ def create_app(
             raise HTTPException(status_code=404, detail="APOD image not available")
         return FileResponse(path)
 
-    @app.get("/")
-    def index() -> FileResponse:
+    def frontend_index() -> FileResponse:
         path = _FRONTEND_DIST_DIR / "index.html"
         if not path.is_file():
             raise HTTPException(
@@ -84,6 +91,10 @@ def create_app(
                 ),
             )
         return FileResponse(path)
+
+    @app.get("/")
+    def index() -> FileResponse:
+        return frontend_index()
 
     # PWA root assets: iOS/Android fetch these from the site root, not /assets.
     # Without explicit routes they'd 404 and "Add to Home Screen" would break.
@@ -101,6 +112,8 @@ def create_app(
 
     @app.get("/{asset_name}")
     def pwa_root_asset(asset_name: str) -> FileResponse:
+        if asset_name in _FRONTEND_SECTION_PATHS:
+            return frontend_index()
         if asset_name not in _PWA_ROOT_ASSETS:
             raise HTTPException(status_code=404, detail="Not found")
         path = _FRONTEND_DIST_DIR / asset_name

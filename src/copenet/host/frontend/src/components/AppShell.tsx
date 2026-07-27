@@ -17,6 +17,7 @@ import { TopCommandBar } from './TopCommandBar';
 import { WorkflowsPage } from './WorkflowsPage';
 import { useIsMobile } from '../lib/responsive';
 import { shouldShowMobileSectionHeader } from '../lib/mobileCopy';
+import { appSectionFromPathname } from '../lib/appSectionRouting';
 
 function AppSectionContent() {
   const currentSection = useAppStore((state) => state.currentSection);
@@ -61,6 +62,17 @@ export function AppShell() {
   useEffect(() => {
     document.documentElement.dataset.theme = themeMode;
   }, [themeMode]);
+
+  useEffect(() => {
+    const syncSectionFromLocation = () => {
+      useAppStore.setState({
+        currentSection: appSectionFromPathname(window.location.pathname),
+      });
+    };
+    syncSectionFromLocation();
+    window.addEventListener('popstate', syncSectionFromLocation);
+    return () => window.removeEventListener('popstate', syncSectionFromLocation);
+  }, []);
 
   return (
     <div className="flex h-screen w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">

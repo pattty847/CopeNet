@@ -6,6 +6,7 @@ import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } fro
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
 import { createFleetSlice, type FleetSlice } from './fleetSlice';
 import { createComposerSlice, type ComposerSlice } from './composerSlice';
+import { appSectionFromPathname, pushAppSectionPath } from '../lib/appSectionRouting';
 
 export type AppSection = 'home' | 'agents' | 'market' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
@@ -306,8 +307,15 @@ export const useAppStore = create<AppState>((set) => ({
   setAuthError: (message) => set({ authError: message }),
   setAppError: (message) => set({ appError: message }),
   clearAppError: () => set({ appError: null }),
-  currentSection: 'home',
-  setCurrentSection: (section) => set({ currentSection: section }),
+  currentSection: typeof window === 'undefined' ? 'home' : appSectionFromPathname(window.location.pathname),
+  setCurrentSection: (section) => {
+    if (typeof window !== 'undefined') {
+      pushAppSectionPath(section, window.location.pathname, (path) => {
+        window.history.pushState(null, '', path);
+      });
+    }
+    set({ currentSection: section });
+  },
   themeMode: readStoredThemeMode(),
   setThemeMode: (mode) => {
     persistThemeMode(mode);

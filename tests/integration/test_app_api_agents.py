@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 from fastapi.testclient import TestClient
+import pytest
 
 from copenet.host.api import _FRONTEND_DIST_DIR, create_app
 
@@ -30,3 +31,22 @@ def test_frontend_public_images_are_served_when_present() -> None:
 
     assert response.status_code == 200
     assert response.content == Path(wallpaper_path).read_bytes()
+
+
+@pytest.mark.parametrize(
+    "path",
+    ["/agents", "/market", "/workflows", "/data-tools", "/observability", "/experiments"],
+)
+def test_frontend_section_paths_serve_the_spa(path: str) -> None:
+    with TestClient(create_app()) as client:
+        response = client.get(path)
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_unknown_frontend_root_path_still_returns_not_found() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/not-a-copenet-section")
+
+    assert response.status_code == 404
