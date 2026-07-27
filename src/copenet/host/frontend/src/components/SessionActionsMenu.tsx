@@ -24,11 +24,13 @@ const actionClass = {
 
 function MenuItem({
   label,
+  description,
   tone,
   icon,
   onClick,
 }: {
   label: string;
+  description?: string;
   tone: keyof typeof actionClass;
   icon: React.ReactNode;
   onClick: () => void;
@@ -42,7 +44,10 @@ function MenuItem({
       <span className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border transition-colors ${actionClass[tone]}`}>
         {icon}
       </span>
-      <span className="min-w-0 flex-1 truncate">{label}</span>
+      <span className="min-w-0 flex-1">
+        <span className="block truncate">{label}</span>
+        {description ? <span className="mt-0.5 block truncate text-[10px] text-operator-muted/65">{description}</span> : null}
+      </span>
     </button>
   );
 }
@@ -63,9 +68,10 @@ export function SessionActionsMenu({
   onArchiveConversation,
 }: SessionActionsMenuProps) {
   return (
-    <div className="absolute right-0 top-full z-20 mt-1.5 w-56 overflow-hidden rounded-xl border border-operator-border bg-operator-panel py-1 shadow-lg">
+    <div className="absolute right-0 top-full z-20 mt-1.5 w-64 overflow-hidden rounded-xl border border-operator-border bg-operator-panel py-1 shadow-lg">
       <MenuItem
-        label="Debug Copy"
+        label="Create Debug Session"
+        description="Duplicate conversation and artifacts"
         tone="inspect"
         icon={<CopyPlus className="h-3.5 w-3.5" />}
         onClick={onDebugCopy}
@@ -73,18 +79,21 @@ export function SessionActionsMenu({
       <MenuDivider />
       <MenuItem
         label={copiedAction === 'chat' ? 'Copied' : 'Copy Chat'}
+        description="Messages only"
         tone="copy"
         icon={<Copy className="h-3.5 w-3.5" />}
         onClick={onCopyConversation}
       />
       <MenuItem
-        label={copiedAction === 'chat_activity' ? 'Copied' : 'Copy Chat + Tool Activity'}
+        label={copiedAction === 'chat_activity' ? 'Copied' : 'Copy Chat + Tools'}
+        description="Messages and tool activity"
         tone="copy"
         icon={<Copy className="h-3.5 w-3.5" />}
         onClick={onCopyConversationWithToolActivity}
       />
       <MenuItem
-        label="Export"
+        label="Export Chat + Tools"
+        description="Download a Markdown file"
         tone="copy"
         icon={<Download className="h-3.5 w-3.5" />}
         onClick={onExportConversation}

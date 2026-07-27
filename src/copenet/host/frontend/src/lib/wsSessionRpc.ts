@@ -1,4 +1,5 @@
 import type {
+  Message,
   PublicMessagePayload,
   Session,
   SessionArtifactRecord,
@@ -7,7 +8,7 @@ import type {
   SessionRunRecord,
   SessionStateRecord,
 } from '../types/backend';
-import { normalizeMergeState, normalizeSession } from './wsNormalizers';
+import { normalizeMergeState, normalizeMessage, normalizeSession } from './wsNormalizers';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
@@ -45,11 +46,22 @@ export async function exportSessionRpc(request: WsRpcRequest, key: string): Prom
   const payload = await request<{
     session: unknown;
     messages: PublicMessagePayload[];
+    runs?: SessionRunRecord[];
     markdown: string;
   }>('sessions.export', { key });
+  const session = normalizeSession(payload.session);
   return {
-    session: normalizeSession(payload.session),
-    messages: (payload.messages || []).map((message) => message),
+    session,
+    messages: (payload.messages || []).map((message, index) =>
+      normalizeMessage(
+        message,
+        session.key,
+        `export-${session.key}-${index}-${message.timestamp || index}`,
+        (message.role as Message['role']) || 'assistant',
+        (message.state as Message['state']) || 'final',
+      ),
+    ),
+    runs: Array.isArray(payload.runs) ? payload.runs : [],
     markdown: String(payload.markdown || ''),
   };
 }

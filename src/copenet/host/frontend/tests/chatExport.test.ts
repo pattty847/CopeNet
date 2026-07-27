@@ -2,7 +2,11 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 
 import type { Message, Session, SessionRunRecord } from '../src/types/backend';
-import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown, formatMessageForClipboard } from '../src/lib/chatExport';
+import {
+  formatConversationMarkdown,
+  formatConversationWithToolActivityMarkdown,
+  formatMessageForClipboard,
+} from '../src/lib/chatExport';
 
 function makeMessage(partial: Partial<Message> & Pick<Message, 'localId' | 'role' | 'content' | 'timestamp'>): Message {
   return {
@@ -103,7 +107,7 @@ test('formatConversationMarkdown skips system messages and empty content', () =>
   assert.match(markdown, /^Keep only this$/m);
 });
 
-test('formatConversationMarkdown includes structured tool parts for tool-only messages', () => {
+test('formatConversationMarkdown excludes tool-only messages', () => {
   const message = makeMessage({
     localId: 'm-tool',
     role: 'assistant',
@@ -131,13 +135,12 @@ test('formatConversationMarkdown includes structured tool parts for tool-only me
     modelLabel: 'gpt-5.5',
   });
 
-  assert.match(markdown, /^## Assistant — /m);
-  assert.match(markdown, /\[tool call\] shell\.exec — pwd/);
-  assert.match(markdown, /\[tool result\] shell\.exec — ok — Ran shell command: pwd/);
-  assert.match(markdown, /Preview: \$ pwd\n\/home\/pepe\/CopeNet/);
+  assert.doesNotMatch(markdown, /^## Assistant — /m);
+  assert.doesNotMatch(markdown, /\[tool call\]/);
+  assert.doesNotMatch(markdown, /\[tool result\]/);
 });
 
-test('formatMessageForClipboard includes single-response tool calls and results', () => {
+test('formatMessageForClipboard copies response prose without tool details', () => {
   const copied = formatMessageForClipboard(
     makeMessage({
       localId: 'm-copy',
@@ -159,9 +162,9 @@ test('formatMessageForClipboard includes single-response tool calls and results'
     })
   );
 
-  assert.match(copied, /^Done\./);
-  assert.match(copied, /\[tool call\] git\.status/);
-  assert.match(copied, /\[tool result\] git\.status — ok — Read git status\./);
+  assert.equal(copied, 'Done.');
+  assert.doesNotMatch(copied, /\[tool call\]/);
+  assert.doesNotMatch(copied, /\[tool result\]/);
 });
 
 test('formatConversationWithToolActivityMarkdown appends readable tool activity', () => {
@@ -169,7 +172,16 @@ test('formatConversationWithToolActivityMarkdown appends readable tool activity'
     session: makeSession(),
     messages: [
       makeMessage({ localId: 'm1', role: 'user', content: 'Read the Kepler notes', timestamp: '2026-05-10T23:13:00.000Z' }),
-      makeMessage({ localId: 'm2', role: 'assistant', content: 'I checked the notes and found the key thread.', timestamp: '2026-05-10T23:14:00.000Z' }),
+      makeMessage({
+        localId: 'm2',
+        role: 'assistant',
+        content: 'I checked the notes and found the key thread.',
+        timestamp: '2026-05-10T23:14:00.000Z',
+        parts: [
+          { kind: 'text', content: 'I checked the notes and found the key thread.' },
+          { kind: 'tool_call', callId: 'call-1', toolId: 'files.read', target: '/tmp/workspace/README.md', hint: null, at: '2026-05-10T23:14:00.000Z' },
+        ],
+      }),
     ],
     runs: [
       makeRun({
@@ -218,4 +230,32 @@ test('formatConversationWithToolActivityMarkdown appends readable tool activity'
   assert.ok(markdown.includes('- `files.read` — Read docs/blocked.md'));
   assert.match(markdown, /Error: permission denied/);
   assert.ok(markdown.includes('Output summary: Summarized the findings.'));
+  assert.equal(markdown.match(/Read README\.md/g)?.length, 1);
+});
+
+test('formatConversationWithToolActivityMarkdown preserves transcript tools for legacy sessions without run records', () => {
+  const markdown = formatConversationWithToolActivityMarkdown({
+    session: makeSession(),
+    messages: [
+      makeMessage({
+        localId: 'legacy-tool',
+        role: 'assistant',
+        content: 'Done.',
+        timestamp: '2026-05-10T23:14:00.000Z',
+        toolExecution: {
+          toolId: 'shell.exec',
+          ok: true,
+          summary: 'Ran pwd.',
+          target: 'pwd',
+        },
+      }),
+    ],
+    runs: [],
+    providerLabel: 'OpenAI Codex',
+    modelLabel: 'gpt-5.5',
+  });
+
+  assert.match(markdown, /^Done\.$/m);
+  assert.match(markdown, /\[tool result\] shell\.exec — ok — Ran pwd\./);
+  assert.doesNotMatch(markdown, /No tool activity captured/);
 });

@@ -548,7 +548,8 @@ export interface MediaAssetDetail extends MediaAsset {
 
 export interface SessionExportPayload {
   session: Session;
-  messages: PublicMessagePayload[];
+  messages: Message[];
+  runs: SessionRunRecord[];
   markdown: string;
 }
 

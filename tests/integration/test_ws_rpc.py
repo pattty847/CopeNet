@@ -605,6 +605,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
         export_response = socket.recv_response(export_id)
         assert export_response["payload"]["session"]["key"] == "alpha"
         assert export_response["payload"]["messages"] == []
+        assert export_response["payload"]["runs"] == []
         assert "# Conversation Export: Alpha Session" in export_response["payload"]["markdown"]
 
         active_list_id = socket.request("sessions.list")

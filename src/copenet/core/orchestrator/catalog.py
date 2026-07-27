@@ -283,6 +283,7 @@ def export_session(orchestrator: "Orchestrator", session_key: str) -> dict[str, 
         raise KeyError(f"unknown session_key: {session_key.strip()}")
 
     messages = orchestrator.history(entry.session_key, limit=100000)
+    runs = orchestrator.list_session_runs(entry.session_key, limit=100000)
     markdown_lines = [
         f"# Conversation Export: {entry.title or entry.session_key}",
         "",
@@ -313,5 +314,6 @@ def export_session(orchestrator: "Orchestrator", session_key: str) -> dict[str, 
     return {
         "session": session_payload(entry),
         "messages": messages,
+        "runs": runs,
         "markdown": "\n".join(markdown_lines).strip() + "\n",
     }

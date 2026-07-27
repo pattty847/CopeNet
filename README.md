@@ -19,9 +19,9 @@ The Home dashboard is the front door to CopeNet: the operator console with live 
 ![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
 
 ### Agents Console — persistent sessions with inspectable runtime context
-The Agents view keeps the live conversation and the runtime inspector together so a run stays understandable instead of turning into opaque chat history. Here a sub-agent delegation session shows the model's actual tool calls (test runs, `py_compile`, `git status`) and reasoning inline, while the inspector on the right rolls the run up into grouped activity — "Edited 6 files · Read 10 files" — plus the session provider, model, Access, and persona.
+The Agents view keeps the live conversation and runtime inspector together so a run stays understandable instead of turning into opaque chat history. The session menu keeps conversation handling explicit too: copy messages only, copy messages with tool activity, export the full chat and tools as Markdown, or create a separate debug session. The inspector on the right keeps the session provider, model, Access, persona, and recent activity visible.
 
-![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+![CopeNet Agents Console](docs/imgs/copenet-agents-console-openai-codex-spdc.png)
 
 ### Fleet Rooms — ChatGPT and Claude collaborate without agreement theater
 Fleet is a durable multi-model room inside Agents. An `@everyone` prompt runs ChatGPT and Claude from the same room snapshot behind an independent-first reveal barrier, then commits both answers with attributed tool receipts. Follow up with `@chatgpt` or `@claude` to challenge a claim directly; each provider keeps its own resumable lane while the room remains the product-visible source of truth.

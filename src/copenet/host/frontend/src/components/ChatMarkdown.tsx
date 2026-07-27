@@ -4,15 +4,22 @@ import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import { Check, Copy } from 'lucide-react';
+import { copyTextToClipboard } from '../lib/clipboard';
+import { useAppStore } from '../store/useAppStore';
 
 type Density = 'cozy' | 'compact';
 
 function CodeBlock({ language, code }: { language: string; code: string }) {
   const [copied, setCopied] = useState(false);
-  const handleCopy = () => {
-    navigator.clipboard.writeText(code.replace(/\n$/, ''));
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+  const setAppError = useAppStore((state) => state.setAppError);
+  const handleCopy = async () => {
+    try {
+      await copyTextToClipboard(code.replace(/\n$/, ''));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to copy code.');
+    }
   };
   return (
     <div
@@ -25,7 +32,8 @@ function CodeBlock({ language, code }: { language: string; code: string }) {
       >
         <span className="font-semibold tracking-wide uppercase">{language}</span>
         <button
-          onClick={handleCopy}
+          type="button"
+          onClick={() => void handleCopy()}
           className="inline-flex items-center gap-1 opacity-70 hover:opacity-100 transition-opacity duration-150"
           title="Copy code"
         >

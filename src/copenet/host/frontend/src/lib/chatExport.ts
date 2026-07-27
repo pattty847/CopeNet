@@ -23,13 +23,6 @@ function formatRoleLabel(role: Message['role']): string {
   return role === 'user' ? 'User' : role === 'assistant' ? 'Assistant' : 'System';
 }
 
-function visibleMessages(messages: Message[]): Message[] {
-  return messages.filter((message) => {
-    if (message.role === 'system') return false;
-    return message.content.trim().length > 0 || !!message.parts?.length || !!message.toolExecution;
-  });
-}
-
 function formatToolPreview(preview: ToolResultPreview | null | undefined): string[] {
   if (!preview) return [];
   if (preview.type === 'file_read') {
@@ -91,11 +84,14 @@ function formatMessagePartLines(part: MessagePart): string[] {
   return lines;
 }
 
-export function formatMessageForClipboard(message: Message): string {
+function formatMessageToolActivityLines(message: Message): string[] {
   if (message.parts?.length) {
-    return message.parts.flatMap(formatMessagePartLines).filter(Boolean).join('\n\n').trim();
+    return message.parts
+      .filter((part) => part.kind !== 'text' && part.kind !== 'thinking')
+      .flatMap(formatMessagePartLines)
+      .filter(Boolean);
   }
-  const lines = [message.content.trim()].filter(Boolean);
+  const lines: string[] = [];
   if (message.toolExecution) {
     lines.push(
       `[tool result] ${message.toolExecution.toolId} — ${message.toolExecution.ok ? 'ok' : 'failed'} — ${message.toolExecution.summary}`
@@ -104,7 +100,19 @@ export function formatMessageForClipboard(message: Message): string {
     if (message.toolExecution.error) lines.push(`  - Error: ${message.toolExecution.error}`);
     else if (message.toolExecution.policySummary) lines.push(`  - Policy: ${message.toolExecution.policySummary}`);
   }
-  return lines.join('\n\n').trim();
+  return lines;
+}
+
+export function formatMessageForClipboard(message: Message): string {
+  if (message.parts?.length) {
+    const text = message.parts
+      .filter((part): part is Extract<MessagePart, { kind: 'text' }> => part.kind === 'text')
+      .map((part) => part.content.trim())
+      .filter(Boolean)
+      .join('\n\n');
+    if (text) return text;
+  }
+  return message.content.trim();
 }
 
 function formatToolStepLines(run: SessionRunRecord): string[] {
@@ -144,8 +152,11 @@ export function formatConversationMarkdown({
     `Model: ${modelLabel || session.model || 'default'}`,
   ];
 
-  for (const message of visibleMessages(messages)) {
-    sections.push('', `## ${formatRoleLabel(message.role)} — ${formatMessageTimestamp(message.timestamp)}`, formatMessageForClipboard(message));
+  for (const message of messages) {
+    if (message.role === 'system') continue;
+    const text = formatMessageForClipboard(message);
+    if (!text) continue;
+    sections.push('', `## ${formatRoleLabel(message.role)} — ${formatMessageTimestamp(message.timestamp)}`, text);
   }
 
   return `${sections.join('\n')}\n`;
@@ -163,7 +174,8 @@ export function formatConversationWithToolActivityMarkdown({
   const orderedRuns = [...runs].sort((a, b) => String(a.startedAt || '').localeCompare(String(b.startedAt || '')));
 
   if (orderedRuns.length === 0) {
-    lines.push('', 'No tool activity captured for this session.');
+    const transcriptToolLines = messages.flatMap(formatMessageToolActivityLines);
+    lines.push('', ...(transcriptToolLines.length ? transcriptToolLines : ['No tool activity captured for this session.']));
     return `${lines.join('\n')}\n`;
   }
 

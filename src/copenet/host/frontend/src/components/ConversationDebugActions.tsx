@@ -8,8 +8,8 @@ type Props = {
   helperText?: string;
   compact?: boolean;
   onDebugCopy: () => Promise<void>;
-  onCopyConversation: () => Promise<void>;
-  onCopyConversationWithToolActivity: () => Promise<void>;
+  onCopyConversation: () => Promise<boolean>;
+  onCopyConversationWithToolActivity: () => Promise<boolean>;
   onExportConversation: () => Promise<void>;
   onArchiveConversation?: () => void;
   onCreatePulse?: () => Promise<void>;
@@ -46,9 +46,10 @@ export function ConversationDebugActions({
     if (disabled || busyAction) return;
     setBusyAction('chat_copy');
     try {
-      await onCopyConversation();
-      setCopiedAction('chat');
-      window.setTimeout(() => setCopiedAction((current) => (current === 'chat' ? null : current)), 1800);
+      if (await onCopyConversation()) {
+        setCopiedAction('chat');
+        window.setTimeout(() => setCopiedAction((current) => (current === 'chat' ? null : current)), 1800);
+      }
     } finally {
       setBusyAction(null);
     }
@@ -58,9 +59,10 @@ export function ConversationDebugActions({
     if (disabled || busyAction) return;
     setBusyAction('chat_activity_copy');
     try {
-      await onCopyConversationWithToolActivity();
-      setCopiedAction('chat_activity');
-      window.setTimeout(() => setCopiedAction((current) => (current === 'chat_activity' ? null : current)), 1800);
+      if (await onCopyConversationWithToolActivity()) {
+        setCopiedAction('chat_activity');
+        window.setTimeout(() => setCopiedAction((current) => (current === 'chat_activity' ? null : current)), 1800);
+      }
     } finally {
       setBusyAction(null);
     }
@@ -118,7 +120,7 @@ export function ConversationDebugActions({
               className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
             >
               {copiedAction === 'debug' ? <Check className="h-4 w-4 shrink-0" /> : <CopyPlus className="h-4 w-4 shrink-0" />}
-              <span>{busyAction === 'copy' ? 'Copying…' : getDebugActionLabel('copy', true)}</span>
+              <span>{busyAction === 'copy' ? 'Creating…' : 'Create Debug Session'}</span>
             </button>
             <button
               type="button"
@@ -130,7 +132,7 @@ export function ConversationDebugActions({
               className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
             >
               {copiedAction === 'chat' ? <Check className="h-4 w-4 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
-              <span>{busyAction === 'chat_copy' ? 'Copying…' : 'Copy Chat'}</span>
+              <span>{busyAction === 'chat_copy' ? 'Copying…' : copiedAction === 'chat' ? 'Copied' : 'Copy Chat (Messages Only)'}</span>
             </button>
             <button
               type="button"
@@ -142,7 +144,7 @@ export function ConversationDebugActions({
               className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
             >
               {copiedAction === 'chat_activity' ? <Check className="h-4 w-4 shrink-0" /> : <Copy className="h-4 w-4 shrink-0" />}
-              <span>{busyAction === 'chat_activity_copy' ? 'Copying…' : 'Copy Chat + Tool Activity'}</span>
+              <span>{busyAction === 'chat_activity_copy' ? 'Copying…' : copiedAction === 'chat_activity' ? 'Copied' : 'Copy Chat + Tools'}</span>
             </button>
             <button
               type="button"
@@ -154,7 +156,7 @@ export function ConversationDebugActions({
               className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
             >
               <Download className="h-4 w-4 shrink-0" />
-              <span>{busyAction === 'export' ? 'Exporting…' : getDebugActionLabel('export', true)}</span>
+              <span>{busyAction === 'export' ? 'Exporting…' : 'Export Chat + Tools'}</span>
             </button>
             {onCreatePulse ? (
               <button

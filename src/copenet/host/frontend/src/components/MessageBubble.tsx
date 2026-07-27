@@ -8,6 +8,8 @@ import { Spinner } from './Spinner';
 import { ChatMarkdown } from './ChatMarkdown';
 import type { MessagePart, ToolBatchPart, ToolCallPart, ToolResultPart } from '../types/backend';
 import { formatMessageForClipboard } from '../lib/chatExport';
+import { copyTextToClipboard } from '../lib/clipboard';
+import { useAppStore } from '../store/useAppStore';
 
 function partsShouldCollapseIntoSingleRow(current: ToolCallPart, next: ToolResultPart | ToolBatchPart): boolean {
   if (next.kind === 'tool_result') {
@@ -128,11 +130,16 @@ export function MessageBubble({ message }: { message: Message }) {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
   const [copied, setCopied] = useState(false);
+  const setAppError = useAppStore((state) => state.setAppError);
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(formatMessageForClipboard(message));
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+  const handleCopy = async () => {
+    try {
+      await copyTextToClipboard(formatMessageForClipboard(message));
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1600);
+    } catch (error) {
+      setAppError(error instanceof Error ? error.message : 'Unable to copy message.');
+    }
   };
 
   if (isSystem) {
@@ -159,8 +166,10 @@ export function MessageBubble({ message }: { message: Message }) {
           )}
           <div className="mt-1 flex items-center justify-end gap-1.5 px-1 text-[10px] text-operator-muted/70">
             <button
-              onClick={handleCopy}
-              className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
+              type="button"
+              onClick={() => void handleCopy()}
+              aria-label={copied ? 'Copied message' : 'Copy message'}
+              className="opacity-40 transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
               title="Copy message"
             >
               {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}
@@ -211,8 +220,10 @@ export function MessageBubble({ message }: { message: Message }) {
 
         <div className="mt-1 flex items-center px-1 text-[10px] text-operator-muted/70">
           <button
-            onClick={handleCopy}
-            className="opacity-0 transition-opacity duration-150 group-hover:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
+            type="button"
+            onClick={() => void handleCopy()}
+            aria-label={copied ? 'Copied message' : 'Copy message'}
+            className="opacity-40 transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
             title="Copy message"
           >
             {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}

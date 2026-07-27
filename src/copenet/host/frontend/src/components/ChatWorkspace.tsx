@@ -13,6 +13,7 @@ import { useIsMobile } from '../lib/responsive';
 import { AgentComposer } from './agents/AgentComposer';
 import { buildPersonaCommandHelpText, DRAFT_TRANSCRIPT_SESSION_KEY, parsePersonaSlashCommand, resolvePersonaRuntime } from '../lib/personaCommands';
 import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown } from '../lib/chatExport';
+import { copyTextToClipboard } from '../lib/clipboard';
 
 export function ChatWorkspace() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
@@ -286,7 +287,14 @@ export function ChatWorkspace() {
     try {
       clearAppError();
       const exported = await wsClient.exportSession(activeSession.key);
-      const blob = new Blob([exported.markdown], { type: 'text/markdown;charset=utf-8' });
+      const markdown = formatConversationWithToolActivityMarkdown({
+        session: exported.session,
+        messages: exported.messages,
+        runs: exported.runs,
+        providerLabel: providerName,
+        modelLabel: runtimeSummary.model,
+      });
+      const blob = new Blob([markdown], { type: 'text/markdown;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -304,17 +312,20 @@ export function ChatWorkspace() {
     if (!activeSession) return;
     try {
       clearAppError();
+      const exported = await wsClient.exportSession(activeSession.key);
       const markdown = formatConversationMarkdown({
-        session: activeSession,
-        messages,
+        session: exported.session,
+        messages: exported.messages,
         providerLabel: providerName,
         modelLabel: runtimeSummary.model,
       });
-      await navigator.clipboard.writeText(markdown);
+      await copyTextToClipboard(markdown);
       setCopiedAction('chat');
       window.setTimeout(() => setCopiedAction((current) => (current === 'chat' ? null : current)), 1800);
+      return true;
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to copy chat.');
+      return false;
     }
   };
 
@@ -322,19 +333,21 @@ export function ChatWorkspace() {
     if (!activeSession) return;
     try {
       clearAppError();
-      const runs = await wsClient.listSessionRuns(activeSession.key, 200);
+      const exported = await wsClient.exportSession(activeSession.key);
       const markdown = formatConversationWithToolActivityMarkdown({
-        session: activeSession,
-        messages,
-        runs,
+        session: exported.session,
+        messages: exported.messages,
+        runs: exported.runs,
         providerLabel: providerName,
         modelLabel: runtimeSummary.model,
       });
-      await navigator.clipboard.writeText(markdown);
+      await copyTextToClipboard(markdown);
       setCopiedAction('chat_activity');
       window.setTimeout(() => setCopiedAction((current) => (current === 'chat_activity' ? null : current)), 1800);
+      return true;
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to copy chat with tool activity.');
+      return false;
     }
   };
 
@@ -532,8 +545,8 @@ export function ChatWorkspace() {
                     archived={Boolean(activeSession?.archived)}
                     canArchive={Boolean(activeSession)}
                     onDebugCopy={() => { void handleDebugCopy(); setActionsOpen(false); }}
-                    onCopyConversation={() => { void handleCopyConversation(); setActionsOpen(false); }}
-                    onCopyConversationWithToolActivity={() => { void handleCopyConversationWithToolActivity(); setActionsOpen(false); }}
+                    onCopyConversation={() => { void handleCopyConversation(); }}
+                    onCopyConversationWithToolActivity={() => { void handleCopyConversationWithToolActivity(); }}
                     onExportConversation={() => { void handleExportConversation(); setActionsOpen(false); }}
                     onCreatePulse={() => { void handleCreatePulse(); setActionsOpen(false); }}
                     onArchiveConversation={() => {

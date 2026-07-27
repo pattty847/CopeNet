@@ -532,6 +532,8 @@ async def test_export_session_returns_messages_and_markdown(fake_orchestrator: O
 
     assert exported["session"]["key"] == "alpha"
     assert len(exported["messages"]) == 2
+    assert len(exported["runs"]) == 1
+    assert exported["runs"][0]["userMessage"] == "Inspect the runtime"
     assert "# Conversation Export: alpha" in exported["markdown"]
     assert "Inspect the runtime" in exported["markdown"]
     assert "hello" in exported["markdown"]
