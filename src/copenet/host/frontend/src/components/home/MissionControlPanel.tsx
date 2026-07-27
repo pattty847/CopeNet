@@ -75,37 +75,49 @@ function MissionItem({
   onPromoteWorkflow: (item: MissionControlItem) => void;
 }) {
   return (
-    <article className="group border-t border-shell-border/70 py-3 first:border-t-0 first:pt-0">
-      <div className="flex items-start justify-between gap-3">
+    <article className="group min-w-0 max-w-full overflow-hidden border-t border-shell-border/70 py-3 first:border-t-0 first:pt-0">
+      <div className="flex min-w-0 flex-col items-start gap-2 sm:flex-row sm:justify-between sm:gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
+          <div className="flex min-w-0 items-start gap-2">
             <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-shell-accent" />
-            <h4 className="min-w-0 truncate text-[13px] font-semibold text-shell-text" title={item.title}>
+            <h4
+              className="min-w-0 break-words text-[13px] font-semibold leading-5 text-shell-text [overflow-wrap:anywhere]"
+              title={item.title}
+            >
               {item.title}
             </h4>
           </div>
-          <p className="mt-1 line-clamp-2 text-[12px] leading-5 text-shell-muted" title={item.detail}>
+          <p
+            className="mt-1 line-clamp-2 min-w-0 break-words text-[12px] leading-5 text-shell-muted [overflow-wrap:anywhere]"
+            title={item.detail}
+          >
             {item.detail}
           </p>
         </div>
         <button
           type="button"
           onClick={actionHandler(item, onOpenSession, onOpenObservability, onPromoteWorkflow)}
-          className="inline-flex h-8 shrink-0 items-center gap-1.5 rounded-lg border border-shell-border bg-shell-panel-strong px-2.5 text-[11px] font-medium text-shell-text transition-colors hover:border-shell-accent/40 hover:text-shell-accent"
+          className="inline-flex h-8 shrink-0 items-center gap-1.5 self-start rounded-lg border border-shell-border bg-shell-panel-strong px-2.5 text-[11px] font-medium text-shell-text transition-colors hover:border-shell-accent/40 hover:text-shell-accent"
         >
           {actionLabel(item)}
           <ArrowRight className="h-3 w-3" />
         </button>
       </div>
-      <div className="mt-2 flex min-w-0 flex-wrap items-center gap-1.5 font-mono text-[10px] text-shell-muted">
-        <span className="truncate rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5">{item.source}</span>
-        <span className="rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5">{item.provider}</span>
+      <div className="mt-2 flex min-w-0 max-w-full flex-wrap items-start gap-1.5 font-mono text-[10px] text-shell-muted">
+        <span className="max-w-full break-words rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5 [overflow-wrap:anywhere]">
+          {item.source}
+        </span>
+        <span className="max-w-full break-words rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5 [overflow-wrap:anywhere]">
+          {item.provider}
+        </span>
         {item.model ? (
-          <span className="max-w-[11rem] truncate rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5">
+          <span className="max-w-full break-words rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5 [overflow-wrap:anywhere] sm:max-w-[11rem]">
             {item.model}
           </span>
         ) : null}
-        <span className="rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5">{item.meta}</span>
+        <span className="max-w-full break-words rounded-md border border-shell-border bg-shell-bg px-1.5 py-0.5 [overflow-wrap:anywhere]">
+          {item.meta}
+        </span>
       </div>
     </article>
   );
@@ -130,7 +142,7 @@ function Lane({
   const Icon = meta.icon;
 
   return (
-    <section className="min-h-[15rem] rounded-[18px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+    <section className="min-h-[15rem] min-w-0 max-w-full overflow-hidden rounded-[18px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
       <header className="mb-3 flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -145,7 +157,7 @@ function Lane({
       </header>
 
       {items.length > 0 ? (
-        <div>
+        <div className="min-w-0">
           {items.slice(0, 3).map((item) => (
             <MissionItem
               key={item.id}
@@ -179,7 +191,7 @@ export function MissionControlPanel({
   const hasItems = items.length > 0;
 
   return (
-    <section className="space-y-3" aria-label="Mission Control">
+    <section className="min-w-0 max-w-full space-y-3 overflow-hidden" aria-label="Mission Control">
       <div className="flex flex-wrap items-end justify-between gap-3 px-1">
         <div className="min-w-0">
           <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
@@ -203,7 +215,7 @@ export function MissionControlPanel({
         </div>
       ) : null}
 
-      <div className="grid gap-3 xl:grid-cols-4 md:grid-cols-2">
+      <div className="grid min-w-0 max-w-full gap-3 md:grid-cols-2 xl:grid-cols-4">
         {LANES.map((lane) => (
           <Lane
             key={lane}

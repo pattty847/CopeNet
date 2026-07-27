@@ -62,3 +62,30 @@ test('MissionControlPanel renders a calm empty state', () => {
   assert.match(html, /No urgent work/);
   assert.match(html, /Mission Control/);
 });
+
+test('MissionControlPanel keeps long run content inside narrow cards', () => {
+  const longToken = 'debug-claude-lane-with-a-very-long-unbroken-runtime-payload';
+  const html = renderToStaticMarkup(
+    <MissionControlPanel
+      items={[
+        item({
+          kind: 'failed_run',
+          title: `Run failed: ${longToken}`,
+          detail: `Claude CLI failed at /Users/operator/${longToken}/${longToken}`,
+          source: `Research-Lab-${longToken}`,
+          provider: `provider-${longToken}`,
+          model: `model-${longToken}`,
+        }),
+      ]}
+      loading={false}
+      onOpenSession={() => {}}
+      onOpenObservability={() => {}}
+      onPromoteWorkflow={() => {}}
+    />,
+  );
+
+  assert.match(html, /flex-col items-start/);
+  assert.match(html, /\[overflow-wrap:anywhere\]/);
+  assert.match(html, /min-w-0 max-w-full overflow-hidden/);
+  assert.doesNotMatch(html, /truncate/);
+});
