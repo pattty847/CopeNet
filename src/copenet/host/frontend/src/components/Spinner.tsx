@@ -2,7 +2,7 @@ import React from 'react';
 import { cn } from '../lib/utils';
 
 export interface SpinnerProps {
-  variant?: 'dot-grid' | 'bars' | 'breathe' | 'bounce' | 'flip';
+  variant?: 'dot-grid' | 'bars' | 'breathe' | 'bounce' | 'flip' | 'orbit';
   className?: string;
 }
 
@@ -39,6 +39,14 @@ export function Spinner({ variant = 'bars', className }: SpinnerProps) {
 
   if (variant === 'flip') {
     return <div className={cn("loader-flip", className)}></div>;
+  }
+
+  if (variant === 'orbit') {
+    return (
+      <div className={cn("loader-orbit", className)} aria-hidden="true">
+        <span></span><span></span><span></span><span></span>
+      </div>
+    );
   }
 
   return null;

@@ -195,7 +195,13 @@ export function MessageBubble({ message }: { message: Message }) {
 
         <div className="px-1 text-[13.5px] leading-relaxed text-operator-text font-sans break-words">
           {message.optimistic && !message.content && !message.parts?.length ? (
-            <Spinner variant="bounce" className="text-operator-muted" />
+            <div
+              className="mt-2.5 flex min-h-8 items-center"
+              role="status"
+              aria-label="Waiting for assistant response"
+            >
+              <Spinner variant="orbit" className="text-operator-muted" />
+            </div>
           ) : null}
 
           {message.parts && message.parts.length > 0 ? (
