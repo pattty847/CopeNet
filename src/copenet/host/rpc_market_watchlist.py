@@ -16,7 +16,7 @@ from copenet.host.rpc_schema import ResponseFrame, make_response_frame
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
 
 
-def _store(orchestrator) -> WatchlistStore:
+def watchlist_store(orchestrator) -> WatchlistStore:
     """Same lazy-singleton-on-orchestrator pattern as rpc_market.py's _runtime(). The path is
     derived from orchestrator.market_store's root (not a bare default_market_dir() call) so
     tests that scope `market_store` to tmp_path automatically scope the watchlist file too —
@@ -64,7 +64,7 @@ async def _respond_state(request_id: str, send_json: SendJson, store: WatchlistS
 
 async def handle_market_watchlist_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     del params
-    await _respond_state(request_id, send_json, _store(orchestrator))
+    await _respond_state(request_id, send_json, watchlist_store(orchestrator))
 
 
 async def handle_market_watchlist_add(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
@@ -77,7 +77,7 @@ async def handle_market_watchlist_add(request_id: str, params: dict[str, Any] | 
     probe = await asyncio.to_thread(fetch_quote_row, symbol)
     if probe is None:
         raise ValueError(f"'{symbol}' did not resolve to a tradable ticker")
-    store = _store(orchestrator)
+    store = watchlist_store(orchestrator)
     store.add(symbol, name, list_name)
     await _respond_state(request_id, send_json, store)
 
@@ -88,28 +88,28 @@ async def handle_market_watchlist_remove(request_id: str, params: dict[str, Any]
     list_name = str(raw.get("list") or "").strip() or None
     if not symbol:
         raise ValueError("symbol is required")
-    store = _store(orchestrator)
+    store = watchlist_store(orchestrator)
     store.remove(symbol, list_name)
     await _respond_state(request_id, send_json, store)
 
 
 async def handle_market_watchlist_list_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
-    store = _store(orchestrator)
+    store = watchlist_store(orchestrator)
     store.create_list(str(raw.get("name") or ""))
     await _respond_state(request_id, send_json, store)
 
 
 async def handle_market_watchlist_list_delete(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
-    store = _store(orchestrator)
+    store = watchlist_store(orchestrator)
     store.delete_list(str(raw.get("name") or ""))
     await _respond_state(request_id, send_json, store)
 
 
 async def handle_market_watchlist_list_select(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
-    store = _store(orchestrator)
+    store = watchlist_store(orchestrator)
     store.select_list(str(raw.get("name") or ""))
     await _respond_state(request_id, send_json, store)
 

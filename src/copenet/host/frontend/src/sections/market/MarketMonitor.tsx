@@ -10,6 +10,7 @@ import { MorningBrief } from './MorningBrief';
 import { EconomicCalendarWidget } from './EconomicCalendarWidget';
 import { useEconomicCalendar } from './useEconomicCalendar';
 import { ForwardLedger } from './ForwardLedger';
+import { AllTimePnl } from './AllTimePnl';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { TreasuryYieldCurve } from './TreasuryYieldCurve';
@@ -50,7 +51,7 @@ function MarketDetail({ children }: { children: ReactNode }) {
       >
         {open ? '▾' : '▸'} Market detail
         <span style={{ color: MM.dimmer, fontWeight: 500, textTransform: 'none', letterSpacing: '.02em', marginLeft: 8 }}>
-          watchlist · macro · rotation · portfolio · evidence · ledger
+          watchlist · macro · rotation · portfolio · all-time P&L · evidence · ledger
         </span>
       </button>
       {open && children}
@@ -671,6 +672,8 @@ export function MarketMonitor() {
                 onSelectList={(n) => void watchlist.selectList(n)}
                 onCreateList={(n) => void watchlist.createList(n)}
                 onDeleteList={(n) => void watchlist.deleteList(n)}
+                onImportWebull={() => void watchlist.importFromWebull()}
+                importing={watchlist.importing}
               />
               <MacroBoard panel={dash.macro} />
               {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
@@ -685,6 +688,7 @@ export function MarketMonitor() {
                 <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
                 <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
               </div>
+              <AllTimePnl onOpen={open} />
               <ForwardLedger report={ledger.report} loading={ledger.loading} />
               <div style={ROW}>
                 <Evidence panel={dash.evidence} onOpen={open} />

@@ -40,10 +40,8 @@ def _account_file() -> Path:
     return webull_data_dir() / "account.json"
 
 
-def build_trade_client(config: WebullConfig):
-    """Construct the SDK trade client. BLOCKS during first-time app approval — call in a thread."""
+def _api_client(config: WebullConfig):
     from webull.core.client import ApiClient
-    from webull.trade.trade_client import TradeClient
 
     api_client = ApiClient(config.app_key, config.app_secret, "us")
     if config.uat_host:
@@ -54,9 +52,47 @@ def build_trade_client(config: WebullConfig):
     log_dir = Path(os.environ.get("COPNET_HOME", Path.home() / ".copenet")) / "logs"
     log_dir.mkdir(parents=True, exist_ok=True)
     api_client.set_file_logger(path=str(log_dir / "webull_sdk.log"), log_level=logging.WARNING)
+    return api_client
+
+
+def build_trade_client(config: WebullConfig):
+    """Construct the SDK trade client. BLOCKS during first-time app approval — call in a thread."""
+    from webull.trade.trade_client import TradeClient
 
     logger.info("Loaded Webull config (env=%s); building trade client", config.env)
-    return TradeClient(api_client)
+    return TradeClient(_api_client(config))
+
+
+def build_data_client(config: WebullConfig):
+    """Construct the SDK data client (quotes lane).
+
+    Realtime equity/option quotes need a paid subscription, but fundamentals, analyst data,
+    capital flow, screeners, watchlists, and crypto all read fine on plain app credentials —
+    see docs/plans/WEBULL_API_SURFACE.md."""
+    from webull.data.data_client import DataClient
+
+    return DataClient(_api_client(config))
+
+
+# Client construction costs a config round trip plus token init, so every RPC building its own was
+# paying for it. One cached client per lane per process; `reset_clients()` exists for tests.
+_CLIENT_CACHE: dict[str, Any] = {}
+
+
+def trade_client(config: WebullConfig):
+    if "trade" not in _CLIENT_CACHE:
+        _CLIENT_CACHE["trade"] = build_trade_client(config)
+    return _CLIENT_CACHE["trade"]
+
+
+def data_client(config: WebullConfig):
+    if "data" not in _CLIENT_CACHE:
+        _CLIENT_CACHE["data"] = build_data_client(config)
+    return _CLIENT_CACHE["data"]
+
+
+def reset_clients() -> None:
+    _CLIENT_CACHE.clear()
 
 
 def _find_token_file() -> Path | None:

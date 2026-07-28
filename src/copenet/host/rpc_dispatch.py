@@ -44,6 +44,9 @@ from .rpc_catalog import (
     handle_market_webull_auth,
     handle_market_webull_status,
     handle_market_webull_sync,
+    handle_market_webull_orders_sync,
+    handle_market_webull_pnl_get,
+    handle_market_webull_watchlists_import,
     handle_market_backtest_run,
     handle_market_backtest_stress_test,
     handle_market_watchlist_get,
@@ -299,6 +302,12 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_webull_account_select(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.sync":
         await handle_market_webull_sync(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.orders.sync":
+        await handle_market_webull_orders_sync(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.pnl.get":
+        await handle_market_webull_pnl_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.webull.watchlists.import":
+        await handle_market_webull_watchlists_import(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.backtest.run":
         await handle_market_backtest_run(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.backtest.stress_test":

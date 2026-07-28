@@ -79,6 +79,27 @@ class WatchlistStore:
             self._save(payload)
         return self.state()
 
+    def replace_list(self, name: str, entries: list[dict[str, str]]) -> dict[str, Any]:
+        """Upsert a whole list by name — creates it when absent, overwrites its entries when
+        present. Used by the Webull import, which re-pulls the broker's lists wholesale."""
+        cleaned = self._valid_name(name)
+        normalized = [
+            {"symbol": str(entry["symbol"]).strip().upper(), "name": str(entry.get("name") or "").strip()}
+            for entry in entries
+            if isinstance(entry, dict) and str(entry.get("symbol") or "").strip()
+        ]
+        with self._lock:
+            payload = self._load()
+            existing = next((wl for wl in payload["lists"] if wl["name"].lower() == cleaned.lower()), None)
+            if existing is None:
+                if len(payload["lists"]) >= _MAX_LISTS:
+                    raise ValueError(f"watchlist limit reached ({_MAX_LISTS})")
+                payload["lists"].append({"name": cleaned, "entries": normalized})
+            else:
+                existing["entries"] = normalized
+            self._save(payload)
+        return self.state()
+
     def delete_list(self, name: str) -> dict[str, Any]:
         cleaned = name.strip()
         with self._lock:

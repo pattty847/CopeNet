@@ -73,13 +73,18 @@ from .rpc_market import (
     handle_market_ticker_fundamentals_get,
     handle_market_ticker_get,
     handle_market_universe_get,
+    handle_market_backtest_run,
+    handle_market_backtest_stress_test,
+)
+from .rpc_market_webull import (
     handle_market_webull_account_select,
     handle_market_webull_accounts,
     handle_market_webull_auth,
+    handle_market_webull_orders_sync,
+    handle_market_webull_pnl_get,
     handle_market_webull_status,
     handle_market_webull_sync,
-    handle_market_backtest_run,
-    handle_market_backtest_stress_test,
+    handle_market_webull_watchlists_import,
 )
 from .rpc_market_watchlist import (
     handle_market_watchlist_get,
@@ -154,6 +159,9 @@ __all__ = [
     "handle_market_webull_accounts",
     "handle_market_webull_account_select",
     "handle_market_webull_sync",
+    "handle_market_webull_orders_sync",
+    "handle_market_webull_pnl_get",
+    "handle_market_webull_watchlists_import",
     "handle_market_backtest_run",
     "handle_market_backtest_stress_test",
     "handle_market_watchlist_get",

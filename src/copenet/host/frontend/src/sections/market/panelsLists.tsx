@@ -308,6 +308,8 @@ export function Watchlist({
   onSelectList,
   onCreateList,
   onDeleteList,
+  onImportWebull,
+  importing,
 }: {
   items: WatchlistItem[];
   lists: string[];
@@ -319,12 +321,28 @@ export function Watchlist({
   onSelectList: (name: string) => void;
   onCreateList: (name: string) => void;
   onDeleteList: (name: string) => void;
+  onImportWebull?: () => void;
+  importing?: boolean;
 }) {
   return (
     <PanelCard
       title="Watchlist"
       status={items.length ? 'live' : 'preview'}
-      right={<WatchlistTabs lists={lists} active={active} onSelect={onSelectList} onCreate={onCreateList} onDelete={onDeleteList} />}
+      right={
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          {onImportWebull && (
+            <button
+              onClick={onImportWebull}
+              disabled={importing}
+              title="Re-import your Webull watchlists (replaces same-named lists here)"
+              style={{ cursor: importing ? 'default' : 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '4px 8px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', opacity: importing ? 0.6 : 1, whiteSpace: 'nowrap', flex: '0 0 auto' }}
+            >
+              {importing ? '◍ Importing…' : '⤓ Webull'}
+            </button>
+          )}
+          <WatchlistTabs lists={lists} active={active} onSelect={onSelectList} onCreate={onCreateList} onDelete={onDeleteList} />
+        </div>
+      }
       subtitle={items.length || loading ? undefined : `"${active}" is empty — add a symbol below.`}
     >
       {items.length === 0 && !loading ? (

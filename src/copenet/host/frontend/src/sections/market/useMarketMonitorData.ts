@@ -297,6 +297,8 @@ export interface MarketWatchlistState {
   createList: (name: string) => Promise<void>;
   deleteList: (name: string) => Promise<void>;
   selectList: (name: string) => Promise<void>;
+  importFromWebull: () => Promise<void>;
+  importing: boolean;
 }
 
 export function useMarketWatchlist(): MarketWatchlistState {
@@ -304,6 +306,7 @@ export function useMarketWatchlist(): MarketWatchlistState {
   const [lists, setLists] = useState<string[]>(['Default']);
   const [active, setActive] = useState('Default');
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const alive = useRef(true);
 
   const apply = useCallback((state: { items: WatchlistItem[]; lists: string[]; active: string }) => {
@@ -354,9 +357,21 @@ export function useMarketWatchlist(): MarketWatchlistState {
     }
   }, [apply]);
 
+  /** Pull the operator's Webull lists again — a one-shot import, not a live subscription, so
+   * edits made in the Webull app land here only when this runs. */
+  const importFromWebull = useCallback(async () => {
+    setImporting(true);
+    try {
+      await wsClient.marketWebullWatchlistsImport();
+      apply(await wsClient.marketWatchlistGet());
+    } finally {
+      if (alive.current) setImporting(false);
+    }
+  }, [apply]);
+
   const symbols = useMemo(() => new Set(items.map((item) => item.symbol)), [items]);
 
-  return { items, lists, active, loading, symbols, add, remove, createList, deleteList, selectList };
+  return { items, lists, active, loading, symbols, add, remove, createList, deleteList, selectList, importFromWebull, importing };
 }
 
 export function useTickerDetail(symbol: string): TickerDetailPayload {

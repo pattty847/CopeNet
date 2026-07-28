@@ -105,7 +105,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import type { YieldCurveRange } from '../sections/market/types';
 import {
   createMergedSessionRpc,
@@ -688,6 +688,18 @@ class WsClient {
 
   async marketWebullSync() {
     return marketWebullSyncRpc(this.request.bind(this));
+  }
+
+  async marketWebullPnlGet() {
+    return marketWebullPnlGetRpc(this.request.bind(this));
+  }
+
+  async marketWebullOrdersSync() {
+    return marketWebullOrdersSyncRpc(this.request.bind(this));
+  }
+
+  async marketWebullWatchlistsImport() {
+    return marketWebullWatchlistsImportRpc(this.request.bind(this));
   }
 
   async marketBacktestRun(params: {

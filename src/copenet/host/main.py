@@ -178,6 +178,10 @@ def _build_parser() -> argparse.ArgumentParser:
     webull_select = webull_subparsers.add_parser("select", help="Select the default account for syncs")
     webull_select.add_argument("--account-id", required=True, help="Webull account id from `webull accounts`")
     webull_subparsers.add_parser("sync", help="Pull balances + positions (read-only) into the local snapshot")
+    webull_pnl = webull_subparsers.add_parser("pnl", help="All-time realized + unrealized P&L, replayed FIFO from fill history")
+    webull_pnl.add_argument("--refresh", action="store_true", help="Re-pull fill history from Webull before computing")
+    webull_watchlists = webull_subparsers.add_parser("watchlists", help="Show (or import) your Webull watchlists")
+    webull_watchlists.add_argument("--apply", action="store_true", help="Import the lists into CopeNet's watchlist store")
     webull_subparsers.add_parser("context", help="Dry-run: print the sanitized AI portfolio context pack (never sends anything)")
 
     configure_movies_parser(subparsers)
@@ -444,6 +448,59 @@ def _run_webull_command(args) -> None:
         print(f"Fetched {len(snapshot.positions)} positions · equity {snapshot.total_equity} · synced {snapshot.synced_at}")
         for warning in snapshot.warnings:
             print("  warning:", warning)
+        return
+    if args.webull_command == "pnl":
+        from copenet.core.market.webull.client import trade_client
+        from copenet.core.market.webull.orders import load_fills, sync_fills
+        from copenet.core.market.webull.pnl import build_ledger
+
+        account = selected_account()
+        if account is None:
+            print("No account selected — run `copenet webull accounts` then `copenet webull select --account-id <id>`.")
+            return
+        orders = load_fills()
+        if args.refresh or orders is None:
+            print("Pulling fill history back to account open…")
+            orders = sync_fills(trade_client(config), account["accountId"])
+        ledger = build_ledger(orders, load_snapshot())
+        if ledger is None:
+            print("No fills found.")
+            return
+        print(f"\nALL-TIME P&L: ${ledger.all_time_pnl:,.2f}")
+        print(f"  realized (closed round trips) ${ledger.realized_pnl:,.2f}")
+        if ledger.expired_option_pl:
+            print(f"  expired options               ${ledger.expired_option_pl:,.2f}")
+        if ledger.unrealized_pnl is not None:
+            print(f"  unrealized (open positions)   ${ledger.unrealized_pnl:,.2f}")
+        print(f"\n{ledger.trade_count} closed trades · {ledger.win_count} winners ({ledger.win_rate_pct}%) · {ledger.fill_count} fills since {ledger.first_fill_at[:10] if ledger.first_fill_at else '?'}")
+        print("\nBy symbol:")
+        for row in ledger.by_symbol:
+            print(f"  {row.symbol:<8} {row.total_pnl:>10,.2f}  (realized {row.realized_pnl:,.2f}, {row.trade_count} trades)")
+        if ledger.reconciliation:
+            print("\nUnreconciled positions:")
+            for row in ledger.reconciliation:
+                print(f"  {row.symbol:<8} replay {row.replayed_quantity} vs broker {row.broker_quantity} — {row.note}")
+        print("\nCaveats:")
+        for caveat in ledger.caveats:
+            print("  -", caveat)
+        return
+    if args.webull_command == "watchlists":
+        from copenet.core.market.runtime import default_market_dir
+        from copenet.core.market.watchlist_store import WatchlistStore
+        from copenet.core.market.webull.client import data_client
+        from copenet.core.market.webull.watchlists import fetch_watchlists, import_into_store
+
+        lists = fetch_watchlists(data_client(config))
+        if not args.apply:
+            for entry in lists:
+                print(f"  {entry['name']:<24} {len(entry['symbols']):>3}  {', '.join(s['symbol'] for s in entry['symbols'][:10])}")
+            print("\nDry run. Re-run with --apply to import these into CopeNet's watchlists.")
+            return
+        result = import_into_store(WatchlistStore(default_market_dir() / "watchlist.json"), lists)
+        for row in result["imported"]:
+            print(f"  imported {row['name']} ({row['count']} symbols)")
+        for note in result["skipped"]:
+            print("  skipped", note)
         return
     if args.webull_command == "context":
         from copenet.core.market.webull.context_pack import build_portfolio_context_pack

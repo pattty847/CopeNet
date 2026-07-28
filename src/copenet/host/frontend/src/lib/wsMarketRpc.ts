@@ -121,6 +121,82 @@ export async function marketWebullSyncRpc(request: WsRpcRequest): Promise<{ star
   return { startedAt: String(payload.startedAt || '') };
 }
 
+export interface RealizedTrade {
+  contractKey: string;
+  symbol: string;
+  instrumentType: string;
+  direction: string;
+  quantity: number;
+  entryPrice: number;
+  exitPrice: number;
+  pnl: number;
+  pnlPct?: number;
+  openedAt: string;
+  closedAt: string;
+  holdingDays?: number;
+}
+
+export interface SymbolPnl {
+  symbol: string;
+  realizedPnl: number;
+  unrealizedPnl?: number;
+  totalPnl: number;
+  tradeCount: number;
+  winCount: number;
+}
+
+export interface PositionReconciliation {
+  symbol: string;
+  replayedQuantity: number;
+  brokerQuantity?: number;
+  note: string;
+}
+
+/** All-time account P&L replayed FIFO from Webull fill history. See core/market/webull/pnl.py. */
+export interface TradeLedger {
+  syncedAt: string;
+  historyStart: string;
+  fillCount: number;
+  realizedPnl: number;
+  expiredOptionPl: number;
+  unrealizedPnl?: number;
+  allTimePnl: number;
+  tradeCount: number;
+  winCount: number;
+  winRatePct?: number;
+  bestTrade?: RealizedTrade;
+  worstTrade?: RealizedTrade;
+  firstFillAt?: string;
+  lastFillAt?: string;
+  bySymbol: SymbolPnl[];
+  trades: RealizedTrade[];
+  reconciliation: PositionReconciliation[];
+  caveats: string[];
+}
+
+export async function marketWebullPnlGetRpc(request: WsRpcRequest): Promise<TradeLedger | null> {
+  const payload = await request<{ ledger?: unknown }>('market.webull.pnl.get', {});
+  return (payload.ledger as TradeLedger) ?? null;
+}
+
+export async function marketWebullOrdersSyncRpc(request: WsRpcRequest): Promise<TradeLedger | null> {
+  const payload = await request<{ ledger?: unknown }>('market.webull.orders.sync', {});
+  return (payload.ledger as TradeLedger) ?? null;
+}
+
+export interface WebullWatchlistImport {
+  imported: { name: string; count: number }[];
+  skipped: string[];
+}
+
+export async function marketWebullWatchlistsImportRpc(request: WsRpcRequest): Promise<WebullWatchlistImport> {
+  const payload = await request<Record<string, unknown>>('market.webull.watchlists.import', {});
+  return {
+    imported: Array.isArray(payload.imported) ? (payload.imported as { name: string; count: number }[]) : [],
+    skipped: Array.isArray(payload.skipped) ? (payload.skipped as string[]) : [],
+  };
+}
+
 export async function marketReadGetRpc(
   request: WsRpcRequest,
   target: string = 'market',
