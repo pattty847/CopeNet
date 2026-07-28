@@ -40,6 +40,26 @@ def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: 
     return frame[["date", "open", "high", "low", "close", "volume"]].dropna(subset=["close"])
 
 
+def fetch_splits(symbol: str) -> list[tuple[str, float]]:
+    """[(ex_date, ratio)] oldest-first — 2.0 is a 2-for-1 forward split, 0.05 a 1-for-20 reverse.
+
+    Deliberately NOT derived from `fetch_ohlcv`: those bars are split-adjusted, so the split is
+    exactly what they have erased. Share-count reconstruction (see webull/pnl.py) needs the raw
+    corporate action, because a broker's fill history reports quantities as they were on trade day.
+    Returns [] for delisted tickers Yahoo no longer serves — callers must handle the gap."""
+    try:
+        import yfinance as yf
+    except ImportError as exc:  # pragma: no cover - dependency exists in packaged env
+        raise RuntimeError("yfinance is required for market data") from exc
+    try:
+        series = yf.Ticker(yf_symbol(symbol)).splits
+    except Exception:
+        return []
+    if series is None or len(series) == 0:
+        return []
+    return sorted((str(stamp.date()), float(ratio)) for stamp, ratio in series.items() if ratio)
+
+
 TREASURY_YIELD_CURVE_URL = (
     "https://home.treasury.gov/resource-center/data-chart-center/interest-rates/pages/xml"
     "?data=daily_treasury_yield_curve&field_tdr_date_value={year}"

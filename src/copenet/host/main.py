@@ -470,6 +470,8 @@ def _run_webull_command(args) -> None:
         print(f"  realized (closed round trips) ${ledger.realized_pnl:,.2f}")
         if ledger.expired_option_pl:
             print(f"  expired options               ${ledger.expired_option_pl:,.2f}")
+        if ledger.unaccounted_position_pl:
+            print(f"  positions that vanished       ${ledger.unaccounted_position_pl:,.2f}")
         if ledger.unrealized_pnl is not None:
             print(f"  unrealized (open positions)   ${ledger.unrealized_pnl:,.2f}")
         print(f"\n{ledger.trade_count} closed trades · {ledger.win_count} winners ({ledger.win_rate_pct}%) · {ledger.fill_count} fills since {ledger.first_fill_at[:10] if ledger.first_fill_at else '?'}")

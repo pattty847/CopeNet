@@ -86,7 +86,20 @@ execution-oriented, which is out of scope for a slow-timeframe radar.
    realized round trips, settles expired option lots, adds broker unrealized, and reconciles
    replayed open quantity against the snapshot. Surfaced as the **All-time P&L** panel, RPC
    `market.webull.orders.sync` / `market.webull.pnl.get`, and `uv run copenet webull pnl`.
-   First live run: 206 fills since 2020-04-17, 104 closed trades, +$985.19 all time.
+
+   **Fill quantities are as-of-trade-day, so the replay MUST split-adjust open lots.** The first
+   version did not, and reported +$985 on an account the Webull app shows at −$936. One
+   unadjusted 1-for-20 reverse split (ETHU, ex-date 2025-04-09) matched 8 post-split shares
+   against a pre-split $9.95 basis and turned a real −$1,273 loss into a phantom +$241 gain.
+   Splits now come from `data_sources.fetch_splits` (raw corporate actions — NOT `fetch_ohlcv`,
+   whose bars have already erased them), are stored with the fills, and apply per lot with a
+   strict `lot_opened < ex_date <= fill_day` bound. A lot bought ON the ex-date already traded
+   post-split; adjusting it doubles the position (XLK, 2025-12-05).
+
+   Current live figure: −$812.15 (realized −$885.24, expired options −$100.00, vanished positions
+   −$291.31, unrealized +$464.40) against the app's −$936.28. The remaining ~$124 is the seven
+   2020 option fills the API returns with no execution price. Every held position now reconciles
+   exactly with the broker's share count, which is the check that caught the bug.
 2. **Watchlist import** — `webull/watchlists.py` + `WatchlistStore.replace_list()`; RPC
    `market.webull.watchlists.import`, the ⤓ Webull button on the watchlist panel, and
    `uv run copenet webull watchlists [--apply]`. Imports are a **pull**: Webull-side edits land

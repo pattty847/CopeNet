@@ -10,11 +10,17 @@ What this CANNOT see, and therefore reports as caveats rather than silently abso
 
 - dividends and interest — the open API exposes no cash-transaction endpoint
 - fees and commissions — every fill returns `fees: []` and `commission: {}`
-- share counts changed by corporate actions (splits, delistings, transfers) never appear as an
-  order, so a replayed open quantity can drift from the broker's. `reconcile()` surfaces every
-  such drift instead of hiding it, and the snapshot always wins for what is held *now*.
+- share counts changed by corporate actions never appear as an order. Splits ARE corrected for,
+  from stored yfinance split history (`orders.py` saves it with the fills), because getting this
+  wrong is not a rounding error: an unadjusted 1-for-20 reverse split turned a real $1,273 loss
+  into a phantom $241 gain on this account. Delistings and transfers still cannot be seen, so a
+  symbol that vanished from the broker has its remaining basis written off (`unaccounted_position_pl`)
+  and `reconcile()` shows the raw drift.
 - long option lots that were never sold are assumed expired worthless (broken out separately as
   `expired_option_pl`, never folded silently into the round-trip total)
+
+Every assumption above is a separate line item and a caveat string — the headline number is never
+allowed to quietly absorb one.
 """
 
 from __future__ import annotations
@@ -82,6 +88,7 @@ class TradeLedger:
     fill_count: int
     realized_pnl: float
     expired_option_pl: float
+    unaccounted_position_pl: float
     unrealized_pnl: float | None
     all_time_pnl: float
     trade_count: int
@@ -102,9 +109,11 @@ class TradeLedger:
 
 
 def _holding_days(opened_at: str, closed_at: str) -> int | None:
+    """Lot open dates are day strings, fill timestamps are full ISO — compare on the date alone
+    so the two never mix naive and tz-aware values."""
     try:
-        start = datetime.fromisoformat(opened_at.replace("Z", "+00:00"))
-        end = datetime.fromisoformat(closed_at.replace("Z", "+00:00"))
+        start = date.fromisoformat(opened_at[:10])
+        end = date.fromisoformat(closed_at[:10])
     except ValueError:
         return None
     return max((end - start).days, 0)
@@ -120,11 +129,35 @@ def _expired(fill: dict[str, Any], today: date) -> bool:
         return False
 
 
-def replay(fills: list[dict[str, Any]]) -> tuple[list[RealizedTrade], list[OpenLot], list[str]]:
+def _apply_splits(book: deque[list[Any]], split_rows: list[Any], today: str) -> None:
+    """Restate open lots for every split whose ex-date falls after the lot opened and on or before
+    the fill being processed. A lot opened ON the ex-date already traded post-split, so the bound is
+    strict — getting this wrong doubles positions bought the day of a split.
+
+    Lot layout: [signed_qty, price, opened_day, applied_ex_dates]."""
+    for lot in book:
+        for row in split_rows:
+            ex_date, ratio = str(row[0]), float(row[1])
+            if lot[2] < ex_date <= today and ex_date not in lot[3]:
+                lot[0] *= ratio
+                lot[1] /= ratio
+                lot[3].add(ex_date)
+
+
+def replay(
+    fills: list[dict[str, Any]],
+    splits: dict[str, list[Any]] | None = None,
+) -> tuple[list[RealizedTrade], list[OpenLot], list[str]]:
     """FIFO-match fills oldest-first. A closing fill consumes opening lots in order; leftovers
-    open a new lot (negative quantity when the leftover is a short)."""
+    open a new lot (negative quantity when the leftover is a short).
+
+    Fill quantities are as-of-trade-day, so open lots are restated across splits before matching.
+    Without that, a 1-for-20 reverse split makes 8 post-split shares match against a pre-split cost
+    basis — which turned a real $1,273 loss into a phantom $241 gain on a live account before this
+    existed."""
     ordered = sorted(fills, key=lambda f: str(f.get("filled_at") or ""))
-    lots: dict[str, deque[list[Any]]] = defaultdict(deque)  # key -> [signed_qty, price, opened_at]
+    splits = splits or {}
+    lots: dict[str, deque[list[Any]]] = defaultdict(deque)
     meta: dict[str, dict[str, Any]] = {}
     trades: list[RealizedTrade] = []
     unpriced: list[str] = []
@@ -133,9 +166,13 @@ def replay(fills: list[dict[str, Any]]) -> tuple[list[RealizedTrade], list[OpenL
         key = str(fill.get("contract_key") or fill.get("symbol") or "")
         price = fill.get("price")
         quantity = fill.get("quantity")
-        if not key or not quantity or price is None:
-            if key:
-                unpriced.append(key)
+        if not key:
+            continue
+        day = str(fill.get("filled_at") or "")[:10]
+        if str(fill.get("instrument_type")).upper() == "EQUITY":
+            _apply_splits(lots[key], splits.get(str(fill.get("symbol") or ""), []), day)
+        if not quantity or price is None:
+            unpriced.append(key)
             continue
         price = float(price)
         remaining = float(quantity)
@@ -172,7 +209,7 @@ def replay(fills: list[dict[str, Any]]) -> tuple[list[RealizedTrade], list[OpenL
                 book.popleft()
 
         if remaining > 1e-9:
-            book.append([remaining * sign, price, str(fill.get("filled_at") or "")])
+            book.append([remaining * sign, price, day, set()])
 
     open_lots = [
         OpenLot(
@@ -217,6 +254,36 @@ def _settle_expired_options(open_lots: list[OpenLot], fills: list[dict[str, Any]
             continue
         survivors.append(lot)
     return round(loss, 2), survivors, expired_count
+
+
+def _settle_unaccounted_positions(
+    open_lots: list[OpenLot],
+    snapshot: dict[str, Any] | None,
+) -> tuple[float, list[OpenLot], list[str]]:
+    """Equity lots for a symbol the broker no longer holds at all: those shares left the account
+    without a sell order we can see — a delisting, a transfer, or a split we have no data for.
+
+    Whatever happened, that cost basis is not sitting in the portfolio, so carrying it as an open
+    position would flatter the total. Same conservative rule as an expired option: the remaining
+    basis is written off, the symbols are named, and `reconciliation` still shows the raw drift.
+    Only fully-vanished symbols settle — a partial quantity mismatch is reported, never assumed."""
+    if snapshot is None:
+        return 0.0, open_lots, []
+    broker = {
+        str(p.get("symbol")).upper()
+        for p in snapshot.get("positions", [])
+        if isinstance(p, dict) and p.get("symbol")
+    }
+    settled = 0.0
+    survivors: list[OpenLot] = []
+    symbols: list[str] = []
+    for lot in open_lots:
+        if lot.instrument_type == "EQUITY" and lot.symbol not in broker:
+            settled -= lot.quantity * lot.price
+            symbols.append(lot.symbol)
+            continue
+        survivors.append(lot)
+    return round(settled, 2), survivors, sorted(set(symbols))
 
 
 def reconcile(open_lots: list[OpenLot], snapshot: dict[str, Any] | None) -> list[PositionReconciliation]:
@@ -291,8 +358,13 @@ def build_ledger(
     today = today or datetime.now().date()
     fills = [f for f in orders_payload["fills"] if isinstance(f, dict)]
 
-    trades, open_lots, warnings = replay(fills)
-    expired_pl, open_lots, expired_count = _settle_expired_options(open_lots, fills, today)
+    splits = orders_payload.get("splits") if isinstance(orders_payload.get("splits"), dict) else {}
+    trades, replayed_lots, warnings = replay(fills, splits)
+    expired_pl, open_lots, expired_count = _settle_expired_options(replayed_lots, fills, today)
+    # Reconciliation reads the pre-settlement lots so the raw drift stays visible in the table
+    # even after the vanished positions have been written off below.
+    reconciliation = reconcile(open_lots, snapshot)
+    unaccounted_pl, open_lots, unaccounted_symbols = _settle_unaccounted_positions(open_lots, snapshot)
     realized = round(sum(trade.pnl for trade in trades), 2)
     unrealized = (
         round(sum(float(p.get("unrealized_pl") or 0) for p in snapshot.get("positions", [])), 2)
@@ -308,8 +380,21 @@ def build_ledger(
             f"{expired_count} option lot(s) expired without a closing trade and are counted as a "
             f"total loss of premium (${abs(expired_pl):,.2f})"
         )
+    if unaccounted_symbols:
+        caveats.append(
+            f"{', '.join(unaccounted_symbols)} left the account with no sell order in the history; "
+            f"the remaining cost basis (${abs(unaccounted_pl):,.2f}) is written off as a loss"
+        )
+    delisted = [str(symbol) for symbol in orders_payload.get("split_data_unavailable") or []]
+    if delisted:
+        caveats.append(
+            f"no corporate-action data for {len(delisted)} delisted ticker(s) — their share counts "
+            f"could not be split-adjusted ({', '.join(delisted[:8])}{'…' if len(delisted) > 8 else ''})"
+        )
     caveats.append("dividends and interest are not included — the Webull open API exposes no cash-transaction endpoint")
     caveats.append("fees and commissions are not included — the API returns them empty on every fill")
+    if not splits:
+        caveats.append("no split history stored with these fills — re-sync to make the share-count replay split-aware")
     if unrealized is not None:
         caveats.append(f"unrealized P&L comes from the {_UNREALIZED_SOURCE}, using Webull's own average cost")
 
@@ -319,8 +404,9 @@ def build_ledger(
         fill_count=len(fills),
         realized_pnl=realized,
         expired_option_pl=expired_pl,
+        unaccounted_position_pl=unaccounted_pl,
         unrealized_pnl=unrealized,
-        all_time_pnl=round(realized + expired_pl + (unrealized or 0.0), 2),
+        all_time_pnl=round(realized + expired_pl + unaccounted_pl + (unrealized or 0.0), 2),
         trade_count=len(trades),
         win_count=wins,
         win_rate_pct=round(wins / len(trades) * 100, 1) if trades else None,
@@ -331,6 +417,6 @@ def build_ledger(
         by_symbol=_summarize_by_symbol(trades, snapshot),
         trades=sorted(trades, key=lambda t: t.closed_at, reverse=True),
         open_lots=open_lots,
-        reconciliation=reconcile(open_lots, snapshot),
+        reconciliation=reconciliation,
         caveats=caveats,
     )

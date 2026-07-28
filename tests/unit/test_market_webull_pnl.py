@@ -67,6 +67,64 @@ def test_replay_matches_fifo_and_leaves_the_remainder_open():
     assert warnings == []
 
 
+def test_reverse_split_restates_open_lots_before_matching():
+    """The bug this exists for: ETHU 1-for-20 on 2025-04-09. 161 pre-split shares became 8; the
+    unadjusted replay matched those 8 against a $9.95 basis and reported a $241 GAIN on a position
+    that actually lost $1,273. Checked against the broker's own since-inception figure."""
+    fills, _ = _fills(
+        _combo("ETHU", "BUY", 161, 9.95, "2024-12-02T15:00:00Z"),
+        _combo("ETHU", "SELL", 8, 25.57, "2025-04-10T15:00:00Z"),
+    )
+    splits = {"ETHU": [["2025-04-09", 0.05]]}
+
+    unadjusted, _, _ = replay(fills)
+    adjusted, open_lots, _ = replay(fills, splits)
+
+    assert unadjusted[0].pnl > 0  # the wrong answer, kept here so the regression is unmistakable
+    assert round(adjusted[0].entry_price, 2) == 199.0  # $9.95 / 0.05
+    assert adjusted[0].pnl == -1387.44
+    assert round(sum(lot.quantity for lot in open_lots), 4) == 0.05  # 161/20 - 8, i.e. flat
+
+
+def test_split_does_not_touch_lots_opened_on_or_after_the_ex_date():
+    """XLK split 2-for-1 on 2025-12-05 and shares were bought that same day at the post-split
+    price. Adjusting those would double the position — the broker says otherwise."""
+    fills, _ = _fills(
+        _combo("XLK", "BUY", 1, 146.66, "2025-12-05T15:00:00Z"),
+        _combo("XLK", "BUY", 1, 145.63, "2025-12-23T15:00:00Z"),
+    )
+    _, open_lots, _ = replay(fills, {"XLK": [["2025-12-05", 2.0]]})
+    assert sum(lot.quantity for lot in open_lots) == 2
+
+
+def test_vanished_position_writes_off_its_remaining_basis():
+    fills, _ = _fills(_combo("MNMD", "BUY", 84, 3.36, "2021-06-14T15:00:00Z"))
+    ledger = build_ledger(
+        {"fills": fills, "synced_at": "x", "history_start": "2016-01-01", "splits": {}},
+        {"positions": []},
+        today=date(2026, 7, 1),
+    )
+    assert ledger is not None
+    assert ledger.unaccounted_position_pl == -282.24  # 84 * 3.36
+    assert ledger.all_time_pnl == -282.24
+    assert any("left the account with no sell order" in caveat for caveat in ledger.caveats)
+    assert [row.symbol for row in ledger.reconciliation] == ["MNMD"]  # drift still shown, not hidden
+
+
+def test_partial_quantity_drift_is_reported_but_never_assumed():
+    """A symbol the broker still holds at a different size stays untouched — only fully-vanished
+    positions are written off."""
+    fills, _ = _fills(_combo("SLI", "BUY", 29, 4.13, "2026-01-02T15:00:00Z"))
+    ledger = build_ledger(
+        {"fills": fills, "synced_at": "x", "history_start": "2016-01-01", "splits": {}},
+        {"positions": [{"symbol": "SLI", "quantity": 20, "unrealized_pl": -10.0}]},
+        today=date(2026, 7, 1),
+    )
+    assert ledger is not None
+    assert ledger.unaccounted_position_pl == 0.0
+    assert [row.symbol for row in ledger.reconciliation] == ["SLI"]
+
+
 def test_replay_handles_a_short_round_trip():
     fills, _ = _fills(
         _combo("TSLA", "SELL", 2, 300, "2026-01-01T15:00:00Z"),
@@ -94,7 +152,7 @@ def test_expired_option_lot_counts_as_a_total_loss_of_premium():
         "legs": [{"option_type": "CALL", "option_expire_date": "2026-07-26", "strike_price": "25.00"}],
     }
     fills, _ = _fills(_combo("BITO", "BUY", 1, 1.0, "2026-06-20T13:47:05Z", **option_leg))
-    ledger = build_ledger({"fills": fills, "synced_at": "x", "history_start": "2016-01-01"}, None, today=date(2026, 8, 1))
+    ledger = build_ledger({"fills": fills, "synced_at": "x", "history_start": "2016-01-01", "splits": {}}, None, today=date(2026, 8, 1))
     assert ledger is not None
     assert ledger.expired_option_pl == -100.0  # 1 contract * $1.00 * 100
     assert ledger.all_time_pnl == -100.0
@@ -108,7 +166,7 @@ def test_ledger_combines_realized_with_broker_unrealized():
         _combo("XLK", "BUY", 5, 150, "2026-03-01T15:00:00Z"),
     )
     snapshot = {"positions": [{"symbol": "XLK", "quantity": 5, "unrealized_pl": 175.5}]}
-    ledger = build_ledger({"fills": fills, "synced_at": "x", "history_start": "2016-01-01"}, snapshot, today=date(2026, 7, 1))
+    ledger = build_ledger({"fills": fills, "synced_at": "x", "history_start": "2016-01-01", "splits": {}}, snapshot, today=date(2026, 7, 1))
     assert ledger is not None
     assert ledger.realized_pnl == 100.0
     assert ledger.unrealized_pnl == 175.5

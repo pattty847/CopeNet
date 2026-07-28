@@ -153,8 +153,11 @@ export function AllTimePnl({ onOpen }: { onOpen: (symbol: string) => void }) {
 
       <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, paddingBottom: 14, borderBottom: `1px solid ${MM.border}` }}>
         <Stat caption="Realized" value={money(ledger.realizedPnl)} color={pnlColor(ledger.realizedPnl)} />
-        {ledger.expiredOptionPl !== 0 && (
+        {!!ledger.expiredOptionPl && (
           <Stat caption="Expired options" value={money(ledger.expiredOptionPl)} color={pnlColor(ledger.expiredOptionPl)} />
+        )}
+        {!!ledger.unaccountedPositionPl && (
+          <Stat caption="Vanished positions" value={money(ledger.unaccountedPositionPl)} color={pnlColor(ledger.unaccountedPositionPl)} />
         )}
         <Stat caption="Unrealized" value={money(ledger.unrealizedPnl)} color={pnlColor(ledger.unrealizedPnl)} />
         <Stat caption="Win rate" value={ledger.winRatePct == null ? '—' : `${ledger.winRatePct}%`} />

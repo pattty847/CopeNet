@@ -32,6 +32,8 @@ HISTORY_START_DATE = "2016-01-01"
 _PAGE_SIZE = 100
 _PAGE_PAUSE_SECONDS = 1.5
 _MAX_PAGES = 100  # 10k orders — a runaway-loop backstop, not an expected limit
+_MAX_RETRIES = 4
+_RETRY_BASE_SECONDS = 5.0
 OPTION_CONTRACT_MULTIPLIER = 100.0
 
 
@@ -135,6 +137,22 @@ def normalize_fills(combos: list[dict[str, Any]]) -> tuple[list[Fill], list[str]
     return fills, warnings
 
 
+def _get_page_with_backoff(trade_client, account_id: str, kwargs: dict[str, Any]) -> Any:
+    """The endpoint 429s when a sync follows close behind another call. A partial history would
+    silently distort P&L, so back off and retry rather than return half the account."""
+    delay = _RETRY_BASE_SECONDS
+    for attempt in range(_MAX_RETRIES):
+        try:
+            return trade_client.order_v2.get_order_history(account_id, **kwargs).json()
+        except Exception as exc:  # noqa: BLE001 — the SDK raises a vendor ServerException
+            if "TOO_MANY_REQUESTS" not in str(exc) or attempt == _MAX_RETRIES - 1:
+                raise
+            logger.info("Webull order history rate-limited; retrying in %ss", delay)
+            time.sleep(delay)
+            delay *= 2
+    return []
+
+
 def fetch_order_history(trade_client, account_id: str, *, start_date: str = HISTORY_START_DATE) -> list[dict[str, Any]]:
     """Walk every history page back to `start_date`. Newest-first from the API; raw combos out."""
     end_date = datetime.now(timezone.utc).date().isoformat()
@@ -148,7 +166,7 @@ def fetch_order_history(trade_client, account_id: str, *, start_date: str = HIST
         kwargs: dict[str, Any] = {"page_size": _PAGE_SIZE, "start_date": start_date, "end_date": end_date}
         if cursor:
             kwargs["last_client_order_id"] = cursor
-        rows = trade_client.order_v2.get_order_history(account_id, **kwargs).json()
+        rows = _get_page_with_backoff(trade_client, account_id, kwargs)
         if not isinstance(rows, list) or not rows:
             break
         fresh = [row for row in rows if isinstance(row, dict) and str(row.get("client_order_id")) not in seen]
@@ -167,16 +185,51 @@ def fetch_order_history(trade_client, account_id: str, *, start_date: str = HIST
     return combos
 
 
+def fetch_split_history(symbols: list[str]) -> tuple[dict[str, list[list[Any]]], list[str]]:
+    """Corporate actions for every traded equity — the fills alone cannot reconstruct share counts.
+
+    Stored with the fills (not re-fetched at read time) so P&L stays a pure function of the sync.
+    Delisted tickers return nothing from Yahoo; those symbols are named, not silently assumed
+    split-free, because an unknown split is exactly what corrupts a replay."""
+    from ..data_sources import fetch_splits
+
+    splits: dict[str, list[list[Any]]] = {}
+    unavailable: list[str] = []
+    for symbol in sorted(set(symbols)):
+        rows = fetch_splits(symbol)
+        if rows:
+            splits[symbol] = [[date, ratio] for date, ratio in rows]
+        elif not _resolvable(symbol):
+            unavailable.append(symbol)
+    return splits, unavailable
+
+
+def _resolvable(symbol: str) -> bool:
+    """True when Yahoo still serves the ticker (so an empty split list means 'no splits', not
+    'no data'). Delisted names are the ones we cannot vouch for."""
+    from ..data_sources import fetch_ohlcv
+
+    try:
+        frame = fetch_ohlcv(symbol, interval="1d", period="5d")
+    except Exception:
+        return False
+    return frame is not None and not frame.empty
+
+
 def sync_fills(trade_client, account_id: str, *, start_date: str = HISTORY_START_DATE) -> dict[str, Any]:
     """Fetch → normalize → persist. Returns the stored payload."""
     combos = fetch_order_history(trade_client, account_id, start_date=start_date)
     fills, warnings = normalize_fills(combos)
+    equities = [fill.symbol for fill in fills if fill.instrument_type == "EQUITY"]
+    splits, unavailable = fetch_split_history(equities)
     payload = {
         "account_id_masked": mask_account_id(account_id),
         "synced_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "history_start": start_date,
         "order_count": len(combos),
         "fills": [fill.to_dict() for fill in fills],
+        "splits": splits,
+        "split_data_unavailable": unavailable,
         "warnings": warnings,
     }
     save_fills(payload)

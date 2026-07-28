@@ -159,6 +159,7 @@ export interface TradeLedger {
   fillCount: number;
   realizedPnl: number;
   expiredOptionPl: number;
+  unaccountedPositionPl: number;
   unrealizedPnl?: number;
   allTimePnl: number;
   tradeCount: number;
