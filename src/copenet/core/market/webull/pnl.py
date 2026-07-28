@@ -16,8 +16,9 @@ What this CANNOT see, and therefore reports as caveats rather than silently abso
   into a phantom $241 gain on this account. Delistings and transfers still cannot be seen, so a
   symbol that vanished from the broker has its remaining basis written off (`unaccounted_position_pl`)
   and `reconcile()` shows the raw drift.
-- long option lots that were never sold are assumed expired worthless (broken out separately as
-  `expired_option_pl`, never folded silently into the round-trip total)
+- long option lots that were never sold are assumed expired worthless. That premium counts inside
+  `realized_pnl` (an expiry IS a realized loss), with `expired_option_pl` kept as a memo so the
+  composition stays traceable.
 
 Every assumption above is a separate line item and a caveat string — the headline number is never
 allowed to quietly absorb one.
@@ -82,6 +83,16 @@ class PositionReconciliation:
 
 
 @dataclass
+class CurvePoint:
+    """One step of the cumulative P&L curve. `realized` is closed P&L to that date; `total` adds
+    today's open P&L, and only differs from `realized` on the final point."""
+
+    date: str
+    realized: float
+    total: float
+
+
+@dataclass
 class TradeLedger:
     synced_at: str
     history_start: str
@@ -98,6 +109,7 @@ class TradeLedger:
     worst_trade: RealizedTrade | None
     first_fill_at: str | None
     last_fill_at: str | None
+    curve: list[CurvePoint] = field(default_factory=list)
     by_symbol: list[SymbolPnl] = field(default_factory=list)
     trades: list[RealizedTrade] = field(default_factory=list)
     open_lots: list[OpenLot] = field(default_factory=list)
@@ -234,7 +246,7 @@ def replay(
     return trades, open_lots, warnings
 
 
-def _settle_expired_options(open_lots: list[OpenLot], fills: list[dict[str, Any]], today: date) -> tuple[float, list[OpenLot], int]:
+def _settle_expired_options(open_lots: list[OpenLot], fills: list[dict[str, Any]], today: date) -> tuple[float, list[OpenLot], int, list[tuple[str, float]]]:
     """A long option lot with no closing fill and an expiry in the past died worthless: the whole
     premium is a loss. Returns (loss, still-open lots, expired count)."""
     expiry_by_key = {
@@ -245,21 +257,24 @@ def _settle_expired_options(open_lots: list[OpenLot], fills: list[dict[str, Any]
     loss = 0.0
     survivors: list[OpenLot] = []
     expired_count = 0
+    dated: list[tuple[str, float]] = []
     for lot in open_lots:
         source = expiry_by_key.get(lot.contract_key)
         if lot.instrument_type == "OPTION" and source and _expired(source, today):
             multiplier = float(source.get("multiplier") or 1.0)
-            loss -= lot.quantity * lot.price * multiplier
+            amount = -lot.quantity * lot.price * multiplier
+            loss += amount
             expired_count += 1
+            dated.append((str(source.get("option_expire_date") or lot.opened_at), round(amount, 2)))
             continue
         survivors.append(lot)
-    return round(loss, 2), survivors, expired_count
+    return round(loss, 2), survivors, expired_count, dated
 
 
 def _settle_unaccounted_positions(
     open_lots: list[OpenLot],
     snapshot: dict[str, Any] | None,
-) -> tuple[float, list[OpenLot], list[str]]:
+) -> tuple[float, list[OpenLot], list[str], list[tuple[str, float]]]:
     """Equity lots for a symbol the broker no longer holds at all: those shares left the account
     without a sell order we can see — a delisting, a transfer, or a split we have no data for.
 
@@ -268,7 +283,7 @@ def _settle_unaccounted_positions(
     basis is written off, the symbols are named, and `reconciliation` still shows the raw drift.
     Only fully-vanished symbols settle — a partial quantity mismatch is reported, never assumed."""
     if snapshot is None:
-        return 0.0, open_lots, []
+        return 0.0, open_lots, [], []
     broker = {
         str(p.get("symbol")).upper()
         for p in snapshot.get("positions", [])
@@ -277,13 +292,18 @@ def _settle_unaccounted_positions(
     settled = 0.0
     survivors: list[OpenLot] = []
     symbols: list[str] = []
+    dated: list[tuple[str, float]] = []
     for lot in open_lots:
         if lot.instrument_type == "EQUITY" and lot.symbol not in broker:
-            settled -= lot.quantity * lot.price
+            amount = -lot.quantity * lot.price
+            settled += amount
             symbols.append(lot.symbol)
+            # No exit date exists for a position that vanished; the lot's own date is the only
+            # honest anchor for placing it on the curve.
+            dated.append((lot.opened_at, round(amount, 2)))
             continue
         survivors.append(lot)
-    return round(settled, 2), survivors, sorted(set(symbols))
+    return round(settled, 2), survivors, sorted(set(symbols)), dated
 
 
 def reconcile(open_lots: list[OpenLot], snapshot: dict[str, Any] | None) -> list[PositionReconciliation]:
@@ -346,6 +366,47 @@ def _summarize_by_symbol(trades: list[RealizedTrade], snapshot: dict[str, Any] |
     return sorted(rows, key=lambda row: -row.total_pnl)
 
 
+def build_equity_curve(
+    trades: list[RealizedTrade],
+    write_offs: list[tuple[str, float]],
+    unrealized: float | None,
+    *,
+    today: date,
+) -> list[CurvePoint]:
+    """Cumulative realized P&L, one point per day something closed, with today's open P&L added at
+    the tail so the last point equals the headline.
+
+    Realized-only along the way — mark-to-market of *past* holdings would need a price history for
+    every symbol ever held, including delisted ones we cannot fetch. This curve answers "how did I
+    get here" from facts we actually have, rather than fabricating a smooth line."""
+    events: dict[str, float] = defaultdict(float)
+    for trade in trades:
+        day = str(trade.closed_at)[:10]
+        if day:
+            events[day] += trade.pnl
+    for day, amount in write_offs:
+        if day:
+            events[day[:10]] += amount
+    if not events:
+        return []
+
+    running = 0.0
+    points: list[CurvePoint] = []
+    for day in sorted(events):
+        running += events[day]
+        points.append(CurvePoint(date=day, realized=round(running, 2), total=round(running, 2)))
+
+    # The tail carries unrealized so the curve ends on the same number the panel shows.
+    if unrealized:
+        last = points[-1]
+        end = today.isoformat()
+        if end == last.date:
+            points[-1] = CurvePoint(date=end, realized=last.realized, total=round(last.realized + unrealized, 2))
+        else:
+            points.append(CurvePoint(date=end, realized=last.realized, total=round(last.realized + unrealized, 2)))
+    return points
+
+
 def build_ledger(
     orders_payload: dict[str, Any] | None,
     snapshot: dict[str, Any] | None,
@@ -360,12 +421,15 @@ def build_ledger(
 
     splits = orders_payload.get("splits") if isinstance(orders_payload.get("splits"), dict) else {}
     trades, replayed_lots, warnings = replay(fills, splits)
-    expired_pl, open_lots, expired_count = _settle_expired_options(replayed_lots, fills, today)
+    expired_pl, open_lots, expired_count, expired_events = _settle_expired_options(replayed_lots, fills, today)
     # Reconciliation reads the pre-settlement lots so the raw drift stays visible in the table
     # even after the vanished positions have been written off below.
     reconciliation = reconcile(open_lots, snapshot)
-    unaccounted_pl, open_lots, unaccounted_symbols = _settle_unaccounted_positions(open_lots, snapshot)
-    realized = round(sum(trade.pnl for trade in trades), 2)
+    unaccounted_pl, open_lots, unaccounted_symbols, unaccounted_events = _settle_unaccounted_positions(open_lots, snapshot)
+    round_trip = round(sum(trade.pnl for trade in trades), 2)
+    # Expired premium is a realized loss like any other — the operator asked for it counted, not
+    # quarantined. `expired_option_pl` stays as a memo so the composition is still traceable.
+    realized = round(round_trip + expired_pl, 2)
     unrealized = (
         round(sum(float(p.get("unrealized_pl") or 0) for p in snapshot.get("positions", [])), 2)
         if snapshot and snapshot.get("positions")
@@ -377,8 +441,15 @@ def build_ledger(
     caveats = list(warnings)
     if expired_count:
         caveats.append(
-            f"{expired_count} option lot(s) expired without a closing trade and are counted as a "
-            f"total loss of premium (${abs(expired_pl):,.2f})"
+            f"{expired_count} option lot(s) expired without a closing trade; the premium "
+            f"(${abs(expired_pl):,.2f}) is counted in realized P&L"
+        )
+    estimated = [f for f in fills if str(f.get("price_source")) == "limit"]
+    if estimated:
+        caveats.append(
+            f"{len(estimated)} fill(s) returned no execution price; their order's limit price is "
+            "used as the estimate — a limit order fills at the limit or better, so this can only "
+            "overstate the loss"
         )
     if unaccounted_symbols:
         caveats.append(
@@ -406,7 +477,7 @@ def build_ledger(
         expired_option_pl=expired_pl,
         unaccounted_position_pl=unaccounted_pl,
         unrealized_pnl=unrealized,
-        all_time_pnl=round(realized + expired_pl + unaccounted_pl + (unrealized or 0.0), 2),
+        all_time_pnl=round(realized + unaccounted_pl + (unrealized or 0.0), 2),
         trade_count=len(trades),
         win_count=wins,
         win_rate_pct=round(wins / len(trades) * 100, 1) if trades else None,
@@ -414,6 +485,7 @@ def build_ledger(
         worst_trade=min(trades, key=lambda t: t.pnl) if trades else None,
         first_fill_at=min(fill_times) if fill_times else None,
         last_fill_at=max(fill_times) if fill_times else None,
+        curve=build_equity_curve(trades, expired_events + unaccounted_events, unrealized, today=today),
         by_symbol=_summarize_by_symbol(trades, snapshot),
         trades=sorted(trades, key=lambda t: t.closed_at, reverse=True),
         open_lots=open_lots,

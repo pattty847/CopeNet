@@ -8,6 +8,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import type { SymbolPnl, TradeLedger } from '../../lib/wsMarketRpc';
 import { MM, PanelCard, mono } from './marketUi';
+import { PnlCurve } from './PnlCurve';
 
 function money(value: number | undefined | null, { sign = true }: { sign?: boolean } = {}): string {
   if (value == null) return '—';
@@ -151,7 +152,9 @@ export function AllTimePnl({ onOpen }: { onOpen: (symbol: string) => void }) {
         <div style={{ fontSize: 11, color: MM.dim, fontStyle: 'italic' }}>since the account opened</div>
       </div>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, paddingBottom: 14, borderBottom: `1px solid ${MM.border}` }}>
+      {ledger.curve?.length > 1 && <PnlCurve points={ledger.curve} />}
+
+      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 20, padding: '14px 0', borderTop: `1px solid ${MM.border}`, borderBottom: `1px solid ${MM.border}` }}>
         <Stat caption="Realized" value={money(ledger.realizedPnl)} color={pnlColor(ledger.realizedPnl)} />
         {!!ledger.expiredOptionPl && (
           <Stat caption="Expired options" value={money(ledger.expiredOptionPl)} color={pnlColor(ledger.expiredOptionPl)} />

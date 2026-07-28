@@ -467,14 +467,16 @@ def _run_webull_command(args) -> None:
             print("No fills found.")
             return
         print(f"\nALL-TIME P&L: ${ledger.all_time_pnl:,.2f}")
-        print(f"  realized (closed round trips) ${ledger.realized_pnl:,.2f}")
+        print(f"  realized (closed + expired)   ${ledger.realized_pnl:,.2f}")
         if ledger.expired_option_pl:
-            print(f"  expired options               ${ledger.expired_option_pl:,.2f}")
+            print(f"    of which expired premium    ${ledger.expired_option_pl:,.2f}")
         if ledger.unaccounted_position_pl:
             print(f"  positions that vanished       ${ledger.unaccounted_position_pl:,.2f}")
         if ledger.unrealized_pnl is not None:
             print(f"  unrealized (open positions)   ${ledger.unrealized_pnl:,.2f}")
         print(f"\n{ledger.trade_count} closed trades · {ledger.win_count} winners ({ledger.win_rate_pct}%) · {ledger.fill_count} fills since {ledger.first_fill_at[:10] if ledger.first_fill_at else '?'}")
+        if ledger.curve:
+            print(f"\nCurve: {len(ledger.curve)} points, {ledger.curve[0].date} -> {ledger.curve[-1].date}")
         print("\nBy symbol:")
         for row in ledger.by_symbol:
             print(f"  {row.symbol:<8} {row.total_pnl:>10,.2f}  (realized {row.realized_pnl:,.2f}, {row.trade_count} trades)")

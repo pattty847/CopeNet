@@ -52,6 +52,7 @@ class Fill:
     multiplier: float
     filled_at: str
     order_type: str
+    price_source: str = "fill"  # fill | limit (estimated)
     option_type: str | None = None
     option_expire_date: str | None = None
     strike_price: float | None = None
@@ -118,6 +119,14 @@ def normalize_fills(combos: list[dict[str, Any]]) -> tuple[list[Fill], list[str]
             legs = order.get("legs") or []
             leg = legs[0] if legs and isinstance(legs[0], dict) else {}
             contract_key, option_fields = _contract_identity(leg, symbol) if is_option else (symbol, {})
+            # 2020-era option fills come back with no filled_price. Every one is a LIMIT order, and
+            # a limit order fills at its limit or better, so the limit is a usable estimate — it can
+            # only understate the result, never flatter it. Flagged so the estimate stays visible.
+            price = _num(order.get("filled_price"))
+            price_source = "fill"
+            if price is None:
+                price = _num(order.get("limit_price"))
+                price_source = "limit" if price is not None else "fill"
             fills.append(
                 Fill(
                     order_id=str(order.get("order_id") or order.get("client_order_id") or ""),
@@ -126,7 +135,8 @@ def normalize_fills(combos: list[dict[str, Any]]) -> tuple[list[Fill], list[str]
                     side=str(order.get("side") or "").upper(),
                     instrument_type="OPTION" if is_option else "EQUITY",
                     quantity=quantity,
-                    price=_num(order.get("filled_price")),
+                    price=price,
+                    price_source=price_source,
                     multiplier=OPTION_CONTRACT_MULTIPLIER if is_option else 1.0,
                     filled_at=str(order.get("filled_time_at") or order.get("place_time_at") or ""),
                     order_type=str(order.get("order_type") or ""),

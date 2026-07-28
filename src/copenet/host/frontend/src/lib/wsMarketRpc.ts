@@ -145,6 +145,12 @@ export interface SymbolPnl {
   winCount: number;
 }
 
+export interface CurvePoint {
+  date: string;
+  realized: number;
+  total: number;
+}
+
 export interface PositionReconciliation {
   symbol: string;
   replayedQuantity: number;
@@ -169,6 +175,7 @@ export interface TradeLedger {
   worstTrade?: RealizedTrade;
   firstFillAt?: string;
   lastFillAt?: string;
+  curve: CurvePoint[];
   bySymbol: SymbolPnl[];
   trades: RealizedTrade[];
   reconciliation: PositionReconciliation[];
