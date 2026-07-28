@@ -10,6 +10,7 @@ import { MorningBrief } from './MorningBrief';
 import { EconomicCalendarWidget } from './EconomicCalendarWidget';
 import { useEconomicCalendar } from './useEconomicCalendar';
 import { ForwardLedger } from './ForwardLedger';
+import { MarketGrid } from './MarketGrid';
 import { AllTimePnl } from './AllTimePnl';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
@@ -19,9 +20,9 @@ import { useIsMobile } from '../../lib/responsive';
 import type { EvidenceItem, InsiderNetWindow, TickerDetailPayload, Tone } from './types';
 
 const ROW = { display: 'flex', gap: 16, flexWrap: 'wrap' as const, alignItems: 'stretch' as const };
-const ROTATION_ROW = { ...ROW, alignItems: 'stretch' as const };
 
 const DETAIL_OPEN_KEY = 'copenet.market.detailOpen';
+const MARKET_GRID_STORAGE_KEY = 'copenet.market.gridLayout.v1';
 
 // Brief-first layout (design review §5): the standing panels live behind one click so the
 // 60-second brief owns the first viewport. Expanded state persists per device.
@@ -661,45 +662,61 @@ export function MarketMonitor() {
             <BriefingHero panel={dash.briefing} onOpen={open} onExplain={() => setReasoningOpen(true)} read={marketRead} />
             <TreasuryYieldCurve />
             <MarketDetail>
-              <Watchlist
-                items={watchlist.items}
-                lists={watchlist.lists}
-                active={watchlist.active}
-                loading={watchlist.loading}
-                onOpen={open}
-                onRemove={(s) => void watchlist.remove(s)}
-                onAdd={(s, n) => void watchlist.add(s, n)}
-                onSelectList={(n) => void watchlist.selectList(n)}
-                onCreateList={(n) => void watchlist.createList(n)}
-                onDeleteList={(n) => void watchlist.deleteList(n)}
-                onImportWebull={() => void watchlist.importFromWebull()}
-                importing={watchlist.importing}
+              <MarketGrid
+                storageKey={MARKET_GRID_STORAGE_KEY}
+                panels={[
+                  {
+                    id: 'watchlist',
+                    layout: { x: 0, y: 0, w: 5, h: 12, minW: 4, minH: 6 },
+                    node: (
+                      <Watchlist
+                        items={watchlist.items}
+                        lists={watchlist.lists}
+                        active={watchlist.active}
+                        loading={watchlist.loading}
+                        onOpen={open}
+                        onRemove={(s) => void watchlist.remove(s)}
+                        onAdd={(s, n) => void watchlist.add(s, n)}
+                        onSelectList={(n) => void watchlist.selectList(n)}
+                        onCreateList={(n) => void watchlist.createList(n)}
+                        onDeleteList={(n) => void watchlist.deleteList(n)}
+                        onImportWebull={() => void watchlist.importFromWebull()}
+                        importing={watchlist.importing}
+                      />
+                    ),
+                  },
+                  { id: 'macro', layout: { x: 5, y: 0, w: 7, h: 12, minW: 4, minH: 6 }, node: <MacroBoard panel={dash.macro} /> },
+                  ...(dash.softBottoming
+                    ? [{ id: 'softBottoming', layout: { x: 0, y: 12, w: 12, h: 8, minW: 4, minH: 5 }, node: <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} /> }]
+                    : []),
+                  { id: 'rrg', layout: { x: 0, y: 20, w: 7, h: 14, minW: 5, minH: 8 }, node: <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} /> },
+                  { id: 'accumulation', layout: { x: 7, y: 20, w: 5, h: 7, minW: 3, minH: 5 }, node: <AccumulationWatch panel={dash.accumulation} onOpen={open} /> },
+                  { id: 'trend', layout: { x: 7, y: 27, w: 5, h: 7, minW: 3, minH: 5 }, node: <TrendWatch panel={dash.trend} onOpen={open} /> },
+                  // Broker-fed panels sit together: positions and the all-time result read as one story.
+                  {
+                    id: 'portfolio',
+                    layout: { x: 0, y: 34, w: 6, h: 13, minW: 4, minH: 6 },
+                    node: <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />,
+                  },
+                  { id: 'allTimePnl', layout: { x: 6, y: 34, w: 6, h: 13, minW: 4, minH: 8 }, node: <AllTimePnl onOpen={open} /> },
+                  { id: 'speculative', layout: { x: 0, y: 47, w: 6, h: 10, minW: 3, minH: 5 }, node: <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} /> },
+                  { id: 'forwardLedger', layout: { x: 6, y: 47, w: 6, h: 10, minW: 4, minH: 5 }, node: <ForwardLedger report={ledger.report} loading={ledger.loading} /> },
+                  { id: 'evidence', layout: { x: 0, y: 57, w: 6, h: 12, minW: 4, minH: 5 }, node: <Evidence panel={dash.evidence} onOpen={open} /> },
+                  {
+                    id: 'contrarian',
+                    layout: { x: 6, y: 57, w: 6, h: 12, minW: 3, minH: 5 },
+                    node: (
+                      <Contrarian
+                        panel={
+                          marketRead && marketRead.thesisKillers.length
+                            ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
+                            : dash.contrarian
+                        }
+                      />
+                    ),
+                  },
+                ]}
               />
-              <MacroBoard panel={dash.macro} />
-              {dash.softBottoming && <SoftBottomingWatch panel={dash.softBottoming} onOpen={open} />}
-              <div style={ROTATION_ROW}>
-                <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} />
-                <div style={{ flex: 1, minWidth: 320, display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <AccumulationWatch panel={dash.accumulation} onOpen={open} />
-                  <TrendWatch panel={dash.trend} onOpen={open} />
-                </div>
-              </div>
-              <div style={ROW}>
-                <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />
-                <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} />
-              </div>
-              <AllTimePnl onOpen={open} />
-              <ForwardLedger report={ledger.report} loading={ledger.loading} />
-              <div style={ROW}>
-                <Evidence panel={dash.evidence} onOpen={open} />
-                <Contrarian
-                  panel={
-                    marketRead && marketRead.thesisKillers.length
-                      ? { status: 'live', data: marketRead.thesisKillers, note: 'model read' }
-                      : dash.contrarian
-                  }
-                />
-              </div>
             </MarketDetail>
           </>
         )}

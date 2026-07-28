@@ -146,7 +146,10 @@ export function PanelCard({
         ...style,
       }}
     >
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: subtitle ? 4 : 12 }}>
+      <div
+        className="market-panel-drag-handle"
+        style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: subtitle ? 4 : 12 }}
+      >
         <span style={label}>{title}</span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {right}
