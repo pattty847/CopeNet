@@ -143,6 +143,7 @@ export interface SymbolPnl {
   totalPnl: number;
   tradeCount: number;
   winCount: number;
+  openPosition?: boolean;
 }
 
 export interface CurvePoint {

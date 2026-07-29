@@ -5,6 +5,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
+import type { TradeLedger } from '../../lib/wsMarketRpc';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
 import type { DashboardPayload, LedgerReport, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
@@ -372,6 +373,55 @@ export function useMarketWatchlist(): MarketWatchlistState {
   const symbols = useMemo(() => new Set(items.map((item) => item.symbol)), [items]);
 
   return { items, lists, active, loading, symbols, add, remove, createList, deleteList, selectList, importFromWebull, importing };
+}
+
+export interface TradeLedgerState {
+  ledger: TradeLedger | null;
+  loading: boolean;
+  syncing: boolean;
+  error: string | null;
+  sync: () => Promise<void>;
+}
+
+/** One ledger fetch shared by the P&L panel and the trade-history panel — two RPC calls would let
+ *  the two views drift apart after a fill sync. */
+export function useTradeLedger(): TradeLedgerState {
+  const [ledger, setLedger] = useState<TradeLedger | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [syncing, setSyncing] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let alive = true;
+    wsClient
+      .marketWebullPnlGet()
+      .then((next) => {
+        if (alive) setLedger(next);
+      })
+      .catch((err) => {
+        if (alive) setError(err instanceof Error ? err.message : 'could not load the ledger');
+      })
+      .finally(() => {
+        if (alive) setLoading(false);
+      });
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const sync = useCallback(async () => {
+    setSyncing(true);
+    setError(null);
+    try {
+      setLedger(await wsClient.marketWebullOrdersSync());
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'fill history sync failed');
+    } finally {
+      setSyncing(false);
+    }
+  }, []);
+
+  return { ledger, loading, syncing, error, sync };
 }
 
 export function useTickerDetail(symbol: string): TickerDetailPayload {

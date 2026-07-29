@@ -5,13 +5,14 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerFundamentals, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { MorningBrief } from './MorningBrief';
 import { EconomicCalendarWidget } from './EconomicCalendarWidget';
 import { useEconomicCalendar } from './useEconomicCalendar';
 import { ForwardLedger } from './ForwardLedger';
 import { MarketGrid } from './MarketGrid';
 import { AllTimePnl } from './AllTimePnl';
+import { TradeHistory } from './TradeHistory';
 import { BacktestLab } from './BacktestLab';
 import { TickerSearch } from './TickerSearch';
 import { TreasuryYieldCurve } from './TreasuryYieldCurve';
@@ -52,7 +53,7 @@ function MarketDetail({ children }: { children: ReactNode }) {
       >
         {open ? '▾' : '▸'} Market detail
         <span style={{ color: MM.dimmer, fontWeight: 500, textTransform: 'none', letterSpacing: '.02em', marginLeft: 8 }}>
-          watchlist · macro · rotation · portfolio · all-time P&L · evidence · ledger
+          watchlist · macro · rotation · portfolio · P&L · trade history · evidence
         </span>
       </button>
       {open && children}
@@ -524,6 +525,7 @@ export function MarketMonitor() {
   const morningBrief = useMorningBrief(reload);
   const economicCalendar = useEconomicCalendar();
   const ledger = useForwardLedger();
+  const tradeLedger = useTradeLedger();
   const watchlist = useMarketWatchlist();
   const isMobile = useIsMobile();
   const [activeTicker, setActiveTicker] = useState<string | null>(null);
@@ -698,13 +700,31 @@ export function MarketMonitor() {
                     layout: { x: 0, y: 34, w: 6, h: 13, minW: 4, minH: 6 },
                     node: <Portfolio panel={dash.portfolio} onOpen={open} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} />,
                   },
-                  { id: 'allTimePnl', layout: { x: 6, y: 34, w: 6, h: 13, minW: 4, minH: 8 }, node: <AllTimePnl onOpen={open} /> },
-                  { id: 'speculative', layout: { x: 0, y: 47, w: 6, h: 10, minW: 3, minH: 5 }, node: <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} /> },
-                  { id: 'forwardLedger', layout: { x: 6, y: 47, w: 6, h: 10, minW: 4, minH: 5 }, node: <ForwardLedger report={ledger.report} loading={ledger.loading} /> },
-                  { id: 'evidence', layout: { x: 0, y: 57, w: 6, h: 12, minW: 4, minH: 5 }, node: <Evidence panel={dash.evidence} onOpen={open} /> },
+                  {
+                    id: 'allTimePnl',
+                    layout: { x: 6, y: 34, w: 6, h: 13, minW: 4, minH: 8 },
+                    node: (
+                      <AllTimePnl
+                        ledger={tradeLedger.ledger}
+                        loading={tradeLedger.loading}
+                        syncing={tradeLedger.syncing}
+                        error={tradeLedger.error}
+                        onSync={() => void tradeLedger.sync()}
+                        onOpen={open}
+                      />
+                    ),
+                  },
+                  {
+                    id: 'tradeHistory',
+                    layout: { x: 0, y: 47, w: 12, h: 13, minW: 4, minH: 6 },
+                    node: <TradeHistory ledger={tradeLedger.ledger} loading={tradeLedger.loading} onOpen={open} />,
+                  },
+                  { id: 'speculative', layout: { x: 0, y: 60, w: 6, h: 10, minW: 3, minH: 5 }, node: <Speculative panel={dash.speculative} onOpen={open} comment={marketRead?.speculativeComment} /> },
+                  { id: 'forwardLedger', layout: { x: 6, y: 60, w: 6, h: 10, minW: 4, minH: 5 }, node: <ForwardLedger report={ledger.report} loading={ledger.loading} /> },
+                  { id: 'evidence', layout: { x: 0, y: 70, w: 6, h: 12, minW: 4, minH: 5 }, node: <Evidence panel={dash.evidence} onOpen={open} /> },
                   {
                     id: 'contrarian',
-                    layout: { x: 6, y: 57, w: 6, h: 12, minW: 3, minH: 5 },
+                    layout: { x: 6, y: 70, w: 6, h: 12, minW: 3, minH: 5 },
                     node: (
                       <Contrarian
                         panel={

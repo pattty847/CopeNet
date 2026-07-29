@@ -72,6 +72,7 @@ class SymbolPnl:
     total_pnl: float
     trade_count: int
     win_count: int
+    open_position: bool = False  # the broker still holds it — drives holdings vs history split
 
 
 @dataclass
@@ -336,6 +337,17 @@ def reconcile(open_lots: list[OpenLot], snapshot: dict[str, Any] | None) -> list
     return rows
 
 
+def _held_symbols(snapshot: dict[str, Any] | None) -> set[str]:
+    """What the broker reports holding right now — the line between a live position and history."""
+    if not snapshot:
+        return set()
+    return {
+        str(position["symbol"]).upper()
+        for position in snapshot.get("positions", [])
+        if isinstance(position, dict) and position.get("symbol")
+    }
+
+
 def _summarize_by_symbol(trades: list[RealizedTrade], snapshot: dict[str, Any] | None) -> list[SymbolPnl]:
     realized: dict[str, float] = defaultdict(float)
     counts: dict[str, int] = defaultdict(int)
@@ -352,6 +364,7 @@ def _summarize_by_symbol(trades: list[RealizedTrade], snapshot: dict[str, Any] |
             if isinstance(position, dict) and position.get("symbol") and position.get("unrealized_pl") is not None:
                 unrealized[str(position["symbol"]).upper()] = float(position["unrealized_pl"])
 
+    held = _held_symbols(snapshot)
     rows = [
         SymbolPnl(
             symbol=symbol,
@@ -360,8 +373,9 @@ def _summarize_by_symbol(trades: list[RealizedTrade], snapshot: dict[str, Any] |
             total_pnl=round(realized.get(symbol, 0.0) + (unrealized.get(symbol) or 0.0), 2),
             trade_count=counts.get(symbol, 0),
             win_count=wins.get(symbol, 0),
+            open_position=symbol in held,
         )
-        for symbol in set(realized) | set(unrealized)
+        for symbol in set(realized) | set(unrealized) | held
     ]
     return sorted(rows, key=lambda row: -row.total_pnl)
 
