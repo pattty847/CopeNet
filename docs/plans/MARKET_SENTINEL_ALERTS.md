@@ -192,6 +192,16 @@ Decisions:
 - Volume evidence stays interval-specific and distinguishes a missing field, reported zeros,
   isolated nonzero rows, and dense nonzero coverage.
 
+### 2026-07-30 — scheduled Yahoo WebSocket session
+
+Planned window: 09:20–16:10 America/New_York. Symbols: AAPL and SPY.
+
+The bounded probe records decoded price messages separately from connection events. It has a
+hard stop, at most five reconnects, progressively longer randomized backoff, and an exact-date
+guard. Evidence includes populated fields, message counts, vendor timestamps, receive lag,
+disconnect exceptions, HTTP status when exposed, WebSocket close code/reason, and reconnect
+attempts. Stream messages remain experimental quote observations rather than canonical candles.
+
 ## 7. Open Phase 0 questions
 
 - Does extended-hours volume remain zero across liquid stocks, ETFs, volatile holdings, and
