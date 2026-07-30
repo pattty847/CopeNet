@@ -1,12 +1,12 @@
-"""End-to-end multi-turn replay through the REAL orchestrator + Responses loop.
+"""In-process integration of multi-turn replay through the orchestrator and Responses loop.
 
 This is the strongest integration proof for the rebuild's spine: it drives two
 full send_chat turns through a real Orchestrator with a fake Responses provider,
 and asserts that turn 2's OUTGOING input[] array — built by build_chat_messages
 from the persisted transcript — carries turn 1's user message, the function_call,
 the function_call_output WITH THE REAL TOOL OUTPUT (not just a summary), and the
-assistant text. Exercises Phase 1 (messages) + Phase 2 (responses loop) +
-transcript persistence + replayOutput together.
+assistant text. It protects message assembly, the Responses loop, transcript
+persistence, and replayOutput together.
 """
 
 from __future__ import annotations

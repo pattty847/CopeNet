@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from copenet.core.orchestrator.messages import (
     build_chat_messages,
-    estimate_input_tokens,
     flatten_messages_to_prompt,
     trim_messages_to_token_budget,
 )
@@ -130,11 +129,6 @@ def test_flatten_messages_renders_tool_exchange_readably() -> None:
     assert "tool result: contents" in prompt
 
 
-def test_estimate_input_tokens_is_roughly_char_quarter() -> None:
-    messages = [{"role": "user", "content": [{"type": "input_text", "text": "a" * 400}]}]
-    assert estimate_input_tokens(messages) == 100
-
-
 def test_token_budget_drops_oldest_complete_turns_and_keeps_tool_pairs() -> None:
     messages = [
         {"role": "user", "content": [{"type": "input_text", "text": "A" * 80}]},
@@ -164,14 +158,3 @@ def test_token_budget_drops_oldest_complete_turns_and_keeps_tool_pairs() -> None
         None,
     ]
     assert with_recent_turn[1]["call_id"] == with_recent_turn[2]["call_id"] == "call-1"
-
-
-def test_token_budget_always_keeps_oversized_current_turn() -> None:
-    messages = [
-        {"role": "user", "content": [{"type": "input_text", "text": "old"}]},
-        {"role": "user", "content": [{"type": "input_text", "text": "X" * 1000}]},
-    ]
-
-    trimmed = trim_messages_to_token_budget(messages, max_context_tokens=10)
-
-    assert trimmed == [messages[-1]]

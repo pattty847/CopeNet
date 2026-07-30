@@ -226,34 +226,31 @@ def test_clear_stale_in_flight_unblocks_future_sends(session_store: SessionStore
     assert entry.in_flight_run_id == "new-run"
 
 
-def test_null_task_mode_session_can_change_access_mid_session(session_store: SessionStore) -> None:
+@pytest.mark.parametrize(
+    ("stored_access", "requested_access", "expected_access"),
+    [
+        pytest.param(None, "full-access", "full-access", id="default-to-full-access"),
+        pytest.param(None, None, None, id="default-continuation"),
+        pytest.param("full-access", None, None, id="full-access-to-default"),
+    ],
+)
+def test_session_access_reconciles_to_operator_requested_mode(
+    session_store: SessionStore,
+    stored_access: str | None,
+    requested_access: str | None,
+    expected_access: str | None,
+) -> None:
     # Access is operator-driven and reconciles mid-session. A model can never escalate
     # itself — it doesn't supply task_prompt_id — and Full Access stays provider-gated
     # downstream in policy_for_task_mode, so this reconcile can't silently over-grant.
-    session_store.create_session(session_key="gamma", provider="fake", task_prompt_id=None)
+    session_store.create_session(
+        session_key="access-transition",
+        provider="fake",
+        task_prompt_id=stored_access,
+    )
     entry = session_store.assert_session_binding(
-        session_key="gamma", provider="fake", task_prompt_id="full-access"
+        session_key="access-transition",
+        provider="fake",
+        task_prompt_id=requested_access,
     )
-    assert entry.task_prompt_id == "full-access"
-
-
-def test_null_task_mode_continuation_still_works(session_store: SessionStore) -> None:
-    # A none/none continuation must keep working (None == "none").
-    session_store.create_session(session_key="delta", provider="fake", task_prompt_id=None)
-    entry = session_store.assert_session_binding(
-        session_key="delta", provider="fake", task_prompt_id=None
-    )
-    assert entry.session_key == "delta"
-
-
-def test_full_access_session_can_downgrade_access_mid_session(session_store: SessionStore) -> None:
-    session_store.create_session(session_key="epsilon", provider="fake", task_prompt_id="full-access")
-    # Same mode continues fine.
-    session_store.assert_session_binding(
-        session_key="epsilon", provider="fake", task_prompt_id="full-access"
-    )
-    # Downgrading back to read-only mid-session reconciles (operator's call).
-    downgraded = session_store.assert_session_binding(
-        session_key="epsilon", provider="fake", task_prompt_id=None
-    )
-    assert downgraded.task_prompt_id is None
+    assert entry.task_prompt_id == expected_access

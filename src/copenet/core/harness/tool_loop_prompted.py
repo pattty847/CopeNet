@@ -14,6 +14,7 @@ from .tool_loop_common import (
     MAX_TOOL_STEPS,
     ToolExecutor,
     TraceRecorder,
+    _bounded_tool_calls,
     _compose_prompted_tool_followup,
     _force_call_id,
     _max_step_explanation,
@@ -114,6 +115,10 @@ async def run_with_prompted_tools(
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
             return
 
+        tool_requests, cap_reached = _bounded_tool_calls(
+            tool_requests,
+            completed_count=turn_state.tool_call_count,
+        )
         consecutive_corrections = 0
         tool_payloads: list[str] = []
         for request in tool_requests:
@@ -174,7 +179,7 @@ async def run_with_prompted_tools(
             turn_state.drain_pending_input()
             if trace is not None:
                 trace("turn_transition", turn_state.to_public_dict())
-        if step_index >= MAX_TOOL_STEPS - 1:
+        if cap_reached:
             turn_state.terminal_reason = "max_turns"
             if trace is not None:
                 trace("turn_completed", turn_state.to_public_dict())

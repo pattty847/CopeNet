@@ -899,12 +899,22 @@ def test_chat_run_survives_websocket_disconnect_after_started_response(rpc_clien
         started = socket.recv_response(send_id)
         assert started["payload"]["status"] == "started"
 
-    time.sleep(0.2)
-
     with _open_rpc(rpc_client) as socket:
-        history_id = socket.request("chat.history", {"sessionKey": "remote-drop"})
-        history_response = socket.recv_response(history_id)
-        messages = history_response["payload"]["messages"]
+        deadline = time.monotonic() + 2.0
+        messages: list[dict] = []
+        while time.monotonic() < deadline:
+            history_id = socket.request("chat.history", {"sessionKey": "remote-drop"})
+            history_response = socket.recv_response(history_id)
+            messages = history_response["payload"]["messages"]
+            if len(messages) >= 2 and messages[-1].get("content") == "slow response persisted":
+                break
+            time.sleep(0.01)
+        else:
+            pytest.fail(
+                "chat run did not persist its assistant response within 2 seconds "
+                f"after the originating WebSocket disconnected; last history={messages!r}"
+            )
+
         assert [message["role"] for message in messages] == ["user", "assistant"]
         assert messages[-1]["content"] == "slow response persisted"
 

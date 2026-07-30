@@ -16,6 +16,7 @@ from .tool_loop_common import (
     MAX_TOOL_STEPS,
     ToolExecutor,
     TraceRecorder,
+    _bounded_tool_calls,
     _force_call_id,
     _max_step_explanation,
     _native_tool_message_content,
@@ -145,6 +146,10 @@ async def run_with_responses_tools(
             yield ProviderEvent(kind="final")
             return
 
+        function_calls, cap_reached = _bounded_tool_calls(
+            function_calls,
+            completed_count=turn_state.tool_call_count,
+        )
         # Append assistant text item (if any) so the model sees its own narration
         # on the next replay, then each function_call item.
         if assistant_text:
@@ -241,7 +246,7 @@ async def run_with_responses_tools(
             if trace is not None:
                 trace("turn_transition", turn_state.to_public_dict())
 
-        if step_index >= MAX_TOOL_STEPS - 1:
+        if cap_reached:
             turn_state.terminal_reason = "max_turns"
             if trace is not None:
                 trace("turn_completed", turn_state.to_public_dict())

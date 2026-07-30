@@ -6,7 +6,8 @@ from pathlib import Path
 from fastapi.testclient import TestClient
 import pytest
 
-from copenet.host.api import _FRONTEND_DIST_DIR, create_app
+from copenet.host import api as host_api
+from copenet.host.api import create_app
 
 
 def test_agents_ping_endpoint_returns_ok_status() -> None:
@@ -20,17 +21,21 @@ def test_agents_ping_endpoint_returns_ok_status() -> None:
     datetime.fromisoformat(payload["timestamp"])
 
 
-def test_frontend_public_images_are_served_when_present() -> None:
-    wallpaper_path = _FRONTEND_DIST_DIR / "imgs" / "wallpaper.png"
-    if not wallpaper_path.is_file():
-        wallpaper_path.parent.mkdir(parents=True, exist_ok=True)
-        wallpaper_path.write_bytes(b"test-image")
+def test_frontend_public_images_are_served_when_present(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    frontend_dist = tmp_path / "dist"
+    wallpaper_path = frontend_dist / "imgs" / "wallpaper.png"
+    wallpaper_path.parent.mkdir(parents=True)
+    wallpaper_path.write_bytes(b"test-image")
+    monkeypatch.setattr(host_api, "_FRONTEND_DIST_DIR", frontend_dist)
 
     with TestClient(create_app()) as client:
         response = client.get("/imgs/wallpaper.png")
 
     assert response.status_code == 200
-    assert response.content == Path(wallpaper_path).read_bytes()
+    assert response.content == wallpaper_path.read_bytes()
 
 
 @pytest.mark.parametrize(

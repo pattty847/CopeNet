@@ -204,7 +204,7 @@ def test_scenario_handles_dashboard_formatted_price_strings() -> None:
     assert isinstance(result.metrics["total_return"], float)
 
 
-def test_scenario_metadata_shock_details_are_real_for_each_preset() -> None:
+def test_scenario_metadata_exposes_configured_synthetic_shock_details() -> None:
     """Guards against UI code hardcoding a shock magnitude that only matches one preset."""
     for key in SCENARIOS:
         result = run_scenario(positions=[], scenario_key=key)

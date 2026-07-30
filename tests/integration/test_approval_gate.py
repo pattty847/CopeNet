@@ -1,4 +1,4 @@
-"""End-to-end approval gate: a high-risk shell command pauses, then runs on approve.
+"""In-process integration of the approval gate pause-and-resume behavior.
 
 Exercises the real pieces together — the executor wrapper
 (_make_approval_gated_executor), the shell handler's approval gate + pre-approval

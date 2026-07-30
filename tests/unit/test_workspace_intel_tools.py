@@ -139,13 +139,6 @@ def test_workspace_intel_refreshes_legacy_cache_records(tmp_path: Path) -> None:
     assert 'npm' in result['packageManagers']
 
 
-def test_tool_registry_does_not_expose_removed_experimental_tools() -> None:
-    tool_ids = {tool.id for tool in ToolRegistry().list_tools()}
-
-    assert 'patch.plan' not in tool_ids
-    assert 'tools.describe' not in tool_ids
-
-
 def test_workspace_intel_honors_copenetignore_for_named_file_scans(tmp_path: Path) -> None:
     _seed_repo(tmp_path)
     scratch_frontend = tmp_path / 'scratch' / 'frontend'
@@ -233,4 +226,3 @@ async def test_files_edit_rejects_stale_expected_digest(tmp_path: Path) -> None:
 
     assert edit_result.ok is False
     assert 'stale read detected' in str(edit_result.error)
-

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass
 import json
-from typing import Any, AsyncIterator, Awaitable, Callable
+from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
 from uuid import uuid4
 
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
@@ -44,6 +44,7 @@ PROMPTED_TOOL_CLOSE = "</copenet:tool>"
 # overrides that suppression. We want lightweight thinking ticks, not richer
 # rationales, so we stay on auto + omit include.
 DEFAULT_RESPONSES_REASONING: dict[str, Any] = {"effort": "medium", "summary": "auto"}
+_ToolCall = TypeVar("_ToolCall")
 
 
 def _max_step_explanation() -> str:
@@ -51,6 +52,17 @@ def _max_step_explanation() -> str:
         f"[Stopped after MAX_TOOL_STEPS={MAX_TOOL_STEPS} tool calls. "
         "Returning what was produced so far.]"
     )
+
+
+def _bounded_tool_calls(
+    calls: list[_ToolCall],
+    *,
+    completed_count: int,
+) -> tuple[list[_ToolCall], bool]:
+    """Return calls that fit the turn budget and whether the cap is reached."""
+    remaining = max(0, MAX_TOOL_STEPS - completed_count)
+    bounded = calls[:remaining]
+    return bounded, completed_count + len(calls) >= MAX_TOOL_STEPS
 
 
 async def collect_provider_turn(

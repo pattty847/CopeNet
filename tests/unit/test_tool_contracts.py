@@ -124,6 +124,5 @@ def test_build_tool_effect_payload_links_turn_decision_and_evidence_role() -> No
 def test_tool_registry_does_not_expose_removed_experimental_tools() -> None:
     tool_ids = {tool.id for tool in ToolRegistry().list_tools()}
 
-    assert "patch.plan" not in tool_ids
-    assert "tools.describe" not in tool_ids
+    assert {"patch.plan", "tools.describe", "context.prepare"}.isdisjoint(tool_ids)
     assert "market.evidence" in tool_ids

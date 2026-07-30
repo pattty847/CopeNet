@@ -14,6 +14,7 @@ from .tool_loop_common import (
     MAX_TOOL_STEPS,
     ToolExecutor,
     TraceRecorder,
+    _bounded_tool_calls,
     _coerce_native_message_content,
     _extract_native_choice,
     _extract_native_tool_calls,
@@ -105,6 +106,10 @@ async def run_with_native_tools(
             yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
             return
 
+        native_tool_calls, cap_reached = _bounded_tool_calls(
+            native_tool_calls,
+            completed_count=turn_state.tool_call_count,
+        )
         assistant_message: dict[str, Any] = {"role": "assistant", "tool_calls": native_tool_calls}
         if content:
             assistant_message["content"] = content
@@ -196,7 +201,7 @@ async def run_with_native_tools(
                     "lastToolId": native_tool_calls[-1]["function"]["name"],
                 },
             )
-        if step_index >= MAX_TOOL_STEPS - 1:
+        if cap_reached:
             turn_state.terminal_reason = "max_turns"
             if trace is not None:
                 trace(
