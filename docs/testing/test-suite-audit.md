@@ -982,26 +982,26 @@ confidence, then add **25–45 higher-value boundary/failure cases**. Net count 
 
 ## 11. Concise verdict
 
-1. **Intentionally comprehensive or merely accumulating?**  
+1. **Intentionally comprehensive or merely accumulating?**
    Both. The core security, session, replay, Market, and Fleet coverage is intentionally
    comprehensive. Phase-era harness tests, frontend helper/setter tests, static catalogs, probe
    fixtures, and exact implementation strings show clear accumulation.
 
-2. **Highest-value categories:**  
+2. **Highest-value categories:**
    Tool/security policy, session identity and persistence invariants, harness/tool replay,
    Market accounting/state logic, Fleet ordering, and provider response parsing.
 
-3. **Most maintenance noise:**  
+3. **Most maintenance noise:**
    Phase-owned characterization files, repeated fake providers, microscopic serialization and
    scalar examples, direct Zustand setters, exact CSS/copy/prompt/catalog/argv assertions, and
    large mixed-domain WS fixtures.
 
-4. **How many can likely be consolidated or removed?**  
+4. **How many can likely be consolidated or removed?**
    Approximately **50–70 of 804 current cases**, with only 12 recommended for immediate
    high-confidence deletion. Most of the remainder should be table-driven or merged, not have
    their input cases discarded.
 
-5. **How to prevent renewed accumulation:**  
+5. **How to prevent renewed accumulation:**
    Require each new test to name its architectural boundary and plausible mutation, identify
    nearby overlapping coverage, prefer named contract tables for input variants, move regression
    tests when architecture moves, review direct-setter/exact-style tests skeptically, and require

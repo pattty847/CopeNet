@@ -26,6 +26,33 @@ helper and `src/copenet/host/frontend/src/lib/agentMobile.ts`. The production
 tool-loop change fixes a cap enforcement defect; the frontend production change
 removes four exports proven to have no callers.
 
+Production files:
+
+- `src/copenet/core/harness/tool_loop_common.py`
+- `src/copenet/core/harness/tool_loop_prompted.py`
+- `src/copenet/core/harness/tool_loop_native.py`
+- `src/copenet/core/harness/tool_loop_responses.py`
+- `src/copenet/host/frontend/src/lib/agentMobile.ts`
+
+Test files:
+
+- `tests/integration/test_tool_loop_cap_contract.py`
+- `tests/integration/test_phase_0_quickwins.py`
+- `tests/integration/test_phase_minus_1_baseline.py`
+- `tests/integration/test_app_api_agents.py`
+- `tests/integration/test_ws_rpc.py`
+- `tests/integration/test_approval_gate.py`
+- `tests/integration/test_multiturn_responses_e2e.py`
+- `tests/unit/test_build_chat_messages.py`
+- `tests/unit/test_market_backtester.py`
+- `tests/unit/test_session_store.py`
+- `tests/unit/test_tool_contracts.py`
+- `tests/unit/test_workspace_intel_tools.py`
+- `src/copenet/host/frontend/tests/agentMobile.test.ts`
+- `src/copenet/host/frontend/tests/personaHomeStore.test.ts` (deleted)
+- `src/copenet/host/frontend/tests/workspaceIntelStore.test.ts` (deleted)
+- `src/copenet/host/frontend/tests/wsClientNormalization.test.ts`
+
 Confidence was not reduced because every deletion was either covered at the
 same boundary by an equal or stronger retained test, asserted only a direct
 setter round-trip, or tested dead production code removed in the same change.
@@ -230,11 +257,11 @@ passed
 The frontend build retained its pre-existing dynamic-import and large-chunk
 warnings; it introduced no lint, type, test, or build failures.
 
-## Intended commit boundaries
+## Commits
 
-1. `test: strengthen tool loop and rpc guarantees`
-2. `test: remove verified duplicate coverage`
-3. `test: consolidate low-risk repeated cases`
-4. `test: isolate fixtures and clean test naming`
-5. `docs: record test suite cleanup pass one`
+The pass was recorded in these local commits:
 
+1. `8f89764 test: strengthen and simplify audited runtime coverage`
+2. `784d532 test(frontend): remove verified low-value coverage`
+3. `677efd1 docs: record test suite audit and cleanup pass`
+4. `docs: normalize test report formatting`
