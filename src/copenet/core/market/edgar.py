@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import logging
 from typing import Any
 
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
@@ -48,20 +49,26 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back
     if fetcher_cls is None:
         return TickerEvidencePayload(symbol=normalized, evidence=[], events=[], as_of=_now_iso(), refreshed=refresh)
     evidence: list[EvidenceItem] = []
+    warnings: list[str] = []
     async with managed_sec_fetcher(fetcher_cls, user_agent=SEC_API_USER_AGENT) as fetcher:
         insider_payload = await _fetch_insider_payload(
-            fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["form4_filings"]
+            fetcher, normalized, refresh=refresh, days_back=days_back,
+            filing_limit=limits["form4_filings"], warnings=warnings,
         )
         for cluster in _clusters_from_payload(insider_payload)[:TICKER_CLUSTER_LIMIT]:
             evidence.append(_cluster_evidence(normalized, cluster))
         for event in _events_from_payload(insider_payload)[: limits["form4_events"]]:
             evidence.append(_insider_evidence(normalized, event))
         form144_payload = await _fetch_144_payload(
-            fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f144_filings"]
+            fetcher, normalized, refresh=refresh, days_back=days_back,
+            filing_limit=limits["f144_filings"], warnings=warnings,
         )
         for record in _records_from_payload(form144_payload)[: limits["f144_records"]]:
             evidence.append(_planned_sale_evidence(normalized, record))
-        form8k_payload = await _fetch_8k_payload(fetcher, normalized, refresh=refresh, days_back=days_back, filing_limit=limits["f8k_events"])
+        form8k_payload = await _fetch_8k_payload(
+            fetcher, normalized, refresh=refresh, days_back=days_back,
+            filing_limit=limits["f8k_events"], warnings=warnings,
+        )
         for event in _events_from_payload(form8k_payload)[: limits["f8k_events"]]:
             evidence.append(_form8k_evidence(normalized, event))
     return TickerEvidencePayload(
@@ -71,6 +78,7 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back
         as_of=_payload_as_of(insider_payload, form8k_payload, form144_payload) or _now_iso(),
         refreshed=refresh,
         insider_net=_insider_net_windows(_events_from_payload(insider_payload)),
+        warnings=warnings,
     )
 
 
@@ -83,25 +91,22 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = F
     except ImportError:
         return None
     async with managed_sec_fetcher(SECDataFetcher, user_agent=SEC_API_USER_AGENT) as fetcher:
-        try:
-            trend = await fetcher.get_financial_trend(symbol, periods=periods)
-            revenue_quarterly_payload = await fetcher.get_financial_series(
-                symbol,
-                metric="revenue",
-                frequency="quarterly",
-                basis="canonical",
-                alignment="availability",
-                refresh=refresh,
-            )
-            revenue_annual_payload = await fetcher.get_financial_series(
-                symbol,
-                metric="revenue",
-                frequency="annual",
-                basis="reported",
-                alignment="availability",
-            )
-        except Exception:
-            return None
+        trend = await fetcher.get_financial_trend(symbol, periods=periods)
+        revenue_quarterly_payload = await fetcher.get_financial_series(
+            symbol,
+            metric="revenue",
+            frequency="quarterly",
+            basis="canonical",
+            alignment="availability",
+            refresh=refresh,
+        )
+        revenue_annual_payload = await fetcher.get_financial_series(
+            symbol,
+            metric="revenue",
+            frequency="annual",
+            basis="reported",
+            alignment="availability",
+        )
     if not trend:
         return None
     metrics = trend.get("metrics") or {}
@@ -213,7 +218,8 @@ async def _evidence_for_symbol(fetcher: Any, symbol: str, *, limit: int) -> list
     rows: list[EvidenceItem] = []
     try:
         payload = await fetcher.get_insider_signal_payload(symbol)
-    except Exception:
+    except Exception as exc:
+        _handle_sec_failure(exc, symbol=symbol, operation="insider filings")
         payload = None
     for cluster in _clusters_from_payload(payload)[:1]:
         rows.append(_cluster_evidence(symbol, cluster))
@@ -221,13 +227,15 @@ async def _evidence_for_symbol(fetcher: Any, symbol: str, *, limit: int) -> list
         rows.append(_insider_evidence(symbol, event))
     try:
         form144 = await fetcher.get_planned_insider_sales(symbol, days_back=FORM_144_DAYS_BACK, filing_limit=25)
-    except Exception:
+    except Exception as exc:
+        _handle_sec_failure(exc, symbol=symbol, operation="Form 144 filings")
         form144 = None
     for record in _records_from_payload(form144)[:1]:
         rows.append(_planned_sale_evidence(symbol, record))
     try:
         filings = await fetcher.get_8k_events(symbol)
-    except Exception:
+    except Exception as exc:
+        _handle_sec_failure(exc, symbol=symbol, operation="8-K filings")
         filings = None
     # Dashboard panel: high-signal 8-Ks only (exec changes, results, M&A, distress,
     # restructuring, material agreements) — routine exhibits/disclosure stay per-ticker.
@@ -237,25 +245,40 @@ async def _evidence_for_symbol(fetcher: Any, symbol: str, *, limit: int) -> list
     return rows
 
 
-async def _fetch_insider_payload(fetcher: Any, symbol: str, *, refresh: bool, days_back: int, filing_limit: int) -> Any:
+async def _fetch_insider_payload(
+    fetcher: Any, symbol: str, *, refresh: bool, days_back: int,
+    filing_limit: int, warnings: list[str] | None = None,
+) -> Any:
     try:
         if refresh:
             return await fetcher.refresh_insider_signal_payload(symbol, days_back=days_back, filing_limit=filing_limit)
         return await fetcher.get_insider_signal_payload(symbol, days_back=days_back, filing_limit=filing_limit)
-    except Exception:
+    except Exception as exc:
+        _handle_sec_failure(
+            exc, symbol=symbol, operation="insider filings", warnings=warnings,
+        )
         return None
 
 
-async def _fetch_8k_payload(fetcher: Any, symbol: str, *, refresh: bool, days_back: int, filing_limit: int) -> Any:
+async def _fetch_8k_payload(
+    fetcher: Any, symbol: str, *, refresh: bool, days_back: int,
+    filing_limit: int, warnings: list[str] | None = None,
+) -> Any:
     try:
         if refresh:
             return await fetcher.refresh_8k_events(symbol, days_back=days_back, filing_limit=filing_limit)
         return await fetcher.get_8k_events(symbol, days_back=days_back, filing_limit=filing_limit)
-    except Exception:
+    except Exception as exc:
+        _handle_sec_failure(
+            exc, symbol=symbol, operation="8-K filings", warnings=warnings,
+        )
         return None
 
 
-async def _fetch_144_payload(fetcher: Any, symbol: str, *, refresh: bool, days_back: int, filing_limit: int) -> Any:
+async def _fetch_144_payload(
+    fetcher: Any, symbol: str, *, refresh: bool, days_back: int,
+    filing_limit: int, warnings: list[str] | None = None,
+) -> Any:
     """Form 144 has no incremental refresh path (records are light) — refresh just bypasses
     the daily cache for a full refetch."""
     try:
@@ -265,8 +288,32 @@ async def _fetch_144_payload(fetcher: Any, symbol: str, *, refresh: bool, days_b
             filing_limit=filing_limit,
             use_cache=not refresh,
         )
-    except Exception:
+    except Exception as exc:
+        _handle_sec_failure(
+            exc, symbol=symbol, operation="Form 144 filings", warnings=warnings,
+        )
         return None
+
+
+def _handle_sec_failure(
+    exc: Exception,
+    *,
+    symbol: str,
+    operation: str,
+    warnings: list[str] | None = None,
+) -> None:
+    """Surface expected acquisition failures; never hide programming errors."""
+
+    try:
+        from copetech_sec import SecRequestError
+    except ImportError:
+        raise exc
+    if not isinstance(exc, SecRequestError):
+        raise exc
+    warning = f"sec_unavailable:{operation}:{type(exc).__name__}"
+    logging.warning("%s for %s: %s", warning, symbol, exc)
+    if warnings is not None and warning not in warnings:
+        warnings.append(warning)
 
 
 def _events_from_payload(payload: Any) -> list[dict[str, Any]]:

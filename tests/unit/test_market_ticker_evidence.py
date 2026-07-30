@@ -317,3 +317,22 @@ async def test_ticker_evidence_missing_copetech_returns_empty_payload(monkeypatc
     assert payload.evidence == []
     assert payload.events == []
     assert payload.refreshed is False
+
+
+@pytest.mark.asyncio
+async def test_ticker_evidence_surfaces_typed_sec_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    from copetech_sec import SecTransportError
+
+    class UnavailableFetcher(FakeFetcher):
+        async def get_insider_signal_payload(self, *args: Any, **kwargs: Any):
+            raise SecTransportError(
+                "timeout",
+                url="https://data.sec.gov/submissions/test",
+                retryable=True,
+            )
+
+    monkeypatch.setattr(edgar, "_sec_fetcher_class", lambda: UnavailableFetcher)
+
+    payload = await edgar.fetch_ticker_evidence("AAPL")
+
+    assert any("SecTransportError" in warning for warning in payload.warnings)

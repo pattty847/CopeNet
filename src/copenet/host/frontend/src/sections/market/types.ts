@@ -243,6 +243,8 @@ export interface TickerEvidencePayload {
   refreshed: boolean;
   /** Net Form 4 activity per trailing window (d30/d90); absent when no insider data. */
   insiderNet?: Record<string, InsiderNetWindow>;
+  /** Typed upstream acquisition failures; empty filings do not produce warnings. */
+  warnings?: string[];
 }
 
 // ---------- morning brief (overnight sentinel delta) ----------

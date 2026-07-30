@@ -244,7 +244,19 @@ class MarketRuntime:
         fs = compute_features(weekly_frame, voo_frame, symbol=symbol)
         verdict = benchmark_verdict(weekly_frame, {"VOO": voo_frame})
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == symbol]
-        fundamentals = await fetch_fundamentals(symbol)
+        fundamentals_warning = None
+        try:
+            fundamentals = await fetch_fundamentals(symbol)
+        except Exception as exc:
+            try:
+                from copetech_sec import SecRequestError
+            except ImportError:
+                raise
+            if not isinstance(exc, SecRequestError):
+                raise
+            logging.warning("SEC fundamentals unavailable for %s: %s", symbol, exc)
+            fundamentals = None
+            fundamentals_warning = type(exc).__name__
         if fundamentals is not None:
             fundamentals = {**fundamentals, **_trailing_eps_and_pe(fundamentals, weekly_frame)}
         query_name = asset.name if asset else symbol
@@ -262,6 +274,11 @@ class MarketRuntime:
             news=news_results,
             news_source=news_source,
         )
+        if fundamentals_warning:
+            packet += (
+                "\nSEC FUNDAMENTALS STATUS: unavailable "
+                f"({fundamentals_warning}); do not infer zero values."
+            )
         if include_portfolio_context_enabled():
             snapshot = load_webull_snapshot()
             held = next((p for p in (snapshot or {}).get("positions", []) if p.get("symbol") == symbol), None)
