@@ -67,9 +67,10 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 trailing-twelve-month, or annual revenue over split-adjusted price, plus historical
 P/E built from the price and the TTM diluted EPS that was actually public on each
 date. The open-source SEC pipeline stitches issuer concept changes, derives missing
-fourth quarters, preserves accession-level provenance, applies amendments only after
-their filing date, and leaves P/E blank when earnings are non-positive—so the chart
-does not leak future information or invent a meaningful multiple.
+revenue fourth quarters, reconstructs interim EPS from weighted diluted shares,
+preserves accession-level provenance, and applies amendments only after their filing
+date. P/E stays blank when earnings are non-positive, stale, or unsupported; the
+chart renders those intervals as real gaps and keeps its financial scale on the left.
 
 ![CopeNet Market Monitor — point-in-time P/E overlay](docs/imgs/market-panel/copenet-financial-overlays.png)
 

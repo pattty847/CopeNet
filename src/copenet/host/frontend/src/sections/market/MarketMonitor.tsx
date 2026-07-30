@@ -367,10 +367,11 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
     if (!overlayMetric || !overlaySeries.data) return undefined;
     if ('epsMetric' in overlaySeries.data) {
       return overlaySeries.data.observations
-        .filter((observation) => observation.value != null && Number.isFinite(observation.value))
         .map((observation) => ({
           t: Math.floor(Date.parse(`${observation.timestamp}T00:00:00Z`) / 1000),
-          value: observation.value as number,
+          value: observation.value != null && Number.isFinite(observation.value)
+            ? observation.value
+            : null,
         }));
     }
     return overlaySeries.data.observations

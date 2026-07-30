@@ -29,6 +29,7 @@ import {
 } from 'lightweight-charts';
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { FinancialOverlayPoint } from './financialOverlay';
+import { formatFinancialValue, splitFinancialOverlaySegments } from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 
 // ---- clustering thresholds ----
@@ -194,7 +195,7 @@ function summarizeCluster(buckets: DayBucket[]): ClusterSummary {
 function clusterBuckets(
   buckets: DayBucket[],
   rows: Ohlcv[],
-  pxPerBar: number,
+  xByTime: Map<number, number>,
 ): { clusters: ClusterSummary[]; loose: DayBucket[] } {
   const chains: DayBucket[][] = [];
   let chain: DayBucket[] = [];
@@ -203,7 +204,13 @@ function clusterBuckets(
       chain = [bucket];
       continue;
     }
-    const gapPx = (bucket.barIndex - chain[chain.length - 1].barIndex) * pxPerBar;
+    const previousX = xByTime.get(chain[chain.length - 1].time);
+    const currentX = xByTime.get(bucket.time);
+    const gapPx = (
+      previousX == null || currentX == null
+        ? Number.POSITIVE_INFINITY
+        : Math.abs(currentX - previousX)
+    );
     if (gapPx <= CLUSTER_GAP_PX) chain.push(bucket);
     else {
       chains.push(chain);
@@ -335,7 +342,7 @@ export function CandleChart({
   /** Full evidence rows backing the markers — clicking a marker day pops their details. */
   evidence?: EvidenceItem[];
   height?: number;
-  /** Filing-date-aligned financial observations on their own hidden scale. */
+  /** Filing-date-aligned financial observations on their own left-side scale. */
   financialOverlay?: FinancialOverlayPoint[];
   financialOverlayKind?: 'revenue' | 'trailing_pe';
 }) {
@@ -344,6 +351,7 @@ export function CandleChart({
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const financialRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const financialSegmentRefs = useRef<ISeriesApi<'Line'>[]>([]);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [dayPopup, setDayPopup] = useState<DayPopupState | null>(null);
   const [clusterBoxes, setClusterBoxes] = useState<RenderedBox[]>([]);
@@ -379,21 +387,24 @@ export function CandleChart({
       return;
     }
     const timeScale = chart.timeScale();
-    const logicalRange = timeScale.getVisibleLogicalRange();
     const paneWidth = timeScale.width();
-    if (!logicalRange || paneWidth <= 0 || logicalRange.to <= logicalRange.from) return;
-    const pxPerBar = paneWidth / (logicalRange.to - logicalRange.from);
-    const xOf = (barIndex: number) => (barIndex - logicalRange.from) * pxPerBar;
+    if (paneWidth <= 0) return;
 
     const sourceEvidence = evidenceRef.current.length ? evidenceRef.current : eventsAsEvidence(eventsRef.current);
     const buckets = buildBuckets(sourceEvidence, rows);
-    const { clusters, loose } = clusterBuckets(buckets, rows, pxPerBar);
+    const xByTime = new Map<number, number>();
+    for (const bucket of buckets) {
+      const coordinate = timeScale.timeToCoordinate(bucket.time as UTCTimestamp);
+      if (coordinate != null) xByTime.set(bucket.time, coordinate);
+    }
+    const { clusters, loose } = clusterBuckets(buckets, rows, xByTime);
 
     // Loose-day markers: text only when no other decorated day is nearby at this zoom.
-    const allXs = buckets.map((b) => xOf(b.barIndex));
+    const allXs = [...xByTime.values()];
     const markers: SeriesMarker<Time>[] = [];
     for (const bucket of loose) {
-      const x = xOf(bucket.barIndex);
+      const x = xByTime.get(bucket.time);
+      if (x == null) continue;
       let room = Number.POSITIVE_INFINITY;
       for (const other of allXs) {
         const d = Math.abs(other - x);
@@ -407,8 +418,12 @@ export function CandleChart({
     clusters.forEach((cluster, ci) => {
       const first = cluster.buckets[0];
       const last = cluster.buckets[cluster.buckets.length - 1];
-      let left = xOf(first.barIndex) - pxPerBar / 2 - 2;
-      let right = xOf(last.barIndex) + pxPerBar / 2 + 2;
+      const firstX = xByTime.get(first.time);
+      const lastX = xByTime.get(last.time);
+      if (firstX == null || lastX == null) return;
+      const halfBar = Math.max(2, chart.timeScale().options().barSpacing / 2);
+      let left = firstX - halfBar - 2;
+      let right = lastX + halfBar + 2;
       if (right < 0 || left > paneWidth) return; // fully off-screen
       left = Math.max(0, left);
       right = Math.min(paneWidth, right);
@@ -462,6 +477,11 @@ export function CandleChart({
         fontSize: 10,
       },
       grid: { vertLines: { color: 'rgba(254,252,244,.04)' }, horzLines: { color: 'rgba(254,252,244,.04)' } },
+      leftPriceScale: {
+        visible: false,
+        borderColor: 'rgba(254,252,244,.08)',
+        textColor: MM.muted,
+      },
       rightPriceScale: { borderColor: 'rgba(254,252,244,.08)' },
       timeScale: { borderColor: 'rgba(254,252,244,.08)', rightOffset: 4 },
       crosshair: { mode: 0 },
@@ -478,16 +498,16 @@ export function CandleChart({
     // Periodic financial observations step from the SEC filing date, never the
     // period end. The separate scale prevents fundamentals from distorting price.
     const financialSeries = chart.addSeries(LineSeries, {
-      priceScaleId: 'financial',
+      priceScaleId: 'left',
       color: '#8fb8e8',
       lineWidth: 2,
       lineType: LineType.WithSteps,
       pointMarkersVisible: true,
-      lastValueVisible: false,
+      lastValueVisible: true,
       priceLineVisible: false,
       crosshairMarkerVisible: true,
     });
-    chart.priceScale('financial').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
+    chart.priceScale('left').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
     const markers = createSeriesMarkers(candle, []);
 
     // Click a marker day → popup with everything that hit that day (who, $, filing link).
@@ -507,6 +527,7 @@ export function CandleChart({
 
     // Pan/zoom re-clusters: rAF-throttled so a fast drag recomputes at most once a frame.
     const onRangeChange = () => {
+      setDayPopup(null);
       if (rafRef.current != null) return;
       rafRef.current = requestAnimationFrame(() => {
         rafRef.current = null;
@@ -522,7 +543,10 @@ export function CandleChart({
     markersRef.current = markers;
 
     const ro = new ResizeObserver(() => {
-      if (containerRef.current) chart.applyOptions({ width: containerRef.current.clientWidth });
+      if (containerRef.current) {
+        chart.applyOptions({ width: containerRef.current.clientWidth });
+        recomputeRef.current();
+      }
     });
     ro.observe(el);
     return () => {
@@ -534,6 +558,7 @@ export function CandleChart({
       candleRef.current = null;
       volumeRef.current = null;
       financialRef.current = null;
+      financialSegmentRefs.current = [];
       markersRef.current = null;
     };
   }, [height]);
@@ -574,29 +599,72 @@ export function CandleChart({
   // Overlay changes must not reset the operator's zoom. Underlying observations
   // stay periodic; the step is explicitly an availability-date visualization.
   useEffect(() => {
-    // One filing can make several comparative periods available at once. A step
-    // chart has one value per timestamp, so retain the newest incoming period for
-    // that filing date (observations arrive in economic-period order).
-    const byTime = new Map<number, FinancialOverlayPoint>();
-    for (const point of financialOverlay ?? []) {
-      if (Number.isFinite(point.t) && Number.isFinite(point.value)) byTime.set(point.t, point);
+    const chart = chartRef.current;
+    const primary = financialRef.current;
+    if (!chart || !primary) return;
+    for (const series of financialSegmentRefs.current) {
+      chart.removeSeries(series);
     }
-    const points = [...byTime.values()].sort((left, right) => left.t - right.t);
-    financialRef.current?.setData(
-      points.map((point) => ({ time: point.t as UTCTimestamp, value: point.value })),
+    financialSegmentRefs.current = [];
+    // Lightweight Charts intentionally connects a line through whitespace data.
+    // Separate series are therefore required for honest null/stale P/E gaps.
+    const segments = splitFinancialOverlaySegments(financialOverlay ?? []);
+    primary.setData(
+      (segments[0] ?? []).map((point) => ({
+        time: point.t as UTCTimestamp,
+        value: point.value,
+      })),
     );
-  }, [financialOverlay]);
+    for (const segment of segments.slice(1)) {
+      const series = chart.addSeries(LineSeries, {
+        priceScaleId: 'left',
+        color: '#d9ad67',
+        lineWidth: 2,
+        lineType: LineType.Simple,
+        pointMarkersVisible: false,
+        lastValueVisible: false,
+        priceLineVisible: false,
+        crosshairMarkerVisible: true,
+      });
+      series.setData(
+        segment.map((point) => ({
+          time: point.t as UTCTimestamp,
+          value: point.value,
+        })),
+      );
+      financialSegmentRefs.current.push(series);
+    }
+    recomputeRef.current();
+  }, [financialOverlay, financialOverlayKind]);
 
   useEffect(() => {
-    financialRef.current?.applyOptions({
-      color: financialOverlayKind === 'trailing_pe' ? '#d9ad67' : '#8fb8e8',
-      lineType: financialOverlayKind === 'trailing_pe' ? LineType.Simple : LineType.WithSteps,
-      pointMarkersVisible: financialOverlayKind !== 'trailing_pe',
-      priceFormat: financialOverlayKind === 'trailing_pe'
-        ? { type: 'price', precision: 1, minMove: 0.1 }
-        : { type: 'price', precision: 2, minMove: 0.01 },
+    chartRef.current?.priceScale('left').applyOptions({
+      visible: financialOverlayKind != null,
     });
-  }, [financialOverlayKind]);
+    const series = [
+      ...(financialRef.current ? [financialRef.current] : []),
+      ...financialSegmentRefs.current,
+    ];
+    series.forEach((item, index) => {
+      item.applyOptions({
+        color: financialOverlayKind === 'trailing_pe' ? '#d9ad67' : '#8fb8e8',
+        lineType: financialOverlayKind === 'trailing_pe' ? LineType.Simple : LineType.WithSteps,
+        pointMarkersVisible: financialOverlayKind !== 'trailing_pe',
+        lastValueVisible: index === series.length - 1,
+        priceFormat: financialOverlayKind === 'trailing_pe'
+          ? {
+              type: 'custom',
+              minMove: 0.1,
+              formatter: (value: number) => `${value.toFixed(1)}×`,
+            }
+          : {
+              type: 'custom',
+              minMove: 1,
+              formatter: (value: number) => formatFinancialValue(value),
+            },
+      });
+    });
+  }, [financialOverlayKind, financialOverlay]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const chart = chartRef.current;

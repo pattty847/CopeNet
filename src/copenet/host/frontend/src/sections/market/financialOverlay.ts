@@ -2,7 +2,37 @@ import type { FinancialSeriesObservation } from './types';
 
 export interface FinancialOverlayPoint {
   t: number;
+  value: number | null;
+}
+
+export interface FinancialOverlayValuePoint {
+  t: number;
   value: number;
+}
+
+export function splitFinancialOverlaySegments(
+  points: FinancialOverlayPoint[],
+): FinancialOverlayValuePoint[][] {
+  const byTime = new Map<number, FinancialOverlayPoint>();
+  for (const point of points) {
+    if (
+      Number.isFinite(point.t)
+      && (point.value == null || Number.isFinite(point.value))
+    ) byTime.set(point.t, point);
+  }
+  const ordered = [...byTime.values()].sort((left, right) => left.t - right.t);
+  const segments: FinancialOverlayValuePoint[][] = [];
+  let segment: FinancialOverlayValuePoint[] = [];
+  for (const point of ordered) {
+    if (point.value == null) {
+      if (segment.length) segments.push(segment);
+      segment = [];
+      continue;
+    }
+    segment.push({ t: point.t, value: point.value });
+  }
+  if (segment.length) segments.push(segment);
+  return segments;
 }
 
 export function observationTime(observation: FinancialSeriesObservation): number {
