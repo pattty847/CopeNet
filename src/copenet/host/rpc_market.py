@@ -10,6 +10,7 @@ from uuid import uuid4
 from copenet.core.market import MarketRuntime
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
 from copenet.core.market.edgar import fetch_fundamentals, fetch_ticker_evidence
+from copenet.core.market.financials import get_financial_series
 from copenet.core.market.ledger import ledger_report, resolve_due_claims
 from copenet.core.market.runtime import resolve_market_runtime
 from copenet.core.market.sentinel import run_morning_sweep
@@ -60,6 +61,41 @@ async def handle_market_ticker_fundamentals_get(request_id: str, params: dict[st
         raise ValueError("symbol is required")
     fundamentals = await fetch_fundamentals(symbol, periods=12)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"symbol": symbol, "fundamentals": fundamentals})))
+
+
+async def handle_market_financial_series_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Canonical point-in-time financial observations shared with agent tools."""
+    del orchestrator
+    raw = params or {}
+    symbol = str(raw.get("symbol") or "").strip().upper()
+    if not symbol:
+        raise ValueError("symbol is required")
+    payload = await get_financial_series(
+        symbol=symbol,
+        metric=str(raw.get("metric") or "revenue"),
+        frequency=str(raw.get("frequency") or "quarterly"),
+        basis=str(raw.get("basis") or "canonical"),
+        alignment=str(raw.get("alignment") or "availability"),
+        as_of=_optional_text(raw.get("asOf")),
+        start=_optional_text(raw.get("start")),
+        end=_optional_text(raw.get("end")),
+        refresh=bool(raw.get("refresh")),
+        include_provenance=raw.get("includeProvenance") is not False,
+    )
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"symbol": symbol, "series": payload},
+            )
+        )
+    )
+
+
+def _optional_text(value: Any) -> str | None:
+    text = str(value or "").strip()
+    return text or None
 
 
 async def handle_market_universe_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

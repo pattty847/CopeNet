@@ -10,6 +10,8 @@ import type {
   MorningBriefPayload,
   TickerEvidencePayload,
   TickerFundamentals,
+  FinancialFrequency,
+  FinancialSeriesPayload,
   SymbolSearchResult,
   TickerDetailPayload,
   TickerRead,
@@ -67,6 +69,26 @@ export async function marketTickerFundamentalsRpc(request: WsRpcRequest, symbol:
   const payload = await request<{ fundamentals?: unknown }>('market.ticker.fundamentals.get', { symbol });
   const fundamentals = payload.fundamentals;
   return fundamentals && typeof fundamentals === 'object' ? (fundamentals as TickerFundamentals) : null;
+}
+
+export async function marketFinancialSeriesRpc(
+  request: WsRpcRequest,
+  symbol: string,
+  metric: string = 'revenue',
+  frequency: FinancialFrequency = 'quarterly',
+  refresh = false,
+): Promise<FinancialSeriesPayload | null> {
+  const payload = await request<{ series?: unknown }>('market.financial.series.get', {
+    symbol,
+    metric,
+    frequency,
+    basis: 'canonical',
+    alignment: 'availability',
+    includeProvenance: true,
+    refresh,
+  });
+  const series = payload.series;
+  return series && typeof series === 'object' ? (series as FinancialSeriesPayload) : null;
 }
 
 export async function marketLedgerGetRpc(request: WsRpcRequest): Promise<LedgerReport> {

@@ -44,7 +44,8 @@ async def test_market_evidence_returns_compact_classified_packet(monkeypatch: py
             }
         )
 
-    async def fake_fundamentals(symbol: str) -> dict[str, Any]:
+    async def fake_fundamentals(symbol: str, *, refresh: bool = False) -> dict[str, Any]:
+        assert refresh is True
         return {"entityName": "Apple Inc.", "revenueQuarterly": [{"date": "2026-06-30", "value": 1}]}
 
     monkeypatch.setattr(market_evidence, "fetch_ticker_evidence", fake_evidence)

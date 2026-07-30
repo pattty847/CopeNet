@@ -28,12 +28,8 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
+import type { FinancialOverlayPoint } from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
-
-export interface RevenuePoint {
-  t: number; // unix seconds (quarter end)
-  value: number; // dollars
-}
 
 // ---- clustering thresholds ----
 // Distances are in PIXELS, which is the zoom-aware version of "n candles apart":
@@ -44,13 +40,6 @@ const LABEL_ROOM_PX = 56; // a lone marker gets text only with this much space a
 const MIN_CLUSTER_EVENTS = 3; // smaller groups stay as plain markers
 const MIN_CLUSTER_DAYS = 2; // single busy days are served by the day popup, not a box
 const PRICE_SPLIT_FRACTION = 0.06; // split a time-cluster where price shelves gap >6%
-
-function formatRevenue(value: number): string {
-  const magnitude = Math.abs(value);
-  if (magnitude >= 1e9) return `$${(value / 1e9).toFixed(2)}B`;
-  if (magnitude >= 1e6) return `$${(value / 1e6).toFixed(0)}M`;
-  return `$${Math.round(value).toLocaleString()}`;
-}
 
 function formatMoney(value: number): string {
   const abs = Math.abs(value);
@@ -338,21 +327,21 @@ export function CandleChart({
   events = [],
   evidence = [],
   height = 380,
-  revenue,
+  financialOverlay,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
   /** Full evidence rows backing the markers — clicking a marker day pops their details. */
   evidence?: EvidenceItem[];
   height?: number;
-  /** Quarterly revenue overlay (step line, own hidden scale). Omit/empty = hidden. */
-  revenue?: RevenuePoint[];
+  /** Filing-date-aligned financial observations on their own hidden scale. */
+  financialOverlay?: FinancialOverlayPoint[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const candleRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
-  const revenueRef = useRef<ISeriesApi<'Line'> | null>(null);
+  const financialRef = useRef<ISeriesApi<'Line'> | null>(null);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [dayPopup, setDayPopup] = useState<DayPopupState | null>(null);
   const [clusterBoxes, setClusterBoxes] = useState<RenderedBox[]>([]);
@@ -484,11 +473,10 @@ export function CandleChart({
     });
     const volume = chart.addSeries(HistogramSeries, { priceFormat: { type: 'volume' }, priceScaleId: 'vol' });
     chart.priceScale('vol').applyOptions({ scaleMargins: { top: 0.84, bottom: 0 } });
-    // Quarterly revenue: step line with point markers on its own scale so dollar
-    // magnitudes never distort the price axis. Band sits in the middle, clear of
-    // the volume strip at the bottom.
-    const revenueSeries = chart.addSeries(LineSeries, {
-      priceScaleId: 'revenue',
+    // Periodic financial observations step from the SEC filing date, never the
+    // period end. The separate scale prevents fundamentals from distorting price.
+    const financialSeries = chart.addSeries(LineSeries, {
+      priceScaleId: 'financial',
       color: '#8fb8e8',
       lineWidth: 2,
       lineType: LineType.WithSteps,
@@ -496,9 +484,8 @@ export function CandleChart({
       lastValueVisible: false,
       priceLineVisible: false,
       crosshairMarkerVisible: true,
-      priceFormat: { type: 'custom', formatter: formatRevenue, minMove: 1 },
     });
-    chart.priceScale('revenue').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
+    chart.priceScale('financial').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
     const markers = createSeriesMarkers(candle, []);
 
     // Click a marker day → popup with everything that hit that day (who, $, filing link).
@@ -529,7 +516,7 @@ export function CandleChart({
     chartRef.current = chart;
     candleRef.current = candle;
     volumeRef.current = volume;
-    revenueRef.current = revenueSeries;
+    financialRef.current = financialSeries;
     markersRef.current = markers;
 
     const ro = new ResizeObserver(() => {
@@ -544,7 +531,7 @@ export function CandleChart({
       chartRef.current = null;
       candleRef.current = null;
       volumeRef.current = null;
-      revenueRef.current = null;
+      financialRef.current = null;
       markersRef.current = null;
     };
   }, [height]);
@@ -578,13 +565,25 @@ export function CandleChart({
     volume.setData(
       rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
     );
-    const revenuePoints = [...(revenue ?? [])]
-      .filter((p) => Number.isFinite(p.t) && Number.isFinite(p.value))
-      .sort((a, z) => a.t - z.t);
-    revenueRef.current?.setData(revenuePoints.map((p) => ({ time: p.t as UTCTimestamp, value: p.value })));
     chart.timeScale().fitContent();
     recomputeRef.current();
-  }, [bars, events, evidence, revenue]);
+  }, [bars, events, evidence]);
+
+  // Overlay changes must not reset the operator's zoom. Underlying observations
+  // stay periodic; the step is explicitly an availability-date visualization.
+  useEffect(() => {
+    // One filing can make several comparative periods available at once. A step
+    // chart has one value per timestamp, so retain the newest incoming period for
+    // that filing date (observations arrive in economic-period order).
+    const byTime = new Map<number, FinancialOverlayPoint>();
+    for (const point of financialOverlay ?? []) {
+      if (Number.isFinite(point.t) && Number.isFinite(point.value)) byTime.set(point.t, point);
+    }
+    const points = [...byTime.values()].sort((left, right) => left.t - right.t);
+    financialRef.current?.setData(
+      points.map((point) => ({ time: point.t as UTCTimestamp, value: point.value })),
+    );
+  }, [financialOverlay]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const chart = chartRef.current;

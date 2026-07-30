@@ -32,6 +32,7 @@ from .rpc_catalog import (
     handle_market_yield_curve_get,
     handle_market_ledger_get,
     handle_market_ticker_fundamentals_get,
+    handle_market_financial_series_get,
     handle_market_dashboard_get,
     handle_market_interpret,
     handle_market_read_get,
@@ -274,6 +275,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_ticker_evidence_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.fundamentals.get":
         await handle_market_ticker_fundamentals_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.financial.series.get":
+        await handle_market_financial_series_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.universe.get":
         await handle_market_universe_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.refresh":

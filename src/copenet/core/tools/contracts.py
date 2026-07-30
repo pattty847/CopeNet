@@ -420,6 +420,16 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             if isinstance(evidence, list)
             else [],
         }
+    if tool_id == "market.financials":
+        observations = body.get("observations")
+        return {
+            "type": "market_financials",
+            "symbol": body.get("symbol"),
+            "metric": body.get("metric"),
+            "frequency": body.get("frequency"),
+            "observationCount": len(observations) if isinstance(observations, list) else 0,
+            "warnings": body.get("warnings"),
+        }
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")
@@ -644,7 +654,7 @@ def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
         return "web_search"
     if tool_id == "web.fetch":
         return "web_fetch"
-    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker", "market.compare", "market.evidence"}:
+    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker", "market.compare", "market.evidence", "market.financials"}:
         return "context"
     return "raw"
 

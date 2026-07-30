@@ -74,7 +74,7 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back
     )
 
 
-async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any] | None:
+async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = False) -> dict[str, Any] | None:
     """Quarterly revenue + EPS history from CopeTech-Edgar's XBRL parser, for the model's fact
     packet. Returns None for symbols with no company facts (ETFs, banks with no matching revenue
     tag, etc.) rather than a hollow dict — callers should treat that as "unavailable", not "zero"."""
@@ -85,17 +85,32 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
     async with managed_sec_fetcher(SECDataFetcher, user_agent=SEC_API_USER_AGENT) as fetcher:
         try:
             trend = await fetcher.get_financial_trend(symbol, periods=periods)
+            revenue_quarterly_payload = await fetcher.get_financial_series(
+                symbol,
+                metric="revenue",
+                frequency="quarterly",
+                basis="canonical",
+                alignment="availability",
+                refresh=refresh,
+            )
+            revenue_annual_payload = await fetcher.get_financial_series(
+                symbol,
+                metric="revenue",
+                frequency="annual",
+                basis="reported",
+                alignment="availability",
+            )
         except Exception:
             return None
     if not trend:
         return None
     metrics = trend.get("metrics") or {}
-    revenue = _dedup_periods((metrics.get("revenue") or {}).get("quarterly") or [])
+    revenue = _legacy_financial_rows(revenue_quarterly_payload, limit=periods)
     eps = _dedup_periods((metrics.get("eps") or {}).get("quarterly") or [])
     # Foreign private issuers (20-F filers like ASE Technology) file ANNUAL XBRL only —
     # no quarterly facts exist at the SEC. Carry the annual series so consumers (chart
     # overlay, fact packets) can fall back rather than reading "no fundamentals".
-    revenue_annual = _dedup_periods((metrics.get("revenue") or {}).get("annual") or [])
+    revenue_annual = _legacy_financial_rows(revenue_annual_payload, limit=periods)
     eps_annual = _dedup_periods((metrics.get("eps") or {}).get("annual") or [])
     if not revenue and not eps and not revenue_annual and not eps_annual:
         return None
@@ -108,6 +123,39 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8) -> dict[str, Any]
         "revenueAnnual": revenue_annual,
         "epsAnnual": eps_annual,
     }
+
+
+def _legacy_financial_rows(payload: dict[str, Any] | None, *, limit: int) -> list[dict[str, Any]]:
+    observations = (payload or {}).get("observations") or []
+    year_lag = 4 if (payload or {}).get("frequency") == "quarterly" else 1
+    newest_first = list(reversed(observations))[:limit]
+    rows: list[dict[str, Any]] = []
+    for index, observation in enumerate(newest_first):
+        previous_year = newest_first[index + year_lag] if index + year_lag < len(newest_first) else None
+        value = float(observation["value"])
+        prior_value = float(previous_year["value"]) if previous_year is not None else None
+        yoy_pct = (
+            round((value - prior_value) / abs(prior_value), 4)
+            if prior_value not in {None, 0}
+            else None
+        )
+        fiscal_period = str(observation.get("fiscalPeriod") or "")
+        fiscal_year = observation.get("fiscalYear")
+        rows.append(
+            {
+                "period": f"{fiscal_period} {fiscal_year}".strip(),
+                "date": observation["periodEnd"],
+                "filed": observation["availableAt"],
+                "value": observation["value"],
+                "form": (observation.get("sources") or [{}])[0].get("form"),
+                "derived": observation.get("derived", False),
+                "confidence": observation.get("confidence"),
+                "qualityFlags": observation.get("qualityFlags") or [],
+                "sources": observation.get("sources") or [],
+                "yoy_pct": yoy_pct,
+            }
+        )
+    return rows
 
 
 def _dedup_periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:

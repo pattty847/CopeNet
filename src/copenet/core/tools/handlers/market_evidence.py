@@ -31,7 +31,7 @@ async def get_market_evidence(
     include_fundamentals = request.arguments.get("includeFundamentals") is not False
 
     evidence_task = fetch_ticker_evidence(symbol, refresh=refresh, days_back=days_back)
-    fundamentals_task = fetch_fundamentals(symbol) if include_fundamentals else _no_fundamentals()
+    fundamentals_task = fetch_fundamentals(symbol, refresh=refresh) if include_fundamentals else _no_fundamentals()
     evidence_payload, fundamentals = await asyncio.gather(evidence_task, fundamentals_task)
     wire = evidence_payload.to_wire()
     evidence = wire.get("evidence")

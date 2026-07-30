@@ -338,6 +338,54 @@ export interface TickerFundamentals {
   epsAnnual?: FundamentalsQuarter[];
 }
 
+// ---------- canonical financial series ----------
+export type FinancialFrequency = 'quarterly' | 'annual' | 'ttm';
+
+export interface FinancialSeriesSource {
+  taxonomy: string;
+  concept: string;
+  form: string;
+  filed: string;
+  accessionNumber: string;
+  frame?: string | null;
+  sourceUrl?: string | null;
+}
+
+export interface FinancialSeriesObservation {
+  periodStart: string;
+  periodEnd: string;
+  availableAt: string;
+  alignedAt: string;
+  value: number;
+  unit: string;
+  frequency: FinancialFrequency;
+  fiscalYear?: number | null;
+  fiscalPeriod?: string | null;
+  reported: boolean;
+  derived: boolean;
+  derivation?: string | null;
+  confidence: number;
+  qualityFlags: string[];
+  sources: FinancialSeriesSource[];
+}
+
+export interface FinancialSeriesPayload {
+  symbol: string;
+  cik?: number | string | null;
+  entityName?: string | null;
+  metric: string;
+  label: string;
+  frequency: FinancialFrequency;
+  basis: 'reported' | 'canonical';
+  alignment: 'period_end' | 'availability';
+  asOf?: string | null;
+  normalizationVersion: number;
+  retrievedAt?: string | null;
+  rawFactCount: number;
+  observations: FinancialSeriesObservation[];
+  warnings: string[];
+}
+
 // ---------- forward ledger (model calls scored at horizon) ----------
 /** Claim rows come from the backend's dataclass dump — snake_case keys, unlike the rest
  *  of the market wire. Lived-with for phase 1. */
