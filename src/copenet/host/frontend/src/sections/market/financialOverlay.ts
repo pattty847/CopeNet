@@ -11,6 +11,14 @@ export function observationTime(observation: FinancialSeriesObservation): number
 
 export function formatFinancialValue(value: number, unit: string = 'USD'): string {
   const magnitude = Math.abs(value);
+  if (unit === 'USD/shares') {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency: 'USD',
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 3,
+    }).format(value);
+  }
   const prefix = unit === 'USD' ? '$' : `${unit} `;
   if (magnitude >= 1e12) return `${prefix}${(value / 1e12).toFixed(2)}T`;
   if (magnitude >= 1e9) return `${prefix}${(value / 1e9).toFixed(2)}B`;

@@ -11,7 +11,7 @@ import type {
   TickerEvidencePayload,
   TickerFundamentals,
   FinancialFrequency,
-  FinancialSeriesPayload,
+  OverlaySeriesPayload,
   SymbolSearchResult,
   TickerDetailPayload,
   TickerRead,
@@ -77,7 +77,7 @@ export async function marketFinancialSeriesRpc(
   metric: string = 'revenue',
   frequency: FinancialFrequency = 'quarterly',
   refresh = false,
-): Promise<FinancialSeriesPayload | null> {
+): Promise<OverlaySeriesPayload | null> {
   const payload = await request<{ series?: unknown }>('market.financial.series.get', {
     symbol,
     metric,
@@ -88,7 +88,7 @@ export async function marketFinancialSeriesRpc(
     refresh,
   });
   const series = payload.series;
-  return series && typeof series === 'object' ? (series as FinancialSeriesPayload) : null;
+  return series && typeof series === 'object' ? (series as OverlaySeriesPayload) : null;
 }
 
 export async function marketLedgerGetRpc(request: WsRpcRequest): Promise<LedgerReport> {

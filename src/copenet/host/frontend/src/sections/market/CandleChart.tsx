@@ -328,6 +328,7 @@ export function CandleChart({
   evidence = [],
   height = 380,
   financialOverlay,
+  financialOverlayKind,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -336,6 +337,7 @@ export function CandleChart({
   height?: number;
   /** Filing-date-aligned financial observations on their own hidden scale. */
   financialOverlay?: FinancialOverlayPoint[];
+  financialOverlayKind?: 'revenue' | 'trailing_pe';
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -584,6 +586,17 @@ export function CandleChart({
       points.map((point) => ({ time: point.t as UTCTimestamp, value: point.value })),
     );
   }, [financialOverlay]);
+
+  useEffect(() => {
+    financialRef.current?.applyOptions({
+      color: financialOverlayKind === 'trailing_pe' ? '#d9ad67' : '#8fb8e8',
+      lineType: financialOverlayKind === 'trailing_pe' ? LineType.Simple : LineType.WithSteps,
+      pointMarkersVisible: financialOverlayKind !== 'trailing_pe',
+      priceFormat: financialOverlayKind === 'trailing_pe'
+        ? { type: 'price', precision: 1, minMove: 0.1 }
+        : { type: 'price', precision: 2, minMove: 0.01 },
+    });
+  }, [financialOverlayKind]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const chart = chartRef.current;

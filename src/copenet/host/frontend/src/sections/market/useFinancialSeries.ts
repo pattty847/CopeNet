@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
-import type { FinancialFrequency, FinancialSeriesPayload } from './types';
+import type { FinancialFrequency, OverlaySeriesPayload } from './types';
 
-const cache = new Map<string, FinancialSeriesPayload | null>();
+const cache = new Map<string, OverlaySeriesPayload | null>();
 
 export interface FinancialSeriesState {
-  data: FinancialSeriesPayload | null;
+  data: OverlaySeriesPayload | null;
   loading: boolean;
   loaded: boolean;
   error: string | null;

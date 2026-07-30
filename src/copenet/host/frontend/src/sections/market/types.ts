@@ -388,6 +388,45 @@ export interface FinancialSeriesPayload {
   warnings: string[];
 }
 
+export interface ValuationSeriesObservation {
+  timestamp: string;
+  alignedAt: string;
+  value: number | null;
+  unit: 'ratio';
+  price: number;
+  priceBasis: 'split_adjusted';
+  priceSource?: {
+    provider: string;
+    timestamp: string;
+    basis: 'split_adjusted';
+  };
+  epsTtm: number | null;
+  epsTtmAdjusted: number | null;
+  epsSplitAdjustmentFactor: number | null;
+  epsAvailableAt: string | null;
+  epsPeriodEnd: string | null;
+  qualityFlags: string[];
+  sources: FinancialSeriesSource[];
+}
+
+export interface ValuationSeriesPayload {
+  symbol: string;
+  metric: 'trailing_pe';
+  label: 'Trailing P/E';
+  frequency: 'price';
+  alignment: 'price_timestamp';
+  priceBasis: 'split_adjusted';
+  epsMetric: 'diluted_eps';
+  epsFrequency: 'ttm';
+  normalizationVersion: number;
+  retrievedAt?: string | null;
+  rawFactCount: number;
+  observations: ValuationSeriesObservation[];
+  warnings: string[];
+}
+
+export type OverlaySeriesPayload = FinancialSeriesPayload | ValuationSeriesPayload;
+
 // ---------- forward ledger (model calls scored at horizon) ----------
 /** Claim rows come from the backend's dataclass dump — snake_case keys, unlike the rest
  *  of the market wire. Lived-with for phase 1. */
