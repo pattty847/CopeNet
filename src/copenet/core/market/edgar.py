@@ -83,16 +83,13 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back
 
 
 async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = False) -> dict[str, Any] | None:
-    """Quarterly revenue + EPS history from CopeTech-Edgar's XBRL parser, for the model's fact
-    packet. Returns None for symbols with no company facts (ETFs, banks with no matching revenue
-    tag, etc.) rather than a hollow dict — callers should treat that as "unavailable", not "zero"."""
+    """Canonical SEC revenue and diluted-EPS history for the model fact packet."""
     try:
-        from copetech_sec import SECDataFetcher
+        from copetech_sec import EdgarClient
     except ImportError:
         return None
-    async with managed_sec_fetcher(SECDataFetcher, user_agent=SEC_API_USER_AGENT) as fetcher:
-        trend = await fetcher.get_financial_trend(symbol, periods=periods)
-        revenue_quarterly_payload = await fetcher.get_financial_series(
+    async with managed_sec_fetcher(EdgarClient, user_agent=SEC_API_USER_AGENT) as client:
+        revenue_quarterly_payload = await client.financials.series(
             symbol,
             metric="revenue",
             frequency="quarterly",
@@ -100,33 +97,86 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = F
             alignment="availability",
             refresh=refresh,
         )
-        revenue_annual_payload = await fetcher.get_financial_series(
+        revenue_annual_payload = await client.financials.series(
             symbol,
             metric="revenue",
             frequency="annual",
             basis="reported",
             alignment="availability",
         )
-    if not trend:
-        return None
-    metrics = trend.get("metrics") or {}
+        eps_quarterly_payload = await client.financials.series(
+            symbol,
+            metric="diluted_eps",
+            frequency="quarterly",
+            basis="canonical",
+            alignment="availability",
+        )
+        eps_annual_payload = await client.financials.series(
+            symbol,
+            metric="diluted_eps",
+            frequency="annual",
+            basis="reported",
+            alignment="availability",
+        )
+        eps_ttm_payload = await client.financials.series(
+            symbol,
+            metric="diluted_eps",
+            frequency="ttm",
+            basis="canonical",
+            alignment="availability",
+        )
     revenue = _legacy_financial_rows(revenue_quarterly_payload, limit=periods)
-    eps = _dedup_periods((metrics.get("eps") or {}).get("quarterly") or [])
+    eps = _legacy_financial_rows(eps_quarterly_payload, limit=periods)
     # Foreign private issuers (20-F filers like ASE Technology) file ANNUAL XBRL only —
     # no quarterly facts exist at the SEC. Carry the annual series so consumers (chart
     # overlay, fact packets) can fall back rather than reading "no fundamentals".
     revenue_annual = _legacy_financial_rows(revenue_annual_payload, limit=periods)
-    eps_annual = _dedup_periods((metrics.get("eps") or {}).get("annual") or [])
+    eps_annual = _legacy_financial_rows(eps_annual_payload, limit=periods)
     if not revenue and not eps and not revenue_annual and not eps_annual:
         return None
+    payloads = [
+        revenue_quarterly_payload,
+        eps_quarterly_payload,
+        revenue_annual_payload,
+        eps_annual_payload,
+    ]
+    identity = next((payload for payload in payloads if payload), {})
+    latest_source_row = next(
+        (
+            rows[0]
+            for rows in (revenue, eps, revenue_annual, eps_annual)
+            if rows
+        ),
+        {},
+    )
+    eps_ttm_observations = (eps_ttm_payload or {}).get("observations") or []
+    eps_ttm = (
+        float(eps_ttm_observations[-1]["value"])
+        if eps_ttm_observations
+        else None
+    )
     return {
-        "entityName": trend.get("entityName"),
-        "sourceForm": trend.get("source_form"),
-        "periodEnd": trend.get("period_end"),
+        "entityName": identity.get("entityName"),
+        "sourceForm": latest_source_row.get("form"),
+        "periodEnd": latest_source_row.get("date"),
         "revenueQuarterly": revenue,
         "epsQuarterly": eps,
         "revenueAnnual": revenue_annual,
         "epsAnnual": eps_annual,
+        "epsTtm": eps_ttm,
+        "epsTtmAvailableAt": (
+            eps_ttm_observations[-1]["availableAt"]
+            if eps_ttm_observations
+            else None
+        ),
+        "warnings": sorted(
+            {
+                warning
+                for payload in [*payloads, eps_ttm_payload]
+                if payload
+                for warning in payload.get("warnings") or []
+            }
+        ),
     }
 
 
@@ -161,22 +211,6 @@ def _legacy_financial_rows(payload: dict[str, Any] | None, *, limit: int) -> lis
             }
         )
     return rows
-
-
-def _dedup_periods(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """One row per period-end date. XBRL frames can label the same fact under two fiscal
-    years (e.g. NVDA 2025-04-27 as both "Q1 2025" and "Q1 2026"); duplicates would draw
-    doubled chart steps and double-count quarters in trailing-EPS sums. Rows arrive
-    newest-first; keep the first occurrence per date."""
-    seen: set[str] = set()
-    out: list[dict[str, Any]] = []
-    for row in rows:
-        date = str(row.get("date") or "")
-        if date in seen:
-            continue
-        seen.add(date)
-        out.append(row)
-    return out
 
 
 _CHART_KIND_BY_TYPE = {"Insider": "insider", "8-K": "8-K", "Form 144": "planned-sale"}

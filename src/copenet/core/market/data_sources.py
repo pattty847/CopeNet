@@ -47,6 +47,12 @@ def fetch_splits(symbol: str) -> list[tuple[str, float]]:
     exactly what they have erased. Share-count reconstruction (see webull/pnl.py) needs the raw
     corporate action, because a broker's fill history reports quantities as they were on trade day.
     Returns [] for delisted tickers Yahoo no longer serves — callers must handle the gap."""
+    events, _verified = fetch_split_history(symbol)
+    return events
+
+
+def fetch_split_history(symbol: str) -> tuple[list[tuple[str, float]], bool]:
+    """Return split events plus whether Yahoo successfully verified the history."""
     try:
         import yfinance as yf
     except ImportError as exc:  # pragma: no cover - dependency exists in packaged env
@@ -54,10 +60,17 @@ def fetch_splits(symbol: str) -> list[tuple[str, float]]:
     try:
         series = yf.Ticker(yf_symbol(symbol)).splits
     except Exception:
-        return []
+        return [], False
     if series is None or len(series) == 0:
-        return []
-    return sorted((str(stamp.date()), float(ratio)) for stamp, ratio in series.items() if ratio)
+        return [], True
+    return (
+        sorted(
+            (str(stamp.date()), float(ratio))
+            for stamp, ratio in series.items()
+            if ratio
+        ),
+        True,
+    )
 
 
 TREASURY_YIELD_CURVE_URL = (

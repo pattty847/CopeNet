@@ -1,9 +1,14 @@
 from __future__ import annotations
 
 from typing import Any
+from contextlib import asynccontextmanager
 
+import pandas as pd
 import pytest
 
+from copenet.core.market import edgar
+from copenet.core.market import financials as market_financials_service
+from copenet.core.market import runtime as market_runtime
 from copenet.core.tools.contracts import ToolExecutionRequest
 from copenet.core.tools.handlers import market_financials
 from copenet.host import rpc_market
@@ -96,3 +101,154 @@ async def test_financial_series_rpc_returns_same_canonical_shape(monkeypatch: py
     assert calls["include_provenance"] is True
     assert frames[0]["ok"] is True
     assert frames[0]["payload"]["series"]["observations"][0]["derived"] is True
+
+
+@pytest.mark.asyncio
+async def test_trailing_pe_metric_dispatches_to_valuation_service(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, Any] = {}
+
+    async def fake_get_valuation_series(**kwargs):
+        calls.update(kwargs)
+        return {"symbol": "NVDA", "metric": "trailing_pe", "observations": []}
+
+    monkeypatch.setattr(
+        market_financials_service,
+        "get_valuation_series",
+        fake_get_valuation_series,
+    )
+
+    payload = await market_financials_service.get_financial_series(
+        symbol=" nvda ",
+        metric="trailing_pe",
+        refresh=True,
+        include_provenance=False,
+    )
+
+    assert payload is not None
+    assert payload["metric"] == "trailing_pe"
+    assert calls == {
+        "symbol": "NVDA",
+        "refresh": True,
+        "include_provenance": False,
+    }
+
+
+def test_valuation_price_inputs_preserve_split_adjusted_contract(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: dict[str, Any] = {}
+
+    def fake_fetch_ohlcv(symbol: str, **kwargs):
+        calls.update({"symbol": symbol, **kwargs})
+        return pd.DataFrame(
+            {
+                "date": pd.to_datetime(["2026-01-02"], utc=True),
+                "close": [25.0],
+            }
+        )
+
+    monkeypatch.setattr(market_financials_service, "fetch_ohlcv", fake_fetch_ohlcv)
+    monkeypatch.setattr(
+        market_financials_service,
+        "fetch_split_history",
+        lambda _symbol: ([("2025-06-01", 2.0)], True),
+    )
+
+    prices, splits = market_financials_service._valuation_price_inputs("NVDA")
+
+    assert calls["auto_adjust"] is True
+    assert calls["interval"] == "1wk"
+    assert prices == [{"time": "2026-01-02", "close": 25.0}]
+    assert splits == [("2025-06-01", 2.0)]
+
+
+@pytest.mark.asyncio
+async def test_fundamentals_use_canonical_diluted_eps(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, str]] = []
+
+    class FakeFinancials:
+        async def series(self, _symbol: str, *, metric: str, frequency: str, **_kwargs):
+            calls.append((metric, frequency))
+            unit = "USD/shares" if metric == "diluted_eps" else "USD"
+            return {
+                "entityName": "Fixture Corp",
+                "metric": metric,
+                "frequency": frequency,
+                "warnings": [],
+                "observations": [
+                    {
+                        "periodEnd": "2025-12-31",
+                        "availableAt": "2026-02-01",
+                        "value": 4 if frequency == "ttm" else 1,
+                        "unit": unit,
+                        "fiscalPeriod": "FY" if frequency == "annual" else "Q4",
+                        "fiscalYear": 2025,
+                        "sources": [{"form": "10-K"}],
+                    }
+                ],
+            }
+
+    class FakeClient:
+        financials = FakeFinancials()
+
+    @asynccontextmanager
+    async def fake_managed(*_args, **_kwargs):
+        yield FakeClient()
+
+    monkeypatch.setattr(edgar, "managed_sec_fetcher", fake_managed)
+
+    payload = await edgar.fetch_fundamentals("TEST")
+
+    assert payload is not None
+    assert payload["epsQuarterly"][0]["value"] == 1
+    assert payload["epsTtm"] == 4
+    assert ("diluted_eps", "ttm") in calls
+
+
+def test_latest_pe_uses_canonical_ttm_eps_on_the_current_split_basis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        market_runtime,
+        "fetch_split_history",
+        lambda _symbol: ([("2026-03-01", 2.0)], True),
+    )
+    weekly = pd.DataFrame({"close": [20.0]})
+
+    result = market_runtime._trailing_eps_and_pe(
+        {
+            "epsTtm": 2.0,
+            "epsTtmAvailableAt": "2026-02-01",
+        },
+        weekly,
+        "TEST",
+    )
+
+    assert result == {
+        "epsTtm": 1.0,
+        "epsTtmReported": 2.0,
+        "epsTtmSplitFactor": 2.0,
+        "peTtm": 20.0,
+    }
+
+
+def test_latest_pe_is_unavailable_when_split_history_cannot_be_verified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        market_runtime,
+        "fetch_split_history",
+        lambda _symbol: ([], False),
+    )
+
+    result = market_runtime._trailing_eps_and_pe(
+        {
+            "epsTtm": 2.0,
+            "epsTtmAvailableAt": "2026-02-01",
+        },
+        pd.DataFrame({"close": [20.0]}),
+        "TEST",
+    )
+
+    assert result["epsTtmReported"] == 2.0
+    assert result["epsTtm"] is None
+    assert result["epsTtmSplitFactor"] is None
+    assert result["peTtm"] is None

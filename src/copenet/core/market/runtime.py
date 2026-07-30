@@ -16,7 +16,14 @@ from copenet._paths import default_sessions_dir
 from copenet.core.tools.handlers.web import run_web_search
 
 from .benchmark import benchmark_verdict
-from .data_sources import fetch_fund_profile, fetch_key_stats, fetch_ohlcv, frame_to_bars, macro_item_from_frame
+from .data_sources import (
+    fetch_fund_profile,
+    fetch_key_stats,
+    fetch_ohlcv,
+    fetch_split_history,
+    frame_to_bars,
+    macro_item_from_frame,
+)
 from .edgar import chart_events_from_evidence, fetch_evidence, fetch_fundamentals
 from .models import (
     AccumulationRow,
@@ -258,7 +265,10 @@ class MarketRuntime:
             fundamentals = None
             fundamentals_warning = type(exc).__name__
         if fundamentals is not None:
-            fundamentals = {**fundamentals, **_trailing_eps_and_pe(fundamentals, weekly_frame)}
+            fundamentals = {
+                **fundamentals,
+                **_trailing_eps_and_pe(fundamentals, weekly_frame, symbol),
+            }
         query_name = asset.name if asset else symbol
         try:
             news_results, news_source = await run_web_search(f"{query_name} {symbol} stock news", limit=5, kind="news")
@@ -772,16 +782,33 @@ def _signal_rows(signals: dict[str, Any]) -> list[SignalRow]:
     return rows
 
 
-def _trailing_eps_and_pe(fundamentals: dict[str, Any], weekly_frame: pd.DataFrame) -> dict[str, Any]:
-    """CopeTech-Edgar has no ratio calculator (ratios need a live price, which is CopeNet's job) —
-    sum the last 4 quarterly EPS values for trailing-twelve-month EPS, then divide the last known
-    close into it for a trailing P/E. Returns {} (not a P/E) if EPS is negative or unavailable."""
-    eps_quarterly = fundamentals.get("epsQuarterly") or []
-    eps_ttm = None
-    if len(eps_quarterly) >= 4:
-        try:
-            eps_ttm = sum(float(e["value"]) for e in eps_quarterly[:4])
-        except (TypeError, ValueError, KeyError):
+def _trailing_eps_and_pe(
+    fundamentals: dict[str, Any],
+    weekly_frame: pd.DataFrame,
+    symbol: str,
+) -> dict[str, Any]:
+    """Use CopeTech's canonical TTM diluted EPS for the latest summary valuation."""
+    reported_eps_ttm = fundamentals.get("epsTtm")
+    try:
+        reported_eps_ttm = (
+            float(reported_eps_ttm)
+            if reported_eps_ttm is not None
+            else None
+        )
+    except (TypeError, ValueError):
+        reported_eps_ttm = None
+    eps_ttm = reported_eps_ttm
+    split_factor = None
+    if eps_ttm is not None:
+        splits, split_history_verified = fetch_split_history(symbol)
+        if split_history_verified:
+            available_at = str(fundamentals.get("epsTtmAvailableAt") or "")
+            split_factor = 1.0
+            for ex_date, ratio in splits:
+                if available_at and ex_date > available_at:
+                    split_factor *= ratio
+            eps_ttm /= split_factor
+        else:
             eps_ttm = None
     pe_ttm = None
     if eps_ttm is not None and eps_ttm > 0 and not weekly_frame.empty:
@@ -790,7 +817,12 @@ def _trailing_eps_and_pe(fundamentals: dict[str, Any], weekly_frame: pd.DataFram
             pe_ttm = last_price / eps_ttm
         except (TypeError, ValueError, IndexError, KeyError):
             pe_ttm = None
-    return {"epsTtm": eps_ttm, "peTtm": pe_ttm}
+    return {
+        "epsTtm": eps_ttm,
+        "epsTtmReported": reported_eps_ttm,
+        "epsTtmSplitFactor": split_factor,
+        "peTtm": pe_ttm,
+    }
 
 
 def _evidence_from_dashboard(payload: dict[str, Any]) -> list[EvidenceItem]:
