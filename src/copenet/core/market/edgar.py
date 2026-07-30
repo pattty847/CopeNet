@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import datetime, timedelta, timezone
 import logging
 from typing import Any
 
+from .data_sources import fetch_split_history
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
 from .sec_fetcher import managed_sec_fetcher
 
@@ -88,6 +90,10 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = F
         from copetech_sec import EdgarClient
     except ImportError:
         return None
+    split_history, split_history_verified = await asyncio.to_thread(
+        fetch_split_history,
+        symbol,
+    )
     async with managed_sec_fetcher(EdgarClient, user_agent=SEC_API_USER_AGENT) as client:
         revenue_quarterly_payload = await client.financials.series(
             symbol,
@@ -124,6 +130,7 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = F
             frequency="ttm",
             basis="canonical",
             alignment="availability",
+            split_events=split_history if split_history_verified else None,
         )
     revenue = _legacy_financial_rows(revenue_quarterly_payload, limit=periods)
     eps = _legacy_financial_rows(eps_quarterly_payload, limit=periods)
@@ -164,6 +171,7 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = F
         "revenueAnnual": revenue_annual,
         "epsAnnual": eps_annual,
         "epsTtm": eps_ttm,
+        "epsTtmShareBasis": (eps_ttm_payload or {}).get("shareBasis"),
         "epsTtmAvailableAt": (
             eps_ttm_observations[-1]["availableAt"]
             if eps_ttm_observations

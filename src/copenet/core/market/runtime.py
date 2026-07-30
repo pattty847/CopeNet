@@ -800,16 +800,19 @@ def _trailing_eps_and_pe(
     eps_ttm = reported_eps_ttm
     split_factor = None
     if eps_ttm is not None:
-        splits, split_history_verified = fetch_split_history(symbol)
-        if split_history_verified:
-            available_at = str(fundamentals.get("epsTtmAvailableAt") or "")
+        if fundamentals.get("epsTtmShareBasis") == "split_adjusted":
             split_factor = 1.0
-            for ex_date, ratio in splits:
-                if available_at and ex_date > available_at:
-                    split_factor *= ratio
-            eps_ttm /= split_factor
         else:
-            eps_ttm = None
+            splits, split_history_verified = fetch_split_history(symbol)
+            if split_history_verified:
+                available_at = str(fundamentals.get("epsTtmAvailableAt") or "")
+                split_factor = 1.0
+                for ex_date, ratio in splits:
+                    if available_at and ex_date > available_at:
+                        split_factor *= ratio
+                eps_ttm /= split_factor
+            else:
+                eps_ttm = None
     pe_ttm = None
     if eps_ttm is not None and eps_ttm > 0 and not weekly_frame.empty:
         try:

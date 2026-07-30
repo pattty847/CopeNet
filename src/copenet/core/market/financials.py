@@ -38,6 +38,10 @@ async def get_financial_series(
         from copetech_sec import EdgarClient
     except ImportError:
         return None
+    split_events = None
+    if metric == "diluted_eps" and frequency == "ttm":
+        splits, verified = await asyncio.to_thread(fetch_split_history, normalized)
+        split_events = splits if verified else None
     async with managed_sec_fetcher(
         EdgarClient,
         user_agent=SEC_API_USER_AGENT,
@@ -53,6 +57,7 @@ async def get_financial_series(
             end=end,
             refresh=refresh,
             include_provenance=include_provenance,
+            split_events=split_events,
         )
 
 

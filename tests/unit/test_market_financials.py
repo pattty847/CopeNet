@@ -163,6 +163,11 @@ def test_valuation_price_inputs_preserve_split_adjusted_contract(monkeypatch: py
 @pytest.mark.asyncio
 async def test_fundamentals_use_canonical_diluted_eps(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[tuple[str, str]] = []
+    monkeypatch.setattr(
+        edgar,
+        "fetch_split_history",
+        lambda _symbol: ([("2025-06-01", 2.0)], True),
+    )
 
     class FakeFinancials:
         async def series(self, _symbol: str, *, metric: str, frequency: str, **_kwargs):
@@ -172,6 +177,7 @@ async def test_fundamentals_use_canonical_diluted_eps(monkeypatch: pytest.Monkey
                 "entityName": "Fixture Corp",
                 "metric": metric,
                 "frequency": frequency,
+                "shareBasis": "split_adjusted" if frequency == "ttm" else None,
                 "warnings": [],
                 "observations": [
                     {
@@ -200,7 +206,42 @@ async def test_fundamentals_use_canonical_diluted_eps(monkeypatch: pytest.Monkey
     assert payload is not None
     assert payload["epsQuarterly"][0]["value"] == 1
     assert payload["epsTtm"] == 4
+    assert payload["epsTtmShareBasis"] == "split_adjusted"
     assert ("diluted_eps", "ttm") in calls
+
+
+@pytest.mark.asyncio
+async def test_diluted_eps_ttm_series_passes_verified_split_history(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls: dict[str, Any] = {}
+
+    class FakeFinancials:
+        async def series(self, _symbol: str, **kwargs):
+            calls.update(kwargs)
+            return {"metric": "diluted_eps", "frequency": "ttm", "observations": []}
+
+    class FakeClient:
+        financials = FakeFinancials()
+
+    @asynccontextmanager
+    async def fake_managed(*_args, **_kwargs):
+        yield FakeClient()
+
+    monkeypatch.setattr(market_financials_service, "managed_sec_fetcher", fake_managed)
+    monkeypatch.setattr(
+        market_financials_service,
+        "fetch_split_history",
+        lambda _symbol: ([("2022-07-15", 20.0)], True),
+    )
+
+    await market_financials_service.get_financial_series(
+        symbol="GOOG",
+        metric="diluted_eps",
+        frequency="ttm",
+    )
+
+    assert calls["split_events"] == [("2022-07-15", 20.0)]
 
 
 def test_latest_pe_uses_canonical_ttm_eps_on_the_current_split_basis(
@@ -227,6 +268,32 @@ def test_latest_pe_uses_canonical_ttm_eps_on_the_current_split_basis(
         "epsTtmReported": 2.0,
         "epsTtmSplitFactor": 2.0,
         "peTtm": 20.0,
+    }
+
+
+def test_latest_pe_does_not_double_adjust_canonical_split_basis(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def forbidden_split_history(_symbol: str):
+        raise AssertionError("split-adjusted EPS must not be adjusted twice")
+
+    monkeypatch.setattr(market_runtime, "fetch_split_history", forbidden_split_history)
+
+    result = market_runtime._trailing_eps_and_pe(
+        {
+            "epsTtm": 2.0,
+            "epsTtmAvailableAt": "2026-02-01",
+            "epsTtmShareBasis": "split_adjusted",
+        },
+        pd.DataFrame({"close": [20.0]}),
+        "TEST",
+    )
+
+    assert result == {
+        "epsTtm": 2.0,
+        "epsTtmReported": 2.0,
+        "epsTtmSplitFactor": 1.0,
+        "peTtm": 10.0,
     }
 
 
