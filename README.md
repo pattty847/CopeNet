@@ -63,13 +63,15 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-panel/copenet-market-brief.png)
 
-**Financial-series overlays** — ticker charts can layer quarterly, trailing-twelve-month,
-or annual revenue over split-adjusted price. The open-source SEC pipeline stitches
-issuer concept changes, derives missing fourth quarters, preserves accession-level
-provenance, and anchors every step to the filing date so the chart does not leak
-future information.
+**Financial-series overlays** — ticker charts can layer quarterly,
+trailing-twelve-month, or annual revenue over split-adjusted price, plus historical
+P/E built from the price and the TTM diluted EPS that was actually public on each
+date. The open-source SEC pipeline stitches issuer concept changes, derives missing
+fourth quarters, preserves accession-level provenance, applies amendments only after
+their filing date, and leaves P/E blank when earnings are non-positive—so the chart
+does not leak future information or invent a meaningful multiple.
 
-![CopeNet Market Monitor — point-in-time revenue overlay](docs/imgs/market-panel/copenet-financial-series-overlay.png)
+![CopeNet Market Monitor — point-in-time P/E overlay](docs/imgs/market-panel/copenet-financial-overlays.png)
 
 **Treasury curve** — official U.S. Treasury Constant Maturity rates for the 3M, 2Y, 5Y, 10Y, and 30Y benchmarks, with selectable basis-point moves, curve-shape context, and the key 10Y–2Y and 10Y–3M spreads. The feed is cached for 15 minutes and every plotted tenor is aligned to the same Treasury observation date.
 
