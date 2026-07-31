@@ -4,6 +4,7 @@ import json
 import pytest
 
 from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.runtime import RunRecord, RunStore
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.providers import ProviderEvent
 
@@ -135,3 +136,36 @@ async def test_send_chat_persists_run_record_for_multi_step_repo_exploration(tmp
     assert [step["toolId"] for step in runs[0].tool_steps] == ["shell.exec", "files.read"]
     assert runs[0].artifact_ids
     assert "README" in runs[0].output_summary
+
+
+def test_startup_recovery_does_not_replace_an_existing_terminal_run_record(tmp_path) -> None:
+    session_store = SessionStore(path=tmp_path / "index.json")
+    session_store.create_session(session_key="alpha", provider="prompted", model="model-a")
+    session_store.mark_run_started("alpha", "run-terminal")
+    run_store = RunStore(root_dir=tmp_path / "runs")
+    run_store.create(
+        RunRecord(
+            run_id="run-terminal",
+            session_key="alpha",
+            provider="prompted",
+            model="model-a",
+            status="ok",
+            user_message="already completed",
+            tool_execution_mode="none",
+            will_attempt_tool_loop=False,
+            terminal_reason="completed",
+        )
+    )
+
+    Orchestrator(
+        session_store=session_store,
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={},
+    )
+
+    entry = session_store.get("alpha")
+    assert entry is not None
+    assert entry.in_flight_run_id is None
+    records = run_store.list_for_session("alpha")
+    assert [(record.run_id, record.status) for record in records] == [("run-terminal", "ok")]

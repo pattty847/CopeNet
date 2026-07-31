@@ -1,5 +1,8 @@
 import json
 
+import pytest
+
+from copenet.core._json_store import JsonStoreError
 from copenet.core.sessions import SessionStateRecord, SessionStateStore
 
 
@@ -79,3 +82,27 @@ def test_session_state_store_roundtrips_personal_history_fields(tmp_dir) -> None
     assert loaded.starter_intent == "plan_my_next_steps"
     assert loaded.topical_tags == ["planning", "execution"]
     assert loaded.prior_decisions == ["Keep the scope to one page."]
+
+
+def test_session_state_store_quarantines_corruption_instead_of_overwriting_it(tmp_dir) -> None:
+    store = SessionStateStore(root_dir=tmp_dir / "state")
+    path = store.state_path_for("alpha")
+    path.write_text("{broken", encoding="utf-8")
+
+    with pytest.raises(JsonStoreError, match="corrupt"):
+        store.get("alpha")
+
+    backup = path.with_suffix(".json.corrupt")
+    assert backup.read_text(encoding="utf-8") == "{broken"
+
+
+def test_minimal_legacy_session_state_uses_backward_compatible_defaults(tmp_dir) -> None:
+    store = SessionStateStore(root_dir=tmp_dir / "state")
+    store.state_path_for("legacy").write_text('{"session_key":"legacy"}', encoding="utf-8")
+
+    record = store.get("legacy")
+    assert record is not None
+    assert record.goals == []
+    assert record.plan_snapshot == {}
+    assert record.merge_state == {}
+    assert record.task_summary is None

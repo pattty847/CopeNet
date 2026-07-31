@@ -7,11 +7,11 @@ from datetime import datetime, timezone
 import json
 import os
 from pathlib import Path
-import threading
 from typing import Any
 from uuid import uuid4
 
 from copenet._paths import default_sessions_dir
+from copenet.core._json_store import _path_lock
 
 
 UTC = timezone.utc
@@ -136,7 +136,7 @@ class SessionStore:
     def __init__(self, path: Path | None = None) -> None:
         base = default_sessions_dir() if path is None else path.parent
         self._path = path if path is not None else (base / "index.json")
-        self._lock = threading.RLock()
+        self._lock = _path_lock(self._path)
         self._path.parent.mkdir(parents=True, exist_ok=True)
 
     @property

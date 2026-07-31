@@ -3,12 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
-import json
 from pathlib import Path
-import threading
 from typing import Any
 
 from copenet._paths import default_session_state_dir
+from copenet.core._json_store import read_json, write_json_atomic
 from copenet.core.sessions.session_store import utc_now_iso
 
 
@@ -94,7 +93,6 @@ class SessionStateStore:
     def __init__(self, root_dir: Path | None = None) -> None:
         self._root_dir = root_dir if root_dir is not None else default_session_state_dir()
         self._root_dir.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
 
     def state_path_for(self, session_key: str) -> Path:
         """Resolve the state file path for one session key."""
@@ -106,10 +104,7 @@ class SessionStateStore:
     def get(self, session_key: str) -> SessionStateRecord | None:
         """Read one session state record if present."""
         path = self.state_path_for(session_key)
-        if not path.exists():
-            return None
-        with self._lock:
-            raw = json.loads(path.read_text(encoding="utf-8"))
+        raw = read_json(path, None)
         if not isinstance(raw, dict):
             return None
         record = SessionStateRecord.from_json(raw)
@@ -129,8 +124,5 @@ class SessionStateStore:
         path = self.state_path_for(record.session_key)
         payload = record.to_json()
         payload["updated_at"] = utc_now_iso()
-        tmp_path = path.with_suffix(".tmp")
-        with self._lock:
-            tmp_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")
-            tmp_path.replace(path)
+        write_json_atomic(path, payload, trailing_newline=False)
         return SessionStateRecord.from_json(payload)

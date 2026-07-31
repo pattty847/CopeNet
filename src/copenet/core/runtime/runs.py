@@ -5,9 +5,9 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass, field
 import json
 from pathlib import Path
-import threading
 from typing import Any
 
+from copenet.core._json_store import _path_lock, append_jsonl
 from copenet.core.runtime.artifacts import _safe_name
 from copenet.core.sessions.session_store import utc_now_iso
 
@@ -136,7 +136,6 @@ class RunStore:
     def __init__(self, root_dir: Path) -> None:
         self._root_dir = root_dir
         self._root_dir.mkdir(parents=True, exist_ok=True)
-        self._lock = threading.RLock()
 
     def runs_path_for(self, session_key: str) -> Path:
         safe = _safe_name(session_key)
@@ -147,10 +146,7 @@ class RunStore:
     def create(self, record: RunRecord) -> RunRecord:
         """Append one run record."""
         path = self.runs_path_for(record.session_key)
-        line = json.dumps(record.to_json(), ensure_ascii=False)
-        with self._lock:
-            with path.open("a", encoding="utf-8", newline="\n") as handle:
-                handle.write(line + "\n")
+        append_jsonl(path, record.to_json())
         return record
 
     def clone_session(self, source_session_key: str, target_session_key: str) -> int:
@@ -189,9 +185,11 @@ class RunStore:
     def list_for_session(self, session_key: str, limit: int = 50) -> list[RunRecord]:
         """Return recent run records for one session."""
         path = self.runs_path_for(session_key)
-        if not path.exists() or limit <= 0:
+        if limit <= 0:
             return []
-        with self._lock:
+        with _path_lock(path):
+            if not path.exists():
+                return []
             lines = path.read_text(encoding="utf-8").splitlines()
         rows: list[RunRecord] = []
         for line in lines[-limit:]:

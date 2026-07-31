@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
 
 from copenet.core.sessions import TranscriptMessage, TranscriptStore
@@ -77,6 +78,42 @@ def test_read_history_skips_malformed_jsonl_lines(transcript_store: TranscriptSt
 
     history = transcript_store.read_history("session-1")
     assert [item["content"] for item in history] == ["one", "two"]
+
+
+def test_read_history_ignores_truncated_final_jsonl_record(transcript_store: TranscriptStore) -> None:
+    path = transcript_store.transcript_path_for("session-1")
+    path.write_text(
+        json.dumps(_message("run-1", "durable").to_json()) + '\n{"run_id":"partial',
+        encoding="utf-8",
+    )
+
+    history = transcript_store.read_history("session-1")
+    assert [(item["run_id"], item["content"]) for item in history] == [("run-1", "durable")]
+
+
+def test_two_transcript_store_instances_append_without_loss_and_preserve_writer_order(tmp_dir) -> None:
+    stores = [TranscriptStore(root_dir=tmp_dir), TranscriptStore(root_dir=tmp_dir)]
+
+    def append_series(store: TranscriptStore, prefix: str) -> None:
+        for index in range(20):
+            store.append_message("shared", _message(f"{prefix}-{index}", f"{prefix} {index}"))
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(append_series, stores[0], "left"),
+            executor.submit(append_series, stores[1], "right"),
+        ]
+        for future in futures:
+            future.result()
+
+    history = stores[0].read_history("shared")
+    run_ids = [item["run_id"] for item in history]
+    assert len(run_ids) == 40
+    assert len(set(run_ids)) == 40
+    assert [run_id for run_id in run_ids if run_id.startswith("left-")] == [f"left-{index}" for index in range(20)]
+    assert [run_id for run_id in run_ids if run_id.startswith("right-")] == [
+        f"right-{index}" for index in range(20)
+    ]
 
 
 def test_transcript_message_roundtrips_structured_parts(transcript_store: TranscriptStore) -> None:

@@ -212,6 +212,8 @@ class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacade
         )
         for session_key, run_id, provider, model in stuck:
             try:
+                if self._run_store.get(session_key, run_id) is not None:
+                    continue
                 self._run_store.create(
                     RunRecord(
                         run_id=run_id,

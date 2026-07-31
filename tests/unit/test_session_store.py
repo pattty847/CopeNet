@@ -1,4 +1,6 @@
+from concurrent.futures import ThreadPoolExecutor
 import json
+from pathlib import Path
 
 import pytest
 
@@ -44,6 +46,56 @@ def test_create_session_raises_on_duplicate_key(session_store: SessionStore) -> 
     session_store.create_session(session_key="alpha", provider="fake")
     with pytest.raises(ValueError, match="session already exists"):
         session_store.create_session(session_key="alpha", provider="fake")
+
+
+def test_two_session_store_instances_preserve_concurrent_creates(tmp_dir) -> None:
+    path = tmp_dir / "index.json"
+    stores = [SessionStore(path=path), SessionStore(path=path)]
+
+    def create_range(store: SessionStore, prefix: str) -> None:
+        for index in range(20):
+            store.create_session(session_key=f"{prefix}-{index}", provider="fake")
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futures = [
+            executor.submit(create_range, stores[0], "left"),
+            executor.submit(create_range, stores[1], "right"),
+        ]
+        for future in futures:
+            future.result()
+
+    keys = {entry.session_key for entry in stores[0].list_sessions()}
+    assert keys == {
+        *(f"left-{index}" for index in range(20)),
+        *(f"right-{index}" for index in range(20)),
+    }
+
+
+def test_interrupted_session_index_replace_preserves_last_good_file_and_can_retry(
+    tmp_dir, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    store = SessionStore(path=tmp_dir / "index.json")
+    store.create_session(session_key="alpha", provider="fake")
+    original_replace = Path.replace
+    failed_once = False
+
+    def interrupt_index_replace(source: Path, target: Path) -> Path:
+        nonlocal failed_once
+        if source == store.path.with_suffix(".json.tmp") and not failed_once:
+            failed_once = True
+            raise OSError("simulated interrupted atomic replacement")
+        return original_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", interrupt_index_replace)
+    with pytest.raises(OSError, match="simulated interrupted atomic replacement"):
+        store.create_session(session_key="beta", provider="fake")
+
+    payload = json.loads(store.path.read_text(encoding="utf-8"))
+    assert [item["session_key"] for item in payload["sessions"]] == ["alpha"]
+
+    created = store.create_session(session_key="beta", provider="fake")
+    assert created.session_key == "beta"
+    assert {entry.session_key for entry in store.list_sessions()} == {"alpha", "beta"}
 
 
 @pytest.mark.parametrize("unsafe_key", ["a/b", "a b", "a:b", "a\\b", "a?b"])
@@ -173,6 +225,22 @@ def test_load_map_ignores_camel_case_storage_entries(tmp_dir) -> None:
     )
 
     assert store.get("legacy-key") is None
+
+
+def test_minimal_legacy_session_entry_uses_backward_compatible_defaults(tmp_dir) -> None:
+    store = SessionStore(path=tmp_dir / "index.json")
+    store.path.write_text(
+        json.dumps({"sessions": [{"session_key": "legacy", "provider": "fake"}]}),
+        encoding="utf-8",
+    )
+
+    entry = store.get("legacy")
+    assert entry is not None
+    assert entry.session_id == "legacy"
+    assert entry.session_type == "standard"
+    assert entry.archived is False
+    assert entry.model is None
+    assert entry.in_flight_run_id is None
 
 
 def test_corrupt_index_fails_loud_and_backs_up(tmp_dir) -> None:
