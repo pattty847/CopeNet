@@ -73,9 +73,17 @@ does not make historical metadata mutable.
 Only one run may be in flight for a session. Concurrent sends must use the existing
 in-flight/idempotency behavior rather than starting a second execution.
 
-On process startup, stale persisted in-flight markers are recovered because no run from
-the previous process can still be executing. Storage failures must fail loudly; a corrupt
-session index must never be treated as an empty index and overwritten.
+File-backed persistence supports concurrent threads, tasks, and multiple store instances
+within one server process. Path-scoped locks coordinate read-modify-write operations and
+append-only transcript/run writes in that process. Exactly one writer process may target a
+persistence workspace. Multi-process writers and shared network filesystems are unsupported;
+supporting them requires a transactional store rather than additional assumptions about files.
+
+Atomic JSON stores replace a fully written temporary file, corrupt whole-file JSON is
+quarantined and fails loudly, and JSONL readers preserve valid records while ignoring a
+truncated final record. On process startup, stale persisted in-flight markers are cleared
+because no run from the previous process can still be executing. Recovery records a run as
+interrupted only when that run does not already have a durable terminal record.
 
 ## Future Work Must Preserve
 

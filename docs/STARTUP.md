@@ -54,6 +54,14 @@ actually used. See [SESSION-CONTINUITY.md](SESSION-CONTINUITY.md).
 
 ## 6) Recommended production-ish baseline
 
+CopeNet's file-backed stores support concurrent operations from threads, tasks,
+and multiple store instances inside one server process. Run exactly one CopeNet
+writer process per persistence workspace. Multiple Uvicorn workers, independent
+hosts, or containers must not share the same `COPNET_DATA_DIR` (or default
+`~/.copenet` directory). Multi-process writers require migration to SQLite or
+another transactional store; file locking across processes and network
+filesystems is not a supported deployment mode.
+
 ```bash
 umask 077
 printf 'COPNET_TOKEN="%s"\nCOPNET_PORT=17123\n' \
