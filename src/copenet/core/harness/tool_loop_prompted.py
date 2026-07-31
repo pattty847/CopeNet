@@ -63,6 +63,12 @@ async def run_with_prompted_tools(
         trace("turn_started", turn_state.to_public_dict())
 
     for step_index in range(MAX_TOOL_STEPS):
+        if abort_event.is_set():
+            turn_state.terminal_reason = "aborted"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(kind="final", provider_session_id=discovered_session)
+            return
         events, discovered_session = await collect_provider_turn(
             provider=provider,
             prompt=current_prompt,
@@ -122,6 +128,12 @@ async def run_with_prompted_tools(
         consecutive_corrections = 0
         tool_payloads: list[str] = []
         for request in tool_requests:
+            if abort_event.is_set():
+                turn_state.terminal_reason = "aborted"
+                if trace is not None:
+                    trace("turn_completed", turn_state.to_public_dict())
+                yield ProviderEvent(kind="final", provider_session_id=discovered_session)
+                return
             call_id = _new_call_id(request.tool_id)
             if trace is not None:
                 trace(

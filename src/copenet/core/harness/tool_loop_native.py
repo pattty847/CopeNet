@@ -59,7 +59,6 @@ async def run_with_native_tools(
     trace: TraceRecorder | None,
 ) -> AsyncIterator[ProviderEvent]:
     """Run an OpenAI-compatible native tool loop without parsing final text."""
-    del abort_event
     turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
     tool_schemas = build_openai_tool_schemas(plan.tools)
     current_system_prompt = compose_native_tool_system_prompt(
@@ -75,6 +74,12 @@ async def run_with_native_tools(
         trace("turn_started", turn_state.to_public_dict())
 
     for step_index in range(MAX_TOOL_STEPS):
+        if abort_event.is_set():
+            turn_state.terminal_reason = "aborted"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+            return
         response = await provider.chat_completion(
             messages=compact_stale_chat_messages(messages),
             model=model,
@@ -115,6 +120,12 @@ async def run_with_native_tools(
             assistant_message["content"] = content
         messages.append(assistant_message)
         for native_call in native_tool_calls:
+            if abort_event.is_set():
+                turn_state.terminal_reason = "aborted"
+                if trace is not None:
+                    trace("turn_completed", turn_state.to_public_dict())
+                yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+                return
             tool_id = native_call["function"]["name"]
             arguments = _parse_native_tool_arguments(native_call["function"].get("arguments"))
             request = ToolExecutionRequest(tool_id=tool_id, arguments=arguments)
