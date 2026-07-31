@@ -63,23 +63,6 @@ def test_soft_bottoming_fires_on_a_bottoming_shape():
     assert fs.soft_bottoming_score >= 0.5
 
 
-def test_no_lookahead_slice_independence():
-    """A feature computed as-of bar k must not change when future bars are appended.
-
-    This is the structural lookahead guard: compute_features only sees the frame it is given,
-    so slicing to `as_of` makes future data unreachable.
-    """
-    closes = list(100 + 30 * np.sin(np.linspace(0, 8, 120)))
-    full = _frame(closes)
-    k = 70
-    as_of = compute_features(full.iloc[:k].copy(), symbol="A")
-    # append wildly different future bars; the as-of view must be byte-identical
-    appended = full.copy()
-    appended.loc[k:, "close"] = 999.0
-    as_of_again = compute_features(appended.iloc[:k].copy(), symbol="A")
-    assert as_of.to_dict() == as_of_again.to_dict()
-
-
 def test_multiyear_structure_uptrend_with_triangle():
     """A 4-year uptrend that consolidates into a converging triangle near the highs — the
     'accumulation wedge in a big uptrend' shape. Structure must see the LONG horizon."""

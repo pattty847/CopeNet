@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from copenet.core.market.models import (
@@ -55,9 +56,33 @@ def test_market_store_persists_bars_signals_and_latest_dashboard(tmp_path: Path)
     reloaded = MarketStore(tmp_path / "market")
 
     assert [bar.c for bar in reloaded.load_bars("GOOG", "weekly")] == [108.0, 110.0]
+    bars_payload = json.loads((tmp_path / "market" / "bars" / "GOOG-weekly.json").read_text())
+    assert bars_payload["priceBasis"] == "split_adjusted"
     assert reloaded.load_signals("GOOG")["trendDirection"] == "up"
     payload = reloaded.load_dashboard().to_wire()
     assert payload["asOf"] == "as of Fri 4:00pm ET close"
     assert payload["macro"]["status"] == "live"
     assert payload["macro"]["data"][0]["label"] == "VIX"
     assert "breadthPct" in payload["briefing"]["data"]
+
+
+def test_market_store_rejects_bars_without_the_split_adjusted_basis(tmp_path: Path) -> None:
+    store = MarketStore(tmp_path / "market")
+    bars_path = tmp_path / "market" / "bars" / "GOOG-weekly.json"
+    bars_path.parent.mkdir(parents=True)
+    row = {"t": 1, "o": 100, "h": 110, "l": 90, "c": 105, "v": 1000}
+
+    bars_path.write_text(json.dumps({"symbol": "GOOG", "timeframe": "weekly", "bars": [row]}))
+    assert store.load_bars("GOOG", "weekly") == []
+
+    bars_path.write_text(
+        json.dumps(
+            {
+                "symbol": "GOOG",
+                "timeframe": "weekly",
+                "priceBasis": "unadjusted",
+                "bars": [row],
+            }
+        )
+    )
+    assert store.load_bars("GOOG", "weekly") == []

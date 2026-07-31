@@ -185,11 +185,11 @@ def fetch_fund_profile(symbol: str) -> dict[str, Any] | None:
 def fetch_quote_row(symbol: str) -> MacroItem | None:
     """Lightweight last-price + day-change + sparkline for one symbol, e.g. for a watchlist
     row. Reuses the same split-adjusted fetch_ohlcv pipeline as every other Market Monitor
-    consumer (auto_adjust=True default) but with a short period — a watchlist row only needs
+    consumer but with a short period — a watchlist row only needs
     recent context, not the 2y default. Deliberately NOT written to MarketStore's bar cache
     (see the auto_adjust invariant in AGENTS.md): this is a small, on-demand, ad hoc read, not
     part of the shared (symbol, timeframe) cache basis every other caller relies on."""
-    frame = fetch_ohlcv(symbol, interval="1d", period="1mo")
+    frame = fetch_ohlcv(symbol, interval="1d", period="1mo", auto_adjust=True)
     return macro_item_from_frame(symbol, frame)
 
 

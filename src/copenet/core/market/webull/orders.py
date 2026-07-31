@@ -220,7 +220,7 @@ def _resolvable(symbol: str) -> bool:
     from ..data_sources import fetch_ohlcv
 
     try:
-        frame = fetch_ohlcv(symbol, interval="1d", period="5d")
+        frame = fetch_ohlcv(symbol, interval="1d", period="5d", auto_adjust=True)
     except Exception:
         return False
     return frame is not None and not frame.empty

@@ -120,6 +120,7 @@ async def test_trailing_pe_metric_dispatches_to_valuation_service(monkeypatch: p
     payload = await market_financials_service.get_financial_series(
         symbol=" nvda ",
         metric="trailing_pe",
+        as_of="2026-03-01",
         refresh=True,
         include_provenance=False,
     )
@@ -128,9 +129,112 @@ async def test_trailing_pe_metric_dispatches_to_valuation_service(monkeypatch: p
     assert payload["metric"] == "trailing_pe"
     assert calls == {
         "symbol": "NVDA",
+        "as_of": "2026-03-01",
         "refresh": True,
         "include_provenance": False,
     }
+
+
+@pytest.mark.asyncio
+async def test_financial_series_as_of_uses_available_at_and_preserves_provenance(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source_payload = {
+        "symbol": "TEST",
+        "metric": "revenue",
+        "observations": [
+            {
+                "periodEnd": "2024-12-31",
+                "availableAt": "2025-02-15",
+                "value": 100,
+                "sources": [{"accessionNumber": "old-original", "source": "sec"}],
+            },
+            {
+                "periodEnd": "2025-03-31",
+                "availableAt": "2025-05-15",
+                "value": 120,
+                "sources": [{"accessionNumber": "new-not-yet-filed", "source": "sec"}],
+            },
+            {
+                "periodEnd": "2024-12-31",
+                "availableAt": "2025-06-01",
+                "value": 105,
+                "sources": [{"accessionNumber": "later-restatement", "source": "sec"}],
+            },
+        ],
+    }
+
+    class FakeFinancials:
+        async def series(self, _symbol: str, **_kwargs):
+            return source_payload
+
+    class FakeClient:
+        financials = FakeFinancials()
+
+    @asynccontextmanager
+    async def fake_managed(*_args, **_kwargs):
+        yield FakeClient()
+
+    monkeypatch.setattr(market_financials_service, "managed_sec_fetcher", fake_managed)
+
+    at_t = await market_financials_service.get_financial_series(
+        symbol="TEST",
+        metric="revenue",
+        as_of="2025-05-01",
+    )
+    after_restatement = await market_financials_service.get_financial_series(
+        symbol="TEST",
+        metric="revenue",
+        as_of="2025-07-01",
+    )
+
+    assert at_t is not None
+    assert at_t["observations"] == [source_payload["observations"][0]]
+    assert at_t["observations"][0]["sources"] == [
+        {"accessionNumber": "old-original", "source": "sec"}
+    ]
+    assert after_restatement is not None
+    assert len(after_restatement["observations"]) == 3
+    assert len(at_t["observations"]) == 1
+    assert len(source_payload["observations"]) == 3
+
+
+def test_valuation_as_of_uses_price_time_without_dropping_empty_eps_rows() -> None:
+    payload = {
+        "metric": "trailing_pe",
+        "priceBasis": "split_adjusted",
+        "observations": [
+            {
+                "timestamp": "2026-02-01",
+                "epsAvailableAt": None,
+                "value": None,
+            },
+            {
+                "timestamp": "2026-03-01",
+                "epsAvailableAt": "2026-02-20",
+                "value": 10,
+            },
+            {
+                "timestamp": "2026-04-01",
+                "epsAvailableAt": "2026-03-20",
+                "value": 8,
+            },
+            {
+                "timestamp": "2026-03-01",
+                "epsAvailableAt": "2026-03-20",
+                "value": 7,
+            },
+        ],
+    }
+
+    result = market_financials_service._point_in_time_valuation_payload(
+        payload,
+        as_of="2026-03-15",
+    )
+
+    assert result is not None
+    assert result["priceBasis"] == "split_adjusted"
+    assert [row["value"] for row in result["observations"]] == [None, 10]
 
 
 def test_valuation_price_inputs_preserve_split_adjusted_contract(monkeypatch: pytest.MonkeyPatch) -> None:

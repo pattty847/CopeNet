@@ -12,6 +12,9 @@ from copenet.core._json_store import read_json, write_json_atomic
 from .models import DashboardPayload, MarketBar
 
 
+MARKET_BAR_PRICE_BASIS = "split_adjusted"
+
+
 class MarketStore:
     """Thread-safe JSON store for bars, signals, and the latest dashboard."""
 
@@ -26,12 +29,19 @@ class MarketStore:
 
     def save_bars(self, symbol: str, timeframe: str, bars: list[MarketBar]) -> None:
         path = self._bars_path(symbol, timeframe)
-        payload = {"symbol": symbol.upper(), "timeframe": timeframe, "bars": [bar.__dict__ for bar in bars]}
+        payload = {
+            "symbol": symbol.upper(),
+            "timeframe": timeframe,
+            "priceBasis": MARKET_BAR_PRICE_BASIS,
+            "bars": [bar.__dict__ for bar in bars],
+        }
         with self._lock:
             write_json_atomic(path, payload)
 
     def load_bars(self, symbol: str, timeframe: str) -> list[MarketBar]:
         payload = read_json(self._bars_path(symbol, timeframe), {})
+        if not isinstance(payload, dict) or payload.get("priceBasis") != MARKET_BAR_PRICE_BASIS:
+            return []
         rows = payload.get("bars") if isinstance(payload, dict) else None
         if not isinstance(rows, list):
             return []

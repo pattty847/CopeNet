@@ -3,7 +3,8 @@
 from __future__ import annotations
 
 import asyncio
-from typing import Any
+from copy import deepcopy
+from typing import Any, Callable
 
 import pandas as pd
 
@@ -31,6 +32,7 @@ async def get_financial_series(
     if metric == "trailing_pe":
         return await get_valuation_series(
             symbol=normalized,
+            as_of=as_of,
             refresh=refresh,
             include_provenance=include_provenance,
         )
@@ -46,7 +48,7 @@ async def get_financial_series(
         EdgarClient,
         user_agent=SEC_API_USER_AGENT,
     ) as client:
-        return await client.financials.series(
+        payload = await client.financials.series(
             normalized,
             metric=metric,
             frequency=frequency,
@@ -59,11 +61,13 @@ async def get_financial_series(
             include_provenance=include_provenance,
             split_events=split_events,
         )
+    return _point_in_time_financial_payload(payload, as_of=as_of)
 
 
 async def get_valuation_series(
     *,
     symbol: str,
+    as_of: str | None = None,
     refresh: bool = False,
     include_provenance: bool = True,
 ) -> dict[str, Any] | None:
@@ -86,7 +90,7 @@ async def get_valuation_series(
         EdgarClient,
         user_agent=SEC_API_USER_AGENT,
     ) as client:
-        return await client.financials.valuation(
+        payload = await client.financials.valuation(
             normalized,
             price_observations=prices,
             split_events=split_events,
@@ -95,6 +99,89 @@ async def get_valuation_series(
             refresh=refresh,
             include_provenance=include_provenance,
         )
+    return _point_in_time_valuation_payload(payload, as_of=as_of)
+
+
+def _point_in_time_financial_payload(
+    payload: dict[str, Any] | None,
+    *,
+    as_of: str | None,
+) -> dict[str, Any] | None:
+    """Defensively enforce availableAt <= as_of at the external-data boundary."""
+    return _filter_observations(
+        payload,
+        as_of=as_of,
+        is_eligible=_financial_observation_is_eligible,
+    )
+
+
+def _point_in_time_valuation_payload(
+    payload: dict[str, Any] | None,
+    *,
+    as_of: str | None,
+) -> dict[str, Any] | None:
+    """Bound valuation rows by price time and reject future EPS provenance."""
+    return _filter_observations(
+        payload,
+        as_of=as_of,
+        is_eligible=_valuation_observation_is_eligible,
+    )
+
+
+def _filter_observations(
+    payload: dict[str, Any] | None,
+    *,
+    as_of: str | None,
+    is_eligible: Callable[[Any, pd.Timestamp], bool],
+) -> dict[str, Any] | None:
+    if payload is None or as_of is None:
+        return payload
+    cutoff = pd.to_datetime(as_of, utc=True, errors="coerce")
+    if pd.isna(cutoff):
+        raise ValueError(f"invalid as_of timestamp: {as_of!r}")
+    observations = payload.get("observations")
+    if not isinstance(observations, list):
+        return payload
+    filtered = deepcopy(payload)
+    filtered["observations"] = [
+        observation
+        for observation in filtered["observations"]
+        if is_eligible(observation, cutoff)
+    ]
+    filtered["asOf"] = as_of
+    return filtered
+
+
+def _financial_observation_is_eligible(observation: Any, cutoff: pd.Timestamp) -> bool:
+    if not isinstance(observation, dict):
+        return False
+    available_at = pd.to_datetime(
+        observation.get("availableAt"),
+        utc=True,
+        errors="coerce",
+    )
+    return not pd.isna(available_at) and available_at <= cutoff
+
+
+def _valuation_observation_is_eligible(observation: Any, cutoff: pd.Timestamp) -> bool:
+    if not isinstance(observation, dict):
+        return False
+    timestamp = pd.to_datetime(
+        observation.get("timestamp"),
+        utc=True,
+        errors="coerce",
+    )
+    if pd.isna(timestamp) or timestamp > cutoff:
+        return False
+    raw_eps_available_at = observation.get("epsAvailableAt")
+    if raw_eps_available_at is None:
+        return True
+    eps_available_at = pd.to_datetime(
+        raw_eps_available_at,
+        utc=True,
+        errors="coerce",
+    )
+    return not pd.isna(eps_available_at) and eps_available_at <= timestamp
 
 
 def _valuation_price_inputs(
