@@ -170,13 +170,13 @@ export function SidebarNav() {
 
         <div
           className={`flex rounded-2xl border border-shell-border bg-shell-panel ${primaryNavCollapsed ? 'justify-center px-2 py-2.5' : 'items-center gap-2.5 px-3 py-2.5'}`}
-          title={primaryNavCollapsed ? 'Patrick Cope · Owner' : undefined}
+          title={primaryNavCollapsed ? 'Local Operator' : undefined}
         >
-          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-shell-ink text-[11px] font-semibold text-white">CP</div>
+          <div className="flex h-9 w-9 items-center justify-center rounded-full bg-shell-ink text-[11px] font-semibold text-white">LO</div>
           {!primaryNavCollapsed && (
             <div className="min-w-0 flex-1">
-              <div className="truncate text-[13px] font-medium text-shell-text">Patrick Cope</div>
-              <div className="truncate text-[11px] text-shell-muted">Owner</div>
+              <div className="truncate text-[13px] font-medium text-shell-text">Local Operator</div>
+              <div className="truncate text-[11px] text-shell-muted">Private workspace</div>
             </div>
           )}
           <ThemeToggle />

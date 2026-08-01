@@ -28,36 +28,36 @@ def test_config_absent_returns_none(monkeypatch):
 def test_normalize_positions_tolerates_vendor_key_variants():
     payload = {
         "data": [
-            # vendor P&L rate is a decimal FRACTION (verified live 2026-07-01): -0.177 == -17.7%
-            {"symbol": "sofi", "quantity": "22.59539", "cost_price": "22.10", "unrealized_profit_loss_rate": "-0.177"},
-            {"ticker": "SLI", "qty": 29, "avgCost": 4.126},
+            # Synthetic vendor-shaped fixtures: the P&L rate is a decimal fraction.
+            {"symbol": "aaa", "quantity": "12.5", "cost_price": "100.00", "unrealized_profit_loss_rate": "-0.125"},
+            {"ticker": "BBB", "qty": 4, "avgCost": 25.0},
             {"note": "row with no symbol should be skipped"},
         ]
     }
     positions, warnings = normalize_positions(payload)
-    assert [p.symbol for p in positions] == ["SOFI", "SLI"]
-    assert positions[0].quantity == 22.59539
-    assert positions[0].avg_cost == 22.10
-    assert positions[0].unrealized_pl_pct == -17.7  # fraction -> percent
-    assert positions[1].avg_cost == 4.126
+    assert [p.symbol for p in positions] == ["AAA", "BBB"]
+    assert positions[0].quantity == 12.5
+    assert positions[0].avg_cost == 100.0
+    assert positions[0].unrealized_pl_pct == -12.5  # fraction -> percent
+    assert positions[1].avg_cost == 25.0
     assert len(warnings) == 1  # the skipped row is reported, not silently dropped
 
 
-def test_normalize_balance_live_shape():
-    # exact key structure observed from a live US cash account (2026-07-01)
+def test_normalize_balance_vendor_shape():
+    # Synthetic values in the exact key structure returned by the vendor.
     payload = {
         "total_asset_currency": "USD",
-        "total_net_liquidation_value": "4,452.78",
-        "total_market_value": "4452.78",
-        "total_cash_balance": "0.00",
+        "total_net_liquidation_value": "10,000.00",
+        "total_market_value": "9000.00",
+        "total_cash_balance": "1,000.00",
         "account_currency_assets": [
-            {"currency": "USD", "cash_balance": "0.00", "settled_cash": "0.00", "buying_power": "0.00"}
+            {"currency": "USD", "cash_balance": "1,000.00", "settled_cash": "900.00", "buying_power": "800.00"}
         ],
     }
     balance = normalize_balance(payload)
-    assert balance["total_equity"] == 4452.78
-    assert balance["cash"] == 0.0
-    assert balance["buying_power"] == 0.0
+    assert balance["total_equity"] == 10000.0
+    assert balance["cash"] == 1000.0
+    assert balance["buying_power"] == 800.0
     assert balance["currency"] == "USD"
     empty = normalize_balance({})
     assert empty["total_equity"] is None  # missing data stays None, never fabricated
@@ -80,13 +80,13 @@ def test_context_pack_redaction_and_content():
     snapshot = WebullSnapshot(
         account_id_masked="***1234",
         synced_at="2026-07-01T00:00:00Z",
-        total_equity=4417.0,
-        cash=12.5,
-        buying_power=25.0,
+        total_equity=10000.0,
+        cash=1000.0,
+        buying_power=800.0,
         currency="USD",
         positions=[
-            WebullPosition(symbol="GOOG", quantity=3.6, avg_cost=206.81, last_price=351.28, market_value=1264.6, unrealized_pl=520.0, unrealized_pl_pct=69.9, allocation_pct=28.6, price_source="yfinance"),
-            WebullPosition(symbol="SLI", quantity=29.0, avg_cost=4.126, last_price=2.79, market_value=80.9, unrealized_pl=-38.7, unrealized_pl_pct=-32.4, allocation_pct=1.8, warnings=["thin volume"]),
+            WebullPosition(symbol="AAA", quantity=30.0, avg_cost=100.0, last_price=150.0, market_value=4500.0, unrealized_pl=1500.0, unrealized_pl_pct=50.0, allocation_pct=45.0, price_source="yfinance"),
+            WebullPosition(symbol="BBB", quantity=10.0, avg_cost=100.0, last_price=60.0, market_value=600.0, unrealized_pl=-400.0, unrealized_pl_pct=-40.0, allocation_pct=6.0, warnings=["thin volume"]),
         ],
         warnings=["one row skipped"],
     ).to_dict()
@@ -97,10 +97,10 @@ def test_context_pack_redaction_and_content():
 
     assert MODEL_INSTRUCTION_HEADER.splitlines()[0] in pack
     assert "***1234" in pack and "LEAKED" not in pack
-    assert "GOOG" in pack and "$351.28" in pack
-    assert "oversized position: GOOG" in pack  # 28.6% ≥ 25% threshold
-    assert "large unrealized winner: GOOG" in pack
-    assert "large unrealized loser: SLI" in pack
+    assert "AAA" in pack and "$150.00" in pack
+    assert "oversized position: AAA" in pack
+    assert "large unrealized winner: AAA" in pack
+    assert "large unrealized loser: BBB" in pack
     assert "data gap" in pack  # warnings surface as flags
     assert "account data source: Webull" in pack
 

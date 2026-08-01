@@ -4,7 +4,7 @@ Exercises a small scenario pack against a running CopeNet server and prints
 the run id for each scenario so traces can be located quickly.
 
 Usage:
-    cd /Users/copeharder/Programming/CopeNet
+    cd /path/to/CopeNet
     uv run python scripts/trace_scenarios.py
 """
 

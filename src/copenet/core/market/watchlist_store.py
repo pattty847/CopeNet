@@ -1,4 +1,4 @@
-"""Durable store for Patrick's user-curated ticker watchlists — separate from the fixed
+"""Durable store for the operator's user-curated ticker watchlists — separate from the fixed
 dashboard UNIVERSE in universe.py (that's the always-on panel set; these are add/remove-able).
 
 Multiple named lists (TradingView-style tabs). Persisted shape:

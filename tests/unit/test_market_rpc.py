@@ -68,7 +68,7 @@ async def test_market_universe_and_ticker_get_return_camel_case_shapes(tmp_path:
 
     universe = frames[0]["payload"]
     ticker = frames[1]["payload"]
-    assert {"symbol": "GOOG", "name": "Alphabet Class C", "role": "holding"} in universe
+    assert {"symbol": "VOO", "name": "Vanguard S&P 500 ETF", "role": "index"} in universe
     assert ticker["symbol"] == "GOOG"
     assert set(ticker["series"].keys()) == {"daily", "weekly", "monthly"}
     assert "pnlPct" not in ticker

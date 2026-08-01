@@ -56,7 +56,7 @@ The model should choose **intent-level actions** against a controlled schema, no
 ## Install
 
 ```bash
-cd /Users/copeharder/Programming/CopeNet
+cd /path/to/CopeNet
 uv sync
 uv run playwright install chromium
 ```

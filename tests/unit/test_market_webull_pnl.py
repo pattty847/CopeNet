@@ -68,32 +68,29 @@ def test_replay_matches_fifo_and_leaves_the_remainder_open():
 
 
 def test_reverse_split_restates_open_lots_before_matching():
-    """The bug this exists for: ETHU 1-for-20 on 2025-04-09. 161 pre-split shares became 8; the
-    unadjusted replay matched those 8 against a $9.95 basis and reported a $241 GAIN on a position
-    that actually lost $1,273. Checked against the broker's own since-inception figure."""
+    """A synthetic reverse split must restate open lots before FIFO matching."""
     fills, _ = _fills(
-        _combo("ETHU", "BUY", 161, 9.95, "2024-12-02T15:00:00Z"),
-        _combo("ETHU", "SELL", 8, 25.57, "2025-04-10T15:00:00Z"),
+        _combo("REVERSE", "BUY", 100, 10, "2025-01-01T15:00:00Z"),
+        _combo("REVERSE", "SELL", 10, 50, "2025-02-02T15:00:00Z"),
     )
-    splits = {"ETHU": [["2025-04-09", 0.05]]}
+    splits = {"REVERSE": [["2025-02-01", 0.1]]}
 
     unadjusted, _, _ = replay(fills)
     adjusted, open_lots, _ = replay(fills, splits)
 
     assert unadjusted[0].pnl > 0  # the wrong answer, kept here so the regression is unmistakable
-    assert round(adjusted[0].entry_price, 2) == 199.0  # $9.95 / 0.05
-    assert adjusted[0].pnl == -1387.44
-    assert round(sum(lot.quantity for lot in open_lots), 4) == 0.05  # 161/20 - 8, i.e. flat
+    assert adjusted[0].entry_price == 100.0
+    assert adjusted[0].pnl == -500.0
+    assert sum(lot.quantity for lot in open_lots) == 0
 
 
 def test_split_does_not_touch_lots_opened_on_or_after_the_ex_date():
-    """XLK split 2-for-1 on 2025-12-05 and shares were bought that same day at the post-split
-    price. Adjusting those would double the position — the broker says otherwise."""
+    """Synthetic lots opened on or after the ex-date already use post-split units."""
     fills, _ = _fills(
-        _combo("XLK", "BUY", 1, 146.66, "2025-12-05T15:00:00Z"),
-        _combo("XLK", "BUY", 1, 145.63, "2025-12-23T15:00:00Z"),
+        _combo("SPLIT", "BUY", 1, 50, "2025-12-05T15:00:00Z"),
+        _combo("SPLIT", "BUY", 1, 49, "2025-12-23T15:00:00Z"),
     )
-    _, open_lots, _ = replay(fills, {"XLK": [["2025-12-05", 2.0]]})
+    _, open_lots, _ = replay(fills, {"SPLIT": [["2025-12-05", 2.0]]})
     assert sum(lot.quantity for lot in open_lots) == 2
 
 

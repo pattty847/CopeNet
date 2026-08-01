@@ -78,8 +78,8 @@ async def test_watchlist_falls_back_to_universe_name_when_none_stored(tmp_path: 
     monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
     orchestrator = FakeOrchestrator(tmp_path)
 
-    result = await _send(handlers.handle_market_watchlist_add, {"symbol": "GOOG"}, orchestrator)
-    assert result["payload"]["items"][0]["name"] == "Alphabet Class C"
+    result = await _send(handlers.handle_market_watchlist_add, {"symbol": "VOO"}, orchestrator)
+    assert result["payload"]["items"][0]["name"] == "Vanguard S&P 500 ETF"
 
 
 async def test_watchlist_store_is_scoped_to_orchestrators_market_store_root(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

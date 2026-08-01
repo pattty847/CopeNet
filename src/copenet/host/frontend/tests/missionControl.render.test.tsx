@@ -71,7 +71,7 @@ test('MissionControlPanel keeps long run content inside narrow cards', () => {
         item({
           kind: 'failed_run',
           title: `Run failed: ${longToken}`,
-          detail: `Claude CLI failed at /Users/operator/${longToken}/${longToken}`,
+          detail: `Claude CLI failed at /Users/example/${longToken}/${longToken}`,
           source: `Research-Lab-${longToken}`,
           provider: `provider-${longToken}`,
           model: `model-${longToken}`,

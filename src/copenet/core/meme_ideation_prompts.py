@@ -164,7 +164,7 @@ def _render_excerpt_block(label: str, excerpts: tuple[object, ...]) -> str:
 
 def build_meme_user_prompt(request: MemeIdeationRequest, knowledge_pack: MemeKnowledgePack | None = None, mutation_plan: MutationPlan | None = None) -> str:
     lines = [
-        "Generate structured meme ideas for the Instagram page copeharderpls.",
+        "Generate structured meme ideas for the operator's configured meme page.",
         f"Return exactly {request.requested_count} candidates as JSON using the required schema.",
     ]
     if request.media_asset_id:

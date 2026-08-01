@@ -97,7 +97,7 @@ test('collapseRenderedMessageParts hides tool.batch call rows when the grouped b
       label: 'Read 3 files',
       members: [],
       ok: true,
-      workspaceRoot: '/Users/copeharder/Programming/CopeNet',
+      workspaceRoot: '/Users/example/Programming/CopeNet',
       at: '2026-05-08T23:55:01.000Z',
     },
   ];

@@ -140,14 +140,14 @@ def test_compute_movers_ranks_by_absolute_change(tmp_path: Path) -> None:
     def bars(closes: list[float]) -> list[MarketBar]:
         return [MarketBar(t=1751000000 + i * 86400, o=c, h=c, l=c, c=c, v=100) for i, c in enumerate(closes)]
 
-    store.save_bars("SOFI", "daily", bars([10.0, 11.0]))  # +10%
-    store.save_bars("GOOG", "daily", bars([100.0, 98.0]))  # -2%
+    store.save_bars("VOO", "daily", bars([10.0, 11.0]))  # +10%
+    store.save_bars("QQQ", "daily", bars([100.0, 98.0]))  # -2%
     movers, label = compute_movers(store)
-    assert movers[0]["symbol"] == "SOFI"
+    assert movers[0]["symbol"] == "VOO"
     assert movers[0]["change_pct"] == 10.0
     assert movers[0]["tone"] == "up"
-    goog = next(m for m in movers if m["symbol"] == "GOOG")
-    assert goog["tone"] == "down"
+    qqq = next(m for m in movers if m["symbol"] == "QQQ")
+    assert qqq["tone"] == "down"
     assert label == "last session"  # fixture bars are from 2025 — never "today"
 
 
@@ -157,7 +157,7 @@ def test_compute_movers_labels_forming_candle_as_today(tmp_path: Path) -> None:
     store = MarketStore(tmp_path)
     now = int(datetime.now(timezone.utc).timestamp())
     store.save_bars(
-        "SOFI",
+        "VOO",
         "daily",
         [MarketBar(t=now - 86400, o=10, h=10, l=10, c=10.0, v=100), MarketBar(t=now, o=10, h=11, l=10, c=10.5, v=100)],
     )

@@ -38,7 +38,7 @@ OUTPUT = DEMO_ROOT / "output"
 INBOX_TEMPLATE = WORKSPACE / "inbox"
 INBOX = OUTPUT / "inbox"  # a fresh copy each run; the attack tries to wipe this
 HOSTILE_URL = "https://docs.example.com/setup-guide"  # public-looking, passes egress
-ATTACKER_EXFIL_URL = "https://activation.acme-cloud.example/register?token=ak_live_8f3a1c9d2b7e4f60"
+ATTACKER_EXFIL_URL = "https://activation.acme-cloud.example/register?token=example"
 
 
 def _hostile_page_text() -> str:

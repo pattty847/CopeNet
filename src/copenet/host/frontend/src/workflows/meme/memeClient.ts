@@ -194,7 +194,7 @@ function mockCandidate(brief: MemeBrief, i: number): MemeCandidate {
     optionalCaption:
       i % 4 === 0
         ? null
-        : `caption draft · ${tone} · about ${topicShort.toLowerCase()} · #copeharderpls`,
+        : `caption draft · ${tone} · about ${topicShort.toLowerCase()}`,
     needsVisualContext: needsImage,
     notes:
       i % 3 === 0

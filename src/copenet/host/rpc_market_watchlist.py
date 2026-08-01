@@ -1,4 +1,4 @@
-"""Watchlist RPC handlers — Patrick's user-curated add/remove ticker list, distinct from the
+"""Watchlist RPC handlers — the operator's user-curated add/remove ticker list, distinct from the
 fixed dashboard UNIVERSE (core/market/universe.py) that drives the always-on panels."""
 
 from __future__ import annotations

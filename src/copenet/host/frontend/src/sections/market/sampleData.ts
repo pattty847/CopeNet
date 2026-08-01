@@ -1,4 +1,4 @@
-// Illustrative Market Monitor data — seeded with Patrick's real watchlist + roles.
+// Illustrative, account-neutral Market Monitor data. Never seed previews from a real account.
 // THIS IS NOT REAL MARKET DATA. Every panel ships with status:'preview' so the UI shows the
 // "Preview · illustrative" badge until Codex's backend flips it to 'live' (blueprint §1, §3).
 // When the seam (useMarketMonitorData) swaps to real market.* RPCs, this file is no longer imported.
@@ -6,33 +6,16 @@
 import type { DashboardPayload, TickerDetailPayload, UniverseAsset } from './types';
 
 export const SAMPLE_UNIVERSE: UniverseAsset[] = [
-  // Portfolio (held)
-  { symbol: 'ASX', name: 'ASE Technology Holding', role: 'holding' },
-  { symbol: 'GOOG', name: 'Alphabet Class C', role: 'holding' },
-  { symbol: 'SOFI', name: 'SoFi Technologies', role: 'holding' },
-  { symbol: 'VTI', name: 'Vanguard Total Stock Market', role: 'holding' },
-  { symbol: 'XLK', name: 'Technology Select Sector', role: 'holding' },
-  { symbol: 'XLE', name: 'Energy Select Sector', role: 'holding' },
-  { symbol: 'SLI', name: 'Standard Lithium', role: 'holding' },
   // Major markets (benchmark / macro)
   { symbol: 'VOO', name: 'Vanguard S&P 500', role: 'index' },
   { symbol: 'QQQ', name: 'Invesco QQQ Trust', role: 'index' },
-  { symbol: 'VOOG', name: 'Vanguard S&P 500 Growth', role: 'index' },
+  { symbol: 'IWM', name: 'iShares Russell 2000', role: 'index' },
+  { symbol: 'EFA', name: 'iShares MSCI EAFE', role: 'index' },
+  { symbol: 'VWO', name: 'Vanguard Emerging Markets', role: 'index' },
   { symbol: 'DXY', name: 'U.S. Dollar Index', role: 'macro' },
   { symbol: 'VIX', name: 'Volatility Index', role: 'macro' },
   { symbol: 'BTCUSD', name: 'Bitcoin / USD', role: 'macro' },
   { symbol: 'ETHUSD', name: 'Ethereum / USD', role: 'macro' },
-  // Watch
-  { symbol: 'CRWV', name: 'CoreWeave', role: 'watch' },
-  { symbol: 'SHLD', name: 'Global X Defense Tech', role: 'watch' },
-  { symbol: 'PLD', name: 'Prologis', role: 'watch' },
-  // Future bags
-  { symbol: 'AMZN', name: 'Amazon', role: 'watch' },
-  { symbol: 'INTC', name: 'Intel', role: 'watch' },
-  { symbol: 'IWM', name: 'iShares Russell 2000', role: 'index' },
-  { symbol: 'NVDA', name: 'NVIDIA', role: 'watch' },
-  { symbol: 'TSLA', name: 'Tesla', role: 'watch' },
-  { symbol: 'SPCX', name: 'SpaceX', role: 'watch' },
   // Sectors
   { symbol: 'XLRE', name: 'Real Estate', role: 'sector' },
   { symbol: 'SMH', name: 'Semiconductors', role: 'sector' },
@@ -147,24 +130,14 @@ export const SAMPLE_DASHBOARD: DashboardPayload = {
     status: 'preview',
     data: {
       total: '$—',
-      pnl: 'cost basis pending',
+      pnl: 'connect a local broker account',
       pnlTone: 'flat',
-      positions: [
-        { symbol: 'GOOG', shares: 0, avgCost: 0, last: '—', pnlPct: '—', tone: 'flat', nudge: '' },
-        { symbol: 'ASX', shares: 0, avgCost: 0, last: '—', pnlPct: '—', tone: 'flat', nudge: '' },
-        { symbol: 'SOFI', shares: 0, avgCost: 0, last: '—', pnlPct: '—', tone: 'flat', nudge: '' },
-        { symbol: 'VTI', shares: 0, avgCost: 0, last: '—', pnlPct: '—', tone: 'flat', nudge: '' },
-        { symbol: 'XLK', shares: 0, avgCost: 0, last: '—', pnlPct: '—', tone: 'flat', nudge: '' },
-        { symbol: 'XLE', shares: 0, avgCost: 0, last: '—', pnlPct: '—', tone: 'flat', nudge: '' },
-      ],
+      positions: [],
     },
   },
   speculative: {
     status: 'preview',
-    data: [
-      { symbol: 'SOFI', pnlPct: '—', tone: 'flat', thesis: 'Fintech re-rate. Sized small — defined exit.', entry: '—', target: '—', invalidation: '—' },
-      { symbol: 'SLI', pnlPct: '—', tone: 'flat', thesis: 'Lithium optionality. Hail-mary sizing only.', entry: '—', target: '—', invalidation: '—' },
-    ],
+    data: [],
   },
   evidence: {
     status: 'preview',

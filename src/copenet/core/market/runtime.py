@@ -38,7 +38,6 @@ from .models import (
     PortfolioPosition,
     SignalRow,
     SoftBottomItem,
-    SpecPosition,
     TickerDetailPayload,
     TickerInsight,
     TickerIntelligence,
@@ -54,7 +53,7 @@ from .webull.context_pack import build_portfolio_context_pack
 from .webull.sync import load_snapshot as load_webull_snapshot
 from .store import MarketStore
 from .synthesis import synthesize_briefing
-from .universe import MACRO_SYMBOLS, PORTFOLIO_BASIS, SECTOR_SYMBOLS, UNIVERSE, find_asset
+from .universe import MACRO_SYMBOLS, SECTOR_SYMBOLS, UNIVERSE, find_asset
 
 
 class MarketRuntime:
@@ -424,14 +423,10 @@ class MarketRuntime:
             portfolio = _portfolio_panel_from_webull(webull_snapshot)
             note = f"account data: Webull · synced {webull_snapshot.get('synced_at', 'unknown')}"
         else:
-            portfolio = _portfolio_panel(weekly)
-            note = "account data: configured cost basis · prices: yfinance"
-        if portfolio.positions:
+            portfolio = None
+            note = None
+        if portfolio is not None and portfolio.positions:
             dashboard.portfolio = MarketPanel(status="live", data=portfolio, as_of=_now_iso(), note=note)
-
-        speculative = _speculative_panel(weekly)
-        if speculative:
-            dashboard.speculative = MarketPanel(status="live", data=speculative, as_of=_now_iso())
 
         # _assemble_dashboard runs inside asyncio.to_thread (see rpc_market.py), i.e. a plain
         # worker thread with no running loop, so asyncio.run() here is a safe sync/async bridge.
@@ -639,8 +634,8 @@ def _build_intelligence(
 
 
 def _portfolio_position_for_symbol(symbol: str, *, last: float) -> dict[str, Any] | None:
-    """Best-effort portfolio join for a single symbol — Webull snapshot first, static cost-basis
-    fallback second. Mirrors the join already done for the whole-dashboard portfolio panel."""
+    """Best-effort portfolio join for a single symbol from the local Webull snapshot."""
+    del last
     snapshot = load_webull_snapshot()
     if snapshot:
         for row in snapshot.get("positions", []):
@@ -653,18 +648,6 @@ def _portfolio_position_for_symbol(symbol: str, *, last: float) -> dict[str, Any
                     "allocation_pct": row.get("allocation_pct"),
                     "source": "webull",
                 }
-    basis = PORTFOLIO_BASIS.get(symbol)
-    if basis and last:
-        avg_cost = float(basis["avg_cost"])
-        pnl_pct = ((last / avg_cost) - 1) * 100 if avg_cost else None
-        return {
-            "shares": basis["shares"],
-            "avg_cost": avg_cost,
-            "last_price": last,
-            "pnl_pct": round(pnl_pct, 2) if pnl_pct is not None else None,
-            "allocation_pct": None,
-            "source": "configured cost basis",
-        }
     return None
 
 
@@ -705,66 +688,6 @@ def _portfolio_panel_from_webull(snapshot: dict) -> Portfolio:
         pnl_tone="up" if pnl > 0 else "down" if pnl < 0 else "flat",
         positions=positions,
     )
-
-
-def _portfolio_panel(frames: dict[str, pd.DataFrame]) -> Portfolio:
-    positions: list[PortfolioPosition] = []
-    total = 0.0
-    cost = 0.0
-    for symbol, basis in PORTFOLIO_BASIS.items():
-        frame = frames.get(symbol, pd.DataFrame())
-        if frame.empty:
-            continue
-        shares = float(basis["shares"])
-        avg_cost = float(basis["avg_cost"])
-        last = float(frame["close"].dropna().iloc[-1])
-        market_value = shares * last
-        cost_value = shares * avg_cost
-        total += market_value
-        cost += cost_value
-        pnl_pct = ((last / avg_cost) - 1) * 100 if avg_cost else 0.0
-        positions.append(
-            PortfolioPosition(
-                symbol=symbol,
-                shares=shares,
-                avg_cost=avg_cost,
-                last=f"${last:,.2f}",
-                pnl_pct=f"{pnl_pct:+.1f}%",
-                tone="up" if pnl_pct > 0 else "down" if pnl_pct < 0 else "flat",
-                nudge="add zone" if pnl_pct < -10 else None,
-            )
-        )
-    pnl = total - cost
-    pnl_pct = (pnl / cost * 100) if cost else 0.0
-    return Portfolio(total=f"${total:,.0f}", pnl=f"{pnl:+,.0f} · {pnl_pct:+.1f}%", pnl_tone="up" if pnl > 0 else "down" if pnl < 0 else "flat", positions=positions)
-
-
-def _speculative_panel(frames: dict[str, pd.DataFrame]) -> list[SpecPosition]:
-    rows: list[SpecPosition] = []
-    for symbol in ("SOFI", "SLI"):
-        frame = frames.get(symbol, pd.DataFrame())
-        if frame.empty:
-            continue
-        close = frame["close"].astype(float).dropna()
-        if close.empty:
-            continue
-        high = float(close.tail(min(len(close), 52)).max())
-        last = float(close.iloc[-1])
-        drawdown = ((last / high) - 1) * 100 if high else 0.0
-        rows.append(
-            SpecPosition(
-                symbol=symbol,
-                pnl_pct=f"{drawdown:+.1f}%",
-                tone="down" if drawdown < 0 else "up",
-                thesis="Spec lane: small-size position with defined invalidation.",
-                entry=f"${last:,.2f}",
-                target="risk-adjusted outperformance vs VOO/sector ETF",
-                invalidation="weekly close below prior support plus lagging benchmark verdict",
-            )
-        )
-    return rows
-
-
 def _signal_rows(signals: dict[str, Any]) -> list[SignalRow]:
     mapping = {
         "below_ma": "Dist from 40W MA",

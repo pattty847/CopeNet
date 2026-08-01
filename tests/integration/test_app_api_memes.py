@@ -134,7 +134,7 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
               "direction": "Existential caption",
               "format": "reaction_caption",
               "text": "ROTATED THE FRY 12 DEGREES AND NOW IT COUNTS AS A DIFFERENT ASSET CLASS / before the allocation committee notices",
-              "optional_caption": "copeharderpls",
+              "optional_caption": "synthetic meme page",
               "needs_visual_context": true,
               "notes": "works with a thousand-yard stare image"
             },

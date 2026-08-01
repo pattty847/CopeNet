@@ -32,7 +32,7 @@ def _tool_context(tmp_path: Path, *, policy: ToolPolicy | None = None) -> ToolEx
 def test_memory_draft_lifecycle_propose_approve_discard(tmp_path: Path) -> None:
     service = MemoryService(MemoryStore(tmp_path / "memory.json"))
 
-    draft = service.propose_memory(category="fact", title="Home base", summary="Patrick is a Starbucks shift supervisor.")
+    draft = service.propose_memory(category="fact", title="Home base", summary="Casey works a synthetic example shift.")
     assert draft.status == "draft"
 
     # Drafts are excluded from the default list and from relevance injection.
@@ -43,12 +43,12 @@ def test_memory_draft_lifecycle_propose_approve_discard(tmp_path: Path) -> None:
     assert [d.id for d in drafts] == [draft.id]
 
     # Proposing again never mutates an existing memory — it's a fresh draft.
-    second = service.propose_memory(category="fact", title="Home base", summary="Patrick is a Starbucks shift supervisor.")
+    second = service.propose_memory(category="fact", title="Home base", summary="Casey works a synthetic example shift.")
     assert second.id != draft.id
     assert len(service.list_memory(status="draft")) == 2
 
     # Approve one, discard the other.
-    approved = service.approve_memory(draft.id, summary="Patrick is a Starbucks shift supervisor (edited).")
+    approved = service.approve_memory(draft.id, summary="Casey works a synthetic example shift (edited).")
     assert approved is not None and approved.status == "active"
     assert approved.summary.endswith("(edited).")
     assert service.discard_memory(second.id) is True

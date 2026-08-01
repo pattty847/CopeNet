@@ -1,8 +1,8 @@
 # Webull API Surface — Live Probe Audit (2026-07-28)
 
-What the `webull-openapi-python-sdk` 2.0.12 credentials in `.env` actually grant us, verified by
-read-only live calls against the production account (no order/trade calls were made). Re-run the
-probe before trusting these results after an SDK or entitlement change.
+This records the account-neutral SDK capabilities verified with read-only calls. No order/trade
+calls were made. Live account values and entitlement details belong in ignored private notes, not
+this document. Re-run the probe before trusting these results after an SDK or entitlement change.
 
 ## Headline
 
@@ -20,10 +20,10 @@ screeners, watchlists, and crypto all return 200 on our current app credentials.
 
 | Call | Returns | Notes |
 |---|---|---|
-| `account.get_account_profile(account_id)` | account_type (`CASH`), account_status | never used; relevant to portfolio context (no margin, settlement rules) |
+| `account.get_account_profile(account_id)` | account type and status | never used; relevant to portfolio context |
 | `account.get_app_subscriptions()` | subscription/account ids | entitlement introspection |
 | `account_v2.get_account_list/balance/position` | — | **the only calls we use today** |
-| `order_v2.get_order_history(account_id, page_size, start_date, end_date)` | **full fill records** | `symbol, side, status, order_type, entrust_type, total_quantity, filled_quantity, filled_price, place_time_at, filled_time_at, limit_price` — verified 37 orders / 25 FILLED over 2026-01-01→07-28. Default window is 7 days; pass explicit dates for history. |
+| `order_v2.get_order_history(account_id, page_size, start_date, end_date)` | **full fill records** | `symbol, side, status, order_type, entrust_type, total_quantity, filled_quantity, filled_price, place_time_at, filled_time_at, limit_price`. Default window is 7 days; pass explicit dates for history. |
 | `order_v2.get_order_open` / `order_v3.*` (read methods) | open orders, order detail | v3 shape is the same combo/legs envelope |
 | `trade_calendar.get_trade_calendar(market, start, end)` | trading days | **max 30-day range per call** (417 otherwise) |
 
@@ -47,7 +47,7 @@ screeners, watchlists, and crypto all return 200 on our current app credentials.
 | `screener.get_market_sectors` / `_detail` | **sector breadth**: advanced / declined / flat counts, volume, change_ratio, market value |
 | `screener.get_gainers_losers(rank_type, category, sort_by, direction)` | requires enum `rank_type` (`DAY_1`, `WEEK_52`, `PRE_MARKET`, …) — passing `"1d"` silently returns an empty list |
 | `screener.get_most_active` / `get_52whl(NEW_HIGH…)` / `get_high_dividend` | ranked rows with price, volume, turnover_rate, relative_volume_10d, market_value, pe_ttm |
-| `watchlist.get_watchlist` / `get_instruments` | **the operator's real Webull lists** — 21 lists; populated ones include ETFs (XLK…XLC sector set), Major Markets (SPY/QQQ/IWM/DIA…), AI, Minerals, Diversifying, Crypto ETFs, REIT, Currencies, Commodities, My Positions |
+| `watchlist.get_watchlist` / `get_instruments` | the authenticated operator's private lists; names and contents must remain local |
 | `crypto_market_data.get_crypto_snapshot` / `get_crypto_history_bar` | **realtime crypto price + bid/ask and OHLC bars, no subscription** |
 | `instrument.get_crypto_instrument`, `get_event_categories`, `get_futures_products` | crypto/event/futures reference data |
 
@@ -87,19 +87,14 @@ execution-oriented, which is out of scope for a slow-timeframe radar.
    replayed open quantity against the snapshot. Surfaced as the **All-time P&L** panel, RPC
    `market.webull.orders.sync` / `market.webull.pnl.get`, and `uv run copenet webull pnl`.
 
-   **Fill quantities are as-of-trade-day, so the replay MUST split-adjust open lots.** The first
-   version did not, and reported +$985 on an account the Webull app shows at −$936. One
-   unadjusted 1-for-20 reverse split (ETHU, ex-date 2025-04-09) matched 8 post-split shares
-   against a pre-split $9.95 basis and turned a real −$1,273 loss into a phantom +$241 gain.
+   **Fill quantities are as-of-trade-day, so the replay MUST split-adjust open lots.** An early
+   version failed this invariant and could turn a real loss into a phantom gain after a reverse
+   split. The regression suite now uses fully synthetic lots and prices.
    Splits now come from `data_sources.fetch_splits` (raw corporate actions — NOT `fetch_ohlcv`,
    whose bars have already erased them), are stored with the fills, and apply per lot with a
-   strict `lot_opened < ex_date <= fill_day` bound. A lot bought ON the ex-date already traded
-   post-split; adjusting it doubles the position (XLK, 2025-12-05).
-
-   Current live figure: −$812.15 (realized −$885.24, expired options −$100.00, vanished positions
-   −$291.31, unrealized +$464.40) against the app's −$936.28. The remaining ~$124 is the seven
-   2020 option fills the API returns with no execution price. Every held position now reconciles
-   exactly with the broker's share count, which is the check that caught the bug.
+   strict `lot_opened < ex_date <= fill_day` bound. A lot bought on the ex-date already traded
+   post-split; adjusting it would double the position. Reconciliation against broker share counts
+   is the invariant that detects this class of bug; live reconciliation figures stay private.
 2. **Watchlist import** — `webull/watchlists.py` + `WatchlistStore.replace_list()`; RPC
    `market.webull.watchlists.import`, the ⤓ Webull button on the watchlist panel, and
    `uv run copenet webull watchlists [--apply]`. Imports are a **pull**: Webull-side edits land

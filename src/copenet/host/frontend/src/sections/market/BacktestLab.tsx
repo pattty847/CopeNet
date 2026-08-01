@@ -9,13 +9,13 @@ import type { BacktestPayload } from '../../lib/wsMarketRpc';
 // Ticker lists for tech fallback detection in weights sync
 const TECH_SYMBOLS = new Set(['GOOG', 'XLK', 'NVDA', 'TSLA', 'AMZN', 'INTC', 'SOX', 'SMH', 'CRWV']);
 
-// Default weights map matching Patrick's basis
+// Account-neutral example weights. Real holdings are supplied only by local broker data.
 const DEFAULT_WEIGHTS: Record<string, number> = {
-  GOOG: 20,
-  XLK: 30,
-  VTI: 25,
-  SOFI: 15,
-  SLI: 10,
+  VOO: 20,
+  QQQ: 20,
+  IWM: 20,
+  EFA: 20,
+  VWO: 20,
 };
 
 interface MetricCardProps {
@@ -140,7 +140,7 @@ function EquityChart({ portfolio, benchmark, height = 300 }: { portfolio: { date
 
 export function BacktestLab() {
   const activeSessionKey = useAppStore((state) => state.activeSessionKey);
-  const [symbolsStr, setSymbolsStr] = useState('GOOG, XLK, VTI, SOFI, SLI');
+  const [symbolsStr, setSymbolsStr] = useState('VOO, QQQ, IWM, EFA, VWO');
   const [weightsMap, setWeightsMap] = useState<Record<string, number>>(DEFAULT_WEIGHTS);
   const [startDate, setStartDate] = useState('2022-01-01');
   const [endDate, setEndDate] = useState('2022-12-31');

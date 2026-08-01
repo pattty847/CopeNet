@@ -253,7 +253,7 @@ export function MemeLab({ onExit }: MemeLabProps) {
             <div className="flex items-center gap-2">
               <h1 className="font-display text-[1.6rem] leading-none tracking-tight text-shell-text">Meme Lab</h1>
               <span className="rounded-full border border-shell-accent/30 bg-shell-accent-soft px-2 py-0.5 font-mono text-[9px] uppercase tracking-[0.24em] text-shell-accent">
-                copeharderpls
+                configured page
               </span>
             </div>
             <div className="mt-0.5 font-mono text-[11px] tabular-nums text-shell-muted">

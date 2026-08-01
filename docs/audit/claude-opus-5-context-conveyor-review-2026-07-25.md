@@ -547,7 +547,7 @@ Update `SUPPORTED_CLAUDE_CLI_MODELS` before L1–L3 or they cannot run on a curr
 - Registry serialization for the manifest token table in P2-18.
 - Negative searches, each confirming an absence claimed above: no production reader of provider `usage`; no production consumer of `responsesCompleted`; no `trace=` argument at any `collect_provider_text` call site; `allow_tools: bool = False` as the external-app default; `query` unused in `build_prompt_context`; `read_guidance` with zero callers.
 
-**Installed runtime.** `claude` 2.1.220 at `/Users/copeharder/.local/bin/claude`. `claude --help` consulted for `--system-prompt`, `--setting-sources`, `--tools`, `--bare`, `--exclude-dynamic-system-prompt-sections`, `--strict-mcp-config`. `claude --setting-sources= --version` and `claude --tools "" --version` run to confirm parse-time acceptance. **No prompts were sent to any model; no subscription or API quota was spent.**
+**Installed runtime.** `claude` 2.1.220 from the operator's local binary path. `claude --help` consulted for `--system-prompt`, `--setting-sources`, `--tools`, `--bare`, `--exclude-dynamic-system-prompt-sections`, `--strict-mcp-config`. `claude --setting-sources= --version` and `claude --tools "" --version` run to confirm parse-time acceptance. **No prompts were sent to any model; no subscription or API quota was spent.**
 
 **Vendor documentation.** Primary-source claims about the Claude Agent SDK, Codex app-server, and the Responses API were taken from the citations already assembled in `docs/plans/PROVIDER_TRANSPORT_EVALUATION.md:330-348` and were not independently re-fetched during this review; the CLI behavior above is from the locally installed binary, which is the authority for what CopeNet actually invokes.
 

@@ -5,13 +5,17 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import logging
+import os
 from typing import Any
 
 from .data_sources import fetch_split_history
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
 from .sec_fetcher import managed_sec_fetcher
 
-SEC_API_USER_AGENT = "Patrick McDermott (CopeNet) pattty847@gmail.com"
+SEC_API_USER_AGENT = os.environ.get(
+    "SEC_API_USER_AGENT",
+    "CopeNet/0.1 contact@example.com",
+).strip()
 TICKER_CLUSTER_LIMIT = 2
 TICKER_SEC_DAYS_BACK = 180  # default depth; the ticker page can ask deeper
 MAX_SEC_DAYS_BACK = 3650  # ~10y — beyond that SEC submissions "recent" coverage runs out anyway

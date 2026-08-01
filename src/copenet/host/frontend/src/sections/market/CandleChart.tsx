@@ -1,7 +1,7 @@
 // TradingView Lightweight Charts (v5) candlestick + volume, themed to CopeNet's dark palette.
 // Consumes the typed OHLCV series from the ticker payload. Pure presentation — no data fetching.
 //
-// SEC decorations are zoom-adaptive (Patrick's boxed-clusters sketch, 2026-07-11):
+// SEC decorations are zoom-adaptive (operator-reviewed boxed-cluster design):
 // event-days that crowd each other at the current zoom collapse into a cluster BOX spanning
 // their time range and price range, tinted by net dollars, with a value-weighted average-price
 // line and a minimal chip (▲9 ▼31 ●4 · net -$226M) that opens the range popup. Clusters are
@@ -191,7 +191,7 @@ function summarizeCluster(buckets: DayBucket[]): ClusterSummary {
 }
 
 /** Chain day-buckets by pixel gap, then split each chain where its days sit on clearly
- *  different price shelves — two boxes, not one giant one (Patrick's GOOG sketch). */
+ *  different price shelves — two boxes, not one giant one. */
 function clusterBuckets(
   buckets: DayBucket[],
   rows: Ohlcv[],

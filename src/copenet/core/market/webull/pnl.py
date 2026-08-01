@@ -12,8 +12,7 @@ What this CANNOT see, and therefore reports as caveats rather than silently abso
 - fees and commissions — every fill returns `fees: []` and `commission: {}`
 - share counts changed by corporate actions never appear as an order. Splits ARE corrected for,
   from stored yfinance split history (`orders.py` saves it with the fills), because getting this
-  wrong is not a rounding error: an unadjusted 1-for-20 reverse split turned a real $1,273 loss
-  into a phantom $241 gain on this account. Delistings and transfers still cannot be seen, so a
+  wrong can turn a real loss into a phantom gain. Delistings and transfers still cannot be seen, so a
   symbol that vanished from the broker has its remaining basis written off (`unaccounted_position_pl`)
   and `reconcile()` shows the raw drift.
 - long option lots that were never sold are assumed expired worthless. That premium counts inside
@@ -165,9 +164,8 @@ def replay(
     open a new lot (negative quantity when the leftover is a short).
 
     Fill quantities are as-of-trade-day, so open lots are restated across splits before matching.
-    Without that, a 1-for-20 reverse split makes 8 post-split shares match against a pre-split cost
-    basis — which turned a real $1,273 loss into a phantom $241 gain on a live account before this
-    existed."""
+    Without that, a reverse split can make post-split shares match against a pre-split cost basis
+    and turn a real loss into a phantom gain."""
     ordered = sorted(fills, key=lambda f: str(f.get("filled_at") or ""))
     splits = splits or {}
     lots: dict[str, deque[list[Any]]] = defaultdict(deque)

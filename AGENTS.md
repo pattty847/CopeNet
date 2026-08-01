@@ -287,6 +287,7 @@ Working code that only exists in the working tree has no rewind point. Treat com
 - **Commit and push once a coherent unit of work lands.** Do not let large amounts of work accumulate uncommitted. If you discover a big pile of uncommitted changes, group it into themed commits and get it into history before starting new work.
 - **Use conventional-commit subjects** with a scope: `feat(scope):`, `fix(scope):`, `docs:`, `chore(scope):`, `refactor(scope):`. Keep the subject imperative and specific; add a short body when the "why" isn't obvious.
 - **Keep the working tree clean.** Don't commit scratch/temporary files (`tmp_*`, one-off probes) — delete them or leave them untracked. Never commit secrets; `.env*` stays gitignored.
+- **Keep operator data local.** Never commit live broker/account output, holdings, quantities, cost basis, balances, fills, P&L, account-derived watchlists, personal names/emails, local usernames, screenshots of private data, or fixtures copied from a real account. Use synthetic fixtures and keep raw probes under `~/.copenet` or ignored `docs/private/`.
 - **Before pushing to the public remote:** sweep for secret-shaped strings and run at least a syntax/compile smoke check. Prefer branching for risky or reversible-only-with-effort changes; direct commits to `main` are fine for docs and captured-state checkpoints.
 - **Group deletions/renames with their rationale** in the same commit (e.g. removing a superseded module in the commit that replaces it), so history reads as a story rather than a diff dump.
 
