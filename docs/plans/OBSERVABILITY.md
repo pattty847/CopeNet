@@ -73,6 +73,18 @@ ignored `tmp/` tree and are never committed.
 
 ## Next work
 
+0. **Record the provider-resolved model.** Both the trace writer and `RunRecord` are
+   stamped with `request.model`, which is the model *requested*, not the one that
+   answered. Measured 2026-08-01: **95 of 334 local traces (28%) carry a null model**,
+   including recent `openai-codex` runs — so more than a quarter of the run history
+   cannot tell you what produced it, which also undercuts the per-turn auditability that
+   mid-session model switching depends on. No provider currently reports the model it
+   used; they only send it in the request. Closing this means each adapter emitting the
+   resolved model (OpenAI Responses returns `response.model`; LM Studio and Ollama return
+   `model` in the response body), the four tool loops forwarding that meta event rather
+   than swallowing it, and the orchestrator updating both the trace writer and the run
+   record. It touches the provider contract, so scope it deliberately rather than in
+   passing.
 1. Test LM Studio and Ollama models that explicitly advertise a thinking stream.
 2. Add side-by-side run comparison for prompt, tool, latency, and reasoning
    differences.

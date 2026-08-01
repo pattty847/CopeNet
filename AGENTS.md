@@ -253,7 +253,9 @@ For current behavior, assume:
   - inline `toolExecution` rendering
   - archive/restore
   - right-panel runtime + tool telemetry (**Tool Activity proof** groups `SessionRunRecord.toolSteps` and run-scoped artifacts via `runtime/activityProof.ts` + `ToolActivityProof.tsx`)
-- Real backend wiring is still concentrated in `Agents`; the other sections are intentional direction-setting shells for now.
+- Section status, verified 2026-08-01 — keep this current, because a stale entry here sends the next contributor to rebuild something that already ships:
+  - **Live and load-bearing:** `Agents`, `Market`, `Observability` (run inspector over durable run records + `logs/runs/*.jsonl`, see `docs/plans/OBSERVABILITY.md`), `Home`.
+  - **Still direction-setting shells:** `Workflows` and `Data & Tools` — neither issues a single RPC. `Experiments` is thin but wired.
 - Global app state lives in `src/copenet/host/frontend/src/store/useAppStore.ts`. Keep it explicit and small.
 - If a feature needs backend support, add and verify the RPC first.
 - Make session state obvious: active section, active session, provider, model, profile, Access, lock state, and connection state.
