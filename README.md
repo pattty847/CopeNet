@@ -14,29 +14,48 @@ CopeNet is a *continuity engine* agent operator for people who want more than a 
 ### Home Dashboard — workspace overview and operator launchpad
 The Home dashboard is the front door to CopeNet: the operator console with live workspace signal (active sessions, provider health, tools available), recent activity, system health, quick-start actions, and an ambient NASA *Picture of the Day* to orient you when you sit back down.
 
+![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
+
 ### Agents Console — persistent sessions with inspectable runtime context
 The Agents view keeps the live conversation and runtime inspector together so a run stays understandable instead of turning into opaque chat history. Operators can attach one or more tools to the next message as removable chips: the visible message stays clean while the structured tool request is carried into that turn and preserved as transcript metadata. The session menu keeps conversation handling explicit too: copy messages only, copy messages with tool activity, export the full chat and tools as Markdown, or create a separate debug session. The inspector on the right keeps the session provider, model, Access, persona, and recent activity visible.
+
+![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+![CopeNet Agents Console with structured tool attachments](docs/imgs/agent-tool-attachments.png)
 
 ### Fleet Rooms — ChatGPT and Claude collaborate without agreement theater
 Fleet is a durable multi-model room inside Agents. An `@everyone` prompt runs ChatGPT and Claude from the same room snapshot behind an independent-first reveal barrier, then commits both answers with attributed tool receipts. Follow up with `@chatgpt` or `@claude` to challenge a claim directly; each provider keeps its own resumable lane while the room remains the product-visible source of truth.
 
+![CopeNet Fleet room — independent AAPL market analysis](docs/imgs/fleet/fleet-room.png)
+
 ### Workflows — purpose-built operator surfaces beyond a single chat
 The Workflows section is where CopeNet starts feeling like an operator studio instead of a prompt box: focused workflow entrypoints, scoped task surfaces, and room for productized agent behaviors that deserve more than one conversation pane.
+
+![CopeNet Workflows](docs/imgs/copenet-workflows.png)
 
 ### Data & Tools — the workspace plumbing that keeps runs useful
 Data & Tools gathers the practical substrate around the agent: imported assets, source material, tool surfaces, and the structured inputs that make later runs more reusable and less ad hoc.
 
+![CopeNet Data & Tools](docs/imgs/copenet-data-tools.png)
+
 ### Persona Home — give CopeNet a stable self, per model
 Persona Home makes identity explicit and editable instead of spooky. Pick or create a persona, switch the active one per runtime, and edit the underlying identity files (`SOUL.md`, `IDENTITY.md`, `USER.md`, …) right in the inline editor. The model can even author a whole persona on request — just ask it to build one and it fills the files itself. Personas live in a plain folder of markdown you fully control.
+
+![CopeNet Persona Home](docs/imgs/copenet-persona-home.png)
 
 ### Observability — trace the work, not just the answer
 The Observability surface exposes run pulse, recent traces, provider distribution, and top tool activity so you can inspect what the system actually did across sessions.
 
+![CopeNet Observability](docs/imgs/copenet-observability.png)
+
 ### Experiments Matrix — compare behavior across providers and models
 Experiments makes evaluation legible by surfacing provider × model runs in one place, making it easier to compare speed, tool behavior, and prompt-following drift.
 
+![CopeNet Experiments Matrix](docs/imgs/copenet-experiments-matrix.png)
+
 ### Access & Permissions — operator-grade trust, not all-or-nothing
 Permissions are their own axis, separate from behavior. Every session picks an **Access** level — **Read-only** (reads + a safe shell allowlist), **Ask** (anything off-allowlist pauses for your approval instead of silently failing), or **Full Access** (writes + unrestricted shell, gated to trusted frontier providers). When a command pauses, the approval card surfaces inline — on desktop *and* mobile — with **Approve**, **Reject**, or **Always allow**. "Always allow" writes the command to a global, persisted allowlist you can edit any time, so the things you trust stop nagging you. Access (and the model, same provider) can even change mid-session, while every run stays stamped with exactly what it used.
+
+![CopeNet Access & Permissions](docs/imgs/copenet-access-permissions.png)
 
 ### Market Monitor — a daily brief, not a wall of tickers
 Market Monitor is the current favorite: a 60-second morning brief on your watchlist, backed by live SEC filings (Form 4, Form 144, 8-K), sector rotation (RRG), an accumulation watch, and a model-generated daily read that shows its work — regime call, evidence considered, and "what would make this wrong" laid out explicitly instead of buried in a chat reply. Every claim the model makes gets logged to a forward ledger and scored later, so the read is accountable, not just confident.
@@ -50,18 +69,31 @@ preserves accession-level provenance, and applies amendments only after their fi
 date. P/E stays blank when earnings are non-positive, stale, or unsupported; the
 chart renders those intervals as real gaps and keeps its financial scale on the left.
 
+![CopeNet Market Monitor — point-in-time revenue overlay](docs/imgs/market-panel/copenet-financial-series-overlay.png)
+![CopeNet Market Monitor — point-in-time P/E overlay](docs/imgs/market-panel/copenet-financial-overlays.png)
+
 **Treasury curve** — official U.S. Treasury Constant Maturity rates for the 3M, 2Y, 5Y, 10Y, and 30Y benchmarks, with selectable basis-point moves, curve-shape context, and the key 10Y–2Y and 10Y–3M spreads. The feed is cached for 15 minutes and every plotted tenor is aligned to the same Treasury observation date.
+
+![CopeNet Market Monitor — Treasury yield curve](docs/imgs/market-panel/copenet-treasury-curve.png)
 
 <details>
 <summary>More Market Monitor views — why-this-read drill-down, watchlist, sector rotation, forward ledger</summary>
 
 **Why this read** — every model call expands into its reasoning: regime inputs, evidence considered (with SEC filing citations), and explicit falsification conditions.
 
+![CopeNet Market Monitor — why this read](docs/imgs/market-panel/copenet-market-why-this-read.png)
+
 **Watchlist + macro board** — sector ETFs, custom watchlists, and a macro weather strip (DXY, VIX, oil, BTC, ETH) at a glance.
+
+![CopeNet Market Monitor — watchlist and macro board](docs/imgs/market-panel/copenet-market-watchlist-macro.png)
 
 **Sector rotation (RRG) + accumulation watch** — relative-strength rotation quadrants and a confluence-ranked list of names sitting in pullback zones.
 
+![CopeNet Market Monitor — sector rotation and accumulation watch](docs/imgs/market-panel/copenet-market-rotation-accumulation.png)
+
 **Forward ledger + evidence/contrarian** — every regime and ticker call is pre-registered and scored at 4w/8w, no backfilling; a dedicated panel argues the other side of every highlighted signal.
+
+![CopeNet Market Monitor — forward ledger and evidence](docs/imgs/market-panel/copenet-market-ledger-evidence.png)
 
 </details>
 
