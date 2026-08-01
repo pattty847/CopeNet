@@ -60,6 +60,8 @@ Permissions are their own axis, separate from behavior. Every session picks an *
 ### Market Monitor — a daily brief, not a wall of tickers
 Market Monitor is the current favorite: a 60-second morning brief on your watchlist, backed by live SEC filings (Form 4, Form 144, 8-K), sector rotation (RRG), an accumulation watch, and a model-generated daily read that shows its work — regime call, evidence considered, and "what would make this wrong" laid out explicitly instead of buried in a chat reply. Every claim the model makes gets logged to a forward ledger and scored later, so the read is accountable, not just confident.
 
+![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
+
 **Financial-series overlays** — ticker charts can layer quarterly,
 trailing-twelve-month, or annual revenue over split-adjusted price, plus historical
 P/E built from the price and the TTM diluted EPS that was actually public on each
