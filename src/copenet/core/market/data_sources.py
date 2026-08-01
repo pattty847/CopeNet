@@ -40,6 +40,74 @@ def fetch_ohlcv(symbol: str, *, interval: str, period: str = "2y", auto_adjust: 
     return frame[["date", "open", "high", "low", "close", "volume"]].dropna(subset=["close"])
 
 
+def fetch_daily_price_history(
+    symbol: str,
+    *,
+    period: str = "max",
+) -> tuple[pd.DataFrame, list[tuple[str, float]], list[tuple[str, float]]]:
+    """Daily bars on a SPLIT-ONLY basis plus the split and dividend actions, in one request.
+
+    Deliberately NOT `fetch_ohlcv`. That function is pinned to `auto_adjust=True`, which
+    folds dividends into the price on top of splits — the right default for the shared
+    MarketStore cache, but two different adjustments behind one flag. Yahoo's unadjusted
+    `close` column is already split-adjusted on their side, so `auto_adjust=False` is
+    precisely how you ask for splits *without* dividends (`adj_close` carries both).
+
+    That distinction is what makes an append-only price cache possible. A dividend
+    retroactively shifts every prior dividend-adjusted price, so appending to that basis
+    drifts at the seam between old and new rows. Split-only bars move only when a split
+    happens. Consumers wanting total return apply the returned dividends themselves via
+    `price_history.apply_dividend_adjustment`.
+
+    Returns `(frame, splits, dividends)` where `frame` matches `fetch_ohlcv`'s columns and
+    both action lists are `[(iso_date, value)]` oldest-first on that same split basis.
+    """
+    try:
+        import yfinance as yf
+    except ImportError as exc:  # pragma: no cover - dependency exists in packaged env
+        raise RuntimeError("yfinance is required for market data") from exc
+    empty = pd.DataFrame(columns=["date", "open", "high", "low", "close", "volume"])
+    try:
+        frame = yf.Ticker(yf_symbol(symbol)).history(
+            period=period,
+            interval="1d",
+            auto_adjust=False,
+            actions=True,
+        )
+    except Exception:
+        return empty, [], []
+    if frame is None or frame.empty:
+        return empty, [], []
+    frame = frame.reset_index()
+    frame.columns = [str(column).lower() for column in frame.columns]
+    if "date" not in frame:
+        return empty, [], []
+    # `Ticker.history` hands back an exchange-local tz-aware index, unlike `yf.download`'s
+    # naive one. Normalize to the calendar trading date so bar timestamps stay identical
+    # to every other bar in the system (UTC midnight) rather than shifting by the offset.
+    stamps = pd.to_datetime(frame["date"], errors="coerce")
+    frame["date"] = pd.to_datetime(
+        [stamp.date() if stamp is not pd.NaT else None for stamp in stamps],
+        errors="coerce",
+    )
+    frame = frame.dropna(subset=["date", "close"])
+    actions = frame.rename(columns={"stock splits": "splits"})
+    splits = _price_actions(actions, "splits")
+    dividends = _price_actions(actions, "dividends")
+    bars = frame[["date", "open", "high", "low", "close", "volume"]]
+    return bars, splits, dividends
+
+
+def _price_actions(frame: pd.DataFrame, column: str) -> list[tuple[str, float]]:
+    if column not in frame:
+        return []
+    rows = frame[frame[column].fillna(0) > 0]
+    return sorted(
+        (str(pd.Timestamp(row["date"]).date()), float(row[column]))
+        for _, row in rows.iterrows()
+    )
+
+
 def fetch_splits(symbol: str) -> list[tuple[str, float]]:
     """[(ex_date, ratio)] oldest-first — 2.0 is a 2-for-1 forward split, 0.05 a 1-for-20 reverse.
 
