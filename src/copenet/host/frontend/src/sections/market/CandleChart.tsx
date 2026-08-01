@@ -412,6 +412,12 @@ export function CandleChart({
     const timeScale = chart.timeScale();
     const paneWidth = timeScale.width();
     if (paneWidth <= 0) return;
+    // `timeToCoordinate` is PANE-relative, and the pane starts after the left price axis.
+    // Cluster boxes are absolutely positioned against the wrapper, which starts at the
+    // chart's left edge — so every pane x needs the axis width added back. This is zero
+    // until a financial overlay makes the left scale visible, at which point every box
+    // silently rendered one axis-width too far left.
+    const leftAxisPx = chart.priceScale('left').width();
 
     const sourceEvidence = evidenceRef.current.length ? evidenceRef.current : eventsAsEvidence(eventsRef.current);
     const buckets = buildBuckets(sourceEvidence, rows);
@@ -467,7 +473,9 @@ export function CandleChart({
       const chip = `${parts.join(' ')}${cluster.net ? ` · net ${formatMoney(cluster.net)}` : ''}`;
       boxes.push({
         key: `${first.time}-${last.time}-${ci}`,
-        left,
+        // Clipping above is done in pane coordinates; only the rendered position needs
+        // shifting into wrapper space.
+        left: left + leftAxisPx,
         top,
         width: right - left,
         height: bottom - top,
@@ -504,6 +512,9 @@ export function CandleChart({
       range?.to ?? '',
       candle.coordinateToPrice(0) ?? '',
       candle.coordinateToPrice(PRICE_PROBE_PX) ?? '',
+      // Showing or hiding the left financial axis moves the pane sideways without
+      // touching either range, so it has to be part of the transform identity.
+      chart.priceScale('left').width(),
     ].join('|');
     if (key === transformKeyRef.current) return;
     transformKeyRef.current = key;
@@ -571,7 +582,8 @@ export function CandleChart({
         setDayPopup(null);
         return;
       }
-      setDayPopup({ x: param.point.x, y: param.point.y, time, items });
+      // Same pane-vs-wrapper offset as the cluster boxes: param.point.x is pane-relative.
+      setDayPopup({ x: param.point.x + chart.priceScale('left').width(), y: param.point.y, time, items });
     });
 
     // The day popup is anchored to a pixel position that stops meaning anything the moment
@@ -736,6 +748,11 @@ export function CandleChart({
             },
       });
     });
+    // Toggling the overlay shows/hides the left axis, which slides the pane sideways.
+    // Same repaint caveat as the log toggle: the new axis width is not readable until the
+    // chart redraws, so invalidate and let the next frame reposition against it.
+    transformKeyRef.current = '';
+    requestAnimationFrame(() => syncRef.current());
   }, [financialOverlayKind, financialOverlay]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
