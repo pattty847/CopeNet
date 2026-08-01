@@ -5,7 +5,7 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
-import { observationTime } from './financialOverlay';
+import { observationTime, snapOverlayToCandles } from './financialOverlay';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
 import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { useFinancialSeries } from './useFinancialSeries';
@@ -365,18 +365,20 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
   const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
   const overlayPoints = (() => {
     if (!overlayMetric || !overlaySeries.data) return undefined;
-    if ('epsMetric' in overlaySeries.data) {
-      return overlaySeries.data.observations
-        .map((observation) => ({
+    const raw = 'epsMetric' in overlaySeries.data
+      ? overlaySeries.data.observations.map((observation) => ({
           t: Math.floor(Date.parse(`${observation.timestamp}T00:00:00Z`) / 1000),
           value: observation.value != null && Number.isFinite(observation.value)
             ? observation.value
             : null,
-        }));
-    }
-    return overlaySeries.data.observations
-      .filter((observation) => observation.availableAt && Number.isFinite(observation.value))
-      .map((observation) => ({ t: observationTime(observation), value: observation.value }));
+        }))
+      : overlaySeries.data.observations
+          .filter((observation) => observation.availableAt && Number.isFinite(observation.value))
+          .map((observation) => ({ t: observationTime(observation), value: observation.value }));
+    // Snap onto the active timeframe's candle grid. Overlay observations are periodic
+    // (quarterly filings, weekly P/E) and land on their own dates, which would otherwise
+    // inject extra slots into the chart's index-based time axis and squeeze the candles.
+    return snapOverlayToCandles(raw, series.map((bar) => bar.t));
   })();
   const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
     <button

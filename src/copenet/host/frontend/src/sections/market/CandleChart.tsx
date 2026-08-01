@@ -41,6 +41,7 @@ const LABEL_ROOM_PX = 56; // a lone marker gets text only with this much space a
 const MIN_CLUSTER_EVENTS = 3; // smaller groups stay as plain markers
 const MIN_CLUSTER_DAYS = 2; // single busy days are served by the day popup, not a box
 const PRICE_SPLIT_FRACTION = 0.06; // split a time-cluster where price shelves gap >6%
+const PRICE_PROBE_PX = 100; // second sample point for detecting vertical rescales
 
 function formatMoney(value: number): string {
   const abs = Math.abs(value);
@@ -49,6 +50,24 @@ function formatMoney(value: number): string {
   if (abs >= 1e6) return `${sign}$${(abs / 1e6).toFixed(1)}M`;
   if (abs >= 1e3) return `${sign}$${(abs / 1e3).toFixed(0)}K`;
   return `${sign}$${Math.round(abs).toLocaleString()}`;
+}
+
+/** On-screen width of one candle, measured rather than read from chart options.
+ *
+ *  `timeScale().options().barSpacing` is the *configured* value, which does not track live
+ *  zoom, and it is expressed in slots — which stops meaning "one candle" the moment any
+ *  other series contributes timestamps the candles do not have. Measuring two adjacent
+ *  candle coordinates is immune to both. */
+function barSpacingPx(
+  timeScale: ReturnType<IChartApi['timeScale']>,
+  rows: Ohlcv[],
+): number {
+  if (rows.length < 2) return 6;
+  const mid = Math.floor(rows.length / 2);
+  const left = timeScale.timeToCoordinate(rows[mid - 1].t as UTCTimestamp);
+  const right = timeScale.timeToCoordinate(rows[mid].t as UTCTimestamp);
+  if (left == null || right == null) return timeScale.options().barSpacing;
+  return Math.abs(right - left);
 }
 
 /** Snap a unix-seconds timestamp to the nearest bar time (shared by markers and click lookups). */
@@ -135,6 +154,10 @@ function buildBuckets(evidence: EvidenceItem[], rows: Ohlcv[]): DayBucket[] {
   for (const item of evidence) {
     if (!item.t || !Number.isFinite(item.t)) continue;
     if (item.t > lastTime + barSpacing) continue; // future-dated 144s handled separately
+    // Bound the low end too. `snapToBar` finds the NEAREST bar, so an event older than the
+    // chart would otherwise pile onto the first candle and read as activity that happened
+    // on-screen. Snapping is presentation-only; it must never relocate an event's date.
+    if (item.t < times[0] - barSpacing) continue;
     const snapped = snapToBar(item.t, times);
     byTime.set(snapped, [...(byTime.get(snapped) ?? []), item]);
   }
@@ -421,7 +444,7 @@ export function CandleChart({
       const firstX = xByTime.get(first.time);
       const lastX = xByTime.get(last.time);
       if (firstX == null || lastX == null) return;
-      const halfBar = Math.max(2, chart.timeScale().options().barSpacing / 2);
+      const halfBar = Math.max(2, barSpacingPx(timeScale, rows) / 2);
       let left = firstX - halfBar - 2;
       let right = lastX + halfBar + 2;
       if (right < 0 || left > paneWidth) return; // fully off-screen
@@ -462,6 +485,32 @@ export function CandleChart({
   };
   const recomputeRef = useRef(recomputeDecorations);
   recomputeRef.current = recomputeDecorations;
+
+  /** Recompute only if either axis transform actually moved.
+   *
+   *  Lightweight Charts publishes a visible-time-range event but nothing at all for the
+   *  price scale, so a vertical change — price-axis drag, vertical pan, autoscale shift —
+   *  has no event to hang off. Comparing the two mappings catches every case uniformly.
+   *  Two price probes rather than one, because a rescale pivoting exactly on a single
+   *  probe would leave its coordinate unchanged. */
+  const transformKeyRef = useRef('');
+  const syncDecorations = () => {
+    const chart = chartRef.current;
+    const candle = candleRef.current;
+    if (!chart || !candle) return;
+    const range = chart.timeScale().getVisibleLogicalRange();
+    const key = [
+      range?.from ?? '',
+      range?.to ?? '',
+      candle.coordinateToPrice(0) ?? '',
+      candle.coordinateToPrice(PRICE_PROBE_PX) ?? '',
+    ].join('|');
+    if (key === transformKeyRef.current) return;
+    transformKeyRef.current = key;
+    recomputeRef.current();
+  };
+  const syncRef = useRef(syncDecorations);
+  syncRef.current = syncDecorations;
 
   // create once
   useEffect(() => {
@@ -525,16 +574,29 @@ export function CandleChart({
       setDayPopup({ x: param.point.x, y: param.point.y, time, items });
     });
 
-    // Pan/zoom re-clusters: rAF-throttled so a fast drag recomputes at most once a frame.
-    const onRangeChange = () => {
-      setDayPopup(null);
-      if (rafRef.current != null) return;
-      rafRef.current = requestAnimationFrame(() => {
-        rafRef.current = null;
-        recomputeRef.current();
-      });
-    };
+    // The day popup is anchored to a pixel position that stops meaning anything the moment
+    // the chart moves underneath it.
+    const onRangeChange = () => setDayPopup(null);
     chart.timeScale().subscribeVisibleLogicalRangeChange(onRangeChange);
+
+    // Cluster boxes are absolutely-positioned HTML at pixel coordinates, so they have to
+    // track BOTH axes, and a vertical change has no event to subscribe to.
+    //
+    // Pointer and wheel listeners cover the interactions that actually move the price
+    // scale — dragging the axis, vertical pan, wheel zoom — and fire deterministically.
+    // The rAF loop is the catch-all for everything else (autoscale settling, animated
+    // range changes). It deliberately carries no load-bearing case of its own: rAF does
+    // not run at all while the document is hidden, so anything relying on it exclusively
+    // would silently stop working in a backgrounded tab.
+    const onPointerSync = () => syncRef.current();
+    for (const type of ['pointerdown', 'pointermove', 'pointerup', 'wheel'] as const) {
+      el.addEventListener(type, onPointerSync, { passive: true });
+    }
+    const sampleTransform = () => {
+      rafRef.current = requestAnimationFrame(sampleTransform);
+      syncRef.current();
+    };
+    rafRef.current = requestAnimationFrame(sampleTransform);
 
     chartRef.current = chart;
     candleRef.current = candle;
@@ -551,6 +613,9 @@ export function CandleChart({
     ro.observe(el);
     return () => {
       ro.disconnect();
+      for (const type of ['pointerdown', 'pointermove', 'pointerup', 'wheel'] as const) {
+        el.removeEventListener(type, onPointerSync);
+      }
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(onRangeChange);
       if (rafRef.current != null) cancelAnimationFrame(rafRef.current);
       chart.remove();
@@ -566,6 +631,13 @@ export function CandleChart({
   // price-scale mode (runs after creation; also re-applies when the chart is rebuilt on height change)
   useEffect(() => {
     chartRef.current?.priceScale('right').applyOptions({ mode: logScale ? PriceScaleMode.Logarithmic : PriceScaleMode.Normal });
+    // Switching log/linear rewrites every price coordinate, so the boxes have to move with
+    // it. Recomputing synchronously here does NOT work: applyOptions only invalidates the
+    // scale, and priceToCoordinate keeps returning the old mapping until the chart
+    // repaints. So invalidate the cached transform instead and let the next frame do the
+    // work against a settled mapping.
+    transformKeyRef.current = '';
+    requestAnimationFrame(() => syncRef.current());
     try {
       localStorage.setItem('mm-log-scale', logScale ? '1' : '0');
     } catch {
