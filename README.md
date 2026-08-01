@@ -43,9 +43,9 @@ Persona Home makes identity explicit and editable instead of spooky. Pick or cre
 ![CopeNet Persona Home](docs/imgs/copenet-persona-home.png)
 
 ### Observability — trace the work, not just the answer
-The Observability surface exposes run pulse, recent traces, provider distribution, and top tool activity so you can inspect what the system actually did across sessions.
+The Observability run inspector reconstructs each model turn from durable evidence: the effective model input, provider/model metadata, reasoning summaries with honest provenance, exact tool arguments and retained results, the final response, and the raw JSONL trace. A persisted **Debug capture** switch enables the sensitive prompt/tool snapshot for subsequent local runs without requiring a host restart.
 
-![CopeNet Observability](docs/imgs/copenet-observability.png)
+![CopeNet Observability run inspector](docs/imgs/copenet-observability-run-inspector.jpg)
 
 ### Experiments Matrix — compare behavior across providers and models
 Experiments makes evaluation legible by surfacing provider × model runs in one place, making it easier to compare speed, tool behavior, and prompt-following drift.
@@ -117,7 +117,7 @@ CopeNet is evolving into an operator workspace, not just a chat client. Today it
 
 - **Agent sessions** with persistent transcripts, first-send runtime binding (provider/profile lock; model + Access changeable mid-session), archive/restore, and inline tool execution
 - **Fleet rooms** where ChatGPT and Claude independently research the same question, share evidence receipts after reveal, and critique each other in attributed follow-up turns
-- **Observability** with run pulse views, recent traces, provider/tool distributions, and session activity inspection
+- **Observability** with a per-run timeline, provider reasoning provenance, exact tool evidence, model-input snapshots, and raw local traces
 - **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured local-model generation
 - **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
 - **Experiments** for comparing provider/model behavior across real runs
