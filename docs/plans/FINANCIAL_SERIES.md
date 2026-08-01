@@ -127,3 +127,62 @@ under `asOf`, Q4/TTM derivation, persisted fallback, RPC/tool shape parity, and
 live GOOGL/NVDA history. Browser verification covers NVDA quarterly/TTM/annual
 switching, provenance/status display, the filing-date step line, and a clean
 console.
+
+## Review findings, 2026-07-31
+
+Independent review of the shipped overlays. The accounting core verified clean
+against real filings — AAPL FY2025 `$7.46`, NVDA FY2025 `$2.94`, and GOOG FY2021
+`$5.61` (the reported `$112.20` across a real 20:1 split) all match as-filed, and
+`availableAt` correctly resolves to the first filing that carried a value rather
+than the latest restatement. The defects are around it, not in it.
+
+Open, ranked:
+
+1. **Historical P/E divides total-return prices by split-only EPS.** The valuation
+   path fetches `auto_adjust=True`, which is splits *and* dividends, then labels it
+   `price_basis="split_adjusted"` — a guard satisfied by a string, not by the actual
+   basis. Measured understatement at the 10-year edge: XOM 35%, KO 27%, AAPL 8%,
+   NVDA 2%, decaying to zero at the right edge, so it renders as a de-rating that
+   never happened. Fixed by the split-only basis in `docs/plans/PRICE_CACHE.md`.
+2. **Overlay time domains are unbounded.** P/E is hardcoded to 10y weekly and
+   revenue to full SEC history regardless of the selected D/W/M candle window.
+   Lightweight Charts' axis is index-based, so every unique timestamp across all
+   series takes one equal-width slot: pre-candle quarterly revenue compresses into
+   the width of ~45 weekly bars, and overlay points landing on filing dates rather
+   than candle dates *inject* new slots, corrupting the `barSpacing` the SEC cluster
+   boxes use for their width. Fix is candle-master: max-history candles plus
+   forward-snapping every overlay point onto a candle timestamp.
+3. **Cluster boxes never recompute on price-axis changes.** Recompute is wired to
+   the visible *logical time* range, the ResizeObserver, and data effects. Nothing
+   fires on a vertical rescale — price-axis drag, vertical pan, autoscale shift, or
+   the log/linear toggle, which applies the mode without recomputing. The boxes are
+   absolutely-positioned HTML at `priceToCoordinate` pixels, so candles move and
+   boxes do not. Lightweight Charts v5 exposes no price-scale subscription; a rAF
+   sampler over a reference coordinate is the available fix.
+4. **`buildBuckets` bounds evidence above but not below.** Anything older than the
+   first candle snaps onto it. Latent while the evidence window (180 days) stays
+   shorter than every candle window; live the moment `daysBack` is raised.
+5. **Diluted-share coverage gates interim TTM EPS.** GOOG has 34 quarterly EPS
+   observations but only 10 quarterly diluted-share observations, all from Oct 2024.
+   TTM reconstruction needs share counts on all three bridge windows, so before 2025
+   only annual 10-K EPS survives — 14 usable points in 10 years. The 180-day
+   staleness rule then blanks the rest, producing the ~6-months-on/6-months-off P/E
+   gaps. Widen the concept list the way `diluted_shares` already accepts
+   `WeightedAverageNumberOfShareOutstandingBasicAndDiluted`; note `diluted_eps` has
+   no matching `EarningsPerShareBasicAndDiluted` entry, which is an asymmetry rather
+   than a basic-EPS fallback and silently excludes issuers using the combined tag.
+6. **`GOOGL` resolves to nothing while `GOOG` works.** Ticker-to-CIK resolution
+   drops one of Alphabet's two tickers.
+7. **No flag for one-off earnings.** GOOG Q2 2026 diluted EPS was `$9.11` against
+   `$2.31` a year earlier and AMZN `$5.75` against `$1.68`, both as-filed. TTM EPS
+   roughly doubles and the P/E collapses — correct arithmetic that reads to a human
+   as the stock getting cheap when the denominator spiked. A discontinuity flag on
+   TTM EPS moving more than ~40% in one quarter would mark these for review.
+8. **Two live financial paths.** `market.ticker.fundamentals.get` still exists in
+   the backend with a client function in `wsMarketRpc.ts`, though no market component
+   calls it. Orphaned frontend code over a live backend path.
+
+Revenue values spot-checked correct (AMZN Q2'26 `$200.61B`, GOOG Q2'26 `$119.80B`,
+NVDA Q1 FY27 `$81.61B`). The revenue concept registry has no bank/fintech
+total-revenue concept, so issuers reporting under a custom total-revenue tag will
+understate.
