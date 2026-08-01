@@ -9,6 +9,7 @@ import pytest
 from copenet.core.market import edgar
 from copenet.core.market import financials as market_financials_service
 from copenet.core.market import runtime as market_runtime
+from copenet.core.market.price_cache import PriceCache
 from copenet.core.tools.contracts import ToolExecutionRequest
 from copenet.core.tools.handlers import market_financials
 from copenet.host import rpc_market
@@ -237,31 +238,72 @@ def test_valuation_as_of_uses_price_time_without_dropping_empty_eps_rows() -> No
     assert [row["value"] for row in result["observations"]] == [None, 10]
 
 
-def test_valuation_price_inputs_preserve_split_adjusted_contract(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: dict[str, Any] = {}
+def test_valuation_prices_are_split_only_and_never_dividend_adjusted(tmp_path) -> None:
+    """A P/E numerator must be the price that actually traded.
 
-    def fake_fetch_ohlcv(symbol: str, **kwargs):
-        calls.update({"symbol": symbol, **kwargs})
-        return pd.DataFrame(
-            {
-                "date": pd.to_datetime(["2026-01-02"], utc=True),
-                "close": [25.0],
-            }
+    Dividend-adjusted prices back-shift history downward, so the same EPS over a lower
+    price reads as a lower multiple — historical P/E understated by an amount that grows
+    with lookback and dividend yield. This pins the split-only basis so the fix cannot be
+    silently undone by anyone reaching for the more convenient adjusted series.
+    """
+    def fake_fetch(_symbol: str, *, period: str = "max"):
+        days = ["2026-01-05", "2026-01-06", "2026-01-12"]
+        return (
+            pd.DataFrame(
+                {
+                    "date": pd.to_datetime(days),
+                    "open": [25.0] * 3,
+                    "high": [25.0] * 3,
+                    "low": [25.0] * 3,
+                    "close": [25.0] * 3,
+                    "volume": [10] * 3,
+                }
+            ),
+            [("2025-06-01", 2.0)],
+            [("2026-01-06", 5.0)],  # a dividend big enough to be obvious if applied
         )
 
-    monkeypatch.setattr(market_financials_service, "fetch_ohlcv", fake_fetch_ohlcv)
-    monkeypatch.setattr(
-        market_financials_service,
-        "fetch_split_history",
-        lambda _symbol: ([("2025-06-01", 2.0)], True),
+    cache = PriceCache(tmp_path, fetch=fake_fetch)
+
+    prices, splits = market_financials_service._valuation_price_inputs(
+        "NVDA",
+        prices_cache=cache,
     )
 
-    prices, splits = market_financials_service._valuation_price_inputs("NVDA")
-
-    assert calls["auto_adjust"] is True
-    assert calls["interval"] == "1wk"
-    assert prices == [{"time": "2026-01-02", "close": 25.0}]
+    # Weekly closes, Monday-anchored, untouched by the dividend.
+    assert prices == [
+        {"time": "2026-01-05", "close": 25.0},
+        {"time": "2026-01-12", "close": 25.0},
+    ]
     assert splits == [("2025-06-01", 2.0)]
+
+
+def test_valuation_prices_come_from_the_cache_without_a_second_download(tmp_path) -> None:
+    calls: list[str] = []
+
+    def fake_fetch(_symbol: str, *, period: str = "max"):
+        calls.append(period)
+        return (
+            pd.DataFrame(
+                {
+                    "date": pd.to_datetime(["2026-01-05"]),
+                    "open": [25.0],
+                    "high": [25.0],
+                    "low": [25.0],
+                    "close": [25.0],
+                    "volume": [10],
+                }
+            ),
+            [],
+            [],
+        )
+
+    cache = PriceCache(tmp_path, fetch=fake_fetch)
+    market_financials_service._valuation_price_inputs("NVDA", prices_cache=cache)
+    market_financials_service._valuation_price_inputs("NVDA", prices_cache=cache)
+
+    # Turning the P/E overlay on used to cost a fresh 10y weekly download every time.
+    assert calls == ["max"]
 
 
 @pytest.mark.asyncio
@@ -423,3 +465,32 @@ def test_latest_pe_is_unavailable_when_split_history_cannot_be_verified(
     assert result["epsTtm"] is None
     assert result["epsTtmSplitFactor"] is None
     assert result["peTtm"] is None
+
+
+def test_valuation_series_trims_the_run_before_any_earnings_existed() -> None:
+    """Price history reaches back decades further than XBRL does."""
+    payload = {
+        "observations": [
+            {"timestamp": "1975-01-06", "value": None, "epsAvailableAt": None},
+            {"timestamp": "2010-01-04", "value": None, "epsAvailableAt": None},
+            {"timestamp": "2010-02-01", "value": 12.0, "epsAvailableAt": "2010-01-28"},
+            # A gap *inside* the covered range is information — stale or negative
+            # earnings — and must survive.
+            {"timestamp": "2010-09-06", "value": None, "epsAvailableAt": None},
+            {"timestamp": "2010-11-01", "value": 14.0, "epsAvailableAt": "2010-10-28"},
+        ]
+    }
+
+    trimmed = market_financials_service._trim_leading_unpriced(payload)
+
+    assert [row["timestamp"] for row in trimmed["observations"]] == [
+        "2010-02-01",
+        "2010-09-06",
+        "2010-11-01",
+    ]
+
+
+def test_valuation_series_with_no_earnings_at_all_is_left_alone() -> None:
+    payload = {"observations": [{"timestamp": "1975-01-06", "value": None, "epsAvailableAt": None}]}
+
+    assert market_financials_service._trim_leading_unpriced(payload) == payload

@@ -4,13 +4,23 @@ from __future__ import annotations
 
 import asyncio
 from copy import deepcopy
+from pathlib import Path
 from typing import Any, Callable
 
 import pandas as pd
 
-from .data_sources import fetch_ohlcv, fetch_split_history
+from copenet._paths import default_sessions_dir
+
+from .data_sources import fetch_split_history
 from .edgar import SEC_API_USER_AGENT
+from .price_cache import PriceCache
+from .price_history import SPLIT_ADJUSTED, WEEKLY, bar_date
 from .sec_fetcher import managed_sec_fetcher
+
+
+def default_market_dir() -> Path:
+    """Local copy of the runtime's market root — importing `runtime` here would cycle."""
+    return default_sessions_dir().parent / "market"
 
 
 async def get_financial_series(
@@ -99,7 +109,35 @@ async def get_valuation_series(
             refresh=refresh,
             include_provenance=include_provenance,
         )
-    return _point_in_time_valuation_payload(payload, as_of=as_of)
+    return _point_in_time_valuation_payload(_trim_leading_unpriced(payload), as_of=as_of)
+
+
+def _trim_leading_unpriced(payload: dict[str, Any] | None) -> dict[str, Any] | None:
+    """Drop leading rows from before any SEC earnings existed.
+
+    Price history now reaches back decades further than XBRL does — KO's candles start in
+    1962 against Company Facts from roughly 2009 — so the head of the series is thousands
+    of rows that can never carry a ratio. Gaps *within* the covered range stay: those mean
+    "stale or non-positive earnings", which is information. A leading run of nothing is not.
+    """
+    if payload is None:
+        return None
+    observations = payload.get("observations")
+    if not isinstance(observations, list):
+        return payload
+    first_priced = next(
+        (
+            index
+            for index, observation in enumerate(observations)
+            if isinstance(observation, dict) and observation.get("epsAvailableAt")
+        ),
+        None,
+    )
+    if not first_priced:
+        return payload
+    trimmed = dict(payload)
+    trimmed["observations"] = observations[first_priced:]
+    return trimmed
 
 
 def _point_in_time_financial_payload(
@@ -186,23 +224,33 @@ def _valuation_observation_is_eligible(observation: Any, cutoff: pd.Timestamp) -
 
 def _valuation_price_inputs(
     symbol: str,
+    *,
+    prices_cache: PriceCache | None = None,
 ) -> tuple[list[dict[str, Any]], list[tuple[str, float]] | None]:
-    frame = fetch_ohlcv(
-        symbol,
-        interval="1wk",
-        period="10y",
-        auto_adjust=True,
-    )
-    prices: list[dict[str, Any]] = []
-    for row in frame.to_dict("records"):
-        timestamp = pd.to_datetime(row.get("date"), utc=True, errors="coerce")
-        if pd.isna(timestamp):
-            continue
-        try:
-            close = float(row["close"])
-        except (KeyError, TypeError, ValueError):
-            continue
-        prices.append({"time": timestamp.date().isoformat(), "close": close})
+    """Weekly closes on a SPLIT-ONLY basis, plus the split history, for trailing P/E.
+
+    P/E is price paid per dollar of earnings, so the numerator must be the price that
+    actually traded — split-adjusted, because a split is mechanical, but *not* dividend
+    adjusted. This previously read `auto_adjust=True`, which folds dividends in on top of
+    splits and quietly back-shifts every historical price downward. Same EPS over a lower
+    price reads as a lower multiple, so historical P/E was understated by an amount that
+    grew with lookback and with dividend yield (measured at the 10-year mark: XOM 35%,
+    KO 27%, AAPL 8%), decaying to zero at the right edge — the shape of a de-rating that
+    never happened.
+
+    The price cache already stores exactly this basis, so it is also the fetch-free path.
+    """
+    cache = prices_cache or PriceCache(default_market_dir() / "prices")
+    cache.refresh(symbol)
+    bars = cache.bars(symbol, timeframe=WEEKLY, basis=SPLIT_ADJUSTED)
+    prices = [
+        {"time": bar_date(bar).isoformat(), "close": float(bar.c)}
+        for bar in bars
+        if float(bar.c) > 0
+    ]
+    history = cache.load(symbol)
+    if history is not None:
+        return prices, history.splits
     splits, verified = fetch_split_history(symbol)
     return prices, splits if verified else None
 

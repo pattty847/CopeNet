@@ -78,7 +78,7 @@ the hazard cannot occur. `tests/unit/test_market_data_contracts.py` pins both ru
 - [x] `fetch_daily_price_history()` — single split-only request
 - [x] `price_history.py` — pure resample / dividend / merge transforms
 - [x] `price_cache.py` — durable store and refresh orchestration
-- [ ] Wire the ticker chart path (`runtime.ticker`)
-- [ ] Wire the valuation path (fixes historical P/E — see the review findings in `FINANCIAL_SERIES.md`)
+- [x] Wire the ticker chart path (`runtime.ticker`) and the VOO/QQQ/XLK benchmark reads
+- [x] Wire the valuation path — historical P/E now divides split-only prices (AAPL Mar-2018 reads 17.0x against a real $41.23 close)
 - [ ] Wire the dashboard refresh
 - [ ] Measure derived weekly/monthly against Yahoo's own aggregation and record the delta

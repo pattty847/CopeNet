@@ -77,8 +77,14 @@ class PriceCache:
     ) -> None:
         self._root = Path(root_dir)
         self._root.mkdir(parents=True, exist_ok=True)
-        self._fetch = fetch or fetch_daily_price_history
+        # Resolved per call rather than bound here so module-level patching works
+        # regardless of when a cache was constructed — the offline test fixtures depend
+        # on being able to cut the network after a runtime already exists.
+        self._fetch = fetch
         self._lock = threading.RLock()
+
+    def _fetch_history(self, symbol: str, *, period: str):
+        return (self._fetch or fetch_daily_price_history)(symbol, period=period)
 
     @property
     def root_dir(self) -> Path:
@@ -138,7 +144,7 @@ class PriceCache:
         if cached is None or force:
             return self._rebuild(normalized, moment)
 
-        frame, splits, dividends = self._fetch(normalized, period=DELTA_PERIOD)
+        frame, splits, dividends = self._fetch_history(normalized, period=DELTA_PERIOD)
         incoming = frame_to_bars(frame)
         if not incoming:
             return cached
@@ -158,7 +164,7 @@ class PriceCache:
         )
 
     def _rebuild(self, symbol: str, moment: datetime) -> PriceHistory | None:
-        frame, splits, dividends = self._fetch(symbol, period="max")
+        frame, splits, dividends = self._fetch_history(symbol, period="max")
         bars = frame_to_bars(frame)
         if not bars:
             return self.load(symbol)

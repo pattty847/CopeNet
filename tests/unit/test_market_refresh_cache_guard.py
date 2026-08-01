@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from copenet.core.market import runtime as runtime_module
+from copenet.core.market import price_cache as price_cache_module
 from copenet.core.market.models import MarketBar
 from copenet.core.market.runtime import MarketRuntime
 from copenet.core.market.store import MarketStore
@@ -37,6 +38,7 @@ def test_refresh_preserves_cached_bars_when_fetch_fails(tmp_path: Path, monkeypa
         raise RuntimeError("simulated transient fetch failure")
 
     monkeypatch.setattr(runtime_module, "fetch_ohlcv", _always_fails)
+    monkeypatch.setattr(price_cache_module, "fetch_daily_price_history", _always_fails)
 
     runtime = MarketRuntime(store=store)
     runtime.refresh(scope="all")
@@ -56,6 +58,7 @@ def test_refresh_marks_regime_stale_not_live_riskoff_on_total_failure(
         raise RuntimeError("simulated total outage")
 
     monkeypatch.setattr(runtime_module, "fetch_ohlcv", _always_fails)
+    monkeypatch.setattr(price_cache_module, "fetch_daily_price_history", _always_fails)
     monkeypatch.setattr(runtime_module, "fetch_fund_profile", lambda symbol: None)
     monkeypatch.setattr(runtime_module, "fetch_key_stats", lambda symbol: None)
 

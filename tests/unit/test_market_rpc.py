@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from copenet.core.market import runtime as runtime_module
+from copenet.core.market import price_cache as price_cache_module
 from copenet.core.market.models import DashboardPayload
 from copenet.core.market.runtime import MarketRuntime
 from copenet.core.market.store import MarketStore
@@ -38,6 +39,9 @@ def offline_market(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(runtime_module, "fetch_ohlcv", _no_network)
     monkeypatch.setattr(runtime_module, "fetch_fund_profile", lambda symbol: None)
     monkeypatch.setattr(runtime_module, "fetch_key_stats", lambda symbol: None)
+    # Candles now come from PriceCache, not fetch_ohlcv. Without this the guard above
+    # leaks: ticker() would reach Yahoo through the cache's own fetch instead.
+    monkeypatch.setattr(price_cache_module, "fetch_daily_price_history", _no_network)
 
 
 async def test_market_dashboard_get_returns_contract_payload(tmp_path: Path) -> None:

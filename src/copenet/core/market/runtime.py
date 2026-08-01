@@ -33,6 +33,7 @@ from .models import (
     EvidenceItem,
     InsightBaseRate,
     InsightComponent,
+    MarketBar,
     MarketPanel,
     Portfolio,
     PortfolioPosition,
@@ -47,6 +48,8 @@ from .fact_packets import market_fact_packet, ticker_fact_packet
 from .ledger import record_market_read_claims, record_ticker_read_claim, track_record_line
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
+from .price_cache import PriceCache
+from .price_history import TOTAL_RETURN
 from .signals import compute_price_signals, compute_rrg_tail
 from .webull.config import include_portfolio_context_enabled
 from .webull.context_pack import build_portfolio_context_pack
@@ -56,9 +59,29 @@ from .synthesis import synthesize_briefing
 from .universe import MACRO_SYMBOLS, SECTOR_SYMBOLS, UNIVERSE, find_asset
 
 
+#: Existing consumers were fed `auto_adjust=True` bars — splits *and* dividends. Serving
+#: total_return from the cache reproduces that basis to within 0.0005%, so adopting the
+#: cache is a pure speed change and no signal, RRG, or drawdown value shifts underneath
+#: it. Whether pattern detection *should* run on a split-only basis is a separate product
+#: call. Trailing P/E already asks for `split_adjusted` instead, because a P/E numerator
+#: has to be the price actually paid rather than a total-return series.
+CHART_PRICE_BASIS = TOTAL_RETURN
+
+#: Full history is cheap to serve now, but a 60-year daily series is a needlessly large
+#: wire payload for a chart. Weekly and monthly stay unbounded so they always reach back
+#: past the earliest SEC facts (2009-ish), which is what stops a financial overlay from
+#: extending the chart's time axis before the first candle.
+CHART_BAR_LIMITS: dict[str, int | None] = {"daily": 2_600, "weekly": None, "monthly": None}
+
+
 class MarketRuntime:
-    def __init__(self, store: MarketStore | None = None) -> None:
+    def __init__(
+        self,
+        store: MarketStore | None = None,
+        prices: PriceCache | None = None,
+    ) -> None:
         self.store = store or MarketStore(default_market_dir())
+        self.prices = prices or PriceCache(self.store.root_dir / "prices")
 
     def dashboard(self) -> DashboardPayload:
         return self.store.load_dashboard()
@@ -66,37 +89,47 @@ class MarketRuntime:
     def universe(self) -> list[dict[str, Any]]:
         return [asset.to_wire() for asset in UNIVERSE]
 
-    def _weekly_frame(self, symbol: str) -> pd.DataFrame:
-        """Live weekly fetch with a store-bars fallback — the same freshness pattern as the
-        chart bars, so a benchmark series is never a stale cache sitting next to a live one."""
+    def cached_bars(self, symbol: str, timeframe: str) -> list[MarketBar]:
+        """Candles from the durable daily cache, falling back to MarketStore's bars.
+
+        One cached daily history serves every timeframe, so this replaces what used to be
+        a separate network fetch per timeframe per view. A refresh failure must never
+        erase a good cache: an empty result falls through to the older stored bars rather
+        than reporting the symbol as having no history.
+        """
         try:
-            frame = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
-            if not frame.empty:
-                return frame
+            if self.prices.refresh(symbol) is not None:
+                bars = self.prices.bars(
+                    symbol,
+                    timeframe=timeframe,
+                    basis=CHART_PRICE_BASIS,
+                )
+                limit = CHART_BAR_LIMITS.get(timeframe)
+                if bars:
+                    return bars[-limit:] if limit else bars
         except Exception:
-            pass
-        return _bars_to_frame(self.store.load_bars(symbol, "weekly"))
+            logging.warning("market: %s %s price cache refresh failed", symbol, timeframe, exc_info=True)
+        return self.store.load_bars(symbol, timeframe)
+
+    def _weekly_frame(self, symbol: str) -> pd.DataFrame:
+        """Weekly benchmark series off the shared cache.
+
+        VOO/QQQ/XLK are the same three symbols for every ticker view, so before the cache
+        existed each view re-downloaded all three from Yahoo just to compute one relative
+        strength read."""
+        return _bars_to_frame(self.cached_bars(symbol, "weekly"))
 
     def ticker(self, symbol: str, *, compare: list[str] | None = None) -> TickerDetailPayload:
         normalized = symbol.strip().upper()
         asset = find_asset(normalized)
         name = asset.name if asset else normalized
-        # Deep multi-timeframe history for the chart, fetched on-demand. The dashboard refresh only
-        # persists weekly(3y)/daily(6mo) for signals, so pull richer D/W/M here for the candle view;
-        # fall back to the stored bars if a live fetch fails.
-        def _chart_bars(interval: str, period: str, cache_key: str) -> list:
-            try:
-                bars = frame_to_bars(fetch_ohlcv(normalized, interval=interval, period=period, auto_adjust=True))
-                if bars:
-                    return bars
-            except Exception:
-                pass
-            return self.store.load_bars(normalized, cache_key)
-
+        # All three timeframes are derived from one cached daily history, so opening a
+        # ticker costs at most a single delta request instead of one download per
+        # timeframe. Weekly and monthly now carry full history rather than 5y/10y.
         fetched_at = _now_iso()
-        daily = _chart_bars("1d", "2y", "daily")
-        weekly = _chart_bars("1wk", "5y", "weekly")
-        monthly = _chart_bars("1mo", "10y", "monthly")
+        daily = self.cached_bars(normalized, "daily")
+        weekly = self.cached_bars(normalized, "weekly")
+        monthly = self.cached_bars(normalized, "monthly")
         weekly_frame = _bars_to_frame(weekly)
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == normalized]
         last = weekly[-1].c if weekly else 0.0
