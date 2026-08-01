@@ -162,15 +162,17 @@ Open, ranked:
 4. **`buildBuckets` bounds evidence above but not below.** Anything older than the
    first candle snaps onto it. Latent while the evidence window (180 days) stays
    shorter than every candle window; live the moment `daysBack` is raised.
-5. **Diluted-share coverage gates interim TTM EPS.** GOOG has 34 quarterly EPS
-   observations but only 10 quarterly diluted-share observations, all from Oct 2024.
-   TTM reconstruction needs share counts on all three bridge windows, so before 2025
-   only annual 10-K EPS survives — 14 usable points in 10 years. The 180-day
-   staleness rule then blanks the rest, producing the ~6-months-on/6-months-off P/E
-   gaps. Widen the concept list the way `diluted_shares` already accepts
-   `WeightedAverageNumberOfShareOutstandingBasicAndDiluted`; note `diluted_eps` has
-   no matching `EarningsPerShareBasicAndDiluted` entry, which is an asymmetry rather
-   than a basic-EPS fallback and silently excludes issuers using the combined tag.
+5. ~~**Diluted-share coverage gates interim TTM EPS.**~~ **Fixed** (CopeTech-Edgar
+   `ed24be4`). Widening the concept list turned out to be impossible: Alphabet has no
+   consolidated weighted-average share count in Company Facts under *any* name before
+   mid-2024, because it reported shares per share class using XBRL dimensions and the
+   Company Facts API returns only non-dimensional facts. The count is now recovered from
+   `net income / diluted EPS`, which agrees with the tagged value to within 0.22% across
+   264 windows where both exist. GOOG went from 14 TTM points to 32 and trailing P/E is
+   continuous from 2019 at a true quarterly cadence. Still open from this item:
+   `diluted_eps` has no `EarningsPerShareBasicAndDiluted` entry, which silently excludes
+   issuers using the combined tag; and GOOG retains a 2016-2018 hole where the early
+   Alphabet filings surface no annual EPS window at all.
 6. **`GOOGL` resolves to nothing while `GOOG` works.** Ticker-to-CIK resolution
    drops one of Alphabet's two tickers.
 7. **No flag for one-off earnings.** GOOG Q2 2026 diluted EPS was `$9.11` against
