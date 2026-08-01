@@ -19,9 +19,7 @@ from .benchmark import benchmark_verdict
 from .data_sources import (
     fetch_fund_profile,
     fetch_key_stats,
-    fetch_ohlcv,
     fetch_split_history,
-    frame_to_bars,
     macro_item_from_frame,
 )
 from .edgar import chart_events_from_evidence, fetch_evidence, fetch_fundamentals
@@ -73,6 +71,13 @@ CHART_PRICE_BASIS = TOTAL_RETURN
 #: extending the chart's time axis before the first candle.
 CHART_BAR_LIMITS: dict[str, int | None] = {"daily": 2_600, "weekly": None, "monthly": None}
 
+#: Signal windows the dashboard sweep has always used — 5y weekly, 6mo daily. Held
+#: constant while the *source* moved to the cache, so no signal, RRG, or drawdown value
+#: shifts underneath the change. A caching commit must not silently re-tune pattern
+#: detection by widening the history those features are computed over.
+REFRESH_WEEKLY_BARS = 261
+REFRESH_DAILY_BARS = 126
+
 
 class MarketRuntime:
     def __init__(
@@ -98,18 +103,21 @@ class MarketRuntime:
         than reporting the symbol as having no history.
         """
         try:
-            if self.prices.refresh(symbol) is not None:
-                bars = self.prices.bars(
-                    symbol,
-                    timeframe=timeframe,
-                    basis=CHART_PRICE_BASIS,
-                )
-                limit = CHART_BAR_LIMITS.get(timeframe)
-                if bars:
-                    return bars[-limit:] if limit else bars
+            self.prices.refresh(symbol)
         except Exception:
-            logging.warning("market: %s %s price cache refresh failed", symbol, timeframe, exc_info=True)
-        return self.store.load_bars(symbol, timeframe)
+            logging.warning("market: %s price cache refresh failed", symbol, exc_info=True)
+        return self._cache_bars(symbol, timeframe, CHART_BAR_LIMITS.get(timeframe)) or (
+            self.store.load_bars(symbol, timeframe)
+        )
+
+    def _cache_bars(self, symbol: str, timeframe: str, limit: int | None) -> list[MarketBar]:
+        """Derive from the stored cache without any network call. May be empty."""
+        try:
+            bars = self.prices.bars(symbol, timeframe=timeframe, basis=CHART_PRICE_BASIS)
+        except Exception:
+            logging.warning("market: %s %s cache read failed", symbol, timeframe, exc_info=True)
+            return []
+        return bars[-limit:] if (bars and limit) else bars
 
     def _weekly_frame(self, symbol: str) -> pd.DataFrame:
         """Weekly benchmark series off the shared cache.
@@ -271,14 +279,12 @@ class MarketRuntime:
 
         symbol = target.strip().upper()
         asset = find_asset(symbol)
-        # Multi-year structure features need the full 5y weekly history; fetch live with a
-        # stored-bars fallback (same pattern as the chart path in ticker()).
-        try:
-            weekly_frame = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
-            if weekly_frame.empty:
-                weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
-        except Exception:
-            weekly_frame = _bars_to_frame(self.store.load_bars(symbol, "weekly"))
+        # Multi-year structure features need the 5y weekly history; same cache-backed path
+        # as ticker(), bounded to the window these features have always been tuned on.
+        weekly_frame = _bars_to_frame(
+            self._cache_bars(symbol, "weekly", REFRESH_WEEKLY_BARS)
+            or self.store.load_bars(symbol, "weekly")
+        )
         voo_frame = _bars_to_frame(self.store.load_bars("VOO", "weekly"))
         fs = compute_features(weekly_frame, voo_frame, symbol=symbol)
         verdict = benchmark_verdict(weekly_frame, {"VOO": voo_frame})
@@ -350,23 +356,30 @@ class MarketRuntime:
         # limits — the morning sentinel runs unattended, so slow-and-reliable wins.
         pace = _fetch_pace_seconds()
         for symbol in symbols:
+            # One request per symbol now covers both timeframes: the first sweep pulls the
+            # symbol's full history, every sweep afterwards is a small delta. This used to
+            # be two downloads each, re-pulling years of unchanged bars every morning.
+            # max_age_seconds=0 because collecting the session's new candle is precisely
+            # this job's purpose — a sweep that served yesterday's cache would be useless.
             try:
-                weekly[symbol] = fetch_ohlcv(symbol, interval="1wk", period="5y", auto_adjust=True)
-                daily[symbol] = fetch_ohlcv(symbol, interval="1d", period="6mo", auto_adjust=True)
+                self.prices.refresh(symbol, max_age_seconds=0)
             except Exception:
-                weekly[symbol] = pd.DataFrame()
-                daily[symbol] = pd.DataFrame()
+                logging.warning("market refresh: %s price fetch failed", symbol, exc_info=True)
+            fresh_weekly = self._cache_bars(symbol, "weekly", REFRESH_WEEKLY_BARS)
+            fresh_daily = self._cache_bars(symbol, "daily", REFRESH_DAILY_BARS)
             # A failed/empty fetch must never overwrite a previously good cache entry — the
             # next reader (ticker(), interpret(), backtester, ledger) falls back to the cache,
             # and a transient rate-limit/network blip shouldn't silently erase real bars.
-            if not weekly[symbol].empty:
-                self.store.save_bars(symbol, "weekly", frame_to_bars(weekly[symbol]))
+            if fresh_weekly:
+                self.store.save_bars(symbol, "weekly", fresh_weekly)
             else:
                 logging.warning("market refresh: %s weekly fetch failed/empty — keeping cached bars", symbol)
-            if not daily[symbol].empty:
-                self.store.save_bars(symbol, "daily", frame_to_bars(daily[symbol]))
+            if fresh_daily:
+                self.store.save_bars(symbol, "daily", fresh_daily)
             else:
                 logging.warning("market refresh: %s daily fetch failed/empty — keeping cached bars", symbol)
+            weekly[symbol] = _bars_to_frame(fresh_weekly or self.store.load_bars(symbol, "weekly"))
+            daily[symbol] = _bars_to_frame(fresh_daily or self.store.load_bars(symbol, "daily"))
             if pace > 0:
                 time.sleep(pace)
 

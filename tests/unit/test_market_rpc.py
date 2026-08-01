@@ -29,18 +29,17 @@ class FakeOrchestrator:
 def offline_market(monkeypatch: pytest.MonkeyPatch) -> None:
     """These tests assert RPC wire shapes only — never let them reach Yahoo or SEC EDGAR.
 
-    ticker() fetches live OHLCV/fund-profile/key-stats with store fallbacks, and
+    ticker() refreshes the price cache and reads fund-profile/key-stats live, and
     refresh() sweeps the whole universe (yfinance + SEC evidence into the shared
     data/edgar cache). Unpatched, this suite made real network calls on every run."""
 
     def _no_network(*args: Any, **kwargs: Any) -> Any:
         raise RuntimeError("network disabled in unit tests")
 
-    monkeypatch.setattr(runtime_module, "fetch_ohlcv", _no_network)
     monkeypatch.setattr(runtime_module, "fetch_fund_profile", lambda symbol: None)
     monkeypatch.setattr(runtime_module, "fetch_key_stats", lambda symbol: None)
-    # Candles now come from PriceCache, not fetch_ohlcv. Without this the guard above
-    # leaks: ticker() would reach Yahoo through the cache's own fetch instead.
+    # Every candle now comes from PriceCache. Patching runtime's old fetch_ohlcv would
+    # block nothing — the runtime no longer calls it at all.
     monkeypatch.setattr(price_cache_module, "fetch_daily_price_history", _no_network)
 
 

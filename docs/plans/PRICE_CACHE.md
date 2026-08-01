@@ -80,5 +80,5 @@ the hazard cannot occur. `tests/unit/test_market_data_contracts.py` pins both ru
 - [x] `price_cache.py` — durable store and refresh orchestration
 - [x] Wire the ticker chart path (`runtime.ticker`) and the VOO/QQQ/XLK benchmark reads
 - [x] Wire the valuation path — historical P/E now divides split-only prices (AAPL Mar-2018 reads 17.0x against a real $41.23 close)
-- [ ] Wire the dashboard refresh
+- [x] Wire the dashboard refresh — a universe sweep is 25 requests instead of 50, each a ~6mo delta after the first day
 - [ ] Measure derived weekly/monthly against Yahoo's own aggregation and record the delta
