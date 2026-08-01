@@ -173,8 +173,14 @@ Open, ranked:
    `diluted_eps` has no `EarningsPerShareBasicAndDiluted` entry, which silently excludes
    issuers using the combined tag; and GOOG retains a 2016-2018 hole where the early
    Alphabet filings surface no annual EPS window at all.
-6. **`GOOGL` resolves to nothing while `GOOG` works.** Ticker-to-CIK resolution
-   drops one of Alphabet's two tickers.
+6. ~~**`GOOGL` resolves to nothing while `GOOG` works.**~~ **Fixed** (CopeTech-Edgar
+   `e3122df`). Not a ticker-to-CIK problem — both tickers resolved correctly to the same
+   CIK and the same payload. The fact ledger keys identity, uniqueness and version
+   ranking by CIK (correctly: a fact belongs to the issuer) but filtered the *read* by
+   symbol, so whichever ticker was ingested first claimed the rows and the sibling's
+   identical facts were dropped by `INSERT OR IGNORE`. Reads now match on CIK with the
+   symbol match kept as a no-migration fallback. Same shape affects BRK.A/BRK.B,
+   FOX/FOXA, UA/UAA.
 7. **No flag for one-off earnings.** GOOG Q2 2026 diluted EPS was `$9.11` against
    `$2.31` a year earlier and AMZN `$5.75` against `$1.68`, both as-filed. TTM EPS
    roughly doubles and the P/E collapses — correct arithmetic that reads to a human
