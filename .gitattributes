@@ -1,0 +1,42 @@
+# Pin text sources to LF so editors, web sessions, and CI on different platforms can't
+# drift the working tree into mixed CRLF/LF state.
+#
+# CopeTech-Edgar learned this the hard way: files imported from a CRLF source stayed CRLF
+# in git's object store, and once a .gitattributes was added *afterwards* every checkout
+# produced a phantom "916 lines changed" diff that no `git reset --hard` could clear —
+# because the rule governs future check-ins, not blobs already stored. Adding this while
+# the repo is clean (verified: zero CRLF blobs) is what keeps that from ever starting.
+#
+# If a phantom whole-file diff ever does appear: `git add --renormalize . && git commit`.
+
+* text=auto eol=lf
+
+*.py text eol=lf
+*.ts text eol=lf
+*.tsx text eol=lf
+*.js text eol=lf
+*.jsx text eol=lf
+*.json text eol=lf
+*.md text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.toml text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.sh text eol=lf
+
+# Binary types must never be normalized.
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.svg binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.mp3 binary
+*.mp4 binary
+*.wav binary
+*.zip binary
