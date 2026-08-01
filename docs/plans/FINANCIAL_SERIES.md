@@ -181,11 +181,15 @@ Open, ranked:
    identical facts were dropped by `INSERT OR IGNORE`. Reads now match on CIK with the
    symbol match kept as a no-migration fallback. Same shape affects BRK.A/BRK.B,
    FOX/FOXA, UA/UAA.
-7. **No flag for one-off earnings.** GOOG Q2 2026 diluted EPS was `$9.11` against
-   `$2.31` a year earlier and AMZN `$5.75` against `$1.68`, both as-filed. TTM EPS
-   roughly doubles and the P/E collapses — correct arithmetic that reads to a human
-   as the stock getting cheap when the denominator spiked. A discontinuity flag on
-   TTM EPS moving more than ~40% in one quarter would mark these for review.
+7. ~~**No flag for one-off earnings.**~~ **Fixed** (CopeTech-Edgar `0c943d5`).
+   `ttm_eps_discontinuity` marks any TTM EPS moving 40%+ against the prior quarter, or
+   crossing zero. The threshold is calibrated, not guessed: across 411 TTM observations
+   (GOOG, AAPL, NVDA, AMZN, MSFT, KO, META) the median quarter-over-quarter change is
+   8.5% and the 90th percentile is 44%. Live flag rates track each business — AAPL 1%,
+   GOOG 6%, NVDA 12% through the AI ramp, AMZN 32% (correct: Amazon spent years near
+   break-even where the ratio is genuinely unstable). The flag propagates onto every
+   affected P/E row, and the UI now carries a plain-English explanation for each quality
+   flag rather than the raw snake_case name.
 8. **Two live financial paths.** `market.ticker.fundamentals.get` still exists in
    the backend with a client function in `wsMarketRpc.ts`, though no market component
    calls it. Orphaned frontend code over a live backend path.

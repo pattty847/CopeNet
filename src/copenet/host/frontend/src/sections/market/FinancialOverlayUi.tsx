@@ -154,6 +154,51 @@ export function FinancialOverlayStatus({
   );
 }
 
+// These flags are the series telling you what it is unsure about, so they are worth
+// reading. Raw snake_case names say nothing to anyone who has not read the accounting
+// code, and a flag nobody understands is a flag nobody acts on.
+const FLAG_NOTES: Record<string, string> = {
+  ttm_eps_discontinuity:
+    'Trailing EPS moved more than 40% against the prior quarter — the top decile of moves. '
+    + 'A P/E can fall because the price dropped OR because earnings jumped, and they look '
+    + 'identical here. A one-time gain (a stake marked up, a tax settlement) inflates earnings '
+    + 'for exactly four quarters and collapses the ratio without the stock getting any cheaper. '
+    + 'Read the filing before treating this multiple as a valuation.',
+  stale_eps:
+    'The newest usable earnings figure is over 180 days old, so no ratio is drawn rather than '
+    + 'dividing today’s price by earnings that may be a year out of date.',
+  non_positive_ttm_eps: 'Trailing earnings were zero or negative, so a P/E has no meaning here.',
+  eps_ttm_reconstructed:
+    'Interim trailing EPS rebuilt as prior full year + this year to date − the same stretch last '
+    + 'year. Per-share figures cannot simply be added, so the arithmetic is done in dollars and '
+    + 'divided by the share count once at the end.',
+  eps_split_adjusted: 'Earnings restated onto today’s share count so they match the price history.',
+  diluted_shares_derived_from_net_income:
+    'The issuer never tagged a consolidated diluted share count for this period, so it was '
+    + 'recovered as net income ÷ diluted EPS. Agrees with the tagged figure to within 0.22% '
+    + 'where both exist.',
+  derived_q4: 'Fourth quarter derived as the full year minus the three reported quarters.',
+  conflicting_filing_values: 'Filings disagreed on this value; the latest amendment was used.',
+  multiple_concepts_available: 'More than one accounting tag covered this period.',
+  amended_filing: 'Sourced from an amended filing.',
+  implausible_annual_residual:
+    'The derived fourth quarter came out negative against positive quarters — treat with suspicion.',
+  split_history_unverified:
+    'Split history could not be confirmed, so earnings and price may sit on different share bases.',
+  no_point_in_time_ttm_eps: 'No earnings figure had been filed yet at this date.',
+  source_refresh_failed_using_persisted_facts:
+    'SEC refresh failed; showing the last successfully stored filings.',
+};
+
+const FLAG_TONE: Record<string, string> = {
+  ttm_eps_discontinuity: '#d96d5f',
+  implausible_annual_residual: '#d96d5f',
+  split_history_unverified: '#d96d5f',
+  derived_q4: MM.dim,
+  multiple_concepts_available: MM.dim,
+  eps_split_adjusted: MM.dim,
+};
+
 function OverlayMetadata({
   count,
   source,
@@ -175,7 +220,11 @@ function OverlayMetadata({
         </a>
       )}
       {warnings.map((warning) => (
-        <span key={warning} title="Series quality flag" style={{ color: warning === 'derived_q4' ? MM.dim : '#d9ad67' }}>
+        <span
+          key={warning}
+          title={FLAG_NOTES[warning] ?? 'Series quality flag'}
+          style={{ color: FLAG_TONE[warning] ?? '#d9ad67', cursor: 'help' }}
+        >
           {warning.replaceAll('_', ' ')}
         </span>
       ))}
