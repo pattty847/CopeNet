@@ -179,6 +179,7 @@ export interface TextPart {
 export interface ThinkingPart {
   kind: 'thinking';
   text: string;
+  source?: 'summary' | 'raw' | 'unknown';
 }
 
 export interface ToolCallPart {
@@ -494,6 +495,7 @@ export interface ChatEventPayload {
   errorMessage?: string | null;
   /** Present on reasoning_delta events: one chunk of inline thinking text. */
   text?: string | null;
+  reasoningSource?: 'summary' | 'raw' | 'unknown' | null;
   provider?: string | null;
   model?: string | null;
   capabilities?: Record<string, unknown> | null;
@@ -613,6 +615,37 @@ export interface SessionRunRecord {
   outputSummary: string;
   error: string | null;
   metadata: Record<string, unknown>;
+  messageCount?: number;
+  inputTokenEstimate?: number;
+  transitionReason?: string;
+  terminalReason?: string | null;
+  toolResults?: Record<string, unknown>[];
+  pendingInputCount?: number;
+  oversizedToolArtifactIds?: string[];
+}
+
+export interface ObservabilitySettings {
+  debugCapture: boolean;
+  captureScope: 'subsequent_runs';
+  storage: 'local';
+}
+
+export interface ObservabilityTraceEvent {
+  timestamp: string;
+  event: string;
+  runId: string;
+  sessionKey: string;
+  provider: string;
+  model: string | null;
+  payload?: Record<string, unknown>;
+}
+
+export interface ObservabilityRunDetail {
+  run: SessionRunRecord;
+  messages: Message[];
+  events: ObservabilityTraceEvent[];
+  artifacts: SessionArtifactRecord[];
+  debugCaptured: boolean;
 }
 
 export interface SessionStateRecord {

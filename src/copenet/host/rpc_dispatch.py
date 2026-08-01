@@ -90,6 +90,11 @@ from .rpc_permissions import (
     handle_permissions_allowlist_list,
     handle_permissions_allowlist_remove,
 )
+from .rpc_observability import (
+    handle_observability_run_get,
+    handle_observability_settings_get,
+    handle_observability_settings_update,
+)
 from .rpc_sessions import (
     handle_approvals_list,
     handle_pulse_create_from_session,
@@ -190,6 +195,12 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_models_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "tools.list":
         await handle_tools_list(req.id, send_json, orchestrator)
+    elif req.method == "observability.settings.get":
+        await handle_observability_settings_get(req.id, send_json, orchestrator)
+    elif req.method == "observability.settings.update":
+        await handle_observability_settings_update(req.id, req.params, send_json, orchestrator)
+    elif req.method == "observability.run.get":
+        await handle_observability_run_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.get":
         await handle_persona_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.settings.get":

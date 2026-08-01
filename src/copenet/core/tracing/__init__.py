@@ -29,6 +29,7 @@ class RunTraceWriter:
     provider: str
     model: str | None
     enabled: bool = False
+    debug: bool = False
     root_dir: Path | None = None
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _path: Path | None = field(default=None, init=False, repr=False)
@@ -65,3 +66,39 @@ class RunTraceWriter:
                     handle.write(line + "\n")
         except Exception:
             return
+
+    def record_debug(self, event: str, payload: dict[str, Any] | None = None) -> None:
+        """Append a sanitized high-detail event only while Debug capture is active."""
+        if not self.debug:
+            return
+        self.record(event, _sanitize(payload or {}))
+
+
+_SECRET_KEYS = {
+    "authorization",
+    "cookie",
+    "password",
+    "secret",
+    "token",
+    "apikey",
+    "accesstoken",
+    "refreshtoken",
+    "idtoken",
+}
+
+
+def _sanitize(value: Any) -> Any:
+    """Redact credential-shaped fields before a debug payload reaches disk."""
+    if isinstance(value, dict):
+        sanitized: dict[str, Any] = {}
+        for key, item in value.items():
+            normalized = str(key).lower().replace("-", "_")
+            compact = normalized.replace("_", "")
+            is_secret = compact in _SECRET_KEYS or "password" in compact or "secret" in compact
+            sanitized[str(key)] = "[redacted]" if is_secret else _sanitize(item)
+        return sanitized
+    if isinstance(value, list):
+        return [_sanitize(item) for item in value]
+    if isinstance(value, tuple):
+        return [_sanitize(item) for item in value]
+    return value

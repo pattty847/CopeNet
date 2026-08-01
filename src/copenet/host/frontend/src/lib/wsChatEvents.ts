@@ -27,7 +27,8 @@ export function handleChatEventAction(
     const text = typeof payload.text === 'string' ? payload.text : '';
     const target = runId ? store.pendingAssistants[runId] : undefined;
     if (target && text) {
-      store.appendMessagePart(target.sessionKey, target.localId, { kind: 'thinking', text });
+      const source = payload.reasoningSource === 'raw' ? 'raw' : payload.reasoningSource === 'summary' ? 'summary' : 'unknown';
+      store.appendMessagePart(target.sessionKey, target.localId, { kind: 'thinking', text, source });
     }
     return;
   }

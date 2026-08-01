@@ -105,6 +105,9 @@ def test_parse_responses_sse_matches_reasoning_delta_name_variants() -> None:
         events = _sse([{"type": ev_type, "delta": "mid-thought"}, {"type": "response.completed", "response": {}}])
         out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
         assert any(e.kind == "reasoning_delta" and e.text == "mid-thought" for e in out), ev_type
+        reasoning = next(e for e in out if e.kind == "reasoning_delta")
+        expected_source = "raw" if ev_type == "response.reasoning_text.delta" else "summary"
+        assert reasoning.metadata == {"reasoningSource": expected_source, "providerEventType": ev_type}
 
 
 def test_parse_responses_sse_emits_text_reasoning_and_function_call() -> None:

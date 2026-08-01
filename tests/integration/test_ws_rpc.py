@@ -1034,6 +1034,35 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         assert run_detail["payload"]["run"]["toolSteps"][0]["summary"] == "Read file README.md."
 
 
+def test_observability_debug_capture_is_runtime_adjustable_and_inspectable(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        settings_id = socket.request("observability.settings.get", {})
+        settings = socket.recv_response(settings_id)
+        assert settings["payload"]["settings"]["debugCapture"] is False
+
+        update_id = socket.request("observability.settings.update", {"debugCapture": True})
+        updated = socket.recv_response(update_id)
+        assert updated["payload"]["settings"]["debugCapture"] is True
+
+        send_id = socket.request(
+            "chat.send",
+            {"sessionKey": "observability-debug", "message": "Explain the trace", "provider": "fake"},
+        )
+        started = socket.recv_response(send_id)
+        run_id = started["payload"]["runId"]
+        socket.recv_chat_until_terminal(session_key="observability-debug", run_id=run_id)
+
+        detail_id = socket.request(
+            "observability.run.get",
+            {"sessionKey": "observability-debug", "runId": run_id},
+        )
+        detail = socket.recv_response(detail_id)["payload"]["detail"]
+        assert detail["debugCaptured"] is True
+        assert detail["run"]["runId"] == run_id
+        assert any(event["event"] == "model_input_snapshot" for event in detail["events"])
+        assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
+
+
 def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None:
     with _open_rpc(rpc_client) as socket:
         send_id = socket.request(

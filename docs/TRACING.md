@@ -6,6 +6,13 @@ CopeNet writes one structured JSONL trace per run for debugging harness, tool, p
 
 Tracing is off by default.
 
+The preferred operator control is the **Debug capture** switch in the
+Observability workspace. It persists locally and applies to subsequent runs.
+Debug capture records the effective model input, tool manifest, transport, and
+provider-exposed reasoning alongside the standard lifecycle events.
+
+The environment variable remains available as a startup fallback:
+
 ```bash
 COPNET_TRACE=1 uv run copenet
 ```
@@ -24,6 +31,11 @@ COPNET_DATA_DIR=/custom/path uv run copenet
 ```
 
 Each run writes one file named `<run-id>.jsonl`.
+
+The Observability run inspector joins this file with the durable run record,
+run-stamped transcript entries, and run-scoped artifacts. See
+[plans/OBSERVABILITY.md](plans/OBSERVABILITY.md) for the product contract and
+reasoning-provenance rules.
 
 **If no trace file appears:** the provider failed to initialize before `RunTraceWriter` started. The client still receives an error event — check the UI response or `providers.list` output first.
 
@@ -159,6 +171,11 @@ within budget on its own.
 `prompt_context_assembled` records the request purpose plus character counts for
 the base system prompt, persona/context overlay, structured message payload, and
 tool schemas. It never records raw prompt text.
+
+When Debug capture is enabled, `model_input_snapshot` additionally records the
+effective instructions/messages, offered tool definitions, harness decision,
+provider transport, and requested reasoning configuration. Treat that event as
+sensitive local debugging data; it is deliberately absent from standard traces.
 
 `prompted_tool_response_interpreted` records `toolCallCount`,
 `malformedBlockCount`, and `rejectedToolIds`. A reply with zero tool calls but a

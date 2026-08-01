@@ -1,336 +1,188 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Activity, RefreshCw, ShieldAlert, Wrench, Zap } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Activity, Bug, RefreshCw } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
-import { useIsMobile } from '../lib/responsive';
-import { clampResponsiveText } from '../lib/mobileCopy';
-import type { SessionRunRecord } from '../types/backend';
-import { RunPulseStrip } from './runtime/RunPulseStrip';
-import { TraceList } from './runtime/TraceList';
+import type { ObservabilityRunDetail, ObservabilitySettings, SessionRunRecord } from '../types/backend';
+import { RunInspector } from './observability/RunInspector';
+import { RunListPane } from './observability/RunListPane';
 
-const RUN_LOOKBACK_PER_SESSION = 10;
+const RUN_LOOKBACK_PER_SESSION = 30;
 const REFRESH_MS = 12_000;
 
-interface KpiTile {
-  label: string;
-  value: string;
-  sub: string;
-  icon: typeof Activity;
-  tone: 'accent' | 'success' | 'error' | 'muted';
-}
-
-const TONE_CLASS: Record<KpiTile['tone'], string> = {
-  accent: 'text-shell-accent',
-  success: 'text-shell-success',
-  error: 'text-shell-error',
-  muted: 'text-shell-muted',
-};
-
-function runIsError(run: SessionRunRecord): boolean {
-  return Boolean(run.error) || run.status === 'error' || run.status === 'failed';
-}
-
-function runIsCompleted(run: SessionRunRecord): boolean {
-  return Boolean(run.completedAt) && !runIsError(run);
+function initialSelection(): { runId: string | null; sessionKey: string | null } {
+  const params = new URLSearchParams(window.location.search);
+  return { runId: params.get('run'), sessionKey: params.get('session') };
 }
 
 export function ObservabilityPage() {
-  const sessions = useAppStore((s) => s.sessions);
-  const providers = useAppStore((s) => s.providers);
-  const isMobile = useIsMobile();
+  const sessions = useAppStore((state) => state.sessions);
+  const activeSessions = useMemo(() => sessions.filter((session) => !session.archived), [sessions]);
+  const initial = useMemo(initialSelection, []);
   const [runs, setRuns] = useState<SessionRunRecord[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [selectedRunId, setSelectedRunId] = useState<string | null>(initial.runId);
+  const [selectedSessionKey, setSelectedSessionKey] = useState<string | null>(initial.sessionKey);
+  const [detail, setDetail] = useState<ObservabilityRunDetail | null>(null);
+  const [settings, setSettings] = useState<ObservabilitySettings | null>(null);
+  const [query, setQuery] = useState('');
+  const [loadingRuns, setLoadingRuns] = useState(false);
+  const [loadingDetail, setLoadingDetail] = useState(false);
+  const [savingSettings, setSavingSettings] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [lastFetch, setLastFetch] = useState<number | null>(null);
 
-  const activeSessions = useMemo(() => sessions.filter((s) => !s.archived), [sessions]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    async function loadAll() {
-      if (activeSessions.length === 0) {
-        setRuns([]);
-        setLastFetch(Date.now());
-        return;
-      }
-      setLoading(true);
-      try {
-        const results = await Promise.all(
-          activeSessions.map((s) =>
-            wsClient.listSessionRuns(s.key, RUN_LOOKBACK_PER_SESSION).catch(() => [] as SessionRunRecord[]),
-          ),
-        );
-        if (cancelled) return;
-        const merged = results.flat();
-        setRuns(merged);
-        setLastFetch(Date.now());
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  const loadRuns = useCallback(async () => {
+    if (activeSessions.length === 0) {
+      setRuns([]);
+      setLastFetch(Date.now());
+      return;
     }
-
-    void loadAll();
-    const timer = window.setInterval(loadAll, REFRESH_MS);
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-    };
+    setLoadingRuns(true);
+    try {
+      const results = await Promise.all(
+        activeSessions.map((session) => wsClient.listSessionRuns(session.key, RUN_LOOKBACK_PER_SESSION).catch(() => [])),
+      );
+      const merged = results.flat().sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+      setRuns(merged);
+      setLastFetch(Date.now());
+      setSelectedRunId((currentRunId) => {
+        if (currentRunId || !merged[0]) return currentRunId;
+        setSelectedSessionKey(merged[0].sessionKey);
+        return merged[0].runId;
+      });
+    } finally {
+      setLoadingRuns(false);
+    }
   }, [activeSessions]);
 
-  const manualRefresh = () => {
-    // Trigger re-run by nudging state; simplest is to re-call the effect deps.
-    // We just re-fetch inline.
-    (async () => {
-      setLoading(true);
-      const results = await Promise.all(
-        activeSessions.map((s) =>
-          wsClient.listSessionRuns(s.key, RUN_LOOKBACK_PER_SESSION).catch(() => [] as SessionRunRecord[]),
-        ),
-      );
-      setRuns(results.flat());
-      setLastFetch(Date.now());
-      setLoading(false);
-    })().catch(() => setLoading(false));
+  useEffect(() => {
+    void loadRuns();
+    const timer = window.setInterval(() => void loadRuns(), REFRESH_MS);
+    return () => window.clearInterval(timer);
+  }, [loadRuns]);
+
+  useEffect(() => {
+    wsClient.getObservabilitySettings().then(setSettings).catch((reason) => {
+      setError(reason instanceof Error ? reason.message : 'Could not load trace settings.');
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!selectedRunId || !selectedSessionKey) {
+      setDetail(null);
+      return;
+    }
+    let cancelled = false;
+    setLoadingDetail(true);
+    setError(null);
+    wsClient.getObservabilityRun(selectedSessionKey, selectedRunId)
+      .then((value) => {
+        if (!cancelled) setDetail(value);
+      })
+      .catch((reason) => {
+        if (!cancelled) setError(reason instanceof Error ? reason.message : 'Could not load this run.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingDetail(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedRunId, selectedSessionKey]);
+
+  const selectRun = (run: SessionRunRecord) => {
+    setSelectedRunId(run.runId);
+    setSelectedSessionKey(run.sessionKey);
+    const url = new URL(window.location.href);
+    url.searchParams.set('run', run.runId);
+    url.searchParams.set('session', run.sessionKey);
+    window.history.replaceState({}, '', url);
+  };
+
+  const toggleDebugCapture = async () => {
+    if (!settings || savingSettings) return;
+    setSavingSettings(true);
+    setError(null);
+    try {
+      setSettings(await wsClient.updateObservabilitySettings(!settings.debugCapture));
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not update Debug capture.');
+    } finally {
+      setSavingSettings(false);
+    }
   };
 
   const stats = useMemo(() => {
     const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
-    const last24h = runs.filter((r) => new Date(r.startedAt).getTime() > dayAgo);
-    const errors = last24h.filter(runIsError);
-    const completed = last24h.filter(runIsCompleted);
-    const totalSteps = last24h.reduce((acc, r) => acc + r.toolSteps.length, 0);
-    const avgSteps = last24h.length > 0 ? totalSteps / last24h.length : 0;
-    const totalDur = completed.reduce((acc, r) => {
-      const end = r.completedAt ? new Date(r.completedAt).getTime() : new Date(r.startedAt).getTime();
-      return acc + (end - new Date(r.startedAt).getTime());
-    }, 0);
-    const avgMs = completed.length > 0 ? totalDur / completed.length : 0;
-    const providersUp = providers.filter((p) => p.available).length;
-
+    const recent = runs.filter((run) => new Date(run.startedAt).getTime() >= dayAgo);
     return {
-      runs24h: last24h.length,
-      errors: errors.length,
-      avgSteps: avgSteps.toFixed(1),
-      avgLatencyS: avgMs > 0 ? (avgMs / 1000).toFixed(1) : '0.0',
-      totalSteps,
-      providersUp,
-      providersTotal: providers.length,
+      runs: recent.length,
+      tools: recent.reduce((count, run) => count + run.toolSteps.length, 0),
+      errors: recent.filter((run) => run.error || run.status === 'error' || run.status === 'failed').length,
     };
-  }, [runs, providers]);
-
-  const tiles: KpiTile[] = [
-    {
-      label: 'Runs · 24h',
-      value: String(stats.runs24h),
-      sub: `${stats.errors} error${stats.errors === 1 ? '' : 's'}`,
-      icon: Zap,
-      tone: stats.errors > 0 ? 'error' : 'accent',
-    },
-    {
-      label: 'Tool steps · 24h',
-      value: String(stats.totalSteps),
-      sub: `${stats.avgSteps} avg per run`,
-      icon: Wrench,
-      tone: 'muted',
-    },
-    {
-      label: 'Avg latency',
-      value: `${stats.avgLatencyS}s`,
-      sub: 'completed runs',
-      icon: Activity,
-      tone: 'muted',
-    },
-    {
-      label: 'Providers up',
-      value: `${stats.providersUp}/${stats.providersTotal || 0}`,
-      sub: stats.providersUp === stats.providersTotal ? 'all healthy' : 'partial',
-      icon: ShieldAlert,
-      tone: stats.providersUp === stats.providersTotal && stats.providersTotal > 0 ? 'success' : 'error',
-    },
-  ];
-
-  // Provider distribution for the bottom-right pane
-  const providerDistribution = useMemo(() => {
-    const byProvider = new Map<string, { total: number; errors: number }>();
-    for (const r of runs) {
-      const prev = byProvider.get(r.provider) ?? { total: 0, errors: 0 };
-      prev.total += 1;
-      if (runIsError(r)) prev.errors += 1;
-      byProvider.set(r.provider, prev);
-    }
-    const list = [...byProvider.entries()]
-      .map(([provider, v]) => ({ provider, ...v }))
-      .sort((a, b) => b.total - a.total);
-    const max = Math.max(1, ...list.map((x) => x.total));
-    return { list, max };
-  }, [runs]);
-
-  const toolDistribution = useMemo(() => {
-    const byTool = new Map<string, { total: number; errors: number }>();
-    for (const r of runs) {
-      for (const step of r.toolSteps) {
-        const prev = byTool.get(step.toolId) ?? { total: 0, errors: 0 };
-        prev.total += 1;
-        if (!step.ok) prev.errors += 1;
-        byTool.set(step.toolId, prev);
-      }
-    }
-    const list = [...byTool.entries()]
-      .map(([tool, v]) => ({ tool, ...v }))
-      .sort((a, b) => b.total - a.total)
-      .slice(0, 6);
-    const max = Math.max(1, ...list.map((x) => x.total));
-    return { list, max };
   }, [runs]);
 
   return (
     <div className="animate-fade-in-up space-y-3">
-      {/* Condensed hero */}
-      <section className="shell-page-utility-hero flex flex-col gap-4 overflow-hidden rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5 lg:flex-row lg:flex-wrap lg:items-end lg:justify-between">
-        <div className="max-w-2xl min-w-0">
-          <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-shell-accent/20 bg-shell-accent-soft px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
-            <Activity className="h-3 w-3" />
-            Observability
+      <header className="flex flex-col gap-3 border-b border-shell-border pb-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <Activity className="h-4 w-4 text-shell-accent" />
+            <h1 className="text-[16px] font-semibold text-shell-text">Run inspector</h1>
           </div>
-          <h1 className="font-display text-[1.7rem] leading-[1.05] tracking-tight text-shell-text sm:text-[2rem]">
-            Trace the work, not just the answer.
-          </h1>
-          <p className="mt-2 max-w-xl text-[13px] leading-6 text-shell-muted">
-            Live view of every run across sessions. Tool blocks, provider drift, and latency are
-            surfaced so the operator can understand what really happened.
+          <p className="mt-1 text-[11px] text-shell-muted">
+            {stats.runs} runs · {stats.tools} tool calls · {stats.errors} errors in the last 24 hours
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-3 font-mono text-[11px] tabular-nums text-shell-muted">
-          <span>
-            last refresh{' '}
-            <span className="text-shell-text">
-              {lastFetch ? new Date(lastFetch).toLocaleTimeString([], { hour12: false }) : '—'}
+
+        <div className="flex flex-wrap items-center gap-2">
+          {settings?.debugCapture && (
+            <span className="rounded-md bg-amber-400/10 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-amber-300">
+              subsequent runs captured locally
             </span>
-          </span>
+          )}
           <button
             type="button"
-            onClick={manualRefresh}
-            className="focus-ring inline-flex items-center gap-1.5 rounded-lg border border-shell-border bg-shell-panel-strong px-2.5 py-1.5 text-[11px] text-shell-text transition-colors hover:border-shell-accent/40 hover:text-shell-accent"
-            title="Refresh now"
+            role="switch"
+            aria-checked={Boolean(settings?.debugCapture)}
+            onClick={toggleDebugCapture}
+            disabled={!settings || savingSettings}
+            className={`focus-ring inline-flex h-8 items-center gap-2 rounded-lg border px-3 text-[11px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-50 ${
+              settings?.debugCapture
+                ? 'border-amber-400/30 bg-amber-400/10 text-amber-200'
+                : 'border-shell-border bg-shell-panel text-shell-muted hover:text-shell-text'
+            }`}
+            title="Capture sanitized prompts, tool schemas, reasoning summaries, and raw run events for subsequent runs"
           >
-            <RefreshCw className={`h-3 w-3 ${loading ? 'animate-spin' : ''}`} />
-            refresh
+            <Bug className="h-3.5 w-3.5" />
+            Debug capture {settings?.debugCapture ? 'on' : 'off'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void loadRuns()}
+            className="focus-ring inline-flex h-8 items-center gap-2 rounded-lg border border-shell-border bg-shell-panel px-3 text-[11px] text-shell-muted transition-colors hover:text-shell-text"
+            title={lastFetch ? `Last refreshed ${new Date(lastFetch).toLocaleTimeString()}` : 'Refresh runs'}
+          >
+            <RefreshCw className={`h-3.5 w-3.5 ${loadingRuns ? 'animate-spin' : ''}`} />
+            Refresh
           </button>
         </div>
-      </section>
+      </header>
 
-      {/* KPI row */}
-      <section className="stagger-children grid gap-2.5 md:grid-cols-2 xl:grid-cols-4">
-        {tiles.map((t) => {
-          const Icon = t.icon;
-          return (
-            <div
-              key={t.label}
-              className="lift-sm shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell"
-            >
-              <div className="mb-2 flex items-center justify-between text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">
-                <span>{t.label}</span>
-                <Icon className={`h-3.5 w-3.5 ${TONE_CLASS[t.tone]}`} />
-              </div>
-              <div className={`font-mono text-[30px] font-medium leading-none tabular-nums ${TONE_CLASS[t.tone]}`}>
-                {t.value}
-              </div>
-              <div className="mt-2 font-mono text-[11px] tabular-nums text-shell-muted">{t.sub}</div>
-            </div>
-          );
-        })}
-      </section>
-
-      {/* Pulse strip */}
-      <RunPulseStrip runs={runs} loading={loading && runs.length === 0} />
-
-      {/* Two-column bottom row */}
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <TraceList runs={runs} />
-
-        <div className="space-y-3">
-          {/* Provider distribution */}
-          <section className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
-            <header className="mb-3 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
-                By provider
-              </span>
-              <span className="font-mono text-[11px] tabular-nums text-shell-muted">24h</span>
-            </header>
-            {providerDistribution.list.length === 0 ? (
-              <div className="py-4 text-center text-[12px] text-shell-muted">No runs recorded yet.</div>
-            ) : (
-              <ul className="space-y-2">
-                {providerDistribution.list.map((row) => {
-                  const pct = Math.max(4, (row.total / providerDistribution.max) * 100);
-                  const errPct = row.total > 0 ? (row.errors / row.total) * 100 : 0;
-                  return (
-                    <li key={row.provider} className="font-mono text-[11px] tabular-nums">
-                      <div className="mb-1 flex min-w-0 items-center justify-between gap-2 overflow-hidden">
-                        <span className="block min-w-0 flex-1 truncate text-shell-text" title={row.provider}>
-                          {clampResponsiveText(row.provider, { isMobile, mobileLimit: 16, desktopLimit: 36 })}
-                        </span>
-                        <span className="shrink-0 text-shell-muted">
-                          {row.total}
-                          {row.errors > 0 && <span className="text-shell-error"> · {row.errors} err</span>}
-                        </span>
-                      </div>
-                      <div className="relative h-1.5 overflow-hidden rounded-full bg-shell-border-strong/40">
-                        <div
-                          className="absolute inset-y-0 left-0 bg-shell-accent/70"
-                          style={{ width: `${pct}%` }}
-                        />
-                        {errPct > 0 && (
-                          <div
-                            className="absolute inset-y-0 left-0 bg-shell-error/80"
-                            style={{ width: `${(pct * errPct) / 100}%` }}
-                          />
-                        )}
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
-
-          {/* Tool distribution */}
-          <section className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
-            <header className="mb-3 flex items-center justify-between">
-              <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">
-                Top tools
-              </span>
-              <span className="font-mono text-[11px] tabular-nums text-shell-muted">{stats.totalSteps} steps</span>
-            </header>
-            {toolDistribution.list.length === 0 ? (
-              <div className="py-4 text-center text-[12px] text-shell-muted">
-                No tool invocations captured yet.
-              </div>
-            ) : (
-              <ul className="space-y-2">
-                {toolDistribution.list.map((row) => {
-                  const pct = Math.max(4, (row.total / toolDistribution.max) * 100);
-                  return (
-                    <li key={row.tool} className="font-mono text-[11px] tabular-nums">
-                      <div className="mb-1 flex min-w-0 items-center justify-between gap-2 overflow-hidden">
-                        <span className="block min-w-0 flex-1 truncate text-shell-text" title={row.tool}>
-                          {clampResponsiveText(row.tool, { isMobile, mobileLimit: 20, desktopLimit: 40 })}
-                        </span>
-                        <span className="shrink-0 text-shell-muted">
-                          {row.total}
-                          {row.errors > 0 && <span className="text-shell-error"> · {row.errors}</span>}
-                        </span>
-                      </div>
-                      <div className="h-1.5 overflow-hidden rounded-full bg-shell-border-strong/40">
-                        <div className="h-full bg-shell-accent/70" style={{ width: `${pct}%` }} />
-                      </div>
-                    </li>
-                  );
-                })}
-              </ul>
-            )}
-          </section>
+      {error && !loadingDetail && (
+        <div role="alert" className="rounded-lg border border-shell-error/30 bg-shell-error/5 px-3 py-2 text-[11px] text-shell-error">
+          {error}
         </div>
+      )}
+
+      <section className="grid min-h-[34rem] overflow-hidden rounded-xl border border-shell-border bg-shell-panel shadow-shell lg:grid-cols-[20rem_minmax(0,1fr)]">
+        <RunListPane
+          runs={runs}
+          sessions={activeSessions}
+          selectedRunId={selectedRunId}
+          loading={loadingRuns}
+          query={query}
+          onQueryChange={setQuery}
+          onSelect={selectRun}
+        />
+        <RunInspector detail={detail} loading={loadingDetail} error={error} />
       </section>
     </div>
   );

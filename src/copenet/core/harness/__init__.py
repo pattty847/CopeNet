@@ -18,6 +18,8 @@ from .tool_loop import (
     DEFAULT_RESPONSES_REASONING,
     ToolExecutor,
     collect_provider_turn,
+    compose_native_tool_system_prompt,
+    compose_prompted_tool_system_prompt,
     compose_provider_prompt,
     compose_responses_tool_instructions,
     provider_system_prompt,
@@ -87,6 +89,7 @@ class ChatHarness:
         session_id: str | None = None,
         purpose: str | None = None,
         input_token_budget: int | None = None,
+        debug_snapshot: dict | None = None,
     ) -> tuple[HarnessTurnPlan, AsyncIterator[ProviderEvent]]:
         """Return the normalized plan and provider event stream.
 
@@ -150,22 +153,44 @@ class ChatHarness:
             trace=trace,
         )
         plan = replace(plan, harness_decision=decision_record.to_public_dict())
+        if debug_snapshot is not None:
+            debug_snapshot.update(
+                {
+                    "provider": plan.provider,
+                    "model": plan.model,
+                    "toolExecutionMode": plan.tool_execution_mode,
+                    "userPrompt": prompt,
+                    "messages": list(messages or []),
+                    "effectiveSystemPrompt": effective_system_prompt,
+                    "toolManifest": [tool.to_public_dict() for tool in plan.tools],
+                    "harnessDecision": dict(plan.harness_decision),
+                }
+            )
         if (
             plan.tool_execution_mode == "responses"
             and tool_executor is not None
             and tool_context is not None
             and hasattr(provider, "stream_responses")
         ):
+            responses_instructions = compose_responses_tool_instructions(
+                system_prompt=effective_system_prompt,
+                workdir=str(getattr(tool_context, "workdir", "") or "") or None,
+                tools=plan.tools,
+            )
+            if debug_snapshot is not None:
+                debug_snapshot.update(
+                    {
+                        "transport": "responses",
+                        "providerInstructions": responses_instructions,
+                        "reasoning": dict(DEFAULT_RESPONSES_REASONING),
+                    }
+                )
             stream = run_with_responses_tools(
                 provider=provider,  # type: ignore[arg-type]
                 messages=list(messages or []),
                 abort_event=abort_event,
                 model=model,
-                instructions=compose_responses_tool_instructions(
-                    system_prompt=effective_system_prompt,
-                    workdir=str(getattr(tool_context, "workdir", "") or "") or None,
-                    tools=plan.tools,
-                ),
+                instructions=responses_instructions,
                 plan=plan,
                 tool_executor=tool_executor,
                 tool_context=tool_context,
@@ -177,6 +202,18 @@ class ChatHarness:
             return plan, stream
 
         if plan.tool_execution_mode == "prompted" and tool_executor is not None and tool_context is not None:
+            if debug_snapshot is not None:
+                debug_snapshot.update(
+                    {
+                        "transport": "prompted",
+                        "providerPrompt": prompt,
+                        "providerSystemPrompt": compose_prompted_tool_system_prompt(
+                            provider=provider,
+                            system_prompt=effective_system_prompt,
+                            tools=plan.tools,
+                        ),
+                    }
+                )
             stream = run_with_prompted_tools(
                 provider=provider,
                 prompt=prompt,
@@ -198,6 +235,14 @@ class ChatHarness:
             or tool_executor is None
             or tool_context is None
         ):
+            if debug_snapshot is not None:
+                debug_snapshot.update(
+                    {
+                        "transport": "provider",
+                        "providerPrompt": compose_provider_prompt(provider, prompt, effective_system_prompt),
+                        "providerSystemPrompt": provider_system_prompt(provider, effective_system_prompt),
+                    }
+                )
             stream = provider.run(
                 prompt=compose_provider_prompt(provider, prompt, effective_system_prompt),
                 provider_session_id=provider_session_id,
@@ -207,6 +252,17 @@ class ChatHarness:
             )
             return plan, stream
 
+        if debug_snapshot is not None:
+            debug_snapshot.update(
+                {
+                    "transport": "native",
+                    "providerPrompt": prompt,
+                    "providerSystemPrompt": compose_native_tool_system_prompt(
+                        provider=provider,
+                        system_prompt=effective_system_prompt,
+                    ),
+                }
+            )
         stream = run_with_native_tools(
             provider=provider,  # type: ignore[arg-type]
             prompt=prompt,

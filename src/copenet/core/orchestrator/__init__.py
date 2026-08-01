@@ -51,6 +51,8 @@ from copenet.core.orchestrator.facade_runtime_workspace import RuntimeWorkspaceF
 from copenet.core.orchestrator.facade_identity import IdentityFacadeMixin
 from copenet.core.orchestrator.facade_messaging import MessagingFacadeMixin
 from copenet.core.orchestrator.facade_provider_auth import ProviderAuthFacadeMixin
+from copenet.core.orchestrator.facade_observability import ObservabilityFacadeMixin
+from copenet.core.observability import ObservabilityStore
 from copenet.core.briefing import ReturnBriefingService
 from copenet.core.user_notes import UserNotesService, UserNotesStore
 from copenet.prompts.optimizer import optimize_prompt_variants
@@ -65,6 +67,7 @@ from copenet._paths import (
     default_personas_dir,
     default_session_state_dir,
     default_sessions_dir,
+    default_run_logs_dir,
     default_workspace_intel_path,
 )
 
@@ -107,7 +110,7 @@ class SessionInFlightError(RuntimeError):
         self.run_id = run_id
 
 
-class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacadeMixin, RuntimeWorkspaceFacadeMixin, ApprovalPermissionFacadeMixin, AppFacadeMixin):
+class Orchestrator(ObservabilityFacadeMixin, IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacadeMixin, RuntimeWorkspaceFacadeMixin, ApprovalPermissionFacadeMixin, AppFacadeMixin):
     """Coordinates providers, session store, transcript store, and run lifecycle."""
 
     def __init__(
@@ -165,7 +168,13 @@ class Orchestrator(IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacade
         self._tool_policy = ToolPolicy()
         self._tool_registry = ToolRegistry(policy=self._tool_policy)
 
-        self._trace_enabled = os.environ.get("COPNET_TRACE", "").strip().lower() in {"1", "true", "yes", "on"}
+        trace_env_default = os.environ.get("COPNET_TRACE", "").strip().lower() in {"1", "true", "yes", "on", "debug"}
+        trace_root = default_run_logs_dir() if sessions_dir is None else base / "logs" / "runs"
+        self._observability_store = ObservabilityStore(
+            settings_path=base / "observability.json",
+            trace_root=trace_root,
+            default_debug_capture=trace_env_default,
+        )
         self._active_abort_by_run: dict[str, asyncio.Event] = {}
         self._active_run_by_session: dict[str, str] = {}
         self._idempotency_cache: dict[str, dict] = {}

@@ -16,6 +16,7 @@ Outputs:
 
 from __future__ import annotations
 
+import argparse
 import json
 import sys
 from datetime import datetime, timezone
@@ -465,7 +466,19 @@ def print_scenario_result(label: str, result: dict, sink_path: Path) -> None:
     print(f"  raw events: {sink_path}")
 
 
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(description="Probe the Codex Responses endpoint without printing account data.")
+    parser.add_argument(
+        "--scenarios",
+        default="A,B,C,D,E,F,G,H,I",
+        help="Comma-separated scenario labels to run (default: all).",
+    )
+    return parser.parse_args()
+
+
 def main() -> int:
+    args = _parse_args()
+    requested = {label.strip().upper() for label in args.scenarios.split(",") if label.strip()}
     RESULTS_DIR.mkdir(parents=True, exist_ok=True)
 
     print("Codex Responses API probe")
@@ -483,7 +496,7 @@ def main() -> int:
         print(f"  ERROR: {exc}")
         print("  Run: uv run copenet auth login --provider openai-codex")
         return 1
-    print(f"  ok, account_id={profile.account_id}")
+    print("  ok")
     print()
 
     scenarios = [
@@ -500,6 +513,8 @@ def main() -> int:
 
     summary: dict[str, dict] = {}
     for label, description, payload in scenarios:
+        if label not in requested:
+            continue
         print(f"Scenario {label}: {description}")
         sink_path = RESULTS_DIR / f"scenario-{label.lower()}-events.jsonl"
         result = stream_request(payload, profile.access_token, sink_path)

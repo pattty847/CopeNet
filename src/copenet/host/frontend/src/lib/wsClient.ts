@@ -39,6 +39,8 @@ import {
   WorkspaceFile,
   WorkspaceFileContent,
   ShellAllowlistEntry,
+  ObservabilityRunDetail,
+  ObservabilitySettings,
 } from '../types/backend';
 import {
   normalizeApprovalRequest,
@@ -119,6 +121,11 @@ import {
   revertEditRpc,
 } from './wsSessionRpc';
 import { browseWorkspaceRootRpc, setWorkspaceRootRpc } from './wsRuntimeRpc';
+import {
+  getObservabilityRunRpc,
+  getObservabilitySettingsRpc,
+  updateObservabilitySettingsRpc,
+} from './wsObservabilityRpc';
 import { bootstrapAction } from './wsBootstrapAction';
 import { loadModelsAction } from './wsCatalogActions';
 import { abortActiveRunAction, decideApprovalAction, sendMessageAction } from './wsChatActions';
@@ -1012,6 +1019,18 @@ class WsClient {
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     return resolveSessionRunRpc(this.request.bind(this), key, runId);
+  }
+
+  async getObservabilitySettings(): Promise<ObservabilitySettings> {
+    return getObservabilitySettingsRpc(this.request.bind(this));
+  }
+
+  async updateObservabilitySettings(debugCapture: boolean): Promise<ObservabilitySettings> {
+    return updateObservabilitySettingsRpc(this.request.bind(this), debugCapture);
+  }
+
+  async getObservabilityRun(sessionKey: string, runId: string): Promise<ObservabilityRunDetail | null> {
+    return getObservabilityRunRpc(this.request.bind(this), sessionKey, runId);
   }
 
   async resolveSessionState(key: string): Promise<SessionStateRecord | null> {

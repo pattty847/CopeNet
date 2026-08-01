@@ -791,7 +791,8 @@ export function normalizeMessageParts(raw: unknown): MessagePart[] | null {
     }
     if (kind === 'thinking') {
       const text = typeof payload.text === 'string' ? payload.text : typeof payload.content === 'string' ? payload.content : '';
-      if (text) parts.push({ kind: 'thinking', text });
+      const source = payload.source === 'raw' ? 'raw' : payload.source === 'summary' ? 'summary' : 'unknown';
+      if (text) parts.push({ kind: 'thinking', text, source });
       continue;
     }
     if (kind === 'tool_call') {

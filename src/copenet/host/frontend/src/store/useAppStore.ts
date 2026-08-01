@@ -536,8 +536,10 @@ export const useAppStore = create<AppState>((set) => ({
         parts = [...parts.slice(0, -1), { kind: 'text', content: last.content + part.content }];
       } else if (part.kind === 'thinking' && parts.length > 0 && parts[parts.length - 1].kind === 'thinking') {
         // Merge adjacent reasoning deltas into one thinking block.
-        const last = parts[parts.length - 1] as { kind: 'thinking'; text: string };
-        parts = [...parts.slice(0, -1), { kind: 'thinking', text: last.text + part.text }];
+        const last = parts[parts.length - 1] as { kind: 'thinking'; text: string; source?: 'summary' | 'raw' | 'unknown' };
+        parts = last.source === part.source
+          ? [...parts.slice(0, -1), { kind: 'thinking', text: last.text + part.text, source: part.source }]
+          : [...parts, part];
       } else {
         parts = [...parts, part];
       }

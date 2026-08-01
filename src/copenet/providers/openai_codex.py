@@ -401,7 +401,12 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
             delta = str(event.get("delta") or "")
             if delta:
                 saw_reasoning_delta = True
-                yield ProviderEvent(kind="reasoning_delta", text=delta)
+                reasoning_source = "raw" if "reasoning_text" in event_type and "summary" not in event_type else "summary"
+                yield ProviderEvent(
+                    kind="reasoning_delta",
+                    text=delta,
+                    metadata={"reasoningSource": reasoning_source, "providerEventType": event_type},
+                )
             continue
         if event_type == "response.output_item.added":
             item = event.get("item")
@@ -442,7 +447,11 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
                 if not saw_reasoning_delta:
                     summary_text = _reasoning_item_text(item)
                     if summary_text:
-                        yield ProviderEvent(kind="reasoning_delta", text=summary_text)
+                        yield ProviderEvent(
+                            kind="reasoning_delta",
+                            text=summary_text,
+                            metadata={"reasoningSource": "summary", "providerEventType": "response.output_item.done"},
+                        )
             continue
         if event_type in {"response.failed", "error"}:
             raise RuntimeError(_openai_codex_failure_message(event))
@@ -546,7 +555,11 @@ def _emit_responses_nonstream_events(data: dict[str, Any]) -> Iterator[ProviderE
             elif item_type == "reasoning":
                 summary_text = _reasoning_item_text(item)
                 if summary_text:
-                    yield ProviderEvent(kind="reasoning_delta", text=summary_text)
+                    yield ProviderEvent(
+                        kind="reasoning_delta",
+                        text=summary_text,
+                        metadata={"reasoningSource": "summary", "providerEventType": "response.output.reasoning"},
+                    )
         return
     direct_text = data.get("output_text")
     if isinstance(direct_text, str) and direct_text.strip():

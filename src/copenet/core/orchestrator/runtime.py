@@ -201,12 +201,15 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     working_history = orchestrator.history(session_key=session_key, limit=12)
     is_first_turn = len(prior_history) == 0
     run_started_at = transcript_now()
+    trace_settings = orchestrator._observability_store.load_settings()
     trace = RunTraceWriter(
         run_id=run_id,
         session_key=session_key,
         provider=provider_name,
         model=request.model,
-        enabled=orchestrator._trace_enabled,
+        enabled=trace_settings.debug_capture,
+        debug=trace_settings.debug_capture,
+        root_dir=orchestrator._observability_store.trace_root,
     )
     # Pre-init the error-path accumulators so the except/finally below can
     # reference them even if we fail in the setup gap before the main body runs.
@@ -436,6 +439,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
             session_state=session_state,
         )
+        model_input_snapshot: dict[str, Any] | None = {} if trace.debug else None
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
             prompt=chat_prompt,
@@ -447,6 +451,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             system_prompt=effective_system_prompt,
             purpose=prompt_policy.purpose.value,
             input_token_budget=context_budget.input_tokens,
+            debug_snapshot=model_input_snapshot,
             available_tools=available_tools,
             tool_executor=_make_approval_gated_executor(
                 orchestrator._tool_registry.execute,
@@ -492,6 +497,23 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 sink=identity_context_payload,
             ),
         )
+        if model_input_snapshot is not None:
+            trace.record_debug(
+                "model_input_snapshot",
+                {
+                    **model_input_snapshot,
+                    "promptContextPolicy": {
+                        "purpose": prompt_policy.purpose.value,
+                        "systemPromptId": resolved_system_prompt_id,
+                        "taskPromptId": resolved_task_prompt_id,
+                    },
+                    "contextWindow": {
+                        "messageCount": message_count,
+                        "inputTokenEstimate": input_token_estimate,
+                        "unboundedInputTokenEstimate": unbounded_token_estimate,
+                    },
+                },
+            )
         if not plan.will_attempt_tool_loop:
             trace.record(
                 "provider_turn_started",
@@ -517,8 +539,17 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 # Phase 2: native reasoning summary deltas. Captured as a
                 # "thinking" part + streamed over WS so the Phase 4 chat UX can
                 # render inline thinking. Not folded into assistant_text.
-                _append_thinking_part(assistant_message_parts, event.text)
-                trace.record("reasoning_delta", {"chars": len(event.text)})
+                reasoning_source = str((event.metadata or {}).get("reasoningSource") or "summary")
+                provider_event_type = str((event.metadata or {}).get("providerEventType") or "") or None
+                _append_thinking_part(assistant_message_parts, event.text, source=reasoning_source)
+                trace.record(
+                    "reasoning_delta",
+                    {"chars": len(event.text), "source": reasoning_source, "providerEventType": provider_event_type},
+                )
+                trace.record_debug(
+                    "reasoning_content",
+                    {"text": event.text, "source": reasoning_source, "providerEventType": provider_event_type},
+                )
                 seq += 1
                 await emit(
                     {
@@ -529,6 +560,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                         "provider": provider_name,
                         "model": request.model,
                         "text": event.text,
+                        "reasoningSource": reasoning_source,
                     }
                 )
 
@@ -1065,13 +1097,13 @@ def _replay_output_from_runtime_input(runtime_input: object) -> str:
     return str(summary) if isinstance(summary, str) else ""
 
 
-def _append_thinking_part(parts: list[dict], text: str) -> None:
+def _append_thinking_part(parts: list[dict], text: str, *, source: str = "summary") -> None:
     if not text:
         return
-    if parts and parts[-1].get("kind") == "thinking":
+    if parts and parts[-1].get("kind") == "thinking" and parts[-1].get("source", "summary") == source:
         parts[-1]["text"] = f"{parts[-1].get('text') or ''}{text}"
         return
-    parts.append({"kind": "thinking", "text": text})
+    parts.append({"kind": "thinking", "text": text, "source": source})
 
 
 def _normalize_final_message_parts(parts: list[dict], *, assistant_text: str) -> list[dict]:
