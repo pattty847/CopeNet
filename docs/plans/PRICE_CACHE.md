@@ -81,4 +81,14 @@ the hazard cannot occur. `tests/unit/test_market_data_contracts.py` pins both ru
 - [x] Wire the ticker chart path (`runtime.ticker`) and the VOO/QQQ/XLK benchmark reads
 - [x] Wire the valuation path — historical P/E now divides split-only prices (AAPL Mar-2018 reads 17.0x against a real $41.23 close)
 - [x] Wire the dashboard refresh — a universe sweep is 25 requests instead of 50, each a ~6mo delta after the first day
+- [x] Watchlist quotes — a warm panel load is 0 requests; cold is capped at 2 concurrent
 - [ ] Measure derived weekly/monthly against Yahoo's own aggregation and record the delta
+
+## Remaining direct yfinance callers
+
+Everything on the candle path reads the cache. Still direct, and fine as-is:
+`search_symbols` (debounced typeahead, no history to cache), `fetch_key_stats` and
+`fetch_fund_profile` (fast_info fields the cache does not hold), `fetch_split_history`
+(cheap, and the cache exposes its own splits to callers that already hold a history),
+plus `backtester.py` and `replay.py`, which take explicit user-initiated runs rather
+than firing on render.

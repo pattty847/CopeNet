@@ -1,7 +1,7 @@
 """market.watchlist.* + market.symbols.search — the user-curated ticker list.
 
-fetch_quote_row / search_symbols are the real I/O boundaries and are monkeypatched, so these
-tests never touch the network.
+quotes.quote_row / quote_rows and search_symbols are the real I/O boundaries and are
+monkeypatched, so these tests never touch the network.
 """
 
 from __future__ import annotations
@@ -31,14 +31,25 @@ async def _send(handler, params: dict[str, Any] | None, orchestrator) -> dict[st
     return frames[0]
 
 
-def _fake_quote(symbol: str) -> MacroItem | None:
+def _fake_quote(_cache: Any, symbol: str, **_kwargs: Any) -> MacroItem | None:
     if symbol == "ZZZZ":
         return None
     return MacroItem(label=symbol, value="$123.45", change="+1.00%", tone="up", spark=[120.0, 123.45])
 
 
+async def _fake_quotes(cache: Any, symbols: list[str], **_kwargs: Any) -> dict[str, MacroItem | None]:
+    return {symbol: _fake_quote(cache, symbol) for symbol in symbols}
+
+
+def _offline_quotes(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Cut both quote entry points: the batch path the panel uses and the single-symbol
+    probe that validates an add."""
+    monkeypatch.setattr(handlers, "quote_row", _fake_quote)
+    monkeypatch.setattr(handlers, "quote_rows", _fake_quotes)
+
+
 async def test_watchlist_add_get_remove_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     added = await _send(handlers.handle_market_watchlist_add, {"symbol": "msft", "name": "Microsoft"}, orchestrator)
@@ -55,7 +66,7 @@ async def test_watchlist_add_get_remove_round_trip(tmp_path: Path, monkeypatch: 
 
 
 async def test_watchlist_add_rejects_unresolvable_symbol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     with pytest.raises(ValueError, match="did not resolve"):
@@ -66,7 +77,7 @@ async def test_watchlist_add_rejects_unresolvable_symbol(tmp_path: Path, monkeyp
 
 
 async def test_watchlist_add_is_idempotent_for_duplicate_symbol(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     await _send(handlers.handle_market_watchlist_add, {"symbol": "MSFT"}, orchestrator)
@@ -75,7 +86,7 @@ async def test_watchlist_add_is_idempotent_for_duplicate_symbol(tmp_path: Path, 
 
 
 async def test_watchlist_falls_back_to_universe_name_when_none_stored(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     result = await _send(handlers.handle_market_watchlist_add, {"symbol": "VOO"}, orchestrator)
@@ -86,7 +97,7 @@ async def test_watchlist_store_is_scoped_to_orchestrators_market_store_root(tmp_
     # Regression: without deriving the watchlist path from orchestrator.market_store.root_dir,
     # a FakeOrchestrator with no `_market_watchlist_store` set would silently fall back to the
     # real ~/.copenet market dir instead of tmp_path.
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     await _send(handlers.handle_market_watchlist_add, {"symbol": "MSFT"}, orchestrator)
@@ -95,7 +106,7 @@ async def test_watchlist_store_is_scoped_to_orchestrators_market_store_root(tmp_
 
 
 async def test_watchlist_multi_list_create_select_delete_round_trip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     await _send(handlers.handle_market_watchlist_add, {"symbol": "MSFT"}, orchestrator)
@@ -115,7 +126,7 @@ async def test_watchlist_multi_list_create_select_delete_round_trip(tmp_path: Pa
 
 
 async def test_watchlist_cannot_delete_last_list(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
 
     with pytest.raises(ValueError, match="last watchlist"):
@@ -125,7 +136,7 @@ async def test_watchlist_cannot_delete_last_list(tmp_path: Path, monkeypatch: py
 async def test_watchlist_migrates_legacy_flat_shape(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     import json
 
-    monkeypatch.setattr(handlers, "fetch_quote_row", _fake_quote)
+    _offline_quotes(monkeypatch)
     orchestrator = FakeOrchestrator(tmp_path)
     legacy = tmp_path / "market" / "watchlist.json"
     legacy.parent.mkdir(parents=True, exist_ok=True)

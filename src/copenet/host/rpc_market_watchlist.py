@@ -6,7 +6,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any, Awaitable, Callable
 
-from copenet.core.market.data_sources import fetch_quote_row, search_symbols
+from copenet.core.market.data_sources import search_symbols
+from copenet.core.market.price_cache import PriceCache
+from copenet.core.market.quotes import quote_row, quote_rows
 from copenet.core.market.runtime import default_market_dir
 from copenet.core.market.store import MarketStore
 from copenet.core.market.universe import find_asset
@@ -14,6 +16,26 @@ from copenet.core.market.watchlist_store import WatchlistStore
 from copenet.host.rpc_schema import ResponseFrame, make_response_frame
 
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
+
+
+def price_cache(orchestrator) -> PriceCache:
+    """Shared price cache, rooted off the same market dir as `watchlist_store`.
+
+    Deriving the root from `orchestrator.market_store` rather than calling
+    `default_market_dir()` keeps tests that scope the store to tmp_path from writing into
+    the real ~/.copenet market dir — same reasoning as `watchlist_store` below.
+    """
+    cache = getattr(orchestrator, "_market_price_cache", None)
+    if isinstance(cache, PriceCache):
+        return cache
+    market_store = getattr(orchestrator, "market_store", None)
+    root = market_store.root_dir if isinstance(market_store, MarketStore) else default_market_dir()
+    cache = PriceCache(root / "prices")
+    try:
+        setattr(orchestrator, "_market_price_cache", cache)
+    except Exception:
+        pass
+    return cache
 
 
 def watchlist_store(orchestrator) -> WatchlistStore:
@@ -35,36 +57,47 @@ def watchlist_store(orchestrator) -> WatchlistStore:
     return store
 
 
-async def _quote_items(entries: list[dict[str, str]]) -> list[dict[str, Any]]:
-    async def _row(entry: dict[str, str]) -> dict[str, Any]:
+async def _quote_items(entries: list[dict[str, str]], cache: PriceCache) -> list[dict[str, Any]]:
+    quotes = await quote_rows(cache, [entry["symbol"] for entry in entries])
+    items: list[dict[str, Any]] = []
+    for entry in entries:
         symbol = entry["symbol"]
-        item = await asyncio.to_thread(fetch_quote_row, symbol)
         asset = find_asset(symbol)
         name = entry.get("name") or (asset.name if asset else "") or symbol
+        item = quotes.get(symbol)
         if item is None:
-            return {"symbol": symbol, "name": name, "value": "—", "change": "—", "tone": "flat", "spark": []}
-        return {"symbol": symbol, "name": name, "value": item.value, "change": item.change, "tone": item.tone, "spark": item.spark}
+            items.append({"symbol": symbol, "name": name, "value": "—", "change": "—", "tone": "flat", "spark": []})
+            continue
+        items.append({"symbol": symbol, "name": name, "value": item.value, "change": item.change, "tone": item.tone, "spark": item.spark})
+    return items
 
-    return list(await asyncio.gather(*[_row(e) for e in entries]))
 
-
-async def _state_payload(store: WatchlistStore) -> dict[str, Any]:
+async def _state_payload(store: WatchlistStore, cache: PriceCache) -> dict[str, Any]:
     """Full watchlist wire state: quoted items for the ACTIVE list + tab metadata."""
     state = store.state()
     return {
-        "items": await _quote_items(state["entries"]),
+        "items": await _quote_items(state["entries"], cache),
         "lists": state["lists"],
         "active": state["active"],
     }
 
 
-async def _respond_state(request_id: str, send_json: SendJson, store: WatchlistStore) -> None:
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=await _state_payload(store))))
+async def _respond_state(
+    request_id: str,
+    send_json: SendJson,
+    store: WatchlistStore,
+    cache: PriceCache,
+) -> None:
+    await send_json(
+        make_response_frame(
+            ResponseFrame(id=request_id, ok=True, payload=await _state_payload(store, cache))
+        )
+    )
 
 
 async def handle_market_watchlist_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     del params
-    await _respond_state(request_id, send_json, watchlist_store(orchestrator))
+    await _respond_state(request_id, send_json, watchlist_store(orchestrator), price_cache(orchestrator))
 
 
 async def handle_market_watchlist_add(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
@@ -74,12 +107,13 @@ async def handle_market_watchlist_add(request_id: str, params: dict[str, Any] | 
     list_name = str(raw.get("list") or "").strip() or None
     if not symbol:
         raise ValueError("symbol is required")
-    probe = await asyncio.to_thread(fetch_quote_row, symbol)
+    cache = price_cache(orchestrator)
+    probe = await asyncio.to_thread(quote_row, cache, symbol)
     if probe is None:
         raise ValueError(f"'{symbol}' did not resolve to a tradable ticker")
     store = watchlist_store(orchestrator)
     store.add(symbol, name, list_name)
-    await _respond_state(request_id, send_json, store)
+    await _respond_state(request_id, send_json, store, cache)
 
 
 async def handle_market_watchlist_remove(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
@@ -90,28 +124,28 @@ async def handle_market_watchlist_remove(request_id: str, params: dict[str, Any]
         raise ValueError("symbol is required")
     store = watchlist_store(orchestrator)
     store.remove(symbol, list_name)
-    await _respond_state(request_id, send_json, store)
+    await _respond_state(request_id, send_json, store, price_cache(orchestrator))
 
 
 async def handle_market_watchlist_list_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     store = watchlist_store(orchestrator)
     store.create_list(str(raw.get("name") or ""))
-    await _respond_state(request_id, send_json, store)
+    await _respond_state(request_id, send_json, store, price_cache(orchestrator))
 
 
 async def handle_market_watchlist_list_delete(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     store = watchlist_store(orchestrator)
     store.delete_list(str(raw.get("name") or ""))
-    await _respond_state(request_id, send_json, store)
+    await _respond_state(request_id, send_json, store, price_cache(orchestrator))
 
 
 async def handle_market_watchlist_list_select(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     store = watchlist_store(orchestrator)
     store.select_list(str(raw.get("name") or ""))
-    await _respond_state(request_id, send_json, store)
+    await _respond_state(request_id, send_json, store, price_cache(orchestrator))
 
 
 async def handle_market_symbols_search(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
