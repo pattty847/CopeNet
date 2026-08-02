@@ -23,7 +23,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { useArtifact, useBatch } from '../../runtime/adapter';
 import type { AsyncResource, BatchResource } from '../../runtime/adapter';
 import type { Artifact } from '../../runtime/types';
-import type { ToolResultPart } from '../../types/backend';
+import type { ToolResultPart, ToolResultPreview } from '../../types/backend';
 import { DiffArtifactView } from './DiffArtifactView';
 import { RunInternalsDrawerBody } from './RunInternalsDrawerBody';
 import { LoadingState } from './ResourceStates';
@@ -333,7 +333,11 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
   const scope = tool.scope;
   const policyDecision = tool.policyDecision;
   const accessAction = tool.accessAction;
+  // The preview can arrive on either field depending on which loop produced the
+  // step, so normalize once. Branching on `tool.preview` alone silently fell
+  // through to JsonView for every effect-carried preview — which is most of them.
   const previewValue = effect?.preview || tool.preview;
+  const preview = (previewValue || null) as ToolResultPreview | null;
 
   // Build the 4-cell metadata grid from meaningful fields
   type MetaCell = { label: string; content: React.ReactNode };
@@ -407,22 +411,61 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
       )}
 
       {/* Preview */}
-      {tool.preview?.type === 'diff' ? (
-        <DiffView preview={tool.preview} />
-      ) : tool.preview?.type === 'plan' ? (
-        <PlanView preview={tool.preview} />
-      ) : tool.preview?.type === 'file_read' ? (
+      {preview?.type === 'diff' ? (
+        <DiffView preview={preview} />
+      ) : preview?.type === 'plan' ? (
+        <PlanView preview={preview} />
+      ) : preview?.type === 'file_read' ? (
         <div className="space-y-1.5">
           <div className="flex items-center justify-between px-0.5">
             <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">output</span>
-            <CopyButton getValue={() => tool.preview?.type === 'file_read' ? tool.preview.lines.join('\n') : ''} />
+            <CopyButton getValue={() => (preview?.type === 'file_read' ? preview.lines.join('\n') : '')} />
           </div>
           <FileLinesView
-            lines={tool.preview.lines}
-            lang={langFromPath(tool.preview.path)}
-            startLine={tool.preview.startLine}
+            lines={preview.lines}
+            lang={langFromPath(preview.path)}
+            startLine={preview.startLine}
             maxHeightClass="max-h-[60vh]"
           />
+        </div>
+      ) : preview?.type === 'raw' ? (
+        // Render the body, not the envelope. This branch was missing, so a raw
+        // preview fell through to JsonView and displayed
+        // `{"type":"raw","text":"..."}` with every newline escaped — the result was
+        // there but unreadable.
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">output</span>
+            <CopyButton getValue={() => (preview?.type === 'raw' ? preview.text : '')} />
+          </div>
+          <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2 font-mono text-[10.5px] leading-5 text-operator-text/85">
+            {preview.text}
+          </pre>
+          {preview.truncated && (
+            <p className="px-0.5 text-[10px] text-operator-muted/60">
+              Clipped at {preview.text.length.toLocaleString()} of{' '}
+              {(preview.fullChars || 0).toLocaleString()} characters. The whole body is in
+              this run's tool output artifact.
+            </p>
+          )}
+        </div>
+      ) : preview?.type === 'repo_search' ? (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">
+              {preview.matches.length} matches
+            </span>
+            <CopyButton getValue={() => previewText(preview)} />
+          </div>
+          <div className="max-h-[60vh] overflow-auto rounded-lg border border-operator-border bg-operator-bg divide-y divide-operator-border/40">
+            {preview.matches.map((match, index) => (
+              <div key={`${match.path}-${match.line}-${index}`} className="flex items-baseline gap-1.5 px-2.5 py-1">
+                <span className="shrink-0 font-mono text-[10px] text-operator-accent">{match.path}</span>
+                <span className="shrink-0 font-mono text-[10px] text-operator-muted/50">:{match.line}</span>
+                <span className="min-w-0 flex-1 truncate font-mono text-[10px] text-operator-text/70">{match.snippet.trim()}</span>
+              </div>
+            ))}
+          </div>
         </div>
       ) : previewValue ? (
         <div className="space-y-1.5">

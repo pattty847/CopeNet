@@ -416,47 +416,15 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
                 "wordCount": int(body.get("wordCount") or 0),
                 "text": text.rstrip()[:600],
             }
-    if tool_id == "market.dashboard":
-        regime = ((body.get("regime") or {}).get("data") or {}).get("current")
-        briefing = (body.get("briefing") or {}).get("data") or {}
-        return {
-            "type": "market_dashboard",
-            "regime": regime,
-            "headline": briefing.get("headline") if isinstance(briefing, dict) else None,
-        }
-    if tool_id == "market.ticker":
-        return {
-            "type": "market_ticker",
-            "symbol": body.get("symbol"),
-            "last": body.get("last"),
-            "change": body.get("change"),
-        }
-    if tool_id == "market.compare":
-        rows = body.get("rows")
-        symbols = [row.get("symbol") for row in rows if isinstance(row, dict)] if isinstance(rows, list) else []
-        return {"type": "market_compare", "symbols": symbols}
-    if tool_id == "market.evidence":
-        evidence = body.get("evidence")
-        return {
-            "type": "market_evidence",
-            "symbol": body.get("symbol"),
-            "asOf": body.get("asOf"),
-            "evidenceCount": body.get("evidenceCount"),
-            "insiderNet": body.get("insiderNet"),
-            "headlines": [row.get("headline") for row in evidence[:5] if isinstance(row, dict)]
-            if isinstance(evidence, list)
-            else [],
-        }
-    if tool_id == "market.financials":
-        observations = body.get("observations")
-        return {
-            "type": "market_financials",
-            "symbol": body.get("symbol"),
-            "metric": body.get("metric"),
-            "frequency": body.get("frequency"),
-            "observationCount": len(observations) if isinstance(observations, list) else 0,
-            "warnings": body.get("warnings"),
-        }
+    # No market.* branch on purpose. Each of these once returned a hand-written
+    # projection — market.compare emitted only the symbol list, discarding the rows
+    # that were the entire point of the call — and the frontend has never had a
+    # renderer for any of the five `market_*` preview types, so every market tool
+    # call rendered blank in the inspector. That is precisely the failure
+    # `_generic_preview` was written to prevent (see its docstring). Falling through
+    # to it yields `{"type": "raw"}`, which the UI does render, bounded by
+    # INSPECTOR_INLINE_BODY_CHARS with the whole body still in the tool_output
+    # artifact. Do not add a projection here without shipping its renderer.
     if tool_id == "files.read":
         path = body.get("path")
         content = body.get("content")
