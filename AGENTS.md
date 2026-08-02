@@ -253,6 +253,9 @@ For current behavior, assume:
   - inline `toolExecution` rendering
   - archive/restore
   - right-panel runtime + tool telemetry (**Tool Activity proof** groups `SessionRunRecord.toolSteps` and run-scoped artifacts via `runtime/activityProof.ts` + `ToolActivityProof.tsx`)
+  - the per-turn **internals line** beneath each assistant message (`components/runtime/TurnInternals.tsx`)
+- **One derivation renders run internals everywhere.** `runtime/runInternals.ts` turns a `SessionRunRecord` plus its lifecycle trace into the collapsed stat line and the what-it-saw / what-it-did / why-it-stopped / raw-trace sections; `components/runtime/RunInternals.tsx` renders it for both the Agents thread and the Observability inspector, with `internalsPalette.ts` selecting `operator-*` vs `shell-*` classes. Add to the derivation, not to a fifth per-surface renderer. Two rules that are easy to break: the collapsed line must never appear while its run is streaming (`TurnInternals` returns null for the active run), and `inputTokenEstimate` counts **messages only** — never label it as everything the model saw.
+- Run records for the thread come from `runtime/runIndex.ts` (one `sessions.runs` call per session, module-level promise cache); trace events load lazily on expand. Do not add a per-message fetch.
 - Section status, verified 2026-08-01 — keep this current, because a stale entry here sends the next contributor to rebuild something that already ships:
   - **Live and load-bearing:** `Agents`, `Market`, `Observability` (run inspector over durable run records + `logs/runs/*.jsonl`, see `docs/plans/OBSERVABILITY.md`), `Home`.
   - **Still direction-setting shells:** `Workflows` and `Data & Tools` — neither issues a single RPC. `Experiments` is thin but wired.

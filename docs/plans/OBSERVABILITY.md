@@ -21,9 +21,14 @@ The Observability workspace is a run-first, master-detail inspector:
 - provider, model, duration, status, tool count, and debug-capture provenance
 
 The Debug capture switch applies to subsequent runs and persists in
-`~/.copenet/observability.json` (or under `COPNET_DATA_DIR`). `COPNET_TRACE=1`
-remains a startup-compatible fallback, but the persisted operator setting is the
-canonical runtime control once it exists.
+`~/.copenet/sessions/observability.json` (the settings file sits beside the session
+store, not at the data-dir root; under `COPNET_DATA_DIR` it follows the same
+relative path). `COPNET_TRACE=1` remains a startup-compatible fallback, but the
+persisted operator setting is the canonical runtime control once it exists.
+
+Inspector tabs, since workstream 2: **Internals** (the shared per-turn view, and
+the default), **Timeline**, **Model input**, **Raw trace**. The old standalone
+Tools tab is now the "What it did" section inside Internals.
 
 ## Data flow
 
@@ -171,12 +176,47 @@ carrying its policy reason, and zero debug rows. With it on, the same shape plus
 337 traces / 7.9 MB to zero and flipped the open run's badge to `no trace` while its run
 record stayed intact.
 
-### Workstream 2 — one per-turn internals component
+### Workstream 2 — one per-turn internals component — **in-thread + Observability shipped 2026-08-02**
 
-Extract the run-internals view used by `RunInspector` into a shared component with three
-mount points: live (in-flight), in-thread (any turn), cross-session (Observability).
-`RunActivityPanel`'s grouped-breadcrumb design is the right visual language and should
-survive — it is already tuned not to overwhelm.
+`runtime/runInternals.ts` is the single derivation — a `SessionRunRecord` plus, optionally,
+that run's lifecycle trace becomes a collapsed stat line and the four sections. Pure and
+React-free so verdicts and tone are unit-testable (`tests/runInternals.test.ts`).
+
+Rendered by `components/runtime/RunInternals.tsx` at two of the three mount points:
+in-thread under every assistant turn (`TurnInternals`, `operator-*` palette) and in the
+Observability inspector as its first tab (`shell-*`). `RunStepCard` and `internalsPalette`
+are extracted so a tool call looks the same in both; the palette is an explicit class table
+because Tailwind cannot see interpolated class names. `RunInspector`'s local
+`Preview`/`ToolStepCard` are gone and its standalone Tools tab is now the shared
+"What it did" — 75 lines deleted there.
+
+`runtime/runIndex.ts` collapses the data path: one `sessions.runs` call per session, shared
+by every turn via a module-level promise cache keyed by (sessionKey, revision), and the
+trace fetched only on expand. This also retires `useRunActivity`'s fetch-ten-render-one.
+
+Three corrections the honest version required:
+
+- **`inputTokenEstimate` charges the messages array only.** Labeling it "input tokens" let
+  a turn read as *5 tokens* while the model was handed an 11.5k-char system prompt and
+  21.5k of tool schemas. The line now says `731 msg`; the expanded row says
+  "history only — prompt and schemas are above", with those sizes as their own rows.
+- **Blocked ≠ failed.** A block is a policy decision the operator may want to change; a
+  failure is a bug. The old card collapsed both to a red X. `isBlockedStep` / `isFailedStep`
+  split them, with a shield vs an X and separate badges.
+- **"Not fetched yet" ≠ "no trace".** The first render of an expanded turn printed
+  "No trace for this run — it predates always-on tracing, or was purged" as fact while the
+  fetch was still in flight. Hence `TraceStatus`.
+
+Layout-shift rule verified live rather than argued: sampling the DOM every 200 ms through a
+real composer send, the streaming turn carries no line (12 bubbles / 5 lines) and the line
+appears only after the run lands (6 lines at +1.0 s). Note the honest tradeoff — the line
+*appearing* is itself a change, just never a mid-stream one; the alternative (a placeholder
+reserving space on every turn) is more noise, not less.
+
+**Still open in this workstream:** the third mount point. The right drawer still shows only
+the last run; it should become the session-level list with the same expansion, and
+`RunActivityPanel` / `LiveToolFeed` should be reconciled against `RunInternals` rather than
+left as parallel renderings.
 
 ### Workstream 3 — emit the provider-resolved model
 
@@ -190,10 +230,11 @@ runs is unusable regardless of anything else), plus the saved queries listed abo
 ## Agents thread UX
 
 The constraint: **insight without obstruction.** The thread is for working; the internals
-must be available at a glance and invisible otherwise.
+must be available at a glance and invisible otherwise. Everything below is shipped except
+the right-drawer item, which is called out as open.
 
 - Every assistant turn carries **one collapsed line** beneath it, muted by default:
-  `model · duration · 4 tools · 12k ctx`. Color appears only when something deserves
+  `model · duration · 4 tools · 731 msg`. Color appears only when something deserves
   attention — a policy block, a failure, a trimmed context.
 - Clicking that line expands **in place**, not into a side panel, because the question is
   about *this* message. Four sections, in the order a person actually debugs:
@@ -205,10 +246,19 @@ must be available at a glance and invisible otherwise.
 - A one-line **verdict** at the top when the answer is already knowable, e.g. *"No tool
   loop attempted: promptedToolUse = false"*. Per this repo's own triage order that is the
   single most common confusion, and it should never require reading JSONL.
-- The right drawer stops showing only the last run and becomes the **session-level** view:
-  every turn, scannable, with the same expansion.
+- **Open:** the right drawer still shows only the last run. It should become the
+  **session-level** view — every turn, scannable, with the same expansion.
 
 Nothing here may shift layout while a run streams; expansion is user-initiated only.
+
+### Known rough edge, next pass
+
+Inline tool rows in the thread (`components/transcript/InlineToolRows.tsx`) still dump the
+raw policy object into the transcript — a blocked `shell.exec` prints
+`{"target": "echo hi", "workspaceRoot": …, "policyDecision": "unsafe_unknown", …}` as JSON
+mid-conversation. `RunInternals` now renders that same information as one readable verdict
+line, so the inline row should be reduced to a summary and defer detail to the expansion.
+This is the most obstructive thing left in the thread.
 
 ### Trace reset — **done 2026-08-02**
 
