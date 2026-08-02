@@ -36,6 +36,7 @@ from copenet.core.tools import (
     disclose_policy_in_descriptions,
     policy_for_task_mode,
 )
+from copenet.providers import RESOLVED_MODEL_META_KEY
 from copenet.core.tracing import RunTraceWriter
 from copenet.prompts import (
     PromptContextPolicy,
@@ -219,6 +220,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     # Pre-init the error-path accumulators so the except/finally below can
     # reference them even if we fail in the setup gap before the main body runs.
     seq = 0
+    # The model that actually answered, once a provider tells us. Distinct from
+    # request.model: LM Studio resolves against a loaded instance, and the Responses
+    # endpoint reports its own id. A run stamped with the request cannot say what
+    # produced the output — which is why 28% of local traces had a null model.
+    resolved_model: str | None = None
     latest_turn_state: dict = {}
     normalized_tool_results: list[dict] = []
     tool_steps: list[dict] = []
@@ -581,6 +587,19 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 )
 
             if event.kind == "meta" and isinstance(event.metadata, dict):
+                announced = event.metadata.get(RESOLVED_MODEL_META_KEY)
+                if isinstance(announced, str) and announced.strip() and announced.strip() != resolved_model:
+                    resolved_model = announced.strip()
+                    # Retag the writer mid-run so every subsequent row carries the
+                    # answering model. The event is recorded even when the two match:
+                    # "the provider confirmed gpt-5.5" and "the provider said nothing
+                    # and we assumed gpt-5.5" are different facts, and only the
+                    # presence of this row tells them apart.
+                    trace.model = resolved_model
+                    trace.record(
+                        "model_resolved",
+                        {"requestedModel": request.model, "resolvedModel": resolved_model},
+                    )
                 tool_call_payload = event.metadata.get("toolCall")
                 if isinstance(tool_call_payload, dict):
                     assistant_message_parts.append({"kind": "tool_call", "toolCall": dict(tool_call_payload)})
@@ -788,7 +807,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             run_id=run_id,
             session_key=session_key,
             provider=provider_name,
-            model=request.model,
+            model=resolved_model or request.model,
             status="ok",
             user_message=message,
             tool_execution_mode=plan.tool_execution_mode,
@@ -942,7 +961,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             run_id=run_id,
             session_key=session_key,
             provider=provider_name,
-            model=request.model,
+            model=resolved_model or request.model,
             status="error",
             user_message=message,
             tool_execution_mode=plan.tool_execution_mode if "plan" in locals() else "none",

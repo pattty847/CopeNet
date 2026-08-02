@@ -20,6 +20,22 @@ class ProviderEvent:
     metadata: dict[str, Any] | None = None
 
 
+# Meta key carrying the model that actually answered, as distinct from the model
+# that was requested. These diverge for real: LM Studio resolves a request against
+# whatever instance is currently loaded, and a run stamped with the requested id
+# cannot tell you what produced the output. Before this existed, 95 of 334 local
+# traces (28%) carried a null model at all.
+RESOLVED_MODEL_META_KEY = "resolvedModel"
+
+
+def resolved_model_event(model: str | None) -> ProviderEvent | None:
+    """Return the meta event announcing the model that actually ran, or None."""
+    normalized = str(model or "").strip()
+    if not normalized:
+        return None
+    return ProviderEvent(kind="meta", metadata={RESOLVED_MODEL_META_KEY: normalized})
+
+
 @dataclass(frozen=True)
 class ProviderModel:
     """One selectable model exposed by a provider."""

@@ -11,7 +11,7 @@ from typing import Any, AsyncIterator, Iterator
 from urllib import error, request
 
 from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuthService
-from copenet.providers.base import ProviderEvent, ProviderModel
+from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event
 
 logger = logging.getLogger(__name__)
 
@@ -371,6 +371,7 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
     # deltas (e.g. trivial turns) — if we already streamed deltas, re-emitting
     # the item duplicates the entire thinking block in the UI.
     saw_reasoning_delta = False
+    announced_model = False
     for raw in _iter_sse_lines(response):
         if abort_event.is_set():
             break
@@ -386,6 +387,12 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
         if not isinstance(event, dict):
             continue
         event_type = str(event.get("type") or "").strip()
+
+        if not announced_model:
+            announcement = resolved_model_event(_resolved_model_from_sse(event))
+            if announcement is not None:
+                announced_model = True
+                yield announcement
 
         if event_type == "response.output_text.delta":
             delta = str(event.get("delta") or "")
@@ -464,6 +471,20 @@ def _parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterat
         if call.get("name"):
             yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": dict(call)})
     yield ProviderEvent(kind="meta", metadata={"responsesCompleted": completed})
+
+
+def _resolved_model_from_sse(event: dict[str, Any]) -> str | None:
+    """Pull the model the endpoint actually ran from a Responses SSE frame.
+
+    `response.created` carries the full response object including `model`. Verified
+    against a captured chatgpt.com/backend-api/codex stream: the requested id and the
+    reported one can differ, and only the reported one describes what answered.
+    """
+    payload = event.get("response")
+    if not isinstance(payload, dict):
+        return None
+    model = str(payload.get("model") or "").strip()
+    return model or None
 
 
 def _classify_responses_body(response: Any, content_type: str) -> tuple[str, Any]:
@@ -657,6 +678,7 @@ def _stream_responses(
 
 def _stream_openai_codex_sse(*, response: Any, abort_event: asyncio.Event) -> Iterator[ProviderEvent]:
     saw_delta = False
+    announced_model = False
     completed_response: dict[str, Any] | None = None
     try:
         for raw in response:
@@ -677,6 +699,11 @@ def _stream_openai_codex_sse(*, response: Any, abort_event: asyncio.Event) -> It
             if not isinstance(event, dict):
                 continue
             event_type = str(event.get("type") or "").strip()
+            if not announced_model:
+                announcement = resolved_model_event(_resolved_model_from_sse(event))
+                if announcement is not None:
+                    announced_model = True
+                    yield announcement
             if event_type == "response.output_text.delta":
                 delta = str(event.get("delta") or "")
                 if delta:

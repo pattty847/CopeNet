@@ -23,6 +23,7 @@ from .tool_loop_common import (
     _tool_result_event_payload,
     trace_tool_requested,
     collect_provider_turn,
+    forwarded_resolved_model,
     compose_prompted_tool_correction,
     compose_prompted_tool_system_prompt,
     parse_prompted_tool_turn,
@@ -80,6 +81,9 @@ async def run_with_prompted_tools(
             trace=trace,
             phase="prompted_tool",
         )
+        announcement = forwarded_resolved_model(events)
+        if announcement is not None:
+            yield announcement
         assistant_text = "".join(event.text or "" for event in events if event.kind == "delta").strip()
         parse = parse_prompted_tool_turn(assistant_text, active_tool_ids=active_tool_id_set)
         tool_requests = parse.requests

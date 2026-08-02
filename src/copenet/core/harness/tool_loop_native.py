@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Protocol
 
 from copenet.core.runtime import TurnState
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, build_openai_tool_schemas
-from copenet.providers import ProviderEvent
+from copenet.providers import ProviderEvent, resolved_model_event
 
 from .planning import HarnessTurnPlan
 from .tool_loop_common import (
@@ -71,6 +71,7 @@ async def run_with_native_tools(
         messages.append({"role": "system", "content": current_system_prompt})
     messages.append({"role": "user", "content": prompt})
     latest_content = ""
+    announced_model = False
     if trace is not None:
         trace("turn_started", turn_state.to_public_dict())
 
@@ -86,6 +87,11 @@ async def run_with_native_tools(
             model=model,
             tools=tool_schemas or None,
         )
+        if not announced_model:
+            announcement = resolved_model_event(response.get("model") if isinstance(response, dict) else None)
+            if announcement is not None:
+                announced_model = True
+                yield announcement
         message, finish_reason = _extract_native_choice(response)
         content = _coerce_native_message_content(message.get("content"))
         if content:

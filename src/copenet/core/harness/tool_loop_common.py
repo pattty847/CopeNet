@@ -9,7 +9,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
 from uuid import uuid4
 
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
-from copenet.providers import Provider, ProviderEvent
+from copenet.providers import RESOLVED_MODEL_META_KEY, Provider, ProviderEvent
 
 from .planning import HarnessTurnPlan
 
@@ -108,6 +108,25 @@ async def collect_provider_turn(
             },
         )
     return events, discovered
+
+
+def forwarded_resolved_model(events: list[ProviderEvent]) -> ProviderEvent | None:
+    """Return the resolved-model announcement from a buffered turn, if any.
+
+    The tool loops replace the provider stream with their own, so a meta event the
+    provider emitted reaches the orchestrator only if a loop re-yields it. Every
+    loop that buffers a turn instead of passing it through has to call this, or the
+    run is stamped with the requested model and the resolved one is lost.
+    """
+    for event in events:
+        if event.kind != "meta" or not isinstance(event.metadata, dict):
+            continue
+        if event.metadata.get(RESOLVED_MODEL_META_KEY):
+            return ProviderEvent(
+                kind="meta",
+                metadata={RESOLVED_MODEL_META_KEY: event.metadata[RESOLVED_MODEL_META_KEY]},
+            )
+    return None
 
 
 def argument_digest(arguments: dict[str, Any]) -> dict[str, Any]:

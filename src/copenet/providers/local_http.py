@@ -7,7 +7,7 @@ import json
 from typing import Any, AsyncIterator
 from urllib import error, request
 
-from copenet.providers.base import ProviderEvent, ProviderModel
+from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event
 
 
 def _trim_trailing_slash(value: str) -> str:
@@ -350,6 +350,11 @@ class LmStudioProvider(_StreamingHttpProvider):
             "messages": messages,
             "stream": True,
         }
+        # ensure_model_loaded picks against whatever instance is actually loaded, so
+        # model_name is the first point in the flow where the answering model is known.
+        announcement = resolved_model_event(model_name)
+        if announcement is not None:
+            yield announcement
 
         def worker() -> None:
             req = request.Request(

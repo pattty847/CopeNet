@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Protocol
 
 from copenet.core.runtime import TurnState
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, build_responses_tool_schemas, responses_safe_tool_name
-from copenet.providers import ProviderEvent
+from copenet.providers import RESOLVED_MODEL_META_KEY, ProviderEvent
 
 from . import responses_items
 from .context_window import estimate_input_tokens, trim_messages_to_token_budget
@@ -129,6 +129,11 @@ async def run_with_responses_tools(
                 fc = event.metadata.get("responsesFunctionCall")
                 if isinstance(fc, dict) and str(fc.get("name") or "").strip():
                     function_calls.append(fc)
+                elif event.metadata.get(RESOLVED_MODEL_META_KEY):
+                    # Forward, don't swallow: this loop owns the stream the
+                    # orchestrator sees, so a dropped announcement is a run stamped
+                    # with the requested model instead of the answering one.
+                    yield event
         assistant_text = "".join(assistant_text_chunks).strip()
         if trace is not None:
             trace(

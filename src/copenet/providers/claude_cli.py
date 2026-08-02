@@ -7,7 +7,7 @@ import json
 import shutil
 from typing import AsyncIterator
 
-from copenet.providers.base import ProviderEvent, ProviderModel
+from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event
 from copenet.runner.cli_runner import CliRunner, RunnerEvent, RunnerResult
 
 SUPPORTED_CLAUDE_CLI_MODELS = (
@@ -160,6 +160,11 @@ class ClaudeCliProvider:
         )
         discovered_session_id: str | None = provider_session_id
         emitted_text = False
+        # _resolve_model already normalized (and validated) the requested id into the
+        # one passed to --model, so this is the model the CLI is actually running.
+        announcement = resolved_model_event(self._resolve_model(model))
+        if announcement is not None:
+            yield announcement
 
         async for event in self._runner.run(args, timeout_sec=120, abort_event=abort_event):
             if isinstance(event, RunnerEvent):

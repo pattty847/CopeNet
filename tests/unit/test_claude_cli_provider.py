@@ -126,7 +126,10 @@ async def test_claude_cli_run_streams_jsonl_and_persists_session(
         )
     ]
 
+    # The leading meta announces the model that actually ran, so a run record can be
+    # stamped with what answered rather than with what was requested.
     assert events == [
+        ProviderEvent(kind="meta", metadata={"resolvedModel": "claude-sonnet-4-6"}),
         ProviderEvent(kind="meta", provider_session_id="abc"),
         ProviderEvent(kind="delta", text="hi"),
         ProviderEvent(kind="final", provider_session_id="abc"),

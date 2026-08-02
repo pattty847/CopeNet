@@ -241,7 +241,11 @@ async def test_run_cold_loads_model_before_chat(lmstudio_server) -> None:
         )
     ]
 
-    assert [event.kind for event in events] == ["delta", "delta", "final"]
+    # LM Studio resolves the request against a loaded instance, so the announced model
+    # carries the instance suffix the caller never asked for — the whole point of
+    # recording the resolved model rather than the requested one.
+    assert [event.kind for event in events] == ["meta", "delta", "delta", "final"]
+    assert events[0].metadata == {"resolvedModel": "openai/gpt-oss-20b#instance-1"}
     assert "".join(event.text or "" for event in events) == "hello world"
     assert state.load_calls == [{"model": "openai/gpt-oss-20b"}]
     assert state.chat_calls[0]["model"] == "openai/gpt-oss-20b#instance-1"

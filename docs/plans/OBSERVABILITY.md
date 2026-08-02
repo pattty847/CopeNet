@@ -221,9 +221,37 @@ to the `InspectorDrawer` overlay. `RunInternalsBody` survives unchanged as the s
 derivation's renderer — it just mounts in the overlay and in Observability instead of
 in the thread.
 
-### Workstream 3 — emit the provider-resolved model
+### Workstream 3 — emit the provider-resolved model — **shipped 2026-08-02**
 
-See "Next work" item 0 below. Prerequisite for model comparison in workstream 4.
+`RESOLVED_MODEL_META_KEY` / `resolved_model_event()` in `providers/base.py` is the contract.
+Each adapter announces the model that actually ran, as early as it knows it:
+
+| Adapter | Source | Divergence from the request |
+|---|---|---|
+| `local_http` (LM Studio, Ollama) | `ensure_model_loaded()` return | **Real.** Resolves against a loaded instance — `openai/gpt-oss-20b` answers as `openai/gpt-oss-20b#instance-1` |
+| `openai_codex` | `response.model` on the `response.created` SSE frame | Endpoint reports its own id |
+| `claude_cli` | `_resolve_model()` — the value passed to `--model` | Normalization only |
+
+**The tool loops were the real work, not the adapters.** A loop replaces the provider stream
+with its own, so a meta event reaches the orchestrator only if the loop re-yields it. The
+Responses loop consumed meta solely to collect `responsesFunctionCall` and dropped the rest;
+the prompted loop buffers a turn through `collect_provider_turn` and only ever extracted
+deltas from it. Both now forward (`forwarded_resolved_model` is the shared helper), and the
+native loop reads `model` off the `chat_completion` body.
+
+The orchestrator retags `trace.model` mid-run and stamps `RunRecord`, falling back to
+`request.model` when a provider stays silent. It emits `model_resolved` **even when the two
+match** — "the provider confirmed gpt-5.5" and "the provider said nothing and we assumed
+gpt-5.5" are different facts, and the presence of that row is what distinguishes them.
+
+Deliberately *not* changed: the transcript message's `model` field. That is "which model this
+conversation is with" and feeds session-binding reconciliation; the audit answer belongs on
+`RunRecord`, which is what Observability reads.
+
+Verified live against `openai-codex`/`gpt-5.5` through the Responses tool loop: first trace
+row `gpt-5.5`, `model_resolved` present, last row `gpt-5.5`. **The LM Studio path — the one
+where the ids genuinely differ, and the only user of the prompted loop — is covered by unit
+test but has not been exercised against a running LM Studio.**
 
 ### Workstream 4 — cross-run queries
 
