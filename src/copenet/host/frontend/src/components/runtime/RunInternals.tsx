@@ -29,6 +29,9 @@ interface Props {
   artifacts?: SessionArtifactRecord[];
   palette?: InternalsPalette;
   traceStatus?: TraceStatus;
+  /** The Agents thread lists every tool call as its own row above this view, so
+   *  the overlay omits "What it did". Observability has no such rows and keeps it. */
+  showDid?: boolean;
 }
 
 function FactRows({ facts, palette }: { facts: InternalsFact[]; palette: InternalsPalette }) {
@@ -71,7 +74,7 @@ function Section({
 
 /** The four sections. Exported on its own so the Observability inspector can
  *  render the body without the collapsed line wrapping it. */
-export function RunInternalsBody({ internals, artifacts = [], palette = 'operator', traceStatus }: Props) {
+export function RunInternalsBody({ internals, artifacts = [], palette = 'operator', traceStatus, showDid = true }: Props) {
   const classes = paletteClasses(palette);
   const [rawOpen, setRawOpen] = useState(false);
   const artifactsById = new Map(artifacts.map((artifact) => [artifact.artifactId, artifact]));
@@ -127,6 +130,7 @@ export function RunInternalsBody({ internals, artifacts = [], palette = 'operato
         )}
       </Section>
 
+      {showDid && (
       <Section icon={Wrench} title="What it did" palette={palette}>
         {internals.did.length > 0 ? (
           <div className="space-y-1.5">
@@ -143,6 +147,7 @@ export function RunInternalsBody({ internals, artifacts = [], palette = 'operato
           <p className={`text-[11px] ${classes.mutedSoft}`}>No tools were called.</p>
         )}
       </Section>
+      )}
 
       <Section icon={Flag} title="Why it stopped" palette={palette}>
         <p className={`text-[11px] leading-4 ${toneClass(internals.stopped.tone, classes)}`}>{internals.stopped.text}</p>

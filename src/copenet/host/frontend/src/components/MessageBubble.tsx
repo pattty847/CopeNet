@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Message, ChatAttachment } from '../types/backend';
 import { fetchChatAttachmentObjectUrl } from '../lib/appApi';
 import { ToolTraceCard } from './ToolTraceCard';
-import { TurnInternals } from './runtime/TurnInternals';
+import { TurnContextRow, TurnToolGroup } from './transcript/TurnToolGroup';
 import { InlineToolPart } from './transcript/InlineToolRows';
 import { Copy, Check } from 'lucide-react';
 import { Spinner } from './Spinner';
@@ -43,26 +43,72 @@ export function collapseRenderedMessageParts(parts: MessagePart[]): MessagePart[
   return collapsed;
 }
 
-// PartsBody — renders a structured parts array with interleaved tool rows.
-function PartsBody({ parts, isLive }: { parts: NonNullable<Message['parts']>; isLive?: boolean }) {
+const TOOL_PART_KINDS = new Set(['tool_call', 'tool_result', 'tool_batch']);
+
+// PartsBody — renders a structured parts array, collapsing consecutive tool
+// parts into one TurnToolGroup.
+//
+// Grouping is by RUN, not by position: a turn's tool calls belong together even
+// when the model narrated between them, so a text part does not close the group.
+// The group opens by default while the run is live so the operator watches work
+// happen, and stays open afterwards — collapsing content out from under someone
+// who just watched it appear is worse than one extra expanded row. Turns loaded
+// from history start collapsed.
+function PartsBody({
+  parts,
+  isLive,
+  sessionKey,
+  runId,
+}: {
+  parts: NonNullable<Message['parts']>;
+  isLive?: boolean;
+  sessionKey: string;
+  runId: string | null;
+}) {
   const renderParts = collapseRenderedMessageParts(parts);
   // A thinking part is "active" (live, auto-expanded) only while it is the
   // trailing part of a still-streaming message. As soon as a tool row or the
   // answer text streams in after it, it settles and collapses to one line.
   const lastIndex = renderParts.length - 1;
-  return (
-    <div className="space-y-2">
-      {renderParts.map((part, i) => {
-        if (part.kind === 'text') {
-          if (!part.content) return null;
-          return <ChatMarkdown key={i} content={part.content} />;
-        }
-        return (
-          <InlineToolPart key={i} part={part} isLive={isLive} active={!!isLive && i === lastIndex} />
-        );
-      })}
-    </div>
-  );
+  const toolParts = renderParts.filter((part) => TOOL_PART_KINDS.has(part.kind));
+
+  const rendered: React.ReactNode[] = [];
+  let groupEmitted = false;
+  renderParts.forEach((part, i) => {
+    if (part.kind === 'text') {
+      if (part.content) rendered.push(<ChatMarkdown key={`text-${i}`} content={part.content} />);
+      return;
+    }
+    if (!TOOL_PART_KINDS.has(part.kind)) {
+      // Thinking parts keep their own inline row — they are the model's voice,
+      // not an action, and belong in the reading flow.
+      rendered.push(
+        <InlineToolPart key={`part-${i}`} part={part} isLive={isLive} active={!!isLive && i === lastIndex} />,
+      );
+      return;
+    }
+    if (groupEmitted) return;
+    groupEmitted = true;
+    rendered.push(
+      <TurnToolGroup key="tool-group" sessionKey={sessionKey} runId={runId} parts={toolParts} defaultOpen={!!isLive}>
+        {toolParts.map((toolPart, index) => (
+          <InlineToolPart
+            key={`tool-${index}`}
+            part={toolPart}
+            isLive={isLive}
+            active={!!isLive && index === toolParts.length - 1}
+          />
+        ))}
+      </TurnToolGroup>,
+    );
+  });
+
+  // A chat-only turn still gets the context row — see TurnContextRow.
+  if (!groupEmitted && runId && !isLive) {
+    rendered.push(<TurnContextRow key="turn-context" sessionKey={sessionKey} runId={runId} />);
+  }
+
+  return <div className="space-y-2">{rendered}</div>;
 }
 
 function formatTimestamp(ts: string) {
@@ -226,7 +272,12 @@ export function MessageBubble({ message }: { message: Message }) {
           ) : null}
 
           {message.parts && message.parts.length > 0 ? (
-            <PartsBody parts={message.parts} isLive={!!(message.optimistic && message.state === 'delta')} />
+            <PartsBody
+              parts={message.parts}
+              isLive={!!(message.optimistic && message.state === 'delta')}
+              sessionKey={message.sessionKey}
+              runId={message.runId}
+            />
           ) : (
             <>
               {message.content && <ChatMarkdown content={message.content} />}
@@ -245,19 +296,16 @@ export function MessageBubble({ message }: { message: Message }) {
           )}
         </div>
 
-        <div className="mt-1 flex min-w-0 items-start gap-2 px-1 text-[10px] text-operator-muted/70">
+        <div className="mt-1 flex items-center px-1 text-[10px] text-operator-muted/70">
           <button
             type="button"
             onClick={() => void handleCopy()}
             aria-label={copied ? 'Copied message' : 'Copy message'}
-            className="mt-0.5 opacity-40 transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 inline-flex shrink-0 items-center gap-0.5 hover:text-operator-text"
+            className="opacity-40 transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
             title="Copy message"
           >
             {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}
           </button>
-          {/* One muted line: model · duration · tools · ctx. Expands in place —
-              the question is about this turn, not the session. */}
-          <TurnInternals sessionKey={message.sessionKey} runId={message.runId} />
         </div>
       </div>
     </div>

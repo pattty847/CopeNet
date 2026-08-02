@@ -2,6 +2,7 @@ import type React from 'react';
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import {
+  Activity,
   AlertTriangle,
   Box,
   CheckCircle2,
@@ -24,6 +25,7 @@ import type { AsyncResource, BatchResource } from '../../runtime/adapter';
 import type { Artifact } from '../../runtime/types';
 import type { ToolResultPart } from '../../types/backend';
 import { DiffArtifactView } from './DiffArtifactView';
+import { RunInternalsDrawerBody } from './RunInternalsDrawerBody';
 import { LoadingState } from './ResourceStates';
 import { ChatMarkdown } from '../ChatMarkdown';
 import { DiffView, FileLinesView, JsonView, PlanView } from './CodeViews';
@@ -540,9 +542,11 @@ export function InspectorDrawer() {
       ? 'Artifact Inspector'
       : target.kind === 'tool'
       ? 'Tool Inspector'
+      : target.kind === 'run'
+      ? 'Turn Internals'
       : 'Batch Inspector';
 
-  const HeaderIcon = target.kind === 'diff' ? FileDiff : target.kind === 'batch' ? Layers : target.kind === 'tool' ? Terminal : FileText;
+  const HeaderIcon = target.kind === 'diff' ? FileDiff : target.kind === 'batch' ? Layers : target.kind === 'tool' ? Terminal : target.kind === 'run' ? Activity : FileText;
 
   return createPortal(
     <div className="fixed inset-0 z-50 flex" role="dialog" aria-modal="true">
@@ -573,12 +577,18 @@ export function InspectorDrawer() {
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto px-4 py-4">
-          {target.kind === 'tool'
-            ? <ToolBody tool={target.tool} />
-            : target.kind === 'batch'
-            ? renderBatchResource(batchResource)
-            : renderArtifactResource(artifactResource)}
+        <div className="flex-1 overflow-y-auto">
+          {target.kind === 'run' ? (
+            <RunInternalsDrawerBody sessionKey={target.sessionKey} runId={target.runId} />
+          ) : (
+            <div className="px-4 py-4">
+              {target.kind === 'tool'
+                ? <ToolBody tool={target.tool} />
+                : target.kind === 'batch'
+                ? renderBatchResource(batchResource)
+                : renderArtifactResource(artifactResource)}
+            </div>
+          )}
         </div>
 
         <div className="px-4 py-2 border-t border-operator-border flex items-center justify-between bg-operator-panel/25">

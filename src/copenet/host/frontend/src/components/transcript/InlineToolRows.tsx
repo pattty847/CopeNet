@@ -59,7 +59,7 @@ const TOOL_VERB: Record<string, string> = {
   'memory.save': 'Saved memory',
 };
 
-function operatorVerb(toolId: string): string {
+export function operatorVerb(toolId: string): string {
   return TOOL_VERB[toolId] || toolId;
 }
 
@@ -376,81 +376,36 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 // ---------------------------------------------------------------------------
 
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
-  // Diffs are the change the model just made — show them open by default,
-  // like Codex / Claude Code. Everything else stays collapsed.
-  const [expanded, setExpanded] = useState(
-    part.preview?.type === 'diff' || part.preview?.type === 'plan' || part.preview?.type === 'web_search',
-  );
+  // The whole row opens the overlay. Nothing expands inline any more: tool output
+  // is routinely a whole file or a long command dump, and rendering that between
+  // two chat messages is what made the thread unreadable. The overlay has 680px
+  // and its own scroll, so the thread keeps a stable height whatever the tool
+  // returned. This also retires the raw policy-object dump — a blocked shell
+  // command used to print its entire policyDecision payload here.
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
-  const hasExpandable = !!part.preview || !!part.effect || !!part.artifactId || (!part.ok && !!part.error);
   const verb = operatorVerb(part.toolId);
   const targetLabel = part.target ? shortPath(part.target) : null;
-  // Only render a status icon for failures — success is the default, no need to badge it
   const failed = !part.ok;
 
-  const headerInner = (
-    <>
+  return (
+    <button
+      type="button"
+      onClick={() => setInspectorTarget({ kind: 'tool', tool: part })}
+      className={`flex w-full items-center gap-2 rounded px-1 py-1 text-left transition-colors duration-100 hover:bg-operator-panel/20 ${failed ? 'text-operator-error' : ''}`}
+      title={part.target || part.summary || verb}
+    >
       {failed
         ? <XCircle className="h-3 w-3 shrink-0 text-operator-error" />
         : <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-operator-muted/40" />
       }
-      <span className="text-[11px] text-operator-muted/80 shrink-0">{verb}</span>
+      <span className="shrink-0 text-[11px] text-operator-muted/80">{verb}</span>
       {(targetLabel || (!part.target && part.summary)) && (
-        <span className="flex-1 truncate text-[11px] text-operator-text/75 min-w-0" title={part.target || part.summary}>
+        <span className="min-w-0 flex-1 truncate text-[11px] text-operator-text/75">
           {targetLabel || part.summary}
         </span>
       )}
-      {hasExpandable && (
-        expanded
-          ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/45" />
-          : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/45" />
-      )}
-    </>
-  );
-
-  return (
-    <div className={`${failed ? 'rounded-lg border border-operator-error/25 bg-operator-error/5' : ''} overflow-hidden`}>
-      {hasExpandable ? (
-        <button
-          onClick={() => setExpanded(!expanded)}
-          className="flex w-full items-center gap-2 px-1 py-1 text-left hover:bg-operator-panel/20 transition-colors duration-100 rounded"
-        >
-          {headerInner}
-        </button>
-      ) : (
-        <div className="flex items-center gap-2 px-1 py-1">
-          {headerInner}
-        </div>
-      )}
-
-      {expanded && (
-        <div className="px-2 pb-2 pt-1">
-          {!part.ok && part.error && (
-            <pre className="mt-1 overflow-x-auto rounded border border-operator-error/20 bg-operator-error/5 px-2.5 py-1.5 text-[10.5px] font-mono text-operator-error whitespace-pre-wrap">
-              {part.error}
-            </pre>
-          )}
-          {part.preview && <ToolPreview preview={part.preview} />}
-          {(part.effect || part.artifactId) && (
-            <div className="mt-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  if (part.effect) {
-                    setInspectorTarget({ kind: 'tool', tool: part });
-                  } else if (part.artifactId) {
-                    setInspectorTarget({ kind: 'artifact', artifactId: part.artifactId });
-                  }
-                }}
-                className="text-[10.5px] text-operator-muted/70 hover:text-operator-accent transition-colors"
-              >
-                Inspect →
-              </button>
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+      <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />
+    </button>
   );
 }
 

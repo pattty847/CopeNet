@@ -73,3 +73,35 @@ def test_write_disclosure_flips_with_full_access() -> None:
 
     assert "NOT available" in guarded.description
     assert "are available" in full.description
+
+
+def test_a_blocked_call_has_no_preview_to_render() -> None:
+    """The body of a refusal is the refusal; the UI renders those fields itself.
+
+    Without this the whole policy object was JSON-dumped into the transcript
+    beside a panel already showing policyDecision, target, and policySummary.
+    """
+    from copenet.core.tools.contracts import _preview_payload
+
+    blocked = {
+        "target": "echo hi",
+        "workspaceRoot": "/repo",
+        "scope": None,
+        "accessAction": "unknown",
+        "policyDecision": "unsafe_unknown",
+        "policySummary": "Command is outside the shell allowlist.",
+    }
+    assert _preview_payload("shell.exec", blocked) is None
+
+
+def test_a_real_result_that_happens_to_carry_policy_fields_still_previews() -> None:
+    from copenet.core.tools.contracts import _preview_payload
+
+    allowed = {
+        "policyDecision": "allowed",
+        "target": "pwd",
+        "stdout": "/repo",
+        "exitCode": 0,
+    }
+    preview = _preview_payload("shell.exec", allowed)
+    assert preview is not None

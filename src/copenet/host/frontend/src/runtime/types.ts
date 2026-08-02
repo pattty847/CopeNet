@@ -237,4 +237,8 @@ export type InspectorTarget =
   | { kind: 'artifact'; artifactId: string }
   | { kind: 'diff'; artifactId: string }
   | { kind: 'batch'; batchId: string }
-  | { kind: 'tool'; tool: import('../types/backend').ToolResultPart };
+  | { kind: 'tool'; tool: import('../types/backend').ToolResultPart }
+  // The turn's own internals — what the model was given, and why it stopped.
+  // Same overlay as a tool result, because it is one more thing that happened in
+  // the turn rather than a different class of object needing its own surface.
+  | { kind: 'run'; sessionKey: string; runId: string };

@@ -6,7 +6,6 @@ import { useDestinations, usePendingApproval } from '../../runtime/adapter';
 import { useAppStore } from '../../store/useAppStore';
 import { wsClient } from '../../lib/wsClient';
 import { ApprovalRequestCard } from '../ApprovalRequestCard';
-import { RunActivityPanel } from '../runtime/RunActivityPanel';
 
 function Section({ icon: Icon, title, children }: { icon: typeof Info; title: string; children: React.ReactNode }) {
   return (
@@ -63,7 +62,6 @@ export function InspectorOverview({ overviewOnly = false }: { overviewOnly?: boo
       {/* Post-run breadcrumbs — collapses the run's tool steps into grouped
           history ("Read 2 files", "Edited 1 file"). Self-hides while a run is
           live (it shows inline in chat) and when the run had no activity. */}
-      <RunActivityPanel sessionKey={activeSessionKey} />
 
       <Section icon={Settings2} title="Runtime">
         <dl className="grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-3 gap-y-1.5">

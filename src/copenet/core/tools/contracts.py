@@ -351,11 +351,38 @@ def _generic_preview(body: Any) -> dict[str, Any]:
     }
 
 
+# Keys that mean "this body IS the policy decision, not a tool result".
+_POLICY_ONLY_KEYS = {
+    "target",
+    "workspaceRoot",
+    "scope",
+    "accessAction",
+    "policyDecision",
+    "policySummary",
+    "command",
+    "error",
+}
+
+
+def _is_policy_only_body(body: dict[str, Any]) -> bool:
+    """True when a blocked call's body carries nothing but its policy verdict.
+
+    A blocked tool has no result to preview — the body is the refusal. Without
+    this it fell through to `_generic_preview`, which JSON-dumped the whole
+    policy object into the transcript beside a UI that already renders
+    policyDecision, target, and policySummary as their own fields. The operator
+    saw the same refusal twice, once as prose and once as a wall of JSON.
+    """
+    return bool(body) and set(body).issubset(_POLICY_ONLY_KEYS) and "policyDecision" in body
+
+
 def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
     if body is None:
         return None
     if not isinstance(body, dict):
         return _generic_preview(body)
+    if _is_policy_only_body(body):
+        return None
     if tool_id == "plan.write":
         items = body.get("items")
         if isinstance(items, list):
