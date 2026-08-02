@@ -71,6 +71,127 @@ ignored `tmp/` tree and are never committed.
 - Existing runs cannot be retroactively upgraded to debug captures.
 - Screenshots and fixtures must use synthetic sessions and prompts.
 
+## Phase 2 plan — run transparency
+
+Goal: **you should be able to look at any turn and see exactly what the model was given,
+what it could call, what it did call, and why it stopped** — without leaving the
+conversation, and without having predicted in advance that you would want to know.
+
+### What we found
+
+There are currently **four** renderings of the same run data:
+
+| Surface | Scope | Where |
+| --- | --- | --- |
+| `LiveToolFeed` | the run in flight | right panel |
+| `RunActivityPanel` | the **last** run only | right panel |
+| `ToolTraceCard` | one message's tool execution | inline in `MessageBubble` |
+| `RunInspector` | any run, any session | Observability page |
+
+So the Observability inspector is not redundant with Agents by accident — it is the
+fourth implementation of one idea. Two concrete symptoms:
+
+- `useRunActivity` calls `listSessionRuns(sessionKey, 10)` and then renders
+  `runs[runs.length - 1]`, discarding nine runs it already fetched. Per-turn history is
+  paid for and thrown away.
+- Nothing outside Agents produces runs. Market, Fleet, and Messaging create no
+  `RunRecord`s, so "runs with no chat thread" is an empty set today and cannot justify a
+  separate viewer on its own.
+
+### The split
+
+> **Agents** answers *"what happened in this turn?"* — you are already here when you
+> notice something is off.
+> **Observability** answers *"what happens across all my turns?"* — questions a single
+> thread structurally cannot express.
+> **One component** renders per-turn internals, mounted in both.
+
+What genuinely belongs only in Observability, because it is a query across runs rather
+than a view of one:
+
+- every run where a tool was **blocked by policy**, across all sessions
+- registered tools that have **never once been called** — the strongest available signal
+  that a tool description is wrong
+- runs whose context was **trimmed** (`tool_loop_input_trimmed` fires today and nothing
+  surfaces it)
+- **model comparison**: same prompt, different model or Access, diffed on manifest, tool
+  behavior, latency, and terminal reason
+- error rates, retention, purge
+
+Those become answerable only once tracing is always on — which is workstream 1.
+
+### Workstream 1 — always-on lifecycle tracing
+
+`runtime.py` builds the writer with `enabled=debug_capture` **and** `debug=debug_capture`
+from the same flag, so with Debug capture off a run writes no trace at all. Measured:
+672 runs, 341 trace files.
+
+Split the tiers:
+
+- **Lifecycle (always on):** run/session identity, resolved model, harness plan
+  (`willAttemptToolLoop`, `promptedToolUse`, offered tool ids), tool requested / executed
+  / blocked with tool id and status, token estimates, trim events, terminal reason,
+  timings. No prompt text, no tool arguments, no tool results — cheap and not sensitive.
+- **Debug capture (opt-in, unchanged):** model input snapshot, effective instructions,
+  message history, tool arguments and results, reasoning payloads.
+
+Keep the existing redaction on both tiers. Retention matters once this is unconditional,
+so pair it with a size cap and a purge control rather than shipping an unbounded writer.
+
+### Workstream 2 — one per-turn internals component
+
+Extract the run-internals view used by `RunInspector` into a shared component with three
+mount points: live (in-flight), in-thread (any turn), cross-session (Observability).
+`RunActivityPanel`'s grouped-breadcrumb design is the right visual language and should
+survive — it is already tuned not to overwhelm.
+
+### Workstream 3 — emit the provider-resolved model
+
+See "Next work" item 0 below. Prerequisite for model comparison in workstream 4.
+
+### Workstream 4 — cross-run queries
+
+The Observability list becomes session-grouped and expandable to turns (scanning 672 flat
+runs is unusable regardless of anything else), plus the saved queries listed above.
+
+## Agents thread UX
+
+The constraint: **insight without obstruction.** The thread is for working; the internals
+must be available at a glance and invisible otherwise.
+
+- Every assistant turn carries **one collapsed line** beneath it, muted by default:
+  `model · duration · 4 tools · 12k ctx`. Color appears only when something deserves
+  attention — a policy block, a failure, a trimmed context.
+- Clicking that line expands **in place**, not into a side panel, because the question is
+  about *this* message. Four sections, in the order a person actually debugs:
+  1. **What it saw** — prompt blocks assembled with sizes, and the tool manifest with each
+     tool's visibility plus the reason any were withheld.
+  2. **What it did** — calls in order, arguments, results, artifacts.
+  3. **Why it stopped** — terminal reason in plain language.
+  4. **Raw trace** — the escape hatch, collapsed.
+- A one-line **verdict** at the top when the answer is already knowable, e.g. *"No tool
+  loop attempted: promptedToolUse = false"*. Per this repo's own triage order that is the
+  single most common confusion, and it should never require reading JSONL.
+- The right drawer stops showing only the last run and becomes the **session-level** view:
+  every turn, scannable, with the same expansion.
+
+Nothing here may shift layout while a run streams; expansion is user-initiated only.
+
+### Trace reset
+
+Existing traces are mostly from testing and predate the tier split, so they carry no
+lifecycle events and cannot be backfilled. Purge `~/.copenet/logs/runs/` when workstream 1
+lands and start clean rather than maintaining two shapes.
+
+### Verification
+
+- Unit: tier gating (lifecycle events present with Debug capture off, payloads absent),
+  redaction on both tiers, session-grouped list shaping.
+- Live: `uv run copenet chat send` against the standing probe session with Debug capture
+  off, then on; confirm the lifecycle skeleton exists in both and payloads only in the
+  second.
+- Browser: expand a turn in-thread, confirm no layout shift during a live run.
+
 ## Next work
 
 0. **Record the provider-resolved model.** Both the trace writer and `RunRecord` are
