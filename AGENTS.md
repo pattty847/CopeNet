@@ -377,7 +377,14 @@ or execute allowed tools, so prefer targeted prompts and default guarded mode un
 
 ### Tracing
 
-When `COPNET_TRACE=1` is enabled, CopeNet writes one JSONL trace per run to `~/.copenet/logs/runs/<run-id>.jsonl`.
+CopeNet writes one JSONL trace per run to `~/.copenet/logs/runs/<run-id>.jsonl`, **unconditionally**. Every row carries a `tier`:
+
+- **`lifecycle`** — always written. Run/session identity, provider and model, harness plan, tool requested/executed/blocked with tool id and status, token estimates, trim events, terminal reason, timings. Carries no prompt text, message history, reasoning content, or tool result bodies. Tool arguments ride along **digested** (`argument_digest` in `tool_loop_common.py`): short scalars verbatim — the `shell.exec` command and the `files.rg` pattern are the point of the trace — and anything over 400 chars replaced by `{"chars": n, "omitted": true}` so a `files.write` body never lands here.
+- **`debug`** — only while Debug capture is on (Observability header toggle, `COPNET_TRACE=1` sets the initial default). Adds `run_input`, `model_input_snapshot`, `tool_arguments`, `tool_result_body`, and reasoning content.
+
+The harness tool loops receive a bare `trace(event, payload)` callable, not the writer, so **`DEBUG_TIER_EVENTS` in `core/tracing/__init__.py` is what routes an event to the debug tier** — add a payload-heavy event's name there rather than assuming `record()` means lifecycle. Credential redaction applies to the debug tier as before.
+
+Retention: 8 MiB per run (then a single `trace_truncated` row), oldest-first prune at startup against 256 MiB / 2,000 files, and a **Purge traces** button in the Observability header (`observability.traces.purge`). None of it touches run records, transcripts, or artifacts.
 
 Full event reference: [docs/TRACING.md](docs/TRACING.md)
 Debugging runbook: [docs/DEBUGGING.md](docs/DEBUGGING.md)
@@ -392,7 +399,9 @@ Open trace and observability work: [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md
 5. Check `assistant_finalized` — was `toolExecutionAttached` as expected?
 6. Check `run_failed` — the `error` field is the primary diagnostic.
 
-**No trace file?** The provider failed to initialize before the run started. Check provider availability via `providers.list` or startup logs.
+**No trace file?** Either the run predates always-on tracing (2026-08-02) or its trace was purged/pruned. If the run is recent and the file is genuinely missing, the provider failed to initialize before the run started — check provider availability via `providers.list` or startup logs.
+
+**Payload you expected isn't there?** Check the row's `tier`. Arguments in `tool_requested` are digested by design; the full ones live in `tool_arguments`, which requires Debug capture *at the time the run happened* — no tier can be backfilled.
 
 **Tool loop not triggering despite available tools?** Check `harness_planned.capabilityProfile.promptedToolUse`. This is the gate, not `availableToolIds`.
 

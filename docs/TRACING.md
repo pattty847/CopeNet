@@ -2,20 +2,49 @@
 
 CopeNet writes one structured JSONL trace per run for debugging harness, tool, provider, and response-synthesis behavior.
 
-## Enable Tracing
+## Tiers
 
-Tracing is off by default.
+Tracing is **always on**. Every row carries a `tier` field.
 
-The preferred operator control is the **Debug capture** switch in the
-Observability workspace. It persists locally and applies to subsequent runs.
-Debug capture records the effective model input, tool manifest, transport, and
-provider-exposed reasoning alongside the standard lifecycle events.
+**`lifecycle`** — written for every run, no setting required. Run and session
+identity, provider and model, the harness plan, tool requested / executed /
+blocked with tool id and status, token estimates, trim events, terminal reason,
+and timings. It carries no prompt text, message history, reasoning content, or
+tool result bodies. Tool arguments appear **digested**: short scalars verbatim
+(a `shell.exec` command, a `files.rg` pattern), anything over 400 characters
+replaced by `{"chars": n, "omitted": true}`.
 
-The environment variable remains available as a startup fallback:
+**`debug`** — added only while **Debug capture** is on. This is the switch in
+the Observability workspace header; it persists locally and applies to
+subsequent runs. It adds `run_input`, `model_input_snapshot`, `tool_arguments`,
+`tool_result_body`, and provider-exposed reasoning content. Credential-shaped
+fields are redacted before any debug payload reaches disk.
+
+The environment variable sets the *initial default* for Debug capture on a fresh
+install; the operator switch overrides it once used:
 
 ```bash
 COPNET_TRACE=1 uv run copenet
 ```
+
+Neither tier can be backfilled. A run traced without Debug capture will never
+gain its payloads.
+
+The harness tool loops hold a bare `trace(event, payload)` callable rather than
+the writer, so an event's tier is decided by `DEBUG_TIER_EVENTS` in
+`core/tracing/__init__.py`. Add a payload-heavy event's name there.
+
+## Retention
+
+- One run is capped at **8 MiB**; past that the writer emits a single
+  `trace_truncated` row and goes quiet for the rest of the run.
+- The directory is pruned oldest-first at orchestrator startup against a
+  **256 MiB / 2,000-file** ceiling.
+- **Purge traces** in the Observability header (`observability.traces.purge`)
+  clears every stored trace.
+
+None of these touch run records, transcripts, or artifacts — only the raw event
+streams.
 
 ## Where Traces Live
 
@@ -37,7 +66,7 @@ run-stamped transcript entries, and run-scoped artifacts. See
 [plans/OBSERVABILITY.md](plans/OBSERVABILITY.md) for the product contract and
 reasoning-provenance rules.
 
-**If no trace file appears:** the provider failed to initialize before `RunTraceWriter` started. The client still receives an error event — check the UI response or `providers.list` output first.
+**If no trace file appears:** the run either predates always-on tracing (2026-08-02) or was purged/pruned. For a recent run, the provider failed to initialize before `RunTraceWriter` started — the client still receives an error event, so check the UI response or `providers.list` output first.
 
 ## Quick Read
 
@@ -175,7 +204,9 @@ tool schemas. It never records raw prompt text.
 When Debug capture is enabled, `model_input_snapshot` additionally records the
 effective instructions/messages, offered tool definitions, harness decision,
 provider transport, and requested reasoning configuration. Treat that event as
-sensitive local debugging data; it is deliberately absent from standard traces.
+sensitive local debugging data; it is deliberately absent from lifecycle-only
+traces, along with `run_input` (the operator's message text), `tool_arguments`,
+and `tool_result_body`.
 
 `prompted_tool_response_interpreted` records `toolCallCount`,
 `malformedBlockCount`, and `rejectedToolIds`. A reply with zero tool calls but a
@@ -269,12 +300,31 @@ This record is for trace continuity and UI inspection only. V1 does not steer, s
 
 ```json
 {
-  "toolId": "files.read",
-  "arguments": { "path": "src/copenet/tracing.py" }
+  "toolId": "files.rg",
+  "arguments": { "pattern": "DEBUG_TIER_EVENTS", "path": "src/copenet", "limit": 10000 },
+  "argumentsDigested": true,
+  "step": 1,
+  "callId": "call_p1h38iHmfnXDiFnyXXkzGBiW",
+  "responses": true
 }
 ```
 
 Emitted when the model's output parses as a valid tool invocation JSON object with an exact registered tool id. If this event is missing despite `willAttemptToolLoop: true`, the model answered directly or did not produce parseable tool JSON.
+
+`argumentsDigested: true` means every long value was replaced by
+`{"chars": n, "omitted": true}` — see the tier rules above. The verbatim
+arguments are in the paired `tool_arguments` event when Debug capture was on.
+
+### `tool_arguments` *(debug tier)*
+
+The full, un-digested arguments for the preceding `tool_requested`, keyed by the
+same `callId`.
+
+### `tool_result_body` *(debug tier)*
+
+The full normalized tool result — `body`, `summary`, policy fields — for one
+call. The lifecycle-tier `tool_result_normalized` records only the identifying
+metadata (`toolId`, `callId`, `channel`, `success`, `artifactId`).
 
 ### `tool_executed`
 

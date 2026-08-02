@@ -120,23 +120,56 @@ than a view of one:
 
 Those become answerable only once tracing is always on — which is workstream 1.
 
-### Workstream 1 — always-on lifecycle tracing
+### Workstream 1 — always-on lifecycle tracing — **shipped 2026-08-02**
 
-`runtime.py` builds the writer with `enabled=debug_capture` **and** `debug=debug_capture`
-from the same flag, so with Debug capture off a run writes no trace at all. Measured:
-672 runs, 341 trace files.
+`runtime.py` built the writer with `enabled=debug_capture` **and** `debug=debug_capture`
+from the same flag, so with Debug capture off a run wrote no trace at all. Measured before
+the fix: 672 runs, 341 trace files.
 
-Split the tiers:
+Every row now carries a `tier`:
 
-- **Lifecycle (always on):** run/session identity, resolved model, harness plan
+- **Lifecycle (always on):** run/session identity, provider and model, harness plan
   (`willAttemptToolLoop`, `promptedToolUse`, offered tool ids), tool requested / executed
   / blocked with tool id and status, token estimates, trim events, terminal reason,
-  timings. No prompt text, no tool arguments, no tool results — cheap and not sensitive.
-- **Debug capture (opt-in, unchanged):** model input snapshot, effective instructions,
-  message history, tool arguments and results, reasoning payloads.
+  timings. No prompt text, no message history, no reasoning content, no tool result bodies.
+- **Debug capture (opt-in, unchanged):** `model_input_snapshot`, `run_input`,
+  `tool_arguments`, `tool_result_body`, reasoning content.
 
-Keep the existing redaction on both tiers. Retention matters once this is unconditional,
-so pair it with a size cap and a purge control rather than shipping an unbounded writer.
+Three design points worth keeping:
+
+**Arguments are digested, not dropped.** A `shell.exec` command or an `files.rg` pattern
+*is* the trace — omitting it would make the lifecycle tier useless for the question
+Patrick actually asked ("are the models getting the context on the tools?"). `argument_digest`
+in `tool_loop_common.py` passes short scalars through verbatim and replaces anything over
+`ARGUMENT_VALUE_CHAR_LIMIT` (400) with `{"chars": n, "omitted": true}`, so a `files.write`
+body never lands in the always-on tier. The full arguments go to `tool_arguments` on the
+debug tier. Note this changes no disclosure surface: `RunRecord.toolSteps` already persists
+full arguments and result previews unconditionally, deliberately.
+
+**The writer owns the tier, not the call site.** The harness tool loops are handed a bare
+`trace(event, payload)` callable rather than the writer, so they cannot reach
+`record_debug` directly. `DEBUG_TIER_EVENTS` in `core/tracing/__init__.py` is the explicit
+table that routes those events to the debug tier from inside `record()`. Threading a
+second callable through three loops plus the registry would have been the alternative;
+this keeps one named list instead of a parameter in six signatures.
+
+**`debugCaptured` had to be redefined.** It was `bool(events)`, which now reports every
+run as debug-captured. It is `any(event.tier == "debug")`, and the detail payload gained
+`lifecycleCaptured` so `RunInspector` can show three states — `debug captured`,
+`lifecycle traced`, `no trace` (purged, or pre-dating always-on tracing).
+
+Retention: `RunTraceWriter` caps one run at 8 MiB (`trace_truncated` row, then silence),
+`ObservabilityStore.prune_traces()` runs oldest-first at orchestrator startup against a
+256 MiB / 2,000-file ceiling, and `observability.traces.purge` backs a **Purge traces**
+button beside the trace-storage readout in the Observability header. Run records,
+transcripts, and artifacts are untouched by any of it.
+
+Verified live: with Debug capture off, a tool-calling run wrote 26 lifecycle events
+(16 KB) including `tool_requested` with the real ripgrep pattern and a `tool_blocked`
+carrying its policy reason, and zero debug rows. With it on, the same shape plus
+`run_input`, `model_input_snapshot`, `tool_arguments`, and `tool_result_body`. Purge took
+337 traces / 7.9 MB to zero and flipped the open run's badge to `no trace` while its run
+record stayed intact.
 
 ### Workstream 2 — one per-turn internals component
 
@@ -177,19 +210,24 @@ must be available at a glance and invisible otherwise.
 
 Nothing here may shift layout while a run streams; expansion is user-initiated only.
 
-### Trace reset
+### Trace reset — **done 2026-08-02**
 
-Existing traces are mostly from testing and predate the tier split, so they carry no
-lifecycle events and cannot be backfilled. Purge `~/.copenet/logs/runs/` when workstream 1
-lands and start clean rather than maintaining two shapes.
+Existing traces were mostly from testing and predated the tier split, so they carried no
+`tier` field and could not be backfilled. Purged via the new button: 337 files / 7.9 MB to
+zero. Runs from before that date show `no trace` in the inspector; their run records,
+transcripts, and artifacts are unaffected.
 
 ### Verification
 
-- Unit: tier gating (lifecycle events present with Debug capture off, payloads absent),
-  redaction on both tiers, session-grouped list shaping.
-- Live: `uv run copenet chat send` against the standing probe session with Debug capture
-  off, then on; confirm the lifecycle skeleton exists in both and payloads only in the
-  second.
+Workstream 1 (done): `tests/unit/test_observability_store.py` (tier gating, size cap,
+prune, purge), `tests/unit/test_trace_argument_digest.py` (digest boundaries),
+`tests/integration/test_lifecycle_tracing.py` (a real run traces with Debug capture off,
+carries no prompt text, and `debugCaptured` distinguishes the tiers). Live probes and the
+browser purge run are recorded under workstream 1 above.
+
+Still to do for later workstreams:
+
+- Unit: session-grouped list shaping.
 - Browser: expand a turn in-thread, confirm no layout shift during a live run.
 
 ## Next work
