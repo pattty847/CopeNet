@@ -1,21 +1,22 @@
 import { useMemo, useState } from 'react';
-import { Brain, CheckCircle2, ChevronDown, ChevronRight, Code2, FileText, MessageSquareText, Wrench, XCircle } from 'lucide-react';
-import type {
-  MessagePart,
-  ObservabilityRunDetail,
-  RunStep,
-  SessionArtifactRecord,
-  ToolResultPreview,
-} from '../../types/backend';
+import { Brain, Code2, FileText, MessageSquareText } from 'lucide-react';
+import type { MessagePart, ObservabilityRunDetail } from '../../types/backend';
 import { formatRunDuration } from '../../lib/formatting';
+import { buildRunInternals } from '../../runtime/runInternals';
+import { RunInternalsBody } from '../runtime/RunInternals';
+import { RunStepCard } from '../runtime/RunStepCard';
 import { ChatMarkdown } from '../ChatMarkdown';
 
-type InspectorTab = 'timeline' | 'input' | 'tools' | 'raw';
+type InspectorTab = 'internals' | 'timeline' | 'input' | 'raw';
 
+// "Internals" is first because it answers the question; Timeline is the
+// narrative read of the same run, and the old standalone Tools tab is now the
+// "What it did" section inside Internals rather than a fourth rendering of the
+// same tool steps.
 const tabs: Array<{ id: InspectorTab; label: string }> = [
+  { id: 'internals', label: 'Internals' },
   { id: 'timeline', label: 'Timeline' },
   { id: 'input', label: 'Model input' },
-  { id: 'tools', label: 'Tools' },
   { id: 'raw', label: 'Raw trace' },
 ];
 
@@ -24,60 +25,6 @@ function JsonBlock({ value }: { value: unknown }) {
     <pre className="max-h-[32rem] overflow-auto whitespace-pre-wrap break-words rounded-lg bg-shell-bg p-3 font-mono text-[11px] leading-5 text-shell-text">
       {JSON.stringify(value, null, 2)}
     </pre>
-  );
-}
-
-function Preview({ preview }: { preview?: ToolResultPreview | null }) {
-  if (!preview) return null;
-  if (preview.type === 'raw') return <pre className="whitespace-pre-wrap break-words">{preview.text}</pre>;
-  if (preview.type === 'file_read') return <pre className="whitespace-pre-wrap break-words">{preview.lines.join('\n')}</pre>;
-  if (preview.type === 'diff') return <pre className="whitespace-pre-wrap break-words">{preview.diff}</pre>;
-  if (preview.type === 'repo_search') {
-    return <pre className="whitespace-pre-wrap break-words">{preview.matches.map((match) => `${match.path}:${match.line} ${match.snippet}`).join('\n')}</pre>;
-  }
-  return <JsonBlock value={preview} />;
-}
-
-function ToolStepCard({ step, artifact }: { step: RunStep; artifact?: SessionArtifactRecord }) {
-  const [open, setOpen] = useState(false);
-  const Status = step.ok ? CheckCircle2 : XCircle;
-  return (
-    <section className="border-l-2 border-shell-border pl-3">
-      <button
-        type="button"
-        onClick={() => setOpen((value) => !value)}
-        className="focus-ring flex w-full items-start gap-2 rounded-md py-1 text-left"
-        aria-expanded={open}
-      >
-        {open ? <ChevronDown className="mt-0.5 h-3.5 w-3.5 text-shell-muted" /> : <ChevronRight className="mt-0.5 h-3.5 w-3.5 text-shell-muted" />}
-        <Wrench className="mt-0.5 h-3.5 w-3.5 text-shell-accent" />
-        <span className="min-w-0 flex-1">
-          <span className="block font-mono text-[11px] text-shell-text">{step.toolId}</span>
-          <span className="mt-0.5 block text-[11px] leading-4 text-shell-muted">{step.summary || 'Tool completed.'}</span>
-        </span>
-        <Status className={`mt-0.5 h-3.5 w-3.5 ${step.ok ? 'text-shell-success' : 'text-shell-error'}`} />
-      </button>
-      {open && (
-        <div className="mt-2 space-y-3 pb-2 pl-8 text-[11px] text-shell-muted">
-          <div>
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.18em]">Arguments</div>
-            <JsonBlock value={step.arguments || {}} />
-          </div>
-          <div>
-            <div className="mb-1 text-[9px] font-semibold uppercase tracking-[0.18em]">Result</div>
-            <div className="max-h-[24rem] overflow-auto rounded-lg bg-shell-bg p-3 font-mono leading-5 text-shell-text">
-              {artifact ? <pre className="whitespace-pre-wrap break-words">{artifact.body}</pre> : <Preview preview={step.preview} />}
-              {!artifact && !step.preview && <span className="text-shell-muted">No result body was retained.</span>}
-            </div>
-          </div>
-          {(step.policyDecision || step.error) && (
-            <div className={step.error ? 'text-shell-error' : 'text-shell-muted'}>
-              {step.error || `${step.policyDecision}: ${step.policySummary || 'No policy detail.'}`}
-            </div>
-          )}
-        </div>
-      )}
-    </section>
   );
 }
 
@@ -117,7 +64,7 @@ function Timeline({ detail }: { detail: ObservabilityRunDetail }) {
           renderedCalls.add(key);
           const step = stepsByCall.get(key) || detail.run.toolSteps.find((candidate) => candidate.toolId === part.toolId && !renderedCalls.has(candidate.callId || ''));
           if (step) renderedCalls.add(step.callId || step.toolId);
-          return step ? <ToolStepCard key={`tool-${key}-${index}`} step={step} artifact={step.artifactId ? artifactsById.get(step.artifactId) : undefined} /> : null;
+          return step ? <RunStepCard key={`tool-${key}-${index}`} step={step} artifact={step.artifactId ? artifactsById.get(step.artifactId) : undefined} palette="shell" /> : null;
         }
         if (part.kind === 'tool_result' || part.kind === 'tool_batch') return null;
         if (part.kind === 'text' && part.content.trim()) {
@@ -134,7 +81,7 @@ function Timeline({ detail }: { detail: ObservabilityRunDetail }) {
       })}
 
       {detail.run.toolSteps.filter((step) => !renderedCalls.has(step.callId || step.toolId)).map((step, index) => (
-        <ToolStepCard key={`fallback-tool-${step.callId || index}`} step={step} artifact={step.artifactId ? artifactsById.get(step.artifactId) : undefined} />
+        <RunStepCard key={`fallback-tool-${step.callId || index}`} step={step} artifact={step.artifactId ? artifactsById.get(step.artifactId) : undefined} palette="shell" />
       ))}
 
       {timelineParts.every((part) => part.kind !== 'text') && detail.run.outputSummary && (
@@ -148,7 +95,7 @@ function Timeline({ detail }: { detail: ObservabilityRunDetail }) {
 }
 
 export function RunInspector({ detail, loading, error }: { detail: ObservabilityRunDetail | null; loading: boolean; error: string | null }) {
-  const [tab, setTab] = useState<InspectorTab>('timeline');
+  const [tab, setTab] = useState<InspectorTab>('internals');
   const inputSnapshot = useMemo(
     () => detail?.events.find((event) => event.event === 'model_input_snapshot')?.payload || null,
     [detail],
@@ -223,12 +170,12 @@ export function RunInspector({ detail, loading, error }: { detail: Observability
             </div>
           )
         )}
-        {tab === 'tools' && (
-          <div className="space-y-4">
-            {run.toolSteps.length > 0 ? run.toolSteps.map((step, index) => (
-              <ToolStepCard key={`${step.callId || step.toolId}-${index}`} step={step} artifact={step.artifactId ? detail.artifacts.find((artifact) => artifact.artifactId === step.artifactId) : undefined} />
-            )) : <p className="py-10 text-center text-[12px] text-shell-muted">This run did not call any CopeNet tools.</p>}
-          </div>
+        {tab === 'internals' && (
+          <RunInternalsBody
+            internals={buildRunInternals(run, detail.events)}
+            artifacts={detail.artifacts}
+            palette="shell"
+          />
         )}
         {tab === 'raw' && (
           detail.events.length > 0 ? <JsonBlock value={detail.events} /> : <p className="py-10 text-center text-[12px] text-shell-muted">Raw events were not captured for this run.</p>

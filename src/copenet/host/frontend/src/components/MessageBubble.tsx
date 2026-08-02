@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Message, ChatAttachment } from '../types/backend';
 import { fetchChatAttachmentObjectUrl } from '../lib/appApi';
 import { ToolTraceCard } from './ToolTraceCard';
+import { TurnInternals } from './runtime/TurnInternals';
 import { InlineToolPart } from './transcript/InlineToolRows';
 import { Copy, Check } from 'lucide-react';
 import { Spinner } from './Spinner';
@@ -244,16 +245,19 @@ export function MessageBubble({ message }: { message: Message }) {
           )}
         </div>
 
-        <div className="mt-1 flex items-center px-1 text-[10px] text-operator-muted/70">
+        <div className="mt-1 flex min-w-0 items-start gap-2 px-1 text-[10px] text-operator-muted/70">
           <button
             type="button"
             onClick={() => void handleCopy()}
             aria-label={copied ? 'Copied message' : 'Copy message'}
-            className="opacity-40 transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 inline-flex items-center gap-0.5 hover:text-operator-text"
+            className="mt-0.5 opacity-40 transition-opacity duration-150 hover:opacity-100 focus-visible:opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:focus-visible:opacity-100 inline-flex shrink-0 items-center gap-0.5 hover:text-operator-text"
             title="Copy message"
           >
             {copied ? <Check className="w-3 h-3 text-operator-success" /> : <Copy className="w-3 h-3" />}
           </button>
+          {/* One muted line: model · duration · tools · ctx. Expands in place —
+              the question is about this turn, not the session. */}
+          <TurnInternals sessionKey={message.sessionKey} runId={message.runId} />
         </div>
       </div>
     </div>
