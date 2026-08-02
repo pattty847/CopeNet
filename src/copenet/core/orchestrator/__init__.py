@@ -175,6 +175,10 @@ class Orchestrator(ObservabilityFacadeMixin, IdentityFacadeMixin, MessagingFacad
             trace_root=trace_root,
             default_debug_capture=trace_env_default,
         )
+        # Lifecycle tracing is unconditional, so the trace directory now grows on
+        # every run. Prune oldest-first at startup rather than shipping an
+        # unbounded writer.
+        self._observability_store.prune_traces()
         self._active_abort_by_run: dict[str, asyncio.Event] = {}
         self._active_run_by_session: dict[str, str] = {}
         self._idempotency_cache: dict[str, dict] = {}

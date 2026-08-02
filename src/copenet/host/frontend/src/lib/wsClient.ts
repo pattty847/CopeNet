@@ -125,6 +125,7 @@ import {
   getObservabilityRunRpc,
   getObservabilitySettingsRpc,
   updateObservabilitySettingsRpc,
+  purgeObservabilityTracesRpc,
 } from './wsObservabilityRpc';
 import { bootstrapAction } from './wsBootstrapAction';
 import { loadModelsAction } from './wsCatalogActions';
@@ -1027,6 +1028,10 @@ class WsClient {
 
   async updateObservabilitySettings(debugCapture: boolean): Promise<ObservabilitySettings> {
     return updateObservabilitySettingsRpc(this.request.bind(this), debugCapture);
+  }
+
+  async purgeObservabilityTraces(): Promise<ObservabilitySettings> {
+    return purgeObservabilityTracesRpc(this.request.bind(this));
   }
 
   async getObservabilityRun(sessionKey: string, runId: string): Promise<ObservabilityRunDetail | null> {

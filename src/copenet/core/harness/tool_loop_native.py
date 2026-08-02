@@ -25,6 +25,7 @@ from .tool_loop_common import (
     _parse_native_tool_arguments,
     _tool_call_event_payload,
     _tool_result_event_payload,
+    trace_tool_requested,
     compact_stale_chat_messages,
     compose_native_tool_system_prompt,
 )
@@ -130,17 +131,14 @@ async def run_with_native_tools(
             arguments = _parse_native_tool_arguments(native_call["function"].get("arguments"))
             request = ToolExecutionRequest(tool_id=tool_id, arguments=arguments)
             call_id = str(native_call.get("id") or "").strip() or _new_call_id(request.tool_id)
-            if trace is not None:
-                trace(
-                    "tool_requested",
-                    {
-                        "toolId": request.tool_id,
-                        "arguments": request.arguments,
-                        "step": step_index + 1,
-                        "native": True,
-                        "callId": call_id,
-                    },
-                )
+            trace_tool_requested(
+                trace,
+                tool_id=request.tool_id,
+                arguments=request.arguments,
+                step=step_index + 1,
+                call_id=call_id,
+                flags={"native": True},
+            )
             yield ProviderEvent(
                 kind="meta",
                 metadata={

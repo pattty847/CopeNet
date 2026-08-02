@@ -94,6 +94,7 @@ from .rpc_observability import (
     handle_observability_run_get,
     handle_observability_settings_get,
     handle_observability_settings_update,
+    handle_observability_traces_purge,
 )
 from .rpc_sessions import (
     handle_approvals_list,
@@ -199,6 +200,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_observability_settings_get(req.id, send_json, orchestrator)
     elif req.method == "observability.settings.update":
         await handle_observability_settings_update(req.id, req.params, send_json, orchestrator)
+    elif req.method == "observability.traces.purge":
+        await handle_observability_traces_purge(req.id, send_json, orchestrator)
     elif req.method == "observability.run.get":
         await handle_observability_run_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "persona.get":

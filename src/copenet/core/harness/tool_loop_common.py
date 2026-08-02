@@ -34,6 +34,11 @@ TOOL_OUTPUT_COMPACT_CHARS = 600
 # markers is parsed as a tool call.
 PROMPTED_TOOL_OPEN = "<copenet:tool>"
 PROMPTED_TOOL_CLOSE = "</copenet:tool>"
+# Lifecycle-tier tool arguments are digested, not copied. A shell command or a
+# search pattern is the whole point of the trace and rides along verbatim; a
+# files.write body is replaced by its size and the full arguments go to the
+# debug tier as `tool_arguments`.
+ARGUMENT_VALUE_CHAR_LIMIT = 400
 # Default reasoning config for the native Responses path. summary="auto" is
 # the gate that makes the endpoint stream response.reasoning_summary_text.delta
 # events — the Phase 4 inline-thinking UX. Verified live against
@@ -103,6 +108,59 @@ async def collect_provider_turn(
             },
         )
     return events, discovered
+
+
+def argument_digest(arguments: dict[str, Any]) -> dict[str, Any]:
+    """Return a compact, bounded view of one tool call's arguments.
+
+    Keeps the fields that make a trace readable — path, command, pattern, flags —
+    and replaces anything bulky with a size marker so the always-on lifecycle
+    tier stays small enough to keep forever.
+    """
+    digest: dict[str, Any] = {}
+    for key, value in arguments.items():
+        name = str(key)
+        if isinstance(value, str):
+            digest[name] = (
+                value
+                if len(value) <= ARGUMENT_VALUE_CHAR_LIMIT
+                else {"chars": len(value), "omitted": True}
+            )
+        elif isinstance(value, (int, float, bool)) or value is None:
+            digest[name] = value
+        elif isinstance(value, (list, tuple)):
+            digest[name] = {"itemCount": len(value), "omitted": True}
+        elif isinstance(value, dict):
+            digest[name] = {"keys": sorted(str(inner) for inner in value)[:12], "omitted": True}
+        else:
+            digest[name] = {"type": type(value).__name__, "omitted": True}
+    return digest
+
+
+def trace_tool_requested(
+    trace: TraceRecorder | None,
+    *,
+    tool_id: str,
+    arguments: dict[str, Any],
+    step: int,
+    call_id: str,
+    flags: dict[str, bool],
+) -> None:
+    """Emit the lifecycle `tool_requested` event plus its debug-tier full arguments."""
+    if trace is None:
+        return
+    trace(
+        "tool_requested",
+        {
+            "toolId": tool_id,
+            "arguments": argument_digest(arguments),
+            "argumentsDigested": True,
+            "step": step,
+            "callId": call_id,
+            **flags,
+        },
+    )
+    trace("tool_arguments", {"toolId": tool_id, "callId": call_id, "arguments": dict(arguments)})
 
 
 def _tool_call_event_payload(

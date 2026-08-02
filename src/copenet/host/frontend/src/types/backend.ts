@@ -628,11 +628,18 @@ export interface ObservabilitySettings {
   debugCapture: boolean;
   captureScope: 'subsequent_runs';
   storage: 'local';
+  // Lifecycle tracing is unconditional — every run leaves an auditable event
+  // stream. Debug capture only adds the payload-heavy tier on top.
+  lifecycleCapture: boolean;
+  traceStorage: { fileCount: number; totalBytes: number };
 }
+
+export type ObservabilityTraceTier = 'lifecycle' | 'debug';
 
 export interface ObservabilityTraceEvent {
   timestamp: string;
   event: string;
+  tier?: ObservabilityTraceTier;
   runId: string;
   sessionKey: string;
   provider: string;
@@ -646,6 +653,7 @@ export interface ObservabilityRunDetail {
   events: ObservabilityTraceEvent[];
   artifacts: SessionArtifactRecord[];
   debugCaptured: boolean;
+  lifecycleCaptured: boolean;
 }
 
 export interface SessionStateRecord {

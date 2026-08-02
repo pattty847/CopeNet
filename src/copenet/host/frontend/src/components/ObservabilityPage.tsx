@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Activity, Bug, RefreshCw } from 'lucide-react';
+import { Activity, Bug, RefreshCw, Trash2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import type { ObservabilityRunDetail, ObservabilitySettings, SessionRunRecord } from '../types/backend';
@@ -8,6 +8,12 @@ import { RunListPane } from './observability/RunListPane';
 
 const RUN_LOOKBACK_PER_SESSION = 30;
 const REFRESH_MS = 12_000;
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
 
 function initialSelection(): { runId: string | null; sessionKey: string | null } {
   const params = new URLSearchParams(window.location.search);
@@ -109,6 +115,30 @@ export function ObservabilityPage() {
     }
   };
 
+  const purgeTraces = async () => {
+    if (!settings || savingSettings) return;
+    const stored = settings.traceStorage;
+    const confirmed = window.confirm(
+      `Delete all ${stored.fileCount} stored run traces (${formatBytes(stored.totalBytes)})?\n\n`
+        + 'Run records, transcripts, and artifacts are not affected — only the raw event streams.',
+    );
+    if (!confirmed) return;
+    setSavingSettings(true);
+    setError(null);
+    try {
+      setSettings(await wsClient.purgeObservabilityTraces());
+      // The open run's event stream just went away; re-read it so the inspector
+      // shows the run record without stale events beside it.
+      if (selectedRunId && selectedSessionKey) {
+        setDetail(await wsClient.getObservabilityRun(selectedSessionKey, selectedRunId));
+      }
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : 'Could not purge run traces.');
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
   const stats = useMemo(() => {
     const dayAgo = Date.now() - 24 * 60 * 60 * 1000;
     const recent = runs.filter((run) => new Date(run.startedAt).getTime() >= dayAgo);
@@ -133,6 +163,14 @@ export function ObservabilityPage() {
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {settings && (
+            <span
+              className="rounded-md bg-shell-bg px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-shell-muted"
+              title="Lifecycle events are traced for every run. Debug capture adds prompts, tool arguments, and tool result bodies."
+            >
+              {settings.traceStorage.fileCount} traces · {formatBytes(settings.traceStorage.totalBytes)}
+            </span>
+          )}
           {settings?.debugCapture && (
             <span className="rounded-md bg-amber-400/10 px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-amber-300">
               subsequent runs captured locally
@@ -149,10 +187,20 @@ export function ObservabilityPage() {
                 ? 'border-amber-400/30 bg-amber-400/10 text-amber-200'
                 : 'border-shell-border bg-shell-panel text-shell-muted hover:text-shell-text'
             }`}
-            title="Capture sanitized prompts, tool schemas, reasoning summaries, and raw run events for subsequent runs"
+            title="Every run is traced at the lifecycle level. Debug capture adds sanitized prompts, tool arguments, reasoning content, and tool result bodies for subsequent runs."
           >
             <Bug className="h-3.5 w-3.5" />
             Debug capture {settings?.debugCapture ? 'on' : 'off'}
+          </button>
+          <button
+            type="button"
+            onClick={() => void purgeTraces()}
+            disabled={!settings || savingSettings || settings.traceStorage.fileCount === 0}
+            className="focus-ring inline-flex h-8 items-center gap-2 rounded-lg border border-shell-border bg-shell-panel px-3 text-[11px] text-shell-muted transition-colors hover:text-shell-error disabled:cursor-not-allowed disabled:opacity-40"
+            title="Delete every stored run trace. Run records, transcripts, and artifacts are untouched."
+          >
+            <Trash2 className="h-3.5 w-3.5" />
+            Purge traces
           </button>
           <button
             type="button"

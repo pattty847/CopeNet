@@ -21,6 +21,7 @@ from .tool_loop_common import (
     _new_call_id,
     _tool_call_event_payload,
     _tool_result_event_payload,
+    trace_tool_requested,
     collect_provider_turn,
     compose_prompted_tool_correction,
     compose_prompted_tool_system_prompt,
@@ -135,17 +136,14 @@ async def run_with_prompted_tools(
                 yield ProviderEvent(kind="final", provider_session_id=discovered_session)
                 return
             call_id = _new_call_id(request.tool_id)
-            if trace is not None:
-                trace(
-                    "tool_requested",
-                    {
-                        "toolId": request.tool_id,
-                        "arguments": request.arguments,
-                        "step": step_index + 1,
-                        "native": False,
-                        "callId": call_id,
-                    },
-                )
+            trace_tool_requested(
+                trace,
+                tool_id=request.tool_id,
+                arguments=request.arguments,
+                step=step_index + 1,
+                call_id=call_id,
+                flags={"native": False},
+            )
             yield ProviderEvent(
                 kind="meta",
                 metadata={

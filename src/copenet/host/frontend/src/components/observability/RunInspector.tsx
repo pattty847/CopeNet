@@ -182,8 +182,19 @@ export function RunInspector({ detail, loading, error }: { detail: Observability
             </div>
             <h2 className="mt-2 line-clamp-2 text-[15px] font-medium leading-5 text-shell-text">{run.userMessage || run.outputSummary}</h2>
           </div>
-          <div className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.15em] ${detail.debugCaptured ? 'bg-amber-400/10 text-amber-300' : 'bg-shell-bg text-shell-muted'}`}>
-            {detail.debugCaptured ? 'debug captured' : 'standard record'}
+          {/* Three states, not two: lifecycle-traced is now the norm, and a run with
+              no trace at all means the file was pruned or predates always-on tracing. */}
+          <div
+            className={`rounded-full px-2.5 py-1 font-mono text-[9px] uppercase tracking-[0.15em] ${detail.debugCaptured ? 'bg-amber-400/10 text-amber-300' : 'bg-shell-bg text-shell-muted'}`}
+            title={
+              detail.debugCaptured
+                ? 'Prompts, tool arguments, and tool result bodies were captured for this run.'
+                : detail.lifecycleCaptured
+                  ? 'Lifecycle events were traced. Turn on Debug capture to also record prompts and tool payloads.'
+                  : 'No trace file for this run — it was purged, or it ran before tracing became unconditional.'
+            }
+          >
+            {detail.debugCaptured ? 'debug captured' : detail.lifecycleCaptured ? 'lifecycle traced' : 'no trace'}
           </div>
         </div>
         <nav className="mt-4 flex gap-1 overflow-x-auto" aria-label="Run inspector views">

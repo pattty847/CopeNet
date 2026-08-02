@@ -24,6 +24,7 @@ from .tool_loop_common import (
     _parse_native_tool_arguments,
     _tool_call_event_payload,
     _tool_result_event_payload,
+    trace_tool_requested,
     compact_stale_responses_items,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
@@ -184,17 +185,14 @@ async def run_with_responses_tools(
                 )
             )
             request = ToolExecutionRequest(tool_id=name, arguments=arguments)
-            if trace is not None:
-                trace(
-                    "tool_requested",
-                    {
-                        "toolId": name,
-                        "arguments": arguments,
-                        "step": step_index + 1,
-                        "responses": True,
-                        "callId": call_id,
-                    },
-                )
+            trace_tool_requested(
+                trace,
+                tool_id=name,
+                arguments=arguments,
+                step=step_index + 1,
+                call_id=call_id,
+                flags={"responses": True},
+            )
             yield ProviderEvent(
                 kind="meta",
                 metadata={

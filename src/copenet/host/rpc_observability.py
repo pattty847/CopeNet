@@ -41,6 +41,15 @@ async def handle_observability_settings_update(
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"settings": settings})))
 
 
+async def handle_observability_traces_purge(request_id: str, send_json: SendJson, orchestrator) -> None:
+    """Delete every stored run trace. Run records and transcripts are untouched."""
+    await send_json(
+        make_response_frame(
+            ResponseFrame(id=request_id, ok=True, payload={"settings": orchestrator.purge_observability_traces()})
+        )
+    )
+
+
 async def handle_observability_run_get(
     request_id: str,
     params: dict[str, Any] | None,

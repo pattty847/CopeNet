@@ -1,4 +1,20 @@
-"""Structured per-run tracing for CopeNet."""
+"""Structured per-run tracing for CopeNet.
+
+Two tiers share one JSONL file per run:
+
+- **lifecycle** (`record`) — always written. Run/session identity, resolved
+  provider and model, the harness plan, tool requested/executed/blocked with
+  tool id and status, token estimates, trim events, terminal reason, timings.
+  This is what makes a run auditable after the fact, so it is not behind a
+  setting. It carries no prompt text, no message history, no reasoning content,
+  and no tool result bodies.
+- **debug** (`record_debug`) — only while Debug capture is on. The model input
+  snapshot, effective instructions, reasoning content, and tool result bodies.
+  Large, and able to contain operator or repository data, so it stays opt-in.
+
+Every row is stamped with its `tier` so a reader can tell the two apart without
+knowing the event vocabulary.
+"""
 
 from __future__ import annotations
 
@@ -13,6 +29,29 @@ from copenet._paths import default_run_logs_dir
 
 
 UTC = timezone.utc
+
+TIER_LIFECYCLE = "lifecycle"
+TIER_DEBUG = "debug"
+
+# Events that are payload-heavy by nature and always belong to the debug tier,
+# no matter which entry point emits them. The harness tool loops are handed a
+# single `trace` callable rather than the writer, so without this table they
+# could only reach the lifecycle tier. Keep it small and explicit: an event
+# belongs here when its payload is the model's or the operator's content
+# (prompt text, reasoning, tool arguments, tool result bodies) rather than
+# metadata about what happened.
+DEBUG_TIER_EVENTS = frozenset(
+    {
+        "run_input",
+        "tool_arguments",
+        "tool_result_body",
+    }
+)
+
+# One pathological run (a tool loop echoing large bodies under Debug capture)
+# must not be able to fill the disk. Past the cap the writer emits a single
+# `trace_truncated` row and goes quiet for the rest of the run.
+DEFAULT_MAX_BYTES_PER_RUN = 8 * 1024 * 1024
 
 
 def utc_now_iso() -> str:
@@ -31,8 +70,11 @@ class RunTraceWriter:
     enabled: bool = False
     debug: bool = False
     root_dir: Path | None = None
+    max_bytes: int = DEFAULT_MAX_BYTES_PER_RUN
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _path: Path | None = field(default=None, init=False, repr=False)
+    _written_bytes: int = field(default=0, init=False, repr=False)
+    _truncated: bool = field(default=False, init=False, repr=False)
 
     @property
     def path(self) -> Path:
@@ -44,8 +86,23 @@ class RunTraceWriter:
         return self._path
 
     def record(self, event: str, payload: dict[str, Any] | None = None) -> None:
-        """Append one structured trace event. Fail closed if tracing is disabled or writing fails."""
-        if not self.enabled:
+        """Append one trace event, routing DEBUG_TIER_EVENTS to the debug tier.
+
+        Always on for lifecycle events; fails closed on write errors.
+        """
+        if event in DEBUG_TIER_EVENTS:
+            self.record_debug(event, payload)
+            return
+        self._write(event, payload, tier=TIER_LIFECYCLE)
+
+    def record_debug(self, event: str, payload: dict[str, Any] | None = None) -> None:
+        """Append a sanitized high-detail event only while Debug capture is active."""
+        if not self.debug:
+            return
+        self._write(event, _sanitize(payload or {}), tier=TIER_DEBUG)
+
+    def _write(self, event: str, payload: dict[str, Any] | None, *, tier: str) -> None:
+        if not self.enabled or self._truncated:
             return
         try:
             path = self.path
@@ -53,6 +110,7 @@ class RunTraceWriter:
             row: dict[str, Any] = {
                 "timestamp": utc_now_iso(),
                 "event": event,
+                "tier": tier,
                 "runId": self.run_id,
                 "sessionKey": self.session_key,
                 "provider": self.provider,
@@ -60,18 +118,32 @@ class RunTraceWriter:
             }
             if payload:
                 row["payload"] = payload
-            line = json.dumps(row, ensure_ascii=False)
+            line = json.dumps(row, ensure_ascii=False) + "\n"
+            encoded = line.encode("utf-8")
             with self._lock:
-                with path.open("a", encoding="utf-8", newline="\n") as handle:
-                    handle.write(line + "\n")
+                if self.max_bytes > 0 and self._written_bytes + len(encoded) > self.max_bytes:
+                    self._truncated = True
+                    encoded = (
+                        json.dumps(
+                            {
+                                "timestamp": utc_now_iso(),
+                                "event": "trace_truncated",
+                                "tier": TIER_LIFECYCLE,
+                                "runId": self.run_id,
+                                "sessionKey": self.session_key,
+                                "provider": self.provider,
+                                "model": self.model,
+                                "payload": {"maxBytes": self.max_bytes, "droppedAtEvent": event},
+                            },
+                            ensure_ascii=False,
+                        )
+                        + "\n"
+                    ).encode("utf-8")
+                with path.open("ab") as handle:
+                    handle.write(encoded)
+                self._written_bytes += len(encoded)
         except Exception:
             return
-
-    def record_debug(self, event: str, payload: dict[str, Any] | None = None) -> None:
-        """Append a sanitized high-detail event only while Debug capture is active."""
-        if not self.debug:
-            return
-        self.record(event, _sanitize(payload or {}))
 
 
 _SECRET_KEYS = {

@@ -202,12 +202,16 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     is_first_turn = len(prior_history) == 0
     run_started_at = transcript_now()
     trace_settings = orchestrator._observability_store.load_settings()
+    # Lifecycle tracing is unconditional: a run that cannot be reconstructed after
+    # the fact is not auditable, and the lifecycle tier carries no prompt text,
+    # message history, reasoning content, or tool result bodies. Debug capture
+    # gates only the payload-heavy tier.
     trace = RunTraceWriter(
         run_id=run_id,
         session_key=session_key,
         provider=provider_name,
         model=request.model,
-        enabled=trace_settings.debug_capture,
+        enabled=True,
         debug=trace_settings.debug_capture,
         root_dir=orchestrator._observability_store.trace_root,
     )
@@ -284,13 +288,17 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         trace.record(
             "run_started",
             {
-                "messagePreview": message[:200],
+                "messageChars": len(message),
+                "attachmentCount": len(attachment_refs or []),
                 "requestedToolIds": list(request.requested_tool_ids),
                 "profile": request.system_prompt_id,
                 "taskMode": request.task_prompt_id,
                 "workdir": str(session_workspace_root),
             },
         )
+        # The operator's own words are prompt text, so they ride the debug tier
+        # with everything else the model was fed.
+        trace.record_debug("run_input", {"messagePreview": message[:2_000]})
         trace.record(
             "session_resolved",
             {
@@ -614,7 +622,12 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool_result_payload = event.metadata.get("toolResult")
                 if isinstance(tool_result_payload, dict):
                     normalized_tool_results.append(dict(tool_result_payload))
-                    trace.record("tool_result_normalized", dict(tool_result_payload))
+                    # The loops already emit a compact lifecycle `tool_result_normalized`
+                    # (tool id, call id, channel, success, artifact id). This event is the
+                    # full normalized body, so it belongs to the debug tier — and it needs
+                    # a distinct name, because two events sharing one name with two shapes
+                    # is exactly the kind of thing a run inspector cannot render honestly.
+                    trace.record_debug("tool_result_body", dict(tool_result_payload))
                 turn_state_payload = event.metadata.get("turnState")
                 if isinstance(turn_state_payload, dict):
                     latest_turn_state = dict(turn_state_payload)
