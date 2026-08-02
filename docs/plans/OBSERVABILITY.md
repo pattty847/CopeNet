@@ -213,10 +213,13 @@ appears only after the run lands (6 lines at +1.0 s). Note the honest tradeoff �
 *appearing* is itself a change, just never a mid-stream one; the alternative (a placeholder
 reserving space on every turn) is more noise, not less.
 
-**Still open in this workstream:** the third mount point. The right drawer still shows only
-the last run; it should become the session-level list with the same expansion, and
-`RunActivityPanel` / `LiveToolFeed` should be reconciled against `RunInternals` rather than
-left as parallel renderings.
+**Restructured the same day — see "Agents thread UX" below.** The in-thread mount shipped as
+an inline expandable panel, and living with it for an hour showed the problem: its
+"What it did" section re-listed the tool calls already rendered as inline rows directly
+above. The panel is gone; the thread now groups tool calls per turn and routes all detail
+to the `InspectorDrawer` overlay. `RunInternalsBody` survives unchanged as the shared
+derivation's renderer — it just mounts in the overlay and in Observability instead of
+in the thread.
 
 ### Workstream 3 — emit the provider-resolved model
 
@@ -246,19 +249,49 @@ the right-drawer item, which is called out as open.
 - A one-line **verdict** at the top when the answer is already knowable, e.g. *"No tool
   loop attempted: promptedToolUse = false"*. Per this repo's own triage order that is the
   single most common confusion, and it should never require reading JSONL.
-- **Open:** the right drawer still shows only the last run. It should become the
-  **session-level** view — every turn, scannable, with the same expansion.
-
 Nothing here may shift layout while a run streams; expansion is user-initiated only.
 
-### Known rough edge, next pass
+### The shape it actually landed on — 2026-08-02
 
-Inline tool rows in the thread (`components/transcript/InlineToolRows.tsx`) still dump the
-raw policy object into the transcript — a blocked `shell.exec` prints
-`{"target": "echo hi", "workspaceRoot": …, "policyDecision": "unsafe_unknown", …}` as JSON
-mid-conversation. `RunInternals` now renders that same information as one readable verdict
-line, so the inline row should be reduced to a summary and defer detail to the expansion.
-This is the most obstructive thing left in the thread.
+The bullets above describe an inline expandable panel. That shipped, and was wrong. Three
+things only became visible once it was on screen:
+
+1. **"What it did" was pure duplication.** `InlineToolRows` already renders every tool call
+   as its own row immediately above. A panel that re-lists them is noise, not insight.
+2. **Long content does not belong in a thread.** Tool output is often a whole file or a
+   command dump. The `InspectorDrawer` overlay — 680px, own scroll, Escape to close — is
+   the surface with room to read it, and it already existed.
+3. **The internals are not a special class of object.** They are one more thing that
+   happened in the turn. Once framed that way they become a row in the same list, and the
+   separate panel has no reason to exist.
+
+The shipped shape: one group per turn (`TurnToolGroup`) with a summary header —
+"Searched 1×, ran command 2×" plus a failed count — expanding to one row per action. Every
+row opens the overlay. The last row is the turn's internals (`InspectorTarget`
+`{kind: 'run'}` → `RunInternalsDrawerBody` → `RunInternalsBody` with `showDid={false}`).
+
+Details worth keeping:
+
+- **A chat-only turn keeps a bare "Context it saw" row.** Load-bearing: a turn with no
+  tools is exactly where "why didn't it use one?" is asked, and `promptedToolUse = false`
+  is the usual answer. Hiding the row when there is nothing to group hides it where it
+  matters most.
+- **Grouping is by run, not adjacency**, so narration between calls does not split a turn
+  into two groups.
+- **The group stays open after a live run ends.** Collapsing content out from under someone
+  who just watched it appear is worse than one extra expanded row. History starts collapsed.
+
+`RunActivityPanel` retires from the Inspector column, which goes back to runtime state,
+destinations, and approvals. `LiveToolFeed` is untouched — it is the only thing that
+renders *during* a run.
+
+### Raw policy dump — fixed 2026-08-02
+
+A blocked `shell.exec` used to print its entire policy object into the transcript. Cause:
+`_preview_payload` had no branch for it, so `_generic_preview` JSON-dumped the body beside a
+UI already rendering `policyDecision`, `target`, and `policySummary` as fields — the same
+refusal twice, once as prose and once as a wall of JSON. A body that is nothing but its
+policy verdict now previews as `None`.
 
 ### Trace reset — **done 2026-08-02**
 
