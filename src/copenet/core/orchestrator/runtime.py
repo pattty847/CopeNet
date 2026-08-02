@@ -33,6 +33,7 @@ from copenet.core.tools import (
     ToolExecutionContext,
     ToolExecutionResult,
     describe_available_tools,
+    disclose_policy_in_descriptions,
     policy_for_task_mode,
 )
 from copenet.core.tracing import RunTraceWriter
@@ -316,11 +317,18 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             entry.task_prompt_id or request.task_prompt_id,
             provider=provider_name,
         )
-        available_tools = [
-            tool
-            for tool in registered_tools
-            if tool.category in effective_tool_policy.allowed_categories
-        ] if request.allow_tools else []
+        # Offer the tools this Access level permits, and tell the model what the
+        # level actually is. Without the disclosure a read-only run learns the
+        # allowlist by being blocked, which costs a tool call to discover a fact
+        # the harness already had.
+        available_tools = disclose_policy_in_descriptions(
+            [
+                tool
+                for tool in registered_tools
+                if tool.category in effective_tool_policy.allowed_categories
+            ],
+            effective_tool_policy,
+        ) if request.allow_tools else []
         available_tool_ids = {tool.id for tool in available_tools}
         active_requested_tool_ids = tuple(
             tool_id for tool_id in requested_tool_ids if tool_id in available_tool_ids

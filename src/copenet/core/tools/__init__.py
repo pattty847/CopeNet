@@ -16,6 +16,7 @@ from .contracts import (
     describe_available_tools,
 )
 from .policy import ToolPolicy, policy_for_task_mode
+from .policy_disclosure import disclose_policy_in_descriptions, shell_policy_disclosure
 from .registry import ToolRegistry
 
 __all__ = [
@@ -35,4 +36,6 @@ __all__ = [
     "responses_safe_tool_name",
     "describe_available_tools",
     "policy_for_task_mode",
+    "disclose_policy_in_descriptions",
+    "shell_policy_disclosure",
 ]
