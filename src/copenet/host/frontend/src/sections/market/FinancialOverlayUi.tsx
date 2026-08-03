@@ -23,6 +23,8 @@ const SHORT_LABELS: Record<string, string> = {
   trailing_pb: 'P/B',
   fcf_yield: 'FCF yield',
   ev_s: 'EV/S',
+  ev_ebitda: 'EV/EBITDA',
+  roic: 'ROIC',
 };
 
 function shortLabel(metric: FinancialMetricInfo): string {
@@ -305,6 +307,19 @@ const FLAG_NOTES: Record<string, string> = {
   ttm_not_applicable_for_instant_metric:
     'Balance-sheet values are measured at one date; a trailing-twelve-month view of one '
     + 'does not exist.',
+  single_period_invested_capital:
+    'No beginning-of-window balance existed, so invested capital is the ending balance '
+    + 'alone instead of the usual beginning/ending average.',
+  effective_tax_rate_clamped:
+    'The implied effective tax rate fell outside 0–100% (a large tax benefit or one-time '
+    + 'item) and was clamped for the NOPAT calculation.',
+  roic_windows_skipped_non_positive_pretax:
+    'Windows with zero or negative pre-tax income were skipped — an effective tax rate '
+    + 'has no meaning there.',
+  roic_available_only_as_ttm: 'ROIC is defined here on trailing-twelve-month flows only.',
+  non_positive_invested_capital:
+    'Invested capital was zero or negative (heavy buybacks can do this), so the ratio '
+    + 'is not drawn.',
 };
 
 const FLAG_TONE: Record<string, string> = {

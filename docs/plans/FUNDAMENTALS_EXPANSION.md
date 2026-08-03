@@ -1,7 +1,7 @@
 # Fundamentals Expansion — Audit & Implementation Proposal
 
 Date: 2026-08-02
-Status: Phases 1–3 implemented (see status sections at the end)
+Status: Phases 1–4 implemented (see status sections at the end)
 Companion to: `FINANCIAL_SERIES.md` (existing revenue/P-E pipeline design)
 
 ## 1. Assessment of the current system
@@ -314,3 +314,56 @@ Landed in CopeNet:
 Remaining (Phase 4): EBITDA + EV/EBITDA (dep_amort TTM already works),
 interest coverage (tag fragmentation risk), ROIC (invested-capital
 definition + balance averaging decisions documented in §6).
+
+## 11. Phase 4 implementation status (2026-08-03)
+
+Landed in CopeTech-Edgar:
+- **Base metrics**: interest_expense (chain: InterestExpense →
+  InterestExpenseNonoperating → InterestExpenseDebt →
+  InterestIncomeExpenseNet), tax_expense, pretax_income; `Depreciation` added
+  to the dep_amort chain (Alphabet tags depreciation alone — understates D&A
+  for intangible-heavy issuers; provenance shows the concept used).
+- **Composites**: ebitda (operating income + D&A), interest_coverage
+  (operating income ÷ interest expense, unit "x" → renders as 29.1×),
+  invested_capital (equity + debt − cash − STI; operating leases and goodwill
+  deliberately untouched), and a derived **gross_profit that shadows the base
+  metric** with the revenue − cost_of_revenue fallback — fixes the empty
+  Gross profit series for GrossProfit-less filers like Alphabet. The metric
+  listing dedupes by id with the derived entry winning.
+- **ROIC engine** (`roic_series.py`): TTM only. NOPAT = TTM operating income
+  × (1 − TTM tax ÷ TTM pretax); invested capital averaged over the balances
+  nearest each end of the window (135-day lookback). Honest flags:
+  `single_period_invested_capital`, `effective_tax_rate_clamped`,
+  `roic_windows_skipped_non_positive_pretax`, `roic_available_only_as_ttm`.
+- **EV/EBITDA** in the trailing-multiple engine (TTM ebitda denominator +
+  net-debt adjustment).
+- Real-data checks: AAPL ROIC ~106% (buyback-shrunken equity — genuinely that
+  high), GOOG ROIC 32.8%, GOOG TTM EBITDA $161.3B → EV/EBITDA 13.4× at a
+  $180 test price with net cash −$47.3B; AAPL interest coverage correctly
+  ends FY2023 when Apple stopped disclosing interest expense.
+
+Landed in CopeNet: ev_ebitda in VALUATION_METRICS + listing; ROIC/EV/EBITDA
+short labels; unit "x" axis formatting; flag notes for the five ROIC flags.
+roic, ebitda, interest_coverage, invested_capital, and the fixed
+gross_profit flow through the registry-driven pipeline automatically.
+
+## 12. Phase 5 (planned): IFRS filers and native currency
+
+Motivating case: ASX (ASE Technology) — 20-F filer, everything under
+ifrs-full in TWD, so today's us-gaap-first, USD-only pipeline yields nothing.
+Scope sketch:
+1. IFRS concept fallbacks across the registry (BasicEarningsLossPerShare,
+   ProfitLossFromOperatingActivities, CashFlowsFromUsedInOperatingActivities,
+   ifrs-full balance-sheet concepts, ...).
+2. Native-currency units: per-metric dominant-currency selection (Company
+   Facts can carry TWD + USD convenience translations side by side; mixed
+   windows must not interleave), unit surfaced end to end, frontend currency
+   labels.
+3. NO USD conversion of operational series — FX noise pollutes trends; serve
+   native currency. Valuation multiples against a USD price DO need
+   conversion, which requires a historical-FX source (new dependency) —
+   decide the source before building (options: ECB/FRED daily fixes, or the
+   filer's own dei:EntityReportingCurrencyISOCode + convenience
+   translations where present).
+4. 20-F filers are annual-only (6-K interims are outside Company Facts) —
+   set cadence expectations in the UI.

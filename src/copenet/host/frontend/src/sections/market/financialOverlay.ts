@@ -92,8 +92,10 @@ export function formatFinancialValue(value: number, unit: string = 'USD'): strin
       maximumFractionDigits: 3,
     }).format(value);
   }
-  // Dimensionless series (margins, intensities) read as percentages.
+  // Dimensionless series (margins, intensities) read as percentages;
+  // coverage-style multiples carry unit "x" and read as 29.1×.
   if (unit === 'ratio') return `${(value * 100).toFixed(1)}%`;
+  if (unit === 'x') return `${value.toFixed(1)}×`;
   if (unit === 'shares') {
     if (magnitude >= 1e9) return `${(value / 1e9).toFixed(2)}B sh`;
     if (magnitude >= 1e6) return `${(value / 1e6).toFixed(0)}M sh`;

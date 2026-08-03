@@ -31,7 +31,15 @@ def _edgar_cache_dir() -> str:
 # Metrics whose numerator is a market price rather than a filed fact. They need
 # the price cache and the valuation engine instead of the plain series path.
 VALUATION_METRICS = frozenset(
-    {"trailing_pe", "trailing_ps", "trailing_pfcf", "trailing_pb", "fcf_yield", "ev_s"}
+    {
+        "trailing_pe",
+        "trailing_ps",
+        "trailing_pfcf",
+        "trailing_pb",
+        "fcf_yield",
+        "ev_s",
+        "ev_ebitda",
+    }
 )
 
 
@@ -352,5 +360,14 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "aggregation": "composite",
             "derived": True,
             "components": ["revenue", "net_debt", "shares_outstanding", "price"],
+        },
+        {
+            "id": "ev_ebitda",
+            "label": "EV/EBITDA",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["ebitda", "net_debt", "shares_outstanding", "price"],
         },
     ]
