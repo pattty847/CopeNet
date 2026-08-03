@@ -30,7 +30,9 @@ def _edgar_cache_dir() -> str:
 
 # Metrics whose numerator is a market price rather than a filed fact. They need
 # the price cache and the valuation engine instead of the plain series path.
-VALUATION_METRICS = frozenset({"trailing_pe", "trailing_ps", "trailing_pfcf"})
+VALUATION_METRICS = frozenset(
+    {"trailing_pe", "trailing_ps", "trailing_pfcf", "trailing_pb", "fcf_yield", "ev_s"}
+)
 
 
 async def get_financial_series(
@@ -242,7 +244,12 @@ def _valuation_observation_is_eligible(observation: Any, cutoff: pd.Timestamp) -
         return False
     # Reject any row whose SEC inputs postdate its own price bar, whatever the
     # multiple: EPS for P/E, TTM denominator and share count for P/S and P/FCF.
-    for key in ("epsAvailableAt", "denominatorAvailableAt", "sharesAvailableAt"):
+    for key in (
+        "epsAvailableAt",
+        "denominatorAvailableAt",
+        "sharesAvailableAt",
+        "adjustmentAvailableAt",
+    ):
         raw_available_at = observation.get(key)
         if raw_available_at is None:
             continue
@@ -318,5 +325,32 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "aggregation": "composite",
             "derived": True,
             "components": ["operating_cash_flow", "capex", "diluted_shares", "price"],
+        },
+        {
+            "id": "trailing_pb",
+            "label": "Trailing P/B",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["stockholders_equity", "shares_outstanding", "price"],
+        },
+        {
+            "id": "fcf_yield",
+            "label": "FCF yield",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["operating_cash_flow", "capex", "shares_outstanding", "price"],
+        },
+        {
+            "id": "ev_s",
+            "label": "EV/S",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["revenue", "net_debt", "shares_outstanding", "price"],
         },
     ]

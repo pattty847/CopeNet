@@ -107,11 +107,14 @@ export function formatFinancialValue(value: number, unit: string = 'USD'): strin
 }
 
 /** Axis formatter for the overlay's left price scale. Valuation multiples read as
- *  "24.3×"; everything else follows the unit the observations carry. */
+ *  "24.3×", inverted valuations (yields) as percentages; everything else follows
+ *  the unit the observations carry. */
 export function overlayAxisFormatter(
   unit: string | undefined,
   valuation: boolean,
+  inverted = false,
 ): (value: number) => string {
+  if (valuation && inverted) return (value: number) => `${(value * 100).toFixed(1)}%`;
   if (valuation) return (value: number) => `${value.toFixed(1)}×`;
   return (value: number) => formatFinancialValue(value, unit ?? 'USD');
 }

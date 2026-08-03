@@ -361,6 +361,7 @@ export function CandleChart({
   financialOverlayKind,
   financialOverlayUnit,
   financialOverlayValuation = false,
+  financialOverlayInverted = false,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -375,6 +376,8 @@ export function CandleChart({
   financialOverlayUnit?: string;
   /** Valuation series step per price bar; financial series step per filing. */
   financialOverlayValuation?: boolean;
+  /** Inverted valuations (yields) format as percentages instead of multiples. */
+  financialOverlayInverted?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -736,7 +739,11 @@ export function CandleChart({
       ...(financialRef.current ? [financialRef.current] : []),
       ...financialSegmentRefs.current,
     ];
-    const formatter = overlayAxisFormatter(financialOverlayUnit, financialOverlayValuation);
+    const formatter = overlayAxisFormatter(
+      financialOverlayUnit,
+      financialOverlayValuation,
+      financialOverlayInverted,
+    );
     const minMove = financialOverlayValuation || financialOverlayUnit === 'ratio' || financialOverlayUnit === 'USD/shares'
       ? 0.001
       : 1;
@@ -754,7 +761,7 @@ export function CandleChart({
     // chart redraws, so invalidate and let the next frame reposition against it.
     transformKeyRef.current = '';
     requestAnimationFrame(() => syncRef.current());
-  }, [financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation]);
+  }, [financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const chart = chartRef.current;

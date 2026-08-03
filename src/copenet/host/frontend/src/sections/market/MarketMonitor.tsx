@@ -455,6 +455,11 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
           financialOverlayKind={overlayMetric ?? undefined}
           financialOverlayUnit={overlayUnit}
           financialOverlayValuation={overlayIsValuation}
+          financialOverlayInverted={
+            overlaySeries.data != null
+            && isValuationPayload(overlaySeries.data)
+            && overlaySeries.data.inverted === true
+          }
         />
         {sec.loading && !secEvidence.length && (
           <div style={{ fontSize: 10.5, color: MM.dim, fontStyle: 'italic', marginTop: 6 }}>

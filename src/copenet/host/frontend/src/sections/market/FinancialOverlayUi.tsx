@@ -20,6 +20,9 @@ const SHORT_LABELS: Record<string, string> = {
   trailing_pe: 'P/E',
   trailing_ps: 'P/S',
   trailing_pfcf: 'P/FCF',
+  trailing_pb: 'P/B',
+  fcf_yield: 'FCF yield',
+  ev_s: 'EV/S',
 };
 
 function shortLabel(metric: FinancialMetricInfo): string {
@@ -176,7 +179,9 @@ export function FinancialOverlayStatus({
     const latest = [...(payload.observations ?? [])].reverse().find((row) => row.value != null);
     if (!latest || latest.value == null) return null;
     const source = latest.sources?.[0];
-    const multiple = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(latest.value);
+    const multiple = payload.inverted
+      ? `${(latest.value * 100).toFixed(1)}%`
+      : `${new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(latest.value)}×`;
     const detail = latest.epsAvailableAt != null || latest.epsTtm != null
       ? (
         <>
@@ -198,7 +203,7 @@ export function FinancialOverlayStatus({
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 7 }}>
         <div style={{ fontSize: 11, color: '#8fb8e8' }}>
-          {label} {multiple}×
+          {label} {multiple}
           {' · '}price {formatFinancialValue(latest.price, 'USD/shares')}
           {detail}
         </div>
@@ -285,6 +290,21 @@ const FLAG_NOTES: Record<string, string> = {
   no_point_in_time_ttm_denominator:
     'No trailing-twelve-month figure had been filed yet at this date.',
   no_point_in_time_share_count: 'No share count had been filed yet at this date.',
+  no_point_in_time_adjustment:
+    'No balance-sheet adjustment (net debt) had been filed yet at this date, so no '
+    + 'enterprise value can be built.',
+  non_positive_enterprise_value:
+    'Net cash exceeds the market cap, making enterprise value non-positive — the ratio has '
+    + 'no meaning here.',
+  point_in_time_shares_outstanding:
+    'Share count taken from the filing cover page — an actual point-in-time count, not a '
+    + 'weighted average.',
+  debt_concepts_missing_assumed_zero:
+    'No standard debt tags were found on this balance sheet. That usually means a debt-free '
+    + 'issuer, but nonstandard tagging looks identical — net debt here is minus cash.',
+  ttm_not_applicable_for_instant_metric:
+    'Balance-sheet values are measured at one date; a trailing-twelve-month view of one '
+    + 'does not exist.',
 };
 
 const FLAG_TONE: Record<string, string> = {

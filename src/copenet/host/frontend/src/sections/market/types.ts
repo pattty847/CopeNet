@@ -428,6 +428,8 @@ export interface ValuationSeriesObservation {
   sharesOutstanding?: number | null;
   sharesAvailableAt?: string | null;
   sharesBasis?: 'split_adjusted';
+  adjustmentValue?: number | null;
+  adjustmentAvailableAt?: string | null;
   qualityFlags: string[];
   sources: FinancialSeriesSource[];
 }
@@ -442,7 +444,9 @@ export interface ValuationSeriesPayload {
   epsMetric?: 'diluted_eps';
   epsFrequency?: 'ttm';
   denominatorMetric?: string;
-  denominatorFrequency?: 'ttm';
+  denominatorFrequency?: 'ttm' | 'instant';
+  adjustmentMetric?: string | null;
+  inverted?: boolean;
   normalizationVersion: number;
   retrievedAt?: string | null;
   rawFactCount: number;

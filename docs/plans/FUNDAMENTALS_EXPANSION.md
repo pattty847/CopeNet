@@ -1,7 +1,7 @@
 # Fundamentals Expansion — Audit & Implementation Proposal
 
 Date: 2026-08-02
-Status: Phases 1 and 2 implemented (see status sections at the end)
+Status: Phases 1–3 implemented (see status sections at the end)
 Companion to: `FINANCIAL_SERIES.md` (existing revenue/P-E pipeline design)
 
 ## 1. Assessment of the current system
@@ -271,3 +271,46 @@ Still deferred (Phase 3+): instant-fact support (net debt, working capital,
 P/B, market-cap series, FCF yield, EV/x), true point-in-time DEI share counts
 (the multiples currently stand weighted-average shares in for shares
 outstanding — documented on every observation), ROIC, interest coverage.
+
+## 10. Phase 3 implementation status (2026-08-03)
+
+Landed in CopeTech-Edgar:
+- **Instant-fact support**: `_normalize_raw_fact` accepts start-less
+  balance-sheet facts (`period_start = period_end`, duration 0); a new
+  "instant" resolution cadence emits one observation per reported balance
+  date. "annual" keeps only dates first substantiated by an annual filing;
+  TTM returns empty with `ttm_not_applicable_for_instant_metric`. (Found and
+  fixed en route: the window resolver's `duration_days or -1` swallowed
+  legitimate 0-day durations.)
+- **13 instant metrics**: shares_outstanding (dei cover-page counts),
+  stockholders_equity, cash_equivalents, short_term_investments,
+  debt_current, debt_noncurrent, current_assets, current_liabilities,
+  receivables, inventory, payables, total_assets, total_liabilities.
+- **Composites**: working_capital (CA − CL) and net_debt (debt components −
+  cash − ST investments, joined on the shared balance date). Missing debt
+  tags are treated as zero but flagged `debt_concepts_missing_assumed_zero` —
+  a debt-free issuer and a nonstandard tagger look identical, so the flag
+  says so instead of guessing. AAPL verification: net debt $14.2B, working
+  capital $9.5B at 2026-03-28, matching the filed balance sheet.
+- **Valuation engine extensions**: instant denominators (trailing_pb over
+  latest known equity), inverted ratios (fcf_yield = TTM FCF ÷ market cap),
+  and numerator adjustments (ev_s: market cap + point-in-time net debt over
+  TTM revenue, `no_point_in_time_adjustment` /
+  `non_positive_enterprise_value` when it can't be built honestly).
+  `build_share_windows` now prefers dei cover-page share counts
+  (`point_in_time_shares_outstanding`) over weighted averages — closing the
+  Phase 2 caveat. Staleness fixed to be governed by the OLDEST required
+  input, not the newest: a fresh balance sheet can no longer rescue a
+  ten-month-old TTM denominator.
+
+Landed in CopeNet:
+- `VALUATION_METRICS` grows to six; `adjustmentAvailableAt` joins the
+  point-in-time boundary filter; three new metric-list entries.
+- Frontend: inverted valuations render as percentages (axis + status line),
+  P/B / FCF-yield / EV/S short labels, flag notes for the six new quality
+  flags. Balance-sheet series (equity, net debt, working capital, inventory,
+  ...) appear in the overlay dropdown automatically via the registry.
+
+Remaining (Phase 4): EBITDA + EV/EBITDA (dep_amort TTM already works),
+interest coverage (tag fragmentation risk), ROIC (invested-capital
+definition + balance averaging decisions documented in §6).
