@@ -6,6 +6,8 @@ import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
 import { observationTime, snapOverlayToCandles } from './financialOverlay';
+import { isValuationMetric, useFinancialMetrics } from './useFinancialMetrics';
+import { isValuationPayload } from './types';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
 import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { useFinancialSeries } from './useFinancialSeries';
@@ -341,11 +343,13 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
   const sec = useTickerEvidence(symbol);
   const [tf, setTf] = useState<'D' | 'W' | 'M'>('W');
   const [overlayMetric, setOverlayMetric] = useState<OverlayMetric | null>(null);
-  const [revenueFrequency, setRevenueFrequency] = useState<FinancialFrequency>('quarterly');
+  const [overlayFrequency, setOverlayFrequency] = useState<FinancialFrequency>('quarterly');
+  const overlayMetrics = useFinancialMetrics();
+  const overlayIsValuation = isValuationMetric(overlayMetrics, overlayMetric);
   const overlaySeries = useFinancialSeries(
     symbol,
     overlayMetric ?? 'revenue',
-    overlayMetric === 'trailing_pe' ? 'ttm' : revenueFrequency,
+    overlayIsValuation ? 'ttm' : overlayFrequency,
     overlayMetric != null,
   );
   const [watchBusy, setWatchBusy] = useState(false);
@@ -363,9 +367,14 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
   const chartEvents = sec.payload ? sec.payload.events : td.events;
   const secEvidence = sec.payload?.evidence ?? [];
   const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
+  const overlayUnit = (() => {
+    if (!overlaySeries.data) return undefined;
+    if (isValuationPayload(overlaySeries.data)) return 'ratio';
+    return overlaySeries.data.observations[0]?.unit;
+  })();
   const overlayPoints = (() => {
     if (!overlayMetric || !overlaySeries.data) return undefined;
-    const raw = 'epsMetric' in overlaySeries.data
+    const raw = isValuationPayload(overlaySeries.data)
       ? overlaySeries.data.observations.map((observation) => ({
           t: Math.floor(Date.parse(`${observation.timestamp}T00:00:00Z`) / 1000),
           value: observation.value != null && Number.isFinite(observation.value)
@@ -422,11 +431,12 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <FinancialOverlayControls
+              metrics={overlayMetrics}
               metric={overlayMetric}
-              frequency={revenueFrequency}
+              frequency={overlayFrequency}
               loading={overlaySeries.loading}
               onMetric={setOverlayMetric}
-              onFrequency={setRevenueFrequency}
+              onFrequency={setOverlayFrequency}
             />
             <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
               {tfBtn('D', '1D')}
@@ -443,13 +453,15 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
           height={620}
           financialOverlay={overlayPoints}
           financialOverlayKind={overlayMetric ?? undefined}
+          financialOverlayUnit={overlayUnit}
+          financialOverlayValuation={overlayIsValuation}
         />
         {sec.loading && !secEvidence.length && (
           <div style={{ fontSize: 10.5, color: MM.dim, fontStyle: 'italic', marginTop: 6 }}>
             ◍ Recent events shown — pulling the full 6-month SEC history, markers will fill in…
           </div>
         )}
-        <FinancialOverlayStatus metric={overlayMetric} state={overlaySeries} />
+        <FinancialOverlayStatus metrics={overlayMetrics} metric={overlayMetric} state={overlaySeries} />
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 8, borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 8 }}>
           <span style={{ fontSize: 10, color: MM.dimmer, display: 'flex', alignItems: 'center', gap: 6 }}>
             <span style={{ width: 13, height: 13, borderRadius: 3, background: '#2a2f3a', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', fontSize: 8, color: '#7d8aa0' }}>TV</span>

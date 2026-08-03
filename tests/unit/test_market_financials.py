@@ -130,6 +130,7 @@ async def test_trailing_pe_metric_dispatches_to_valuation_service(monkeypatch: p
     assert payload["metric"] == "trailing_pe"
     assert calls == {
         "symbol": "NVDA",
+        "metric": "trailing_pe",
         "as_of": "2026-03-01",
         "refresh": True,
         "include_provenance": False,
@@ -398,14 +399,12 @@ def test_latest_pe_uses_canonical_ttm_eps_on_the_current_split_basis(
         "fetch_split_history",
         lambda _symbol: ([("2026-03-01", 2.0)], True),
     )
-    weekly = pd.DataFrame({"close": [20.0]})
-
     result = market_runtime._trailing_eps_and_pe(
         {
             "epsTtm": 2.0,
             "epsTtmAvailableAt": "2026-02-01",
         },
-        weekly,
+        20.0,
         "TEST",
     )
 
@@ -431,7 +430,7 @@ def test_latest_pe_does_not_double_adjust_canonical_split_basis(
             "epsTtmAvailableAt": "2026-02-01",
             "epsTtmShareBasis": "split_adjusted",
         },
-        pd.DataFrame({"close": [20.0]}),
+        20.0,
         "TEST",
     )
 
@@ -457,7 +456,7 @@ def test_latest_pe_is_unavailable_when_split_history_cannot_be_verified(
             "epsTtm": 2.0,
             "epsTtmAvailableAt": "2026-02-01",
         },
-        pd.DataFrame({"close": [20.0]}),
+        20.0,
         "TEST",
     )
 

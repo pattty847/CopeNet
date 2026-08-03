@@ -11,6 +11,7 @@ import type {
   TickerEvidencePayload,
   TickerFundamentals,
   FinancialFrequency,
+  FinancialMetricInfo,
   OverlaySeriesPayload,
   SymbolSearchResult,
   TickerDetailPayload,
@@ -89,6 +90,11 @@ export async function marketFinancialSeriesRpc(
   });
   const series = payload.series;
   return series && typeof series === 'object' ? (series as OverlaySeriesPayload) : null;
+}
+
+export async function marketFinancialMetricsRpc(request: WsRpcRequest): Promise<FinancialMetricInfo[]> {
+  const payload = await request<{ metrics?: unknown }>('market.financial.metrics.list', {});
+  return Array.isArray(payload.metrics) ? (payload.metrics as FinancialMetricInfo[]) : [];
 }
 
 export async function marketLedgerGetRpc(request: WsRpcRequest): Promise<LedgerReport> {

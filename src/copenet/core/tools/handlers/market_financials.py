@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from copenet.core.market.financials import get_financial_series
+from copenet.core.market.financials import (
+    get_financial_series,
+    supported_financial_metrics,
+)
 from copenet.core.tools.contracts import (
     ToolDescriptor,
     ToolExecutionContext,
@@ -56,6 +59,13 @@ def _optional_string(value) -> str | None:
     return text or None
 
 
+def _metric_ids() -> list[str]:
+    ids = [str(entry.get("id")) for entry in supported_financial_metrics()]
+    # The registry is empty only when copetech-edgar is not importable; keep the
+    # schema valid so tool listing never breaks in that degraded state.
+    return ids or ["revenue"]
+
+
 DESCRIPTORS = [
     ToolDescriptor(
         id="market.financials",
@@ -73,8 +83,12 @@ DESCRIPTORS = [
                 "symbol": {"type": "string", "description": "Public-company ticker."},
                 "metric": {
                     "type": "string",
-                    "enum": ["revenue"],
-                    "description": "Canonical metric id. Revenue is the first supported slice.",
+                    "enum": _metric_ids(),
+                    "description": (
+                        "Canonical metric id: base SEC series (revenue, "
+                        "operating_income, ...), derived composites (gross_margin, "
+                        "fcf, ...), or price-backed valuation (trailing_pe)."
+                    ),
                 },
                 "frequency": {
                     "type": "string",

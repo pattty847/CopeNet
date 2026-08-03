@@ -92,11 +92,28 @@ export function formatFinancialValue(value: number, unit: string = 'USD'): strin
       maximumFractionDigits: 3,
     }).format(value);
   }
+  // Dimensionless series (margins, intensities) read as percentages.
+  if (unit === 'ratio') return `${(value * 100).toFixed(1)}%`;
+  if (unit === 'shares') {
+    if (magnitude >= 1e9) return `${(value / 1e9).toFixed(2)}B sh`;
+    if (magnitude >= 1e6) return `${(value / 1e6).toFixed(0)}M sh`;
+    return `${Math.round(value).toLocaleString()} sh`;
+  }
   const prefix = unit === 'USD' ? '$' : `${unit} `;
   if (magnitude >= 1e12) return `${prefix}${(value / 1e12).toFixed(2)}T`;
   if (magnitude >= 1e9) return `${prefix}${(value / 1e9).toFixed(2)}B`;
   if (magnitude >= 1e6) return `${prefix}${(value / 1e6).toFixed(0)}M`;
   return `${prefix}${Math.round(value).toLocaleString()}`;
+}
+
+/** Axis formatter for the overlay's left price scale. Valuation multiples read as
+ *  "24.3×"; everything else follows the unit the observations carry. */
+export function overlayAxisFormatter(
+  unit: string | undefined,
+  valuation: boolean,
+): (value: number) => string {
+  if (valuation) return (value: number) => `${value.toFixed(1)}×`;
+  return (value: number) => formatFinancialValue(value, unit ?? 'USD');
 }
 
 export function formatFinancialDate(value: string): string {

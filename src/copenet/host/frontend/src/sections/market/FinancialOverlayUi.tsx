@@ -1,9 +1,14 @@
-import type { FinancialFrequency, ValuationSeriesPayload } from './types';
+import type { FinancialFrequency, FinancialMetricInfo, ValuationSeriesPayload } from './types';
+import { isValuationPayload } from './types';
 import type { FinancialSeriesState } from './useFinancialSeries';
 import { formatFinancialDate, formatFinancialValue } from './financialOverlay';
 import { MM, mono } from './marketUi';
 
-export type OverlayMetric = 'revenue' | 'trailing_pe';
+export type OverlayMetric = string;
+
+// The two flagship series keep one-click buttons; everything else the registry
+// serves lives in the dropdown so new backend metrics appear with zero UI edits.
+const FLAGSHIP_METRICS: OverlayMetric[] = ['revenue', 'trailing_pe'];
 
 const FREQUENCIES: Array<{ value: FinancialFrequency; label: string }> = [
   { value: 'quarterly', label: 'Quarter' },
@@ -11,27 +16,48 @@ const FREQUENCIES: Array<{ value: FinancialFrequency; label: string }> = [
   { value: 'annual', label: 'Annual' },
 ];
 
+function shortLabel(metric: FinancialMetricInfo): string {
+  if (metric.id === 'trailing_pe') return 'P/E';
+  return metric.label;
+}
+
 export function FinancialOverlayControls({
+  metrics,
   metric,
   frequency,
   loading,
   onMetric,
   onFrequency,
 }: {
+  metrics: FinancialMetricInfo[];
   metric: OverlayMetric | null;
   frequency: FinancialFrequency;
   loading: boolean;
   onMetric: (metric: OverlayMetric | null) => void;
   onFrequency: (frequency: FinancialFrequency) => void;
 }) {
-  const button = (value: OverlayMetric, label: string, title: string) => {
-    const active = metric === value;
+  const byId = new Map(metrics.map((entry) => [entry.id, entry]));
+  const flagship = FLAGSHIP_METRICS.map((id) => byId.get(id)).filter(
+    (entry): entry is FinancialMetricInfo => entry != null,
+  );
+  const rest = metrics.filter((entry) => !FLAGSHIP_METRICS.includes(entry.id));
+  const selected = metric ? byId.get(metric) ?? null : null;
+  const valuationSelected = selected?.factType === 'valuation';
+
+  const button = (entry: FinancialMetricInfo) => {
+    const active = metric === entry.id;
     return (
       <button
-        key={value}
-        onClick={() => onMetric(active ? null : value)}
+        key={entry.id}
+        onClick={() => onMetric(active ? null : entry.id)}
         aria-pressed={active}
-        title={title}
+        title={
+          entry.id === 'revenue'
+            ? 'Plot canonical SEC revenue from the date each filing became public'
+            : entry.id === 'trailing_pe'
+              ? 'Plot split-adjusted price divided by then-known TTM diluted EPS'
+              : entry.label
+        }
         style={{
           cursor: 'pointer',
           border: `1px solid ${active ? 'rgba(90,143,199,.45)' : MM.border}`,
@@ -45,21 +71,46 @@ export function FinancialOverlayControls({
           whiteSpace: 'nowrap',
         }}
       >
-        {loading && active ? '◍ ' : value === 'revenue' ? '∿ ' : ''}{label}
+        {loading && active ? '◍ ' : entry.id === 'revenue' ? '∿ ' : ''}{shortLabel(entry)}
       </button>
     );
   };
 
+  const restActive = metric != null && !FLAGSHIP_METRICS.includes(metric);
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
       <div
         aria-label="Financial chart overlay"
-        style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 9, padding: 3 }}
+        style={{ display: 'flex', gap: 3, alignItems: 'center', background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 9, padding: 3 }}
       >
-        {button('revenue', 'Revenue', 'Plot canonical SEC revenue from the date each filing became public')}
-        {button('trailing_pe', 'P/E', 'Plot split-adjusted price divided by then-known TTM diluted EPS')}
+        {flagship.map(button)}
+        {rest.length > 0 && (
+          <select
+            aria-label="More financial overlays"
+            value={restActive ? metric ?? '' : ''}
+            onChange={(event) => onMetric(event.target.value || null)}
+            style={{
+              cursor: 'pointer',
+              border: `1px solid ${restActive ? 'rgba(90,143,199,.45)' : MM.border}`,
+              background: restActive ? 'rgba(90,143,199,.12)' : '#050506',
+              color: restActive ? '#8fb8e8' : MM.muted,
+              borderRadius: 7,
+              padding: '4px 6px',
+              font: '600 9.5px Inter',
+              letterSpacing: '.04em',
+              maxWidth: 150,
+            }}
+          >
+            <option value="">{restActive && loading ? '◍ More…' : 'More…'}</option>
+            {rest.map((entry) => (
+              <option key={entry.id} value={entry.id}>
+                {entry.label}{entry.derived ? ' (derived)' : ''}
+              </option>
+            ))}
+          </select>
+        )}
       </div>
-      {metric === 'revenue' && (
+      {metric != null && !valuationSelected && (
         <div style={{ display: 'flex', gap: 2, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 7, padding: 2 }}>
           {FREQUENCIES.map((option) => (
             <button
@@ -86,16 +137,20 @@ export function FinancialOverlayControls({
 }
 
 export function FinancialOverlayStatus({
+  metrics,
   metric,
   state,
 }: {
+  metrics: FinancialMetricInfo[];
   metric: OverlayMetric | null;
   state: FinancialSeriesState;
 }) {
   if (!metric) return null;
-  const label = metric === 'trailing_pe' ? 'P/E' : 'Revenue';
+  const info = metrics.find((entry) => entry.id === metric) ?? null;
+  const valuation = info?.factType === 'valuation';
+  const label = info ? shortLabel(info) : metric;
   if (state.loading) {
-    return <div style={{ fontSize: 11, color: MM.dim, marginTop: 6 }}>Loading {label === 'P/E' ? 'point-in-time valuation' : 'normalized SEC history'}…</div>;
+    return <div style={{ fontSize: 11, color: MM.dim, marginTop: 6 }}>Loading {valuation ? 'point-in-time valuation' : 'normalized SEC history'}…</div>;
   }
   if (state.error) {
     return <div role="alert" style={{ fontSize: 11, color: MM.down, marginTop: 6 }}>{label} series failed: {state.error}</div>;
@@ -105,15 +160,15 @@ export function FinancialOverlayStatus({
   if (state.loaded && !plotted.length) {
     return (
       <div style={{ fontSize: 11, color: MM.dim, marginTop: 6 }}>
-        {metric === 'trailing_pe'
+        {valuation
           ? 'No positive point-in-time TTM diluted EPS is available for this issuer.'
-          : 'No canonical SEC revenue series is available for this issuer.'}
+          : `No canonical SEC ${label.toLowerCase()} series is available for this issuer.`}
       </div>
     );
   }
-  if (metric === 'trailing_pe') {
-    const payload = state.data as ValuationSeriesPayload | null;
-    const latest = [...(payload?.observations ?? [])].reverse().find((row) => row.value != null);
+  if (state.data && isValuationPayload(state.data)) {
+    const payload = state.data as ValuationSeriesPayload;
+    const latest = [...(payload.observations ?? [])].reverse().find((row) => row.value != null);
     if (!latest || latest.value == null) return null;
     const source = latest.sources?.[0];
     return (
@@ -127,19 +182,19 @@ export function FinancialOverlayStatus({
         <OverlayMetadata
           count={plotted.length}
           source={source}
-          warnings={payload?.warnings ?? []}
+          warnings={payload.warnings ?? []}
         />
       </div>
     );
   }
 
-  const payload = state.data && !('epsMetric' in state.data) ? state.data : null;
+  const payload = state.data && !isValuationPayload(state.data) ? state.data : null;
   const latest = payload?.observations[payload.observations.length - 1];
-  if (!latest) return null;
+  if (!payload || !latest) return null;
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 7 }}>
       <div style={{ fontSize: 11, color: '#8fb8e8' }}>
-        ∿ {payload.frequency.toUpperCase()} revenue · {formatFinancialValue(latest.value, latest.unit)}
+        ∿ {payload.frequency.toUpperCase()} {payload.label.toLowerCase()} · {formatFinancialValue(latest.value, latest.unit)}
         {' · '}period ended {formatFinancialDate(latest.periodEnd)}
         {' · '}known {formatFinancialDate(latest.availableAt)}
         {latest.derived ? ' · derived' : ' · reported'}
@@ -188,6 +243,12 @@ const FLAG_NOTES: Record<string, string> = {
   no_point_in_time_ttm_eps: 'No earnings figure had been filed yet at this date.',
   source_refresh_failed_using_persisted_facts:
     'SEC refresh failed; showing the last successfully stored filings.',
+  gross_profit_derived_from_cost_of_revenue:
+    'The issuer does not tag gross profit directly, so it was derived as revenue minus the '
+    + 'tagged cost of revenue.',
+  ttm_unavailable_for_weighted_average_component:
+    'Per-share components are weighted averages that cannot be summed across quarters, so no '
+    + 'TTM view exists for this metric yet.',
 };
 
 const FLAG_TONE: Record<string, string> = {
@@ -197,6 +258,7 @@ const FLAG_TONE: Record<string, string> = {
   derived_q4: MM.dim,
   multiple_concepts_available: MM.dim,
   eps_split_adjusted: MM.dim,
+  gross_profit_derived_from_cost_of_revenue: MM.dim,
 };
 
 function OverlayMetadata({

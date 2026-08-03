@@ -10,7 +10,10 @@ from uuid import uuid4
 from copenet.core.market import MarketRuntime
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
 from copenet.core.market.edgar import fetch_fundamentals, fetch_ticker_evidence
-from copenet.core.market.financials import get_financial_series
+from copenet.core.market.financials import (
+    get_financial_series,
+    supported_financial_metrics,
+)
 from copenet.core.market.ledger import ledger_report, resolve_due_claims
 from copenet.core.market.runtime import resolve_market_runtime
 from copenet.core.market.sentinel import run_morning_sweep
@@ -88,6 +91,20 @@ async def handle_market_financial_series_get(request_id: str, params: dict[str, 
                 id=request_id,
                 ok=True,
                 payload={"symbol": symbol, "series": payload},
+            )
+        )
+    )
+
+
+async def handle_market_financial_metrics_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Every metric the overlay can request, so the UI never hardcodes the list."""
+    del params, orchestrator
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"metrics": supported_financial_metrics()},
             )
         )
     )

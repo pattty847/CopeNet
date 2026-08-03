@@ -47,7 +47,7 @@ from .ledger import record_market_read_claims, record_ticker_read_claim, track_r
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
 from .price_cache import PriceCache
-from .price_history import TOTAL_RETURN
+from .price_history import SPLIT_ADJUSTED, TOTAL_RETURN
 from .signals import compute_price_signals, compute_rrg_tail
 from .webull.config import include_portfolio_context_enabled
 from .webull.context_pack import build_portfolio_context_pack
@@ -118,6 +118,22 @@ class MarketRuntime:
             logging.warning("market: %s %s cache read failed", symbol, timeframe, exc_info=True)
             return []
         return bars[-limit:] if (bars and limit) else bars
+
+    def _last_split_adjusted_close(self, symbol: str) -> float | None:
+        """Latest close on the price basis a P/E numerator requires.
+
+        The chart frames serve TOTAL_RETURN, which folds dividends into history; dividing
+        that by split-only EPS understates every trailing multiple. Same defect the
+        overlay path already fixed — the summary card must use the traded price too.
+        """
+        try:
+            bars = self.prices.bars(symbol, timeframe="weekly", basis=SPLIT_ADJUSTED)
+            return float(bars[-1].c) if bars else None
+        except Exception:
+            logging.warning(
+                "market: %s split-adjusted close unavailable", symbol, exc_info=True
+            )
+            return None
 
     def _weekly_frame(self, symbol: str) -> pd.DataFrame:
         """Weekly benchmark series off the shared cache.
@@ -305,7 +321,11 @@ class MarketRuntime:
         if fundamentals is not None:
             fundamentals = {
                 **fundamentals,
-                **_trailing_eps_and_pe(fundamentals, weekly_frame, symbol),
+                **_trailing_eps_and_pe(
+                    fundamentals,
+                    self._last_split_adjusted_close(symbol),
+                    symbol,
+                ),
             }
         query_name = asset.name if asset else symbol
         try:
@@ -753,7 +773,7 @@ def _signal_rows(signals: dict[str, Any]) -> list[SignalRow]:
 
 def _trailing_eps_and_pe(
     fundamentals: dict[str, Any],
-    weekly_frame: pd.DataFrame,
+    last_price: float | None,
     symbol: str,
 ) -> dict[str, Any]:
     """Use CopeTech's canonical TTM diluted EPS for the latest summary valuation."""
@@ -783,12 +803,8 @@ def _trailing_eps_and_pe(
             else:
                 eps_ttm = None
     pe_ttm = None
-    if eps_ttm is not None and eps_ttm > 0 and not weekly_frame.empty:
-        try:
-            last_price = float(weekly_frame["close"].iloc[-1])
-            pe_ttm = last_price / eps_ttm
-        except (TypeError, ValueError, IndexError, KeyError):
-            pe_ttm = None
+    if eps_ttm is not None and eps_ttm > 0 and last_price is not None and last_price > 0:
+        pe_ttm = last_price / eps_ttm
     return {
         "epsTtm": eps_ttm,
         "epsTtmReported": reported_eps_ttm,

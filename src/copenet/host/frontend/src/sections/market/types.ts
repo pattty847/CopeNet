@@ -343,6 +343,17 @@ export interface TickerFundamentals {
 // ---------- canonical financial series ----------
 export type FinancialFrequency = 'quarterly' | 'annual' | 'ttm';
 
+/** One entry from market.financial.metrics.list — everything the overlay can plot. */
+export interface FinancialMetricInfo {
+  id: string;
+  label: string;
+  factType: 'duration' | 'instant' | 'derived' | 'valuation';
+  validUnits: string[];
+  aggregation: string;
+  derived?: boolean;
+  components?: string[];
+}
+
 export interface FinancialSeriesSource {
   taxonomy: string;
   concept: string;
@@ -386,6 +397,10 @@ export interface FinancialSeriesPayload {
   rawFactCount: number;
   observations: FinancialSeriesObservation[];
   warnings: string[];
+  /** Payload discriminator set by the backend; older cached payloads may lack it. */
+  kind?: 'financial';
+  derived?: boolean;
+  components?: string[];
 }
 
 export interface ValuationSeriesObservation {
@@ -423,9 +438,19 @@ export interface ValuationSeriesPayload {
   rawFactCount: number;
   observations: ValuationSeriesObservation[];
   warnings: string[];
+  /** Payload discriminator set by the backend; older cached payloads may lack it. */
+  kind?: 'valuation';
 }
 
 export type OverlaySeriesPayload = FinancialSeriesPayload | ValuationSeriesPayload;
+
+/** Single source of truth for telling the two overlay payloads apart. Prefers the
+ *  backend's kind tag and falls back to key-sniffing for payloads that predate it. */
+export function isValuationPayload(payload: OverlaySeriesPayload): payload is ValuationSeriesPayload {
+  if (payload.kind === 'valuation') return true;
+  if (payload.kind === 'financial') return false;
+  return 'epsMetric' in payload;
+}
 
 // ---------- forward ledger (model calls scored at horizon) ----------
 /** Claim rows come from the backend's dataclass dump — snake_case keys, unlike the rest

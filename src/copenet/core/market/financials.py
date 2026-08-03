@@ -23,6 +23,16 @@ def default_market_dir() -> Path:
     return default_sessions_dir().parent / "market"
 
 
+def _edgar_cache_dir() -> str:
+    """Pin the SEC fact ledger under the market root instead of the process CWD."""
+    return str(default_market_dir() / "edgar")
+
+
+# Metrics whose numerator is a market price rather than a filed fact. They need
+# the price cache and the valuation engine instead of the plain series path.
+VALUATION_METRICS = frozenset({"trailing_pe"})
+
+
 async def get_financial_series(
     *,
     symbol: str,
@@ -39,9 +49,10 @@ async def get_financial_series(
     normalized = symbol.strip().upper()
     if not normalized:
         raise ValueError("symbol is required")
-    if metric == "trailing_pe":
+    if metric in VALUATION_METRICS:
         return await get_valuation_series(
             symbol=normalized,
+            metric=metric,
             as_of=as_of,
             refresh=refresh,
             include_provenance=include_provenance,
@@ -57,6 +68,7 @@ async def get_financial_series(
     async with managed_sec_fetcher(
         EdgarClient,
         user_agent=SEC_API_USER_AGENT,
+        cache_dir=_edgar_cache_dir(),
     ) as client:
         payload = await client.financials.series(
             normalized,
@@ -71,12 +83,16 @@ async def get_financial_series(
             include_provenance=include_provenance,
             split_events=split_events,
         )
-    return _point_in_time_financial_payload(payload, as_of=as_of)
+    filtered = _point_in_time_financial_payload(payload, as_of=as_of)
+    if filtered is not None:
+        filtered["kind"] = "financial"
+    return filtered
 
 
 async def get_valuation_series(
     *,
     symbol: str,
+    metric: str = "trailing_pe",
     as_of: str | None = None,
     refresh: bool = False,
     include_provenance: bool = True,
@@ -86,6 +102,8 @@ async def get_valuation_series(
     normalized = symbol.strip().upper()
     if not normalized:
         raise ValueError("symbol is required")
+    if metric != "trailing_pe":
+        raise ValueError(f"unsupported valuation metric {metric!r}")
     try:
         from copetech_sec import EdgarClient
     except ImportError:
@@ -99,6 +117,7 @@ async def get_valuation_series(
     async with managed_sec_fetcher(
         EdgarClient,
         user_agent=SEC_API_USER_AGENT,
+        cache_dir=_edgar_cache_dir(),
     ) as client:
         payload = await client.financials.valuation(
             normalized,
@@ -109,7 +128,12 @@ async def get_valuation_series(
             refresh=refresh,
             include_provenance=include_provenance,
         )
-    return _point_in_time_valuation_payload(_trim_leading_unpriced(payload), as_of=as_of)
+    filtered = _point_in_time_valuation_payload(
+        _trim_leading_unpriced(payload), as_of=as_of
+    )
+    if filtered is not None:
+        filtered["kind"] = "valuation"
+    return filtered
 
 
 def _trim_leading_unpriced(payload: dict[str, Any] | None) -> dict[str, Any] | None:
@@ -133,7 +157,7 @@ def _trim_leading_unpriced(payload: dict[str, Any] | None) -> dict[str, Any] | N
         ),
         None,
     )
-    if not first_priced:
+    if first_priced is None or first_priced == 0:
         return payload
     trimmed = dict(payload)
     trimmed["observations"] = observations[first_priced:]
@@ -256,8 +280,19 @@ def _valuation_price_inputs(
 
 
 def supported_financial_metrics() -> list[dict[str, Any]]:
+    """Base and derived SEC metrics plus CopeNet's own price-backed valuation metrics."""
     try:
-        from copetech_sec.financial_metrics import list_supported_metrics
+        from copetech_sec.financial_series_service import FinancialSeriesService
     except ImportError:
         return []
-    return list_supported_metrics()
+    return FinancialSeriesService.supported_metrics() + [
+        {
+            "id": "trailing_pe",
+            "label": "Trailing P/E",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["diluted_eps", "price"],
+        }
+    ]

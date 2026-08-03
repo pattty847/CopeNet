@@ -29,7 +29,7 @@ import {
 } from 'lightweight-charts';
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { FinancialOverlayPoint } from './financialOverlay';
-import { formatFinancialValue, splitFinancialOverlaySegments } from './financialOverlay';
+import { overlayAxisFormatter, splitFinancialOverlaySegments } from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 
 // ---- clustering thresholds ----
@@ -359,6 +359,8 @@ export function CandleChart({
   height = 380,
   financialOverlay,
   financialOverlayKind,
+  financialOverlayUnit,
+  financialOverlayValuation = false,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -367,7 +369,12 @@ export function CandleChart({
   height?: number;
   /** Filing-date-aligned financial observations on their own left-side scale. */
   financialOverlay?: FinancialOverlayPoint[];
-  financialOverlayKind?: 'revenue' | 'trailing_pe';
+  /** Metric id — any entry from market.financial.metrics.list. */
+  financialOverlayKind?: string;
+  /** Unit the overlay observations carry (USD, ratio, USD/shares, shares). */
+  financialOverlayUnit?: string;
+  /** Valuation series step per price bar; financial series step per filing. */
+  financialOverlayValuation?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -729,23 +736,17 @@ export function CandleChart({
       ...(financialRef.current ? [financialRef.current] : []),
       ...financialSegmentRefs.current,
     ];
+    const formatter = overlayAxisFormatter(financialOverlayUnit, financialOverlayValuation);
+    const minMove = financialOverlayValuation || financialOverlayUnit === 'ratio' || financialOverlayUnit === 'USD/shares'
+      ? 0.001
+      : 1;
     series.forEach((item, index) => {
       item.applyOptions({
-        color: financialOverlayKind === 'trailing_pe' ? '#d9ad67' : '#8fb8e8',
-        lineType: financialOverlayKind === 'trailing_pe' ? LineType.Simple : LineType.WithSteps,
-        pointMarkersVisible: financialOverlayKind !== 'trailing_pe',
+        color: financialOverlayValuation ? '#d9ad67' : '#8fb8e8',
+        lineType: financialOverlayValuation ? LineType.Simple : LineType.WithSteps,
+        pointMarkersVisible: !financialOverlayValuation,
         lastValueVisible: index === series.length - 1,
-        priceFormat: financialOverlayKind === 'trailing_pe'
-          ? {
-              type: 'custom',
-              minMove: 0.1,
-              formatter: (value: number) => `${value.toFixed(1)}×`,
-            }
-          : {
-              type: 'custom',
-              minMove: 1,
-              formatter: (value: number) => formatFinancialValue(value),
-            },
+        priceFormat: { type: 'custom', minMove, formatter },
       });
     });
     // Toggling the overlay shows/hides the left axis, which slides the pane sideways.
@@ -753,7 +754,7 @@ export function CandleChart({
     // chart redraws, so invalidate and let the next frame reposition against it.
     transformKeyRef.current = '';
     requestAnimationFrame(() => syncRef.current());
-  }, [financialOverlayKind, financialOverlay]);
+  }, [financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
     const chart = chartRef.current;
