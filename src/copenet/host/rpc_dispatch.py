@@ -6,50 +6,91 @@ from typing import Any, Awaitable, Callable
 
 from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
-from .rpc_catalog import (
-    handle_briefing_get,
-    handle_memory_approve,
-    handle_memory_archive,
-    handle_memory_discard,
+from .rpc_catalog_core import (
+    handle_prompts_list,
+    handle_prompts_optimize,
+    handle_providers_list,
+    handle_models_list,
+    handle_tools_list,
+)
+from .rpc_briefing import handle_briefing_get
+from .rpc_persona import (
+    handle_persona_get,
+    handle_persona_settings_get,
+    handle_persona_settings_update,
+    handle_persona_context_get,
+    handle_persona_list,
+    handle_persona_create,
+    handle_persona_select,
+    handle_persona_read_file,
+    handle_persona_write_file,
+    handle_persona_flavor_draft,
+    handle_persona_flavor_save,
+)
+from .rpc_memory import (
     handle_memory_list,
     handle_memory_upsert,
+    handle_memory_archive,
+    handle_memory_approve,
+    handle_memory_discard,
+)
+from .rpc_user_notes import (
+    handle_user_notes_list,
     handle_user_notes_approve,
     handle_user_notes_discard,
-    handle_user_notes_list,
+)
+from .rpc_runtime import (
+    handle_runtime_context_get,
+    handle_runtime_context_resolve,
+    handle_runtime_workspace_browse,
+    handle_runtime_workspace_set,
+)
+from .rpc_provider_auth import (
+    handle_provider_auth_status,
+    handle_provider_auth_begin_login,
+    handle_provider_auth_complete_login,
+    handle_provider_auth_logout,
+)
+from .rpc_messaging import (
     handle_messaging_config_get,
     handle_messaging_config_update,
-    handle_messaging_destinations_delete,
+    handle_messaging_test,
     handle_messaging_destinations_list,
     handle_messaging_destinations_upsert,
-    handle_messaging_routes_delete,
+    handle_messaging_destinations_delete,
     handle_messaging_routes_list,
-    handle_messaging_routes_resolve,
     handle_messaging_routes_upsert,
-    handle_messaging_test,
+    handle_messaging_routes_delete,
+    handle_messaging_routes_resolve,
+)
+from .rpc_market import (
     handle_market_brief_get,
     handle_market_brief_run,
-    handle_market_calendar_get,
-    handle_market_yield_curve_get,
     handle_market_ledger_get,
-    handle_market_ticker_fundamentals_get,
-    handle_market_financial_series_get,
     handle_market_dashboard_get,
     handle_market_interpret,
     handle_market_read_get,
     handle_market_refresh,
     handle_market_ticker_evidence_get,
+    handle_market_ticker_fundamentals_get,
+    handle_market_financial_metrics_list,
+    handle_market_financial_series_get,
     handle_market_ticker_get,
     handle_market_universe_get,
+    handle_market_backtest_run,
+    handle_market_backtest_stress_test,
+)
+from .rpc_market_webull import (
     handle_market_webull_account_select,
     handle_market_webull_accounts,
     handle_market_webull_auth,
-    handle_market_webull_status,
-    handle_market_webull_sync,
     handle_market_webull_orders_sync,
     handle_market_webull_pnl_get,
+    handle_market_webull_status,
+    handle_market_webull_sync,
     handle_market_webull_watchlists_import,
-    handle_market_backtest_run,
-    handle_market_backtest_stress_test,
+)
+from .rpc_market_watchlist import (
     handle_market_watchlist_get,
     handle_market_watchlist_add,
     handle_market_watchlist_remove,
@@ -57,31 +98,9 @@ from .rpc_catalog import (
     handle_market_watchlist_list_delete,
     handle_market_watchlist_list_select,
     handle_market_symbols_search,
-    handle_models_list,
-    handle_persona_context_get,
-    handle_persona_flavor_draft,
-    handle_persona_flavor_save,
-    handle_persona_create,
-    handle_persona_get,
-    handle_persona_list,
-    handle_persona_read_file,
-    handle_persona_select,
-    handle_persona_settings_get,
-    handle_persona_settings_update,
-    handle_persona_write_file,
-    handle_prompts_list,
-    handle_prompts_optimize,
-    handle_provider_auth_begin_login,
-    handle_provider_auth_complete_login,
-    handle_provider_auth_logout,
-    handle_provider_auth_status,
-    handle_providers_list,
-    handle_runtime_context_get,
-    handle_runtime_context_resolve,
-    handle_runtime_workspace_browse,
-    handle_runtime_workspace_set,
-    handle_tools_list,
 )
+from .rpc_market_calendar import handle_market_calendar_get
+from .rpc_market_yield_curve import handle_market_yield_curve_get
 from .rpc_chat import handle_chat_abort, handle_chat_history, handle_chat_send
 from .rpc_fleet import handle_fleet_archive, handle_fleet_create, handle_fleet_get, handle_fleet_list, handle_fleet_send
 from .rpc_nasa import handle_nasa_apod, handle_nasa_apod_list
@@ -291,6 +310,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_ticker_fundamentals_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.financial.series.get":
         await handle_market_financial_series_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.financial.metrics.list":
+        await handle_market_financial_metrics_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.universe.get":
         await handle_market_universe_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.refresh":
