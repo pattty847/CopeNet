@@ -375,6 +375,24 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 // ToolResultRow — single completed tool result
 // ---------------------------------------------------------------------------
 
+/** How much of the body the inline box is showing, when it can be known.
+ *  Null when the preview carries no total to compare against. */
+export function clipNotice(part: ToolResultPart): string | null {
+  const preview = part.preview;
+  if (!preview) return null;
+  if (preview.type === 'raw' && preview.truncated && preview.fullChars) {
+    return `Showing ${preview.text.length.toLocaleString()} of ${preview.fullChars.toLocaleString()} chars`;
+  }
+  if (preview.type === 'repo_search' && preview.totalMatches != null && preview.matches.length < preview.totalMatches) {
+    return `Showing ${preview.matches.length} of ${preview.totalMatches} matches`;
+  }
+  if (preview.type === 'file_read' && preview.totalLines != null && preview.lines.length < preview.totalLines) {
+    return `Showing ${preview.lines.length} of ${preview.totalLines} lines`;
+  }
+  if (preview.type === 'diff' && preview.truncated) return 'Diff truncated';
+  return null;
+}
+
 /** True when there is genuinely more to read than the inline expansion shows.
  *
  *  Two sources: the result overflowed into a `tool_output` artifact, or the
@@ -411,6 +429,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
   const failed = !part.ok;
   const hasBody = !!part.preview || (!part.ok && !!part.error);
   const hasMore = hasMoreThanShown(part);
+  const notice = clipNotice(part);
 
   return (
     <div>
@@ -447,14 +466,23 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
         </div>
       )}
 
-      {expanded && hasMore && (
-        <button
-          type="button"
-          onClick={() => setInspectorTarget({ kind: 'tool', tool: part })}
-          className="mt-1 px-1 text-[10.5px] text-operator-muted/70 transition-colors hover:text-operator-accent"
-        >
-          Inspect full output →
-        </button>
+      {/* Expand answers "what did it return"; Inspect answers "what was this call" —
+          arguments, policy decision, scope, evidence role, the artifact. The second
+          question is always worth a door, so this is never hidden. Only the label
+          changes, to say whether there is more OUTPUT behind it. */}
+      {expanded && (
+        <div className="mt-1 flex items-baseline gap-2 px-1">
+          {notice && <span className="text-[10px] text-amber-400/80">{notice}</span>}
+          <button
+            type="button"
+            onClick={() => setInspectorTarget({ kind: 'tool', tool: part })}
+            className={`text-[10.5px] transition-colors hover:text-operator-accent ${
+              hasMore ? 'text-operator-accent/80' : 'text-operator-muted/60'
+            }`}
+          >
+            {hasMore ? 'Inspect full output →' : 'Inspect call →'}
+          </button>
+        </div>
       )}
     </div>
   );
