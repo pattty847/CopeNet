@@ -352,6 +352,8 @@ export interface FinancialMetricInfo {
   aggregation: string;
   derived?: boolean;
   components?: string[];
+  /** When present, the only frequencies this metric can serve (e.g. ROIC: ttm). */
+  frequencies?: FinancialFrequency[];
 }
 
 export interface FinancialSeriesSource {

@@ -6,7 +6,7 @@ import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
 import { observationTime, snapOverlayToCandles } from './financialOverlay';
-import { isValuationMetric, useFinancialMetrics } from './useFinancialMetrics';
+import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinancialMetrics';
 import { isValuationPayload } from './types';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
 import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
@@ -346,10 +346,19 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
   const [overlayFrequency, setOverlayFrequency] = useState<FinancialFrequency>('quarterly');
   const overlayMetrics = useFinancialMetrics();
   const overlayIsValuation = isValuationMetric(overlayMetrics, overlayMetric);
+  // A metric that declares its supported frequencies (ROIC: ttm only) clamps
+  // the selector — asking the backend for an unsupported cadence just returns
+  // an empty series with a warning nobody reads.
+  const overlayFrequencyChoices = metricInfo(overlayMetrics, overlayMetric)?.frequencies;
+  const effectiveOverlayFrequency: FinancialFrequency = overlayIsValuation
+    ? 'ttm'
+    : overlayFrequencyChoices && !overlayFrequencyChoices.includes(overlayFrequency)
+      ? overlayFrequencyChoices[0]
+      : overlayFrequency;
   const overlaySeries = useFinancialSeries(
     symbol,
     overlayMetric ?? 'revenue',
-    overlayIsValuation ? 'ttm' : overlayFrequency,
+    effectiveOverlayFrequency,
     overlayMetric != null,
   );
   const [watchBusy, setWatchBusy] = useState(false);
@@ -433,7 +442,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
             <FinancialOverlayControls
               metrics={overlayMetrics}
               metric={overlayMetric}
-              frequency={overlayFrequency}
+              frequency={effectiveOverlayFrequency}
               loading={overlaySeries.loading}
               onMetric={setOverlayMetric}
               onFrequency={setOverlayFrequency}

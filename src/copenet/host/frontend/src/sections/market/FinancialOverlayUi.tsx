@@ -122,7 +122,9 @@ export function FinancialOverlayControls({
       </div>
       {metric != null && !valuationSelected && (
         <div style={{ display: 'flex', gap: 2, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 7, padding: 2 }}>
-          {FREQUENCIES.map((option) => (
+          {FREQUENCIES.filter(
+            (option) => !selected?.frequencies || selected.frequencies.includes(option.value),
+          ).map((option) => (
             <button
               key={option.value}
               onClick={() => onFrequency(option.value)}
