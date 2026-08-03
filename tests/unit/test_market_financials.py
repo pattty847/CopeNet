@@ -138,6 +138,42 @@ async def test_trailing_pe_metric_dispatches_to_valuation_service(monkeypatch: p
 
 
 @pytest.mark.asyncio
+async def test_every_valuation_metric_dispatches_with_its_own_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[str] = []
+
+    async def fake_get_valuation_series(**kwargs):
+        seen.append(kwargs["metric"])
+        return {"symbol": "NVDA", "metric": kwargs["metric"], "observations": []}
+
+    monkeypatch.setattr(
+        market_financials_service,
+        "get_valuation_series",
+        fake_get_valuation_series,
+    )
+
+    for metric in sorted(market_financials_service.VALUATION_METRICS):
+        payload = await market_financials_service.get_financial_series(
+            symbol="NVDA",
+            metric=metric,
+        )
+        assert payload is not None and payload["metric"] == metric
+
+    assert seen == sorted(market_financials_service.VALUATION_METRICS)
+
+
+def test_valuation_eligibility_covers_generic_multiple_provenance() -> None:
+    cutoff = pd.Timestamp("2026-03-01", tz="UTC")
+    eligible = market_financials_service._valuation_observation_is_eligible
+    base = {"timestamp": "2026-02-01"}
+
+    assert eligible({**base, "denominatorAvailableAt": "2026-01-15"}, cutoff)
+    # SEC inputs filed after the price bar are lookahead, whatever the multiple.
+    assert not eligible({**base, "denominatorAvailableAt": "2026-02-15"}, cutoff)
+    assert not eligible({**base, "sharesAvailableAt": "2026-02-15"}, cutoff)
+    assert not eligible({**base, "epsAvailableAt": "2026-02-15"}, cutoff)
+
+
+@pytest.mark.asyncio
 async def test_financial_series_as_of_uses_available_at_and_preserves_provenance(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

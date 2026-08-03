@@ -1,7 +1,7 @@
 # Fundamentals Expansion — Audit & Implementation Proposal
 
 Date: 2026-08-02
-Status: Phase 1 implemented (see status section at the end)
+Status: Phases 1 and 2 implemented (see status sections at the end)
 Companion to: `FINANCIAL_SERIES.md` (existing revenue/P-E pipeline design)
 
 ## 1. Assessment of the current system
@@ -229,3 +229,45 @@ Deliberately deferred from the first batch:
   FCF and sparse quarterly observations work today).
 - `useFinancialSeries` cache invalidation / refresh button (unchanged
   behavior: cached for the page lifetime).
+
+## 9. Phase 2 implementation status (2026-08-03)
+
+Landed in CopeTech-Edgar:
+- **YTD-differencing cadence** (`ytd_cadence` on `MetricDefinition`): the
+  resolver accepts six-month (150–200d) and nine-month (240–300d) cumulative
+  windows and derives standalone Q2/Q3 as YTDn − YTDn−1
+  (`_add_quarters_derived_from_ytd`, flag `derived_from_ytd`,
+  `implausible_ytd_residual` on negative residuals against positive
+  cumulatives). Derived quarters never feed further derivations; Q4-from-annual
+  and 4-quarter TTM now compose on top. Verified on real AAPL facts: quarterly
+  OCF went from 18 sparse points to 70 full-coverage quarters; TTM OCF
+  $140.2B / TTM capex $11.1B → TTM FCF ≈ $129B, matching filings.
+- New base metrics `sbc` and `dep_amort` (both ytd_cadence), composites
+  `sbc_burden` and `capex_intensity`.
+- **Generic trailing-multiple engine** (`derive_trailing_multiple_series`):
+  value = split-adjusted price × point-in-time shares ÷ latest TTM denominator
+  known at the bar. Shares are the most recent diluted weighted-average window
+  (`build_share_windows`, with the proven NI ÷ EPS fallback for issuers that
+  tag counts only dimensionally), restated onto the current split basis by
+  multiplying through every split after the filing. Values are suppressed —
+  never silently wrong — on unverified split history, non-positive
+  denominators, or fundamentals older than 180 days (`stale_fundamentals`).
+  Served as `trailing_ps` (TTM revenue) and `trailing_pfcf` (TTM FCF resolved
+  through the derived-series layer), via
+  `client.financials.valuation(metric=...)`.
+
+Landed in CopeNet:
+- `VALUATION_METRICS` now {trailing_pe, trailing_ps, trailing_pfcf}; the
+  metric is forwarded to the valuation client; the point-in-time boundary
+  filter rejects rows whose `denominatorAvailableAt`/`sharesAvailableAt`/
+  `epsAvailableAt` postdates the price bar; `_trim_leading_unpriced`
+  recognizes generic-multiple provenance.
+- Metrics list gains the two new valuation entries; they appear in the overlay
+  dropdown automatically. Valuation status line generalized (P/E keeps its
+  EPS detail; P/S / P/FCF show TTM denominator, share count, and known-date);
+  flag notes added for the new quality flags.
+
+Still deferred (Phase 3+): instant-fact support (net debt, working capital,
+P/B, market-cap series, FCF yield, EV/x), true point-in-time DEI share counts
+(the multiples currently stand weighted-average shares in for shares
+outstanding — documented on every observation), ROIC, interest coverage.

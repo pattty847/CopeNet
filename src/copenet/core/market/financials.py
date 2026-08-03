@@ -30,7 +30,7 @@ def _edgar_cache_dir() -> str:
 
 # Metrics whose numerator is a market price rather than a filed fact. They need
 # the price cache and the valuation engine instead of the plain series path.
-VALUATION_METRICS = frozenset({"trailing_pe"})
+VALUATION_METRICS = frozenset({"trailing_pe", "trailing_ps", "trailing_pfcf"})
 
 
 async def get_financial_series(
@@ -97,12 +97,12 @@ async def get_valuation_series(
     refresh: bool = False,
     include_provenance: bool = True,
 ) -> dict[str, Any] | None:
-    """Build canonical P/E from split-adjusted Yahoo prices and point-in-time SEC EPS."""
+    """Build a trailing multiple from split-adjusted prices and point-in-time SEC facts."""
 
     normalized = symbol.strip().upper()
     if not normalized:
         raise ValueError("symbol is required")
-    if metric != "trailing_pe":
+    if metric not in VALUATION_METRICS:
         raise ValueError(f"unsupported valuation metric {metric!r}")
     try:
         from copetech_sec import EdgarClient
@@ -122,6 +122,7 @@ async def get_valuation_series(
         payload = await client.financials.valuation(
             normalized,
             price_observations=prices,
+            metric=metric,
             split_events=split_events,
             price_source="yfinance",
             price_basis="split_adjusted",
@@ -153,7 +154,11 @@ def _trim_leading_unpriced(payload: dict[str, Any] | None) -> dict[str, Any] | N
         (
             index
             for index, observation in enumerate(observations)
-            if isinstance(observation, dict) and observation.get("epsAvailableAt")
+            if isinstance(observation, dict)
+            and any(
+                observation.get(key)
+                for key in ("epsAvailableAt", "denominatorAvailableAt")
+            )
         ),
         None,
     )
@@ -235,15 +240,16 @@ def _valuation_observation_is_eligible(observation: Any, cutoff: pd.Timestamp) -
     )
     if pd.isna(timestamp) or timestamp > cutoff:
         return False
-    raw_eps_available_at = observation.get("epsAvailableAt")
-    if raw_eps_available_at is None:
-        return True
-    eps_available_at = pd.to_datetime(
-        raw_eps_available_at,
-        utc=True,
-        errors="coerce",
-    )
-    return not pd.isna(eps_available_at) and eps_available_at <= timestamp
+    # Reject any row whose SEC inputs postdate its own price bar, whatever the
+    # multiple: EPS for P/E, TTM denominator and share count for P/S and P/FCF.
+    for key in ("epsAvailableAt", "denominatorAvailableAt", "sharesAvailableAt"):
+        raw_available_at = observation.get(key)
+        if raw_available_at is None:
+            continue
+        available_at = pd.to_datetime(raw_available_at, utc=True, errors="coerce")
+        if pd.isna(available_at) or available_at > timestamp:
+            return False
+    return True
 
 
 def _valuation_price_inputs(
@@ -294,5 +300,23 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "aggregation": "composite",
             "derived": True,
             "components": ["diluted_eps", "price"],
-        }
+        },
+        {
+            "id": "trailing_ps",
+            "label": "Trailing P/S",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["revenue", "diluted_shares", "price"],
+        },
+        {
+            "id": "trailing_pfcf",
+            "label": "Trailing P/FCF",
+            "factType": "valuation",
+            "validUnits": ["ratio"],
+            "aggregation": "composite",
+            "derived": True,
+            "components": ["operating_cash_flow", "capex", "diluted_shares", "price"],
+        },
     ]

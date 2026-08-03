@@ -16,9 +16,14 @@ const FREQUENCIES: Array<{ value: FinancialFrequency; label: string }> = [
   { value: 'annual', label: 'Annual' },
 ];
 
+const SHORT_LABELS: Record<string, string> = {
+  trailing_pe: 'P/E',
+  trailing_ps: 'P/S',
+  trailing_pfcf: 'P/FCF',
+};
+
 function shortLabel(metric: FinancialMetricInfo): string {
-  if (metric.id === 'trailing_pe') return 'P/E';
-  return metric.label;
+  return SHORT_LABELS[metric.id] ?? metric.label;
 }
 
 export function FinancialOverlayControls({
@@ -161,7 +166,7 @@ export function FinancialOverlayStatus({
     return (
       <div style={{ fontSize: 11, color: MM.dim, marginTop: 6 }}>
         {valuation
-          ? 'No positive point-in-time TTM diluted EPS is available for this issuer.'
+          ? `No positive point-in-time trailing fundamentals are available to draw ${label} for this issuer.`
           : `No canonical SEC ${label.toLowerCase()} series is available for this issuer.`}
       </div>
     );
@@ -171,13 +176,31 @@ export function FinancialOverlayStatus({
     const latest = [...(payload.observations ?? [])].reverse().find((row) => row.value != null);
     if (!latest || latest.value == null) return null;
     const source = latest.sources?.[0];
+    const multiple = new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(latest.value);
+    const detail = latest.epsAvailableAt != null || latest.epsTtm != null
+      ? (
+        <>
+          {' · '}TTM diluted EPS {formatFinancialValue(latest.epsTtmAdjusted ?? latest.epsTtm ?? 0, 'USD/shares')}
+          {latest.epsAvailableAt ? ` · known ${formatFinancialDate(latest.epsAvailableAt)}` : ''}
+        </>
+      )
+      : (
+        <>
+          {latest.denominatorTtm != null
+            ? <>{' · '}TTM {payload.denominatorMetric ?? 'denominator'} {formatFinancialValue(latest.denominatorTtm, 'USD')}</>
+            : null}
+          {latest.sharesOutstanding != null
+            ? <>{' · '}{formatFinancialValue(latest.sharesOutstanding, 'shares')}</>
+            : null}
+          {latest.denominatorAvailableAt ? ` · known ${formatFinancialDate(latest.denominatorAvailableAt)}` : ''}
+        </>
+      );
     return (
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginTop: 7 }}>
         <div style={{ fontSize: 11, color: '#8fb8e8' }}>
-          P/E {new Intl.NumberFormat(undefined, { maximumFractionDigits: 1 }).format(latest.value)}×
+          {label} {multiple}×
           {' · '}price {formatFinancialValue(latest.price, 'USD/shares')}
-          {' · '}TTM diluted EPS {formatFinancialValue(latest.epsTtmAdjusted ?? latest.epsTtm ?? 0, 'USD/shares')}
-          {latest.epsAvailableAt ? ` · known ${formatFinancialDate(latest.epsAvailableAt)}` : ''}
+          {detail}
         </div>
         <OverlayMetadata
           count={plotted.length}
@@ -249,6 +272,19 @@ const FLAG_NOTES: Record<string, string> = {
   ttm_unavailable_for_weighted_average_component:
     'Per-share components are weighted averages that cannot be summed across quarters, so no '
     + 'TTM view exists for this metric yet.',
+  derived_from_ytd:
+    'Cash-flow statements report Q2/Q3 only as cumulative year-to-date figures, so this '
+    + 'standalone quarter was derived by subtracting the preceding cumulative window.',
+  implausible_ytd_residual:
+    'Differencing the cumulative windows produced a negative quarter against positive '
+    + 'cumulatives — treat with suspicion.',
+  stale_fundamentals:
+    'The newest SEC input behind this multiple is over 180 days old, so no ratio is drawn.',
+  non_positive_ttm_denominator:
+    'Trailing revenue or cash flow was zero or negative, so this multiple has no meaning here.',
+  no_point_in_time_ttm_denominator:
+    'No trailing-twelve-month figure had been filed yet at this date.',
+  no_point_in_time_share_count: 'No share count had been filed yet at this date.',
 };
 
 const FLAG_TONE: Record<string, string> = {

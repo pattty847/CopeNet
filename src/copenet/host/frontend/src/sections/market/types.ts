@@ -415,24 +415,34 @@ export interface ValuationSeriesObservation {
     timestamp: string;
     basis: 'split_adjusted';
   };
-  epsTtm: number | null;
-  epsTtmAdjusted: number | null;
-  epsSplitAdjustmentFactor: number | null;
-  epsAvailableAt: string | null;
-  epsPeriodEnd: string | null;
+  // Trailing P/E payloads carry the EPS fields; generic market-cap multiples
+  // (P/S, P/FCF) carry the denominator/shares fields instead.
+  epsTtm?: number | null;
+  epsTtmAdjusted?: number | null;
+  epsSplitAdjustmentFactor?: number | null;
+  epsAvailableAt?: string | null;
+  epsPeriodEnd?: string | null;
+  denominatorTtm?: number | null;
+  denominatorAvailableAt?: string | null;
+  denominatorPeriodEnd?: string | null;
+  sharesOutstanding?: number | null;
+  sharesAvailableAt?: string | null;
+  sharesBasis?: 'split_adjusted';
   qualityFlags: string[];
   sources: FinancialSeriesSource[];
 }
 
 export interface ValuationSeriesPayload {
   symbol: string;
-  metric: 'trailing_pe';
-  label: 'Trailing P/E';
+  metric: string;
+  label: string;
   frequency: 'price';
   alignment: 'price_timestamp';
   priceBasis: 'split_adjusted';
-  epsMetric: 'diluted_eps';
-  epsFrequency: 'ttm';
+  epsMetric?: 'diluted_eps';
+  epsFrequency?: 'ttm';
+  denominatorMetric?: string;
+  denominatorFrequency?: 'ttm';
   normalizationVersion: number;
   retrievedAt?: string | null;
   rawFactCount: number;
