@@ -19,8 +19,9 @@ def test_tool_execution_event_payload_includes_files_read_preview() -> None:
     )
 
     assert payload["preview"] == {
+        "type": "file_read",
         "path": "README.md",
-        "content": "# Title\nhello",
+        "lines": ["# Title", "hello"],
         "startLine": 1,
         "totalLines": 2,
     }
@@ -35,8 +36,9 @@ def test_tool_execution_event_payload_includes_files_read_preview() -> None:
         "kind": "file_read",
         "target": "README.md",
         "preview": {
+            "type": "file_read",
             "path": "README.md",
-            "content": "# Title\nhello",
+            "lines": ["# Title", "hello"],
             "startLine": 1,
             "totalLines": 2,
         },
@@ -55,8 +57,9 @@ def test_files_read_preview_preserves_ranged_read_start_line() -> None:
     ).to_event_payload()
 
     assert payload["preview"] == {
+        "type": "file_read",
         "path": "README.md",
-        "content": "alpha\nbeta",
+        "lines": ["alpha", "beta"],
         "startLine": 41,
         "totalLines": 2,
     }
@@ -112,8 +115,9 @@ def test_tool_execution_event_payload_includes_grouped_batch_members() -> None:
             "summary": "Read file docs/tests/TEST_FILE.md.",
             "error": None,
             "preview": {
+                "type": "file_read",
                 "path": "docs/tests/TEST_FILE.md",
-                "content": "alpha\nbeta",
+                "lines": ["alpha", "beta"],
                 "startLine": 1,
                 "totalLines": 2,
             },
@@ -124,8 +128,9 @@ def test_tool_execution_event_payload_includes_grouped_batch_members() -> None:
             "summary": "Read file docs/tests/TEST_FILE_2.md.",
             "error": None,
             "preview": {
+                "type": "file_read",
                 "path": "docs/tests/TEST_FILE_2.md",
-                "content": "gamma\ndelta",
+                "lines": ["gamma", "delta"],
                 "startLine": 1,
                 "totalLines": 2,
             },

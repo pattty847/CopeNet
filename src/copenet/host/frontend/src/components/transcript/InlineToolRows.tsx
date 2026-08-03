@@ -375,37 +375,88 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
 // ToolResultRow — single completed tool result
 // ---------------------------------------------------------------------------
 
+/** True when there is genuinely more to read than the inline expansion shows.
+ *
+ *  Two sources: the result overflowed into a `tool_output` artifact, or the
+ *  preview itself reports being clipped. A *missing* preview is not "more" — a
+ *  failed call with only an error message has nothing further, and offering
+ *  Inspect there makes the button meaningless everywhere else. */
+export function hasMoreThanShown(part: ToolResultPart): boolean {
+  if (part.artifactId) return true;
+  const preview = part.preview;
+  if (!preview) return false;
+  if (preview.type === 'raw' || preview.type === 'diff') return Boolean(preview.truncated);
+  if (preview.type === 'repo_search') {
+    return preview.totalMatches != null && preview.matches.length < preview.totalMatches;
+  }
+  if (preview.type === 'file_read') {
+    return preview.totalLines != null && preview.lines.length < preview.totalLines;
+  }
+  return false;
+}
+
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
-  // The whole row opens the overlay. Nothing expands inline any more: tool output
-  // is routinely a whole file or a long command dump, and rendering that between
-  // two chat messages is what made the thread unreadable. The overlay has 680px
-  // and its own scroll, so the thread keeps a stable height whatever the tool
-  // returned. This also retires the raw policy-object dump — a blocked shell
-  // command used to print its entire policyDecision payload here.
+  // Three levels, matching how every agent surface converged: a summary row, an
+  // in-place expansion in a bounded scroll box, and — only when the body was
+  // clipped — the overlay. Expanding in place is what makes a three-line command
+  // result readable without leaving the conversation; the fixed max height is
+  // what stops a 900-line file from swallowing the thread.
+  //
+  // `Inspect →` appears ONLY when something was clipped, so the button means
+  // "there is more than this" instead of being decoration on every row.
+  const [expanded, setExpanded] = useState(false);
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   const verb = operatorVerb(part.toolId);
   const targetLabel = part.target ? shortPath(part.target) : null;
   const failed = !part.ok;
+  const hasBody = !!part.preview || (!part.ok && !!part.error);
+  const hasMore = hasMoreThanShown(part);
 
   return (
-    <button
-      type="button"
-      onClick={() => setInspectorTarget({ kind: 'tool', tool: part })}
-      className={`flex w-full items-center gap-2 rounded px-1 py-1 text-left transition-colors duration-100 hover:bg-operator-panel/20 ${failed ? 'text-operator-error' : ''}`}
-      title={part.target || part.summary || verb}
-    >
-      {failed
-        ? <XCircle className="h-3 w-3 shrink-0 text-operator-error" />
-        : <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-operator-muted/40" />
-      }
-      <span className="shrink-0 text-[11px] text-operator-muted/80">{verb}</span>
-      {(targetLabel || (!part.target && part.summary)) && (
-        <span className="min-w-0 flex-1 truncate text-[11px] text-operator-text/75">
-          {targetLabel || part.summary}
-        </span>
+    <div>
+      <button
+        type="button"
+        onClick={() => (hasBody ? setExpanded((value) => !value) : setInspectorTarget({ kind: 'tool', tool: part }))}
+        aria-expanded={hasBody ? expanded : undefined}
+        className={`flex w-full items-center gap-2 rounded px-1 py-1 text-left transition-colors duration-100 hover:bg-operator-panel/20 ${failed ? 'text-operator-error' : ''}`}
+        title={part.target || part.summary || verb}
+      >
+        {failed
+          ? <XCircle className="h-3 w-3 shrink-0 text-operator-error" />
+          : <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-operator-muted/40" />
+        }
+        <span className="shrink-0 text-[11px] text-operator-muted/80">{verb}</span>
+        {(targetLabel || (!part.target && part.summary)) && (
+          <span className="min-w-0 flex-1 truncate text-[11px] text-operator-text/75">
+            {targetLabel || part.summary}
+          </span>
+        )}
+        {hasBody && (expanded
+          ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />
+          : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />)}
+      </button>
+
+      {expanded && (
+        <div className="max-h-80 overflow-y-auto rounded-lg border border-operator-border/50 bg-operator-bg/40 px-2 py-1.5">
+          {!part.ok && part.error && (
+            <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded border border-operator-error/20 bg-operator-error/5 px-2.5 py-1.5 text-[10.5px] font-mono text-operator-error">
+              {part.error}
+            </pre>
+          )}
+          {part.preview && <ToolPreview preview={part.preview} />}
+        </div>
       )}
-      <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />
-    </button>
+
+      {expanded && hasMore && (
+        <button
+          type="button"
+          onClick={() => setInspectorTarget({ kind: 'tool', tool: part })}
+          className="mt-1 px-1 text-[10.5px] text-operator-muted/70 transition-colors hover:text-operator-accent"
+        >
+          Inspect full output →
+        </button>
+      )}
+    </div>
   );
 }
 

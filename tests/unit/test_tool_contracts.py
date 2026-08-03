@@ -112,7 +112,8 @@ def test_build_tool_effect_payload_links_turn_decision_and_evidence_role() -> No
         "target": "README.md",
         "preview": {
             "path": "README.md",
-            "content": "# Title\nhello",
+            "type": "file_read",
+            "lines": ["# Title", "hello"],
             "startLine": 1,
             "totalLines": 2,
         },

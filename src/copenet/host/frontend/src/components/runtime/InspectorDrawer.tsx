@@ -329,6 +329,13 @@ function previewText(value: unknown): string {
 }
 
 function ToolBody({ tool }: { tool: ToolResultPart }) {
+  // When a tool result overflowed the preview budget, tool_result_materialization
+  // persisted the WHOLE body as a `tool_output` artifact. Loading it here is what
+  // makes this panel actually the full output rather than the same clipped preview
+  // at a larger size — the other 96% of a market.financials result lives here and
+  // had no door to it.
+  const activeSessionKey = useAppStore((s) => s.activeSessionKey);
+  const fullOutput = useArtifact(activeSessionKey, tool.artifactId || null);
   const effect = tool.effect;
   const scope = tool.scope;
   const policyDecision = tool.policyDecision;
@@ -427,6 +434,18 @@ function ToolBody({ tool }: { tool: ToolResultPart }) {
             startLine={preview.startLine}
             maxHeightClass="max-h-[60vh]"
           />
+        </div>
+      ) : fullOutput.status === 'ready' && fullOutput.data?.bodyMarkdown ? (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between px-0.5">
+            <span className="text-[9.5px] font-semibold uppercase tracking-wider text-operator-muted/60">
+              full output · {fullOutput.data.bodyMarkdown.length.toLocaleString()} chars
+            </span>
+            <CopyButton getValue={() => fullOutput.data?.bodyMarkdown || ''} />
+          </div>
+          <pre className="max-h-[60vh] overflow-auto whitespace-pre-wrap break-words rounded-lg border border-operator-border bg-operator-bg px-2.5 py-2 font-mono text-[10.5px] leading-5 text-operator-text/85">
+            {fullOutput.data.bodyMarkdown}
+          </pre>
         </div>
       ) : preview?.type === 'raw' ? (
         // Render the body, not the envelope. This branch was missing, so a raw

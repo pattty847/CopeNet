@@ -75,6 +75,20 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current request flow.
 
 **UI stays honest.** The frontend now uses React + Vite, but should still stay straightforward, typed, and product-driven. Avoid unnecessary abstractions, state sprawl, or design churn without a clear product reason.
 
+## No Back-Compat By Default
+
+When we change course, **change it all the way**. Do not leave the old path working "just in case" unless the operator explicitly asks for a migration window.
+
+Compatibility shims are how this codebase drifts: the old name survives beside the new one, a later contributor reads the old one and assumes it is current, and the two meanings diverge silently. A concrete case — the frontend guessed preview shapes from field names because the backend never declared a `type`. Everything rendered, so nothing looked broken, and the real contract was never written down. Three tools depended on a guess for months.
+
+Rules:
+
+- Rename in place; do not alias. One canonical name per concept, everywhere, in the same commit.
+- Delete the superseded module, field, or branch in the commit that replaces it, and say so in the message.
+- No `legacy_*` / `*_v2` / `*_old` pairs, no "deprecated but still supported" fields, no dual-read code paths.
+- If a shim is genuinely unavoidable (persisted data written by an older build), it is a **migration** — write it as one, note the removal date or condition, and never let it become the permanent read path.
+- When you find an existing shim while working nearby, report it rather than extending it. Removal is its own commit.
+
 ## Coding Style
 
 - Match the existing file style before introducing new patterns.
@@ -254,7 +268,10 @@ For current behavior, assume:
   - archive/restore
   - right-panel runtime + tool telemetry (**Tool Activity proof** groups `SessionRunRecord.toolSteps` and run-scoped artifacts via `runtime/activityProof.ts` + `ToolActivityProof.tsx`)
   - one **grouped tool block per turn** (`components/transcript/TurnToolGroup.tsx`)
+- **Previews declare their `type`; the client does not guess.** `_preview_payload` emits `file_read` (with `lines`, not `content`), `repo_search` (with `snippet`, not `text`), `raw`, `diff`, `plan`, `web_search`, `web_doc`. The normalizer used to infer `file_read` from `{path, content}` and `repo_search` from `{matches}`; that shim is gone, so an undeclared preview is genuinely raw. Add the `type` in the same commit as the projection.
 - **A preview type with no renderer renders blank.** `_preview_payload` in `core/tools/contracts.py` hand-projects a per-tool preview; the frontend's `ToolResultPreview` union is the list of shapes that can actually be displayed. The five `market_*` types were emitted for months with no renderer, so every market tool call showed the call and no output. `tests/unit/test_preview_renderability.py` now fails on any orphan — ship the renderer with the projection, or omit the branch and let `_generic_preview` return a raw body. Also note a tool step may carry its preview on `effect.preview` rather than `preview`; normalize before branching.
+- **Three levels in the thread, not two.** Group header (`TurnToolGroup`) → one row per action → the row expands **in place** into a `max-h-80` scroll box. `Inspect full output →` appears only when `hasMoreThanShown` is true — the result spilled to a `tool_output` artifact, or the preview reports itself clipped. A failed call with only an error message has nothing more; showing the button there makes it meaningless on the rows that need it.
+- **The drawer shows the artifact, not the preview.** When a tool step carries an `artifactId`, `ToolBody` loads that `tool_output` artifact — the whole body. Without it the panel is the same clipped preview at a larger size, which is what it used to be.
 - **Thread detail lives in the overlay, never inline.** Every tool row and the per-turn internals row open `InspectorDrawer` (a portal overlay: 680px, own scroll, Escape) via `setInspectorTarget`. Nothing expands inside the transcript — tool output is routinely a whole file or a command dump, and rendering that between two chat messages is what made the thread unreadable. Do not add a new inline expander; add an `InspectorTarget` kind.
 - **One derivation renders run internals everywhere.** `runtime/runInternals.ts` turns a `SessionRunRecord` plus its lifecycle trace into the stat line and the what-it-saw / what-it-did / why-it-stopped / raw-trace sections; `components/runtime/RunInternals.tsx` renders it in the drawer (`showDid={false}` — the thread already lists the calls) and in the Observability inspector (`showDid` default), with `internalsPalette.ts` selecting `operator-*` vs `shell-*` classes. Add to the derivation, not to a per-surface renderer. Three rules that are easy to break: a chat-only turn must keep its "Context it saw" row (that is the `promptedToolUse: false` case, where the question is asked most); grouping is by run, not adjacency, so narration between calls must not split a turn; and `inputTokenEstimate` counts **messages only** — never label it as everything the model saw.
 - Run records for the thread come from `runtime/runIndex.ts` (one `sessions.runs` call per session, module-level promise cache); trace events load lazily on expand. Do not add a per-message fetch.

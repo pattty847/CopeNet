@@ -433,14 +433,51 @@ def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
             # the Inspect drawer can show the full read; the inline transcript caps
             # the DISPLAY to a 200-line teaser. Not a 240-char receipt anymore.
             preview_content = content.rstrip()[:24000]
+            lines = preview_content.split("\n")
             return {
+                "type": "file_read",
                 "path": path,
-                "content": preview_content,
+                # `lines`, not `content`: the frontend's FileReadPreview reads an
+                # array. It used to infer this shape from the presence of
+                # path+content, which worked until someone renamed a field.
+                "lines": lines,
                 "startLine": body.get("startLine", 1),
                 # Number of lines actually carried in this preview, not the
                 # whole file. Inline "more lines" must never promise content
                 # the Inspect drawer does not have.
-                "totalLines": preview_content.count("\n") + 1,
+                "totalLines": len(lines),
+            }
+    if tool_id in {"files.rg", "files.search", "files.list", "git.status", "git.diff"}:
+        matches = body.get("matches")
+        if isinstance(matches, list):
+            return {
+                "type": "repo_search",
+                "query": str(body.get("pattern") or body.get("query") or ""),
+                "matches": [
+                    {
+                        "path": str(row.get("path") or ""),
+                        "line": int(row.get("line") or 0),
+                        # The handler calls it `text`; the renderer calls it
+                        # `snippet`. Normalize here rather than making the client
+                        # accept both.
+                        "snippet": str(row.get("text") or row.get("snippet") or ""),
+                    }
+                    for row in matches
+                    if isinstance(row, dict)
+                ],
+                "totalMatches": body.get("totalMatches"),
+            }
+    if tool_id == "shell.exec":
+        stdout = body.get("stdout")
+        stderr = body.get("stderr")
+        if isinstance(stdout, str) or isinstance(stderr, str):
+            command = str(body.get("command") or "")
+            streams = [str(stdout or "").rstrip(), str(stderr or "").rstrip()]
+            text = "\n".join(part for part in streams if part)
+            return {
+                "type": "raw",
+                "text": f"$ {command}\n{text}" if command else text,
+                "fullChars": len(text),
             }
     if tool_id in {"files.write", "files.edit"}:
         diff = body.get("diff")

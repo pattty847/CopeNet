@@ -210,34 +210,10 @@ export function normalizeToolResultPreview(raw: unknown, limits?: PreviewLimits)
       text: String(payload.text || ''),
     };
   }
-  if (typeof payload.path === 'string' && typeof payload.content === 'string') {
-    const lines = physicalFilePreviewLines(payload.content, maxLines);
-    return {
-      type: 'file_read',
-      path: String(payload.path),
-      lines,
-      startLine: payload.startLine != null ? Math.max(1, Number(payload.startLine)) : 1,
-      totalLines: payload.totalLines != null ? Number(payload.totalLines) : physicalFilePreviewLines(payload.content).length,
-    };
-  }
-  if (Array.isArray(payload.matches)) {
-    return {
-      type: 'repo_search',
-      query: typeof payload.query === 'string' ? payload.query : '',
-      matches: payload.matches.slice(0, maxMatches).map((m: unknown) => {
-        const match = (m || {}) as Record<string, unknown>;
-        return {
-          path: String(match.path || ''),
-          line: Number(match.line || 0),
-          snippet: String(match.text || match.snippet || ''),
-        };
-      }),
-      totalMatches: Array.isArray(payload.matches) ? payload.matches.length : null,
-    };
-  }
-  if (typeof payload.preview === 'string') {
-    return { type: 'raw', text: String(payload.preview).slice(0, maxChars) };
-  }
+  // No shape sniffing. This used to infer file_read from {path, content} and
+  // repo_search from {matches}, which meant three tools rendered correctly by
+  // accident and would have broken silently on a backend field rename. The
+  // backend declares `type` now; anything undeclared is genuinely raw.
   // Fall back to raw text preview
   const text = payload.text ? String(payload.text) : JSON.stringify(payload);
   return { type: 'raw', text: text.slice(0, maxChars) };

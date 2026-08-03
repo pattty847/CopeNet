@@ -37,7 +37,11 @@ async def test_shell_exec_returns_stdout_to_prompt_and_preview(tmp_path: Path) -
     assert result.output["exitCode"] == 0
     assert result.output["stdout"].strip() == str(tmp_path)
     assert str(tmp_path) in result.to_prompt_payload()
-    assert result.to_event_payload()["preview"]["preview"].endswith(str(tmp_path))
+    # shell.exec declares a raw preview now: `$ <command>` then the streams,
+    # rather than an undeclared {"preview": "..."} the client had to sniff.
+    preview = result.to_event_payload()["preview"]
+    assert preview["type"] == "raw"
+    assert preview["text"].endswith(str(tmp_path))
 
 
 @pytest.mark.asyncio
