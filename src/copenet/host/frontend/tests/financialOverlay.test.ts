@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 
 import {
+  hasRenderableFinancialOverlay,
   observationTime,
   snapOverlayToCandles,
   splitFinancialOverlaySegments,
@@ -24,6 +25,14 @@ test('null financial observations split the plotted line into real gaps', () => 
       { t: 5, value: 21 },
     ],
   ]);
+});
+
+test('an all-null valuation is not treated as a renderable chart axis', () => {
+  assert.equal(hasRenderableFinancialOverlay([
+    { t: 1, value: null },
+    { t: 2, value: Number.NaN },
+  ]), false);
+  assert.equal(hasRenderableFinancialOverlay([{ t: 1, value: -0.05 }]), true);
 });
 
 test('duplicate timestamps keep the latest point before segmentation', () => {

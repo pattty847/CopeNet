@@ -10,6 +10,14 @@ export interface FinancialOverlayValuePoint {
   value: number;
 }
 
+export function hasRenderableFinancialOverlay(
+  points: FinancialOverlayPoint[] | undefined,
+): boolean {
+  return points?.some(
+    (point) => Number.isFinite(point.t) && point.value != null && Number.isFinite(point.value),
+  ) ?? false;
+}
+
 export function splitFinancialOverlaySegments(
   points: FinancialOverlayPoint[],
 ): FinancialOverlayValuePoint[][] {

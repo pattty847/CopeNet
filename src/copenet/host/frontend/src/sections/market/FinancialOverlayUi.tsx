@@ -288,7 +288,7 @@ const FLAG_NOTES: Record<string, string> = {
     'Differencing the cumulative windows produced a negative quarter against positive '
     + 'cumulatives — treat with suspicion.',
   stale_fundamentals:
-    'The newest SEC input behind this multiple is over 180 days old, so no ratio is drawn.',
+    'At least one required SEC input behind this multiple is over 180 days old, so no ratio is drawn.',
   non_positive_ttm_denominator:
     'Trailing revenue or cash flow was zero or negative, so this multiple has no meaning here.',
   no_point_in_time_ttm_denominator:
@@ -322,6 +322,19 @@ const FLAG_NOTES: Record<string, string> = {
   non_positive_invested_capital:
     'Invested capital was zero or negative (heavy buybacks can do this), so the ratio '
     + 'is not drawn.',
+  cost_of_services_may_not_equal_total_cost_of_revenue:
+    'Only the issuer’s cost-of-services tag was available. A business that also sells goods may have additional costs not captured here.',
+  depreciation_only_may_understate_dep_amort:
+    'Only depreciation was tagged; intangible amortization may be omitted, which can understate EBITDA.',
+  net_interest_used_for_interest_expense:
+    'Net interest income/expense was used because gross interest expense was unavailable. Interest coverage may therefore be overstated.',
+  equity_includes_noncontrolling_interest:
+    'The available equity tag includes noncontrolling interests, so P/B and invested capital are not strictly parent-common measures.',
+  cash_includes_restricted_cash:
+    'The available cash tag includes restricted cash, which may understate net debt relative to freely available cash.',
+  payables_include_accrued_liabilities:
+    'The available fallback combines accounts payable with accrued liabilities and is broader than payables alone.',
+  non_positive_share_count: 'The selected share count was zero or negative, so no valuation can be calculated.',
 };
 
 const FLAG_TONE: Record<string, string> = {

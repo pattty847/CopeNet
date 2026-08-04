@@ -399,8 +399,8 @@ export interface FinancialSeriesPayload {
   rawFactCount: number;
   observations: FinancialSeriesObservation[];
   warnings: string[];
-  /** Payload discriminator set by the backend; older cached payloads may lack it. */
-  kind?: 'financial';
+  /** Payload discriminator set by the backend. */
+  kind: 'financial';
   derived?: boolean;
   components?: string[];
 }
@@ -454,18 +454,15 @@ export interface ValuationSeriesPayload {
   rawFactCount: number;
   observations: ValuationSeriesObservation[];
   warnings: string[];
-  /** Payload discriminator set by the backend; older cached payloads may lack it. */
-  kind?: 'valuation';
+  /** Payload discriminator set by the backend. */
+  kind: 'valuation';
 }
 
 export type OverlaySeriesPayload = FinancialSeriesPayload | ValuationSeriesPayload;
 
-/** Single source of truth for telling the two overlay payloads apart. Prefers the
- *  backend's kind tag and falls back to key-sniffing for payloads that predate it. */
+/** Single source of truth for telling the two overlay payloads apart. */
 export function isValuationPayload(payload: OverlaySeriesPayload): payload is ValuationSeriesPayload {
-  if (payload.kind === 'valuation') return true;
-  if (payload.kind === 'financial') return false;
-  return 'epsMetric' in payload;
+  return payload.kind === 'valuation';
 }
 
 // ---------- forward ledger (model calls scored at horizon) ----------

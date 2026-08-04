@@ -367,3 +367,34 @@ Scope sketch:
    translations where present).
 4. 20-F filers are annual-only (6-K interims are outside Company Facts) —
    set cadence expectations in the UI.
+
+## 13. Post-implementation correctness audit (2026-08-03)
+
+The full CopeTech → CopeNet → chart path was re-audited after Phases 1–4.
+The audit corrected four point-in-time and rendering defects:
+
+- Derived Q4 now becomes available at the latest filing date among the annual
+  value and all three contributing quarters. A later quarterly amendment can
+  no longer alter a Q4 residual before that amendment was public.
+- Generic historical valuations now reconstruct denominator, adjustment, and
+  share-count revisions at every filing date. Prices before an amendment keep
+  the originally filed value; prices after it use the amended value.
+- Interim trailing EPS is recomputed when a later amendment changes an older
+  annual/YTD bridge input; P/E no longer leaves the pre-amendment TTM in force.
+- Negative FCF yield is retained as economically meaningful, while invalid
+  share counts and non-positive denominators for non-inverted multiples remain
+  suppressed with explicit flags.
+- The chart hides an all-null valuation scale instead of passing an empty
+  custom-formatted series into Lightweight Charts.
+
+Metric metadata now declares only cadences the resolver can actually serve;
+taxonomy fallbacks that broaden or narrow a label carry explicit quality flags;
+and browser-side financial-series cache entries expire after five minutes.
+Tests cover formulas, zero divisors, YTD/Q4 derivations, instant/annual
+classification, amendment timing, valuation arithmetic, registry wiring, cache
+expiry, and null-only rendering.
+
+Open product decisions remain definition-level rather than plumbing defects:
+whether to expose all support metrics in the operator dropdown, whether broad
+taxonomy fallbacks should remain flagged or become hard-null, and whether ROIC,
+EBITDA, net debt, and FCF should gain alternate published definitions.

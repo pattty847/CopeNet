@@ -314,6 +314,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["diluted_eps", "price"],
         },
         {
@@ -323,6 +324,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["revenue", "diluted_shares", "price"],
         },
         {
@@ -332,6 +334,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["operating_cash_flow", "capex", "diluted_shares", "price"],
         },
         {
@@ -341,6 +344,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["stockholders_equity", "shares_outstanding", "price"],
         },
         {
@@ -350,6 +354,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["operating_cash_flow", "capex", "shares_outstanding", "price"],
         },
         {
@@ -359,6 +364,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["revenue", "net_debt", "shares_outstanding", "price"],
         },
         {
@@ -368,6 +374,7 @@ def supported_financial_metrics() -> list[dict[str, Any]]:
             "validUnits": ["ratio"],
             "aggregation": "composite",
             "derived": True,
+            "frequencies": ["ttm"],
             "components": ["ebitda", "net_debt", "shares_outstanding", "price"],
         },
     ]

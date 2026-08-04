@@ -173,6 +173,21 @@ def test_valuation_eligibility_covers_generic_multiple_provenance() -> None:
     assert not eligible({**base, "epsAvailableAt": "2026-02-15"}, cutoff)
 
 
+def test_metric_listing_is_unique_complete_and_frequency_honest() -> None:
+    metrics = market_financials_service.supported_financial_metrics()
+    by_id = {entry["id"]: entry for entry in metrics}
+
+    assert len(by_id) == len(metrics)
+    assert set(market_financials_service.VALUATION_METRICS) <= set(by_id)
+    assert all(entry.get("frequencies") for entry in metrics)
+    for metric in market_financials_service.VALUATION_METRICS:
+        assert by_id[metric]["factType"] == "valuation"
+        assert by_id[metric]["frequencies"] == ["ttm"]
+    assert by_id["stockholders_equity"]["frequencies"] == ["quarterly", "annual"]
+    assert by_id["revenue_per_share"]["frequencies"] == ["quarterly", "annual"]
+    assert by_id["roic"]["frequencies"] == ["ttm"]
+
+
 @pytest.mark.asyncio
 async def test_financial_series_as_of_uses_available_at_and_preserves_provenance(
     monkeypatch: pytest.MonkeyPatch,

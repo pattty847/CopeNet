@@ -29,7 +29,11 @@ import {
 } from 'lightweight-charts';
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { FinancialOverlayPoint } from './financialOverlay';
-import { overlayAxisFormatter, splitFinancialOverlaySegments } from './financialOverlay';
+import {
+  hasRenderableFinancialOverlay,
+  overlayAxisFormatter,
+  splitFinancialOverlaySegments,
+} from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 
 // ---- clustering thresholds ----
@@ -732,13 +736,24 @@ export function CandleChart({
   }, [financialOverlay, financialOverlayKind]);
 
   useEffect(() => {
+    const hasValues = financialOverlayKind != null
+      && hasRenderableFinancialOverlay(financialOverlay);
     chartRef.current?.priceScale('left').applyOptions({
-      visible: financialOverlayKind != null,
+      visible: hasValues,
     });
     const series = [
       ...(financialRef.current ? [financialRef.current] : []),
       ...financialSegmentRefs.current,
     ];
+    if (!hasValues) {
+      // Lightweight Charts invokes custom price formatters with a null internal
+      // value when an otherwise-visible scale has no renderable points. Keep the
+      // empty overlay selected in the UI, but do not configure or expose its axis.
+      series.forEach((item) => item.applyOptions({ lastValueVisible: false }));
+      transformKeyRef.current = '';
+      requestAnimationFrame(() => syncRef.current());
+      return;
+    }
     const formatter = overlayAxisFormatter(
       financialOverlayUnit,
       financialOverlayValuation,
