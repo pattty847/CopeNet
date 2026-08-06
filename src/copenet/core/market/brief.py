@@ -14,9 +14,9 @@ import re
 from datetime import datetime, timezone
 from typing import Any
 
-from .models import EvidenceItem, MorningBriefPayload
+from .models import EvidenceItem, MorningBriefPayload, UniverseAsset
 from .store import MarketStore
-from .universe import UNIVERSE
+from .universe import SIGNAL_ROLES, UNIVERSE
 
 _MAX_EVIDENCE = 8
 _MAX_FLIPS = 8
@@ -28,8 +28,16 @@ _HEADLINE_MOVER_PCT = 3.0
 _UP_QUADRANTS = {"improving", "leading"}
 
 
-def compute_movers(store: MarketStore, *, limit: int = _MAX_MOVERS) -> tuple[list[dict[str, Any]], str]:
+def compute_movers(
+    store: MarketStore,
+    *,
+    limit: int = _MAX_MOVERS,
+    universe: tuple[UniverseAsset, ...] = UNIVERSE,
+) -> tuple[list[dict[str, Any]], str]:
     """Top movers by close-over-close change from the freshly refreshed daily bars.
+
+    Pass the runtime's scan universe (public UNIVERSE + the operator's watchlists) — with the
+    default, movers can only ever rank index ETFs, which reads as a permanently quiet tape.
 
     Returns (rows, label). The label is self-evidencing freshness: when the newest daily
     bar IS the brief's calendar day (market open, forming candle present) it reads
@@ -37,8 +45,8 @@ def compute_movers(store: MarketStore, *, limit: int = _MAX_MOVERS) -> tuple[lis
     hero, not silently mislabeled."""
     rows: list[dict[str, Any]] = []
     newest_bar_day: str | None = None
-    for asset in UNIVERSE:
-        if asset.role not in {"holding", "watch", "spec", "index"}:
+    for asset in universe:
+        if asset.role not in SIGNAL_ROLES and asset.role != "index":
             continue
         bars = store.load_bars(asset.symbol, "daily")
         if len(bars) < 2 or not bars[-2].c:

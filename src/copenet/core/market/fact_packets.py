@@ -19,7 +19,61 @@ def _line(parts: list[str]) -> str:
     return " · ".join(p for p in parts if p)
 
 
-def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None, *, overnight: dict[str, Any] | None = None) -> str:
+def market_history_section(
+    briefs: list[dict[str, Any]], reads: list[dict[str, Any]], *, limit: int = 5
+) -> str | None:
+    """The recent trail: what the tape did, and what the model called, on each prior session.
+
+    ``overnight`` covers a single night. This covers the last few sessions, which is what lets a
+    briefing read as a continuing story instead of a daily cold start — and it is the only way
+    the model can be held to its own prior calls ("risk-on three sessions running, still intact").
+
+    The two lists are expected to be misaligned: briefs go back ~30 days while the read archive
+    only begins when archiving shipped. Reads are matched by date and omitted where absent,
+    rather than zipped positionally, which would silently attribute the wrong call to a session.
+    """
+    if not briefs:
+        return None
+    read_by_date = {str(r.get("generatedAt") or "")[:10]: r for r in reads if r.get("generatedAt")}
+    lines: list[str] = []
+    # Oldest-first so the trail reads forward in time, the way the narrative should.
+    for brief in list(briefs)[:limit][::-1]:
+        date = str(brief.get("briefDate") or "").strip()
+        if not date:
+            continue
+        parts = [f"{date}: {brief.get('headline') or 'no headline'}"]
+        shifts = brief.get("rrgShifts") or []
+        if shifts:
+            parts.append(
+                "rotation: "
+                + ", ".join(
+                    f"{s.get('symbol')} {s.get('fromQuadrant')}->{s.get('toQuadrant')}"
+                    for s in shifts[:4]
+                )
+            )
+        flips = brief.get("signalFlips") or []
+        if flips:
+            parts.append("flips: " + ", ".join(f"{f.get('symbol')} {f.get('kind')}" for f in flips[:4]))
+        read = read_by_date.get(date)
+        called = str((read or {}).get("regime") or "").strip()
+        if called:
+            parts.append(f"model called: {called}")
+        lines.append("  " + " | ".join(parts))
+    if not lines:
+        return None
+    return (
+        "RECENT SESSIONS (oldest first — compare today against this trail, and say plainly "
+        "whether your prior call is holding up):\n" + "\n".join(lines)
+    )
+
+
+def market_fact_packet(
+    wire: dict[str, Any],
+    base_rate: BaseRate | None,
+    *,
+    overnight: dict[str, Any] | None = None,
+    history: str | None = None,
+) -> str:
     """Format the whole-market packet from the persisted dashboard wire dict.
 
     ``overnight`` is today's morning-brief wire (the delta vs the previous sweep);
@@ -40,6 +94,10 @@ def market_fact_packet(wire: dict[str, Any], base_rate: BaseRate | None, *, over
     overnight_section = _overnight_section(overnight)
     if overnight_section:
         sections.append(overnight_section)
+
+    # After the overnight delta, before today's raw state: last night, then recent days, then now.
+    if history:
+        sections.append(history)
 
     macro = (wire.get("macro") or {}).get("data") or []
     if macro:

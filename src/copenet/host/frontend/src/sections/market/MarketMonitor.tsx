@@ -9,7 +9,7 @@ import { observationTime, snapOverlayToCandles } from './financialOverlay';
 import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinancialMetrics';
 import { isValuationPayload } from './types';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
-import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
+import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketSessions, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { useFinancialSeries } from './useFinancialSeries';
 import { MorningBrief } from './MorningBrief';
 import { EconomicCalendarWidget } from './EconomicCalendarWidget';
@@ -547,6 +547,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
 export function MarketMonitor() {
   const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
   const { read: marketRead, running: reading, run: runRead } = useMarketRead();
+  const marketSessions = useMarketSessions();
   const morningBrief = useMorningBrief(reload);
   const economicCalendar = useEconomicCalendar();
   const ledger = useForwardLedger();
@@ -719,6 +720,22 @@ export function MarketMonitor() {
                   { id: 'rrg', layout: { x: 0, y: 20, w: 7, h: 14, minW: 5, minH: 8 }, node: <Rrg panel={dash.rrg} onOpen={open} note={marketRead?.rotationRead} /> },
                   { id: 'accumulation', layout: { x: 7, y: 20, w: 5, h: 7, minW: 3, minH: 5 }, node: <AccumulationWatch panel={dash.accumulation} onOpen={open} /> },
                   { id: 'trend', layout: { x: 7, y: 27, w: 5, h: 7, minW: 3, minH: 5 }, node: <TrendWatch panel={dash.trend} onOpen={open} /> },
+                  // Optional: a dashboard wire written before the industry layer existed has no
+                  // such panel, and an unknown id in a saved layout is dropped anyway.
+                  ...(dash.industryRrg
+                    ? [{
+                        id: 'industryRrg',
+                        layout: { x: 0, y: 34, w: 7, h: 14, minW: 5, minH: 8 },
+                        node: (
+                          <Rrg
+                            panel={dash.industryRrg}
+                            onOpen={open}
+                            title="Industry Rotation · RRG"
+                            subtitle="Regional banks, biotech, retail, homebuilders, defense vs S&P 500 · weekly"
+                          />
+                        ),
+                      }]
+                    : []),
                   // Broker-fed panels sit together: positions and the all-time result read as one story.
                   {
                     id: 'portfolio',
@@ -769,7 +786,7 @@ export function MarketMonitor() {
           Reads are evidence-based with caveats — never forecasts. Panels marked “preview” are illustrative until their live data loads.
         </div>
       </div>
-      {reasoningOpen && <BriefingReasoning dash={dash} read={marketRead} onClose={() => setReasoningOpen(false)} />}
+      {reasoningOpen && <BriefingReasoning dash={dash} read={marketRead} sessions={marketSessions} onClose={() => setReasoningOpen(false)} />}
     </div>
   );
 }

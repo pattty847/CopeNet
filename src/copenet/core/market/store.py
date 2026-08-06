@@ -90,12 +90,42 @@ class MarketStore:
         return DashboardPayload.empty(as_of="as of no market refresh yet").to_wire()
 
     def save_market_read(self, read: dict[str, Any]) -> None:
+        """Persist the latest read plus a dated copy under market-reads/ for history.
+
+        Mirrors save_morning_brief. Without the archive there is no trail to compare against:
+        every run overwrote the previous call, so the model could never be asked what it said
+        yesterday or whether it held up. Several editions in one day collapse to that day's
+        file, newest wins — intraday editions are revisions of the day's read, not rivals.
+        """
         with self._lock:
             write_json_atomic(self._root / "latest-market-read.json", read)
+            read_date = str(read.get("generatedAt") or "")[:10]
+            if len(read_date) == 10:
+                write_json_atomic(self._root / "market-reads" / f"{read_date}.json", read)
 
     def load_market_read(self) -> dict[str, Any] | None:
         payload = read_json(self._root / "latest-market-read.json", None)
         return payload if isinstance(payload, dict) and payload else None
+
+    def load_market_reads(self, *, limit: int = 10) -> list[dict[str, Any]]:
+        """Most recent archived reads, newest first. Empty until the archive fills in."""
+        return self._load_dated(self._root / "market-reads", limit)
+
+    def load_morning_briefs(self, *, limit: int = 10) -> list[dict[str, Any]]:
+        """Most recent archived briefs, newest first."""
+        return self._load_dated(self._root / "briefs", limit)
+
+    @staticmethod
+    def _load_dated(directory: Path, limit: int) -> list[dict[str, Any]]:
+        """Filenames are ISO dates, so a reverse lexical sort is a reverse chronological one."""
+        if not directory.is_dir():
+            return []
+        out: list[dict[str, Any]] = []
+        for path in sorted(directory.glob("*.json"), reverse=True)[:limit]:
+            payload = read_json(path, None)
+            if isinstance(payload, dict) and payload:
+                out.append(payload)
+        return out
 
     def save_morning_brief(self, wire: dict[str, Any]) -> None:
         """Persist the latest morning brief plus a dated copy under briefs/ for history."""

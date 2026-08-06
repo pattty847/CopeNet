@@ -101,6 +101,18 @@ export const SAMPLE_DASHBOARD: DashboardPayload = {
       { symbol: 'XLC', name: 'Communication Services', quadrant: 'leading', tail: [{ x: 0.6, y: 0.3 }, { x: 1.3, y: 0.8 }, { x: 2.0, y: 1.0 }, { x: 2.6, y: 0.8 }] },
     ],
   },
+  // Deliberately shows the divergence this chart exists to catch: XLF sits in `weakening`
+  // above while KRE is outright `lagging` — the sector looks calmer than the banks inside it.
+  industryRrg: {
+    status: 'preview',
+    data: [
+      { symbol: 'KRE', name: 'Regional Banks', quadrant: 'lagging', tail: [{ x: -1.8, y: -0.4 }, { x: -2.4, y: -0.9 }, { x: -3.0, y: -1.3 }, { x: -3.5, y: -1.6 }] },
+      { symbol: 'XBI', name: 'Biotech', quadrant: 'improving', tail: [{ x: -3.2, y: -1.0 }, { x: -2.6, y: -0.3 }, { x: -2.0, y: 0.5 }, { x: -1.4, y: 1.1 }] },
+      { symbol: 'XRT', name: 'Retail', quadrant: 'weakening', tail: [{ x: 2.8, y: 1.0 }, { x: 2.6, y: 0.4 }, { x: 2.3, y: -0.3 }, { x: 2.0, y: -0.8 }] },
+      { symbol: 'XHB', name: 'Homebuilders', quadrant: 'lagging', tail: [{ x: -1.2, y: 0.2 }, { x: -1.8, y: -0.4 }, { x: -2.3, y: -0.9 }, { x: -2.7, y: -1.2 }] },
+      { symbol: 'ITA', name: 'Aerospace & Defense', quadrant: 'leading', tail: [{ x: 1.0, y: 0.5 }, { x: 1.8, y: 1.0 }, { x: 2.5, y: 1.3 }, { x: 3.2, y: 1.1 }] },
+    ],
+  },
   accumulation: {
     status: 'preview',
     data: [

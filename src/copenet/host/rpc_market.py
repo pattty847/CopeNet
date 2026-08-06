@@ -166,7 +166,12 @@ async def handle_market_read_get(request_id: str, params: dict[str, Any] | None,
     target = str(raw.get("target") or "market").strip() or "market"
     runtime = _runtime(orchestrator)
     read = runtime.store.load_market_read() if target == "market" else runtime.store.load_ticker_read(target)
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"target": target, "read": read})))
+    payload: dict[str, Any] = {"target": target, "read": read}
+    if target == "market":
+        # Rides along with the read the briefing already polls rather than a second RPC — the
+        # trail is only ever rendered beside the read it gives continuity to.
+        payload["sessions"] = runtime.recent_sessions()
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload)))
 
 
 async def handle_market_brief_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:

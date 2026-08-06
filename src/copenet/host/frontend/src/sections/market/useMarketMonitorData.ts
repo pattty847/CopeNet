@@ -7,7 +7,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import type { TradeLedger } from '../../lib/wsMarketRpc';
 import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
-import type { DashboardPayload, LedgerReport, MarketRead, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
+import type { DashboardPayload, LedgerReport, MarketRead, MarketSession, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -256,6 +256,25 @@ function useModelRead<T extends MarketRead | TickerRead>(target: string) {
 
 export function useMarketRead() {
   return useModelRead<MarketRead>('market');
+}
+
+/** The day-over-day trail behind the briefing. Fetched once — it only changes on a sweep,
+ *  and the briefing overlay is the only thing that reads it. */
+export function useMarketSessions() {
+  const [sessions, setSessions] = useState<MarketSession[]>([]);
+  useEffect(() => {
+    let alive = true;
+    wsClient
+      .marketSessionsGet()
+      .then((next) => {
+        if (alive) setSessions(next);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return sessions;
 }
 
 export function useTickerRead(symbol: string) {

@@ -185,6 +185,9 @@ export interface DashboardPayload {
   regime: Panel<Regime>;
   macro: Panel<MacroItem[]>;
   rrg: Panel<RrgSector[]>;
+  /** Industry funds (KRE, XBI, XRT, XHB, ITA) on their own rotation chart — same math as
+   *  `rrg`, narrower lens, kept separate so the 12-tail sector chart stays readable. */
+  industryRrg: Panel<RrgSector[]>;
   accumulation: Panel<AccumulationRow[]>;
   trend: Panel<TrendRow[]>;
   softBottoming: Panel<SoftBottomItem[]>;
@@ -504,12 +507,25 @@ export interface LedgerReport {
 }
 
 // ---------- model reads (Insight Engine Phase D) ----------
+/** One prior session in the day-over-day trail. `regime` is '' when no archived read exists
+ *  for that date — the brief archive runs deeper than the read archive. */
+export interface MarketSession {
+  date: string;
+  headline: string;
+  rrgShifts: BriefRrgShift[];
+  signalFlips: BriefSignalFlip[];
+  regime: string;
+}
+
 export interface MarketRead {
   headline: string;
   emphasis: string;
   summary: string;
   regime: 'risk-off' | 'chop' | 'risk-on' | 'event-risk';
   regimeReasoning: string;
+  /** How today squares with the model's own prior calls. Empty when there is no trail yet
+   *  (reads only began archiving 2026-08-05) or when the read predates the field. */
+  continuity?: string;
   attention: { symbol: string; kind: string; why: string }[];
   rotationRead: string;
   speculativeComment: string;

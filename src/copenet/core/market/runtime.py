@@ -37,12 +37,14 @@ from .models import (
     PortfolioPosition,
     SignalRow,
     SoftBottomItem,
+    SpecPosition,
     TickerDetailPayload,
     TickerInsight,
     TickerIntelligence,
+    UniverseAsset,
 )
 from .base_rates import load_base_rate
-from .fact_packets import market_fact_packet, ticker_fact_packet
+from .fact_packets import market_fact_packet, market_history_section, ticker_fact_packet
 from .ledger import record_market_read_claims, record_ticker_read_claim, track_record_line
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
@@ -54,7 +56,16 @@ from .webull.context_pack import build_portfolio_context_pack
 from .webull.sync import load_snapshot as load_webull_snapshot
 from .store import MarketStore
 from .synthesis import synthesize_briefing
-from .universe import MACRO_SYMBOLS, SECTOR_SYMBOLS, UNIVERSE, find_asset
+from .universe import (
+    INDUSTRY_SYMBOLS,
+    MACRO_SYMBOLS,
+    SECTOR_SYMBOLS,
+    SIGNAL_ROLES,
+    UNIVERSE,
+    find_asset,
+    merge_watchlist_assets,
+)
+from .watchlist_store import WatchlistStore
 
 
 #: Existing consumers were fed `auto_adjust=True` bars — splits *and* dividends. Serving
@@ -84,15 +95,65 @@ class MarketRuntime:
         self,
         store: MarketStore | None = None,
         prices: PriceCache | None = None,
+        watchlists: WatchlistStore | None = None,
     ) -> None:
         self.store = store or MarketStore(default_market_dir())
         self.prices = prices or PriceCache(self.store.root_dir / "prices")
+        # Rooted off the same market dir as rpc_market_watchlist.watchlist_store(), so the
+        # scan and the watchlist UI read one file and a symbol added in the UI is scanned
+        # on the next sweep.
+        self.watchlists = watchlists or WatchlistStore(self.store.root_dir / "watchlist.json")
+
+    def scan_universe(self) -> tuple[UniverseAsset, ...]:
+        """The public UNIVERSE plus the operator's watchlist symbols, resolved per call.
+
+        Read fresh rather than cached at construction: the runtime is a long-lived singleton,
+        and a symbol added mid-day must be picked up by the next refresh without a restart.
+        A broken/unreadable watchlist file degrades to the public universe rather than
+        failing the sweep — a stale panel beats no dashboard.
+        """
+        try:
+            lists = self.watchlists.scan_lists()
+        except Exception:
+            logging.warning("market refresh: watchlist unreadable — scanning public universe only", exc_info=True)
+            return UNIVERSE
+        return merge_watchlist_assets(lists)
+
+    def recent_sessions(self, *, limit: int = 6) -> list[dict[str, Any]]:
+        """Structured day-over-day trail for the briefing UI, newest first.
+
+        The prose twin of this is `market_history_section`, which feeds the model. Kept separate
+        deliberately: the model wants one compact block it can reason over, the UI wants rows it
+        can lay out. Reads are joined by date and may be absent for older sessions — the archive
+        only starts where it started, and a missing read is rendered, not faked.
+        """
+        reads = {
+            str(r.get("generatedAt") or "")[:10]: r
+            for r in self.store.load_market_reads(limit=limit)
+            if r.get("generatedAt")
+        }
+        sessions: list[dict[str, Any]] = []
+        for brief in self.store.load_morning_briefs(limit=limit):
+            date = str(brief.get("briefDate") or "").strip()
+            if not date:
+                continue
+            read = reads.get(date) or {}
+            sessions.append(
+                {
+                    "date": date,
+                    "headline": brief.get("headline") or "",
+                    "rrgShifts": brief.get("rrgShifts") or [],
+                    "signalFlips": brief.get("signalFlips") or [],
+                    "regime": read.get("regime") or "",
+                }
+            )
+        return sessions
 
     def dashboard(self) -> DashboardPayload:
         return self.store.load_dashboard()
 
     def universe(self) -> list[dict[str, Any]]:
-        return [asset.to_wire() for asset in UNIVERSE]
+        return [asset.to_wire() for asset in self.scan_universe()]
 
     def cached_bars(self, symbol: str, timeframe: str) -> list[MarketBar]:
         """Candles from the durable daily cache, falling back to MarketStore's bars.
@@ -273,7 +334,20 @@ class MarketRuntime:
             overnight = self.store.load_morning_brief()
             if overnight and overnight.get("briefDate") != datetime.now().strftime("%Y-%m-%d"):
                 overnight = None
-            packet = market_fact_packet(self.store.load_dashboard_wire(), sb_rate, overnight=overnight)
+            # The trail behind today: skip the current session's own brief/read so the model is
+            # comparing against prior calls, not being handed its own conclusion as evidence.
+            today = datetime.now().strftime("%Y-%m-%d")
+            prior_briefs = [b for b in self.store.load_morning_briefs(limit=8) if b.get("briefDate") != today]
+            prior_reads = [
+                r for r in self.store.load_market_reads(limit=8)
+                if str(r.get("generatedAt") or "")[:10] != today
+            ]
+            packet = market_fact_packet(
+                self.store.load_dashboard_wire(),
+                sb_rate,
+                overnight=overnight,
+                history=market_history_section(prior_briefs, prior_reads),
+            )
             track_record = track_record_line(self.store)
             if track_record:
                 packet = f"{packet}\n{track_record}"
@@ -371,7 +445,8 @@ class MarketRuntime:
     def refresh(self, *, scope: str = "all") -> DashboardPayload:
         weekly: dict[str, pd.DataFrame] = {}
         daily: dict[str, pd.DataFrame] = {}
-        symbols = _symbols_for_scope(scope)
+        universe = self.scan_universe()
+        symbols = _symbols_for_scope(scope, universe)
         # Polite pacing between symbols keeps the full sweep well under Yahoo's rate
         # limits — the morning sentinel runs unattended, so slow-and-reliable wins.
         pace = _fetch_pace_seconds()
@@ -403,11 +478,18 @@ class MarketRuntime:
             if pace > 0:
                 time.sleep(pace)
 
-        dashboard = self._assemble_dashboard(weekly=weekly, daily=daily)
+        dashboard = self._assemble_dashboard(weekly=weekly, daily=daily, universe=universe)
         self.store.save_dashboard(dashboard)
         return dashboard
 
-    def _assemble_dashboard(self, *, weekly: dict[str, pd.DataFrame], daily: dict[str, pd.DataFrame]) -> DashboardPayload:
+    def _assemble_dashboard(
+        self,
+        *,
+        weekly: dict[str, pd.DataFrame],
+        daily: dict[str, pd.DataFrame],
+        universe: tuple[UniverseAsset, ...] | None = None,
+    ) -> DashboardPayload:
+        universe = universe if universe is not None else self.scan_universe()
         as_of = _as_of_label()
         dashboard = DashboardPayload.empty(as_of=as_of)
         macro = _macro_items(weekly)
@@ -417,11 +499,11 @@ class MarketRuntime:
         benchmark = weekly.get("VOO", pd.DataFrame())
         accumulation: list[AccumulationRow] = []
         trend: list[Any] = []
-        live_signal_symbols = [asset.symbol for asset in UNIVERSE if asset.role in {"holding", "watch", "spec"}]
+        live_signal_symbols = [asset.symbol for asset in universe if asset.role in SIGNAL_ROLES]
         soft_bottoms: list[SoftBottomItem] = []
         above_trend = 0
         total_trend = 0
-        for asset in UNIVERSE:
+        for asset in universe:
             frame = weekly.get(asset.symbol, pd.DataFrame())
             if frame.empty:
                 continue
@@ -477,12 +559,24 @@ class MarketRuntime:
 
         rrg = [
             compute_rrg_tail(asset.symbol, asset.name, weekly.get(asset.symbol, pd.DataFrame()), benchmark)
-            for asset in UNIVERSE
+            for asset in universe
             if asset.symbol in SECTOR_SYMBOLS
         ]
         rrg = [sector for sector in rrg if sector.tail]
         if rrg:
             dashboard.rrg = MarketPanel(status="live", data=rrg, as_of=_now_iso())
+
+        # Second rotation chart, same benchmark and math, narrower lens: industry funds rotate
+        # against the S&P independently of the sector that contains them, and averaging them
+        # into the 12-tail sector RRG both crowds that chart and hides the divergence.
+        industry_rrg = [
+            compute_rrg_tail(asset.symbol, asset.name, weekly.get(asset.symbol, pd.DataFrame()), benchmark)
+            for asset in universe
+            if asset.symbol in INDUSTRY_SYMBOLS
+        ]
+        industry_rrg = [item for item in industry_rrg if item.tail]
+        if industry_rrg:
+            dashboard.industry_rrg = MarketPanel(status="live", data=industry_rrg, as_of=_now_iso())
 
         webull_snapshot = load_webull_snapshot()
         if webull_snapshot and webull_snapshot.get("positions"):
@@ -494,13 +588,18 @@ class MarketRuntime:
         if portfolio is not None and portfolio.positions:
             dashboard.portfolio = MarketPanel(status="live", data=portfolio, as_of=_now_iso(), note=note)
 
+        speculative = _speculative_panel(weekly, universe)
+        if speculative:
+            dashboard.speculative = MarketPanel(status="live", data=speculative, as_of=_now_iso())
+
         # _assemble_dashboard runs inside asyncio.to_thread (see rpc_market.py), i.e. a plain
         # worker thread with no running loop, so asyncio.run() here is a safe sync/async bridge.
-        evidence = asyncio.run(
-            fetch_evidence([asset.symbol for asset in UNIVERSE if asset.role in {"holding", "watch", "spec"}])
-        )
+        evidence = asyncio.run(fetch_evidence(live_signal_symbols))
         evidence_note = None
-        if not evidence:
+        if not live_signal_symbols:
+            # Nothing to sweep is not a fetch failure — say so, rather than blaming the SEC.
+            evidence_note = "no watchlist symbols in the scan — add tickers or set a list's role to watch"
+        elif not evidence:
             # Zero evidence across every symbol in one cycle is far more likely a transient failure
             # (SEC rate-limit, network hiccup) than every ticker genuinely having no insider/8-K
             # activity — don't let that silently wipe a previously good evidence panel.
@@ -509,6 +608,11 @@ class MarketRuntime:
                 logging.warning("market refresh: evidence fetch returned empty for all symbols, keeping last known evidence")
                 evidence = previous
                 evidence_note = "evidence fetch returned empty this cycle — showing last known evidence"
+        # Newest filing first. fetch_evidence returns per-symbol batches concatenated in universe
+        # order, so unsorted the panel reads as symbol-grouped noise and buries this morning's
+        # Form 4 under last week's. Sorted here rather than in the panel so the ticker view and
+        # the model fact packet inherit the same ordering. Undated items sink to the bottom.
+        evidence.sort(key=lambda item: getattr(item, "t", None) or 0, reverse=True)
         dashboard.evidence = MarketPanel(status="live", data=evidence, as_of=_now_iso(), note=evidence_note)
 
         breadth_pct = (above_trend / total_trend * 100) if total_trend else 0.0
@@ -517,13 +621,20 @@ class MarketRuntime:
         regime_status: str = "live"
         regime_note: str | None = None
         if total_trend == 0:
-            # No symbol had trend data this cycle — every fetch failed/was empty. 0.0 breadth
-            # is a fetch-failure artifact, not a genuine "everything is risk-off" reading;
-            # publishing it as live would be a confident false regime call. Mark it stale
-            # instead, mirroring the evidence-panel fetch-failure guard above.
-            logging.warning("market refresh: no symbols had trend data this cycle — regime/briefing marked stale")
+            # Breadth of 0.0 here is an artifact, not a genuine "everything is risk-off" reading,
+            # so publishing it as live would be a confident false regime call either way. But the
+            # two causes need different words: an empty scan universe is a config problem the
+            # operator can fix, and calling it a "fetch failure" sends them to the wrong layer.
             regime_status = "stale"
-            regime_note = "no trend data this cycle (fetch failure) — regime is unknown, not risk-off"
+            if not live_signal_symbols:
+                logging.warning(
+                    "market refresh: scan universe has no holding/watch/spec symbols — "
+                    "signal panels will be empty until a watchlist is populated"
+                )
+                regime_note = "no watchlist symbols in the scan — regime is unknown, not risk-off"
+            else:
+                logging.warning("market refresh: no symbols had trend data this cycle — regime/briefing marked stale")
+                regime_note = "no trend data this cycle (fetch failure) — regime is unknown, not risk-off"
 
         dashboard.briefing = MarketPanel(status=regime_status, data=briefing, as_of=_now_iso(), note=regime_note)
         dashboard.contrarian = MarketPanel(status=regime_status, data=contrarian, as_of=_now_iso(), note=regime_note)
@@ -570,12 +681,50 @@ def _fetch_pace_seconds() -> float:
         return 0.2
 
 
-def _symbols_for_scope(scope: str) -> list[str]:
+def _speculative_panel(
+    frames: dict[str, pd.DataFrame], universe: tuple[UniverseAsset, ...]
+) -> list[SpecPosition]:
+    """Drawdown-from-52w-high for every `spec`-role name in the scan universe.
+
+    Restored from fca5acb, which deleted this wholesale because the symbol pair was hardcoded
+    (operator data). Driving it off the role instead keeps the panel while leaving the names in
+    the watchlist store where they belong — mark a list `spec` and it populates.
+    """
+    rows: list[SpecPosition] = []
+    for asset in universe:
+        if asset.role != "spec":
+            continue
+        frame = frames.get(asset.symbol, pd.DataFrame())
+        if frame.empty:
+            continue
+        close = frame["close"].astype(float).dropna()
+        if close.empty:
+            continue
+        high = float(close.tail(min(len(close), 52)).max())
+        last = float(close.iloc[-1])
+        drawdown = ((last / high) - 1) * 100 if high else 0.0
+        rows.append(
+            SpecPosition(
+                symbol=asset.symbol,
+                pnl_pct=f"{drawdown:+.1f}%",
+                tone="down" if drawdown < 0 else "up",
+                thesis="Spec lane: small-size position with defined invalidation.",
+                entry=f"${last:,.2f}",
+                target="risk-adjusted outperformance vs VOO/sector ETF",
+                invalidation="weekly close below prior support plus lagging benchmark verdict",
+            )
+        )
+    return rows
+
+
+def _symbols_for_scope(scope: str, universe: tuple[UniverseAsset, ...] = UNIVERSE) -> list[str]:
     if scope == "macro":
         return list(MACRO_SYMBOLS) + ["VOO"]
-    if scope in {"signals", "all", "edgar"}:
-        return [asset.symbol for asset in UNIVERSE]
-    return [asset.symbol for asset in UNIVERSE]
+    # `context` symbols are quoted, never analyzed — no panel reads their bars, and both the
+    # watchlist quote strip and the ticker page fetch on demand (see cached_bars). Sweeping
+    # them daily was buying nothing and is the bulk of the request budget when an operator
+    # keeps old broker imports around.
+    return [asset.symbol for asset in universe if asset.role != "context"]
 
 
 def _macro_items(frames: dict[str, pd.DataFrame]) -> list:

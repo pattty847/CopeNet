@@ -96,6 +96,7 @@ from .rpc_market_watchlist import (
     handle_market_watchlist_remove,
     handle_market_watchlist_list_create,
     handle_market_watchlist_list_delete,
+    handle_market_watchlist_list_role,
     handle_market_watchlist_list_select,
     handle_market_symbols_search,
 )
@@ -362,6 +363,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_watchlist_list_delete(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.watchlist.list.select":
         await handle_market_watchlist_list_select(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.watchlist.list.role":
+        await handle_market_watchlist_list_role(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.symbols.search":
         await handle_market_symbols_search(req.id, req.params, send_json, orchestrator)
     elif req.method == "sessions.create":

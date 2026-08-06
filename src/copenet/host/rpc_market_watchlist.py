@@ -141,6 +141,14 @@ async def handle_market_watchlist_list_delete(request_id: str, params: dict[str,
     await _respond_state(request_id, send_json, store, price_cache(orchestrator))
 
 
+async def handle_market_watchlist_list_role(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Set a list's scan role. Applies on the next market refresh, not retroactively."""
+    raw = params or {}
+    store = watchlist_store(orchestrator)
+    store.set_list_role(str(raw.get("name") or ""), str(raw.get("role") or ""))
+    await _respond_state(request_id, send_json, store, price_cache(orchestrator))
+
+
 async def handle_market_watchlist_list_select(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     store = watchlist_store(orchestrator)

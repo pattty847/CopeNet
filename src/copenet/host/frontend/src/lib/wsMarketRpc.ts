@@ -7,6 +7,7 @@ import type {
   EconomicCalendarPayload,
   LedgerReport,
   MarketRead,
+  MarketSession,
   MorningBriefPayload,
   TickerEvidencePayload,
   TickerFundamentals,
@@ -241,6 +242,14 @@ export async function marketReadGetRpc(
   const payload = await request<{ read?: unknown }>('market.read.get', { target });
   const read = payload.read;
   return read && typeof read === 'object' ? (read as MarketRead | TickerRead) : null;
+}
+
+/** The day-over-day trail, which `market.read.get` returns alongside the market read. Split
+ *  into its own call so the read-polling path above keeps its "did generatedAt advance?"
+ *  shape rather than growing a second concern. */
+export async function marketSessionsGetRpc(request: WsRpcRequest): Promise<MarketSession[]> {
+  const payload = await request<{ sessions?: unknown }>('market.read.get', { target: 'market' });
+  return Array.isArray(payload.sessions) ? (payload.sessions as MarketSession[]) : [];
 }
 
 export interface BacktestPayload {

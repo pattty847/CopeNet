@@ -97,7 +97,20 @@ function constrainView(next: RrgView): RrgView {
   };
 }
 
-export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen: (s: string) => void; note?: string }) {
+export function Rrg({
+  panel,
+  onOpen,
+  note,
+  title = 'Sector Rotation · RRG',
+  subtitle = 'Relative strength vs S&P 500 · weekly · clockwise = rotation cycle',
+}: {
+  panel: Panel<RrgSector[]>;
+  onOpen: (s: string) => void;
+  note?: string;
+  /** Overridden by the industry chart, which is the same component over a different basket. */
+  title?: string;
+  subtitle?: string;
+}) {
   const isMobile = useIsMobile();
   const clipId = useId();
   const svgRef = useRef<SVGSVGElement | null>(null);
@@ -198,16 +211,19 @@ export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen
 
   return (
     <PanelCard
-      title="Sector Rotation · RRG"
+      title={title}
       status={panel.status}
-      subtitle="Relative strength vs S&P 500 · weekly · clockwise = rotation cycle"
+      subtitle={subtitle}
       style={{
         // Mobile: flex-basis 100% claims a full wrap line (width alone loses to flex-basis:0,
         // which let this panel get crushed into a sliver beside the Accumulation column).
         flex: isMobile ? '1 1 100%' : 1.55,
         minWidth: isMobile ? 0 : 420,
         alignSelf: 'stretch',
-        minHeight: 520,
+        // Desktop gets a floor to fill its grid cell. Mobile must NOT: a min-height-only card
+        // has no definite height, so the aspect-sized chart below would be padded out by
+        // whatever the floor exceeded — and the plot itself never grows to meet it.
+        minHeight: isMobile ? 0 : 520,
         height: 'auto',
       }}
       right={
@@ -265,7 +281,12 @@ export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen
           {note}
         </div>
       )}
-      <div style={{ flex: '1 1 0', minHeight: 0, height: 0, display: 'flex', alignItems: 'stretch', justifyContent: 'center', overflow: 'hidden' }}>
+      {/* `flex:1 1 0` + `height:0` only resolves to a real height when the card has a DEFINITE
+          one — true on desktop, where react-grid-layout pins the panel to its cell in pixels.
+          The mobile layout stacks panels in an auto-height column, so that same pair collapsed
+          the chart to zero and the RRG rendered blank. Mobile instead sizes from the viewBox
+          aspect ratio, which never depends on the parent resolving a height. */}
+      <div style={{ flex: isMobile ? '0 0 auto' : '1 1 0', minHeight: 0, height: isMobile ? 'auto' : 0, display: 'flex', alignItems: 'stretch', justifyContent: 'center', overflow: 'hidden' }}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
@@ -277,9 +298,10 @@ export function Rrg({ panel, onOpen, note }: { panel: Panel<RrgSector[]>; onOpen
           onMouseLeave={() => setHoveredSymbol(null)}
           style={{
             width: '100%',
-            height: '100%',
+            height: isMobile ? 'auto' : '100%',
             minHeight: 0,
-            maxHeight: '100%',
+            maxHeight: isMobile ? 'none' : '100%',
+            aspectRatio: isMobile ? `${W} / ${H}` : undefined,
             display: 'block',
             cursor: isZoomed ? 'grab' : 'zoom-in',
             touchAction: 'none',

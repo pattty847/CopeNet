@@ -103,7 +103,7 @@ async def run_morning_sweep(
             resolve_due_claims(runtime.store)
         except Exception:
             _LOG.warning("morning sweep: ledger resolution failed", exc_info=True)
-        movers, movers_label = compute_movers(runtime.store)
+        movers, movers_label = compute_movers(runtime.store, universe=runtime.scan_universe())
         brief = build_morning_brief(
             previous,
             current,

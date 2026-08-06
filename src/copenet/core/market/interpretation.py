@@ -44,16 +44,22 @@ Hard rules:
   the day and cares most about what is DIFFERENT since yesterday. Anchor the headline, summary, and
   attention items on those changes when they are material; if the overnight tape was quiet, say so
   plainly rather than re-describing the standing picture as if it were new.
+- When a RECENT SESSIONS section is present, treat this as a continuing story rather than a fresh
+  start. The owner reads these in sequence, so hold yourself to your own prior calls: if you have
+  said risk-on for three sessions and it still holds, say that; if the tape has broken your call,
+  say that outright instead of quietly switching sides. Never re-litigate a past call you cannot
+  see in the trail.
 
 Respond with ONLY a JSON object matching exactly this shape (no markdown fences, no commentary):
 {
   "headline": "one striking sentence, <= 120 chars",
   "emphasis": "a short substring of headline to visually highlight",
-  "summary": "2-3 sentences: your interpretation of the tape",
+  "summary": "3-5 sentences: your interpretation of the tape, written to be read as prose",
   "regime": "risk-off" | "chop" | "risk-on" | "event-risk",
-  "regime_reasoning": "1-2 sentences: why this regime call, citing packet facts",
+  "regime_reasoning": "2-4 sentences: why this regime call, citing packet facts",
+  "continuity": "2-4 sentences against the RECENT SESSIONS trail: what you called on prior sessions, whether it is holding up, and what specifically changed. Empty string when the packet has no trail.",
   "attention": [ { "symbol": "TICKER", "kind": "short label", "why": "one sentence citing facts" } ],
-  "rotation_read": "1-2 sentences on the sector rotation picture",
+  "rotation_read": "2-3 sentences on the sector rotation picture, including how it has shifted over the recent sessions",
   "speculative_comment": "1-2 sentences on the speculative lane positions, honest and unhyped",
   "thesis_killers": [ { "signal": "what's being called", "kill": "what would make it wrong" } ],
   "caveats": "1-2 sentences on the limits of this read (data gaps, sample sizes, regime drift)"
@@ -119,6 +125,8 @@ class MarketRead:
     summary: str
     regime: str
     regime_reasoning: str
+    # Empty on the first read after archiving shipped, and whenever there is no prior trail.
+    continuity: str
     attention: list[dict[str, str]]
     rotation_read: str
     speculative_comment: str
@@ -202,6 +210,7 @@ def parse_market_read(text: str, *, model: str, generated_at: str) -> MarketRead
         summary=str(raw.get("summary", "")).strip(),
         regime=regime if regime in _VALID_REGIMES else "chop",
         regime_reasoning=str(raw.get("regime_reasoning", "")).strip(),
+        continuity=str(raw.get("continuity", "")).strip(),
         attention=attention,
         rotation_read=str(raw.get("rotation_read", "")).strip(),
         speculative_comment=str(raw.get("speculative_comment", "")).strip(),

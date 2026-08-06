@@ -13,7 +13,10 @@ from typing import Any, Literal
 Tone = Literal["up", "down", "flat"]
 Direction = Literal["up", "down"]
 PanelStatus = Literal["live", "preview", "stale", "error"]
-AssetRole = Literal["index", "holding", "watch", "trend", "spec", "sector", "macro"]
+# "context" = in the scan universe for quotes, deliberately out of the signal panels and breadth.
+AssetRole = Literal[
+    "index", "holding", "watch", "trend", "spec", "sector", "industry", "macro", "context"
+]
 
 
 @dataclass(frozen=True)
@@ -205,6 +208,7 @@ class DashboardPayload:
     regime: MarketPanel
     macro: MarketPanel
     rrg: MarketPanel
+    industry_rrg: MarketPanel
     accumulation: MarketPanel
     trend: MarketPanel
     soft_bottoming: MarketPanel
@@ -245,6 +249,7 @@ class DashboardPayload:
             ),
             macro=MarketPanel(status="preview", data=[], note=preview),
             rrg=MarketPanel(status="preview", data=[], note=preview),
+            industry_rrg=MarketPanel(status="preview", data=[], note=preview),
             accumulation=MarketPanel(status="preview", data=[], note=preview),
             trend=MarketPanel(status="preview", data=[], note=preview),
             soft_bottoming=MarketPanel(status="preview", data=[], note=preview),
