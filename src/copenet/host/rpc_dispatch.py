@@ -80,6 +80,11 @@ from .rpc_market import (
     handle_market_backtest_run,
     handle_market_backtest_stress_test,
 )
+from .rpc_market_alerts import (
+    handle_market_alerts_cancel,
+    handle_market_alerts_create,
+    handle_market_alerts_list,
+)
 from .rpc_market_webull import (
     handle_market_webull_account_select,
     handle_market_webull_accounts,
@@ -331,6 +336,12 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_yield_curve_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ledger.get":
         await handle_market_ledger_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.alerts.list":
+        await handle_market_alerts_list(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.alerts.create":
+        await handle_market_alerts_create(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.alerts.cancel":
+        await handle_market_alerts_cancel(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.status":
         await handle_market_webull_status(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.auth":

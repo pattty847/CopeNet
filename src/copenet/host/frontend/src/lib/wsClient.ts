@@ -107,7 +107,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketAlertsCancelRpc, marketAlertsCreateRpc, marketAlertsListRpc, marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import type { FinancialFrequency } from '../sections/market/types';
 import type { YieldCurveRange } from '../sections/market/types';
 import {
@@ -746,6 +746,18 @@ class WsClient {
 
   async marketWatchlistGet() {
     return marketWatchlistGetRpc(this.request.bind(this));
+  }
+
+  async marketAlertsList(symbol: string) {
+    return marketAlertsListRpc(this.request.bind(this), symbol);
+  }
+
+  async marketAlertsCreate(params: { symbol: string; direction: 'above' | 'below'; threshold: number; referencePrice: number }) {
+    return marketAlertsCreateRpc(this.request.bind(this), params);
+  }
+
+  async marketAlertsCancel(alertId: string, symbol: string) {
+    return marketAlertsCancelRpc(this.request.bind(this), alertId, symbol);
   }
 
   async marketWatchlistAdd(symbol: string, name = '') {

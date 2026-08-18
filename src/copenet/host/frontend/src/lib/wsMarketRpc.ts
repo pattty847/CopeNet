@@ -9,6 +9,7 @@ import type {
   MarketRead,
   MarketSession,
   MorningBriefPayload,
+  PriceAlert,
   TickerEvidencePayload,
   TickerFundamentals,
   FinancialFrequency,
@@ -316,6 +317,25 @@ function watchlistState(payload: { items?: unknown; lists?: unknown; active?: un
 
 export async function marketWatchlistGetRpc(request: WsRpcRequest): Promise<WatchlistWireState> {
   return watchlistState(await request<Record<string, unknown>>('market.watchlist.get', {}));
+}
+
+function priceAlerts(payload: { alerts?: unknown }): PriceAlert[] {
+  return Array.isArray(payload.alerts) ? (payload.alerts as PriceAlert[]) : [];
+}
+
+export async function marketAlertsListRpc(request: WsRpcRequest, symbol: string): Promise<PriceAlert[]> {
+  return priceAlerts(await request<{ alerts?: unknown }>('market.alerts.list', { symbol }));
+}
+
+export async function marketAlertsCreateRpc(
+  request: WsRpcRequest,
+  params: { symbol: string; direction: 'above' | 'below'; threshold: number; referencePrice: number },
+): Promise<PriceAlert[]> {
+  return priceAlerts(await request<{ alerts?: unknown }>('market.alerts.create', params));
+}
+
+export async function marketAlertsCancelRpc(request: WsRpcRequest, alertId: string, symbol: string): Promise<PriceAlert[]> {
+  return priceAlerts(await request<{ alerts?: unknown }>('market.alerts.cancel', { alertId, symbol }));
 }
 
 export async function marketWatchlistAddRpc(request: WsRpcRequest, symbol: string, name = ''): Promise<WatchlistWireState> {

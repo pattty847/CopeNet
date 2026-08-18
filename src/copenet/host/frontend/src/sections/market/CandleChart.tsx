@@ -28,6 +28,8 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
+import type { PriceAlert } from './types';
+import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
 import {
   hasRenderableFinancialOverlay,
@@ -366,6 +368,9 @@ export function CandleChart({
   financialOverlayUnit,
   financialOverlayValuation = false,
   financialOverlayInverted = false,
+  priceAlerts = [],
+  alertPlacementActive = false,
+  onAlertPriceSelected,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -382,6 +387,9 @@ export function CandleChart({
   financialOverlayValuation?: boolean;
   /** Inverted valuations (yields) format as percentages instead of multiples. */
   financialOverlayInverted?: boolean;
+  priceAlerts?: PriceAlert[];
+  alertPlacementActive?: boolean;
+  onAlertPriceSelected?: (price: number) => void;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -392,15 +400,21 @@ export function CandleChart({
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [dayPopup, setDayPopup] = useState<DayPopupState | null>(null);
   const [clusterBoxes, setClusterBoxes] = useState<RenderedBox[]>([]);
+  const [chartGeneration, setChartGeneration] = useState(0);
   // Refs so the (once-subscribed) chart handlers always see current data.
   const evidenceRef = useRef<EvidenceItem[]>(evidence);
   const eventsRef = useRef<ChartEvent[]>(events);
   const barsRef = useRef<Ohlcv[]>(bars);
   const futureMarkersRef = useRef<SeriesMarker<Time>[]>([]);
+  const alertPlacementRef = useRef(alertPlacementActive);
+  const onAlertPriceSelectedRef = useRef(onAlertPriceSelected);
   const rafRef = useRef<number | null>(null);
   evidenceRef.current = evidence;
   eventsRef.current = events;
   barsRef.current = bars;
+  alertPlacementRef.current = alertPlacementActive;
+  onAlertPriceSelectedRef.current = onAlertPriceSelected;
+  useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration);
   // TradingView muscle memory: right-click the price axis to flip log/linear. Persisted.
   const [logScale, setLogScale] = useState(() => {
     try {
@@ -591,6 +605,12 @@ export function CandleChart({
         return;
       }
       const time = param.time as number;
+      if (alertPlacementRef.current) {
+        const price = candle.coordinateToPrice(param.point.y);
+        if (price != null && Number.isFinite(price) && price > 0) onAlertPriceSelectedRef.current?.(price);
+        setDayPopup(null);
+        return;
+      }
       const items = evidenceForDay(evidenceRef.current, normalize(barsRef.current), time);
       if (!items.length) {
         setDayPopup(null);
@@ -629,6 +649,7 @@ export function CandleChart({
     volumeRef.current = volume;
     financialRef.current = financialSeries;
     markersRef.current = markers;
+    setChartGeneration((generation) => generation + 1);
 
     const ro = new ResizeObserver(() => {
       if (containerRef.current) {
@@ -805,7 +826,7 @@ export function CandleChart({
     : null;
 
   return (
-    <div style={{ position: 'relative' }} onContextMenu={onContextMenu}>
+    <div style={{ position: 'relative', cursor: alertPlacementActive ? 'crosshair' : undefined }} onContextMenu={onContextMenu}>
       <div ref={containerRef} style={{ width: '100%' }} />
       {clusterBoxes.map((box) => (
         <div
@@ -927,6 +948,11 @@ export function CandleChart({
           style={{ position: 'absolute', top: 6, right: 6, zIndex: 5, borderRadius: 6, padding: '2px 7px', font: '700 8.5px Inter', letterSpacing: '.1em', background: 'rgba(251,148,35,.14)', color: MM.accent, border: `1px solid rgba(251,148,35,.3)`, pointerEvents: 'none' }}
         >
           LOG
+        </span>
+      )}
+      {alertPlacementActive && (
+        <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px Inter', letterSpacing: '.04em', pointerEvents: 'none' }}>
+          Click the chart to place a daily-close alert
         </span>
       )}
       {bars.length === 0 && (

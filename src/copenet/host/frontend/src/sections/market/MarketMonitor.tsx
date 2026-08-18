@@ -4,6 +4,7 @@ import { BriefingHero, MacroBoard, ModelBadge } from './panelsTop';
 import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
+import { PriceAlertControl } from './PriceAlertControl';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
 import { observationTime, snapOverlayToCandles } from './financialOverlay';
 import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinancialMetrics';
@@ -11,6 +12,7 @@ import { isValuationPayload } from './types';
 import { AccumulationWatch, Contrarian, Evidence, Portfolio, SoftBottomingWatch, Speculative, TrendWatch, Watchlist } from './panelsLists';
 import { SEC_DEPTHS, useForwardLedger, useMarketDashboard, useMarketRead, useMarketSessions, useMarketWatchlist, useMorningBrief, useTradeLedger, useTickerDetail, useTickerEvidence, useTickerRead, type MarketWatchlistState } from './useMarketMonitorData';
 import { useFinancialSeries } from './useFinancialSeries';
+import { usePriceAlerts } from './usePriceAlerts';
 import { MorningBrief } from './MorningBrief';
 import { EconomicCalendarWidget } from './EconomicCalendarWidget';
 import { useEconomicCalendar } from './useEconomicCalendar';
@@ -344,6 +346,9 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
   const [tf, setTf] = useState<'D' | 'W' | 'M'>('W');
   const [overlayMetric, setOverlayMetric] = useState<OverlayMetric | null>(null);
   const [overlayFrequency, setOverlayFrequency] = useState<FinancialFrequency>('quarterly');
+  const [alertPlacementActive, setAlertPlacementActive] = useState(false);
+  const [pickedAlertPrice, setPickedAlertPrice] = useState<number | null>(null);
+  const priceAlerts = usePriceAlerts(symbol);
   const overlayMetrics = useFinancialMetrics();
   const overlayIsValuation = isValuationMetric(overlayMetrics, overlayMetric);
   // A metric that declares its supported frequencies (ROIC: ttm only) clamps
@@ -373,6 +378,7 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
     }
   };
   const series = tf === 'D' ? td.series.daily : tf === 'M' ? td.series.monthly : td.series.weekly;
+  const currentPrice = td.series.daily.at(-1)?.c ?? series.at(-1)?.c ?? 0;
   const chartEvents = sec.payload ? sec.payload.events : td.events;
   const secEvidence = sec.payload?.evidence ?? [];
   const tfLabel = tf === 'D' ? 'Daily' : tf === 'M' ? 'Monthly' : 'Weekly';
@@ -439,6 +445,18 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
         status={series.length ? 'live' : 'preview'}
         right={
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <PriceAlertControl
+              alerts={priceAlerts.alerts}
+              currentPrice={currentPrice}
+              pickedPrice={pickedAlertPrice}
+              placing={alertPlacementActive}
+              loading={priceAlerts.loading}
+              error={priceAlerts.error}
+              onStartPlacing={() => setAlertPlacementActive(true)}
+              onStopPlacing={() => setAlertPlacementActive(false)}
+              onCreate={(direction, threshold) => priceAlerts.create(direction, threshold, currentPrice)}
+              onCancel={priceAlerts.cancel}
+            />
             <FinancialOverlayControls
               metrics={overlayMetrics}
               metric={overlayMetric}
@@ -469,6 +487,12 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
             && isValuationPayload(overlaySeries.data)
             && overlaySeries.data.inverted === true
           }
+          priceAlerts={priceAlerts.alerts}
+          alertPlacementActive={alertPlacementActive}
+          onAlertPriceSelected={(price) => {
+            setPickedAlertPrice(price);
+            setAlertPlacementActive(false);
+          }}
         />
         {sec.loading && !secEvidence.length && (
           <div style={{ fontSize: 10.5, color: MM.dim, fontStyle: 'italic', marginTop: 6 }}>

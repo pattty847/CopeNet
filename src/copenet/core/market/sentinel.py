@@ -20,6 +20,7 @@ from typing import Any
 
 from copenet.core.pulse import PulseRecord
 
+from .alerts import evaluate_price_alerts
 from .brief import build_morning_brief, compute_movers
 from .ledger import resolve_due_claims
 from .runtime import MarketRuntime, resolve_market_runtime
@@ -97,6 +98,10 @@ async def run_morning_sweep(
         previous = runtime.store.load_dashboard_wire()
         await asyncio.to_thread(runtime.refresh, scope="all")
         current = runtime.store.load_dashboard_wire()
+        try:
+            await asyncio.to_thread(evaluate_price_alerts, runtime, pulse_store)
+        except Exception:
+            _LOG.warning("morning sweep: price-alert evaluation failed", exc_info=True)
         try:
             # Prices are fresh — score any forward-ledger claims that just came due, BEFORE
             # the chained model read so its track-record line is current.

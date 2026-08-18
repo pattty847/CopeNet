@@ -1,6 +1,6 @@
 # Market Sentinel Alerts — Architecture and Experiment Log
 
-**Status:** Phase 0 — data feasibility and semantics
+**Status:** Phase 1 partial — durable daily-close price crossings ship; intraday lane remains in Phase 0
 
 **Started:** 2026-07-29
 
@@ -28,7 +28,19 @@ decide whether a mathematical crossing occurred.
 
 ## 2. Phase plan
 
-### Phase 0 — specification and data proof (current)
+### Shipped first vertical slice
+
+- The ticker chart's **Add alert** control enters a crosshair placement mode and creates a
+  one-shot `above` or `below` price rule.
+- Rules persist under the operator's Market directory; cancelled and triggered rules remain
+  durable, and trigger events append to JSONL.
+- Active levels render as dashed chart price lines.
+- Evaluation uses the canonical split-adjusted daily close during the unattended morning sweep
+  and operator-triggered full/signal refreshes. A crossing creates a Pulse item.
+- The UI explicitly says **daily close**. Intraday polling, Telegram, cooldown/rearm, indicator
+  rules, and composite conditions are not implied by this slice.
+
+### Phase 0 — specification and data proof (completed foundation)
 
 - Measure actual yfinance intraday/session/volume behavior.
 - Keep raw probe data local; commit only code and compact findings.

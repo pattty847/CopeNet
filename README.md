@@ -62,6 +62,15 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
 
+**Chart-created price alerts** — click **Add alert**, place a level directly on the
+candlestick chart, and choose whether a daily close should cross above or below it.
+Rules are durable and one-shot; active levels return as chart lines, and a crossing
+from the unattended morning market sweep creates a Pulse item. The control labels the
+daily-close cadence explicitly while the separately designed intraday lane remains in
+data validation.
+
+![CopeNet Market Monitor — chart-created daily-close price alert](docs/imgs/market-panel/copenet-price-alert.png)
+
 **Financial-series overlays** — ticker charts can layer quarterly,
 trailing-twelve-month, or annual revenue over split-adjusted price, plus historical
 P/E built from the price and the TTM diluted EPS that was actually public on each
