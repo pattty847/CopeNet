@@ -111,7 +111,6 @@ copenet/
 │   ├── rpc_market*.py                  ← Market dashboard/watchlist/calendar/yield handlers
 │   ├── rpc_nasa.py                     ← NASA APOD handlers
 │   ├── rpc_permissions.py              ← persisted approval allowlist handlers
-│   ├── rpc_catalog.py                 ← compatibility export for catalog-style handlers
 │   ├── rpc_catalog_core.py            ← provider/model/tool catalogs
 │   ├── rpc_profile.py                 ← profile + briefing handlers
 │   ├── rpc_persona.py                 ← persona handlers
@@ -150,11 +149,8 @@ copenet/
 ├── browser_agent/                     ← deterministic browser-control prototype (Playwright)
 │   ├── cli.py, loop.py, decision.py, observer.py, validator.py, session.py, trace.py, models.py
 │
-├── probes/
-│   └── runtime_bundle.py              ← runtime probe payload helper
-│
-└── (legacy compatibility shims at top-level: orchestrator.py, harness.py, tracing.py,
-   sessions/, tools/  — re-export from core/ for backward compatibility)
+└── probes/
+    └── runtime_bundle.py              ← runtime probe payload helper
 ```
 
 **Web UI:** `host/api.py` serves the React SPA from `host/frontend/dist/` at `/`, with `/assets` for hashed bundles and `/imgs` for public images. If the production build is missing, `/` returns an actionable `503`; build the frontend before starting a UI-serving host or packaging a wheel.

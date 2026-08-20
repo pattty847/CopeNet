@@ -150,7 +150,7 @@ async def test_egress_allowlist_permits_private_host_but_keeps_secret_checks(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     _enable(monkeypatch)
-    monkeypatch.setenv("COPENET_BARRICADE_FETCH_ALLOWLIST", "127.0.0.1")
+    monkeypatch.setenv("COPNET_WEB_FETCH_ALLOWLIST", "127.0.0.1")
 
     async def fake_extract(self, *, url: str, max_chars: int = 20000):  # noqa: ANN001
         from copenet.core.web_ingest import WebExtractResult
