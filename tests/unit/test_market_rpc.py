@@ -103,3 +103,32 @@ async def test_market_refresh_returns_run_identifier(tmp_path: Path, monkeypatch
     assert payload["runId"].startswith("market-refresh-")
     assert payload["startedAt"].endswith("Z")
     assert refresh_scopes == ["macro"]
+
+
+async def test_manual_signal_refresh_does_not_evaluate_daily_close_alerts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    orchestrator = FakeOrchestrator(tmp_path)
+    runtime = runtime_module.resolve_market_runtime(orchestrator)
+    price_refreshes: list[str] = []
+
+    monkeypatch.setattr(
+        MarketRuntime,
+        "refresh",
+        lambda self, *, scope="all": DashboardPayload.empty(as_of="test"),
+    )
+    monkeypatch.setattr(
+        runtime.prices,
+        "refresh",
+        lambda symbol, *, max_age_seconds=None: price_refreshes.append(symbol),
+    )
+
+    async def send_json(frame: dict[str, Any]) -> None:
+        del frame
+
+    await handle_market_refresh("refresh", {"scope": "signals"}, send_json, orchestrator)
+    await asyncio.gather(*orchestrator._background_tasks)
+
+    # Today's daily candle remains provisional during market hours. Only the pre-market
+    # sentinel may treat the latest cached candle as a completed daily close.
+    assert price_refreshes == []

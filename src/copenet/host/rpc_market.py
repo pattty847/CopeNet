@@ -9,7 +9,6 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from copenet.core.market import MarketRuntime
-from copenet.core.market.alerts import evaluate_price_alerts
 from copenet.core.market.backtester import run_portfolio_backtest, run_scenario
 from copenet.core.market.edgar import fetch_fundamentals, fetch_ticker_evidence
 from copenet.core.market.financials import (
@@ -135,15 +134,9 @@ async def handle_market_refresh(request_id: str, params: dict[str, Any] | None, 
 
     async def _refresh_then_interpret() -> None:
         await asyncio.to_thread(runtime.refresh, scope=scope)
-        if scope in {"all", "signals"}:
-            try:
-                await asyncio.to_thread(
-                    evaluate_price_alerts,
-                    runtime,
-                    getattr(orchestrator, "_pulse_store", None),
-                )
-            except Exception:
-                logging.warning("market refresh: price-alert evaluation failed", exc_info=True)
+        # A manual daytime refresh includes today's still-forming daily candle. Daily-close
+        # alerts therefore evaluate only in the pre-market sentinel, after the prior session
+        # is complete; treating this refresh as a close can fire a rule on an intraday print.
         # Default lane: one automatic whole-market model read per refresh (operator design).
         if provider is not None and scope in {"all", "signals"}:
             try:

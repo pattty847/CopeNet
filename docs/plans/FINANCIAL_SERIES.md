@@ -3,10 +3,11 @@
 ## Outcome
 
 CopeNet now has one canonical financial-series path shared by chart overlays,
-WebSocket RPC, and the `market.financials` agent tool. Revenue is the first metric.
-It supports quarterly, annual, and TTM views; reported-only or canonical bases;
-filing-date point-in-time queries; range filters; provenance; and explicit quality
-warnings.
+WebSocket RPC, and the `market.financials` agent tool. The registry-driven chart
+surface now serves 50 selectable metrics: 43 SEC-backed base/derived series and
+7 price-backed valuation series. Supported cadence is declared per metric rather
+than assumed; the shared path carries filing-date point-in-time queries, range
+filters, provenance, revision semantics, and explicit quality warnings.
 
 The normalization and storage engine lives in CopeTech-Edgar. CopeNet owns the
 product boundary and visualization:
@@ -95,17 +96,13 @@ or cross-check—not as the sole denominator in a reproducible open series. Paid
 vendors remain appropriate for estimates, broader international coverage,
 restatement support, and service guarantees.
 
-## Metric roadmap
+## Metric status
 
-The registry currently contains USD revenue duration facts. Next additions should
-reuse the same observation and provenance contract:
-
-1. gross profit, operating income, net income;
-2. operating cash flow, capital expenditure, free cash flow;
-3. diluted EPS and clearly distinguished diluted/basic/period-end share counts;
-4. trailing valuation metrics using split-adjusted price and point-in-time TTM
-   denominators; and
-5. forward valuation metrics only after adding timestamped consensus estimates.
+Phases 1–4 of `FUNDAMENTALS_EXPANSION.md` are implemented: income-statement,
+cash-flow/YTD, instant balance-sheet, composite, ROIC/coverage, and trailing
+valuation families all reuse the same observation and provenance contract.
+Forward valuation remains intentionally absent until a timestamped consensus
+estimate source exists.
 
 Historical trailing P/E is not market cap divided by revenue and does not require
 revenue per share. It is either split-adjusted price divided by point-in-time TTM
@@ -114,7 +111,7 @@ share count. Negative or near-zero earnings need an explicit unavailable policy.
 
 ## Current limitations
 
-- Revenue is USD-only and Company Facts-only.
+- SEC-backed series are Company Facts-only and predominantly USD-denominated.
 - No filing-level XBRL fallback or estimate source is implemented yet.
 - Conflict flags identify disagreement but do not yet include a materiality score.
 - Filing timestamps are day-granular; same-day market-session timing is not yet

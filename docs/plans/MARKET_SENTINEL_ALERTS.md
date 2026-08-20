@@ -35,8 +35,9 @@ decide whether a mathematical crossing occurred.
 - Rules persist under the operator's Market directory; cancelled and triggered rules remain
   durable, and trigger events append to JSONL.
 - Active levels render as dashed chart price lines.
-- Evaluation uses the canonical split-adjusted daily close during the unattended morning sweep
-  and operator-triggered full/signal refreshes. A crossing creates a Pulse item.
+- Evaluation uses the canonical split-adjusted daily close during the unattended morning sweep.
+  Manual full/signal refreshes intentionally do not evaluate rules because today's cached daily
+  candle is still forming during market hours. A completed-close crossing creates a Pulse item.
 - The UI explicitly says **daily close**. Intraday polling, Telegram, cooldown/rearm, indicator
   rules, and composite conditions are not implied by this slice.
 
@@ -204,15 +205,26 @@ Decisions:
 - Volume evidence stays interval-specific and distinguishes a missing field, reported zeros,
   isolated nonzero rows, and dense nonzero coverage.
 
-### 2026-07-30 — scheduled Yahoo WebSocket session
+### 2026-07-30 — full-day Yahoo WebSocket session
 
-Planned window: 09:20–16:10 America/New_York. Symbols: AAPL and SPY.
+Completed window: 09:20–16:10 America/New_York. Symbols: AAPL and SPY. The bounded probe
+received 54,905 decoded messages on one uninterrupted connection with zero reconnects or
+errors. Median observed vendor-to-receive lag was about 1.46 seconds; p95 was about 2.74
+seconds.
 
-The bounded probe records decoded price messages separately from connection events. It has a
-hard stop, at most five reconnects, progressively longer randomized backoff, and an exact-date
-guard. Evidence includes populated fields, message counts, vendor timestamps, receive lag,
-disconnect exceptions, HTTP status when exposed, WebSocket close code/reason, and reconnect
-attempts. Stream messages remain experimental quote observations rather than canonical candles.
+Findings:
+
+- Regular-session messages carried usable prices and populated trade/volume-related fields.
+- Premarket messages carried prices but no populated size or volume fields.
+- After-hours prices continued. In the sampled ten-minute window, only two messages per symbol
+  populated size/day-volume fields—far too sparse to support extended-hours VWAP or relative
+  volume.
+- The stream therefore supports timely price-only crossings, including extended hours. It does
+  not replace canonical candles and does not prove usable extended-hours volume.
+
+The probe records decoded price messages separately from connection events, uses a hard stop,
+bounded reconnects with progressively longer randomized backoff, and an exact-date guard. Raw
+messages remain local beneath the operator's Market directory.
 
 ## 7. Open Phase 0 questions
 
