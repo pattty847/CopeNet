@@ -126,6 +126,7 @@ export function PanelCard({
   right,
   children,
   style,
+  headerLayout = 'default',
 }: {
   title: string;
   status: PanelStatus;
@@ -133,6 +134,7 @@ export function PanelCard({
   right?: ReactNode;
   children: ReactNode;
   style?: CSSProperties;
+  headerLayout?: 'default' | 'mobile-toolbar';
 }) {
   return (
     <div
@@ -147,11 +149,11 @@ export function PanelCard({
       }}
     >
       <div
-        className="market-panel-drag-handle"
+        className={`market-panel-drag-handle ${headerLayout === 'mobile-toolbar' ? 'market-panel-header--mobile-toolbar' : ''}`}
         style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, marginBottom: subtitle ? 4 : 12 }}
       >
         <span style={label}>{title}</span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+        <div className="market-panel-header__actions" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {right}
           <PreviewBadge status={status} />
         </div>

@@ -792,3 +792,139 @@ html[data-theme='dark'] .shell-workbench-feature {
   scrollbar-width: thin;
   scrollbar-color: var(--color-shell-border-strong) transparent;
 }
+
+/* Market chart controls keep their natural touch targets and move as one TradingView-style
+   rail on narrow screens. The nudge buttons consume fixed space; the rail gets exactly the
+   remaining width and also supports native touch scrolling. */
+.market-chart-toolbar {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.market-chart-toolbar__rail {
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scroll-behavior: smooth;
+  touch-action: pan-x;
+  scrollbar-width: thin;
+}
+
+.market-chart-toolbar__rail::-webkit-scrollbar {
+  height: 4px;
+}
+
+.market-chart-toolbar__content {
+  display: flex;
+  width: max-content;
+  align-items: center;
+  gap: 8px;
+  padding-bottom: 3px;
+}
+
+.market-chart-toolbar__timeframes {
+  display: flex;
+  flex: 0 0 auto;
+  gap: 3px;
+  padding: 3px;
+  border: 1px solid rgba(254, 252, 244, 0.06);
+  border-radius: 8px;
+  background: #050506;
+}
+
+.market-chart-toolbar__nudge {
+  display: none;
+  flex: 0 0 28px;
+  width: 28px;
+  height: 34px;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(254, 252, 244, 0.06);
+  background: #080809;
+  color: var(--color-shell-muted);
+}
+
+.market-price-alert-trigger__count {
+  display: none;
+}
+
+@media (max-width: 1023px) {
+  .market-ticker-detail {
+    padding: 12px !important;
+  }
+
+  .market-panel-header--mobile-toolbar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .market-panel-header--mobile-toolbar .market-panel-header__actions {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .market-chart-toolbar {
+    width: 100%;
+    flex: 1 1 auto;
+  }
+
+  .market-chart-toolbar__rail {
+    flex: 1 1 auto;
+  }
+
+  .market-chart-toolbar__nudge {
+    display: inline-flex;
+  }
+
+  .market-chart-toolbar__nudge--left {
+    margin-right: 5px;
+    border-radius: 8px 3px 3px 8px;
+  }
+
+  .market-chart-toolbar__nudge--right {
+    margin-left: 5px;
+    border-radius: 3px 8px 8px 3px;
+  }
+
+  .market-chart-toolbar__nudge:disabled {
+    color: rgba(162, 155, 144, 0.28);
+  }
+
+  .market-price-alert-trigger {
+    position: relative;
+    width: 36px;
+    height: 34px;
+    justify-content: center;
+    padding: 0 !important;
+  }
+
+  .market-price-alert-trigger__label {
+    display: none;
+  }
+
+  .market-price-alert-trigger__count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: inline-flex;
+    min-width: 15px;
+    height: 15px;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #fb9423;
+    color: #1a1205;
+    font: 700 8px Inter;
+  }
+
+  .market-price-alert-popover {
+    position: fixed !important;
+    top: max(74px, calc(env(safe-area-inset-top) + 58px)) !important;
+    right: 12px !important;
+    left: 12px !important;
+    width: auto !important;
+    max-height: calc(100dvh - 160px);
+    overflow-y: auto;
+  }
+}

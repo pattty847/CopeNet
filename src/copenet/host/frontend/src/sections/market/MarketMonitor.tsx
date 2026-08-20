@@ -5,6 +5,7 @@ import { Rrg } from './RrgChart';
 import { BriefingReasoning } from './BriefingReasoning';
 import { CandleChart } from './CandleChart';
 import { PriceAlertControl } from './PriceAlertControl';
+import { MarketChartToolbar } from './MarketChartToolbar';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
 import { observationTime, snapOverlayToCandles } from './financialOverlay';
 import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinancialMetrics';
@@ -404,17 +405,8 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
     // inject extra slots into the chart's index-based time axis and squeeze the candles.
     return snapOverlayToCandles(raw, series.map((bar) => bar.t));
   })();
-  const tfBtn = (key: 'D' | 'W' | 'M', label: string) => (
-    <button
-      key={key}
-      onClick={() => setTf(key)}
-      style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 11px', font: '600 10px Inter', background: tf === key ? MM.accent : 'transparent', color: tf === key ? '#1a1205' : MM.muted }}
-    >
-      {label}
-    </button>
-  );
   return (
-    <div style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
+    <div className="market-ticker-detail" style={{ padding: 22, display: 'flex', flexDirection: 'column', gap: 16 }}>
       <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
         <button onClick={onClose} style={{ cursor: 'pointer', border: `1px solid rgba(254,252,244,.08)`, background: MM.panel, color: MM.muted, borderRadius: 9, padding: '8px 13px', font: '600 11px Inter' }}>← Market Monitor</button>
         <span style={{ fontFamily: mono, fontSize: 26, fontWeight: 600, color: MM.text, letterSpacing: '-.02em' }}>{td.symbol}</span>
@@ -443,9 +435,12 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
       <PanelCard
         title={`Price · ${tfLabel}`}
         status={series.length ? 'live' : 'preview'}
+        headerLayout="mobile-toolbar"
         right={
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <PriceAlertControl
+          <MarketChartToolbar
+            timeframe={tf}
+            onTimeframe={setTf}
+            alertControl={<PriceAlertControl
               alerts={priceAlerts.alerts}
               currentPrice={currentPrice}
               pickedPrice={pickedAlertPrice}
@@ -456,21 +451,16 @@ function TickerDetail({ symbol, onClose, watchlist }: { symbol: string; onClose:
               onStopPlacing={() => setAlertPlacementActive(false)}
               onCreate={(direction, threshold) => priceAlerts.create(direction, threshold, currentPrice)}
               onCancel={priceAlerts.cancel}
-            />
-            <FinancialOverlayControls
+            />}
+            financialControls={<FinancialOverlayControls
               metrics={overlayMetrics}
               metric={overlayMetric}
               frequency={effectiveOverlayFrequency}
               loading={overlaySeries.loading}
               onMetric={setOverlayMetric}
               onFrequency={setOverlayFrequency}
-            />
-            <div style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
-              {tfBtn('D', '1D')}
-              {tfBtn('W', '1W')}
-              {tfBtn('M', '1M')}
-            </div>
-          </div>
+            />}
+          />
         }
       >
         <CandleChart

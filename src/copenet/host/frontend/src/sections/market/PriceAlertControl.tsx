@@ -59,14 +59,19 @@ export function PriceAlertControl({
     <div style={{ position: 'relative' }}>
       <button
         type="button"
+        className="market-price-alert-trigger"
         onClick={start}
         aria-expanded={open}
+        aria-label={alerts.length ? `${alerts.length} active price alert${alerts.length === 1 ? '' : 's'}` : 'Add price alert'}
+        title={alerts.length ? `${alerts.length} active price alert${alerts.length === 1 ? '' : 's'}` : 'Add price alert'}
         style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${alerts.length ? 'rgba(251,148,35,.35)' : MM.border}`, background: alerts.length ? MM.accentSoft : '#050506', color: alerts.length ? MM.accent : MM.muted, borderRadius: 8, padding: '6px 9px', font: '600 10px Inter' }}
       >
-        <Bell size={12} /> {alerts.length ? `${alerts.length} alert${alerts.length === 1 ? '' : 's'}` : 'Add alert'}
+        <Bell size={12} />
+        <span className="market-price-alert-trigger__label">{alerts.length ? `${alerts.length} alert${alerts.length === 1 ? '' : 's'}` : 'Add alert'}</span>
+        {alerts.length > 0 && <span className="market-price-alert-trigger__count">{alerts.length}</span>}
       </button>
       {open && (
-        <div style={{ position: 'absolute', zIndex: 40, top: 'calc(100% + 8px)', right: 0, width: 310, border: `1px solid ${MM.borderHi}`, borderRadius: 12, background: '#0b0b0d', padding: 12, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
+        <div className="market-price-alert-popover" style={{ position: 'absolute', zIndex: 40, top: 'calc(100% + 8px)', right: 0, width: 310, border: `1px solid ${MM.borderHi}`, borderRadius: 12, background: '#0b0b0d', padding: 12, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ font: '700 9px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>Daily-close price alert</span>
             <button type="button" onClick={close} aria-label="Close price alerts" style={{ border: 0, background: 'transparent', color: MM.dim, cursor: 'pointer', padding: 2 }}><X size={13} /></button>

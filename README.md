@@ -71,6 +71,14 @@ data validation.
 
 ![CopeNet Market Monitor — chart-created daily-close price alert](docs/imgs/market-panel/copenet-price-alert.png)
 
+On phones, alert, financial-overlay, and timeframe controls share a compact
+TradingView-style toolbar. The available width stays with the chart; the tool rail
+swipes horizontally, exposes left/right nudge buttons, and keeps a thin scrollbar for
+discoverability. Alert creation opens as a phone-width sheet instead of overflowing the
+chart edge.
+
+![CopeNet Market Monitor — mobile chart toolbar](docs/imgs/market-panel/copenet-mobile-chart-toolbar.png)
+
 **Financial-series overlays** — ticker charts can layer quarterly,
 trailing-twelve-month, or annual revenue over split-adjusted price, plus historical
 P/E built from the price and the TTM diluted EPS that was actually public on each
