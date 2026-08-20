@@ -125,7 +125,6 @@ DEFAULT_ALLOWED_FETCH_DOMAINS: frozenset[str] = frozenset(
 )
 
 _FETCH_ALLOWLIST_ENV = "COPNET_WEB_FETCH_ALLOWLIST"
-_LEGACY_PRIVATE_ALLOWLIST_ENV = "COPENET_BARRICADE_FETCH_ALLOWLIST"
 
 
 def barricade_enabled() -> bool:
@@ -151,15 +150,11 @@ def fetch_allowlist() -> set[str]:
     """Destinations web.fetch/web.search may reach without an approval prompt.
 
     Built-in defaults, unioned with operator-configured entries from
-    COPNET_WEB_FETCH_ALLOWLIST (and the legacy COPENET_BARRICADE_FETCH_ALLOWLIST
-    name, merged in for back-compat). Additive: operators extend the safe
-    defaults, they don't need to restate them.
+    COPNET_WEB_FETCH_ALLOWLIST. Additive: operators extend the safe defaults,
+    they don't need to restate them.
     """
     operator_raw = os.environ.get(_FETCH_ALLOWLIST_ENV, "")
-    legacy_raw = os.environ.get(_LEGACY_PRIVATE_ALLOWLIST_ENV, "")
-    operator_entries = {
-        host.strip().lower() for host in f"{operator_raw},{legacy_raw}".split(",") if host.strip()
-    }
+    operator_entries = {host.strip().lower() for host in operator_raw.split(",") if host.strip()}
     return DEFAULT_ALLOWED_FETCH_DOMAINS | operator_entries
 
 

@@ -59,11 +59,6 @@ def list_task_modes() -> list[dict[str, str]]:
     return _list_category("task-modes")
 
 
-def list_presets() -> list[dict[str, str]]:
-    """Backward-compatible flat preset listing."""
-    return list_profiles()
-
-
 def get_prompt_text(category: str, prompt_id: str) -> str | None:
     """Return raw text for a prompt category/id pair."""
     if not prompt_id or not prompt_id.strip():
@@ -170,8 +165,3 @@ def compose_prompt(
     if not parts:
         return None
     return "\n\n".join(parts)
-
-
-def get_preset_text(preset_id: str) -> str | None:
-    """Backward-compatible lookup for base profiles."""
-    return get_profile_text(preset_id)

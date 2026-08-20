@@ -57,8 +57,6 @@ The current product direction is:
 
 The `src/copenet/core/` package owns all business logic and run lifecycle. Transport, hosting, and provider adapters stay outside it.
 
-Old top-level shims (`orchestrator.py`, `harness.py`, `tracing.py`, `sessions/`, `tools/`) re-export from `core/` for backward compatibility.
-
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current request flow.
 
 ## Architectural Principles
@@ -71,7 +69,7 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for the current request flow.
 
 **Atomic session writes.** `SessionStore` must keep the temp-file + rename pattern for index updates.
 
-**Session identity is sacred.** Once a session is used, never silently mutate its binding. Provider/profile/persona/workspace stay locked. Model (same provider) and Access (task mode) may change mid-session, but only via an explicit operator-driven request — the model can never alter its own runtime — and each run is stamped with what it actually used. See Session Semantics below.
+**Session identity is sacred.** Once a session is used, never silently mutate its binding — provider/profile/persona/workspace lock after first send, and model/Access change only via an explicit operator-driven request. Full rules and current state: see Session Semantics below.
 
 **UI stays honest.** The frontend now uses React + Vite, but should still stay straightforward, typed, and product-driven. Avoid unnecessary abstractions, state sprawl, or design churn without a clear product reason.
 
@@ -89,61 +87,34 @@ Rules:
 - If a shim is genuinely unavoidable (persisted data written by an older build), it is a **migration** — write it as one, note the removal date or condition, and never let it become the permanent read path.
 - When you find an existing shim while working nearby, report it rather than extending it. Removal is its own commit.
 
-## Coding Style
+## Coding Style & Standards
 
-- Match the existing file style before introducing new patterns.
-- Prefer focused edits over broad refactors.
-- Keep helpers small and justified.
-- Make errors actionable.
-- Do not add speculative abstraction for features we have not chosen yet.
+Match the existing file style before introducing new patterns; prefer focused edits over broad refactors. Keep helpers small and justified, errors actionable, and skip speculative abstraction for features not yet chosen. Optimize for clear, stable, `rg`-grepable code over clever indirection — humans and agents both navigate this codebase by search first.
 
-## Coding Standards For Searchability
+**Naming**
 
-CopeNet code should be easy for humans and agents to navigate with `rg` before any heavier tooling is involved. Optimize for clear, stable, grepable code over clever indirection.
+- One canonical term per product concept, consistent across every layer (`session`, `provider`, `task_mode`, `tool_execution`, `run_id`) — do not rename the same concept per layer without a strong reason.
+- Name handlers and actions by domain plus verb (`handle_chat_send`, `archive_session`, `list_models`); avoid generic names like `process`, `handle`, `manager`, `data` with no domain context.
+- Prefer full words over abbreviations unless already standard in the codebase. Keep RPC methods, event names, and tool identifiers stable and obvious.
 
-### Naming
+**Structure**
 
-- Use one canonical term per product concept and keep it consistent across layers.
-- Prefer explicit domain names like `session`, `provider`, `task_mode`, `tool_execution`, and `run_id` over local synonyms.
-- Name handlers and actions by domain plus verb, e.g. `handle_chat_send`, `archive_session`, `list_models`.
-- Prefer full words over abbreviations unless the abbreviation is already standard in the codebase.
-- Keep important RPC methods, event names, and tool identifiers stable and obvious.
+- One subsystem concern per directory, one primary responsibility per file (see Extraction-Before-Expansion Rule below for size thresholds).
+- Put similar logic in predictable places so searches land in the expected layer; avoid generic dumping-ground modules (broad `utils` files) when a domain-specific home exists.
+- Extract registration/mapping tables into obviously named modules when they are part of how the product is wired together.
 
-### Structure
+**Data shapes & control flow**
 
-- Keep one subsystem concern per directory and one primary responsibility per file.
-- Put similar logic in predictable places every time so searches land in the expected layer.
-- Avoid generic dumping-ground modules like broad `utils` files when a domain-specific home exists.
-- Extract registration or mapping tables into obvious named modules when they are part of how the product is wired together.
+- Preserve field names across boundaries unless there's a clear normalization reason to rename; prefer small typed DTOs over ad-hoc dicts with shifting keys.
+- Centralize canonical event/method names instead of rebuilding them dynamically — avoid dynamic string construction for important identifiers when a stable constant would do.
+- Prefer explicit dispatch tables and named handlers over hidden registration magic or metaprogramming; keep entrypoints easy to locate by name in transport, orchestrator, and UI layers.
+- Use indirection only when it buys clear reuse or product clarity, not abstraction for its own sake.
 
-### Data Shapes And Interfaces
+**Comments, docs, and tests**
 
-- Preserve the same field names across boundaries unless there is a clear normalization reason to rename them.
-- Prefer small typed DTOs or named payload models over ad-hoc dicts with shifting keys.
-- Make important persisted and streamed fields easy to trace end-to-end through search.
-- Centralize canonical event and method names instead of rebuilding them dynamically.
-
-### Control Flow
-
-- Prefer explicit dispatch tables and named handlers over hidden registration magic.
-- Make entrypoints easy to locate by name in transport, orchestrator, and UI layers.
-- Keep side effects close to clearly named functions rather than burying them in generic helpers.
-- Use indirection only when it buys clear reuse or product clarity, not just abstraction for its own sake.
-
-### Comments, Docs, And Tests
-
-- Use the same domain vocabulary in comments, docs, and tests that the code uses.
-- Write test names so they describe product behavior in searchable language.
-- Keep architecture docs aligned with real code names so search results reinforce each other.
-- Add short intent comments only where they improve navigation or explain a non-obvious boundary.
-
-### Avoid
-
-- Renaming the same concept in each layer without a strong reason.
-- Overly generic helper names like `process`, `handle`, `manager`, or `data` without domain context.
-- Dynamic string construction for important identifiers when a stable constant or literal would be clearer.
-- Large files with unrelated responsibilities that make search results noisy and misleading.
-- Metaprogramming or registration patterns that make definitions and call paths hard to find.
+- Use the same domain vocabulary in code, comments, docs, and tests so search results reinforce each other.
+- Write test names in searchable, product-behavior language.
+- Add short intent comments only where they explain a non-obvious boundary — not what the code already says.
 
 ## Extraction-Before-Expansion Rule
 
@@ -157,34 +128,11 @@ If a file is over threshold, extract a focused sub-module before expanding it. P
 
 ## Data Flow and Validation Discipline
 
-Keep runtime validation strict at trust boundaries and intentionally minimal everywhere else.
+Validate strictly at trust boundaries; trust the shape everywhere else. Once data is normalized upstream, do not add duplicate `isinstance`/`type(...)`/`None`-guard/`str()`-`int()` coercion downstream.
 
-### Trust boundaries (validate here)
-
-- WebSocket frame parsing and RPC request envelopes (`host/ws_server.py`, `host/rpc_schema.py`)
-- External provider HTTP responses and runtime API payloads
-- CLI/user input parsing
-- Any raw payload entering CopeNet from outside the process
-
-### Internal flows (trust contracts here)
-
-- RPC layer → orchestrator → harness → providers
-- normalized client RPC payloads after `_rpc()` return
-- typed provider events and metadata (`ProviderEvent`, session/transcript models)
-
-Inside these internal flows, do **not** add duplicate `isinstance`, `type(...)`, extra `None` guards, or repeated `str()/int()` coercion once data was already normalized upstream.
-
-### Normalization rule
-
-- Normalize once per flow at the boundary.
-- Reuse that normalized shape downstream.
-- If repeated guards appear, move validation earlier instead of re-checking in each layer.
-
-### Function shape preferences
-
-- Prefer short functions with early returns and low branching.
-- Avoid nested ternaries deeper than one level.
-- Prefer small typed DTOs (dataclass/Pydantic) between layers over ad-hoc dict shape checks.
+- **Validate here:** WebSocket frame parsing and RPC envelopes (`host/ws_server.py`, `host/rpc_schema.py`), external provider HTTP responses, CLI/user input, any raw payload entering the process.
+- **Trust the contract here:** RPC → orchestrator → harness → providers; normalized `_rpc()` return payloads; typed provider events and session/transcript models.
+- Normalize once per flow at the boundary and reuse that shape downstream. If repeated guards start appearing in internal flows, that's a signal to move validation earlier — not to add another guard.
 
 ## Session Semantics
 
@@ -285,25 +233,19 @@ For current behavior, assume:
 - Prefer Browser Use against the Codex in-app browser for localhost UI verification when the plugin is available. Use it to reproduce interaction bugs, verify fixes, and catch runtime UI failures that lint/build will miss.
 - For Codex specifically, treat `[@Browser](plugin://browser-use@openai-bundled)` as the canonical browser-validation path when the plugin is available. Read the Browser skill first, use the in-app browser workflow for localhost verification, and only fall back to Playwright or Computer Use if that path is genuinely unavailable. Claude and Gemini do not share this Codex-only browser surface, so do not assume they can follow the same workflow.
 - When a UI pass materially improves the product surface, capture a fresh product screenshot right away, store it under `docs/imgs/`, and update the matching `README.md` section in the canonical GitHub repo (`github.com/pattty847/CopeNet`). Prefer Browser Use for the capture flow when available; otherwise use a trustworthy automated localhost fallback such as Playwright. `gh` is installed, so repo docs/screenshot refreshes should be treated as part of finishing polished UI work rather than a nice-to-have.
-- **Before committing any README screenshot, check the frame for operator-specific data** — the Market Monitor "since you last looked" strip and daily-briefing header render a real portfolio dollar figure (`Book`/`Portfolio $…`), and the Agents Console Inspector's Destinations panel can show a real phone number or other personal identifier. Either crop those elements out, capture a clean state (empty portfolio / no destinations configured), or skip that panel and note in the PR/commit body which section still needs a sanitized screenshot. This is a live case, not hypothetical: a full pass was needed on 2026-07-31 (commit `fca5acb`) to strip already-committed screenshots that leaked exactly this data. See the operator-data rule under Git Hygiene below — it applies to screenshots the same as it does to fixtures and logs.
+- **Before committing any README screenshot, check the frame for operator-specific data** — the Market Monitor "since you last looked" strip and daily-briefing header render a real portfolio dollar figure (`Book`/`Portfolio $…`), and the Agents Console Inspector's Destinations panel can show a real phone number or other personal identifier. Either crop those elements out, capture a clean state (empty portfolio / no destinations configured), or skip that panel and note in the PR/commit body which section still needs a sanitized screenshot. This is a live case, not hypothetical: a full pass was needed on 2026-07-31 (commit `fca5acb`) to strip already-committed screenshots that leaked exactly this data. See the operator-data rule under Version Control & Commit Discipline below — it applies to screenshots the same as it does to fixtures and logs.
 
 ### Market Monitor
 
-- Lives in `src/copenet/core/market/`: `data_sources.py` (yfinance — includes `search_symbols()` for live ticker/company lookup and `fetch_daily_price_history()`, the one split-only fetch backing `PriceCache`), `signals.py`/`features.py` (technical signals, RRG, soft-bottoming pattern), `edgar.py` (CopeTech-Edgar adapter — insider Form 4/8-K evidence and legacy fundamentals), `financials.py` (canonical point-in-time CopeTech-Edgar financial-series boundary), `interpretation.py`/`fact_packets.py` (the LLM read pipeline), `replay.py`/`base_rates.py` (point-in-time pattern calibration), `backtester.py` (portfolio backtesting + scenario stress simulation), `webull/` (read-only broker lane: portfolio `sync.py`, fill history `orders.py`, all-time FIFO P&L `pnl.py`, `watchlists.py` import; surface audit in `docs/plans/WEBULL_API_SURFACE.md`), `store.py` (`MarketStore`, caches bars/signals/dashboard/reads to disk), `price_cache.py`/`price_history.py` (durable split-only daily history; every candle and P/E price now reads from here), `quotes.py` (watchlist rows off that cache, bounded concurrency rather than a per-symbol fan-out), `watchlist_store.py` (`WatchlistStore` — user-curated add/remove ticker list, distinct from the fixed `UNIVERSE` in `universe.py`; RPC handlers in `host/rpc_market_watchlist.py`: `market.watchlist.get/add/remove`, `market.symbols.search`).
-- **Candle history comes from `PriceCache`, not from a fresh fetch.** `price_cache.py` + `price_history.py` hold one durable daily history per symbol and derive weekly/monthly by resampling and total-return by applying dividends at read time. Before it existed, one ticker view cost ~8 yfinance requests and the morning sweep 2 per symbol; both now cost one. New price consumers read the cache. Full design: `docs/plans/PRICE_CACHE.md`.
-- **Cache invariant: dividends never invalidate the cache; splits always do.** `auto_adjust=True` hides *two* adjustments behind one flag. Splits are mechanical and must always be applied. Dividends are not: adjusting for them turns a price chart into a total-return chart, and because every dividend retroactively shifts all prior adjusted prices, an append-only cache of that basis drifts invisibly at the seam. The cache therefore stores split-only bars plus the split and dividend histories. A split rewrites Yahoo's own history, so it forces a full rebuild — detected on the delta fetch.
-- **Load-bearing invariant: every `fetch_ohlcv()` call must be split-adjusted.** The function defaults to `auto_adjust=True`; do not call it with `auto_adjust=False` and do not add a new caller that skips this. Every consumer sharing `MarketStore`'s bar cache does so under the same `(symbol, timeframe)` key with no adjustment-basis tag, so one caller writing a different basis silently corrupts every other reader — including fake price cliffs on splits (this happened for real, 2026-07-06 — see `[[project_market_monitor]]`). The one sanctioned split-only path is `fetch_daily_price_history()`, a separate function that never writes that cache. Both rules are pinned by `tests/unit/test_market_data_contracts.py`.
-- **Trailing P/E divides split-only price by point-in-time TTM diluted EPS.** The numerator must be the price that actually traded. Dividend-adjusted prices back-shift history downward, so the same EPS over a lower price reads as a lower multiple — measured understatement at the 10-year mark before this was fixed: XOM 35%, KO 27%, AAPL 8%, decaying to zero at the right edge, i.e. the shape of a de-rating that never happened.
-- **Financial overlay invariant: price charts and backtests align fundamentals to `availableAt`/filing date, never `periodEnd`.** Period-end alignment is accounting analysis only; using it against price leaks future information. Preserve accession provenance, derivation flags, and point-in-time `asOf` filtering through new financial metrics.
-- **Lightweight Charts' time axis is index-based, and its coordinates are pane-relative.** Two traps, both of which shipped as visible bugs (see the 2026-07-31 findings in `docs/plans/FINANCIAL_SERIES.md`):
-  - Every unique timestamp across *every attached series* takes one equal-width slot regardless of real spacing. An overlay point on its own filing date does not sit between two candles, it **inserts** a slot — which compresses the candles and corrupts the `barSpacing` other decorations size themselves from. Snap overlay points onto candle timestamps (`snapOverlayToCandles`), forward only, since snapping backward would draw a filing before it was public.
-  - `timeToCoordinate()` and `param.point.x` are relative to the **pane**, which begins after the left price axis. Anything positioned against the chart wrapper must add `priceScale('left').width()` back. This is 0 until a financial overlay makes that axis visible, so the bug hides until someone toggles an overlay.
-- **Chart decorations must track the price scale, which publishes no event.** Lightweight Charts has a visible-time-range subscription and nothing at all for vertical changes, so absolutely-positioned overlays drift on axis drag, vertical pan, autoscale shift, and the log/linear toggle. `CandleChart` samples both mappings and recomputes on change, driven by pointer/wheel listeners with an rAF loop as catch-all — the rAF loop carries no load-bearing case on purpose, because rAF does not run while the document is hidden. Note that `applyOptions` only *invalidates* a price scale: `priceToCoordinate` keeps returning the old mapping until the chart repaints, so recomputing synchronously after a mode change reads stale coordinates. Invalidate and defer a frame instead.
-- **SEC Company Facts returns only non-dimensional facts.** Anything an issuer reports broken out by segment or share class is simply absent, and no amount of widening the concept list will recover it. Alphabet tagged weighted-average diluted shares per share class until mid-2024, so the consolidated divisor did not exist — the fix was to derive it as `net income / diluted EPS` (agrees within 0.22% where both exist), not to hunt for another tag.
-- **A financial fact belongs to the issuer CIK, not to a ticker.** Multi-ticker issuers (GOOG/GOOGL, BRK.A/BRK.B, FOX/FOXA) file once. The fact ledger keys identity and uniqueness by CIK, so reads must match on CIK too; filtering reads by symbol left whichever ticker was ingested second with no history at all.
-- The model-facing `market.*` tools (`market.dashboard`, `market.ticker`, `market.compare`, `market.backtest`, `market.evidence`, `market.financials`) are registered through `core/tools/handlers/market.py`, category `context` (read-only, auto-allowed at every Access level) — add new read-only market tools there, not under a new category.
-- The backtest lab's named scenario presets (`2022_tech_dump`, `2020_covid_crash` in `backtester.py`'s `SCENARIOS` dict) are **hand-typed shock magnitudes projected onto a synthetic cosine curve, not a real historical replay** — `run_portfolio_backtest` (the real engine, already correct) could replay the actual historical window instead; this just hasn't been done yet.
-- Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`, and this session's memory (`project_market_monitor.md`) for the blow-by-blow of what shipped and why.
+- File map (`src/copenet/core/market/`): `data_sources.py` (yfinance), `signals.py`/`features.py` (technical signals, RRG, soft-bottoming), `edgar.py` (CopeTech-Edgar insider/8-K evidence + legacy fundamentals), `financials.py` (canonical point-in-time financial-series boundary), `interpretation.py`/`fact_packets.py` (LLM read pipeline), `replay.py`/`base_rates.py` (point-in-time pattern calibration), `backtester.py` (portfolio backtest + scenario stress), `webull/` (read-only broker lane — `sync.py` portfolio, `orders.py` fills, `pnl.py` all-time FIFO P&L, `watchlists.py` import; audit in `docs/plans/WEBULL_API_SURFACE.md`), `store.py` (`MarketStore` disk cache), `price_cache.py`/`price_history.py` (durable split-only daily history — every candle and P/E price reads from here), `quotes.py` (watchlist rows off that cache), `watchlist_store.py` (`WatchlistStore`, distinct from the fixed `UNIVERSE` in `universe.py`).
+- **Splits always invalidate the price cache; dividends never do.** `auto_adjust=True` hides two different adjustments behind one flag — dividend-adjusting retroactively shifts all prior prices, which would drift an append-only cache invisibly at the seam, so the cache stores split-only bars plus separate split/dividend histories. Every `fetch_ohlcv()` call must stay split-adjusted (pinned by `tests/unit/test_market_data_contracts.py`); the one sanctioned split-only bypass is `fetch_daily_price_history()`, which never writes the shared cache.
+- **Trailing P/E divides split-only price by point-in-time TTM diluted EPS**, not a dividend-adjusted price — the wrong basis silently understates the multiple (measured up to 35% at the 10-year mark before this was fixed).
+- **Financial overlays align to `availableAt`/filing date, never `periodEnd`** — period-end alignment leaks future information into a price chart. Preserve accession provenance and point-in-time `asOf` filtering on new financial metrics.
+- **A financial fact belongs to the issuer CIK, not the ticker** — multi-ticker issuers (GOOG/GOOGL, BRK.A/BRK.B) file once, so reads must match on CIK or the second-ingested ticker gets no history. SEC Company Facts also has no segment/share-class breakdown — derive it (e.g. `net income / diluted EPS`) rather than hunting for a tag that doesn't exist.
+- **Lightweight Charts' time axis is index-based and pane-relative** — coordinate traps here already shipped as visible bugs twice; read `docs/plans/FINANCIAL_SERIES.md` before touching overlay positioning or `CandleChart.tsx`.
+- The model-facing `market.*` tools register through `core/tools/handlers/market.py`, category `context` — add new read-only market tools there, not a new category.
+- The backtest lab's named scenario presets (`SCENARIOS` in `backtester.py`) are hand-typed shock magnitudes on a synthetic curve, not a real historical replay — `run_portfolio_backtest` could replay the actual window instead; just hasn't been done.
+- Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`.
 
 ## Safe Collaboration Rules
 
@@ -370,7 +312,10 @@ Common checks:
 - Launch the tailnet bind with
   `COPNET_HOST=tailscale uv run --env-file .copenet.env copenet`. The root
   `.copenet.env` is gitignored and must contain a private `COPNET_TOKEN`;
-  `dev-token` is loopback-only.
+  `dev-token` is loopback-only. This is also aliased as `copenet-tail` (function
+  `copenet_tail` in the operator's `~/.zshrc`) — an agent shell inherits the
+  profile, so `copenet-tail` works directly; no need to reconstruct the raw
+  command from `main.py`.
 - Reuse an existing authenticated browser tab when possible. A browser visiting a
   custom-token host needs the matching value entered through CopeNet's
   authentication banner once. Never read, print, commit, paste into prompts, or
