@@ -11,6 +11,8 @@ test('chart toolbar keeps tools in one accessible scroll rail', () => {
       financialControls={<button type="button">Revenue</button>}
       timeframe="W"
       onTimeframe={() => undefined}
+      range="5Y"
+      onRange={() => undefined}
     />,
   );
 
@@ -19,5 +21,6 @@ test('chart toolbar keeps tools in one accessible scroll rail', () => {
   assert.match(html, /market-chart-toolbar__rail/);
   assert.match(html, /aria-label="Show previous chart tools"/);
   assert.match(html, /aria-label="Show more chart tools"/);
-  assert.match(html, /aria-pressed="true"[^>]*>1W</);
+  assert.match(html, /aria-pressed="true"[^>]*>W</);
+  assert.match(html, /aria-pressed="true"[^>]*>5Y</);
 });

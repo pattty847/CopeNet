@@ -4,6 +4,8 @@ import test from 'node:test';
 import {
   APP_SECTION_PATHS,
   appSectionFromPathname,
+  marketTickerFromPathname,
+  marketTickerPath,
   pushAppSectionPath,
 } from '../src/lib/appSectionRouting';
 
@@ -19,8 +21,19 @@ test('top-level app sections map to stable reloadable paths', () => {
   });
 
   assert.equal(appSectionFromPathname('/market'), 'market');
+  assert.equal(appSectionFromPathname('/market/BRK.A'), 'market');
   assert.equal(appSectionFromPathname('/agents/'), 'agents');
   assert.equal(appSectionFromPathname('/not-a-section'), 'home');
+});
+
+test('market ticker paths are reloadable and preserve symbol punctuation', () => {
+  assert.equal(marketTickerFromPathname('/market/NVDA'), 'NVDA');
+  assert.equal(marketTickerFromPathname('/market/%5EVIX/'), '^VIX');
+  assert.equal(marketTickerFromPathname('/market'), null);
+  assert.equal(marketTickerFromPathname('/market/NVDA/events'), null);
+  assert.equal(marketTickerPath('brk.a'), '/market/BRK.A');
+  assert.equal(marketTickerPath('^vix'), '/market/%5EVIX');
+  assert.equal(marketTickerPath(null), '/market');
 });
 
 test('section navigation pushes only when the top-level path changes', () => {

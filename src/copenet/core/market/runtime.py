@@ -41,6 +41,7 @@ from .models import (
     TickerDetailPayload,
     TickerInsight,
     TickerIntelligence,
+    TickerQuote,
     UniverseAsset,
 )
 from .base_rates import load_base_rate
@@ -74,7 +75,7 @@ from .watchlist_store import WatchlistStore
 #: it. Whether pattern detection *should* run on a split-only basis is a separate product
 #: call. Trailing P/E already asks for `split_adjusted` instead, because a P/E numerator
 #: has to be the price actually paid rather than a total-return series.
-CHART_PRICE_BASIS = TOTAL_RETURN
+DEFAULT_MARKET_PRICE_BASIS = TOTAL_RETURN
 
 #: Full history is cheap to serve now, but a 60-year daily series is a needlessly large
 #: wire payload for a chart. Weekly and monthly stay unbounded so they always reach back
@@ -155,7 +156,13 @@ class MarketRuntime:
     def universe(self) -> list[dict[str, Any]]:
         return [asset.to_wire() for asset in self.scan_universe()]
 
-    def cached_bars(self, symbol: str, timeframe: str) -> list[MarketBar]:
+    def cached_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        *,
+        basis: str = DEFAULT_MARKET_PRICE_BASIS,
+    ) -> list[MarketBar]:
         """Candles from the durable daily cache, falling back to MarketStore's bars.
 
         One cached daily history serves every timeframe, so this replaces what used to be
@@ -167,14 +174,21 @@ class MarketRuntime:
             self.prices.refresh(symbol)
         except Exception:
             logging.warning("market: %s price cache refresh failed", symbol, exc_info=True)
-        return self._cache_bars(symbol, timeframe, CHART_BAR_LIMITS.get(timeframe)) or (
+        return self._cache_bars(symbol, timeframe, CHART_BAR_LIMITS.get(timeframe), basis=basis) or (
             self.store.load_bars(symbol, timeframe)
         )
 
-    def _cache_bars(self, symbol: str, timeframe: str, limit: int | None) -> list[MarketBar]:
+    def _cache_bars(
+        self,
+        symbol: str,
+        timeframe: str,
+        limit: int | None,
+        *,
+        basis: str = DEFAULT_MARKET_PRICE_BASIS,
+    ) -> list[MarketBar]:
         """Derive from the stored cache without any network call. May be empty."""
         try:
-            bars = self.prices.bars(symbol, timeframe=timeframe, basis=CHART_PRICE_BASIS)
+            bars = self.prices.bars(symbol, timeframe=timeframe, basis=basis)
         except Exception:
             logging.warning("market: %s %s cache read failed", symbol, timeframe, exc_info=True)
             return []
@@ -196,13 +210,18 @@ class MarketRuntime:
             )
             return None
 
-    def _weekly_frame(self, symbol: str) -> pd.DataFrame:
+    def _weekly_frame(
+        self,
+        symbol: str,
+        *,
+        basis: str = DEFAULT_MARKET_PRICE_BASIS,
+    ) -> pd.DataFrame:
         """Weekly benchmark series off the shared cache.
 
         VOO/QQQ/XLK are the same three symbols for every ticker view, so before the cache
         existed each view re-downloaded all three from Yahoo just to compute one relative
         strength read."""
-        return _bars_to_frame(self.cached_bars(symbol, "weekly"))
+        return _bars_to_frame(self.cached_bars(symbol, "weekly", basis=basis))
 
     def ticker(self, symbol: str, *, compare: list[str] | None = None) -> TickerDetailPayload:
         normalized = symbol.strip().upper()
@@ -212,16 +231,21 @@ class MarketRuntime:
         # ticker costs at most a single delta request instead of one download per
         # timeframe. Weekly and monthly now carry full history rather than 5y/10y.
         fetched_at = _now_iso()
-        daily = self.cached_bars(normalized, "daily")
-        weekly = self.cached_bars(normalized, "weekly")
-        monthly = self.cached_bars(normalized, "monthly")
+        # The asset workspace shows historical prices that actually traded. Total-return
+        # series remain appropriate for portfolio/replay analytics, but dividend-adjusted
+        # history makes old chart levels and operator annotations misleading.
+        daily = self.cached_bars(normalized, "daily", basis=SPLIT_ADJUSTED)
+        weekly = self.cached_bars(normalized, "weekly", basis=SPLIT_ADJUSTED)
+        monthly = self.cached_bars(normalized, "monthly", basis=SPLIT_ADJUSTED)
         weekly_frame = _bars_to_frame(weekly)
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == normalized]
-        last = weekly[-1].c if weekly else 0.0
-        previous = weekly[-2].c if len(weekly) > 1 else last
-        change_pct = ((last / previous) - 1) * 100 if previous else 0.0
-        voo_frame = self._weekly_frame("VOO")
-        qqq_frame = self._weekly_frame("QQQ")
+        latest_bars = daily or weekly or monthly
+        last = latest_bars[-1].c if latest_bars else None
+        previous = latest_bars[-2].c if len(latest_bars) > 1 else None
+        change_pct = ((last / previous) - 1) * 100 if last is not None and previous else None
+        bar_time = latest_bars[-1].t if latest_bars else None
+        voo_frame = self._weekly_frame("VOO", basis=SPLIT_ADJUSTED)
+        qqq_frame = self._weekly_frame("QQQ", basis=SPLIT_ADJUSTED)
         # Always compute signals live from the same weekly_frame used below — the cached
         # per-symbol signals (written by the last dashboard refresh) can be stale enough
         # to disagree with the live-fetched intelligence packet (e.g. drawdown %) in the
@@ -230,11 +254,15 @@ class MarketRuntime:
         # Default benchmarks are the broad market/growth read (VOO/XLK/QQQ); `compare` lets the
         # caller add specific symbols (a sector ETF, a direct competitor) on top — it never
         # replaces the defaults, so the human-facing Market page's verdict table is unaffected.
-        benchmark_frames = {"VOO": voo_frame, "XLK": self._weekly_frame("XLK"), "QQQ": qqq_frame}
+        benchmark_frames = {
+            "VOO": voo_frame,
+            "XLK": self._weekly_frame("XLK", basis=SPLIT_ADJUSTED),
+            "QQQ": qqq_frame,
+        }
         for extra in compare or []:
             extra_symbol = extra.strip().upper()
             if extra_symbol and extra_symbol not in benchmark_frames:
-                benchmark_frames[extra_symbol] = self._weekly_frame(extra_symbol)
+                benchmark_frames[extra_symbol] = self._weekly_frame(extra_symbol, basis=SPLIT_ADJUSTED)
         benchmark_frames.pop(normalized, None)  # never benchmark a symbol against itself
         verdict = benchmark_verdict(weekly_frame, benchmark_frames)
         fs = compute_features(weekly_frame, voo_frame, symbol=normalized, as_of=fetched_at)
@@ -245,15 +273,20 @@ class MarketRuntime:
             role=asset.role if asset else "unknown",
             verdict=verdict,
             rotation=rotation if rotation.tail else None,
-            portfolio=_portfolio_position_for_symbol(normalized, last=last),
+            portfolio=_portfolio_position_for_symbol(normalized, last=last or 0.0),
             exposure=fetch_fund_profile(normalized),
         )
         return TickerDetailPayload(
             symbol=normalized,
             name=name,
-            last=f"${last:,.2f}" if last else "n/a",
-            change=f"{change_pct:+.2f}%" if last else "n/a",
-            tone="up" if change_pct > 0 else "down" if change_pct < 0 else "flat",
+            as_of=fetched_at,
+            quote=TickerQuote(
+                price=round(last, 4) if last is not None else None,
+                change_pct=round(change_pct, 4) if change_pct is not None else None,
+                bar_time=bar_time,
+                comparison="previous_daily_bar",
+                price_basis="split_adjusted",
+            ),
             series={"daily": daily, "weekly": weekly, "monthly": monthly},
             verdict=verdict,
             signals=_signal_rows(signals),

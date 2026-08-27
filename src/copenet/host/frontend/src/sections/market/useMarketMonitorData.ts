@@ -6,7 +6,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import type { TradeLedger } from '../../lib/wsMarketRpc';
-import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE, sampleTicker } from './sampleData';
+import { SAMPLE_DASHBOARD, SAMPLE_UNIVERSE } from './sampleData';
 import type { DashboardPayload, LedgerReport, MarketRead, MarketSession, MorningBriefPayload, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
@@ -443,22 +443,47 @@ export function useTradeLedger(): TradeLedgerState {
   return { ledger, loading, syncing, error, sync };
 }
 
-export function useTickerDetail(symbol: string): TickerDetailPayload {
-  const [detail, setDetail] = useState<TickerDetailPayload>(() => sampleTicker(symbol));
+export interface TickerDetailState {
+  detail: TickerDetailPayload | null;
+  loading: boolean;
+  error: string | null;
+  reload: () => Promise<void>;
+}
+
+export function useTickerDetail(symbol: string): TickerDetailState {
+  const normalized = symbol.trim().toUpperCase();
+  const [detail, setDetail] = useState<TickerDetailPayload | null>(null);
+  const [loading, setLoading] = useState(Boolean(normalized));
+  const [error, setError] = useState<string | null>(null);
+  const requestVersion = useRef(0);
+
+  const reload = useCallback(async () => {
+    if (!normalized) return;
+    const version = ++requestVersion.current;
+    setLoading(true);
+    setError(null);
+    try {
+      const next = await wsClient.marketTicker(normalized);
+      if (requestVersion.current === version) setDetail(next);
+    } catch (err) {
+      if (requestVersion.current === version) {
+        setDetail(null);
+        setError(err instanceof Error ? err.message : 'Ticker data is unavailable.');
+      }
+    } finally {
+      if (requestVersion.current === version) setLoading(false);
+    }
+  }, [normalized]);
+
   useEffect(() => {
-    let alive = true;
-    setDetail(sampleTicker(symbol));
-    wsClient
-      .marketTicker(symbol)
-      .then((next) => {
-        if (alive && next) setDetail(next);
-      })
-      .catch(() => {});
+    setDetail(null);
+    void reload();
     return () => {
-      alive = false;
+      requestVersion.current += 1;
     };
-  }, [symbol]);
-  return detail;
+  }, [reload]);
+
+  return { detail, loading, error, reload };
 }
 
 export interface TickerFundamentalsState {

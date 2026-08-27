@@ -55,3 +55,18 @@ def test_unknown_frontend_root_path_still_returns_not_found() -> None:
         response = client.get("/not-a-copenet-section")
 
     assert response.status_code == 404
+
+
+def test_nested_frontend_section_path_serves_the_spa() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/market/BRK.A")
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/html")
+
+
+def test_unknown_nested_path_still_returns_not_found() -> None:
+    with TestClient(create_app()) as client:
+        response = client.get("/not-a-copenet-section/path")
+
+    assert response.status_code == 404

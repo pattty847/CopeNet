@@ -58,7 +58,10 @@ async def get_market_ticker(request: ToolExecutionRequest, context: ToolExecutio
     if thesis is not None:
         wire.setdefault("intelligence", {})["thesis"] = thesis
 
-    summary = f"{detail.symbol}: {detail.last} ({detail.change})"
+    quote = detail.quote
+    price = f"${quote.price:,.2f}" if quote.price is not None else "n/a"
+    change = f"{quote.change_pct:+.2f}%" if quote.change_pct is not None else "n/a"
+    summary = f"{detail.symbol}: {price} ({change} vs previous daily bar)"
     return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary=summary, output=wire)
 
 

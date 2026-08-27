@@ -2,18 +2,23 @@ import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { MM } from './marketUi';
 
-type Timeframe = 'D' | 'W' | 'M';
+export type ChartTimeframe = 'D' | 'W' | 'M';
+export type ChartRange = '6M' | '1Y' | '3Y' | '5Y' | 'MAX';
 
 export function MarketChartToolbar({
   alertControl,
   financialControls,
   timeframe,
   onTimeframe,
+  range,
+  onRange,
 }: {
   alertControl: ReactNode;
   financialControls: ReactNode;
-  timeframe: Timeframe;
-  onTimeframe: (timeframe: Timeframe) => void;
+  timeframe: ChartTimeframe;
+  onTimeframe: (timeframe: ChartTimeframe) => void;
+  range: ChartRange;
+  onRange: (range: ChartRange) => void;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -69,11 +74,11 @@ export function MarketChartToolbar({
         <div ref={contentRef} className="market-chart-toolbar__content">
           {alertControl}
           {financialControls}
-          <div className="market-chart-toolbar__timeframes" aria-label="Chart timeframe">
+          <div className="market-chart-toolbar__timeframes" role="group" aria-label="Bar interval">
             {([
-              ['D', '1D'],
-              ['W', '1W'],
-              ['M', '1M'],
+              ['D', 'D'],
+              ['W', 'W'],
+              ['M', 'M'],
             ] as const).map(([key, label]) => (
               <button
                 key={key}
@@ -91,6 +96,27 @@ export function MarketChartToolbar({
                 }}
               >
                 {label}
+              </button>
+            ))}
+          </div>
+          <div className="market-chart-toolbar__timeframes" role="group" aria-label="Visible date range">
+            {(['6M', '1Y', '3Y', '5Y', 'MAX'] as const).map((key) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => onRange(key)}
+                aria-pressed={range === key}
+                style={{
+                  cursor: 'pointer',
+                  border: 'none',
+                  borderRadius: 5,
+                  padding: '4px 9px',
+                  font: '600 10px Inter',
+                  background: range === key ? 'rgba(143,184,232,.18)' : 'transparent',
+                  color: range === key ? '#8fb8e8' : MM.muted,
+                }}
+              >
+                {key === 'MAX' ? 'Max' : key}
               </button>
             ))}
           </div>

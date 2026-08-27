@@ -22,6 +22,10 @@ def _one_verdict(asset: pd.DataFrame, benchmark: pd.DataFrame, bench: str) -> Ve
         axis=1,
         join="inner",
     ).dropna()
+    # A cockpit comparison should answer how the asset is behaving now, not turn a
+    # decades-old split-adjusted starting price into a six-figure lifetime verdict.
+    # Fifty-three weekly closes produce a consistent trailing-52-week comparison.
+    joined = joined.tail(53)
     if len(joined) < 8:
         return VerdictRow(bench=bench, label="In line", pct="n/a", tone="flat")
     returns = joined.pct_change().dropna()
@@ -30,6 +34,8 @@ def _one_verdict(asset: pd.DataFrame, benchmark: pd.DataFrame, bench: str) -> Ve
     variance = float(returns["bench"].var())
     beta = float(returns["asset"].cov(returns["bench"]) / variance) if variance else 1.0
     risk_adjusted_excess = (asset_total - (beta * bench_total)) * 100
+    if math.isfinite(risk_adjusted_excess) and abs(risk_adjusted_excess) < 0.05:
+        risk_adjusted_excess = 0.0
     if risk_adjusted_excess > 2:
         label, tone = "Beats", "up"
     elif risk_adjusted_excess < -2:

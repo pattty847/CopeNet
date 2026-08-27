@@ -74,6 +74,10 @@ async def test_market_universe_and_ticker_get_return_camel_case_shapes(tmp_path:
     assert {"symbol": "VOO", "name": "Vanguard S&P 500 ETF", "role": "index"} in universe
     assert ticker["symbol"] == "GOOG"
     assert set(ticker["series"].keys()) == {"daily", "weekly", "monthly"}
+    assert ticker["quote"]["comparison"] == "previous_daily_bar"
+    assert ticker["quote"]["priceBasis"] == "split_adjusted"
+    assert "last" not in ticker
+    assert "change" not in ticker
     assert "pnlPct" not in ticker
     # Insight Engine: ticker carries the soft_bottoming flag + decomposed components
     assert "insight" in ticker

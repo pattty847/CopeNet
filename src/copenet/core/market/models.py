@@ -310,6 +310,17 @@ class TickerIntelligence:
     thesis: dict[str, Any] | None = None
 
 
+@dataclass(frozen=True)
+class TickerQuote:
+    """Latest cached daily bar, explicitly distinguished from a live quote."""
+
+    price: float | None
+    change_pct: float | None
+    bar_time: int | None
+    comparison: Literal["previous_daily_bar"]
+    price_basis: Literal["split_adjusted"]
+
+
 @dataclass
 class CompareRow:
     symbol: str
@@ -343,9 +354,8 @@ class CompareResult:
 class TickerDetailPayload:
     symbol: str
     name: str
-    last: str
-    change: str
-    tone: Tone
+    as_of: str
+    quote: TickerQuote
     series: dict[str, list[MarketBar]]
     verdict: list[VerdictRow]
     signals: list[SignalRow]

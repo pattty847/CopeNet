@@ -849,9 +849,122 @@ html[data-theme='dark'] .shell-workbench-feature {
   display: none;
 }
 
+/* Asset workspaces preserve the Market cockpit's visual language while making the
+   investigation sequence explicit: identity → chart → context → deeper evidence. */
+.ticker-workspace {
+  display: flex;
+  min-height: 100%;
+  max-width: 1640px;
+  margin: 0 auto;
+  padding: 22px;
+  flex-direction: column;
+  gap: 16px;
+  background: #080809;
+  color: var(--color-shell-text);
+}
+
+.ticker-workspace-header {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 9px 0;
+  background: rgba(8, 8, 9, 0.92);
+  backdrop-filter: blur(14px);
+}
+
+.ticker-back-button,
+.ticker-watch-button {
+  display: inline-flex;
+  min-height: 32px;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border: 1px solid rgba(254, 252, 244, 0.1);
+  border-radius: 8px;
+  background: rgba(254, 252, 244, 0.025);
+  color: var(--color-shell-muted);
+  cursor: pointer;
+  font: 600 10px Inter;
+}
+
+.ticker-back-button {
+  padding: 0 10px;
+}
+
+.ticker-watch-button {
+  padding: 0 11px;
+  border-color: rgba(251, 148, 35, 0.28);
+  color: #fb9423;
+}
+
+.ticker-watch-button.is-active {
+  border-color: rgba(105, 197, 137, 0.3);
+  background: rgba(105, 197, 137, 0.07);
+  color: #69c589;
+}
+
+.ticker-back-button:hover,
+.ticker-watch-button:hover {
+  background: rgba(254, 252, 244, 0.06);
+}
+
+.ticker-back-button:focus-visible,
+.ticker-watch-button:focus-visible {
+  outline: 2px solid #fb9423;
+  outline-offset: 2px;
+}
+
+.ticker-workspace-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 320px);
+  align-items: start;
+  gap: 16px;
+}
+
+.ticker-context-rail {
+  position: sticky;
+  top: 84px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ticker-analysis-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  align-items: stretch;
+  gap: 16px;
+}
+
+.market-read-cases {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
 @media (max-width: 1023px) {
   .market-ticker-detail {
     padding: 12px !important;
+  }
+
+  .ticker-workspace-header {
+    position: static;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .ticker-workspace-main {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .ticker-context-rail {
+    position: static;
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
   .market-panel-header--mobile-toolbar {

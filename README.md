@@ -62,6 +62,16 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
 
+**Asset workspace** — every ticker now opens as a reloadable `/market/{symbol}`
+investigation rather than an oversized dashboard card. Identity, quote provenance,
+watchlist state, interval and visible-range controls, split-adjusted price history,
+SEC markers, financial overlays, portfolio context, benchmark-relative behavior, data
+quality, deterministic signals, and the model read follow one progressive path from
+“why this asset now?” to deeper evidence. The Market page remains the cockpit; browser
+Back and **Market cockpit** preserve the zoom-out/zoom-in workflow.
+
+![CopeNet Market Monitor — asset workspace](docs/imgs/market-panel/copenet-asset-workspace.png)
+
 **Chart-created price alerts** — click **Add alert**, place a level directly on the
 candlestick chart, and choose whether a daily close should cross above or below it.
 Rules are durable and one-shot; active levels return as chart lines, and a crossing

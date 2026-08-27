@@ -3,7 +3,7 @@
 // "Preview · illustrative" badge until Codex's backend flips it to 'live' (blueprint §1, §3).
 // When the seam (useMarketMonitorData) swaps to real market.* RPCs, this file is no longer imported.
 
-import type { DashboardPayload, TickerDetailPayload, UniverseAsset } from './types';
+import type { DashboardPayload, UniverseAsset } from './types';
 
 export const SAMPLE_UNIVERSE: UniverseAsset[] = [
   // Major markets (benchmark / macro)
@@ -169,30 +169,3 @@ export const SAMPLE_DASHBOARD: DashboardPayload = {
     ],
   },
 };
-
-export function sampleTicker(symbol: string): TickerDetailPayload {
-  const name = SAMPLE_UNIVERSE.find((a) => a.symbol === symbol)?.name ?? symbol;
-  return {
-    symbol,
-    name,
-    last: '—',
-    change: '—',
-    tone: 'flat',
-    series: { daily: [], weekly: [], monthly: [] },
-    verdict: [
-      { bench: 'VOO', label: 'In line', pct: '50%', tone: 'flat' },
-      { bench: 'Sector', label: 'In line', pct: '50%', tone: 'flat' },
-    ],
-    signals: [
-      { key: 'Weekly trend', value: '—', tone: 'flat' },
-      { key: 'Daily confirm', value: '—', tone: 'flat' },
-      { key: 'vs 50W MA', value: '—', tone: 'flat' },
-      { key: 'RSI (14W)', value: '—', tone: 'flat' },
-      { key: 'Drawdown', value: '—', tone: 'flat' },
-      { key: 'Rel-strength rank', value: '—', tone: 'flat' },
-    ],
-    evidence: [],
-    events: [],
-    kill: 'Illustrative preview — real signals and evidence land when the backend is wired.',
-  };
-}

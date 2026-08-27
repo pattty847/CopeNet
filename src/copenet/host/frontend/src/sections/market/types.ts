@@ -235,6 +235,89 @@ export interface SignalRow {
   tone: Tone;
 }
 
+export interface TickerQuote {
+  /** Latest cached daily bar, not an exchange-streaming quote. */
+  price?: number | null;
+  changePct?: number | null;
+  barTime?: number | null;
+  comparison: 'previous_daily_bar';
+  priceBasis: 'split_adjusted';
+}
+
+export interface TickerIntelligence {
+  asOf?: string | null;
+  assetRole: string;
+  trend: {
+    maStack?: string | null;
+    longTrend?: string | null;
+    longTrendSlopePctPerYear?: number | null;
+    distMa10Pct?: number | null;
+    distMa30Pct?: number | null;
+    distMa40Pct?: number | null;
+  };
+  momentum: {
+    rsi14?: number | null;
+    atrPct?: number | null;
+    atrMoveMultiple?: number | null;
+    atrPercentile?: number | null;
+    volVsAvg?: number | null;
+    upDownVolRatio?: number | null;
+  };
+  returns: {
+    r1wPct?: number | null;
+    r4wPct?: number | null;
+    r13wPct?: number | null;
+    r26wPct?: number | null;
+    r52wPct?: number | null;
+    rYtdPct?: number | null;
+    r3yPct?: number | null;
+  };
+  drawdown: {
+    drawdown52wPct?: number | null;
+    weeksSince52wHigh?: number | null;
+    pctOf52wRange?: number | null;
+    distFromFullHistoryHighPct?: number | null;
+  };
+  volatility: {
+    vol4wAnnualizedPct?: number | null;
+    vol13wAnnualizedPct?: number | null;
+    vol26wAnnualizedPct?: number | null;
+    beta52wVsVoo?: number | null;
+    corr52wVsVoo?: number | null;
+  };
+  relativeStrength: {
+    rsRatioVsVoo?: number | null;
+    rsMomentumVsVoo?: number | null;
+    excessReturn13wPct?: number | null;
+    excessReturn26wPct?: number | null;
+    benchmarks: { symbol: string; verdict: string; riskAdjustedExcess: string }[];
+  };
+  structure: {
+    compression?: boolean;
+    compressionShape?: string | null;
+    rangeRatio12wVs36w?: number | null;
+  };
+  dataQuality: {
+    historyWeeks: number;
+    hasVolume: boolean;
+    thinHistory: boolean;
+  };
+  rotation?: { quadrant: string; benchmark: string } | null;
+  portfolio?: {
+    shares?: number | null;
+    avgCost?: number | null;
+    lastPrice?: number | null;
+    pnlPct?: number | null;
+    allocationPct?: number | null;
+    source: string;
+  } | null;
+  exposure?: {
+    source: string;
+    topHoldings?: { symbol: string; name?: string | null; weightPct?: number | null }[];
+    sectorWeightPct?: Record<string, number>;
+  } | null;
+}
+
 export interface ChartEvent {
   t: number;
   kind: 'insider' | '8-K' | 'planned-sale';
@@ -588,9 +671,8 @@ export interface TickerInsight {
 export interface TickerDetailPayload {
   symbol: string;
   name: string;
-  last: string;
-  change: string;
-  tone: Tone;
+  asOf: string;
+  quote: TickerQuote;
   series: { daily: Ohlcv[]; weekly: Ohlcv[]; monthly: Ohlcv[] };
   verdict: VerdictRow[];
   signals: SignalRow[];
@@ -598,6 +680,7 @@ export interface TickerDetailPayload {
   events: ChartEvent[];
   kill: string;
   insight?: TickerInsight | null;
+  intelligence?: TickerIntelligence | null;
   /** Headline stats from yfinance; keys absent when unresolvable (indexes, some ETFs). */
   stats?: { marketCap?: number; yearHigh?: number; yearLow?: number; avgVolume3m?: number } | null;
 }

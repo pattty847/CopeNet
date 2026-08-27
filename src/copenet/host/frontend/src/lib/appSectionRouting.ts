@@ -20,7 +20,26 @@ function normalizePathname(pathname: string): string {
 }
 
 export function appSectionFromPathname(pathname: string): AppSection {
-  return APP_SECTION_BY_PATH.get(normalizePathname(pathname)) || 'home';
+  const normalized = normalizePathname(pathname);
+  if (normalized.startsWith('/market/')) return 'market';
+  return APP_SECTION_BY_PATH.get(normalized) || 'home';
+}
+
+export function marketTickerFromPathname(pathname: string): string | null {
+  const normalized = normalizePathname(pathname);
+  const match = normalized.match(/^\/market\/([^/]+)$/);
+  if (!match) return null;
+  try {
+    const symbol = decodeURIComponent(match[1]).trim().toUpperCase();
+    return symbol || null;
+  } catch {
+    return null;
+  }
+}
+
+export function marketTickerPath(symbol: string | null): string {
+  const normalized = symbol?.trim().toUpperCase();
+  return normalized ? `/market/${encodeURIComponent(normalized)}` : '/market';
 }
 
 export function pushAppSectionPath(

@@ -121,4 +121,10 @@ def create_app(
             raise HTTPException(status_code=404, detail="Not found")
         return FileResponse(path)
 
+    @app.get("/{section}/{client_path:path}")
+    def frontend_nested_route(section: str, client_path: str) -> FileResponse:
+        if section not in _FRONTEND_SECTION_PATHS or not client_path:
+            raise HTTPException(status_code=404, detail="Not found")
+        return frontend_index()
+
     return app
