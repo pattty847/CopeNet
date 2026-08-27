@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { CandleChart } from './CandleChart';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
@@ -17,6 +17,9 @@ import { TickerSignalPanel } from './TickerSignalPanel';
 import { PriceAlertControl } from './PriceAlertControl';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import { useIsMobile } from '../../lib/responsive';
+import { ChartComparisonControl } from './ChartComparisonControl';
+import { buildComparisonLines, comparisonSearch, comparisonStateFromSearch } from './chartComparison';
+import { useChartComparisons } from './useChartComparisons';
 
 const RANGE_SECONDS: Record<Exclude<ChartRange, 'MAX'>, number> = {
   '6M': 183 * 86400,
@@ -58,6 +61,8 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
   const [alertPlacementActive, setAlertPlacementActive] = useState(false);
   const [pickedAlertPrice, setPickedAlertPrice] = useState<number | null>(null);
   const [watchBusy, setWatchBusy] = useState(false);
+  const [comparisonExpressions, setComparisonExpressions] = useState(() => comparisonStateFromSearch(window.location.search).expressions);
+  const [comparisonMode, setComparisonMode] = useState(() => comparisonStateFromSearch(window.location.search).active);
   const priceAlerts = usePriceAlerts(symbol);
   const overlayMetrics = useFinancialMetrics();
   const overlayIsValuation = isValuationMetric(overlayMetrics, overlayMetric);
@@ -68,10 +73,15 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
       ? overlayFrequencyChoices[0]
       : overlayFrequency;
   const overlaySeries = useFinancialSeries(symbol, overlayMetric ?? 'revenue', effectiveOverlayFrequency, overlayMetric != null);
+  const comparisons = useChartComparisons(comparisonExpressions, timeframe);
 
   const detail = ticker.detail;
   const rawBars = detail ? timeframe === 'D' ? detail.series.daily : timeframe === 'M' ? detail.series.monthly : detail.series.weekly : [];
   const bars = useMemo(() => visibleBars(rawBars, range), [rawBars, range]);
+  const comparisonLines = useMemo(
+    () => buildComparisonLines(detail?.symbol ?? symbol.toUpperCase(), bars, comparisonExpressions, comparisons.payload?.series ?? []),
+    [bars, comparisonExpressions, comparisons.payload?.series, detail?.symbol, symbol],
+  );
   const overlayPoints = useMemo(() => {
     if (!overlayMetric || !overlaySeries.data || bars.length === 0) return undefined;
     const raw = isValuationPayload(overlaySeries.data)
@@ -79,6 +89,11 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
       : overlaySeries.data.observations.filter((item) => item.availableAt && Number.isFinite(item.value)).map((item) => ({ t: observationTime(item), value: item.value }));
     return snapOverlayToCandles(raw, bars.map((bar) => bar.t));
   }, [bars, overlayMetric, overlaySeries.data]);
+
+  useEffect(() => {
+    const search = comparisonSearch(comparisonExpressions, comparisonMode);
+    window.history.replaceState({}, '', `${window.location.pathname}${search}`);
+  }, [comparisonExpressions, comparisonMode]);
 
   if (ticker.loading || !detail) {
     return <TickerLoadState symbol={symbol} error={ticker.error} onClose={onClose} onRetry={ticker.reload} />;
@@ -101,6 +116,14 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
   const overlayUnit = !overlaySeries.data ? undefined : isValuationPayload(overlaySeries.data) ? 'ratio' : overlaySeries.data.observations[0]?.unit;
   const timeframeLabel = timeframe === 'D' ? 'Daily bars' : timeframe === 'M' ? 'Monthly bars' : 'Weekly bars';
   const latestVisibleBar = bars[bars.length - 1];
+  const showingComparison = comparisonMode && comparisonExpressions.length > 0;
+  const removeComparison = (expression: string) => {
+    setComparisonExpressions((current) => {
+      const next = current.filter((item) => item !== expression);
+      if (!next.length) setComparisonMode(false);
+      return next;
+    });
+  };
 
   return (
     <div className="market-ticker-detail ticker-workspace">
@@ -122,17 +145,18 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
       {isMobile && <TickerSearch onSelect={(next) => onOpenTicker(next)} fullWidth />}
 
       <main className="ticker-workspace-main">
-        <PanelCard title={`Price · ${timeframeLabel} · ${range === 'MAX' ? 'Max history' : range}`} status={bars.length ? 'live' : 'error'} headerLayout="mobile-toolbar" right={
+        <PanelCard title={`${showingComparison ? 'Indexed comparison' : 'Price'} · ${timeframeLabel} · ${range === 'MAX' ? 'Max history' : range}`} status={comparisons.error && showingComparison ? 'error' : bars.length ? 'live' : 'error'} headerLayout="mobile-toolbar" right={
           <MarketChartToolbar
             timeframe={timeframe}
             onTimeframe={setTimeframe}
             range={range}
             onRange={setRange}
-            alertControl={<PriceAlertControl alerts={priceAlerts.alerts} currentPrice={detail.quote.price ?? 0} pickedPrice={pickedAlertPrice} placing={alertPlacementActive} loading={priceAlerts.loading} error={priceAlerts.error} onStartPlacing={() => setAlertPlacementActive(true)} onStopPlacing={() => setAlertPlacementActive(false)} onCreate={(direction, threshold) => priceAlerts.create(direction, threshold, detail.quote.price ?? 0)} onCancel={priceAlerts.cancel} />}
-            financialControls={<FinancialOverlayControls metrics={overlayMetrics} metric={overlayMetric} frequency={effectiveOverlayFrequency} loading={overlaySeries.loading} onMetric={setOverlayMetric} onFrequency={setOverlayFrequency} />}
+            alertControl={showingComparison ? null : <PriceAlertControl alerts={priceAlerts.alerts} currentPrice={detail.quote.price ?? 0} pickedPrice={pickedAlertPrice} placing={alertPlacementActive} loading={priceAlerts.loading} error={priceAlerts.error} onStartPlacing={() => setAlertPlacementActive(true)} onStopPlacing={() => setAlertPlacementActive(false)} onCreate={(direction, threshold) => priceAlerts.create(direction, threshold, detail.quote.price ?? 0)} onCancel={priceAlerts.cancel} />}
+            financialControls={showingComparison ? null : <FinancialOverlayControls metrics={overlayMetrics} metric={overlayMetric} frequency={effectiveOverlayFrequency} loading={overlaySeries.loading} onMetric={setOverlayMetric} onFrequency={setOverlayFrequency} />}
+            comparisonControl={<ChartComparisonControl active={showingComparison} expressions={comparisonExpressions} onActive={setComparisonMode} onAdd={(expression) => setComparisonExpressions((current) => [...current, expression])} onRemove={removeComparison} onClear={() => { setComparisonExpressions([]); setComparisonMode(false); }} />}
           />
         }>
-          {latestVisibleBar && (
+          {!showingComparison && latestVisibleBar && (
             <div aria-label="Latest visible bar" style={{ display: 'flex', gap: 13, flexWrap: 'wrap', paddingBottom: 8, color: MM.dim, fontFamily: "'JetBrains Mono', monospace", fontSize: 9.5 }}>
               <span>{formatBarDate(latestVisibleBar.t)}</span>
               <span>O <b style={{ color: MM.textSoft }}>{formatQuote(latestVisibleBar.o)}</b></span>
@@ -142,9 +166,10 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
               <span>V <b style={{ color: MM.textSoft }}>{formatVolume(latestVisibleBar.v)}</b></span>
             </div>
           )}
-          <CandleChart bars={bars} events={chartEvents} evidence={evidence} height={isMobile ? 430 : 590} financialOverlay={overlayPoints} financialOverlayKind={overlayMetric ?? undefined} financialOverlayUnit={overlayUnit} financialOverlayValuation={overlayIsValuation} financialOverlayInverted={overlaySeries.data != null && isValuationPayload(overlaySeries.data) && overlaySeries.data.inverted === true} priceAlerts={priceAlerts.alerts} alertPlacementActive={alertPlacementActive} onAlertPriceSelected={(price) => { setPickedAlertPrice(price); setAlertPlacementActive(false); }} />
-          <FinancialOverlayStatus metrics={overlayMetrics} metric={overlayMetric} state={overlaySeries} />
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 8, borderTop: `1px solid ${MM.border}`, paddingTop: 8, fontSize: 9.5, color: MM.dimmer }}><span>SEC markers and active alerts remain synchronized to the visible bars.</span><span>{bars.length.toLocaleString()} bars · split-adjusted traded price · right-click price axis for log scale</span></div>
+          {showingComparison && <ComparisonLegend labels={[detail.symbol, ...comparisonExpressions.filter((item) => item !== detail.symbol)]} lines={comparisonLines} loading={comparisons.loading} error={comparisons.error} />}
+          <CandleChart bars={bars} events={chartEvents} evidence={evidence} height={isMobile ? 430 : 590} financialOverlay={overlayPoints} financialOverlayKind={overlayMetric ?? undefined} financialOverlayUnit={overlayUnit} financialOverlayValuation={overlayIsValuation} financialOverlayInverted={overlaySeries.data != null && isValuationPayload(overlaySeries.data) && overlaySeries.data.inverted === true} priceAlerts={priceAlerts.alerts} alertPlacementActive={alertPlacementActive} onAlertPriceSelected={(price) => { setPickedAlertPrice(price); setAlertPlacementActive(false); }} comparisonMode={showingComparison} comparisonLines={comparisonLines} />
+          {!showingComparison && <FinancialOverlayStatus metrics={overlayMetrics} metric={overlayMetric} state={overlaySeries} />}
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 8, borderTop: `1px solid ${MM.border}`, paddingTop: 8, fontSize: 9.5, color: MM.dimmer }}><span>{showingComparison ? 'Every line is rebased to 0% at its first observation in the visible range.' : 'SEC markers and active alerts remain synchronized to the visible bars.'}</span><span>{bars.length.toLocaleString()} bars · split-adjusted traded price{showingComparison ? '' : ' · right-click price axis for log scale'}</span></div>
         </PanelCard>
         <TickerOverviewRail detail={detail} evidence={evidence} />
       </main>
@@ -152,6 +177,21 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
       <TickerSignalPanel detail={detail} />
       <TickerEvidencePanel state={sec} />
       <TickerReadPanel symbol={detail.symbol} />
+    </div>
+  );
+}
+
+function ComparisonLegend({ labels, lines, loading, error }: { labels: string[]; lines: ReturnType<typeof buildComparisonLines>; loading: boolean; error: string | null }) {
+  if (error) return <div role="alert" style={{ paddingBottom: 8, color: MM.down, fontSize: 11 }}>{error}</div>;
+  const byLabel = new Map(lines.map((line) => [line.label, line]));
+  return (
+    <div aria-label="Comparison legend" style={{ display: 'flex', gap: 14, flexWrap: 'wrap', paddingBottom: 8, fontFamily: "'JetBrains Mono', monospace", fontSize: 10 }}>
+      {labels.map((label) => {
+        const line = byLabel.get(label);
+        if (!line) return <span key={label} style={{ color: MM.dim }}><b>{label}</b> {loading ? 'loading…' : 'no overlapping history'}</span>;
+        const value = line.data[line.data.length - 1]?.value;
+        return <span key={line.id} style={{ color: line.color }}><b>{line.label}</b> {value == null ? '—' : `${value > 0 ? '+' : ''}${value.toFixed(1)}%`}</span>;
+      })}
     </div>
   );
 }

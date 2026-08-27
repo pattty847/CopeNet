@@ -31,6 +31,8 @@ import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { PriceAlert } from './types';
 import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
+import type { ChartComparisonLine } from './chartComparison';
+import { replaceComparisonSeries } from './chartComparisonSeries';
 import {
   hasRenderableFinancialOverlay,
   overlayAxisFormatter,
@@ -371,6 +373,8 @@ export function CandleChart({
   priceAlerts = [],
   alertPlacementActive = false,
   onAlertPriceSelected,
+  comparisonMode = false,
+  comparisonLines = [],
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -390,6 +394,8 @@ export function CandleChart({
   priceAlerts?: PriceAlert[];
   alertPlacementActive?: boolean;
   onAlertPriceSelected?: (price: number) => void;
+  comparisonMode?: boolean;
+  comparisonLines?: ChartComparisonLine[];
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -397,6 +403,7 @@ export function CandleChart({
   const volumeRef = useRef<ISeriesApi<'Histogram'> | null>(null);
   const financialRef = useRef<ISeriesApi<'Line'> | null>(null);
   const financialSegmentRefs = useRef<ISeriesApi<'Line'>[]>([]);
+  const comparisonRefs = useRef<ISeriesApi<'Line'>[]>([]);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [dayPopup, setDayPopup] = useState<DayPopupState | null>(null);
   const [clusterBoxes, setClusterBoxes] = useState<RenderedBox[]>([]);
@@ -671,6 +678,7 @@ export function CandleChart({
       volumeRef.current = null;
       financialRef.current = null;
       financialSegmentRefs.current = [];
+      comparisonRefs.current = [];
       markersRef.current = null;
     };
   }, [height]);
@@ -715,6 +723,29 @@ export function CandleChart({
     recomputeRef.current();
   }, [bars, events, evidence]);
 
+  useEffect(() => {
+    const chart = chartRef.current;
+    const candle = candleRef.current;
+    const volume = volumeRef.current;
+    if (!chart || !candle || !volume) return;
+    const latestPrice = barsRef.current[barsRef.current.length - 1]?.c ?? 1;
+    const pricePrecision = latestPrice < 1 ? 4 : 2;
+    candle.applyOptions({
+      visible: !comparisonMode,
+      lastValueVisible: !comparisonMode,
+      priceFormat: comparisonMode
+        ? { type: 'custom', minMove: 0.01, formatter: (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%` }
+        : { type: 'price', precision: pricePrecision, minMove: 10 ** -pricePrecision },
+    });
+    volume.applyOptions({ visible: !comparisonMode });
+    comparisonRefs.current = replaceComparisonSeries(
+      chart,
+      comparisonRefs.current,
+      comparisonMode ? comparisonLines : [],
+    );
+    chart.timeScale().fitContent();
+  }, [comparisonMode, comparisonLines, chartGeneration]);
+
   // Overlay changes must not reset the operator's zoom. Underlying observations
   // stay periodic; the step is explicitly an availability-date visualization.
   useEffect(() => {
@@ -757,7 +788,7 @@ export function CandleChart({
   }, [financialOverlay, financialOverlayKind]);
 
   useEffect(() => {
-    const hasValues = financialOverlayKind != null
+    const hasValues = !comparisonMode && financialOverlayKind != null
       && hasRenderableFinancialOverlay(financialOverlay);
     chartRef.current?.priceScale('left').applyOptions({
       visible: hasValues,
@@ -797,9 +828,10 @@ export function CandleChart({
     // chart redraws, so invalidate and let the next frame reposition against it.
     transformKeyRef.current = '';
     requestAnimationFrame(() => syncRef.current());
-  }, [financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted]);
+  }, [comparisonMode, financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted]);
 
   const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (comparisonMode) return;
     const chart = chartRef.current;
     const el = containerRef.current;
     if (!chart || !el) return;
@@ -828,7 +860,7 @@ export function CandleChart({
   return (
     <div style={{ position: 'relative', cursor: alertPlacementActive ? 'crosshair' : undefined }} onContextMenu={onContextMenu}>
       <div ref={containerRef} style={{ width: '100%' }} />
-      {clusterBoxes.map((box) => (
+      {!comparisonMode && clusterBoxes.map((box) => (
         <div
           key={box.key}
           style={{
@@ -856,7 +888,7 @@ export function CandleChart({
           )}
         </div>
       ))}
-      {clusterBoxes.map((box) => (
+      {!comparisonMode && clusterBoxes.map((box) => (
         <button
           key={`chip-${box.key}`}
           onClick={() =>
@@ -889,7 +921,7 @@ export function CandleChart({
           {box.chip}
         </button>
       ))}
-      {dayPopup && (
+      {!comparisonMode && dayPopup && (
         <div
           style={{
             position: 'absolute',

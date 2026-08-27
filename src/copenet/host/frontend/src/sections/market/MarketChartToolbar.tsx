@@ -12,6 +12,7 @@ export function MarketChartToolbar({
   onTimeframe,
   range,
   onRange,
+  comparisonControl,
 }: {
   alertControl: ReactNode;
   financialControls: ReactNode;
@@ -19,6 +20,7 @@ export function MarketChartToolbar({
   onTimeframe: (timeframe: ChartTimeframe) => void;
   range: ChartRange;
   onRange: (range: ChartRange) => void;
+  comparisonControl?: ReactNode;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -74,6 +76,7 @@ export function MarketChartToolbar({
         <div ref={contentRef} className="market-chart-toolbar__content">
           {alertControl}
           {financialControls}
+          {comparisonControl}
           <div className="market-chart-toolbar__timeframes" role="group" aria-label="Bar interval">
             {([
               ['D', 'D'],

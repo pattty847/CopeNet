@@ -107,7 +107,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketAlertsCancelRpc, marketAlertsCreateRpc, marketAlertsListRpc, marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketAlertsCancelRpc, marketAlertsCreateRpc, marketAlertsListRpc, marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import type { FinancialFrequency } from '../sections/market/types';
 import type { YieldCurveRange } from '../sections/market/types';
 import {
@@ -645,6 +645,10 @@ class WsClient {
 
   async marketTicker(symbol: string) {
     return marketTickerRpc(this.request.bind(this), symbol);
+  }
+
+  async marketChartSeries(symbols: string[], timeframe: 'daily' | 'weekly' | 'monthly') {
+    return marketChartSeriesRpc(this.request.bind(this), symbols, timeframe);
   }
 
   async marketTickerEvidence(symbol: string, refresh = false, daysBack = 180) {

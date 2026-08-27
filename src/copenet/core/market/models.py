@@ -321,6 +321,25 @@ class TickerQuote:
     price_basis: Literal["split_adjusted"]
 
 
+@dataclass(frozen=True)
+class ChartSeriesRow:
+    symbol: str
+    bars: list[MarketBar]
+
+
+@dataclass(frozen=True)
+class ChartSeriesPayload:
+    """Small batch of like-for-like traded-price histories for chart comparison."""
+
+    as_of: str
+    timeframe: Literal["daily", "weekly", "monthly"]
+    price_basis: Literal["split_adjusted"]
+    series: list[ChartSeriesRow]
+
+    def to_wire(self) -> dict[str, Any]:
+        return _to_wire(self)
+
+
 @dataclass
 class CompareRow:
     symbol: str

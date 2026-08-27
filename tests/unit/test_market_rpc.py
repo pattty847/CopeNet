@@ -12,6 +12,7 @@ from copenet.core.market.models import DashboardPayload
 from copenet.core.market.runtime import MarketRuntime
 from copenet.core.market.store import MarketStore
 from copenet.host.rpc_market import (
+    handle_market_chart_series_get,
     handle_market_dashboard_get,
     handle_market_refresh,
     handle_market_ticker_get,
@@ -82,6 +83,26 @@ async def test_market_universe_and_ticker_get_return_camel_case_shapes(tmp_path:
     # Insight Engine: ticker carries the soft_bottoming flag + decomposed components
     assert "insight" in ticker
     assert "softBottoming" in ticker["insight"]
+
+
+async def test_market_chart_series_returns_split_adjusted_batch_contract(tmp_path: Path) -> None:
+    orchestrator = FakeOrchestrator(tmp_path)
+    frames: list[dict[str, Any]] = []
+
+    async def send_json(frame: dict[str, Any]) -> None:
+        frames.append(frame)
+
+    await handle_market_chart_series_get(
+        "chart-series",
+        {"symbols": ["xlk", "GLD", "XLK"], "timeframe": "weekly"},
+        send_json,
+        orchestrator,
+    )
+
+    payload = frames[0]["payload"]
+    assert payload["timeframe"] == "weekly"
+    assert payload["priceBasis"] == "split_adjusted"
+    assert [row["symbol"] for row in payload["series"]] == ["XLK", "GLD"]
 
 
 async def test_market_refresh_returns_run_identifier(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

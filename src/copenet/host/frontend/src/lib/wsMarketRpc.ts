@@ -4,6 +4,7 @@
 
 import type {
   DashboardPayload,
+  ChartSeriesPayload,
   EconomicCalendarPayload,
   LedgerReport,
   MarketRead,
@@ -37,6 +38,15 @@ export async function marketDashboardRpc(request: WsRpcRequest): Promise<Dashboa
 export async function marketTickerRpc(request: WsRpcRequest, symbol: string): Promise<TickerDetailPayload> {
   const payload = await request<Record<string, unknown>>('market.ticker.get', { symbol });
   return payload as unknown as TickerDetailPayload;
+}
+
+export async function marketChartSeriesRpc(
+  request: WsRpcRequest,
+  symbols: string[],
+  timeframe: 'daily' | 'weekly' | 'monthly',
+): Promise<ChartSeriesPayload> {
+  const payload = await request<Record<string, unknown>>('market.chart.series.get', { symbols, timeframe });
+  return payload as unknown as ChartSeriesPayload;
 }
 
 export async function marketTickerEvidenceRpc(request: WsRpcRequest, symbol: string, refresh = false, daysBack = 180): Promise<TickerEvidencePayload> {

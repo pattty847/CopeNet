@@ -244,6 +244,13 @@ export interface TickerQuote {
   priceBasis: 'split_adjusted';
 }
 
+export interface ChartSeriesPayload {
+  asOf: string;
+  timeframe: 'daily' | 'weekly' | 'monthly';
+  priceBasis: 'split_adjusted';
+  series: { symbol: string; bars: Ohlcv[] }[];
+}
+
 export interface TickerIntelligence {
   asOf?: string | null;
   assetRole: string;

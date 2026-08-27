@@ -64,6 +64,7 @@ from .rpc_messaging import (
     handle_messaging_routes_resolve,
 )
 from .rpc_market import (
+    handle_market_chart_series_get,
     handle_market_brief_get,
     handle_market_brief_run,
     handle_market_ledger_get,
@@ -310,6 +311,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_dashboard_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.get":
         await handle_market_ticker_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.chart.series.get":
+        await handle_market_chart_series_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.evidence.get":
         await handle_market_ticker_evidence_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.fundamentals.get":

@@ -15,7 +15,7 @@ export function MarketMonitor() {
   }, []);
 
   const navigateTicker = (symbol: string | null) => {
-    const nextPath = marketTickerPath(symbol);
+    const nextPath = `${marketTickerPath(symbol)}${symbol ? window.location.search : ''}`;
     if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
     setActiveTicker(symbol?.trim().toUpperCase() || null);
   };

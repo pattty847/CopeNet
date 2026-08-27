@@ -25,6 +25,8 @@ from .data_sources import (
 from .edgar import chart_events_from_evidence, fetch_evidence, fetch_fundamentals
 from .models import (
     AccumulationRow,
+    ChartSeriesPayload,
+    ChartSeriesRow,
     CompareResult,
     CompareRow,
     DashboardPayload,
@@ -296,6 +298,32 @@ class MarketRuntime:
             insight=insight,
             intelligence=intelligence,
             stats=fetch_key_stats(normalized),
+        )
+
+    def chart_series(self, symbols: list[str], timeframe: str) -> ChartSeriesPayload:
+        normalized_timeframe = timeframe.strip().lower()
+        if normalized_timeframe not in CHART_BAR_LIMITS:
+            raise ValueError("timeframe must be daily, weekly, or monthly")
+        normalized_symbols: list[str] = []
+        for raw in symbols:
+            symbol = raw.strip().upper()
+            if symbol and symbol not in normalized_symbols:
+                normalized_symbols.append(symbol)
+        if not normalized_symbols:
+            raise ValueError("at least one symbol is required")
+        if len(normalized_symbols) > 10:
+            raise ValueError("chart comparison supports at most 10 component symbols")
+        return ChartSeriesPayload(
+            as_of=_now_iso(),
+            timeframe=normalized_timeframe,  # type: ignore[arg-type]
+            price_basis="split_adjusted",
+            series=[
+                ChartSeriesRow(
+                    symbol=symbol,
+                    bars=self.cached_bars(symbol, normalized_timeframe, basis=SPLIT_ADJUSTED),
+                )
+                for symbol in normalized_symbols
+            ],
         )
 
     def compare(self, symbols: list[str]) -> CompareResult:

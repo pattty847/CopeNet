@@ -946,6 +946,131 @@ html[data-theme='dark'] .shell-workbench-feature {
   gap: 14px;
 }
 
+.chart-comparison-control {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+.chart-comparison-modes {
+  display: flex;
+  padding: 3px;
+  border: 1px solid rgba(254, 252, 244, 0.06);
+  border-radius: 8px;
+  background: #050506;
+}
+
+.chart-comparison-modes > button {
+  display: inline-flex;
+  min-height: 26px;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--color-shell-muted);
+  cursor: pointer;
+  font: 600 9.5px Inter;
+}
+
+.chart-comparison-modes > button[aria-pressed='true'] {
+  background: rgba(143, 184, 232, 0.16);
+  color: #8fb8e8;
+}
+
+.chart-comparison-popover {
+  position: absolute;
+  top: calc(100% + 7px);
+  right: 0;
+  z-index: 30;
+  width: 340px;
+  padding: 13px;
+  border: 1px solid rgba(254, 252, 244, 0.11);
+  border-radius: 11px;
+  background: #101012;
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.55);
+}
+
+.chart-comparison-popover input {
+  min-width: 0;
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid rgba(254, 252, 244, 0.1);
+  border-radius: 7px;
+  outline: none;
+  background: #080809;
+  color: var(--color-shell-text);
+  font: 500 11px 'JetBrains Mono', monospace;
+  text-transform: uppercase;
+}
+
+.chart-comparison-popover input:focus-visible {
+  border-color: rgba(251, 148, 35, 0.65);
+}
+
+.chart-comparison-popover form button,
+.chart-comparison-clear,
+.chart-comparison-close {
+  border: 1px solid rgba(254, 252, 244, 0.1);
+  border-radius: 7px;
+  background: rgba(254, 252, 244, 0.03);
+  color: var(--color-shell-muted);
+  cursor: pointer;
+}
+
+.chart-comparison-popover form button {
+  padding: 0 11px;
+  color: #fb9423;
+  font: 650 10px Inter;
+}
+
+.chart-comparison-close {
+  display: inline-flex;
+  width: 27px;
+  height: 27px;
+  align-items: center;
+  justify-content: center;
+}
+
+.chart-comparison-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 11px;
+}
+
+.chart-comparison-list > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 5px 4px 8px;
+  border: 1px solid rgba(143, 184, 232, 0.2);
+  border-radius: 999px;
+  color: #8fb8e8;
+  font-size: 9.5px;
+}
+
+.chart-comparison-list > span button {
+  display: inline-flex;
+  padding: 1px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.chart-comparison-list p {
+  margin: 2px 0;
+  color: var(--color-shell-muted);
+  font-size: 10.5px;
+}
+
+.chart-comparison-clear {
+  margin-top: 11px;
+  padding: 5px 8px;
+  font: 600 9px Inter;
+}
+
 @media (max-width: 1023px) {
   .market-ticker-detail {
     padding: 12px !important;
@@ -965,6 +1090,14 @@ html[data-theme='dark'] .shell-workbench-feature {
     position: static;
     display: grid;
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  }
+
+  .chart-comparison-popover {
+    position: fixed;
+    top: max(74px, calc(env(safe-area-inset-top) + 58px));
+    right: 12px;
+    left: 12px;
+    width: auto;
   }
 
   .market-panel-header--mobile-toolbar {

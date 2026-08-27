@@ -40,6 +40,18 @@ async def handle_market_ticker_get(request_id: str, params: dict[str, Any] | Non
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=runtime.ticker(symbol).to_wire())))
 
 
+async def handle_market_chart_series_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    raw = params or {}
+    symbols = raw.get("symbols")
+    if not isinstance(symbols, list) or not all(isinstance(symbol, str) for symbol in symbols):
+        raise ValueError("symbols must be a list of ticker strings")
+    timeframe = raw.get("timeframe")
+    if not isinstance(timeframe, str):
+        raise ValueError("timeframe is required")
+    payload = _runtime(orchestrator).chart_series(symbols, timeframe)
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload.to_wire())))
+
+
 async def handle_market_ticker_evidence_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     del orchestrator
     raw = params or {}
