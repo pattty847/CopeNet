@@ -1112,7 +1112,7 @@ html[data-theme='dark'] .shell-workbench-feature {
 
 @media (max-width: 1023px) {
   .market-dashboard-canvas {
-    padding: 10px max(6px, env(safe-area-inset-right)) 18px max(6px, env(safe-area-inset-left));
+    padding: 10px 4px 18px;
     gap: 12px;
   }
 
