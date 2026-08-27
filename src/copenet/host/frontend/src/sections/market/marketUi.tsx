@@ -138,11 +138,11 @@ export function PanelCard({
 }) {
   return (
     <div
+      className="market-panel-card"
       style={{
         background: MM.panel,
         border: `1px solid ${MM.border}`,
         borderRadius: 14,
-        padding: 16,
         display: 'flex',
         flexDirection: 'column',
         ...style,

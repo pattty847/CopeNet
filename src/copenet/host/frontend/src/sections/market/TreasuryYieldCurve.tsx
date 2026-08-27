@@ -111,8 +111,8 @@ export function TreasuryYieldCurve() {
   const asOf = useMemo(() => curve ? new Date(curve.asOf).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) : '', [curve]);
 
   return (
-    <section aria-labelledby="treasury-curve-title" style={{ border: `1px solid ${MM.borderHi}`, borderRadius: 14, background: `radial-gradient(circle at 25% 20%, rgba(251,148,35,.055), transparent 34%), ${MM.panel}`, overflow: 'hidden' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '14px 16px', borderBottom: `1px solid ${MM.border}`, flexWrap: 'wrap' }}>
+    <section className="market-treasury-curve" aria-labelledby="treasury-curve-title" style={{ border: `1px solid ${MM.borderHi}`, borderRadius: 14, background: `radial-gradient(circle at 25% 20%, rgba(251,148,35,.055), transparent 34%), ${MM.panel}`, overflow: 'hidden' }}>
+      <div className="market-treasury-curve__header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, borderBottom: `1px solid ${MM.border}`, flexWrap: 'wrap' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span aria-hidden="true" style={{ color: MM.accent, fontFamily: mono, fontSize: 18 }}>∿</span>
           <div>
@@ -134,7 +134,7 @@ export function TreasuryYieldCurve() {
 
       {!curve ? <EmptyCurve loading={loading} error={error} onRetry={() => void load(selectedRange)} /> : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 2fr) minmax(260px, .8fr)' }}>
-          <div style={{ minWidth: 0, padding: '12px 16px 14px' }}>
+          <div className="market-treasury-curve__chart" style={{ minWidth: 0 }}>
             <div style={{ font: '600 8.5px Inter', letterSpacing: '.13em', color: MM.dim, textTransform: 'uppercase' }}>Yield (%)</div>
             <div style={{ overflowX: 'auto', paddingBottom: 2 }}><CurveChart points={curve.points} /></div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${curve.points.length}, minmax(76px, 1fr))`, border: `1px solid ${MM.border}`, borderRadius: 10, overflowX: 'auto' }}>
@@ -153,13 +153,13 @@ export function TreasuryYieldCurve() {
             </table>
           </div>
 
-          <aside aria-label="Treasury curve insights" style={{ borderLeft: isMobile ? 'none' : `1px solid ${MM.border}`, borderTop: isMobile ? `1px solid ${MM.border}` : 'none', padding: 14, display: 'flex', flexDirection: 'column', gap: 10 }}>
-            <div style={{ padding: 14, border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset }}>
+          <aside className="market-treasury-curve__insights" aria-label="Treasury curve insights" style={{ borderLeft: isMobile ? 'none' : `1px solid ${MM.border}`, borderTop: isMobile ? `1px solid ${MM.border}` : 'none', display: 'flex', flexDirection: 'column' }}>
+            <div className="market-treasury-curve__insight-card" style={{ border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset }}>
               <div style={{ font: '700 8.5px Inter', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase' }}>Curve shape</div>
               <div style={{ marginTop: 8, font: '500 19px Inter', color: MM.text }}>{curve.shape.label}</div>
               <div style={{ marginTop: 7, fontSize: 10.5, lineHeight: 1.55, color: MM.muted }}>{curve.shape.detail}</div>
             </div>
-            <div style={{ padding: 14, border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset }}>
+            <div className="market-treasury-curve__insight-card" style={{ border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset }}>
               <div style={{ font: '700 8.5px Inter', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase', marginBottom: 7 }}>Key spreads</div>
               {curve.spreads.map((spread) => (
                 <div key={spread.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '7px 0', borderTop: `1px solid ${MM.border}` }}>
@@ -168,7 +168,7 @@ export function TreasuryYieldCurve() {
                 </div>
               ))}
             </div>
-            <div style={{ padding: 14, border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset, flex: 1 }}>
+            <div className="market-treasury-curve__insight-card" style={{ border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset, flex: 1 }}>
               <div style={{ font: '700 8.5px Inter', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase' }}>Why it matters</div>
               <p style={{ margin: '9px 0 0', fontSize: 10.5, lineHeight: 1.55, color: MM.textSoft }}>The curve prices expectations for growth, inflation, and Federal Reserve policy across time.</p>
               <p style={{ margin: '8px 0 0', fontSize: 10.5, lineHeight: 1.55, color: MM.muted }}>Watch the 10Y–2Y spread for the policy cycle and 10Y–3M for deeper inversion risk.</p>

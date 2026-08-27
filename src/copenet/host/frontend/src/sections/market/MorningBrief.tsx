@@ -70,8 +70,8 @@ function RunButton({ generating, onRun, label }: { generating: boolean; onRun: (
 
 function BriefRow({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: 12, alignItems: 'baseline', borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 9 }}>
-      <span style={{ flex: '0 0 62px', fontFamily: mono, fontSize: 9, letterSpacing: '.12em', color: MM.dim, textTransform: 'uppercase' }}>{label}</span>
+    <div className="market-brief-row" style={{ display: 'flex', alignItems: 'baseline', borderTop: `1px solid rgba(254,252,244,.05)`, paddingTop: 9 }}>
+      <span className="market-brief-row__label" style={{ fontFamily: mono, fontSize: 9, letterSpacing: '.12em', color: MM.dim, textTransform: 'uppercase' }}>{label}</span>
       <div style={{ flex: 1, minWidth: 0 }}>{children}</div>
     </div>
   );
@@ -101,12 +101,11 @@ export function MorningBrief({
     background: `linear-gradient(180deg, rgba(251,148,35,.07), transparent 55%), ${MM.panel}`,
     border: `1px solid rgba(251,148,35,.22)`,
     borderRadius: 14,
-    padding: 16,
   };
 
   if (!brief) {
     return (
-      <div style={frame}>
+      <div className="market-morning-brief" style={frame}>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
           <span style={{ font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.accent }}>☀ Since you last looked</span>
           <RunButton generating={generating} onRun={onRunNow} label="↻ Run sweep now" />
@@ -127,6 +126,7 @@ export function MorningBrief({
 
   const symbolChip = (symbol: string, key: string, body: ReactNode) => (
     <button
+      className="market-brief-symbol-chip"
       key={key}
       onClick={() => onOpen(symbol)}
       style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, textAlign: 'left', background: 'rgba(254,252,244,.03)', border: `1px solid ${MM.border}`, borderRadius: 9, padding: '7px 10px', color: MM.textSoft, maxWidth: '100%' }}
@@ -136,7 +136,7 @@ export function MorningBrief({
   );
 
   return (
-    <div style={frame}>
+    <div className="market-morning-brief" style={frame}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 10 }}>
         <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.accent }}>
           ☀ Since you last looked
