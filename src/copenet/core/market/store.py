@@ -111,6 +111,26 @@ class MarketStore:
         """Most recent archived reads, newest first. Empty until the archive fills in."""
         return self._load_dated(self._root / "market-reads", limit)
 
+    def save_market_tape(self, tape: dict[str, Any]) -> None:
+        """Freeze the exact account-neutral evidence packet used by a market read.
+
+        Unlike daily reads, intraday tape editions are not revisions of one conclusion: a
+        future late-day packet must coexist with the morning observation so regime changes
+        can be audited.  Archive by date and full timestamp from the beginning.
+        """
+        generated_at = str(tape.get("generatedAt") or "").strip()
+        with self._lock:
+            write_json_atomic(self._root / "latest-market-tape.json", tape)
+            tape_date = generated_at[:10]
+            if len(tape_date) == 10:
+                stamp = "".join(character for character in generated_at if character.isalnum())
+                if stamp:
+                    write_json_atomic(self._root / "market-tapes" / tape_date / f"{stamp}.json", tape)
+
+    def load_market_tape(self) -> dict[str, Any] | None:
+        payload = read_json(self._root / "latest-market-tape.json", None)
+        return payload if isinstance(payload, dict) and payload else None
+
     def load_morning_briefs(self, *, limit: int = 10) -> list[dict[str, Any]]:
         """Most recent archived briefs, newest first."""
         return self._load_dated(self._root / "briefs", limit)

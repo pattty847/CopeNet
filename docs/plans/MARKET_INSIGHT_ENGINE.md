@@ -6,3 +6,6 @@ portfolio context, and model-shaping notes stay in ignored local storage.
 
 Detailed operator-specific planning notes, when present, live in the ignored
 `docs/private/MARKET_INSIGHT_ENGINE.private.md` file.
+
+The model's frozen point-in-time observation contract is documented in
+[MARKET_TAPE_PACKET.md](MARKET_TAPE_PACKET.md).

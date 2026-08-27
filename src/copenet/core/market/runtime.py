@@ -51,6 +51,8 @@ from .fact_packets import market_fact_packet, market_history_section, ticker_fac
 from .ledger import record_market_read_claims, record_ticker_read_claim, track_record_line
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
+from .market_tape import build_market_tape
+from .market_tape_formatter import format_market_tape
 from .price_cache import PriceCache
 from .price_history import SPLIT_ADJUSTED, TOTAL_RETURN
 from .signals import compute_price_signals, compute_rrg_tail
@@ -403,12 +405,16 @@ class MarketRuntime:
                 r for r in self.store.load_market_reads(limit=8)
                 if str(r.get("generatedAt") or "")[:10] != today
             ]
+            dashboard_wire = self.store.load_dashboard_wire()
             packet = market_fact_packet(
-                self.store.load_dashboard_wire(),
+                dashboard_wire,
                 sb_rate,
                 overnight=overnight,
                 history=market_history_section(prior_briefs, prior_reads),
             )
+            tape = build_market_tape(self.store, dashboard_wire, generated_at=generated_at)
+            self.store.save_market_tape(tape.to_wire())
+            packet = f"{packet}\n\n{format_market_tape(tape)}"
             track_record = track_record_line(self.store)
             if track_record:
                 packet = f"{packet}\n{track_record}"
