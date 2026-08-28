@@ -18,6 +18,7 @@ import { PriceAlertControl } from './PriceAlertControl';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import { useIsMobile } from '../../lib/responsive';
 import { ChartComparisonControl } from './ChartComparisonControl';
+import { ChartEvidenceControl, type InsiderDisplayMode, type InsiderLookback } from './ChartEvidenceControl';
 import { buildComparisonLines, comparisonSearch, comparisonStateFromSearch } from './chartComparison';
 import { useChartComparisons } from './useChartComparisons';
 
@@ -60,6 +61,12 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
   const [overlayFrequency, setOverlayFrequency] = useState<FinancialFrequency>('quarterly');
   const [alertPlacementActive, setAlertPlacementActive] = useState(false);
   const [pickedAlertPrice, setPickedAlertPrice] = useState<number | null>(null);
+  const [showInsiderTransactions, setShowInsiderTransactions] = useState(false);
+  const [insiderLookback, setInsiderLookback] = useState<InsiderLookback>('chart');
+  const [insiderDisplayMode, setInsiderDisplayMode] = useState<InsiderDisplayMode>('individual');
+  const [logScale, setLogScale] = useState(() => {
+    try { return localStorage.getItem('mm-log-scale') === '1'; } catch { return false; }
+  });
   const [watchBusy, setWatchBusy] = useState(false);
   const [comparisonExpressions, setComparisonExpressions] = useState(() => comparisonStateFromSearch(window.location.search).expressions);
   const [comparisonMode, setComparisonMode] = useState(() => comparisonStateFromSearch(window.location.search).active);
@@ -113,6 +120,25 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
   const quoteTone = change == null || change === 0 ? 'flat' : change > 0 ? 'up' : 'down';
   const chartEvents = sec.payload?.events ?? detail.events;
   const evidence = sec.payload?.evidence?.length ? sec.payload.evidence : detail.evidence;
+  const chartEvidence = (() => {
+    const latest = bars[bars.length - 1]?.t;
+    const lookbackDays = insiderLookback === '90D' ? 90 : insiderLookback === '1Y' ? 366 : insiderLookback === '3Y' ? 3 * 366 : insiderLookback === '5Y' ? 5 * 366 : null;
+    return evidence.filter((item) => {
+      if (item.type !== 'Insider') return true;
+      if (!showInsiderTransactions) return false;
+      if (insiderLookback === 'chart') return item.t == null || bars.length === 0 || item.t >= bars[0].t;
+      if (lookbackDays == null || latest == null || item.t == null) return true;
+      return item.t >= latest - lookbackDays * 86400;
+    });
+  })();
+  const chartEventRows = chartEvents.filter((event) => {
+    if (event.kind !== 'insider') return true;
+    if (!showInsiderTransactions) return false;
+    const latest = bars[bars.length - 1]?.t;
+    const lookbackDays = insiderLookback === '90D' ? 90 : insiderLookback === '1Y' ? 366 : insiderLookback === '3Y' ? 3 * 366 : insiderLookback === '5Y' ? 5 * 366 : null;
+    if (insiderLookback === 'chart') return bars.length === 0 || event.t >= bars[0].t;
+    return lookbackDays == null || latest == null || event.t >= latest - lookbackDays * 86400;
+  });
   const overlayUnit = !overlaySeries.data ? undefined : isValuationPayload(overlaySeries.data) ? 'ratio' : overlaySeries.data.observations[0]?.unit;
   const timeframeLabel = timeframe === 'D' ? 'Daily bars' : timeframe === 'M' ? 'Monthly bars' : 'Weekly bars';
   const latestVisibleBar = bars[bars.length - 1];
@@ -151,9 +177,12 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
             onTimeframe={setTimeframe}
             range={range}
             onRange={setRange}
-            alertControl={showingComparison ? null : <PriceAlertControl alerts={priceAlerts.alerts} currentPrice={detail.quote.price ?? 0} pickedPrice={pickedAlertPrice} placing={alertPlacementActive} loading={priceAlerts.loading} error={priceAlerts.error} onStartPlacing={() => setAlertPlacementActive(true)} onStopPlacing={() => setAlertPlacementActive(false)} onCreate={(direction, threshold) => priceAlerts.create(direction, threshold, detail.quote.price ?? 0)} onCancel={priceAlerts.cancel} />}
+            alertControl={showingComparison ? null : <PriceAlertControl alerts={priceAlerts.alerts} currentPrice={detail.quote.price ?? 0} pickedPrice={pickedAlertPrice} placing={alertPlacementActive} loading={priceAlerts.loading} error={priceAlerts.error} onStartPlacing={() => setAlertPlacementActive(true)} onStopPlacing={() => { setAlertPlacementActive(false); setPickedAlertPrice(null); }} onCreate={async (direction, threshold) => { const created = await priceAlerts.create(direction, threshold, detail.quote.price ?? 0); if (created) setPickedAlertPrice(null); return created; }} onCancel={priceAlerts.cancel} />}
             financialControls={showingComparison ? null : <FinancialOverlayControls metrics={overlayMetrics} metric={overlayMetric} frequency={effectiveOverlayFrequency} loading={overlaySeries.loading} onMetric={setOverlayMetric} onFrequency={setOverlayFrequency} />}
             comparisonControl={<ChartComparisonControl active={showingComparison} expressions={comparisonExpressions} onActive={setComparisonMode} onAdd={(expression) => setComparisonExpressions((current) => [...current, expression])} onRemove={removeComparison} onClear={() => { setComparisonExpressions([]); setComparisonMode(false); }} />}
+            evidenceControl={showingComparison ? null : <ChartEvidenceControl showInsiderTransactions={showInsiderTransactions} onShowInsiderTransactions={setShowInsiderTransactions} lookback={insiderLookback} onLookback={setInsiderLookback} displayMode={insiderDisplayMode} onDisplayMode={setInsiderDisplayMode} />}
+            logScale={logScale}
+            onLogScale={setLogScale}
           />
         }>
           {!showingComparison && latestVisibleBar && (
@@ -167,9 +196,9 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
             </div>
           )}
           {showingComparison && <ComparisonLegend labels={[detail.symbol, ...comparisonExpressions.filter((item) => item !== detail.symbol)]} lines={comparisonLines} loading={comparisons.loading} error={comparisons.error} />}
-          <CandleChart bars={bars} events={chartEvents} evidence={evidence} height={isMobile ? 430 : 590} financialOverlay={overlayPoints} financialOverlayKind={overlayMetric ?? undefined} financialOverlayUnit={overlayUnit} financialOverlayValuation={overlayIsValuation} financialOverlayInverted={overlaySeries.data != null && isValuationPayload(overlaySeries.data) && overlaySeries.data.inverted === true} priceAlerts={priceAlerts.alerts} alertPlacementActive={alertPlacementActive} onAlertPriceSelected={(price) => { setPickedAlertPrice(price); setAlertPlacementActive(false); }} comparisonMode={showingComparison} comparisonLines={comparisonLines} />
+          <CandleChart bars={bars} events={chartEventRows} evidence={chartEvidence} height={isMobile ? 430 : 590} financialOverlay={overlayPoints} financialOverlayKind={overlayMetric ?? undefined} financialOverlayUnit={overlayUnit} financialOverlayValuation={overlayIsValuation} financialOverlayInverted={overlaySeries.data != null && isValuationPayload(overlaySeries.data) && overlaySeries.data.inverted === true} priceAlerts={priceAlerts.alerts} draftAlertPrice={pickedAlertPrice} alertPlacementActive={alertPlacementActive} onAlertPriceSelected={(price) => { setPickedAlertPrice(price); setAlertPlacementActive(false); }} comparisonMode={showingComparison} comparisonLines={comparisonLines} insiderDisplayMode={insiderDisplayMode} logScale={logScale} />
           {!showingComparison && <FinancialOverlayStatus metrics={overlayMetrics} metric={overlayMetric} state={overlaySeries} />}
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 8, borderTop: `1px solid ${MM.border}`, paddingTop: 8, fontSize: 9.5, color: MM.dimmer }}><span>{showingComparison ? 'Every line is rebased to 0% at its first observation in the visible range.' : 'SEC markers and active alerts remain synchronized to the visible bars.'}</span><span>{bars.length.toLocaleString()} bars · split-adjusted traded price{showingComparison ? '' : ' · right-click price axis for log scale'}</span></div>
+          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', marginTop: 8, borderTop: `1px solid ${MM.border}`, paddingTop: 8, fontSize: 9.5, color: MM.dimmer }}><span>{showingComparison ? 'Every line is rebased to 0% at its first observation in the visible range.' : `8-K and Form 144 markers on · Form 4 ${showInsiderTransactions ? `on (${insiderDisplayMode})` : 'off'}`}</span><span>{bars.length.toLocaleString()} bars · split-adjusted traded price</span></div>
         </PanelCard>
         <TickerOverviewRail detail={detail} evidence={evidence} />
       </main>

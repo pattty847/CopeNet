@@ -9,6 +9,7 @@ export function useChartPriceAlertLines(
   candleRef: MutableRefObject<ISeriesApi<'Candlestick'> | null>,
   alerts: PriceAlert[],
   chartGeneration: number,
+  draftPrice?: number | null,
 ) {
   const linesRef = useRef<PriceLine[]>([]);
 
@@ -24,9 +25,19 @@ export function useChartPriceAlertLines(
       axisLabelVisible: true,
       title: `Alert ${alert.direction === 'above' ? '≥' : '≤'}`,
     }));
+    if (draftPrice != null && Number.isFinite(draftPrice) && draftPrice > 0) {
+      linesRef.current.push(candle.createPriceLine({
+        price: draftPrice,
+        color: '#8fb8e8',
+        lineWidth: 1,
+        lineStyle: LineStyle.Solid,
+        axisLabelVisible: true,
+        title: 'New alert',
+      }));
+    }
     return () => {
       linesRef.current.forEach((line) => candle.removePriceLine(line));
       linesRef.current = [];
     };
-  }, [alerts, candleRef, chartGeneration]);
+  }, [alerts, candleRef, chartGeneration, draftPrice]);
 }

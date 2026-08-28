@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, Crosshair, X } from 'lucide-react';
+import { MarketFloatingPopover } from './MarketFloatingPopover';
 import { MM, mono } from './marketUi';
 import type { PriceAlert } from './types';
 
@@ -29,6 +30,7 @@ export function PriceAlertControl({
   const [open, setOpen] = useState(false);
   const [thresholdText, setThresholdText] = useState('');
   const [direction, setDirection] = useState<'above' | 'below'>('above');
+  const triggerRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
     if (pickedPrice == null) return;
@@ -58,6 +60,7 @@ export function PriceAlertControl({
   return (
     <div style={{ position: 'relative' }}>
       <button
+        ref={triggerRef}
         type="button"
         className="market-price-alert-trigger"
         onClick={start}
@@ -70,8 +73,8 @@ export function PriceAlertControl({
         <span className="market-price-alert-trigger__label">{alerts.length ? `${alerts.length} alert${alerts.length === 1 ? '' : 's'}` : 'Add alert'}</span>
         {alerts.length > 0 && <span className="market-price-alert-trigger__count">{alerts.length}</span>}
       </button>
-      {open && (
-        <div className="market-price-alert-popover" style={{ position: 'absolute', zIndex: 40, top: 'calc(100% + 8px)', right: 0, width: 310, border: `1px solid ${MM.borderHi}`, borderRadius: 12, background: '#0b0b0d', padding: 12, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
+      <MarketFloatingPopover anchorRef={triggerRef} open={open} onClose={close} className="market-price-alert-popover" width={320} dismissOnOutside={false}>
+        <div style={{ border: `1px solid ${MM.borderHi}`, borderRadius: 12, background: '#0b0b0d', padding: 12, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <span style={{ font: '700 9px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>Daily-close price alert</span>
             <button type="button" onClick={close} aria-label="Close price alerts" style={{ border: 0, background: 'transparent', color: MM.dim, cursor: 'pointer', padding: 2 }}><X size={13} /></button>
@@ -79,6 +82,7 @@ export function PriceAlertControl({
           <button type="button" onClick={onStartPlacing} style={{ width: '100%', cursor: 'crosshair', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: `1px solid ${placing ? MM.accent : MM.border}`, background: placing ? MM.accentSoft : 'rgba(254,252,244,.02)', color: placing ? MM.accent : MM.textSoft, borderRadius: 8, padding: '8px 10px', font: '600 10.5px Inter' }}>
             <Crosshair size={13} /> {placing ? 'Click a price level on the chart…' : 'Pick a level on the chart'}
           </button>
+          {pickedPrice != null && <div role="status" style={{ marginTop: 7, color: MM.up, fontSize: 10 }}>Level selected at ${pickedPrice.toFixed(2)}. Review it below, then arm the alert.</div>}
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 112px', gap: 8, marginTop: 9 }}>
             <label style={{ display: 'grid', gap: 4, fontSize: 9, color: MM.dim }}>
               Price
@@ -114,7 +118,7 @@ export function PriceAlertControl({
             </div>
           )}
         </div>
-      )}
+      </MarketFloatingPopover>
     </div>
   );
 }

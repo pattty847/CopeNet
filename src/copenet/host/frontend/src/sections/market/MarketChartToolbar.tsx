@@ -13,6 +13,9 @@ export function MarketChartToolbar({
   range,
   onRange,
   comparisonControl,
+  evidenceControl,
+  logScale,
+  onLogScale,
 }: {
   alertControl: ReactNode;
   financialControls: ReactNode;
@@ -21,6 +24,9 @@ export function MarketChartToolbar({
   range: ChartRange;
   onRange: (range: ChartRange) => void;
   comparisonControl?: ReactNode;
+  evidenceControl?: ReactNode;
+  logScale?: boolean;
+  onLogScale?: (enabled: boolean) => void;
 }) {
   const railRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -77,6 +83,7 @@ export function MarketChartToolbar({
           {alertControl}
           {financialControls}
           {comparisonControl}
+          {evidenceControl}
           <div className="market-chart-toolbar__timeframes" role="group" aria-label="Bar interval">
             {([
               ['D', 'D'],
@@ -123,6 +130,7 @@ export function MarketChartToolbar({
               </button>
             ))}
           </div>
+          <button type="button" className="market-chart-tool-button" aria-pressed={logScale} onClick={() => onLogScale?.(!logScale)} title="Toggle logarithmic price axis">Axis · {logScale ? 'Log' : 'Linear'}</button>
         </div>
       </div>
       <button

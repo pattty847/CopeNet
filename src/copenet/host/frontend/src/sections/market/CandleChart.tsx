@@ -32,6 +32,7 @@ import type { PriceAlert } from './types';
 import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
 import type { ChartComparisonLine } from './chartComparison';
+import type { InsiderDisplayMode } from './ChartEvidenceControl';
 import { replaceComparisonSeries } from './chartComparisonSeries';
 import {
   hasRenderableFinancialOverlay,
@@ -308,6 +309,24 @@ function bucketMarkers(bucket: DayBucket, withText: boolean): SeriesMarker<UTCTi
   return markers;
 }
 
+function individualMarkers(bucket: DayBucket): SeriesMarker<UTCTimestamp>[] {
+  return bucket.items.map((item) => {
+    const glyph = glyphFor(item);
+    const trade = item.type === 'Insider';
+    const price = item.price && item.price > 0 ? ` @ $${item.price.toFixed(2)}` : '';
+    const value = item.value ? ` ${formatMoney(item.value)}` : '';
+    const text = trade ? `${glyph}${value}${price}` : item.type;
+    return {
+      time: bucket.time as UTCTimestamp,
+      position: item.tone === 'up' ? 'belowBar' : 'aboveBar',
+      shape: item.tone === 'up' ? 'arrowUp' : item.tone === 'down' ? 'arrowDown' : item.type === '8-K' ? 'square' : 'circle',
+      color: item.tone === 'up' ? MM.up : item.tone === 'down' ? MM.down : MM.muted,
+      size: trade ? 1 : 0.7,
+      text,
+    } satisfies SeriesMarker<UTCTimestamp>;
+  });
+}
+
 /** Future-dated planned sales: whitespace times past the last candle + price-anchored markers. */
 function futureDecorations(evidence: EvidenceItem[], rows: Ohlcv[]): { markers: SeriesMarker<Time>[]; times: number[] } {
   if (!evidence.length || !rows.length) return { markers: [], times: [] };
@@ -371,10 +390,13 @@ export function CandleChart({
   financialOverlayValuation = false,
   financialOverlayInverted = false,
   priceAlerts = [],
+  draftAlertPrice,
   alertPlacementActive = false,
   onAlertPriceSelected,
   comparisonMode = false,
   comparisonLines = [],
+  insiderDisplayMode = 'individual',
+  logScale = false,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -392,10 +414,13 @@ export function CandleChart({
   /** Inverted valuations (yields) format as percentages instead of multiples. */
   financialOverlayInverted?: boolean;
   priceAlerts?: PriceAlert[];
+  draftAlertPrice?: number | null;
   alertPlacementActive?: boolean;
   onAlertPriceSelected?: (price: number) => void;
   comparisonMode?: boolean;
   comparisonLines?: ChartComparisonLine[];
+  insiderDisplayMode?: InsiderDisplayMode;
+  logScale?: boolean;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
@@ -415,21 +440,15 @@ export function CandleChart({
   const futureMarkersRef = useRef<SeriesMarker<Time>[]>([]);
   const alertPlacementRef = useRef(alertPlacementActive);
   const onAlertPriceSelectedRef = useRef(onAlertPriceSelected);
+  const insiderDisplayModeRef = useRef(insiderDisplayMode);
   const rafRef = useRef<number | null>(null);
   evidenceRef.current = evidence;
   eventsRef.current = events;
   barsRef.current = bars;
   alertPlacementRef.current = alertPlacementActive;
   onAlertPriceSelectedRef.current = onAlertPriceSelected;
-  useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration);
-  // TradingView muscle memory: right-click the price axis to flip log/linear. Persisted.
-  const [logScale, setLogScale] = useState(() => {
-    try {
-      return localStorage.getItem('mm-log-scale') === '1';
-    } catch {
-      return false;
-    }
-  });
+  insiderDisplayModeRef.current = insiderDisplayMode;
+  useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration, draftAlertPrice);
 
   /** Recompute markers + cluster boxes for the current data and zoom. Derived, never stored:
    *  runs on data change and (rAF-throttled) on every visible-range change. */
@@ -461,7 +480,8 @@ export function CandleChart({
       const coordinate = timeScale.timeToCoordinate(bucket.time as UTCTimestamp);
       if (coordinate != null) xByTime.set(bucket.time, coordinate);
     }
-    const { clusters, loose } = clusterBuckets(buckets, rows, xByTime);
+    const individual = insiderDisplayModeRef.current === 'individual';
+    const { clusters, loose } = individual ? { clusters: [], loose: buckets } : clusterBuckets(buckets, rows, xByTime);
 
     // Loose-day markers: text only when no other decorated day is nearby at this zoom.
     const allXs = [...xByTime.values()];
@@ -474,7 +494,7 @@ export function CandleChart({
         const d = Math.abs(other - x);
         if (d > 0.5 && d < room) room = d;
       }
-      markers.push(...bucketMarkers(bucket, room >= LABEL_ROOM_PX));
+      markers.push(...(individual ? individualMarkers(bucket) : bucketMarkers(bucket, room >= LABEL_ROOM_PX)));
     }
     markersApi.setMarkers([...markers, ...futureMarkersRef.current].sort((a, z) => (a.time as number) - (z.time as number)));
 
@@ -607,17 +627,21 @@ export function CandleChart({
 
     // Click a marker day → popup with everything that hit that day (who, $, filing link).
     chart.subscribeClick((param) => {
-      if (param.time == null || !param.point) {
+      if (!param.point) {
         setDayPopup(null);
         return;
       }
-      const time = param.time as number;
       if (alertPlacementRef.current) {
         const price = candle.coordinateToPrice(param.point.y);
         if (price != null && Number.isFinite(price) && price > 0) onAlertPriceSelectedRef.current?.(price);
         setDayPopup(null);
         return;
       }
+      if (param.time == null) {
+        setDayPopup(null);
+        return;
+      }
+      const time = param.time as number;
       const items = evidenceForDay(evidenceRef.current, normalize(barsRef.current), time);
       if (!items.length) {
         setDayPopup(null);
@@ -830,20 +854,6 @@ export function CandleChart({
     requestAnimationFrame(() => syncRef.current());
   }, [comparisonMode, financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted]);
 
-  const onContextMenu = (event: React.MouseEvent<HTMLDivElement>) => {
-    if (comparisonMode) return;
-    const chart = chartRef.current;
-    const el = containerRef.current;
-    if (!chart || !el) return;
-    const rect = el.getBoundingClientRect();
-    // Only when the right-click lands ON the price axis (same gesture as TradingView).
-    const axisWidth = chart.priceScale('right').width();
-    if (event.clientX >= rect.right - axisWidth) {
-      event.preventDefault();
-      setLogScale((v) => !v);
-    }
-  };
-
   const popupNet = dayPopup
     ? dayPopup.items.reduce(
         (acc, item) => {
@@ -858,7 +868,7 @@ export function CandleChart({
     : null;
 
   return (
-    <div style={{ position: 'relative', cursor: alertPlacementActive ? 'crosshair' : undefined }} onContextMenu={onContextMenu}>
+    <div style={{ position: 'relative', cursor: alertPlacementActive ? 'crosshair' : undefined }}>
       <div ref={containerRef} style={{ width: '100%' }} />
       {!comparisonMode && clusterBoxes.map((box) => (
         <div
@@ -973,14 +983,6 @@ export function CandleChart({
             ))}
           </div>
         </div>
-      )}
-      {logScale && (
-        <span
-          title="Logarithmic price scale — right-click the price axis to switch back to linear"
-          style={{ position: 'absolute', top: 6, right: 6, zIndex: 5, borderRadius: 6, padding: '2px 7px', font: '700 8.5px Inter', letterSpacing: '.1em', background: 'rgba(251,148,35,.14)', color: MM.accent, border: `1px solid rgba(251,148,35,.3)`, pointerEvents: 'none' }}
-        >
-          LOG
-        </span>
       )}
       {alertPlacementActive && (
         <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px Inter', letterSpacing: '.04em', pointerEvents: 'none' }}>

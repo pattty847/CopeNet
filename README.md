@@ -70,11 +70,18 @@ quality, deterministic signals, and the model read follow one progressive path f
 “why this asset now?” to deeper evidence. The Market page remains the cockpit; browser
 Back and **Market cockpit** preserve the zoom-out/zoom-in workflow.
 
+The benchmark check labels **Beats/Lags** from aligned trailing-52-week excess return,
+then exposes asset return, benchmark return, beta, and the beta-adjusted residual as
+separate facts. SEC chart settings keep 8-K and Form 144 events visible while Form 4
+transactions start off, with operator-selected lookback and individual-trade or legacy
+cluster-box display. Linear/log axis mode is an explicit toolbar control.
+
 ![CopeNet Market Monitor — asset workspace](docs/imgs/market-panel/copenet-asset-workspace.png)
 
 **Multi-series and ratio comparison** — switch the chart from traded price to an
 indexed comparison and add up to five symbols or relative-strength expressions such
-as `XLK/GLD`. Every line is built from the same split-adjusted interval, rebased to
+as `XLK/GLD`. The asset popup searches Yahoo Finance symbols for either side of the
+expression. Every line is built from the same split-adjusted interval, rebased to
 zero at the selected range's first observation, and persisted in the URL for reloads
 and sharing. Ratios and ordinary symbols can be plotted together without mixing dollar
 prices and percentages on one axis.
@@ -83,7 +90,8 @@ prices and percentages on one axis.
 
 **Chart-created price alerts** — click **Add alert**, place a level directly on the
 candlestick chart, and choose whether a daily close should cross above or below it.
-Rules are durable and one-shot; active levels return as chart lines, and a crossing
+The picked level immediately appears as a labeled draft line and stays in the popup for
+review before it is armed. Rules are durable and one-shot; active levels return as chart lines, and a crossing
 from the unattended morning market sweep creates a Pulse item. The control labels the
 daily-close cadence explicitly while the separately designed intraday lane remains in
 data validation.
