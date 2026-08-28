@@ -62,15 +62,13 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
 
-**Asset workspace** — every ticker now opens as a reloadable `/market/{symbol}`
-investigation rather than an oversized dashboard card. Identity, quote provenance,
-watchlist state, interval and visible-range controls, split-adjusted price history,
-SEC markers, financial overlays, portfolio context, benchmark-relative behavior, data
-quality, deterministic signals, and the model read follow one progressive path from
-“why this asset now?” to deeper evidence. The Market page remains the cockpit; browser
-Back and **Market cockpit** preserve the zoom-out/zoom-in workflow. The shell command
-field is also Market's ticker/company lookup, with the same search palette available
-from a compact **Ticker** action on phones.
+**Asset workspace** — every ticker opens as a reloadable `/market/{symbol}` research
+surface with the price chart in command. Identity, quote provenance, watchlist state,
+asset switching, interval and visible-range controls, split-adjusted price history,
+SEC markers, financial overlays, and alerts stay in one compact instrument frame. A
+thin context strip answers why the asset matters now, while a persistent research dock
+separates measured state, SEC evidence, and model synthesis without making them compete
+with the chart. Portfolio context appears only when a position actually exists.
 
 The benchmark check labels **Beats/Lags** from aligned trailing-52-week excess return,
 then exposes asset return, benchmark return, beta, and the beta-adjusted residual as
@@ -79,7 +77,7 @@ transactions start off, with operator-selected lookback and cluster-box display 
 default; individual trades remain available for inspection. Linear/log axis mode is an
 explicit toolbar control.
 
-![CopeNet Market Monitor — asset workspace](docs/imgs/market-panel/copenet-asset-workspace.png)
+![CopeNet Market Monitor — chart-first asset workspace](docs/imgs/market-ticker-workspace.png)
 
 **Multi-series and ratio comparison** — switch the chart from traded price to an
 indexed comparison and add up to five symbols or relative-strength expressions such
