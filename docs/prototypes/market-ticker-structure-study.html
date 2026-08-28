@@ -1,0 +1,234 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>CopeNet Market — Ticker Structure Study</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --canvas: #030405;
+      --panel: #08090a;
+      --inset: #0c0d0f;
+      --raised: #111214;
+      --line: rgba(254,252,244,.09);
+      --line-strong: rgba(254,252,244,.15);
+      --text: #f3f0e8;
+      --soft: #c3bdb2;
+      --muted: #8c867d;
+      --subtle: #625d55;
+      --brand: #fb9423;
+      --brand-soft: rgba(251,148,35,.11);
+      --info: #8fb8e8;
+      --up: #69c589;
+      --down: #d96d5f;
+      --r-panel: 6px;
+      --r-control: 4px;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: #000; color: var(--text); font: 12px/1.45 Inter, ui-sans-serif, system-ui, sans-serif; }
+    button { font: inherit; }
+    .study-shell { min-height: 100vh; background: var(--canvas); }
+    .study-bar { position: sticky; top: 0; z-index: 20; display: flex; align-items: center; gap: 16px; min-height: 48px; padding: 7px 18px; border-bottom: 1px solid var(--line); background: rgba(3,4,5,.96); }
+    .study-title { margin-right: auto; font-weight: 650; letter-spacing: .01em; }
+    .study-title small { display: block; color: var(--muted); font-size: 10px; font-weight: 450; }
+    .study-switch { display: flex; border: 1px solid var(--line); border-radius: var(--r-control); overflow: hidden; }
+    .study-switch button { min-height: 30px; padding: 0 12px; border: 0; border-left: 1px solid var(--line); background: transparent; color: var(--muted); cursor: pointer; }
+    .study-switch button:first-child { border-left: 0; }
+    .study-switch button[aria-pressed="true"] { background: var(--brand-soft); color: var(--brand); }
+    .tradeoff { width: min(1120px, calc(100vw - 32px)); margin: 12px auto 0; color: var(--muted); }
+    .tradeoff b { color: var(--soft); }
+    .prototype { display: none; width: min(1500px, 100%); margin: 0 auto; padding: 12px 16px 28px; }
+    .prototype.is-active { display: block; }
+    .asset-head { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; min-height: 58px; border-bottom: 1px solid var(--line); }
+    .back { margin-right: 14px; color: var(--muted); }
+    .identity { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+    .symbol, .quote, .mono { font-family: "SFMono-Regular", Consolas, monospace; font-variant-numeric: tabular-nums; }
+    .symbol { font-size: 24px; font-weight: 700; letter-spacing: -.04em; }
+    .name { color: var(--soft); font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .asset-meta { margin-top: 2px; color: var(--muted); font-size: 10.5px; }
+    .head-actions { display: flex; align-items: center; gap: 7px; }
+    .quote { margin-right: 7px; text-align: right; font-size: 19px; }
+    .quote small { display: block; color: var(--up); font-size: 10.5px; }
+    .control { min-height: 30px; padding: 0 9px; border: 1px solid var(--line); border-radius: var(--r-control); background: transparent; color: var(--soft); cursor: pointer; }
+    .control.brand { color: var(--brand); border-color: rgba(251,148,35,.28); }
+    .control:hover, .tool:hover, .dock-tabs button:hover { background: rgba(254,252,244,.045); color: var(--text); }
+    .control:focus-visible, .tool:focus-visible, .dock-tabs button:focus-visible { outline: 2px solid var(--brand); outline-offset: -2px; }
+    .context-strip { display: grid; grid-template-columns: minmax(280px, 1.6fr) repeat(2, minmax(160px, .7fr)); margin-top: 4px; border-bottom: 1px solid var(--line); }
+    .context-strip > div { min-width: 0; padding: 8px 12px; border-left: 1px solid var(--line); }
+    .context-strip > div:first-child { border-left: 0; padding-left: 0; }
+    .context-action { width: 100%; padding: 0; border: 0; background: transparent; color: inherit; cursor: pointer; text-align: left; }
+    .context-action:focus-visible { outline: 2px solid var(--brand); outline-offset: 2px; }
+    .kicker { color: var(--muted); font-size: 10.5px; font-weight: 650; letter-spacing: .09em; text-transform: uppercase; }
+    .value { margin-top: 2px; color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .value.up { color: var(--up); }
+    .value.down { color: var(--down); }
+    .chart-surface { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--panel); overflow: hidden; }
+    .toolbar { display: flex; align-items: stretch; min-height: 38px; border-bottom: 1px solid var(--line); }
+    .toolbar-rail { display: flex; flex: 1 1 auto; min-width: 0; overflow-x: auto; }
+    .toolbar-fixed { display: flex; flex: 0 0 auto; border-left: 1px solid var(--line); background: var(--panel); }
+    .tool-group { display: flex; flex: 0 0 auto; min-height: 30px; margin-left: 6px; border-left: 1px solid var(--line); }
+    .tool-group:first-child { border-left: 0; margin-left: 0; }
+    .tool { min-width: 32px; min-height: 30px; padding: 0 9px; border: 0; background: transparent; color: var(--muted); cursor: pointer; }
+    .tool.active { background: var(--brand-soft); color: var(--brand); }
+    .ohlc { padding: 7px 12px 0; color: var(--muted); font-size: 10.5px; word-spacing: 7px; }
+    .chart { position: relative; height: clamp(300px, 44vh, 430px); overflow: hidden; background: linear-gradient(rgba(255,255,255,.025) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.025) 1px, transparent 1px); background-size: 100% 48px, 10% 100%; }
+    .chart svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+    .chart-label { position: absolute; right: 12px; color: var(--subtle); font: 10px "SFMono-Regular", monospace; }
+    .chart-label.one { top: 18%; }.chart-label.two { top: 42%; }.chart-label.three { top: 67%; }
+    .last-price { position: absolute; right: 0; top: 35%; padding: 2px 7px; background: var(--up); color: #07130c; font: 10px "SFMono-Regular", monospace; }
+    .chart-foot { display: flex; justify-content: space-between; padding: 7px 12px; border-top: 1px solid var(--line); color: var(--subtle); font-size: 10.5px; }
+    .dock { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--panel); overflow: hidden; }
+    .dock-tabs { position: sticky; top: 48px; z-index: 5; display: flex; min-height: 38px; border-bottom: 1px solid var(--line); overflow-x: auto; background: var(--panel); }
+    .dock-tabs button { align-self: stretch; padding: 0 14px; border: 0; border-right: 1px solid var(--line); background: transparent; color: var(--muted); }
+    .dock-tabs button.active { box-shadow: inset 0 -2px var(--brand); color: var(--text); }
+    .dock-panel { display: none; min-height: 190px; }
+    .dock-panel.is-active { display: block; }
+    .dock-grid { display: grid; grid-template-columns: 1fr 1fr; }
+    .dock-grid > section { padding: 12px; border-left: 1px solid var(--line); }
+    .dock-grid > section:first-child { border-left: 0; }
+    .dock-footer { display: flex; gap: 16px; padding: 10px 12px; border-top: 1px solid var(--line); }
+    h3 { margin: 0 0 9px; color: var(--muted); font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase; }
+    .metric { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; border-top: 1px solid rgba(254,252,244,.05); color: var(--muted); }
+    .metric:first-of-type { border-top: 0; }
+    .metric span:last-child { color: var(--soft); font-family: "SFMono-Regular", monospace; }
+    .evidence-row { display: grid; grid-template-columns: 62px 1fr auto; gap: 10px; padding: 7px 0; border-top: 1px solid rgba(254,252,244,.05); }
+    .evidence-row:first-of-type { border-top: 0; }
+    .tag { align-self: start; color: var(--brand); font-size: 10.5px; font-weight: 700; }
+    .date { color: var(--subtle); font-size: 10.5px; }
+    .risk { padding-left: 10px; border-left: 2px solid rgba(217,109,95,.5); color: var(--soft); }
+    .synthesis { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 18px; padding: 14px; }
+    .synthesis p { max-width: 760px; margin: 5px 0 0; color: var(--muted); }
+    .synthesis .control { align-self: start; min-height: 32px; border-color: rgba(143,184,232,.28); color: var(--info); }
+    .inspector-layout { display: grid; grid-template-columns: minmax(0,1fr) 286px; gap: 10px; }
+    .inspector { margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-panel); background: var(--panel); }
+    .inspector-head { display: flex; justify-content: space-between; padding: 10px 12px; border-bottom: 1px solid var(--line); }
+    .inspector section { padding: 11px 12px; border-top: 1px solid var(--line); }
+    .inspector section:first-of-type { border-top: 0; }
+    .split-frame { display: grid; grid-template-rows: minmax(410px, 58vh) 8px minmax(220px, 32vh); margin-top: 10px; border: 1px solid var(--line); border-radius: var(--r-panel); overflow: hidden; background: var(--panel); }
+    .split-frame .chart-surface { margin: 0; border: 0; border-radius: 0; }
+    .split-frame .chart { height: calc(58vh - 76px); min-height: 330px; }
+    .split-handle { display: grid; place-items: center; border-block: 1px solid var(--line); color: var(--subtle); background: var(--inset); }
+    .split-body { display: grid; grid-template-columns: 170px minmax(0,1fr); }
+    .split-nav { padding: 8px; border-right: 1px solid var(--line); }
+    .split-nav button { display: block; width: 100%; padding: 8px; border: 0; background: transparent; color: var(--muted); text-align: left; }
+    .split-nav button.active { background: var(--brand-soft); color: var(--brand); }
+    .split-table { padding: 10px 14px; overflow: auto; }
+    @media (max-width: 800px) {
+      .study-bar { align-items: stretch; flex-direction: column; }
+      .study-switch { overflow-x: auto; }
+      .prototype { padding: 8px; }
+      .asset-head { grid-template-columns: 1fr auto; padding: 8px 0; }
+      .back { display: none; }
+      .head-actions .control.brand { display: none; }
+      .quote { font-size: 16px; }
+      .context-strip { grid-template-columns: 1.5fr 1fr; }
+      .context-strip > div { border-top: 1px solid var(--line); }
+      .context-strip > div:first-child { grid-column: 1 / -1; padding-left: 12px; }
+      .chart { height: clamp(240px, 42vh, 360px); min-height: 0; }
+      .tool, .control { min-height: 42px; }
+      .dock-tabs { position: static; min-height: 44px; }
+      .dock-tabs button { flex: 0 0 auto; }
+      .dock-grid, .inspector-layout, .split-body, .synthesis { grid-template-columns: 1fr; }
+      .dock-grid > section { border-left: 0; border-top: 1px solid var(--line); }
+      .inspector { display: none; }
+      .split-nav { display: flex; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); }
+      .split-nav button { width: auto; white-space: nowrap; }
+    }
+  </style>
+</head>
+<body>
+  <div class="study-shell">
+    <header class="study-bar">
+      <div class="study-title">Ticker page structure study <small>Three structural approaches, one shared visual language</small></div>
+      <div class="study-switch" role="group" aria-label="Prototype approach">
+        <button aria-pressed="true" data-view="dock">A · Research dock</button>
+        <button aria-pressed="false" data-view="inspector">B · Context inspector</button>
+        <button aria-pressed="false" data-view="split">C · Terminal split</button>
+      </div>
+    </header>
+    <p class="tradeoff" data-note><b>A · Research dock:</b> maximum chart width, stable hierarchy, and the lowest interaction/state complexity. Context is one scan line; investigation becomes a tabbed lower workspace.</p>
+
+    <main class="prototype is-active" data-prototype="dock">
+      <div class="asset-head">
+        <span class="back">← Market</span>
+        <div><div class="identity"><span class="symbol">AAPL</span><span class="name">Apple Inc.</span></div><div class="asset-meta">Latest daily bar · Aug 27, 2026 · split-adjusted</div></div>
+        <div class="head-actions"><div class="quote">$321.29<small>+2.13% vs prior daily bar</small></div><button class="control">Switch · ⌘K</button><button class="control brand">+ Watch</button></div>
+      </div>
+      <div class="chart-surface" data-chart></div>
+      <div class="context-strip">
+        <div><button class="context-action" data-dock-target="evidence"><span class="kicker">Latest high-signal evidence · Jul 30</span><span class="value" style="display:block">8-K · Results of Operations and Financial Condition →</span></button></div>
+        <div><div class="kicker">Price regime</div><div class="value up">Up · 3.7% off 52W high</div></div>
+        <div><button class="context-action" data-dock-target="fundamentals"><span class="kicker">Data status</span><span class="value" style="display:block">All sources current · no warnings →</span></button></div>
+      </div>
+      <div class="dock">
+        <nav class="dock-tabs" aria-label="Research views"><button class="active" data-dock-tab="overview">Overview</button><button data-dock-tab="evidence">SEC & Events</button><button data-dock-tab="fundamentals">Fundamentals</button><button data-dock-tab="synthesis">Synthesis</button></nav>
+        <div class="dock-panel is-active" data-dock-panel="overview">
+          <div class="dock-grid">
+            <section><h3>Measured state · fixed horizons</h3><div class="metric"><span>Market cap</span><span>$4.69T</span></div><div class="metric"><span>RSI · daily</span><span>54</span></div><div class="metric"><span>Volume vs 20D</span><span>0.6×</span></div><div class="metric"><span>40W trend</span><span style="color:var(--up)">+13.5% above</span></div></section>
+            <section><h3>Active setup & benchmarks</h3><div class="metric"><span>Soft-bottoming setup</span><span>0.72 · calibrated</span></div><div class="metric"><span>VOO · 52W excess</span><span style="color:var(--up)">+19.0%</span></div><div class="metric"><span>QQQ · 52W excess</span><span style="color:var(--up)">+12.8%</span></div><div class="metric"><span>XLK · 52W excess</span><span style="color:var(--down)">−3.4%</span></div></section>
+          </div>
+          <div class="dock-footer"><h3>Risk conditions · measured</h3><div class="risk">40W trend break · relative strength below VOO · volume fails to confirm</div></div>
+        </div>
+        <div class="dock-panel" data-dock-panel="evidence">
+          <section style="padding:12px"><div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap"><h3 style="margin-right:auto">SEC & event investigation · cached Aug 28</h3><button class="control">6M</button><button class="control">2Y</button><button class="control">5Y</button><button class="control">Refresh</button></div><div class="evidence-row"><span class="tag">FORM 144</span><span>Jennifer Newstead filed to sell 8,632 shares (~$2.7M)</span><span class="date">Aug 11 · Focus chart</span></div><div class="evidence-row"><span class="tag">8-K</span><span>Results of Operations and Financial Condition, Financial Statements and Exhibits</span><span class="date">Jul 30 · Focus chart</span></div><div class="evidence-row"><span class="tag">FORM 4</span><span>Kevan Parekh sold 1,534 shares</span><span class="date">Apr 23 · Focus chart</span></div><div class="evidence-row"><span class="tag">8-K</span><span>Departure or Election of Directors / Officers</span><span class="date">Apr 20 · Focus chart</span></div></section>
+        </div>
+        <div class="dock-panel" data-dock-panel="fundamentals">
+          <div class="dock-grid"><section><h3>Point-in-time financials</h3><div class="metric"><span>Revenue · TTM</span><span>$416.2B</span></div><div class="metric"><span>Diluted EPS · TTM</span><span>$7.84</span></div><div class="metric"><span>Free cash flow · TTM</span><span>$108.5B</span></div></section><section><h3>Valuation</h3><div class="metric"><span>Trailing P/E</span><span>41.0×</span></div><div class="metric"><span>FCF yield</span><span>2.3%</span></div><div class="metric"><span>Known at</span><span>Jul 30 filing</span></div></section></div>
+        </div>
+        <div class="dock-panel" data-dock-panel="synthesis">
+          <div class="synthesis"><div><h3>Model synthesis · no current read</h3><div class="value">Default read · weekly / positional · VOO benchmark</div><p>Uses CopeNet's current price structure, deterministic signals, point-in-time fundamentals, SEC evidence, and recent web context. It does not inherit ad hoc chart zoom or overlay state.</p></div><button class="control">Run default read</button></div>
+        </div>
+      </div>
+    </main>
+
+    <main class="prototype" data-prototype="inspector">
+      <div class="asset-head">
+        <span class="back">← Market</span><div><div class="identity"><span class="symbol">AAPL</span><span class="name">Apple Inc.</span></div><div class="asset-meta">Latest daily bar · Aug 27, 2026 · split-adjusted</div></div>
+        <div class="head-actions"><div class="quote">$321.29<small>+2.13%</small></div><button class="control">⌕ Switch</button><button class="control brand">Context ×</button></div>
+      </div>
+      <div class="inspector-layout">
+        <div><div class="chart-surface" data-chart></div><div class="dock"><nav class="dock-tabs"><button class="active">Evidence</button><button>Signals</button><button>Model</button><button class="run">Run synthesis →</button></nav><div class="dock-body" style="grid-template-columns:1fr"><section><h3>Investigation feed</h3><div class="evidence-row"><span class="tag">8-K</span><span>Results of Operations and Financial Condition</span><span class="date">Jul 30</span></div><div class="evidence-row"><span class="tag">FORM 144</span><span>Jennifer Newstead filed to sell 8,632 shares</span><span class="date">Aug 11</span></div></section></div></div></div>
+        <aside class="inspector"><div class="inspector-head"><b>Asset context</b><span style="color:var(--muted)">×</span></div><section><h3>Market state</h3><div class="metric"><span>Long trend</span><span>Up</span></div><div class="metric"><span>13W excess</span><span style="color:var(--up)">+1.2%</span></div><div class="metric"><span>52W drawdown</span><span style="color:var(--down)">−3.7%</span></div></section><section><h3>Benchmarks</h3><div class="metric"><span>VOO</span><span>+19.0%</span></div><div class="metric"><span>QQQ</span><span>+12.8%</span></div><div class="metric"><span>XLK</span><span>−3.4%</span></div></section><section><h3>Data status</h3><p style="color:var(--muted)">Split-adjusted · 2,386 weeks · volume available</p></section></aside>
+      </div>
+    </main>
+
+    <main class="prototype" data-prototype="split">
+      <div class="asset-head">
+        <span class="back">← Market</span><div><div class="identity"><span class="symbol">AAPL</span><span class="name">Apple Inc.</span></div><div class="asset-meta">Latest daily bar · Aug 27, 2026 · split-adjusted</div></div>
+        <div class="head-actions"><div class="quote">$321.29<small>+2.13%</small></div><button class="control">⌕ Switch</button><button class="control brand">+ Watch</button></div>
+      </div>
+      <div class="split-frame"><div class="chart-surface" data-chart></div><div class="split-handle">•••</div><div class="split-body"><nav class="split-nav"><button class="active">Overview</button><button>SEC & Events</button><button>Fundamentals</button><button>Portfolio</button><button>Model synthesis</button></nav><div class="split-table"><h3>SEC & Event investigation</h3><div class="evidence-row"><span class="tag">FORM 144</span><span>Jennifer Newstead filed to sell 8,632 shares (~$2.7M)</span><span class="date">Aug 11</span></div><div class="evidence-row"><span class="tag">8-K</span><span>Results of Operations and Financial Condition, Financial Statements and Exhibits</span><span class="date">Jul 30</span></div><div class="evidence-row"><span class="tag">FORM 4</span><span>Kevan Parekh sold 1,534 shares</span><span class="date">Apr 23</span></div></div></div></div>
+    </main>
+  </div>
+  <template id="chart-template">
+    <div class="toolbar"><div class="toolbar-rail"><div class="tool-group"><button class="tool">D</button><button class="tool active">W</button><button class="tool">M</button></div><div class="tool-group"><button class="tool">6M</button><button class="tool">1Y</button><button class="tool">3Y</button><button class="tool active">5Y</button><button class="tool">Max</button></div><div class="tool-group"><button class="tool active">Price</button><button class="tool">Compare</button></div><div class="tool-group"><button class="tool active">Scale: Log</button></div><div class="tool-group"><button class="tool">Overlays ▾</button><button class="tool active">Events · 8-K, 144 ▾</button></div></div><div class="toolbar-fixed"><button class="tool">Alert · 2</button></div></div>
+    <div class="ohlc mono">AUG 23, 2026 &nbsp; O $311.47 &nbsp; H $322.37 &nbsp; L $308.21 &nbsp; C $321.29 &nbsp; V 145.12M</div>
+    <div class="chart"><svg viewBox="0 0 1200 460" preserveAspectRatio="none" aria-label="Stylized five-year price chart"><defs><linearGradient id="area" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#69c589" stop-opacity=".18"/><stop offset="1" stop-color="#69c589" stop-opacity="0"/></linearGradient></defs><path d="M0,390 L42,344 L82,370 L120,298 L160,315 L205,273 L248,286 L290,239 L332,265 L378,211 L420,235 L465,192 L510,224 L552,159 L596,188 L640,130 L686,163 L730,116 L774,141 L816,96 L860,126 L902,78 L946,104 L990,65 L1035,84 L1080,42 L1120,69 L1160,30 L1200,54 L1200,460 L0,460 Z" fill="url(#area)"/><path d="M0,390 L42,344 L82,370 L120,298 L160,315 L205,273 L248,286 L290,239 L332,265 L378,211 L420,235 L465,192 L510,224 L552,159 L596,188 L640,130 L686,163 L730,116 L774,141 L816,96 L860,126 L902,78 L946,104 L990,65 L1035,84 L1080,42 L1120,69 L1160,30 L1200,54" fill="none" stroke="#9ed2ae" stroke-width="1.5" vector-effect="non-scaling-stroke"/><line x1="0" x2="1200" y1="162" y2="162" stroke="#69c589" stroke-opacity=".55" stroke-dasharray="2 3"/></svg><span class="chart-label one">360.00</span><span class="chart-label two">280.00</span><span class="chart-label three">210.00</span><span class="last-price">321.29</span></div>
+    <div class="chart-foot"><span>8-K and Form 144 markers on · Form 4 off</span><span>262 bars · split-adjusted traded price</span></div>
+  </template>
+  <script>
+    const chartTemplate = document.querySelector('#chart-template');
+    document.querySelectorAll('[data-chart]').forEach((host) => host.append(chartTemplate.content.cloneNode(true)));
+    const notes = {
+      dock: '<b>A · Research dock:</b> maximum chart width, stable hierarchy, and the lowest interaction/state complexity. Context is one scan line; investigation becomes a tabbed lower workspace.',
+      inspector: '<b>B · Context inspector:</b> keeps chart and detail visible together when needed, but the panel still taxes chart width and makes long evidence/model content cramped.',
+      split: '<b>C · Terminal split:</b> strongest iterative chart-to-evidence workflow, but resize state, chart-height recreation, and narrow-window adaptation make it the highest-risk first implementation.'
+    };
+    document.querySelectorAll('[data-view]').forEach((button) => button.addEventListener('click', () => {
+      const view = button.dataset.view;
+      document.querySelectorAll('[data-view]').forEach((item) => item.setAttribute('aria-pressed', String(item === button)));
+      document.querySelectorAll('[data-prototype]').forEach((item) => item.classList.toggle('is-active', item.dataset.prototype === view));
+      document.querySelector('[data-note]').innerHTML = notes[view];
+    }));
+    document.querySelectorAll('[data-dock-tab]').forEach((button) => button.addEventListener('click', () => {
+      const tab = button.dataset.dockTab;
+      document.querySelectorAll('[data-dock-tab]').forEach((item) => item.classList.toggle('active', item === button));
+      document.querySelectorAll('[data-dock-panel]').forEach((item) => item.classList.toggle('is-active', item.dataset.dockPanel === tab));
+    }));
+    document.querySelectorAll('[data-dock-target]').forEach((button) => button.addEventListener('click', () => {
+      document.querySelector(`[data-dock-tab="${button.dataset.dockTarget}"]`)?.click();
+    }));
+  </script>
+</body>
+</html>
