@@ -3,7 +3,7 @@ import { evidenceDate } from './marketUi';
 import { latestMaterialEvidence } from './TickerOverviewPanel';
 import type { EvidenceItem, TickerDetailPayload } from './types';
 
-export type TickerResearchTab = 'overview' | 'evidence' | 'synthesis';
+export type TickerResearchTab = 'overview' | 'fundamentals' | 'evidence' | 'synthesis';
 
 export function TickerContextStrip({
   detail,
@@ -43,7 +43,7 @@ export function TickerContextStrip({
       )}
       <button type="button" className={dataWarning ? 'ticker-context-item has-warning' : 'ticker-context-item'} onClick={() => onOpenTab('overview')}>
         <Database size={14} aria-hidden="true" />
-        <span><small>Data status</small><strong>{dataWarning ? 'Review quality warnings' : 'Price, SEC, and fundamentals current'}</strong></span>
+        <span><small>Price history</small><strong>{dataWarning ? 'Review history quality warnings' : 'Split-adjusted history healthy'}</strong></span>
       </button>
     </div>
   );

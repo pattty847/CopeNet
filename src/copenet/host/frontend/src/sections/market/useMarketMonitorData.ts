@@ -211,17 +211,21 @@ export function useMarketUniverse(): UniverseAsset[] {
 function useModelRead<T extends MarketRead | TickerRead>(target: string) {
   const [read, setRead] = useState<T | null>(null);
   const [running, setRunning] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const alive = useRef(true);
 
   useEffect(() => {
     alive.current = true;
     setRead(null);
+    setError(null);
     wsClient
       .marketReadGet(target)
       .then((next) => {
         if (alive.current && next) setRead(next as T);
       })
-      .catch(() => {});
+      .catch((caught) => {
+        if (alive.current) setError(caught instanceof Error ? caught.message : 'The saved model read could not be loaded. Retry after checking the connection.');
+      });
     return () => {
       alive.current = false;
     };
@@ -229,7 +233,9 @@ function useModelRead<T extends MarketRead | TickerRead>(target: string) {
 
   const run = useCallback(async () => {
     setRunning(true);
+    setError(null);
     const before = (read as { generatedAt?: string } | null)?.generatedAt || '';
+    let receivedFreshRead = false;
     try {
       await wsClient.marketInterpret(target);
       for (let i = 0; i < 30 && alive.current; i += 1) {
@@ -238,20 +244,22 @@ function useModelRead<T extends MarketRead | TickerRead>(target: string) {
           const next = await wsClient.marketReadGet(target);
           if (next && (next as { generatedAt?: string }).generatedAt !== before) {
             if (alive.current) setRead(next as T);
+            receivedFreshRead = true;
             break;
           }
         } catch {
           /* transient — keep polling */
         }
       }
-    } catch {
-      /* provider unavailable — leave the read as-is */
+      if (!receivedFreshRead && alive.current) setError('No fresh model read arrived within 90 seconds. Try again after checking provider availability.');
+    } catch (caught) {
+      if (alive.current) setError(caught instanceof Error ? caught.message : 'The model read could not be started. Check provider availability and retry.');
     } finally {
       if (alive.current) setRunning(false);
     }
   }, [target, read]);
 
-  return { read, running, run };
+  return { read, running, error, run };
 }
 
 export function useMarketRead() {
@@ -563,6 +571,7 @@ export function useTickerEvidence(symbol: string): TickerEvidenceState {
     let alive = true;
     const key = `${normalized}:${depthDays}`;
     latestKey.current = key;
+    setPayload(null);
     setError(null);
     setLoading(Boolean(normalized));
     if (!normalized) return () => {

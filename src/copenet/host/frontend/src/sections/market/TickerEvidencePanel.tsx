@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EvidenceFlagBadge, EvidenceToneGlyph, MM, PanelCard, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, EvidenceToneGlyph, MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { sortEvidenceNewestFirst } from './marketEvidence';
 import { SEC_DEPTHS, type TickerEvidenceState } from './useMarketMonitorData';
 import type { InsiderNetWindow, Tone } from './types';
@@ -34,7 +34,7 @@ function InsiderWindow({ window }: { window: InsiderNetWindow }) {
   );
 }
 
-export function TickerEvidencePanel({ state, embedded = false }: { state: TickerEvidenceState; embedded?: boolean }) {
+export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
   const [showMethod, setShowMethod] = useState(false);
   const evidence = sortEvidenceNewestFirst(state.payload?.evidence ?? []);
   const insiderWindows = Object.values(state.payload?.insiderNet ?? {}).sort((a, b) => a.days - b.days);
@@ -69,7 +69,7 @@ export function TickerEvidencePanel({ state, embedded = false }: { state: Ticker
       ) : evidence.length === 0 ? (
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>No activity found in this window.</div>
       ) : (
-        <div className={embedded ? 'ticker-evidence-list is-embedded' : 'ticker-evidence-list'} style={{ display: 'flex', flexDirection: 'column', maxHeight: embedded ? undefined : 330, overflowY: embedded ? undefined : 'auto', paddingRight: 4 }}>
+        <div className="ticker-evidence-list is-embedded" style={{ display: 'flex', flexDirection: 'column', paddingRight: 4 }}>
           {evidence.map((item, index) => {
             const body = (
               <>
@@ -87,16 +87,13 @@ export function TickerEvidencePanel({ state, embedded = false }: { state: Ticker
       )}
     </>
   );
-  if (embedded) {
-    return (
-      <section className="ticker-evidence-panel is-embedded">
-        <header className="ticker-embedded-panel-header">
-          <div><h3>SEC & event investigation</h3><p>{state.payload?.asOf ? `Cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'}</p></div>
-          {actions}
-        </header>
-        {body}
-      </section>
-    );
-  }
-  return <PanelCard title="Events & SEC evidence" status={state.loading ? 'preview' : state.error ? 'error' : 'live'} subtitle={state.payload?.asOf ? `cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'} right={actions}>{body}</PanelCard>;
+  return (
+    <section className="ticker-evidence-panel is-embedded">
+      <header className="ticker-embedded-panel-header">
+        <div><h3>SEC & event investigation</h3><p>{state.payload?.asOf ? `Cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'}</p></div>
+        {actions}
+      </header>
+      {body}
+    </section>
+  );
 }

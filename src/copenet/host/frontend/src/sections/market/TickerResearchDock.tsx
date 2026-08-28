@@ -1,5 +1,6 @@
 import { useRef, type KeyboardEvent } from 'react';
 import { TickerEvidencePanel } from './TickerEvidencePanel';
+import { TickerFundamentalsPanel } from './TickerFundamentalsPanel';
 import { TickerOverviewPanel } from './TickerOverviewPanel';
 import { TickerReadPanel } from './TickerReadPanel';
 import type { TickerDetailPayload, EvidenceItem } from './types';
@@ -8,6 +9,7 @@ import type { TickerResearchTab } from './TickerContextStrip';
 
 const TABS: Array<{ id: TickerResearchTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
+  { id: 'fundamentals', label: 'Fundamentals' },
   { id: 'evidence', label: 'SEC & Events' },
   { id: 'synthesis', label: 'Synthesis' },
 ];
@@ -57,11 +59,14 @@ export function TickerResearchDock({
       <div id="ticker-panel-overview" role="tabpanel" aria-labelledby="ticker-tab-overview" hidden={activeTab !== 'overview'}>
         <TickerOverviewPanel detail={detail} evidence={evidence} />
       </div>
+      <div id="ticker-panel-fundamentals" role="tabpanel" aria-labelledby="ticker-tab-fundamentals" hidden={activeTab !== 'fundamentals'}>
+        <TickerFundamentalsPanel symbol={detail.symbol} active={activeTab === 'fundamentals'} />
+      </div>
       <div id="ticker-panel-evidence" role="tabpanel" aria-labelledby="ticker-tab-evidence" hidden={activeTab !== 'evidence'}>
-        <TickerEvidencePanel state={evidenceState} embedded />
+        <TickerEvidencePanel state={evidenceState} />
       </div>
       <div id="ticker-panel-synthesis" role="tabpanel" aria-labelledby="ticker-tab-synthesis" hidden={activeTab !== 'synthesis'}>
-        <TickerReadPanel symbol={detail.symbol} embedded />
+        <TickerReadPanel symbol={detail.symbol} />
       </div>
     </section>
   );

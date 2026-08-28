@@ -42,6 +42,11 @@ export function marketTickerPath(symbol: string | null): string {
   return normalized ? `/market/${encodeURIComponent(normalized)}` : '/market';
 }
 
+export function marketTickerNavigationPath(symbol: string | null, currentPathname: string, currentSearch: string): string {
+  const preserveTickerState = symbol != null && marketTickerFromPathname(currentPathname) != null;
+  return `${marketTickerPath(symbol)}${preserveTickerState ? currentSearch : ''}`;
+}
+
 export function pushAppSectionPath(
   section: AppSection,
   currentPathname: string,

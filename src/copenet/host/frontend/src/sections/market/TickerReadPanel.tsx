@@ -8,11 +8,11 @@ const CONFIDENCE_COLORS: Record<string, string> = {
   high: '#69c589',
 };
 
-export function TickerReadPanel({ symbol, embedded = false }: { symbol: string; embedded?: boolean }) {
-  const { read, running, run } = useTickerRead(symbol);
+export function TickerReadPanel({ symbol }: { symbol: string }) {
+  const { read, running, error, run } = useTickerRead(symbol);
 
   return (
-    <section className={embedded ? 'ticker-synthesis-panel is-embedded' : 'ticker-synthesis-panel'} aria-labelledby="ticker-model-read" style={{ background: embedded ? 'transparent' : `linear-gradient(180deg, rgba(90,143,199,.06), transparent 45%), ${MM.panel}`, border: embedded ? 'none' : `1px solid rgba(90,143,199,.22)`, borderRadius: embedded ? 0 : 8, padding: embedded ? 14 : 12 }}>
+    <section className="ticker-synthesis-panel is-embedded" aria-labelledby="ticker-model-read" style={{ background: 'transparent', border: 'none', borderRadius: 0, padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: read ? 12 : 0, flexWrap: 'wrap' }}>
         <span id="ticker-model-read" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: '#8fb8e8' }}>
           ✦ Model synthesis
@@ -24,6 +24,8 @@ export function TickerReadPanel({ symbol, embedded = false }: { symbol: string; 
           </button>
         </div>
       </div>
+
+      {error && <p role="alert" style={{ margin: '8px 0 0', color: MM.down, fontSize: 11.5 }}>{error}</p>}
 
       {!read && (
         <p style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', margin: '8px 0 0' }}>

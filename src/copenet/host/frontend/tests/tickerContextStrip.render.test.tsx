@@ -39,7 +39,7 @@ test('ticker context exposes evidence, regime, and data status without inventing
   assert.match(html, /Latest material evidence/);
   assert.match(html, /Synthetic material event/);
   assert.match(html, /Uptrend · 8\.4% off 52w high/);
-  assert.match(html, /Price, SEC, and fundamentals current/);
+  assert.match(html, /Split-adjusted history healthy/);
   assert.doesNotMatch(html, /<small>Position<\/small>/);
 });
 

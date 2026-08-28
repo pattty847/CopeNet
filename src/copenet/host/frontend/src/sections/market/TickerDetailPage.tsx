@@ -51,8 +51,10 @@ export function TickerDetailPage({
   };
   const change = detail.quote.changePct;
   const quoteTone = change == null || change === 0 ? 'flat' : change > 0 ? 'up' : 'down';
-  const chartEvents = sec.payload?.events ?? detail.events;
-  const evidence = sec.payload?.evidence?.length ? sec.payload.evidence : detail.evidence;
+  const currentSecPayload = sec.payload?.symbol === detail.symbol ? sec.payload : null;
+  const currentSec = currentSecPayload === sec.payload ? sec : { ...sec, payload: null, loading: true };
+  const chartEvents = currentSecPayload?.events ?? detail.events;
+  const evidence = currentSecPayload?.evidence?.length ? currentSecPayload.evidence : detail.evidence;
   const displayName = detail.name.trim().toUpperCase() === detail.symbol.trim().toUpperCase() ? '' : detail.name;
 
   return (
@@ -75,7 +77,7 @@ export function TickerDetailPage({
       <main className="ticker-workspace-main">
         <TickerChartWorkspace detail={detail} events={chartEvents} evidence={evidence} />
         <TickerContextStrip detail={detail} evidence={evidence} onOpenTab={setResearchTab} />
-        <TickerResearchDock activeTab={researchTab} detail={detail} evidence={evidence} evidenceState={sec} onTab={setResearchTab} />
+        <TickerResearchDock activeTab={researchTab} detail={detail} evidence={evidence} evidenceState={currentSec} onTab={setResearchTab} />
       </main>
     </div>
   );

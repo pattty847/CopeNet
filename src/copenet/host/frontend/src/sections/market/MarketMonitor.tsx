@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { marketTickerFromPathname, marketTickerPath } from '../../lib/appSectionRouting';
+import { marketTickerFromPathname, marketTickerNavigationPath } from '../../lib/appSectionRouting';
 import { MarketDashboard } from './MarketDashboard';
 import { TickerDetailPage } from './TickerDetailPage';
 import { useMarketWatchlist } from './useMarketMonitorData';
@@ -15,8 +15,8 @@ export function MarketMonitor() {
   }, []);
 
   const navigateTicker = (symbol: string | null) => {
-    const nextPath = `${marketTickerPath(symbol)}${symbol ? window.location.search : ''}`;
-    if (window.location.pathname !== nextPath) window.history.pushState({}, '', nextPath);
+    const nextPath = marketTickerNavigationPath(symbol, window.location.pathname, window.location.search);
+    if (`${window.location.pathname}${window.location.search}` !== nextPath) window.history.pushState({}, '', nextPath);
     setActiveTicker(symbol?.trim().toUpperCase() || null);
   };
 

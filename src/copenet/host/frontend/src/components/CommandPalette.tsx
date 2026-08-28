@@ -16,7 +16,7 @@ import {
   shouldAutoScrollCommandPalette,
   type CommandPaletteInteraction,
 } from '../lib/commandPalette';
-import { marketTickerPath } from '../lib/appSectionRouting';
+import { marketTickerNavigationPath } from '../lib/appSectionRouting';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import type { SymbolSearchResult } from '../sections/market/types';
@@ -149,13 +149,12 @@ export function CommandPalette() {
     hint: `${result.name}${result.exchange ? ` · ${result.exchange}` : ''}`,
     icon: TrendingUp,
     action: () => {
-      setCurrentSection('market');
-      window.history.pushState({}, '', marketTickerPath(result.symbol));
+      window.history.pushState({}, '', marketTickerNavigationPath(result.symbol, window.location.pathname, window.location.search));
       window.dispatchEvent(new PopStateEvent('popstate'));
       setOpen(false);
     },
     group: 'Market symbols',
-  })), [marketResults, setCurrentSection, setOpen]);
+  })), [marketResults, setOpen]);
 
   const allItems = useMemo(() => [...marketItems, ...actionItems, ...navItems, ...sessionItems], [marketItems, actionItems, navItems, sessionItems]);
 

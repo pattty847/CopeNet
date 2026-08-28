@@ -15,6 +15,7 @@ import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinanci
 import { useFinancialSeries } from './useFinancialSeries';
 import { usePriceAlerts } from './usePriceAlerts';
 import { useIsMobile } from '../../lib/responsive';
+import { readTickerChartViewState, writeTickerChartViewState } from './tickerChartViewState';
 
 const RANGE_SECONDS: Record<Exclude<ChartRange, 'MAX'>, number> = {
   '6M': 183 * 86400,
@@ -47,20 +48,25 @@ function formatVolume(value: number): string {
 
 export function TickerChartWorkspace({ detail, events, evidence }: { detail: TickerDetailPayload; events: ChartEvent[]; evidence: EvidenceItem[] }) {
   const isMobile = useIsMobile();
-  const [timeframe, setTimeframe] = useState<ChartTimeframe>('W');
-  const [range, setRange] = useState<ChartRange>('5Y');
-  const [overlayMetric, setOverlayMetric] = useState<OverlayMetric | null>(null);
-  const [overlayFrequency, setOverlayFrequency] = useState<FinancialFrequency>('quarterly');
+  const [initialView] = useState(readTickerChartViewState);
+  const [timeframe, setTimeframe] = useState<ChartTimeframe>(initialView.timeframe);
+  const [range, setRange] = useState<ChartRange>(initialView.range);
+  const [overlayMetric, setOverlayMetric] = useState<OverlayMetric | null>(initialView.overlayMetric);
+  const [overlayFrequency, setOverlayFrequency] = useState<FinancialFrequency>(initialView.overlayFrequency);
   const [alertPlacementActive, setAlertPlacementActive] = useState(false);
   const [pickedAlertPrice, setPickedAlertPrice] = useState<number | null>(null);
-  const [showInsiderTransactions, setShowInsiderTransactions] = useState(false);
-  const [insiderLookback, setInsiderLookback] = useState<InsiderLookback>('chart');
-  const [insiderDisplayMode, setInsiderDisplayMode] = useState<InsiderDisplayMode>('clusters');
+  const [showInsiderTransactions, setShowInsiderTransactions] = useState(initialView.showInsiderTransactions);
+  const [insiderLookback, setInsiderLookback] = useState<InsiderLookback>(initialView.insiderLookback);
+  const [insiderDisplayMode, setInsiderDisplayMode] = useState<InsiderDisplayMode>(initialView.insiderDisplayMode);
   const [logScale, setLogScale] = useState(() => {
     try { return localStorage.getItem('mm-log-scale') === '1'; } catch { return false; }
   });
   const [comparisonExpressions, setComparisonExpressions] = useState(() => comparisonStateFromSearch(window.location.search).expressions);
   const [comparisonMode, setComparisonMode] = useState(() => comparisonStateFromSearch(window.location.search).active);
+  const effectiveComparisonExpressions = useMemo(
+    () => comparisonExpressions.filter((expression) => expression !== detail.symbol),
+    [comparisonExpressions, detail.symbol],
+  );
   const priceAlerts = usePriceAlerts(detail.symbol);
   const overlayMetrics = useFinancialMetrics();
   const overlayIsValuation = isValuationMetric(overlayMetrics, overlayMetric);
@@ -70,8 +76,8 @@ export function TickerChartWorkspace({ detail, events, evidence }: { detail: Tic
 
   const rawBars = timeframe === 'D' ? detail.series.daily : timeframe === 'M' ? detail.series.monthly : detail.series.weekly;
   const bars = useMemo(() => visibleBars(rawBars, range), [rawBars, range]);
-  const comparisons = useChartComparisons(comparisonExpressions, timeframe);
-  const comparisonLines = useMemo(() => buildComparisonLines(detail.symbol, bars, comparisonExpressions, comparisons.payload?.series ?? []), [bars, comparisonExpressions, comparisons.payload?.series, detail.symbol]);
+  const comparisons = useChartComparisons(effectiveComparisonExpressions, timeframe);
+  const comparisonLines = useMemo(() => buildComparisonLines(detail.symbol, bars, effectiveComparisonExpressions, comparisons.payload?.series ?? []), [bars, effectiveComparisonExpressions, comparisons.payload?.series, detail.symbol]);
   const overlayPoints = useMemo(() => {
     if (!overlayMetric || !overlaySeries.data || bars.length === 0) return undefined;
     const raw = isValuationPayload(overlaySeries.data)
@@ -81,13 +87,22 @@ export function TickerChartWorkspace({ detail, events, evidence }: { detail: Tic
   }, [bars, overlayMetric, overlaySeries.data]);
 
   useEffect(() => {
-    const search = comparisonSearch(comparisonExpressions, comparisonMode);
+    if (effectiveComparisonExpressions.length !== comparisonExpressions.length) {
+      setComparisonExpressions(effectiveComparisonExpressions);
+      if (!effectiveComparisonExpressions.length) setComparisonMode(false);
+      return;
+    }
+    const search = comparisonSearch(effectiveComparisonExpressions, comparisonMode && effectiveComparisonExpressions.length > 0);
     window.history.replaceState({}, '', `${window.location.pathname}${search}`);
-  }, [comparisonExpressions, comparisonMode, detail.symbol]);
+  }, [comparisonExpressions, comparisonMode, detail.symbol, effectiveComparisonExpressions]);
 
   useEffect(() => {
     try { localStorage.setItem('mm-log-scale', logScale ? '1' : '0'); } catch { /* optional preference */ }
   }, [logScale]);
+
+  useEffect(() => {
+    writeTickerChartViewState({ timeframe, range, overlayMetric, overlayFrequency, showInsiderTransactions, insiderLookback, insiderDisplayMode });
+  }, [timeframe, range, overlayMetric, overlayFrequency, showInsiderTransactions, insiderLookback, insiderDisplayMode]);
 
   const latest = bars[bars.length - 1]?.t;
   const lookbackDays = insiderLookback === '90D' ? 90 : insiderLookback === '1Y' ? 366 : insiderLookback === '3Y' ? 3 * 366 : insiderLookback === '5Y' ? 5 * 366 : null;
@@ -105,7 +120,7 @@ export function TickerChartWorkspace({ detail, events, evidence }: { detail: Tic
   });
   const overlayUnit = !overlaySeries.data ? undefined : isValuationPayload(overlaySeries.data) ? 'ratio' : overlaySeries.data.observations[0]?.unit;
   const latestVisibleBar = bars[bars.length - 1];
-  const showingComparison = comparisonMode && comparisonExpressions.length > 0;
+  const showingComparison = comparisonMode && effectiveComparisonExpressions.length > 0;
   const viewportHeight = typeof window === 'undefined' ? 900 : window.innerHeight;
   const chartHeight = isMobile ? 430 : viewportHeight < 780 ? 320 : viewportHeight < 900 ? 400 : 500;
   const removeComparison = (expression: string) => setComparisonExpressions((current) => {
@@ -123,7 +138,7 @@ export function TickerChartWorkspace({ detail, events, evidence }: { detail: Tic
         onRange={setRange}
         alertControl={showingComparison ? null : <PriceAlertControl alerts={priceAlerts.alerts} currentPrice={detail.quote.price ?? 0} pickedPrice={pickedAlertPrice} placing={alertPlacementActive} loading={priceAlerts.loading} error={priceAlerts.error} onStartPlacing={() => setAlertPlacementActive(true)} onStopPlacing={() => { setAlertPlacementActive(false); setPickedAlertPrice(null); }} onCreate={async (direction, threshold) => { const created = await priceAlerts.create(direction, threshold, detail.quote.price ?? 0); if (created) setPickedAlertPrice(null); return created; }} onCancel={priceAlerts.cancel} />}
         financialControls={showingComparison ? null : <FinancialOverlayControls metrics={overlayMetrics} metric={overlayMetric} frequency={effectiveOverlayFrequency} loading={overlaySeries.loading} onMetric={setOverlayMetric} onFrequency={setOverlayFrequency} />}
-        comparisonControl={<ChartComparisonControl active={showingComparison} expressions={comparisonExpressions} onActive={setComparisonMode} onAdd={(expression) => setComparisonExpressions((current) => [...current, expression])} onRemove={removeComparison} onClear={() => { setComparisonExpressions([]); setComparisonMode(false); }} />}
+        comparisonControl={<ChartComparisonControl active={showingComparison} expressions={effectiveComparisonExpressions} onActive={setComparisonMode} onAdd={(expression) => setComparisonExpressions((current) => [...current, expression])} onRemove={removeComparison} onClear={() => { setComparisonExpressions([]); setComparisonMode(false); }} />}
         evidenceControl={showingComparison ? null : <ChartEvidenceControl showInsiderTransactions={showInsiderTransactions} onShowInsiderTransactions={setShowInsiderTransactions} lookback={insiderLookback} onLookback={setInsiderLookback} displayMode={insiderDisplayMode} onDisplayMode={setInsiderDisplayMode} />}
         logScale={logScale}
         onLogScale={setLogScale}
