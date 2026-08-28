@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, RefreshCw } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Search } from 'lucide-react';
 import { CandleChart } from './CandleChart';
 import { FinancialOverlayControls, FinancialOverlayStatus, type OverlayMetric } from './FinancialOverlayUi';
 import { MarketChartToolbar, type ChartRange, type ChartTimeframe } from './MarketChartToolbar';
@@ -12,7 +12,6 @@ import { isValuationPayload, type FinancialFrequency, type Ohlcv } from './types
 import { TickerEvidencePanel } from './TickerEvidencePanel';
 import { TickerOverviewRail } from './TickerOverviewRail';
 import { TickerReadPanel } from './TickerReadPanel';
-import { TickerSearch } from './TickerSearch';
 import { TickerSignalPanel } from './TickerSignalPanel';
 import { PriceAlertControl } from './PriceAlertControl';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
@@ -21,6 +20,7 @@ import { ChartComparisonControl } from './ChartComparisonControl';
 import { ChartEvidenceControl, type InsiderDisplayMode, type InsiderLookback } from './ChartEvidenceControl';
 import { buildComparisonLines, comparisonSearch, comparisonStateFromSearch } from './chartComparison';
 import { useChartComparisons } from './useChartComparisons';
+import { useAppStore } from '../../store/useAppStore';
 
 const RANGE_SECONDS: Record<Exclude<ChartRange, 'MAX'>, number> = {
   '6M': 183 * 86400,
@@ -51,10 +51,11 @@ function formatVolume(value: number): string {
   return value.toLocaleString();
 }
 
-export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: { symbol: string; onClose: () => void; onOpenTicker: (symbol: string) => void; watchlist: MarketWatchlistState }) {
+export function TickerDetailPage({ symbol, onClose, watchlist }: { symbol: string; onClose: () => void; watchlist: MarketWatchlistState }) {
   const ticker = useTickerDetail(symbol);
   const sec = useTickerEvidence(symbol);
   const isMobile = useIsMobile();
+  const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
   const [timeframe, setTimeframe] = useState<ChartTimeframe>('W');
   const [range, setRange] = useState<ChartRange>('5Y');
   const [overlayMetric, setOverlayMetric] = useState<OverlayMetric | null>(null);
@@ -161,17 +162,15 @@ export function TickerDetailPage({ symbol, onClose, onOpenTicker, watchlist }: {
             <div style={{ marginTop: 3, fontSize: 10, color: MM.dim }}>Latest daily bar · {formatBarDate(detail.quote.barTime)} · {detail.quote.priceBasis.replace('_', '-')}</div>
           </div>
           <button type="button" onClick={() => void toggleWatch()} disabled={watchBusy} className={isWatched ? 'ticker-watch-button is-active' : 'ticker-watch-button'}>{watchBusy ? 'Updating…' : isWatched ? '✓ Watching' : '+ Watchlist'}</button>
+          <button type="button" onClick={() => setCommandPaletteOpen(true)} className="ticker-command-search" aria-label="Search ticker or company"><Search size={13} /><span>Ticker</span></button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 10, flexWrap: 'wrap' }}>
-          {!isMobile && <TickerSearch onSelect={(next) => onOpenTicker(next)} />}
           <div style={{ textAlign: 'right' }}><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 21, color: MM.text }}>{formatQuote(detail.quote.price)}</div><div style={{ fontFamily: "'JetBrains Mono', monospace", fontSize: 11.5, color: toneColor(quoteTone) }}>{change == null ? '—' : `${change > 0 ? '+' : ''}${change.toFixed(2)}%`} vs prior daily bar</div></div>
         </div>
       </header>
 
-      {isMobile && <TickerSearch onSelect={(next) => onOpenTicker(next)} fullWidth />}
-
       <main className="ticker-workspace-main">
-        <PanelCard title={`${showingComparison ? 'Indexed comparison' : 'Price'} · ${timeframeLabel} · ${range === 'MAX' ? 'Max history' : range}`} status={comparisons.error && showingComparison ? 'error' : bars.length ? 'live' : 'error'} headerLayout="mobile-toolbar" right={
+        <PanelCard title={`${showingComparison ? 'Indexed comparison' : 'Price'} · ${timeframeLabel} · ${range === 'MAX' ? 'Max history' : range}`} status={comparisons.error && showingComparison ? 'error' : bars.length ? 'live' : 'error'} headerLayout="chart-toolbar" right={
           <MarketChartToolbar
             timeframe={timeframe}
             onTimeframe={setTimeframe}

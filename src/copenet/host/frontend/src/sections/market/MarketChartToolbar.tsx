@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
-import { ChevronLeft, ChevronRight } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Scale } from 'lucide-react';
 import { MM } from './marketUi';
 
 export type ChartTimeframe = 'D' | 'W' | 'M';
@@ -60,12 +60,13 @@ export function MarketChartToolbar({
   };
 
   return (
-    <div className="market-chart-toolbar" role="toolbar" aria-label="Chart tools">
+    <div className={`market-chart-toolbar${canScrollLeft ? ' has-left-overflow' : ''}${canScrollRight ? ' has-right-overflow' : ''}`} role="toolbar" aria-label="Chart tools">
       <button
         type="button"
         className="market-chart-toolbar__nudge market-chart-toolbar__nudge--left"
         aria-label="Show previous chart tools"
-        disabled={!canScrollLeft}
+        aria-hidden={!canScrollLeft}
+        tabIndex={canScrollLeft ? 0 : -1}
         onClick={() => nudge(-1)}
       >
         <ChevronLeft size={15} />
@@ -80,10 +81,6 @@ export function MarketChartToolbar({
         }}
       >
         <div ref={contentRef} className="market-chart-toolbar__content">
-          {alertControl}
-          {financialControls}
-          {comparisonControl}
-          {evidenceControl}
           <div className="market-chart-toolbar__timeframes" role="group" aria-label="Bar interval">
             {([
               ['D', 'D'],
@@ -130,14 +127,20 @@ export function MarketChartToolbar({
               </button>
             ))}
           </div>
-          <button type="button" className="market-chart-tool-button" aria-pressed={logScale} onClick={() => onLogScale?.(!logScale)} title="Toggle logarithmic price axis">Axis · {logScale ? 'Log' : 'Linear'}</button>
+          <button type="button" className="market-chart-tool-button market-chart-tool-button--axis" aria-pressed={logScale} onClick={() => onLogScale?.(!logScale)} title="Toggle logarithmic price axis"><Scale size={13} aria-hidden="true" /><span>{logScale ? 'Log' : 'Linear'}</span></button>
+          <span className="market-chart-toolbar__divider" aria-hidden="true" />
+          {comparisonControl}
+          {financialControls}
+          {alertControl}
+          {evidenceControl}
         </div>
       </div>
       <button
         type="button"
         className="market-chart-toolbar__nudge market-chart-toolbar__nudge--right"
         aria-label="Show more chart tools"
-        disabled={!canScrollRight}
+        aria-hidden={!canScrollRight}
+        tabIndex={canScrollRight ? 0 : -1}
         onClick={() => nudge(1)}
       >
         <ChevronRight size={15} />

@@ -68,7 +68,9 @@ watchlist state, interval and visible-range controls, split-adjusted price histo
 SEC markers, financial overlays, portfolio context, benchmark-relative behavior, data
 quality, deterministic signals, and the model read follow one progressive path from
 “why this asset now?” to deeper evidence. The Market page remains the cockpit; browser
-Back and **Market cockpit** preserve the zoom-out/zoom-in workflow.
+Back and **Market cockpit** preserve the zoom-out/zoom-in workflow. The shell command
+field is also Market's ticker/company lookup, with the same search palette available
+from a compact **Ticker** action on phones.
 
 The benchmark check labels **Beats/Lags** from aligned trailing-52-week excess return,
 then exposes asset return, benchmark return, beta, and the beta-adjusted residual as
@@ -98,11 +100,11 @@ data validation.
 
 ![CopeNet Market Monitor — chart-created daily-close price alert](docs/imgs/market-panel/copenet-price-alert.png)
 
-On phones, alert, financial-overlay, and timeframe controls share a compact
-TradingView-style toolbar. The available width stays with the chart; the tool rail
-swipes horizontally, exposes left/right nudge buttons, and keeps a thin scrollbar for
-discoverability. Alert creation opens as a phone-width sheet instead of overflowing the
-chart edge.
+Chart interval, range, and axis mode lead a compact TradingView-style toolbar; analysis
+tools follow as a separate group. The available width stays with the chart on desktop
+and phones: the tool rail scrolls horizontally, exposes edge nudges only when more tools
+exist, and keeps a thin scrollbar for discoverability. Alert creation opens as a
+phone-width sheet instead of overflowing the chart edge.
 
 ![CopeNet Market Monitor — mobile chart toolbar](docs/imgs/market-panel/copenet-mobile-chart-toolbar.png)
 

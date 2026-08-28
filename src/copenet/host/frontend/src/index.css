@@ -793,16 +793,19 @@ html[data-theme='dark'] .shell-workbench-feature {
   scrollbar-color: var(--color-shell-border-strong) transparent;
 }
 
-/* Market chart controls keep their natural touch targets and move as one TradingView-style
-   rail on narrow screens. The nudge buttons consume fixed space; the rail gets exactly the
-   remaining width and also supports native touch scrolling. */
+/* The chart keeps its controls on one compact, touch-scrollable rail. Overflow nudges sit
+   over the edges instead of stealing chart width, so the same geometry works on desktop
+   panels and narrow mobile screens. */
 .market-chart-toolbar {
+  position: relative;
   display: flex;
+  width: 100%;
   min-width: 0;
   align-items: center;
 }
 
 .market-chart-toolbar__rail {
+  width: 100%;
   min-width: 0;
   overflow-x: auto;
   overscroll-behavior-x: contain;
@@ -819,8 +822,16 @@ html[data-theme='dark'] .shell-workbench-feature {
   display: flex;
   width: max-content;
   align-items: center;
-  gap: 8px;
-  padding-bottom: 3px;
+  gap: 6px;
+  padding: 1px 2px 4px;
+}
+
+.market-chart-toolbar__divider {
+  width: 1px;
+  height: 22px;
+  flex: 0 0 1px;
+  margin: 0 1px;
+  background: rgba(254, 252, 244, 0.08);
 }
 
 .market-chart-toolbar__timeframes {
@@ -850,6 +861,7 @@ html[data-theme='dark'] .shell-workbench-feature {
 
 .market-chart-tool-button[aria-pressed='true'] { border-color: rgba(251, 148, 35, 0.3); background: rgba(251, 148, 35, 0.09); color: #fb9423; }
 .market-chart-tool-button:focus-visible { outline: 2px solid #fb9423; outline-offset: 2px; }
+.market-chart-tool-button--axis { min-width: 68px; justify-content: center; }
 
 .market-sec-toggle { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-top: 13px; padding: 10px; border: 1px solid rgba(254,252,244,.08); border-radius: 9px; color: var(--color-shell-text); font-size: 10.5px; }
 .market-sec-toggle span { display: grid; gap: 2px; }
@@ -864,19 +876,68 @@ html[data-theme='dark'] .shell-workbench-feature {
 .market-sec-fieldset p { margin: 3px 0 0; color: var(--color-shell-muted); font-size: 9.5px; line-height: 1.45; }
 
 .market-chart-toolbar__nudge {
-  display: none;
-  flex: 0 0 28px;
-  width: 28px;
+  position: absolute;
+  z-index: 3;
+  top: 1px;
+  display: inline-flex;
+  width: 32px;
   height: 34px;
   align-items: center;
   justify-content: center;
-  border: 1px solid rgba(254, 252, 244, 0.06);
-  background: #080809;
+  border: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(90deg, rgba(8, 8, 9, 0.98) 68%, rgba(8, 8, 9, 0));
   color: var(--color-shell-muted);
+  cursor: pointer;
+  transition: opacity 120ms ease;
+}
+
+.market-chart-toolbar__nudge--left { left: 0; }
+.market-chart-toolbar__nudge--right { right: 0; transform: rotate(180deg); }
+.market-chart-toolbar__nudge--right svg { transform: rotate(180deg); }
+.market-chart-toolbar.has-left-overflow .market-chart-toolbar__nudge--left,
+.market-chart-toolbar.has-right-overflow .market-chart-toolbar__nudge--right { opacity: 1; pointer-events: auto; }
+.market-chart-toolbar__nudge:hover { color: var(--color-shell-text); }
+.market-chart-toolbar__nudge:focus-visible { outline: 2px solid #fb9423; outline-offset: -2px; }
+
+.market-panel-header--chart-toolbar {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.market-panel-header--chart-toolbar .market-panel-header__chart-title {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.market-panel-header--chart-toolbar .market-panel-header__actions {
+  width: 100%;
+  min-width: 0;
 }
 
 .market-price-alert-trigger__count {
   display: none;
+}
+
+.ticker-command-search {
+  display: none;
+  min-height: 34px;
+  align-items: center;
+  gap: 6px;
+  padding: 0 10px;
+  border: 1px solid rgba(254, 252, 244, 0.08);
+  border-radius: 8px;
+  background: #050506;
+  color: var(--color-shell-muted);
+  cursor: pointer;
+  font: 600 10px Inter;
 }
 
 /* Asset workspaces preserve the Market cockpit's visual language while making the
@@ -1223,12 +1284,14 @@ html[data-theme='dark'] .shell-workbench-feature {
     grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   }
 
-  .market-panel-header--mobile-toolbar {
+  .market-panel-header--mobile-toolbar,
+  .market-panel-header--chart-toolbar {
     display: grid !important;
     grid-template-columns: minmax(0, 1fr);
   }
 
-  .market-panel-header--mobile-toolbar .market-panel-header__actions {
+  .market-panel-header--mobile-toolbar .market-panel-header__actions,
+  .market-panel-header--chart-toolbar .market-panel-header__actions {
     width: 100%;
     min-width: 0;
   }
@@ -1242,24 +1305,6 @@ html[data-theme='dark'] .shell-workbench-feature {
     flex: 1 1 auto;
   }
 
-  .market-chart-toolbar__nudge {
-    display: inline-flex;
-  }
-
-  .market-chart-toolbar__nudge--left {
-    margin-right: 5px;
-    border-radius: 8px 3px 3px 8px;
-  }
-
-  .market-chart-toolbar__nudge--right {
-    margin-left: 5px;
-    border-radius: 3px 8px 8px 3px;
-  }
-
-  .market-chart-toolbar__nudge:disabled {
-    color: rgba(162, 155, 144, 0.28);
-  }
-
   .market-price-alert-trigger {
     position: relative;
     width: 36px;
@@ -1267,6 +1312,8 @@ html[data-theme='dark'] .shell-workbench-feature {
     justify-content: center;
     padding: 0 !important;
   }
+
+  .ticker-command-search { display: inline-flex; }
 
   .market-price-alert-trigger__label {
     display: none;

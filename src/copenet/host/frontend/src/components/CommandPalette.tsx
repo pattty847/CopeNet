@@ -8,6 +8,7 @@ import {
   Layers3,
   Plus,
   Search,
+  TrendingUp,
   Video,
   Wrench,
 } from 'lucide-react';
@@ -15,8 +16,10 @@ import {
   shouldAutoScrollCommandPalette,
   type CommandPaletteInteraction,
 } from '../lib/commandPalette';
+import { marketTickerPath } from '../lib/appSectionRouting';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
+import type { SymbolSearchResult } from '../sections/market/types';
 
 interface PaletteItem {
   id: string;
@@ -30,6 +33,7 @@ interface PaletteItem {
 export function CommandPalette() {
   const open = useAppStore((state) => state.commandPaletteOpen);
   const setOpen = useAppStore((state) => state.setCommandPaletteOpen);
+  const currentSection = useAppStore((state) => state.currentSection);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
   const sessions = useAppStore((state) => state.sessions);
   const setActiveSessionKey = useAppStore((state) => state.setActiveSessionKey);
@@ -38,6 +42,8 @@ export function CommandPalette() {
   const [query, setQuery] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [interaction, setInteraction] = useState<CommandPaletteInteraction>('idle');
+  const [marketResults, setMarketResults] = useState<SymbolSearchResult[]>([]);
+  const [marketSearchLoading, setMarketSearchLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
@@ -69,6 +75,35 @@ export function CommandPalette() {
       });
     }
   }, [open]);
+
+  useEffect(() => {
+    const trimmed = query.trim();
+    if (!open || currentSection !== 'market' || trimmed.length < 2) {
+      setMarketResults([]);
+      setMarketSearchLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+    setMarketSearchLoading(true);
+    const timeout = window.setTimeout(() => {
+      void wsClient.marketSymbolsSearch(trimmed, 8)
+        .then((results) => {
+          if (!cancelled) setMarketResults(results);
+        })
+        .catch(() => {
+          if (!cancelled) setMarketResults([]);
+        })
+        .finally(() => {
+          if (!cancelled) setMarketSearchLoading(false);
+        });
+    }, 250);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [currentSection, open, query]);
 
   const navItems: PaletteItem[] = useMemo(() => [
     { id: 'nav-home', label: 'Go to Home', icon: Home, action: () => { setCurrentSection('home'); setOpen(false); }, group: 'Navigation' },
@@ -108,7 +143,21 @@ export function CommandPalette() {
     })),
   [sessions, setActiveSessionKey, setDraftOpen, setCurrentSection, setOpen]);
 
-  const allItems = useMemo(() => [...actionItems, ...navItems, ...sessionItems], [actionItems, navItems, sessionItems]);
+  const marketItems: PaletteItem[] = useMemo(() => marketResults.map((result) => ({
+    id: `market-symbol-${result.symbol}`,
+    label: result.symbol,
+    hint: `${result.name}${result.exchange ? ` · ${result.exchange}` : ''}`,
+    icon: TrendingUp,
+    action: () => {
+      setCurrentSection('market');
+      window.history.pushState({}, '', marketTickerPath(result.symbol));
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      setOpen(false);
+    },
+    group: 'Market symbols',
+  })), [marketResults, setCurrentSection, setOpen]);
+
+  const allItems = useMemo(() => [...marketItems, ...actionItems, ...navItems, ...sessionItems], [marketItems, actionItems, navItems, sessionItems]);
 
   const filtered = useMemo(() => {
     if (!query.trim()) return allItems;
@@ -181,7 +230,7 @@ export function CommandPalette() {
               setQuery(e.target.value);
             }}
             onKeyDown={handleKeyDown}
-            placeholder="Search commands, sessions, or navigate…"
+            placeholder={currentSection === 'market' ? 'Search a ticker, company, or command…' : 'Search commands, sessions, or navigate…'}
             className="flex-1 bg-transparent text-[14px] text-shell-text outline-none placeholder:text-shell-muted/60"
           />
           <kbd className="rounded-md border border-shell-border bg-shell-panel-strong px-1.5 py-0.5 text-[10px] font-semibold text-shell-muted">
@@ -191,7 +240,10 @@ export function CommandPalette() {
 
         {/* Results */}
         <div ref={listRef} className="max-h-[360px] overflow-auto py-2">
-          {filtered.length === 0 ? (
+          {marketSearchLoading && currentSection === 'market' && query.trim().length >= 2 && (
+            <div className="px-4 py-2 text-[11px] text-shell-muted">Searching market symbols…</div>
+          )}
+          {filtered.length === 0 && !marketSearchLoading ? (
             <div className="px-4 py-6 text-center text-[13px] text-shell-muted">
               No results for "{query}"
             </div>
