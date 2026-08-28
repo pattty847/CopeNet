@@ -34,18 +34,13 @@ function InsiderWindow({ window }: { window: InsiderNetWindow }) {
   );
 }
 
-export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
+export function TickerEvidencePanel({ state, embedded = false }: { state: TickerEvidenceState; embedded?: boolean }) {
   const [showMethod, setShowMethod] = useState(false);
   const evidence = sortEvidenceNewestFirst(state.payload?.evidence ?? []);
   const insiderWindows = Object.values(state.payload?.insiderNet ?? {}).sort((a, b) => a.days - b.days);
 
-  return (
-    <PanelCard
-      title="Events & SEC evidence"
-      status={state.loading ? 'preview' : state.error ? 'error' : 'live'}
-      subtitle={state.payload?.asOf ? `cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'}
-      right={
-        <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
+  const actions = (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
           <div role="group" aria-label="SEC history depth" style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
             {SEC_DEPTHS.map((depth) => (
               <button key={depth.days} type="button" onClick={() => state.setDepthDays(depth.days)} aria-pressed={state.depthDays === depth.days} style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 8px', font: '600 9px Inter', background: state.depthDays === depth.days ? MM.accent : 'transparent', color: state.depthDays === depth.days ? '#1a1205' : MM.muted }}>{depth.label}</button>
@@ -54,9 +49,10 @@ export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
           <button type="button" onClick={() => void state.refresh()} disabled={state.refreshing} style={{ cursor: state.refreshing ? 'default' : 'pointer', border: `1px solid rgba(251,148,35,.3)`, background: 'transparent', color: MM.accent, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', opacity: state.refreshing ? 0.6 : 1 }}>
             {state.refreshing ? 'Checking…' : 'Check SEC now'}
           </button>
-        </div>
-      }
-    >
+    </div>
+  );
+  const body = (
+    <>
       {state.error && <div role="alert" style={{ fontSize: 11, color: MM.down, marginBottom: 8 }}>{state.error}</div>}
       {(state.payload?.warnings ?? []).map((warning) => <div key={warning} role="status" style={{ fontSize: 10.5, color: MM.accent, marginBottom: 6 }}>{warning}</div>)}
       {insiderWindows.length > 0 && (
@@ -73,7 +69,7 @@ export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
       ) : evidence.length === 0 ? (
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>No activity found in this window.</div>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 330, overflowY: 'auto', paddingRight: 4 }}>
+        <div className={embedded ? 'ticker-evidence-list is-embedded' : 'ticker-evidence-list'} style={{ display: 'flex', flexDirection: 'column', maxHeight: embedded ? undefined : 330, overflowY: embedded ? undefined : 'auto', paddingRight: 4 }}>
           {evidence.map((item, index) => {
             const body = (
               <>
@@ -89,6 +85,18 @@ export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
           })}
         </div>
       )}
-    </PanelCard>
+    </>
   );
+  if (embedded) {
+    return (
+      <section className="ticker-evidence-panel is-embedded">
+        <header className="ticker-embedded-panel-header">
+          <div><h3>SEC & event investigation</h3><p>{state.payload?.asOf ? `Cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'}</p></div>
+          {actions}
+        </header>
+        {body}
+      </section>
+    );
+  }
+  return <PanelCard title="Events & SEC evidence" status={state.loading ? 'preview' : state.error ? 'error' : 'live'} subtitle={state.payload?.asOf ? `cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'} right={actions}>{body}</PanelCard>;
 }

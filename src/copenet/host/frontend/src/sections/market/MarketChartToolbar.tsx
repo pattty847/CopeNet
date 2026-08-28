@@ -81,57 +81,59 @@ export function MarketChartToolbar({
         }}
       >
         <div ref={contentRef} className="market-chart-toolbar__content">
-          <div className="market-chart-toolbar__timeframes" role="group" aria-label="Bar interval">
-            {([
-              ['D', 'D'],
-              ['W', 'W'],
-              ['M', 'M'],
-            ] as const).map(([key, label]) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onTimeframe(key)}
-                aria-pressed={timeframe === key}
-                style={{
-                  cursor: 'pointer',
-                  border: 'none',
-                  borderRadius: 5,
-                  padding: '4px 11px',
-                  font: '600 10px Inter',
-                  background: timeframe === key ? MM.accent : 'transparent',
-                  color: timeframe === key ? '#1a1205' : MM.muted,
-                }}
-              >
-                {label}
-              </button>
-            ))}
+          <div className="market-chart-toolbar__group" aria-label="Time settings">
+            <div className="market-chart-toolbar__timeframes" role="group" aria-label="Bar interval">
+              {([
+                ['D', 'D'],
+                ['W', 'W'],
+                ['M', 'M'],
+              ] as const).map(([key, label]) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onTimeframe(key)}
+                  aria-pressed={timeframe === key}
+                  style={{
+                    cursor: 'pointer',
+                    border: 'none',
+                    borderRadius: 5,
+                    padding: '4px 11px',
+                    font: '600 10px Inter',
+                    background: timeframe === key ? MM.accent : 'transparent',
+                    color: timeframe === key ? '#1a1205' : MM.muted,
+                  }}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <div className="market-chart-toolbar__timeframes" role="group" aria-label="Visible date range">
+              {(['6M', '1Y', '3Y', '5Y', 'MAX'] as const).map((key) => (
+                <button
+                  key={key}
+                  type="button"
+                  onClick={() => onRange(key)}
+                  aria-pressed={range === key}
+                  style={{
+                    cursor: 'pointer',
+                    border: 'none',
+                    borderRadius: 5,
+                    padding: '4px 9px',
+                    font: '600 10px Inter',
+                    background: range === key ? MM.accentSoft : 'transparent',
+                    color: range === key ? MM.accent : MM.muted,
+                  }}
+                >
+                  {key === 'MAX' ? 'Max' : key}
+                </button>
+              ))}
+            </div>
           </div>
-          <div className="market-chart-toolbar__timeframes" role="group" aria-label="Visible date range">
-            {(['6M', '1Y', '3Y', '5Y', 'MAX'] as const).map((key) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => onRange(key)}
-                aria-pressed={range === key}
-                style={{
-                  cursor: 'pointer',
-                  border: 'none',
-                  borderRadius: 5,
-                  padding: '4px 9px',
-                  font: '600 10px Inter',
-                  background: range === key ? 'rgba(143,184,232,.18)' : 'transparent',
-                  color: range === key ? '#8fb8e8' : MM.muted,
-                }}
-              >
-                {key === 'MAX' ? 'Max' : key}
-              </button>
-            ))}
+          <div className="market-chart-toolbar__group" aria-label="Chart mode">
+            {comparisonControl}
+            <button type="button" className="market-chart-tool-button market-chart-tool-button--axis" aria-pressed={logScale} onClick={() => onLogScale?.(!logScale)} title="Toggle logarithmic price axis"><Scale size={13} aria-hidden="true" /><span>Scale: {logScale ? 'Log' : 'Linear'}</span></button>
           </div>
-          <button type="button" className="market-chart-tool-button market-chart-tool-button--axis" aria-pressed={logScale} onClick={() => onLogScale?.(!logScale)} title="Toggle logarithmic price axis"><Scale size={13} aria-hidden="true" /><span>{logScale ? 'Log' : 'Linear'}</span></button>
-          {comparisonControl}
-          {financialControls}
-          {alertControl}
-          {evidenceControl}
+          <div className="market-chart-toolbar__group" aria-label="Chart overlays">{financialControls}{evidenceControl}</div>
         </div>
       </div>
       <button
@@ -144,6 +146,7 @@ export function MarketChartToolbar({
       >
         <ChevronRight size={15} />
       </button>
+      {alertControl && <div className="market-chart-toolbar__fixed" aria-label="Chart actions">{alertControl}</div>}
     </div>
   );
 }

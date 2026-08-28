@@ -8,11 +8,11 @@ const CONFIDENCE_COLORS: Record<string, string> = {
   high: '#69c589',
 };
 
-export function TickerReadPanel({ symbol }: { symbol: string }) {
+export function TickerReadPanel({ symbol, embedded = false }: { symbol: string; embedded?: boolean }) {
   const { read, running, run } = useTickerRead(symbol);
 
   return (
-    <section aria-labelledby="ticker-model-read" style={{ background: `linear-gradient(180deg, rgba(90,143,199,.06), transparent 45%), ${MM.panel}`, border: `1px solid rgba(90,143,199,.22)`, borderRadius: 8, padding: 12 }}>
+    <section className={embedded ? 'ticker-synthesis-panel is-embedded' : 'ticker-synthesis-panel'} aria-labelledby="ticker-model-read" style={{ background: embedded ? 'transparent' : `linear-gradient(180deg, rgba(90,143,199,.06), transparent 45%), ${MM.panel}`, border: embedded ? 'none' : `1px solid rgba(90,143,199,.22)`, borderRadius: embedded ? 0 : 8, padding: embedded ? 14 : 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: read ? 12 : 0, flexWrap: 'wrap' }}>
         <span id="ticker-model-read" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: '#8fb8e8' }}>
           ✦ Model synthesis
@@ -29,7 +29,7 @@ export function TickerReadPanel({ symbol }: { symbol: string }) {
         <p style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', margin: '8px 0 0' }}>
           {running
             ? 'Building an interpretation from the current fact packet…'
-            : `Interpret ${symbol}'s price structure, fundamentals, SEC evidence, and recent context. The result is an opinion with explicit caveats, not a forecast.`}
+            : `Default read · weekly / positional · VOO benchmark. Interpret ${symbol}'s price structure, deterministic signals, point-in-time fundamentals, SEC evidence, and recent context. Ad hoc chart zoom and overlay state are not included.`}
         </p>
       )}
 
