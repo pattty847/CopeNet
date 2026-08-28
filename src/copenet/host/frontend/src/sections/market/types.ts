@@ -225,7 +225,11 @@ export interface PriceAlert {
 export interface VerdictRow {
   bench: string;
   label: 'Beats' | 'Lags' | 'In line';
-  pct: string;
+  excessReturnPct?: number | null;
+  assetReturnPct?: number | null;
+  benchmarkReturnPct?: number | null;
+  beta?: number | null;
+  betaAdjustedExcessPct?: number | null;
   tone: Tone;
 }
 
@@ -297,7 +301,7 @@ export interface TickerIntelligence {
     rsMomentumVsVoo?: number | null;
     excessReturn13wPct?: number | null;
     excessReturn26wPct?: number | null;
-    benchmarks: { symbol: string; verdict: string; riskAdjustedExcess: string }[];
+    benchmarks: { symbol: string; verdict: string; excessReturnPct?: number | null; assetReturnPct?: number | null; benchmarkReturnPct?: number | null; beta?: number | null; betaAdjustedExcessPct?: number | null }[];
   };
   structure: {
     compression?: boolean;

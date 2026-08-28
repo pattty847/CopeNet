@@ -63,7 +63,14 @@ export function TickerOverviewRail({ detail, evidence }: { detail: TickerDetailP
       {detail.verdict.length > 0 && (
         <RailSection label="Benchmark check">
           {detail.verdict.map((row) => (
-            <Metric key={row.bench} label={`vs ${row.bench} · 52w risk-adj.`} value={`${row.label} · ${row.pct}`} valueTone={row.tone} />
+            <div key={row.bench} style={{ display: 'grid', gap: 3 }}>
+              <Metric label={`vs ${row.bench} · 52w`} value={`${row.label} · ${signedPercent(row.excessReturnPct)}`} valueTone={row.tone} />
+              <span style={{ color: MM.dimmer, fontFamily: mono, fontSize: 9, lineHeight: 1.4, textAlign: 'right' }}>
+                {row.assetReturnPct == null || row.benchmarkReturnPct == null
+                  ? 'Insufficient overlapping history'
+                  : `${signedPercent(row.assetReturnPct)} vs ${signedPercent(row.benchmarkReturnPct)} · β ${row.beta?.toFixed(2) ?? '—'} · beta-adj. ${signedPercent(row.betaAdjustedExcessPct)}`}
+              </span>
+            </div>
           ))}
         </RailSection>
       )}

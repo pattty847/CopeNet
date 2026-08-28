@@ -174,7 +174,11 @@ class ContrarianNote:
 class VerdictRow:
     bench: str
     label: Literal["Beats", "Lags", "In line"]
-    pct: str
+    excess_return_pct: float | None
+    asset_return_pct: float | None
+    benchmark_return_pct: float | None
+    beta: float | None
+    beta_adjusted_excess_pct: float | None
     tone: Tone
 
 

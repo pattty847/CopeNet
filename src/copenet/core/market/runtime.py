@@ -477,7 +477,18 @@ class MarketRuntime:
             fs,
             name=asset.name if asset else symbol,
             base_rate=sb_rate,
-            verdict=[{"bench": v.bench, "label": v.label} for v in verdict],
+            verdict=[
+                {
+                    "bench": v.bench,
+                    "label": v.label,
+                    "excess_return_pct": v.excess_return_pct,
+                    "asset_return_pct": v.asset_return_pct,
+                    "benchmark_return_pct": v.benchmark_return_pct,
+                    "beta": v.beta,
+                    "beta_adjusted_excess_pct": v.beta_adjusted_excess_pct,
+                }
+                for v in verdict
+            ],
             evidence=[{"type": e.type, "headline": e.headline, "source": e.source} for e in evidence],
             fundamentals=fundamentals,
             news=news_results,
@@ -897,7 +908,18 @@ def _build_intelligence(
             "rs_momentum_vs_voo": fs.rs_momentum,
             "excess_return_13w_pct": fs.excess_13w,
             "excess_return_26w_pct": fs.excess_26w,
-            "benchmarks": [{"symbol": v.bench, "verdict": v.label, "risk_adjusted_excess": v.pct} for v in verdict],
+            "benchmarks": [
+                {
+                    "symbol": v.bench,
+                    "verdict": v.label,
+                    "excess_return_pct": v.excess_return_pct,
+                    "asset_return_pct": v.asset_return_pct,
+                    "benchmark_return_pct": v.benchmark_return_pct,
+                    "beta": v.beta,
+                    "beta_adjusted_excess_pct": v.beta_adjusted_excess_pct,
+                }
+                for v in verdict
+            ],
         },
         structure={
             "compression": fs.compression,

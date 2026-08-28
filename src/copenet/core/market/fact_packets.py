@@ -316,8 +316,21 @@ def ticker_fact_packet(
         sections.append(line)
 
     if verdict:
-        rows = [f"vs {v['bench']}: {v['label']}" for v in verdict]
-        sections.append("BENCHMARK VERDICT (risk-adjusted, 1y): " + "; ".join(rows))
+        rows = []
+        for v in verdict:
+            excess = v.get("excess_return_pct")
+            asset_return = v.get("asset_return_pct")
+            benchmark_return = v.get("benchmark_return_pct")
+            beta = v.get("beta")
+            beta_adjusted = v.get("beta_adjusted_excess_pct")
+            rows.append(
+                f"vs {v['bench']}: {v['label']} by {excess:+.1f}% raw "
+                f"(asset {asset_return:+.1f}%, benchmark {benchmark_return:+.1f}%; "
+                f"beta {beta:.2f}, beta-adjusted residual {beta_adjusted:+.1f}%)"
+                if None not in (excess, asset_return, benchmark_return, beta, beta_adjusted)
+                else f"vs {v['bench']}: insufficient overlapping history"
+            )
+        sections.append("BENCHMARK CHECK (trailing 52w; verdict uses raw excess return): " + "; ".join(rows))
 
     if evidence:
         rows = [f"[{e['type']}] {e['headline']} ({e.get('source', '')})" for e in evidence[:5]]

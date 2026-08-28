@@ -62,11 +62,25 @@ def test_ticker_fact_packet_carries_data_quality_and_pattern():
     arr = np.array(closes)
     frame = pd.DataFrame({"date": dates, "open": arr, "high": arr * 1.01, "low": arr * 0.99, "close": arr, "volume": [1e6] * len(closes)})
     fs = compute_features(frame, symbol="TEST")
-    packet = ticker_fact_packet(fs, name="Test Corp", base_rate=_base_rate(), verdict=[{"bench": "VOO", "label": "Lags"}])
+    packet = ticker_fact_packet(
+        fs,
+        name="Test Corp",
+        base_rate=_base_rate(),
+        verdict=[{
+            "bench": "VOO",
+            "label": "Beats",
+            "excess_return_pct": 12.0,
+            "asset_return_pct": 30.0,
+            "benchmark_return_pct": 18.0,
+            "beta": 1.5,
+            "beta_adjusted_excess_pct": 3.0,
+        }],
+    )
     assert "ASSET: TEST (Test Corp)" in packet
     assert "DATA QUALITY" in packet
     assert "RETURNS:" in packet
-    assert "vs VOO: Lags" in packet
+    assert "vs VOO: Beats by +12.0% raw" in packet
+    assert "asset +30.0%, benchmark +18.0%; beta 1.50, beta-adjusted residual +3.0%" in packet
     if fs.soft_bottoming:
         assert "SOFT BOTTOMING FIRING" in packet and "n=5" in packet
 

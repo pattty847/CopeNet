@@ -22,4 +22,18 @@ def test_benchmark_verdict_uses_trailing_52_weeks_not_lifetime_starting_price() 
     verdict = benchmark_verdict(asset, {"VOO": benchmark})[0]
 
     assert verdict.label == "In line"
-    assert verdict.pct == "+0.0%"
+    assert verdict.excess_return_pct == 0.0
+    assert verdict.beta_adjusted_excess_pct == 0.0
+
+
+def test_benchmark_verdict_headline_uses_actual_relative_performance() -> None:
+    benchmark = _weekly_frame([100.0 + index for index in range(53)])
+    asset = _weekly_frame([100.0 + (index * 2.0) for index in range(53)])
+
+    verdict = benchmark_verdict(asset, {"VOO": benchmark})[0]
+
+    assert verdict.label == "Beats"
+    assert verdict.excess_return_pct is not None and verdict.excess_return_pct > 10
+    assert verdict.asset_return_pct is not None
+    assert verdict.benchmark_return_pct is not None
+    assert verdict.beta is not None
