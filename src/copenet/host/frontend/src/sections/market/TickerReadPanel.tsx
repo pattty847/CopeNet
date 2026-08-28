@@ -12,7 +12,7 @@ export function TickerReadPanel({ symbol }: { symbol: string }) {
   const { read, running, run } = useTickerRead(symbol);
 
   return (
-    <section aria-labelledby="ticker-model-read" style={{ background: `linear-gradient(180deg, rgba(90,143,199,.06), transparent 45%), ${MM.panel}`, border: `1px solid rgba(90,143,199,.22)`, borderRadius: 14, padding: 16 }}>
+    <section aria-labelledby="ticker-model-read" style={{ background: `linear-gradient(180deg, rgba(90,143,199,.06), transparent 45%), ${MM.panel}`, border: `1px solid rgba(90,143,199,.22)`, borderRadius: 8, padding: 12 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: read ? 12 : 0, flexWrap: 'wrap' }}>
         <span id="ticker-model-read" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: '#8fb8e8' }}>
           ✦ Model synthesis

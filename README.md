@@ -75,8 +75,9 @@ from a compact **Ticker** action on phones.
 The benchmark check labels **Beats/Lags** from aligned trailing-52-week excess return,
 then exposes asset return, benchmark return, beta, and the beta-adjusted residual as
 separate facts. SEC chart settings keep 8-K and Form 144 events visible while Form 4
-transactions start off, with operator-selected lookback and individual-trade or legacy
-cluster-box display. Linear/log axis mode is an explicit toolbar control.
+transactions start off, with operator-selected lookback and cluster-box display by
+default; individual trades remain available for inspection. Linear/log axis mode is an
+explicit toolbar control.
 
 ![CopeNet Market Monitor — asset workspace](docs/imgs/market-panel/copenet-asset-workspace.png)
 
@@ -100,11 +101,12 @@ data validation.
 
 ![CopeNet Market Monitor — chart-created daily-close price alert](docs/imgs/market-panel/copenet-price-alert.png)
 
-Chart interval, range, and axis mode lead a compact TradingView-style toolbar; analysis
-tools follow as a separate group. The available width stays with the chart on desktop
-and phones: the tool rail scrolls horizontally, exposes edge nudges only when more tools
-exist, and keeps a thin scrollbar for discoverability. Alert creation opens as a
-phone-width sheet instead of overflowing the chart edge.
+Chart interval, range, and axis mode lead a compact TradingView-style instrument strip;
+joined cells replace a row of separated pills, and analysis tools follow in the same
+rail. The available width stays with the chart on desktop and phones: the tool rail
+scrolls horizontally, exposes edge nudges only when more tools exist, and keeps a thin
+scrollbar for discoverability. Alert creation opens as a phone-width sheet instead of
+overflowing the chart edge.
 
 ![CopeNet Market Monitor — mobile chart toolbar](docs/imgs/market-panel/copenet-mobile-chart-toolbar.png)
 

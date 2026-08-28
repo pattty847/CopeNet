@@ -64,7 +64,7 @@ export function TickerDetailPage({ symbol, onClose, watchlist }: { symbol: strin
   const [pickedAlertPrice, setPickedAlertPrice] = useState<number | null>(null);
   const [showInsiderTransactions, setShowInsiderTransactions] = useState(false);
   const [insiderLookback, setInsiderLookback] = useState<InsiderLookback>('chart');
-  const [insiderDisplayMode, setInsiderDisplayMode] = useState<InsiderDisplayMode>('individual');
+  const [insiderDisplayMode, setInsiderDisplayMode] = useState<InsiderDisplayMode>('clusters');
   const [logScale, setLogScale] = useState(() => {
     try { return localStorage.getItem('mm-log-scale') === '1'; } catch { return false; }
   });

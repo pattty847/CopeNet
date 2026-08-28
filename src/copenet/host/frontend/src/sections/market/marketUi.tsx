@@ -142,7 +142,7 @@ export function PanelCard({
       style={{
         background: MM.panel,
         border: `1px solid ${MM.border}`,
-        borderRadius: 14,
+        borderRadius: 8,
         display: 'flex',
         flexDirection: 'column',
         ...style,

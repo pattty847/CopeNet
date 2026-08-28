@@ -25,7 +25,7 @@ export function ChartEvidenceControl({
   const triggerRef = useRef<HTMLButtonElement>(null);
 
   return (
-    <div style={{ position: 'relative', flex: '0 0 auto' }}>
+    <div className="market-sec-control" style={{ position: 'relative', flex: '0 0 auto' }}>
       <button
         ref={triggerRef}
         type="button"
@@ -57,7 +57,7 @@ export function ChartEvidenceControl({
               <button type="button" aria-pressed={displayMode === 'individual'} onClick={() => onDisplayMode('individual')}>Individual trades</button>
               <button type="button" aria-pressed={displayMode === 'clusters'} onClick={() => onDisplayMode('clusters')}>Cluster boxes</button>
             </div>
-            <p>Individual mode places buys below candles and sells above them. Cluster boxes preserve the older net-flow summary when you want it.</p>
+            <p>Cluster boxes summarize net flow by default. Individual mode is available when you want to inspect each executed trade.</p>
           </fieldset>
         </div>
       </MarketFloatingPopover>

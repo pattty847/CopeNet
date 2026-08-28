@@ -23,7 +23,7 @@ export function TickerSignalPanel({ detail }: { detail: TickerDetailPayload }) {
   return (
     <div className="ticker-analysis-grid">
       {detail.insight?.softBottoming && (
-        <section style={{ background: `linear-gradient(180deg, rgba(105,197,137,.07), transparent 52%), ${MM.panel}`, border: `1px solid rgba(105,197,137,.25)`, borderRadius: 14, padding: 16 }}>
+        <section style={{ background: `linear-gradient(180deg, rgba(105,197,137,.07), transparent 52%), ${MM.panel}`, border: `1px solid rgba(105,197,137,.25)`, borderRadius: 8, padding: 12 }}>
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 9 }}>
             <h3 style={{ margin: 0, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.up }}>Soft-bottoming setup</h3>
             <span style={{ fontFamily: mono, fontSize: 12, color: MM.up }}>score {detail.insight.score.toFixed(2)}</span>
@@ -53,7 +53,7 @@ export function TickerSignalPanel({ detail }: { detail: TickerDetailPayload }) {
         </div>
       </PanelCard>
 
-      <section style={{ background: `linear-gradient(180deg, rgba(251,148,35,.05), transparent 50%), ${MM.panel}`, border: `1px solid rgba(251,148,35,.16)`, borderRadius: 14, padding: 16 }}>
+      <section style={{ background: `linear-gradient(180deg, rgba(251,148,35,.05), transparent 50%), ${MM.panel}`, border: `1px solid rgba(251,148,35,.16)`, borderRadius: 8, padding: 12 }}>
         <h3 style={{ margin: '0 0 9px', font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: MM.accent }}>What would make this wrong</h3>
         <p style={{ margin: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{detail.kill}</p>
       </section>

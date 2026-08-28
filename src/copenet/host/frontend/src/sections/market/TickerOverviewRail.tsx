@@ -87,7 +87,7 @@ export function TickerOverviewRail({ detail, evidence }: { detail: TickerDetailP
 
 function RailSection({ label, accent = MM.muted, children }: { label: string; accent?: string; children: ReactNode }) {
   return (
-    <section style={{ display: 'flex', flexDirection: 'column', gap: 8, padding: 13, borderRadius: 12, border: `1px solid ${MM.border}`, background: 'rgba(254,252,244,.018)' }}>
+    <section style={{ display: 'flex', flexDirection: 'column', gap: 7, padding: 11, borderRadius: 8, border: `1px solid ${MM.border}`, background: 'rgba(254,252,244,.018)' }}>
       <h3 style={{ margin: 0, font: '650 9px Inter', letterSpacing: '.13em', textTransform: 'uppercase', color: accent }}>{label}</h3>
       {children}
     </section>

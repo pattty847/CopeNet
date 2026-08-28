@@ -128,7 +128,6 @@ export function MarketChartToolbar({
             ))}
           </div>
           <button type="button" className="market-chart-tool-button market-chart-tool-button--axis" aria-pressed={logScale} onClick={() => onLogScale?.(!logScale)} title="Toggle logarithmic price axis"><Scale size={13} aria-hidden="true" /><span>{logScale ? 'Log' : 'Linear'}</span></button>
-          <span className="market-chart-toolbar__divider" aria-hidden="true" />
           {comparisonControl}
           {financialControls}
           {alertControl}

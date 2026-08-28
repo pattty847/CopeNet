@@ -88,8 +88,9 @@ export function FinancialOverlayControls({
 
   const restActive = metric != null && !FLAGSHIP_METRICS.includes(metric);
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
+    <div className="market-financial-controls" style={{ display: 'flex', alignItems: 'center', gap: 5 }}>
       <div
+        className="market-financial-controls__metrics"
         aria-label="Financial chart overlay"
         style={{ display: 'flex', gap: 3, alignItems: 'center', background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 9, padding: 3 }}
       >
@@ -121,7 +122,7 @@ export function FinancialOverlayControls({
         )}
       </div>
       {metric != null && !valuationSelected && (
-        <div style={{ display: 'flex', gap: 2, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 7, padding: 2 }}>
+        <div className="market-financial-controls__frequency" style={{ display: 'flex', gap: 2, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 7, padding: 2 }}>
           {FREQUENCIES.filter(
             (option) => !selected?.frequencies || selected.frequencies.includes(option.value),
           ).map((option) => (

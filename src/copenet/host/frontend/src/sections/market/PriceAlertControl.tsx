@@ -58,7 +58,7 @@ export function PriceAlertControl({
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="market-price-alert-control" style={{ position: 'relative' }}>
       <button
         ref={triggerRef}
         type="button"
