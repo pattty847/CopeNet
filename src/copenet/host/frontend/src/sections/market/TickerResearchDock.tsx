@@ -6,6 +6,7 @@ import { TickerReadPanel } from './TickerReadPanel';
 import type { TickerDetailPayload, EvidenceItem } from './types';
 import type { TickerEvidenceState } from './useMarketMonitorData';
 import type { TickerResearchTab } from './TickerContextStrip';
+import './financialResearch.css';
 
 const TABS: Array<{ id: TickerResearchTab; label: string }> = [
   { id: 'overview', label: 'Overview' },
@@ -63,7 +64,7 @@ export function TickerResearchDock({
         <TickerFundamentalsPanel symbol={detail.symbol} active={activeTab === 'fundamentals'} />
       </div>
       <div id="ticker-panel-evidence" role="tabpanel" aria-labelledby="ticker-tab-evidence" hidden={activeTab !== 'evidence'}>
-        <TickerEvidencePanel state={evidenceState} />
+        <TickerEvidencePanel state={evidenceState} active={activeTab === 'evidence'} />
       </div>
       <div id="ticker-panel-synthesis" role="tabpanel" aria-labelledby="ticker-tab-synthesis" hidden={activeTab !== 'synthesis'}>
         <TickerReadPanel symbol={detail.symbol} />

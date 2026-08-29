@@ -1,8 +1,6 @@
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useState } from 'react';
-import { useAppStore } from '../../store/useAppStore';
 import { MM, toneColor } from './marketUi';
-import { TickerAssetSwitcher } from './TickerAssetSwitcher';
 import { TickerChartWorkspace } from './TickerChartWorkspace';
 import { TickerContextStrip, type TickerResearchTab } from './TickerContextStrip';
 import { TickerResearchDock } from './TickerResearchDock';
@@ -20,17 +18,14 @@ function formatBarDate(value?: number | null): string {
 export function TickerDetailPage({
   symbol,
   onClose,
-  onOpenTicker,
   watchlist,
 }: {
   symbol: string;
   onClose: () => void;
-  onOpenTicker: (symbol: string) => void;
   watchlist: MarketWatchlistState;
 }) {
   const ticker = useTickerDetail(symbol);
   const sec = useTickerEvidence(symbol);
-  const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
   const [watchBusy, setWatchBusy] = useState(false);
   const [researchTab, setResearchTab] = useState<TickerResearchTab>('overview');
 
@@ -69,7 +64,6 @@ export function TickerDetailPage({
         </div>
         <div className="ticker-header-actions">
           <div className="ticker-quote"><strong>{formatQuote(detail.quote.price)}</strong><span style={{ color: toneColor(quoteTone) }}>{change == null ? '—' : `${change > 0 ? '+' : ''}${change.toFixed(2)}%`} vs prior daily bar</span></div>
-          <TickerAssetSwitcher currentSymbol={detail.symbol} items={watchlist.items} onSearch={() => setCommandPaletteOpen(true)} onSelect={onOpenTicker} />
           <button type="button" onClick={() => void toggleWatch()} disabled={watchBusy} className={isWatched ? 'ticker-watch-button is-active' : 'ticker-watch-button'}>{watchBusy ? 'Updating…' : isWatched ? '✓ Watching' : '+ Watch'}</button>
         </div>
       </header>

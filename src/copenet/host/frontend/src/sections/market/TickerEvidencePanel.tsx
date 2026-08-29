@@ -1,8 +1,11 @@
-import { useState } from 'react';
+import { lazy, Suspense, useState } from 'react';
 import { EvidenceFlagBadge, EvidenceToneGlyph, MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { sortEvidenceNewestFirst } from './marketEvidence';
+import { evidenceDay } from './secActivity';
 import { SEC_DEPTHS, type TickerEvidenceState } from './useMarketMonitorData';
 import type { InsiderNetWindow, Tone } from './types';
+
+const SecActivityChart = lazy(() => import('./SecActivityChart').then((module) => ({ default: module.SecActivityChart })));
 
 function signTone(value: number): Tone {
   return value > 0 ? 'up' : value < 0 ? 'down' : 'flat';
@@ -25,18 +28,19 @@ function InsiderWindow({ window }: { window: InsiderNetWindow }) {
   return (
     <div style={{ flex: 1, minWidth: 145, border: `1px solid ${valueTone === 'up' ? 'rgba(105,197,137,.25)' : valueTone === 'down' ? 'rgba(217,109,95,.25)' : MM.border}`, background: valueTone === 'up' ? 'rgba(105,197,137,.05)' : valueTone === 'down' ? 'rgba(217,109,95,.05)' : 'transparent', borderRadius: 9, padding: '8px 10px' }}>
       <div style={{ font: '600 8px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 3 }}>{window.days}d insider net</div>
-      <div style={{ fontFamily: mono, fontSize: 12, color: toneColor(shareTone) }}>
-        {compactNumber(window.netShares, 'shares')}
-        {window.netValue != null && <span style={{ color: toneColor(valueTone), marginLeft: 6 }}>({compactNumber(window.netValue, 'money')})</span>}
-      </div>
+      <div style={{ fontFamily: mono, fontSize: 12, color: toneColor(valueTone) }}>{window.netValue != null ? compactNumber(window.netValue, 'money') : compactNumber(window.netShares, 'shares')}</div>
+      {window.netValue != null && <div style={{ fontFamily: mono, fontSize: 9.5, color: toneColor(shareTone), marginTop: 2 }}>{compactNumber(window.netShares, 'shares')}</div>}
       <div style={{ fontFamily: mono, fontSize: 9.5, color: MM.dim, marginTop: 2 }}>{window.buys} buys · {window.sells} sells · {window.openMarketBuys ?? 0} open-market</div>
     </div>
   );
 }
 
-export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
+export function TickerEvidencePanel({ state, active }: { state: TickerEvidenceState; active: boolean }) {
   const [showMethod, setShowMethod] = useState(false);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const evidence = sortEvidenceNewestFirst(state.payload?.evidence ?? []);
+  const effectiveSelectedDay = selectedDay && evidence.some((item) => evidenceDay(item) === selectedDay) ? selectedDay : null;
+  const visibleEvidence = effectiveSelectedDay ? evidence.filter((item) => evidenceDay(item) === effectiveSelectedDay) : evidence;
   const insiderWindows = Object.values(state.payload?.insiderNet ?? {}).sort((a, b) => a.days - b.days);
 
   const actions = (
@@ -55,6 +59,11 @@ export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
     <>
       {state.error && <div role="alert" style={{ fontSize: 11, color: MM.down, marginBottom: 8 }}>{state.error}</div>}
       {(state.payload?.warnings ?? []).map((warning) => <div key={warning} role="status" style={{ fontSize: 10.5, color: MM.accent, marginBottom: 6 }}>{warning}</div>)}
+      {active && evidence.length > 0 ? (
+        <Suspense fallback={<div className="sec-activity-skeleton" aria-label="Loading SEC activity chart"><span /><span /><span /><span /></div>}>
+          <SecActivityChart evidence={evidence} selectedDay={effectiveSelectedDay} onSelectDay={setSelectedDay} />
+        </Suspense>
+      ) : null}
       {insiderWindows.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>{insiderWindows.map((window) => <InsiderWindow key={window.days} window={window} />)}</div>
@@ -69,8 +78,10 @@ export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
       ) : evidence.length === 0 ? (
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>No activity found in this window.</div>
       ) : (
-        <div className="ticker-evidence-list is-embedded" style={{ display: 'flex', flexDirection: 'column', paddingRight: 4 }}>
-          {evidence.map((item, index) => {
+        <>
+          {effectiveSelectedDay ? <div className="sec-evidence-filter"><span>Showing {visibleEvidence.length} {visibleEvidence.length === 1 ? 'event' : 'events'} from {new Intl.DateTimeFormat(undefined, { month: 'long', day: 'numeric', year: 'numeric' }).format(new Date(`${effectiveSelectedDay}T00:00:00Z`))}</span><button type="button" onClick={() => setSelectedDay(null)}>Clear filter</button></div> : null}
+          <div className="ticker-evidence-list is-embedded" style={{ display: 'flex', flexDirection: 'column', paddingRight: 4 }}>
+          {visibleEvidence.map((item, index) => {
             const body = (
               <>
                 <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
@@ -83,7 +94,8 @@ export function TickerEvidencePanel({ state }: { state: TickerEvidenceState }) {
               ? <a key={`${item.type}-${item.t}-${item.headline}`} href={item.url} target="_blank" rel="noreferrer" style={{ ...style, textDecoration: 'none' }}>{body}</a>
               : <div key={`${item.type}-${item.t}-${item.headline}`} style={style}>{body}</div>;
           })}
-        </div>
+          </div>
+        </>
       )}
     </>
   );

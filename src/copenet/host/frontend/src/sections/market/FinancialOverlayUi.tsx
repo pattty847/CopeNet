@@ -3,6 +3,7 @@ import { isValuationPayload } from './types';
 import type { FinancialSeriesState } from './useFinancialSeries';
 import { formatFinancialDate, formatFinancialValue } from './financialOverlay';
 import { MM, mono } from './marketUi';
+import { FinancialMetricPicker } from './FinancialMetricPicker';
 
 export type OverlayMetric = string;
 
@@ -96,29 +97,13 @@ export function FinancialOverlayControls({
       >
         {flagship.map(button)}
         {rest.length > 0 && (
-          <select
-            aria-label="More financial overlays"
-            value={restActive ? metric ?? '' : ''}
-            onChange={(event) => onMetric(event.target.value || null)}
-            style={{
-              cursor: 'pointer',
-              border: `1px solid ${restActive ? 'rgba(90,143,199,.45)' : MM.border}`,
-              background: restActive ? 'rgba(90,143,199,.12)' : '#050506',
-              color: restActive ? '#8fb8e8' : MM.muted,
-              borderRadius: 7,
-              padding: '4px 6px',
-              font: '600 9.5px Inter',
-              letterSpacing: '.04em',
-              maxWidth: 150,
-            }}
-          >
-            <option value="">{restActive && loading ? '◍ More…' : 'More…'}</option>
-            {rest.map((entry) => (
-              <option key={entry.id} value={entry.id}>
-                {entry.label}{entry.derived ? ' (derived)' : ''}
-              </option>
-            ))}
-          </select>
+          <FinancialMetricPicker
+            metrics={rest}
+            selectedMetric={restActive ? metric : null}
+            selectedLabel={restActive && selected ? shortLabel(selected) : null}
+            loading={loading}
+            onMetric={onMetric}
+          />
         )}
       </div>
       {metric != null && !valuationSelected && (

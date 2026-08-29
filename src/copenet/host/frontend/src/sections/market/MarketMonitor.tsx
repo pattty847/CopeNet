@@ -25,7 +25,6 @@ export function MarketMonitor() {
       <TickerDetailPage
         symbol={activeTicker}
         onClose={() => navigateTicker(null)}
-        onOpenTicker={(symbol) => navigateTicker(symbol)}
         watchlist={watchlist}
       />
     );

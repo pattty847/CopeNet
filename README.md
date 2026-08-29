@@ -68,7 +68,12 @@ asset switching, interval and visible-range controls, split-adjusted price histo
 SEC markers, financial overlays, and alerts stay in one compact instrument frame. A
 thin context strip answers why the asset matters now, while a persistent research dock
 separates measured state, SEC evidence, and model synthesis without making them compete
-with the chart. Portfolio context appears only when a position actually exists.
+with the chart. Fundamentals become a linked chart-and-table explorer for income, cash
+flow, margins, balance-sheet, per-share, and valuation stories; every period keeps its
+source filing one click away. SEC activity adds a signed transaction-size history that
+keeps executed Form 4 trades separate from planned Form 144 sales and can filter the
+evidence list to a filing day. Portfolio context appears only when a position actually
+exists.
 
 The benchmark check labels **Beats/Lags** from aligned trailing-52-week excess return,
 then exposes asset return, benchmark return, beta, and the beta-adjusted residual as
