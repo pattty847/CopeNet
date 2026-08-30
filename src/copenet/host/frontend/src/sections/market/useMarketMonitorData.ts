@@ -455,12 +455,37 @@ export interface TickerDetailState {
   detail: TickerDetailPayload | null;
   loading: boolean;
   error: string | null;
+  /** True while `detail` belongs to a previous symbol or fetch. The workspace keeps the frame
+   *  painted and marks the pending symbol rather than blanking — a fixed-frame layout that
+   *  empties on every switch reads as a crash. */
+  stale: boolean;
   reload: () => Promise<void>;
+}
+
+/** Small LRU of recent payloads. Ticker analysis is a traversal — an operator moves back and
+ *  forth between the same handful of names for an hour — so the second visit should be
+ *  instant instead of a fresh round trip. */
+const DETAIL_CACHE = new Map<string, TickerDetailPayload>();
+const DETAIL_CACHE_LIMIT = 20;
+
+function cacheDetail(symbol: string, payload: TickerDetailPayload): void {
+  DETAIL_CACHE.delete(symbol);
+  DETAIL_CACHE.set(symbol, payload);
+  while (DETAIL_CACHE.size > DETAIL_CACHE_LIMIT) {
+    const oldest = DETAIL_CACHE.keys().next().value;
+    if (oldest === undefined) break;
+    DETAIL_CACHE.delete(oldest);
+  }
 }
 
 export function useTickerDetail(symbol: string): TickerDetailState {
   const normalized = symbol.trim().toUpperCase();
-  const [detail, setDetail] = useState<TickerDetailPayload | null>(null);
+  // Keyed by the symbol that was ASKED FOR, never by the payload's own `symbol`. The backend
+  // canonicalises (BRK.B -> BRK-B, aliases, suffixes), so comparing against the response
+  // would mark a perfectly fresh payload stale forever.
+  const [entry, setEntry] = useState<{ requested: string; payload: TickerDetailPayload } | null>(
+    () => { const cached = DETAIL_CACHE.get(normalized); return cached ? { requested: normalized, payload: cached } : null; },
+  );
   const [loading, setLoading] = useState(Boolean(normalized));
   const [error, setError] = useState<string | null>(null);
   const requestVersion = useRef(0);
@@ -472,10 +497,11 @@ export function useTickerDetail(symbol: string): TickerDetailState {
     setError(null);
     try {
       const next = await wsClient.marketTicker(normalized);
-      if (requestVersion.current === version) setDetail(next);
+      cacheDetail(normalized, next);
+      if (requestVersion.current === version) setEntry({ requested: normalized, payload: next });
     } catch (err) {
       if (requestVersion.current === version) {
-        setDetail(null);
+        setEntry(null);
         setError(err instanceof Error ? err.message : 'Ticker data is unavailable.');
       }
     } finally {
@@ -484,14 +510,21 @@ export function useTickerDetail(symbol: string): TickerDetailState {
   }, [normalized]);
 
   useEffect(() => {
-    setDetail(null);
+    const cached = DETAIL_CACHE.get(normalized);
+    if (cached) setEntry({ requested: normalized, payload: cached });
     void reload();
     return () => {
       requestVersion.current += 1;
     };
-  }, [reload]);
+  }, [normalized, reload]);
 
-  return { detail, loading, error, reload };
+  return {
+    detail: entry?.payload ?? null,
+    loading,
+    error,
+    stale: entry != null && entry.requested !== normalized,
+    reload,
+  };
 }
 
 export interface TickerFundamentalsState {
@@ -531,12 +564,14 @@ export function useTickerFundamentals(symbol: string): TickerFundamentalsState {
       setData(next);
       setUnavailable(next === null || (!next.revenueQuarterly?.length && !next.revenueAnnual?.length));
     } catch {
-      /* backend offline — leave untouched so a later toggle retries */
+      // Mark the attempt as spent. Leaving it unset re-armed the caller's effect on the next
+      // render, which turned an offline backend into an unthrottled request loop.
+      loadedFor.current = normalized;
     } finally {
       if (alive.current) setLoading(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [normalized, loading]);
+  }, [normalized]);
 
   return { data, loading, unavailable, load };
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import { comparisonSymbols } from './chartComparison';
 import type { ChartSeriesPayload } from './types';
-import type { ChartTimeframe } from './MarketChartToolbar';
+import type { ChartTimeframe } from './chartRanges';
 
 const RPC_TIMEFRAME: Record<ChartTimeframe, ChartSeriesPayload['timeframe']> = { D: 'daily', W: 'weekly', M: 'monthly' };
 

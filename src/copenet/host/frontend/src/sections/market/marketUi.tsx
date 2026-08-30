@@ -20,6 +20,10 @@ export const MM = {
   accentSoft: 'rgba(251,148,35,.12)',
   up: '#69c589',
   down: '#d96d5f',
+  /** Analytical blue. Data series and derived/model content — never "selected" or "active",
+   *  which orange owns. It was already hardcoded in a dozen places; naming it stops the
+   *  twelfth copy from drifting. */
+  info: '#8fb8e8',
 } as const;
 
 export function toneColor(tone: Tone): string {
@@ -63,13 +67,16 @@ export function evidenceDate(t?: number): string {
 }
 
 export function evidenceTypeBg(t: EvidenceItem['type']): string {
-  if (t === 'Insider') return MM.accentSoft;
+  // Insider rows already carry direction in their ▲/▼ tone glyph. Colouring the TYPE tag
+  // as well made the category compete with the state, and orange is reserved for "active
+  // tool" — so the tag stays neutral and the tone does the talking.
+  if (t === 'Insider') return 'rgba(254,252,244,.06)';
   if (t === 'Form 144') return 'rgba(217,109,95,.12)';
   return 'rgba(254,252,244,.06)';
 }
 
 export function evidenceTypeColor(t: EvidenceItem['type']): string {
-  if (t === 'Insider') return MM.accent;
+  if (t === 'Insider') return MM.muted;
   if (t === 'Form 144') return MM.down;
   return MM.textSoft;
 }

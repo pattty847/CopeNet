@@ -1,4 +1,5 @@
 import { lazy, Suspense, useState } from 'react';
+import { RefreshCw } from 'lucide-react';
 import { EvidenceFlagBadge, EvidenceToneGlyph, MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { sortEvidenceNewestFirst } from './marketEvidence';
 import { evidenceDay } from './secActivity';
@@ -44,21 +45,23 @@ export function TickerEvidencePanel({ state, active }: { state: TickerEvidenceSt
   const insiderWindows = Object.values(state.payload?.insiderNet ?? {}).sort((a, b) => a.days - b.days);
 
   const actions = (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 7, flexWrap: 'wrap' }}>
-          <div role="group" aria-label="SEC history depth" style={{ display: 'flex', gap: 3, background: '#050506', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 3 }}>
-            {SEC_DEPTHS.map((depth) => (
-              <button key={depth.days} type="button" onClick={() => state.setDepthDays(depth.days)} aria-pressed={state.depthDays === depth.days} style={{ cursor: 'pointer', border: 'none', borderRadius: 5, padding: '4px 8px', font: '600 9px Inter', background: state.depthDays === depth.days ? MM.accent : 'transparent', color: state.depthDays === depth.days ? '#1a1205' : MM.muted }}>{depth.label}</button>
-            ))}
-          </div>
-          <button type="button" onClick={() => void state.refresh()} disabled={state.refreshing} style={{ cursor: state.refreshing ? 'default' : 'pointer', border: `1px solid rgba(251,148,35,.3)`, background: 'transparent', color: MM.accent, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', opacity: state.refreshing ? 0.6 : 1 }}>
-            {state.refreshing ? 'Checking…' : 'Check SEC now'}
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+      <div className="tw-segment" role="group" aria-label="SEC history depth">
+        {SEC_DEPTHS.map((depth) => (
+          <button key={depth.days} type="button" onClick={() => state.setDepthDays(depth.days)} aria-pressed={state.depthDays === depth.days}>
+            {depth.label}
           </button>
+        ))}
+      </div>
+      <button type="button" className="tw-btn" onClick={() => void state.refresh()} disabled={state.refreshing}>
+        <RefreshCw size={11} aria-hidden="true" /> {state.refreshing ? 'Checking…' : 'Check SEC now'}
+      </button>
     </div>
   );
   const body = (
     <>
       {state.error && <div role="alert" style={{ fontSize: 11, color: MM.down, marginBottom: 8 }}>{state.error}</div>}
-      {(state.payload?.warnings ?? []).map((warning) => <div key={warning} role="status" style={{ fontSize: 10.5, color: MM.accent, marginBottom: 6 }}>{warning}</div>)}
+      {(state.payload?.warnings ?? []).map((warning) => <div key={warning} role="status" style={{ fontSize: 10.5, color: MM.down, marginBottom: 6 }}>{warning}</div>)}
       {active && evidence.length > 0 ? (
         <Suspense fallback={<div className="sec-activity-skeleton" aria-label="Loading SEC activity chart"><span /><span /><span /><span /></div>}>
           <SecActivityChart evidence={evidence} selectedDay={effectiveSelectedDay} onSelectDay={setSelectedDay} />

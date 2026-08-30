@@ -31,7 +31,9 @@ export interface FinancialStory {
 
 const BLUE = '#4b8ff7';
 const CYAN = '#4cc9d7';
-const ORANGE = '#fb9423';
+// NOT the CopeNet accent (#fb9423) — that colour means "armed tool" and nothing else, so a
+// data series may not borrow it.
+const AMBER = '#c6924e';
 const VIOLET = '#a886f7';
 
 export const FINANCIAL_STORIES: FinancialStory[] = [
@@ -46,7 +48,7 @@ export const FINANCIAL_STORIES: FinancialStory[] = [
     metrics: [
       { id: 'revenue', label: 'Revenue', shortLabel: 'Revenue', color: BLUE },
       { id: 'gross_profit', label: 'Gross profit', shortLabel: 'Gross profit', color: CYAN },
-      { id: 'operating_income', label: 'Operating income', shortLabel: 'Operating', color: ORANGE },
+      { id: 'operating_income', label: 'Operating income', shortLabel: 'Operating', color: AMBER },
       { id: 'net_income', label: 'Net income', shortLabel: 'Net income', color: VIOLET },
     ],
   },
@@ -60,7 +62,7 @@ export const FINANCIAL_STORIES: FinancialStory[] = [
     frequencies: ['annual', 'quarterly', 'ttm'],
     metrics: [
       { id: 'operating_cash_flow', label: 'Operating cash flow', shortLabel: 'Operating cash', color: BLUE },
-      { id: 'capex', label: 'Capital expenditures', shortLabel: 'Capex', color: ORANGE },
+      { id: 'capex', label: 'Capital expenditures', shortLabel: 'Capex', color: AMBER },
       { id: 'fcf', label: 'Free cash flow', shortLabel: 'Free cash flow', color: CYAN },
     ],
   },
@@ -74,7 +76,7 @@ export const FINANCIAL_STORIES: FinancialStory[] = [
     frequencies: ['annual', 'quarterly', 'ttm'],
     metrics: [
       { id: 'gross_margin', label: 'Gross margin', shortLabel: 'Gross margin', color: BLUE },
-      { id: 'operating_margin', label: 'Operating margin', shortLabel: 'Operating margin', color: ORANGE },
+      { id: 'operating_margin', label: 'Operating margin', shortLabel: 'Operating margin', color: AMBER },
       { id: 'fcf_margin', label: 'Free cash flow margin', shortLabel: 'FCF margin', color: CYAN },
     ],
   },
@@ -88,7 +90,7 @@ export const FINANCIAL_STORIES: FinancialStory[] = [
     frequencies: ['annual', 'quarterly'],
     metrics: [
       { id: 'cash_equivalents', label: 'Cash and equivalents', shortLabel: 'Cash', color: CYAN },
-      { id: 'net_debt', label: 'Net debt', shortLabel: 'Net debt', color: ORANGE },
+      { id: 'net_debt', label: 'Net debt', shortLabel: 'Net debt', color: AMBER },
       { id: 'stockholders_equity', label: "Stockholders' equity", shortLabel: 'Equity', color: BLUE },
     ],
   },
@@ -116,7 +118,7 @@ export const FINANCIAL_STORIES: FinancialStory[] = [
     metrics: [
       { id: 'trailing_pe', label: 'Trailing price / earnings', shortLabel: 'P/E', color: BLUE },
       { id: 'trailing_ps', label: 'Trailing price / sales', shortLabel: 'P/S', color: CYAN },
-      { id: 'trailing_pfcf', label: 'Trailing price / free cash flow', shortLabel: 'P/FCF', color: ORANGE },
+      { id: 'trailing_pfcf', label: 'Trailing price / free cash flow', shortLabel: 'P/FCF', color: AMBER },
     ],
   },
 ];

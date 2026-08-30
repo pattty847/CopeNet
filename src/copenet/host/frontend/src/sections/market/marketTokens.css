@@ -1,0 +1,59 @@
+/* CopeNet Market design tokens.
+ *
+ * The reusable half of the ticker-workspace redesign. Deliberately separated from the
+ * workspace's own layout so the Market dashboard — or any other Market surface — can adopt
+ * the grammar by importing this file, without importing a page.
+ *
+ * The grammar in one paragraph: surfaces are SEAMED, NOT CARDED — docked regions are divided
+ * by 1px hairlines rather than wrapped in rounded borders, and a card is reserved for content
+ * that is genuinely a discrete object. Radius is 0 for regions, 4px for controls, 6px for
+ * cards, and never more. Orange means "CopeNet accent / active tool" and nothing else:
+ * warnings are red, data series are blue, and a merely-selected control is a lifted surface
+ * rather than a colour. Every number is set in the mono face; prose is Inter; the serif is
+ * reserved for asset identity alone.
+ *
+ * These live on :root rather than on a workspace class because popovers and overlays portal
+ * to document.body, where a scoped token resolves to nothing at all. */
+
+:root {
+  --mkt-ground: #000103;
+  --mkt-canvas: #080809;
+  --mkt-dock: #0b0b0d;
+  --mkt-raise: rgba(254, 252, 244, 0.045);
+  --mkt-raise-hi: rgba(254, 252, 244, 0.08);
+  --mkt-seam: rgba(254, 252, 244, 0.06);
+  --mkt-seam-soft: rgba(254, 252, 244, 0.045);
+
+  --mkt-text: #fefcf4;
+  --mkt-soft: #cdc7bc;
+  --mkt-muted: #a29b90;
+  --mkt-dim: #6f685e;
+  --mkt-dimmer: #4a443c;
+
+  --mkt-accent: #fb9423;
+  --mkt-accent-soft: rgba(251, 148, 35, 0.13);
+  --mkt-accent-line: rgba(251, 148, 35, 0.32);
+  --mkt-up: #69c589;
+  --mkt-down: #d96d5f;
+  --mkt-info: #8fb8e8;
+
+  --mkt-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  /* Six sizes, and a reason for each. Sixteen sizes is an accumulation: the difference
+   * between 9.5 and 10 is invisible as hierarchy and visible only as inconsistency. */
+  --mkt-t-micro: 9px;   /* caps labels, provenance, axis stubs */
+  --mkt-t-label: 10px;  /* controls, keys, secondary values */
+  --mkt-t-value: 11px;  /* numbers and list rows — the working size */
+  --mkt-t-body: 13px;   /* prose meant to be read in sentences */
+  --mkt-t-hero: 17px;   /* the one number a card exists to show */
+  --mkt-t-quote: 20px;  /* live price */
+  --mkt-t-symbol: 22px; /* asset identity */
+
+  /* 4px base. 7px and 9px gaps were on no grid at all. */
+  --mkt-s1: 4px;
+  --mkt-s2: 8px;
+  --mkt-s3: 12px;
+  --mkt-s4: 16px;
+  --mkt-control: 26px;
+}
+

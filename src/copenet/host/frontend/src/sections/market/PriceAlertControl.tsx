@@ -15,6 +15,7 @@ export function PriceAlertControl({
   onStopPlacing,
   onCreate,
   onCancel,
+  disabled = false,
 }: {
   alerts: PriceAlert[];
   currentPrice: number;
@@ -26,6 +27,8 @@ export function PriceAlertControl({
   onStopPlacing: () => void;
   onCreate: (direction: 'above' | 'below', threshold: number) => Promise<boolean>;
   onCancel: (alertId: string) => Promise<void>;
+  /** Comparison rebases the price pane, so a price threshold has no meaning while it is on. */
+  disabled?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const [thresholdText, setThresholdText] = useState('');
@@ -62,24 +65,31 @@ export function PriceAlertControl({
       <button
         ref={triggerRef}
         type="button"
-        className="market-price-alert-trigger"
+        className="tw-iconbtn"
         onClick={start}
         aria-expanded={open}
+        data-active={alerts.length > 0 || open}
+        disabled={disabled}
         aria-label={alerts.length ? `${alerts.length} active price alert${alerts.length === 1 ? '' : 's'}` : 'Add price alert'}
-        title={alerts.length ? `${alerts.length} active price alert${alerts.length === 1 ? '' : 's'}` : 'Add price alert'}
-        style={{ cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6, border: `1px solid ${alerts.length ? 'rgba(251,148,35,.35)' : MM.border}`, background: alerts.length ? MM.accentSoft : '#050506', color: alerts.length ? MM.accent : MM.muted, borderRadius: 8, padding: '6px 9px', font: '600 10px Inter' }}
+        title={disabled ? 'Price alerts are price-anchored and unavailable while the chart is rebased for comparison.' : alerts.length ? `${alerts.length} active price alert${alerts.length === 1 ? '' : 's'}` : 'Add price alert'}
+        style={{ position: 'relative' }}
       >
-        <Bell size={12} />
-        <span className="market-price-alert-trigger__label">{alerts.length ? `${alerts.length} alert${alerts.length === 1 ? '' : 's'}` : 'Add alert'}</span>
-        {alerts.length > 0 && <span className="market-price-alert-trigger__count">{alerts.length}</span>}
+        <Bell size={14} />
+        {alerts.length > 0 && (
+          <span aria-hidden="true" className="tw-iconbtn__count">{alerts.length}</span>
+        )}
       </button>
       <MarketFloatingPopover anchorRef={triggerRef} open={open} onClose={close} className="market-price-alert-popover" width={320} dismissOnOutside={false}>
-        <div style={{ border: `1px solid ${MM.borderHi}`, borderRadius: 12, background: '#0b0b0d', padding: 12, boxShadow: '0 18px 36px rgba(0,0,0,.55)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-            <span style={{ font: '700 9px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>Daily-close price alert</span>
-            <button type="button" onClick={close} aria-label="Close price alerts" style={{ border: 0, background: 'transparent', color: MM.dim, cursor: 'pointer', padding: 2 }}><X size={13} /></button>
+        <div className="tw-pop">
+          <div className="tw-pop__head">
+            <div>
+              <div className="tw-pop__title">Price alert</div>
+              <div className="tw-pop__sub">Evaluated on the daily close after the morning sweep.</div>
+            </div>
+            <button type="button" className="tw-iconbtn" onClick={close} aria-label="Close price alerts"><X size={13} /></button>
           </div>
-          <button type="button" onClick={onStartPlacing} style={{ width: '100%', cursor: 'crosshair', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, border: `1px solid ${placing ? MM.accent : MM.border}`, background: placing ? MM.accentSoft : 'rgba(254,252,244,.02)', color: placing ? MM.accent : MM.textSoft, borderRadius: 8, padding: '8px 10px', font: '600 10.5px Inter' }}>
+          <div className="tw-pop__body">
+          <button type="button" className="tw-btn" data-active={placing} onClick={onStartPlacing} style={{ width: '100%', cursor: 'crosshair' }}>
             <Crosshair size={13} /> {placing ? 'Click a price level on the chart…' : 'Pick a level on the chart'}
           </button>
           {pickedPrice != null && <div role="status" style={{ marginTop: 7, color: MM.up, fontSize: 10 }}>Level selected at ${pickedPrice.toFixed(2)}. Review it below, then arm the alert.</div>}
@@ -91,19 +101,20 @@ export function PriceAlertControl({
                 onChange={(event) => setThresholdText(event.target.value)}
                 inputMode="decimal"
                 placeholder={currentPrice ? currentPrice.toFixed(2) : '0.00'}
-                style={{ minWidth: 0, border: `1px solid ${MM.border}`, background: '#050506', color: MM.text, borderRadius: 7, padding: '7px 8px', fontFamily: mono, fontSize: 11 }}
+                className="tw-input"
+                style={{ minWidth: 0 }}
               />
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 9, color: MM.dim }}>
               Trigger when
-              <select value={direction} onChange={(event) => setDirection(event.target.value as 'above' | 'below')} style={{ border: `1px solid ${MM.border}`, background: '#050506', color: MM.textSoft, borderRadius: 7, padding: '7px 8px', fontSize: 10 }}>
+              <select value={direction} onChange={(event) => setDirection(event.target.value as 'above' | 'below')} className="tw-input" style={{ fontFamily: 'Inter', fontSize: 10 }}>
                 <option value="above">Closes above</option>
                 <option value="below">Closes below</option>
               </select>
             </label>
           </div>
           {error && <div role="alert" style={{ marginTop: 7, fontSize: 9.5, color: MM.down }}>{error}</div>}
-          <button type="button" onClick={() => void save()} disabled={loading || !valid} style={{ width: '100%', marginTop: 9, cursor: loading || !valid ? 'default' : 'pointer', border: 0, borderRadius: 8, padding: '8px 10px', background: MM.accent, color: '#1a1205', font: '700 10px Inter', opacity: loading || !valid ? .45 : 1 }}>
+          <button type="button" className="tw-btn" onClick={() => void save()} disabled={loading || !valid} style={{ width: '100%', marginTop: 9, borderColor: 'var(--mkt-accent-line)', background: 'var(--mkt-accent-soft)', color: 'var(--mkt-accent)' }}>
             {loading ? (thresholdText ? 'Saving…' : 'Loading alerts…') : 'Arm one-shot alert'}
           </button>
           <div style={{ marginTop: 7, color: MM.dimmer, fontSize: 9, lineHeight: 1.4 }}>Evaluated after the unattended morning market sweep. A crossing creates a Pulse item.</div>
@@ -117,6 +128,7 @@ export function PriceAlertControl({
               ))}
             </div>
           )}
+          </div>
         </div>
       </MarketFloatingPopover>
     </div>

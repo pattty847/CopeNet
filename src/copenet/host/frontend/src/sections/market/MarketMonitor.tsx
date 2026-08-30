@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { marketTickerFromPathname, marketTickerNavigationPath } from '../../lib/appSectionRouting';
 import { MarketDashboard } from './MarketDashboard';
-import { TickerDetailPage } from './TickerDetailPage';
+import { TickerWorkspace } from './TickerWorkspace';
 import { useMarketWatchlist } from './useMarketMonitorData';
 
 export function MarketMonitor() {
@@ -22,9 +22,10 @@ export function MarketMonitor() {
 
   if (activeTicker) {
     return (
-      <TickerDetailPage
+      <TickerWorkspace
         symbol={activeTicker}
         onClose={() => navigateTicker(null)}
+        onNavigate={(next) => navigateTicker(next)}
         watchlist={watchlist}
       />
     );

@@ -32,7 +32,7 @@ import type { PriceAlert } from './types';
 import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
 import type { ChartComparisonLine } from './chartComparison';
-import type { InsiderDisplayMode } from './ChartEvidenceControl';
+import type { InsiderDisplayMode } from './chartRanges';
 import { replaceComparisonSeries } from './chartComparisonSeries';
 import {
   hasRenderableFinancialOverlay,
@@ -397,6 +397,8 @@ export function CandleChart({
   comparisonLines = [],
   insiderDisplayMode = 'individual',
   logScale = false,
+  showVolume = true,
+  onHoverBar,
 }: {
   bars: Ohlcv[];
   events?: ChartEvent[];
@@ -417,6 +419,11 @@ export function CandleChart({
   draftAlertPrice?: number | null;
   alertPlacementActive?: boolean;
   onAlertPriceSelected?: (price: number) => void;
+  /** Volume is an ordinary plot the operator can remove, not a permanent fixture. */
+  showVolume?: boolean;
+  /** Crosshair bar under the pointer, or null when the pointer leaves the chart. Lets the
+   *  legend live ON the chart instead of in a metadata strip wrapped around it. */
+  onHoverBar?: (bar: Ohlcv | null) => void;
   comparisonMode?: boolean;
   comparisonLines?: ChartComparisonLine[];
   insiderDisplayMode?: InsiderDisplayMode;
@@ -440,6 +447,7 @@ export function CandleChart({
   const futureMarkersRef = useRef<SeriesMarker<Time>[]>([]);
   const alertPlacementRef = useRef(alertPlacementActive);
   const onAlertPriceSelectedRef = useRef(onAlertPriceSelected);
+  const onHoverBarRef = useRef(onHoverBar);
   const insiderDisplayModeRef = useRef(insiderDisplayMode);
   const rafRef = useRef<number | null>(null);
   evidenceRef.current = evidence;
@@ -447,6 +455,7 @@ export function CandleChart({
   barsRef.current = bars;
   alertPlacementRef.current = alertPlacementActive;
   onAlertPriceSelectedRef.current = onAlertPriceSelected;
+  onHoverBarRef.current = onHoverBar;
   insiderDisplayModeRef.current = insiderDisplayMode;
   useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration, draftAlertPrice);
 
@@ -625,6 +634,18 @@ export function CandleChart({
     chart.priceScale('left').applyOptions({ scaleMargins: { top: 0.45, bottom: 0.2 }, visible: false });
     const markers = createSeriesMarkers(candle, []);
 
+    // Feed the on-chart legend. Reading through refs keeps this subscription off the
+    // chart-rebuild dependency list — the chart is torn down and recreated on height and
+    // theme changes, and re-subscribing per render would leak handlers.
+    chart.subscribeCrosshairMove((param) => {
+      if (param.time == null) {
+        onHoverBarRef.current?.(null);
+        return;
+      }
+      const time = param.time as number;
+      onHoverBarRef.current?.(barsRef.current.find((bar) => bar.t === time) ?? null);
+    });
+
     // Click a marker day → popup with everything that hit that day (who, $, filing link).
     chart.subscribeClick((param) => {
       if (!param.point) {
@@ -705,6 +726,25 @@ export function CandleChart({
       comparisonRefs.current = [];
       markersRef.current = null;
     };
+    // Deliberately empty: the chart is created once and mutated thereafter. Rebuilding it on
+    // every height change threw away zoom and pan each time the research drawer resized.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Height is an option, not a reason to rebuild. The SEC cluster boxes are absolutely
+  // positioned at priceToCoordinate pixels, so they have to be recomputed against the new
+  // pane geometry — and only after the chart has actually repainted at the new size.
+  useEffect(() => {
+    const chart = chartRef.current;
+    const container = containerRef.current;
+    if (!chart || !container) return;
+    // resize() rather than applyOptions({ height }) — the options path does not actually
+    // re-lay-out the panes, so the chart kept its construction height while its region
+    // shrank underneath it.
+    chart.resize(container.clientWidth, height);
+    transformKeyRef.current = '';
+    const frame = requestAnimationFrame(() => syncRef.current());
+    return () => cancelAnimationFrame(frame);
   }, [height]);
 
   // price-scale mode (runs after creation; also re-applies when the chart is rebuilt on height change)
@@ -722,7 +762,7 @@ export function CandleChart({
     } catch {
       /* private mode — preference just doesn't persist */
     }
-  }, [logScale, height]);
+  }, [logScale, chartGeneration]);
 
   // update data
   useEffect(() => {
@@ -745,7 +785,10 @@ export function CandleChart({
     );
     chart.timeScale().fitContent();
     recomputeRef.current();
-  }, [bars, events, evidence]);
+    // chartGeneration: a height change tears the chart down and builds a new one, so the
+    // data has to be written again. Without this the chart comes back blank — latent while
+    // height was effectively constant, immediate once the layout can resize it.
+  }, [bars, events, evidence, chartGeneration]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -761,14 +804,14 @@ export function CandleChart({
         ? { type: 'custom', minMove: 0.01, formatter: (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%` }
         : { type: 'price', precision: pricePrecision, minMove: 10 ** -pricePrecision },
     });
-    volume.applyOptions({ visible: !comparisonMode });
+    volume.applyOptions({ visible: !comparisonMode && showVolume });
     comparisonRefs.current = replaceComparisonSeries(
       chart,
       comparisonRefs.current,
       comparisonMode ? comparisonLines : [],
     );
     chart.timeScale().fitContent();
-  }, [comparisonMode, comparisonLines, chartGeneration]);
+  }, [comparisonMode, comparisonLines, showVolume, chartGeneration]);
 
   // Overlay changes must not reset the operator's zoom. Underlying observations
   // stay periodic; the step is explicitly an availability-date visualization.
@@ -809,7 +852,7 @@ export function CandleChart({
       financialSegmentRefs.current.push(series);
     }
     recomputeRef.current();
-  }, [financialOverlay, financialOverlayKind]);
+  }, [financialOverlay, financialOverlayKind, chartGeneration]);
 
   useEffect(() => {
     const hasValues = !comparisonMode && financialOverlayKind != null
@@ -852,7 +895,7 @@ export function CandleChart({
     // chart redraws, so invalidate and let the next frame reposition against it.
     transformKeyRef.current = '';
     requestAnimationFrame(() => syncRef.current());
-  }, [comparisonMode, financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted]);
+  }, [comparisonMode, financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted, chartGeneration]);
 
   const popupNet = dayPopup
     ? dayPopup.items.reduce(

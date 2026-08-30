@@ -1,0 +1,895 @@
+@import './marketTokens.css';
+
+/* CopeNet Market — ticker workspace visual grammar.
+ *
+ * The frame is SEAMED, NOT CARDED: docked regions are separated by 1px hairlines rather
+ * than surrounded by rounded borders. A docked instrument has seams; a dashboard has cards.
+ * Radius is 0 for regions and panes, 4px for controls, 6px for genuinely discrete objects.
+ * Orange means "CopeNet accent / active tool" and nothing else — data series carry their own
+ * hues, and selected-but-inactive states are a lifted surface rather than a colour. */
+
+.tw {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mkt-ground);
+  color: var(--mkt-text);
+}
+
+/* ---------------------------------------------------------------- asset bar */
+
+.tw-assetbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  height: 50px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.tw-assetbar__identity {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.tw-assetbar__symbol {
+  margin: 0;
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-symbol);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--mkt-text);
+}
+
+/* Cormorant on the company name is CopeNet's signature. It is reserved for asset
+ * identity alone — it never appears on a label, a control, or a number. */
+.tw-assetbar__name {
+  overflow: hidden;
+  max-width: 30ch;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px;
+  color: var(--mkt-dim);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tw-assetbar__kind {
+  padding: 2px 6px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  color: var(--mkt-dim);
+  font: 600 9px Inter;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tw-assetbar__pending {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border: 1px solid var(--mkt-accent-line);
+  border-radius: 4px;
+  color: var(--mkt-accent);
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-micro);
+}
+
+.tw-assetbar__spacer { flex: 1 1 auto; }
+
+.tw-assetbar__quote {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  font-family: var(--mkt-mono);
+}
+
+.tw-assetbar__price { font-size: var(--mkt-t-quote); color: var(--mkt-text); }
+/* The change % is what an operator actually scans, so it is not the smallest thing here. */
+.tw-assetbar__change { font-size: var(--mkt-t-body); }
+
+/* A held position changes how every other number on the page reads, so it is one of the
+ * few things that earns permanent pixels — but only when the position exists. */
+.tw-position-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--mkt-control);
+  padding: 0 9px;
+  border: 1px solid rgba(143, 184, 232, 0.26);
+  border-radius: 4px;
+  background: rgba(143, 184, 232, 0.07);
+  color: var(--mkt-info);
+  cursor: pointer;
+  font: 600 10px Inter;
+}
+
+.tw-position-chip__pnl { font-family: var(--mkt-mono); }
+.tw-position-chip:hover { background: rgba(143, 184, 232, 0.13); }
+
+/* ------------------------------------------------------------------ controls */
+
+.tw-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: var(--mkt-control);
+  padding: 0 9px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-muted);
+  cursor: pointer;
+  font: 600 10px Inter;
+  white-space: nowrap;
+}
+
+.tw-btn:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.tw-btn:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+.tw-btn[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+/* Active tool = orange. This is the only place orange is allowed to mean "on". */
+.tw-btn[aria-pressed='true'],
+.tw-btn[data-active='true'] {
+  border-color: var(--mkt-accent-line);
+  background: var(--mkt-accent-soft);
+  color: var(--mkt-accent);
+}
+
+.tw-btn--sm { height: 20px; padding: 0 7px; font-size: var(--mkt-t-micro); }
+
+.tw-iconbtn {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-muted);
+  cursor: pointer;
+}
+
+.tw-iconbtn:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+.tw-iconbtn:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+.tw-iconbtn[aria-pressed='true'],
+.tw-iconbtn[data-active='true'] {
+  border-color: var(--mkt-accent-line);
+  background: var(--mkt-accent-soft);
+  color: var(--mkt-accent);
+}
+.tw-iconbtn[disabled] { opacity: 0.32; cursor: not-allowed; }
+
+/* One badge, one definition. It was duplicated between the toolbar and the alert control. */
+.tw-iconbtn__count {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  min-width: 12px;
+  height: 12px;
+  padding: 0 3px;
+  border-radius: 999px;
+  background: var(--mkt-accent);
+  color: #1a1205;
+  font: 700 9px Inter;
+  line-height: 12px;
+  text-align: center;
+}
+
+.tw-input {
+  height: var(--mkt-control);
+  padding: 0 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: #050506;
+  color: var(--mkt-text);
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-value);
+  outline: none;
+}
+
+.tw-input:focus-visible { border-color: var(--mkt-accent-line); }
+
+/* A segmented run of textual choices — intervals and ranges keep text because that is the
+ * conventional grammar and an icon for "3Y" would be a puzzle. Selection is a lifted
+ * surface, not a colour, so the toolbar has exactly one coloured thing at a time. */
+.tw-segment {
+  display: inline-flex;
+  align-items: center;
+  gap: 1px;
+  height: var(--mkt-control);
+  padding: 2px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+.tw-segment > button {
+  height: 20px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 10px Inter;
+}
+
+.tw-segment > button:hover { color: var(--mkt-soft); }
+.tw-segment > button[aria-pressed='true'] {
+  background: var(--mkt-raise-hi);
+  color: var(--mkt-text);
+}
+.tw-segment > button:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: -1px; }
+
+.tw-sep {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 18px;
+  background: var(--mkt-seam);
+}
+
+/* --------------------------------------------------------------------- body */
+
+.tw-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.tw-main {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* ------------------------------------------------------------------ toolbar */
+
+.tw-toolbar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  height: 38px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.tw-toolbar__spacer { flex: 1 1 auto; }
+
+/* ------------------------------------------------------------------- stage */
+
+.tw-stage {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mkt-canvas);
+}
+
+/* Chart state belongs ON the chart, not in strips wrapped around it. */
+.tw-legend {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 4;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  pointer-events: none;
+}
+
+.tw-legend__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-family: var(--mkt-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.tw-legend__symbol {
+  color: var(--mkt-soft);
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.tw-legend__ohlc { color: var(--mkt-dim); }
+.tw-legend__ohlc b { font-weight: 500; color: var(--mkt-soft); }
+
+.tw-legend__plot {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  pointer-events: auto;
+}
+
+.tw-legend__swatch {
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.tw-legend__plot button {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mkt-dimmer);
+  cursor: pointer;
+}
+
+.tw-legend__plot button:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+
+/* Data-quality caveats qualify every trend claim on the page, so they surface on the chart
+ * itself when triggered — and are completely silent otherwise. */
+.tw-warnband {
+  position: absolute;
+  right: 10px;
+  bottom: 8px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 9px;
+  border: 1px solid rgba(217, 109, 95, 0.28);
+  border-radius: 4px;
+  background: rgba(20, 8, 6, 0.9);
+  color: var(--mkt-down);
+  font: 500 10px Inter;
+}
+
+.tw-stage__empty {
+  display: grid;
+  height: 100%;
+  place-items: center;
+  color: var(--mkt-dim);
+  font: 500 11px Inter;
+}
+
+/* ------------------------------------------------------------------ drawer */
+
+.tw-drawer {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  min-height: 0;
+  border-top: 1px solid var(--mkt-seam);
+  background: var(--mkt-dock);
+}
+
+.tw-drawer__tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 8px 0 4px;
+  height: 33px;
+}
+
+.tw-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 33px;
+  padding: 0 11px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 10px Inter;
+}
+
+.tw-tab:hover { color: var(--mkt-soft); }
+.tw-tab[aria-selected='true'] { color: var(--mkt-text); }
+
+/* The active tab is marked by a seam, not a filled pill — it reads as the region below
+ * being attached to this label, which is what a dock is. */
+.tw-tab[aria-selected='true']::after {
+  content: '';
+  position: absolute;
+  right: 8px;
+  bottom: 0;
+  left: 8px;
+  height: 2px;
+  background: var(--mkt-text);
+}
+
+.tw-tab:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: -2px; }
+
+/* Warnings have to survive the collapsed drawer or a half-broken workspace looks healthy. */
+.tw-tab__badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: rgba(217, 109, 95, 0.18);
+  color: var(--mkt-down);
+  font: 700 9px Inter;
+}
+
+.tw-drawer__panel {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 14px 16px;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.tw-drawer__panel::-webkit-scrollbar { width: 9px; }
+.tw-drawer__panel::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(254, 252, 244, 0.11);
+}
+
+/* Snap presets rather than a free drag: a drag gets used twice and then never again, has no
+ * keyboard path, and resizes the chart canvas on every frame. `full` deliberately keeps a
+ * live strip of chart — losing the price entirely while reading a filing reads as a
+ * different page, not a taller drawer. */
+.tw-drawer[data-snap='collapsed'] { height: auto; }
+.tw-drawer[data-snap='half'] { height: 40%; }
+.tw-drawer[data-snap='full'] { height: 68%; }
+
+@keyframes tw-spin { to { transform: rotate(360deg); } }
+.tw-spin { animation: tw-spin 0.9s linear infinite; }
+
+/* --------------------------------------------------------------- symbol rail */
+
+.tw-rail {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  width: 186px;
+  min-height: 0;
+  border-right: 1px solid var(--mkt-seam);
+  background: var(--mkt-dock);
+  transition: width 0.14s ease;
+}
+
+.tw-rail[data-collapsed='true'] { width: 40px; }
+.tw-rail[data-collapsed='true'] .tw-rail__group,
+.tw-rail[data-collapsed='true'] .tw-rail__chg,
+.tw-rail[data-collapsed='true'] .tw-rail__empty { display: none; }
+.tw-rail[data-collapsed='true'] .tw-rail__row { justify-content: center; padding: 3px 2px; }
+.tw-rail[data-collapsed='true'] .tw-rail__sym { flex: 0 0 auto; font-size: var(--mkt-t-micro); text-align: center; }
+
+.tw-rail__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  height: 33px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  color: var(--mkt-dim);
+  font: 600 9px Inter;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.tw-rail[data-collapsed='true'] .tw-rail__head { justify-content: center; padding: 0; }
+
+.tw-rail__list {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 4px 0 8px;
+}
+
+.tw-rail__list::-webkit-scrollbar { width: 8px; }
+.tw-rail__list::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(254, 252, 244, 0.1);
+}
+
+.tw-rail__group {
+  padding: 9px 9px 4px;
+  color: var(--mkt-dimmer);
+  font: 650 9px Inter;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.tw-rail__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 9px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--mkt-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tw-rail__row:hover { background: var(--mkt-raise); }
+.tw-rail__row[data-current='true'] {
+  border-left-color: var(--mkt-accent);
+  background: var(--mkt-accent-soft);
+}
+.tw-rail__row[data-cursor='true'] { background: var(--mkt-raise-hi); }
+.tw-rail__row:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: -2px; }
+
+.tw-rail__sym {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font-family: var(--mkt-mono);
+  font-size: 10px;
+  color: var(--mkt-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tw-rail__row[data-current='true'] .tw-rail__sym { color: var(--mkt-text); }
+
+.tw-rail__chg {
+  flex: 0 0 auto;
+  font-family: var(--mkt-mono);
+  font-size: 10px;
+}
+
+.tw-rail__empty {
+  padding: 10px 9px;
+  color: var(--mkt-dimmer);
+  font: 400 10px Inter;
+  line-height: 1.5;
+}
+
+/* Type-to-switch: any letter outside an input opens this, pinned to the chart corner.
+ * Bloomberg and TradingView both train this reflex; it costs one keystroke. */
+.tw-jump {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 12;
+  width: 264px;
+  border: 1px solid var(--mkt-accent-line);
+  border-radius: 4px;
+  background: #0b0b0d;
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6);
+}
+
+.tw-jump input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: transparent;
+  color: var(--mkt-text);
+  font-family: var(--mkt-mono);
+  font-size: 13px;
+  letter-spacing: 0.06em;
+  outline: none;
+  text-transform: uppercase;
+}
+
+.tw-jump__hits { max-height: 232px; overflow-y: auto; }
+
+.tw-jump__hit {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-muted);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tw-jump__hit[data-cursor='true'] { background: var(--mkt-accent-soft); }
+.tw-jump__hit b { font-family: var(--mkt-mono); font-size: 11px; font-weight: 500; color: var(--mkt-text); }
+.tw-jump__hit span {
+  overflow: hidden;
+  flex: 1 1 auto;
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tw-jump__hit small { color: var(--mkt-dimmer); font-size: 9px; }
+
+.tw-jump__hint {
+  padding: 5px 10px;
+  border-top: 1px solid var(--mkt-seam);
+  color: var(--mkt-dimmer);
+  font: 400 9px Inter;
+}
+
+/* ----------------------------------------------------------------- popovers */
+
+.tw-pop {
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-dock);
+  box-shadow: 0 20px 44px rgba(0, 0, 0, 0.62);
+}
+
+.tw-pop__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 11px 12px 9px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+}
+
+.tw-pop__title { color: var(--mkt-text); font: 650 11px Inter; }
+.tw-pop__sub { margin-top: 3px; color: var(--mkt-dim); font: 400 10px Inter; line-height: 1.45; }
+.tw-pop__body { padding: 10px 12px 12px; }
+.tw-pop__section + .tw-pop__section { margin-top: 12px; }
+
+.tw-pop__label {
+  margin-bottom: 6px;
+  color: var(--mkt-dim);
+  font: 650 9px Inter;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tw-pop__note { margin: 8px 0 0; color: var(--mkt-dimmer); font-size: 10px; line-height: 1.5; }
+
+.tw-pop__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 6px 0;
+}
+
+.tw-pop__row + .tw-pop__row { border-top: 1px solid var(--mkt-seam-soft); }
+
+.tw-choices { display: flex; flex-wrap: wrap; gap: 5px; }
+
+.tw-choices button {
+  height: 24px;
+  padding: 0 9px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 10px Inter;
+}
+
+.tw-choices button:hover { color: var(--mkt-soft); }
+.tw-choices button[aria-pressed='true'] {
+  border-color: var(--mkt-seam);
+  background: var(--mkt-raise-hi);
+  color: var(--mkt-text);
+}
+
+.tw-switch {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  cursor: pointer;
+  color: var(--mkt-soft);
+  font: 500 10px Inter;
+}
+
+.tw-switch small { display: block; margin-top: 2px; color: var(--mkt-dim); font-size: 10px; }
+.tw-switch input { accent-color: var(--mkt-accent); }
+
+/* ------------------------------------------------------------------ drawer content */
+
+.tw-grid {
+  display: grid;
+  gap: 10px;
+  grid-template-columns: repeat(auto-fit, minmax(202px, 1fr));
+}
+
+/* Two or three small tiles should stay small. The elastic grid stretched a pair of
+ * insider-net figures across 1600px of dock, which is space spent on nothing. */
+.tw-grid--tight {
+  grid-template-columns: repeat(auto-fit, minmax(196px, 268px));
+  justify-content: start;
+}
+
+.tw-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 11px 12px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-raise);
+}
+
+.tw-card__title {
+  color: var(--mkt-dim);
+  font: 650 9px Inter;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.tw-kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.tw-kv__k { color: var(--mkt-dim); font-size: 10px; }
+.tw-kv__v { font-family: var(--mkt-mono); font-size: 10px; color: var(--mkt-soft); text-align: right; }
+
+/* A 52-week range is a POSITION WITHIN A BAND. Printing "$206.96 – $404.47" throws away
+ * the only thing that made it worth showing. */
+.tw-band { display: flex; flex-direction: column; gap: 5px; }
+
+.tw-band__track {
+  position: relative;
+  height: 4px;
+  border-radius: 2px;
+  background: linear-gradient(90deg, rgba(217, 109, 95, 0.3), rgba(254, 252, 244, 0.09) 50%, rgba(105, 197, 137, 0.3));
+}
+
+.tw-band__mark {
+  position: absolute;
+  top: -3px;
+  width: 2px;
+  height: 10px;
+  border-radius: 1px;
+  background: var(--mkt-text);
+  transform: translateX(-1px);
+}
+
+.tw-band__ends {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mkt-mono);
+  font-size: 9px;
+  color: var(--mkt-dimmer);
+}
+
+.tw-meter { display: flex; flex-direction: column; gap: 4px; }
+
+.tw-meter__track {
+  position: relative;
+  height: 3px;
+  border-radius: 2px;
+  background: rgba(254, 252, 244, 0.07);
+  overflow: hidden;
+}
+
+.tw-meter__fill { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+
+/* Performance across horizons is one shape, not seven rows. */
+.tw-returns {
+  display: grid;
+  gap: 1px;
+  grid-template-columns: repeat(7, minmax(56px, 82px));
+  justify-content: start;
+  width: fit-content;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  overflow: hidden;
+  background: var(--mkt-seam);
+}
+
+.tw-returns__cell {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 6px;
+  background: var(--mkt-dock);
+  text-align: center;
+}
+
+.tw-returns__k { color: var(--mkt-dimmer); font: 650 9px Inter; letter-spacing: 0.1em; text-transform: uppercase; }
+.tw-returns__v { font-family: var(--mkt-mono); font-size: 11px; }
+
+.tw-spark { display: block; width: 100%; height: 28px; overflow: visible; }
+
+.tw-empty {
+  padding: 26px 0;
+  color: var(--mkt-dimmer);
+  font: 400 11px Inter;
+  line-height: 1.6;
+  text-align: center;
+}
+
+.tw-plotrow {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 10px Inter;
+  text-align: left;
+}
+
+.tw-plotrow:hover { background: var(--mkt-raise); }
+.tw-plotrow[data-active='true'] { border-color: rgba(143, 184, 232, 0.34); background: rgba(143, 184, 232, 0.08); }
+.tw-plotrow__val { margin-left: auto; font-family: var(--mkt-mono); font-size: 10px; color: var(--mkt-dim); }
+
+.tw-evidence__row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tw-evidence__row:hover { border-left-color: var(--mkt-accent-line); background: var(--mkt-raise); }
+
+.tw-tag {
+  flex: 0 0 auto;
+  min-width: 52px;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font: 600 9px Inter;
+  letter-spacing: 0.07em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+/* The toolbar wraps rather than scrolling. A horizontally scrolling toolbar was the thing
+ * this redesign set out to remove; wrapping keeps every control reachable at any width
+ * without reintroducing a rail nobody can see the end of. */
+@media (max-width: 1080px) {
+  .tw-toolbar {
+    height: auto;
+    min-height: 38px;
+    flex-wrap: wrap;
+    padding: var(--mkt-s1) var(--mkt-s2);
+    gap: 6px;
+  }
+
+  .tw-toolbar__spacer { flex-basis: 100%; height: 0; }
+}
+
+@media (max-width: 900px) {
+  /* Touch has no `/` and no j/k, so the rail's job moves to the asset bar's search button. */
+  .tw-rail { display: none; }
+
+  .tw-assetbar {
+    height: auto;
+    padding: var(--mkt-s2) var(--mkt-s3);
+    flex-wrap: wrap;
+    gap: var(--mkt-s2);
+  }
+
+  .tw-assetbar__name { display: none; }
+  .tw-drawer[data-snap='half'] { height: 52%; }
+  .tw-jump { left: var(--mkt-s2); right: var(--mkt-s2); width: auto; }
+}
