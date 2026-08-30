@@ -12,7 +12,7 @@ CopeNet is an agent harness. It provides:
 - operator-side stores for Pulse, memory, messaging routes, profile, and external-app credentials
 - a React operator workspace UI with a Home dashboard and agent console
 - a CopeNet-native harness layer that normalizes provider execution and tool capability work
-- An evergrowing stock market cockpick and terminal with agent integration
+- An ever-growing stock market cockpit and terminal with agent integration
 
 The current product direction is:
 
@@ -275,7 +275,7 @@ Working code that only exists in the working tree has no rewind point. Treat com
 
 ## Verification Expectations
 
-There are a large amount of tests all over the project you should use, and maintain. 
+There are a large amount of tests all over the project you should use, and maintain.
 
 Common checks:
 
@@ -292,7 +292,7 @@ Common checks:
 - Prefer `http://127.0.0.1:17123/` for checks running on the host Mac.
 - The private tailnet URL is also valid when the current browser is already using
   it or remote-device behavior is what needs verification. Resolve the current
-  address with `tailscale ip -4`; do not hard-code a personal hostname or IP in 
+  address with `tailscale ip -4`; do not hard-code a personal hostname or IP in
   code, tests, or documentation.
 - Launch the tailnet bind with
   `COPNET_HOST=tailscale uv run --env-file .copenet.env copenet`. The root
