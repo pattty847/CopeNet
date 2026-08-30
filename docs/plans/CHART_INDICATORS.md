@@ -242,6 +242,20 @@ it does resize the panes either side of it, and a pane above resizing moves ever
 pane below it — whose own observers then fire. That covers separator drags, chart
 resizes and pane add/remove with no polling.
 
+Two details that are easy to get wrong, both of which shipped broken once:
+
+- **Anchor to the plot area, not the pane element.** `getHTMLElement()` returns
+  the pane ROW, which spans the full chart width including its price scale.
+  Right-aligning controls to it puts them on top of the axis labels — present in
+  the DOM, unreadable on screen. The plot area is found as the widest canvas
+  inside the pane, which is robust to how the library orders its layers and stays
+  correct when a left-hand axis appears for a financial overlay.
+- **An element with `pointer-events: none` never matches `:hover`.** The pane-head
+  strip must not receive pointer events, or it swallows the crosshair and the
+  separator drag across the top of every pane — so `.tw-panehead:hover` matched
+  only when the pointer was already on the (invisible) buttons. Controls reveal on
+  `.tw-stage:hover` instead, and stay lit while their own popover is open.
+
 Double-click-to-open-settings was considered and rejected: an invisible affordance
 where a visible gear is already one click away in three places.
 

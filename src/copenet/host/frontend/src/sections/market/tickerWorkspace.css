@@ -1183,7 +1183,6 @@
 
 .tw-panehead {
   position: absolute;
-  left: 0;
   z-index: 5;
   display: flex;
   align-items: center;
@@ -1208,13 +1207,18 @@
 .tw-panehead__label { color: var(--mkt-muted); font-family: Inter, sans-serif; }
 .tw-panehead__value { color: var(--mkt-soft); }
 
-/* The controls stay faint until the pane is hovered. Two lit icons on every pane is chrome
- * competing with the data the pane exists to show. */
-.tw-panehead .tw-ind-controls { pointer-events: auto; opacity: 0.3; transition: opacity 120ms ease; }
-.tw-panehead:hover .tw-ind-controls,
-.tw-panehead:focus-within .tw-ind-controls { opacity: 1; }
+/* Controls appear while the pointer is anywhere on the chart, and are invisible otherwise.
+ * Two lit icons on every pane is chrome competing with the data the pane exists to show.
+ *
+ * Revealing on `.tw-stage:hover` rather than on the strip's own :hover is not a stylistic
+ * choice. The strip carries `pointer-events: none` so it cannot swallow the crosshair or the
+ * pane-separator drag — and an element with pointer-events: none never matches :hover, so
+ * `.tw-panehead:hover` matched only when the pointer was already on top of the (invisible)
+ * buttons. Hovering the chart is also simply where the hand already is. */
+.tw-ind-controls { pointer-events: auto; opacity: 0; transition: opacity 120ms ease; }
+.tw-stage:hover .tw-ind-controls { opacity: 1; }
 
-/* Same treatment for a price overlay's controls on the top-left legend stack. */
-.tw-legend__plot .tw-ind-controls { pointer-events: auto; opacity: 0; transition: opacity 120ms ease; }
-.tw-legend:hover .tw-ind-controls,
-.tw-legend__plot:focus-within .tw-ind-controls { opacity: 1; }
+/* Keep a control visible while its own popover is open, however far the pointer travels to
+ * reach the form. Without this the gear fades out from under an open settings panel. */
+.tw-ind-controls:focus-within,
+.tw-ind-controls:has([data-active='true']) { opacity: 1; }

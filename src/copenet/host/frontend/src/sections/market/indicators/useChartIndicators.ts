@@ -9,9 +9,15 @@ import type { IChartApi } from 'lightweight-charts';
 import type { ComputedIndicator } from './compute';
 import { IndicatorChartLayer } from './render';
 
-/** Where one indicator's pane sits, in coordinates relative to the chart wrapper. */
+/** Where one indicator's PLOT AREA sits, in coordinates relative to the chart wrapper.
+ *
+ *  Deliberately the plot area and not the pane element. The pane spans the full chart width
+ *  including its price scale, so right-aligning controls to it puts them on top of the axis
+ *  labels — visible in the DOM, unreadable on screen. `left`/`width` therefore describe the
+ *  canvas; `top`/`height` still describe the pane. */
 export interface IndicatorPaneRect {
   instanceId: string;
+  left: number;
   top: number;
   height: number;
   width: number;
@@ -52,7 +58,14 @@ export function useChartIndicators(
     const origin = container.getBoundingClientRect();
     const next = layer.paneElements().map(({ instanceId, element }) => {
       const box = element.getBoundingClientRect();
-      return { instanceId, top: box.top - origin.top, height: box.height, width: box.width };
+      const plot = plotArea(element) ?? box;
+      return {
+        instanceId,
+        left: plot.left - origin.left,
+        top: box.top - origin.top,
+        height: box.height,
+        width: plot.width,
+      };
     });
     // Replace only on a real change. This runs from a ResizeObserver, and setting a fresh
     // array every callback would re-render the overlay on every frame of a pane drag.
@@ -84,11 +97,25 @@ export function useChartIndicators(
   return paneRects;
 }
 
+/** The pane's drawing surface, as distinct from the pane row that also holds its price
+ *  scales. Identified as the WIDEST canvas inside the pane rather than by position, so it
+ *  does not depend on how Lightweight Charts orders or nests its layers — and it stays
+ *  correct when a left-hand axis appears for a financial overlay. */
+function plotArea(paneElement: HTMLElement): DOMRect | null {
+  let widest: DOMRect | null = null;
+  for (const canvas of paneElement.querySelectorAll('canvas')) {
+    const rect = canvas.getBoundingClientRect();
+    if (!widest || rect.width > widest.width) widest = rect;
+  }
+  return widest;
+}
+
 function sameRects(left: IndicatorPaneRect[], right: IndicatorPaneRect[]): boolean {
   if (left.length !== right.length) return false;
   return left.every((rect, i) => {
     const other = right[i];
     return rect.instanceId === other.instanceId
+      && Math.abs(rect.left - other.left) < 0.5
       && Math.abs(rect.top - other.top) < 0.5
       && Math.abs(rect.height - other.height) < 0.5
       && Math.abs(rect.width - other.width) < 0.5;

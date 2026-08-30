@@ -32,10 +32,11 @@ export function IndicatorPaneControls({
           <div
             key={rect.instanceId}
             className="tw-panehead"
-            // The row spans the pane so its label sits left and its controls sit right.
-            // pointerEvents stays off on the strip itself — a transparent band across the
-            // top of every pane would otherwise swallow crosshair and drag interactions.
-            style={{ top: rect.top + 3, width: rect.width }}
+            // Spans the pane's PLOT area — not the pane row, which also contains the price
+            // scale and would put the controls on top of the axis labels.
+            // pointerEvents stays off on the strip itself: a transparent band across the top
+            // of every pane would otherwise swallow crosshair and separator-drag interaction.
+            style={{ left: rect.left, top: rect.top + 3, width: rect.width }}
           >
             <span className="tw-panehead__legend">
               <span className="tw-legend__swatch" style={{ background: legendColor(indicator) }} />
