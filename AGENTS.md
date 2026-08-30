@@ -261,15 +261,6 @@ For current behavior, assume:
   See `docs/plans/CHART_INDICATORS.md`.
 - Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`.
 
-## Safe Collaboration Rules
-
-1. Read the file you are changing first.
-2. Prefer one subsystem per change when possible.
-3. Do not revert unrelated user edits.
-4. Do not swallow provider or storage errors silently.
-5. Verify protocol changes against both UI and client expectations.
-6. If you touch session semantics, check the whole flow: create, send, list, resolve, archive, history.
-
 ## Version Control & Commit Discipline
 
 Working code that only exists in the working tree has no rewind point. Treat committing as part of finishing work, not an afterthought.
@@ -282,29 +273,9 @@ Working code that only exists in the working tree has no rewind point. Treat com
 - **Before pushing to the public remote:** sweep for secret-shaped strings and run at least a syntax/compile smoke check. Prefer branching for risky or reversible-only-with-effort changes; direct commits to `main` are fine for docs and captured-state checkpoints.
 - **Group deletions/renames with their rationale** in the same commit (e.g. removing a superseded module in the commit that replaces it), so history reads as a story rather than a diff dump.
 
-## Parallel Review
-
-CopeNet contributors should actively use parallel review capacity when it helps de-risk a change or speed up investigation.
-
-- Assume the team has access to two additional AI reviewers beyond the current coding agent.
-- Use those extra reviewers for fresh eyes on traces, provider behavior, UI/UX flows, or patch plans when the problem feels ambiguous or suspicious.
-- Treat outside-model reviews as advisory, not authoritative. Always verify claims against CopeNet code, traces, and runtime behavior before acting.
-- Prefer giving parallel reviewers tightly scoped questions, concrete file paths, and exact run bundle directories instead of broad “figure it out” prompts.
-- Record durable findings in the relevant canonical document or `docs/plans/ROADMAP.md` so the team can build on them rather than re-discovering them.
-
-### AI Collaboration
-
-Codex, Claude, and Gemini are all capable full-stack collaborators. Do not assign permanent frontend, backend, product, or architecture ownership based on the model name. The agent actively leading a task owns its implementation, integration, and verification unless the human explicitly assigns those responsibilities differently.
-
-- The human may mostly act as prompt/orchestration support while juggling work and life. The active lead agent is expected to carry autonomous project-management load: propose the next work, use available collaborators when helpful, and keep progress moving without repeated reminders.
-- The lead coding agent should default toward action, implementation, debugging, and cleanup. Do not sit idle waiting for the human to remember available help, enumerate every next step, or manually orchestrate every lane.
-- Choose collaborators by the task at hand, current context, and available tools. Familiar strengths can inform an assignment, but they are preferences rather than ownership boundaries.
-- When parallel work would materially accelerate delivery, give collaborators bounded, mergeable assignments with explicit files, goals, and constraints. 
-- Treat every collaborator's output as useful but advisory until it is verified against the current code, traces, tests, and runtime behavior.
-
 ## Verification Expectations
 
-There is not a deep automated suite yet, so manual and targeted verification matter.
+There are a large amount of tests all over the project you should use, and maintain. 
 
 Common checks:
 
@@ -321,7 +292,7 @@ Common checks:
 - Prefer `http://127.0.0.1:17123/` for checks running on the host Mac.
 - The private tailnet URL is also valid when the current browser is already using
   it or remote-device behavior is what needs verification. Resolve the current
-  address with `tailscale ip -4`; do not hard-code a personal hostname or IP in
+  address with `tailscale ip -4`; do not hard-code a personal hostname or IP in 
   code, tests, or documentation.
 - Launch the tailnet bind with
   `COPNET_HOST=tailscale uv run --env-file .copenet.env copenet`. The root
@@ -371,21 +342,6 @@ Retention: 8 MiB per run (then a single `trace_truncated` row), oldest-first pru
 Full event reference: [docs/TRACING.md](docs/TRACING.md)
 Debugging runbook: [docs/DEBUGGING.md](docs/DEBUGGING.md)
 Open trace and observability work: [docs/plans/ROADMAP.md](docs/plans/ROADMAP.md)
-
-**Triage order for a bad run:**
-
-1. Check `harness_planned` — was `willAttemptToolLoop` correct? Was `promptedToolUse: true`? Does `availableToolIds` match Access expectations (**write tools only with `full-access`**)?
-2. Check `harness_decision_recorded` when present — it is trace/UI data only, not a steering gate.
-3. Check `tool_requested` — did the model invoke an exact registered tool id with correct structured arguments?
-4. Check `tool_executed` or `tool_blocked` — was this a policy rejection or a real failure?
-5. Check `assistant_finalized` — was `toolExecutionAttached` as expected?
-6. Check `run_failed` — the `error` field is the primary diagnostic.
-
-**No trace file?** Either the run predates always-on tracing (2026-08-02) or its trace was purged/pruned. If the run is recent and the file is genuinely missing, the provider failed to initialize before the run started — check provider availability via `providers.list` or startup logs.
-
-**Payload you expected isn't there?** Check the row's `tier`. Arguments in `tool_requested` are digested by design; the full ones live in `tool_arguments`, which requires Debug capture *at the time the run happened* — no tier can be backfilled.
-
-**Tool loop not triggering despite available tools?** Check `harness_planned.capabilityProfile.promptedToolUse`. This is the gate, not `availableToolIds`.
 
 Use traces to explain behavior differences, policy rejections, and provider/tool mismatches before proposing architectural changes.
 

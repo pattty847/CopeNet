@@ -142,18 +142,6 @@ test('reference lines are replaced, never accumulated, across repeated renders',
   assert.equal(anchor.priceLines.length, 3, 'reference lines accumulated on re-render');
 });
 
-test('a bounded oscillator pins its own scale instead of autoscaling to its noise', () => {
-  const { chart } = layerFor(build('rsi'));
-  const provider = chart.series[0].options.autoscaleInfoProvider as (() => { priceRange: { minValue: number; maxValue: number } }) | undefined;
-  assert.ok(provider, 'RSI declares a pane range and must apply it');
-  assert.deepEqual(provider().priceRange, { minValue: 0, maxValue: 100 });
-});
-
-test('an unbounded pane indicator is left to autoscale', () => {
-  const { chart } = layerFor(build('atr'));
-  assert.equal(chart.series[0].options.autoscaleInfoProvider, undefined);
-});
-
 test('only one series per pane shows a last-value badge', () => {
   const { chart } = layerFor(build('macd'));
   const badges = chart.series.filter((series) => series.options.lastValueVisible === true);
@@ -274,37 +262,66 @@ test('an emptied pane is removed rather than left holding vertical space', () =>
   assert.equal(chart.series.length, 0);
 });
 
-test('a bounded pane keeps its declared range even after its axis is dragged', () => {
-  // Dragging a price axis turns autoScale off, and `autoscaleInfoProvider` only applies while
-  // it is on — so RSI's declared 0-100 silently stops applying and the scale drifts to
-  // whatever the drag left, flattening the series into a line. The axis sits a few pixels
-  // from the pane separator, so this is easy to hit while resizing.
-  const instances = build('rsi');
-  const { chart, layer } = layerFor(instances);
-  const scale = chart.priceScale('right', 1);
-  assert.equal(scale.autoScale, true);
-  assert.deepEqual(scale.scaleMargins, { top: 0.08, bottom: 0.08 }, 'a bounded pane uses its full height');
+/** Run an indicator's autoscale provider against a data range, the way the chart does. */
+function autoscale(chart: FakeChart, seriesIndex: number, min: number, max: number) {
+  const provider = chart.series[seriesIndex].options.autoscaleInfoProvider as
+    ((original: () => unknown) => { priceRange: { minValue: number; maxValue: number } } | null) | undefined;
+  assert.ok(provider, 'expected an autoscale provider on this series');
+  return provider(() => ({ priceRange: { minValue: min, maxValue: max } }));
+}
 
-  scale.autoScale = false; // what an axis drag does
-  layer.enforceBoundedScales();
-  assert.equal(scale.autoScale, true, 'a declared range is not a preference');
+test('an oscillator scales to its DATA, not to its theoretical range', () => {
+  // RSI lives between roughly 30 and 70. Pinning the pane to a flat 0-100 leaves a third of
+  // an already-short pane permanently empty and the line reading as flat — the peaks and
+  // troughs are the entire point of the indicator.
+  const { chart } = layerFor(build('rsi'));
+  const fitted = autoscale(chart, 0, 38, 64);
+  assert.deepEqual(fitted?.priceRange, { minValue: 30, maxValue: 70 }, 'fits the data, widened only to keep the bands');
 });
 
-test('an unbounded pane is left alone — it still drags, zooms and resets normally', () => {
-  const { chart, layer } = layerFor(build('atr'));
-  const scale = chart.priceScale('right', 1);
-  assert.deepEqual(scale.scaleMargins, { top: 0.2, bottom: 0.1 }, 'defaults untouched');
-  scale.autoScale = false;
-  layer.enforceBoundedScales();
-  assert.equal(scale.autoScale, false, 'a manual scale on an unbounded pane is the operator\'s to keep');
+test('reference bands stay on screen through a quiet stretch', () => {
+  // Without folding the levels in, an RSI sitting at 45-55 would scale its own 70/30 bands
+  // off the pane — removing the thing the reading is judged against.
+  const { chart } = layerFor(build('rsi'));
+  assert.deepEqual(autoscale(chart, 0, 47, 53)?.priceRange, { minValue: 30, maxValue: 70 });
+  // MACD has no bounded range, but its zero line is the signal and must stay visible.
+  const macd = layerFor(build('macd')).chart;
+  const histogramIndex = macd.series.findIndex((series) => series.options.autoscaleInfoProvider);
+  const provider = macd.series[histogramIndex].options.autoscaleInfoProvider as (o: () => unknown) => { priceRange: { minValue: number; maxValue: number } };
+  assert.deepEqual(provider(() => ({ priceRange: { minValue: 2, maxValue: 9 } })).priceRange, { minValue: 0, maxValue: 9 });
 });
 
-test('enforcing a bounded scale that is already on does no work', () => {
-  const { chart, layer } = layerFor(build('rsi'));
+test('a declared range is a ceiling, never a floor', () => {
+  // It stops padding implying an RSI above 100; it must not force the view wider than the
+  // data, which is what made the pane look flat.
+  const { chart } = layerFor(build('rsi'));
+  assert.deepEqual(autoscale(chart, 0, -20, 140)?.priceRange, { minValue: 0, maxValue: 100 }, 'clamped to the declared bounds');
+  const willr = layerFor(build('willr')).chart;
+  const provider = willr.series[0].options.autoscaleInfoProvider as (o: () => unknown) => { priceRange: { minValue: number; maxValue: number } };
+  assert.deepEqual(provider(() => ({ priceRange: { minValue: -95, maxValue: -5 } })).priceRange, { minValue: -95, maxValue: -5 });
+});
+
+test('an indicator with neither bounds nor bands is left to plain autoscale', () => {
+  // ATR, OBV and friends: nothing to fold in, so nothing to override. Double-click reset on
+  // their axis behaves exactly as it does on the price pane.
+  const { chart } = layerFor(build('atr'));
+  assert.equal(chart.series[0].options.autoscaleInfoProvider, undefined);
+});
+
+test('indicator panes take symmetric margins', () => {
+  // The library default reserves 20% above and 10% below — right for price, where the
+  // last-value badge and recent action sit at the top, lopsided for an oscillator read
+  // against its own midline.
+  const { chart } = layerFor(build('rsi'));
+  assert.deepEqual(chart.priceScale('right', 1).scaleMargins, { top: 0.1, bottom: 0.1 });
+});
+
+test('nothing forces autoScale back on, so a pane axis drags and resets like any other', () => {
+  const { chart, render } = layerFor(build('rsi'));
   const scale = chart.priceScale('right', 1);
-  const before = scale.applyCount;
-  for (let i = 0; i < 20; i += 1) layer.enforceBoundedScales();
-  assert.equal(scale.applyCount, before, 'this runs on pointermove; it must not thrash the scale');
+  scale.autoScale = false; // an axis drag
+  render(build('rsi'));
+  assert.equal(scale.autoScale, false, 'a manual scale on an indicator pane is the operator\'s to keep');
 });
 
 test('a stored pane division is applied instead of the default weighting', () => {

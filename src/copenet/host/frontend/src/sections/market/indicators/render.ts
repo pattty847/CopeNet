@@ -23,6 +23,7 @@ import {
   LineType,
   type IChartApi,
   type IPaneApi,
+  type AutoscaleInfo,
   type IPriceLine,
   type ISeriesApi,
   type SeriesType,
@@ -37,8 +38,6 @@ type AnySeries = ISeriesApi<SeriesType, Time>;
 interface RenderedEntry {
   /** null for price overlays, which live on pane 0 alongside the candles. */
   pane: IPaneApi<Time> | null;
-  /** Set when the indicator declares a fixed range, e.g. RSI's 0-100. */
-  bounded: boolean;
   /** Output keys and plot kinds. A change here means the series have to be rebuilt. */
   signature: string;
   series: Map<string, AnySeries>;
@@ -81,35 +80,11 @@ export class IndicatorChartLayer {
 
     this.reorderPanes(active);
     this.applyPaneSizing(active, priceStretch);
-    this.enforceBoundedScales();
   }
 
   /** Remove every series and pane this layer owns. The caller still owns the chart. */
   destroy(): void {
     for (const [instanceId, entry] of [...this.entries]) this.teardown(instanceId, entry);
-  }
-
-  /** Keep a declared pane range actually in force.
-   *
-   *  `autoscaleInfoProvider` only applies while the scale is on AUTO, and dragging a price
-   *  axis silently turns auto off — after which RSI's declared 0-100 stops applying and the
-   *  scale drifts to whatever the drag left behind, flattening the series into a line. The
-   *  axis and the pane separator are a few pixels apart, so this is easy to trigger by
-   *  accident while resizing and gives no clue what happened.
-   *
-   *  A range the definition declares is not a preference, so it is re-asserted rather than
-   *  restored on request: for a bounded oscillator the scale IS the indicator. Unbounded
-   *  panes are left completely alone and still drag, zoom and double-click-reset normally. */
-  enforceBoundedScales(): void {
-    for (const entry of this.entries.values()) {
-      if (!entry.pane || !entry.bounded) continue;
-      try {
-        const scale = this.chart.priceScale('right', entry.pane.paneIndex());
-        if (!scale.options().autoScale) scale.applyOptions({ autoScale: true });
-      } catch {
-        /* pane removed or mid-layout */
-      }
-    }
   }
 
   /** How the operator has divided the panes, as stretch factors. Relative by nature, so it
@@ -164,7 +139,6 @@ export class IndicatorChartLayer {
     const pane = indicator.placement === 'pane' ? this.chart.addPane(true) : null;
     const entry: RenderedEntry = {
       pane,
-      bounded: indicator.paneRange != null,
       signature: signatureOf(indicator),
       series: new Map(),
       priceLines: [],
@@ -172,17 +146,14 @@ export class IndicatorChartLayer {
     };
     const paneIndex = pane ? pane.paneIndex() : 0;
 
-    // A bounded oscillator uses nearly its whole pane. Lightweight Charts' default margins
-    // reserve 30% of the height, which turns RSI's 0-100 into roughly -16..129 of usable
-    // scale and squashes the line into the middle.
-    if (pane && indicator.paneRange) {
+    // Symmetric margins on every indicator pane. Lightweight Charts' default reserves 20%
+    // above and 10% below, which is right for price — where the last-value badge and recent
+    // action live at the top — and lopsided for an oscillator read against its own midline.
+    if (pane) {
       try {
-        this.chart.priceScale('right', paneIndex).applyOptions({
-          autoScale: true,
-          scaleMargins: { top: 0.08, bottom: 0.08 },
-        });
+        this.chart.priceScale('right', paneIndex).applyOptions({ scaleMargins: { top: 0.1, bottom: 0.1 } });
       } catch {
-        /* the pane is mid-layout; enforceBoundedScales settles it */
+        /* the pane is mid-layout; the next sync settles it */
       }
     }
 
@@ -248,6 +219,7 @@ export class IndicatorChartLayer {
 
   private optionsFor(output: ComputedOutput, indicator: ComputedIndicator, isAnchor: boolean) {
     const range = indicator.paneRange;
+    const references = indicator.references ?? [];
     return {
       color: output.color,
       lineWidth: output.lineWidth as 1 | 2 | 3 | 4,
@@ -259,13 +231,33 @@ export class IndicatorChartLayer {
       // becomes a stack of overlapping labels on the axis.
       lastValueVisible: isAnchor && indicator.placement === 'pane',
       crosshairMarkerVisible: true,
-      // A bounded oscillator keeps the scale it declares. Without this RSI autoscales to
-      // whatever range it happened to visit, so 45-55 fills the pane and reads as violent.
-      ...(isAnchor && range
+      // Scale to the DATA, not to the indicator's theoretical range.
+      //
+      // Pinning RSI to a flat 0-100 was wrong in practice: RSI spends its life between
+      // roughly 30 and 70, so a third of the pane is permanently empty and the line reads as
+      // flat — on a pane only ~90px tall, that is most of the signal thrown away. It also
+      // made double-click-to-reset a no-op on indicator panes, because re-enabling autoscale
+      // immediately handed back the same fixed range. The peaks and troughs are the point.
+      //
+      // Two adjustments to the raw data range. Reference levels are folded in, so the 70/30
+      // bands (or MACD's zero) stay on screen in a quiet stretch that would otherwise scale
+      // them off. And a declared range is a CEILING, never a floor: it stops padding from
+      // implying an RSI above 100, without ever forcing the view wider than the data.
+      ...(isAnchor && (range || references.length)
         ? {
-            autoscaleInfoProvider: () => ({
-              priceRange: { minValue: range.min ?? 0, maxValue: range.max ?? 100 },
-            }),
+            autoscaleInfoProvider: (original: () => AutoscaleInfo | null): AutoscaleInfo | null => {
+              const base = original();
+              if (!base?.priceRange) return base;
+              let { minValue, maxValue } = base.priceRange;
+              for (const reference of references) {
+                minValue = Math.min(minValue, reference.value);
+                maxValue = Math.max(maxValue, reference.value);
+              }
+              if (range?.min != null) minValue = Math.max(minValue, range.min);
+              if (range?.max != null) maxValue = Math.min(maxValue, range.max);
+              if (!(maxValue > minValue)) return base;
+              return { priceRange: { minValue, maxValue } };
+            },
           }
         : {}),
     };

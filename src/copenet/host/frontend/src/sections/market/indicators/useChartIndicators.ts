@@ -82,35 +82,23 @@ export function useChartIndicators(
     measure();
   }, [indicators, chartGeneration, measure, priceStretch]);
 
-  // Pointer interaction on the chart is where BOTH of these are settled, and neither has an
-  // event of its own: Lightweight Charts publishes nothing for a price-scale change or a
-  // pane-separator drag.
-  //
-  //  * A bounded scale is re-asserted on every move, so an accidental drag on an RSI axis
-  //    cannot leave its declared 0-100 quietly switched off. The scale reads as locked,
-  //    which is what a declared range means.
-  //  * A separator drag is read back on release and handed up to be persisted.
+  // A pane-separator drag publishes no event, so the new division is read back when the
+  // pointer is released. Nothing else is enforced here: indicator price scales drag, zoom
+  // and double-click-reset exactly like the price pane's, which is what makes the reset
+  // gesture mean something on a pane.
   const stretchRef = useRef(onPaneStretchChange);
   stretchRef.current = onPaneStretchChange;
 
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const hold = () => layerRef.current?.enforceBoundedScales();
     const settle = () => {
-      const layer = layerRef.current;
-      if (!layer) return;
-      layer.enforceBoundedScales();
-      const next = layer.readPaneStretch();
-      if (Object.keys(next.byInstance).length) stretchRef.current?.(next);
+      const next = layerRef.current?.readPaneStretch();
+      if (next && Object.keys(next.byInstance).length) stretchRef.current?.(next);
     };
-    container.addEventListener('pointermove', hold, { passive: true });
-    container.addEventListener('wheel', hold, { passive: true });
     container.addEventListener('pointerup', settle, { passive: true });
     container.addEventListener('pointerleave', settle, { passive: true });
     return () => {
-      container.removeEventListener('pointermove', hold);
-      container.removeEventListener('wheel', hold);
       container.removeEventListener('pointerup', settle);
       container.removeEventListener('pointerleave', settle);
     };

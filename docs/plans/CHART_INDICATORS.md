@@ -153,18 +153,29 @@ chart series is. `CandleChart` gained one prop and one hook call.
 - **Hidden means gone.** Hiding a pane indicator destroys its pane rather than
   emptying it; an empty pane still holding vertical space is the worse behaviour
   when hiding is what you reach for to get the price back.
-- Bounded oscillators pin their own scale via `autoscaleInfoProvider`, so RSI at
-  45–55 does not fill its pane and read as violent. They also take tighter scale
-  margins (8% against the default 20/10), because the default reserves 30% of the
-  pane and turns a declared 0–100 into roughly −16…129 of usable scale.
-- **A declared range is re-asserted, not merely requested.** `autoscaleInfoProvider`
-  only applies while the scale is on AUTO, and dragging a price axis silently turns
-  auto off — after which RSI's 0–100 stops applying and the scale drifts to
-  whatever the drag left, flattening the series into a line. The axis sits a few
-  pixels from the pane separator, so this is easy to trigger while resizing and
-  gives no clue what happened. `enforceBoundedScales()` runs on pointer movement,
-  so a bounded axis reads as locked. Unbounded panes are untouched and still drag,
-  zoom and double-click-reset normally.
+- **Panes scale to their DATA, not to an indicator's theoretical range.** An early
+  version pinned RSI to a flat 0–100 via `autoscaleInfoProvider`, on the reasoning
+  that a declared range should hold. In practice RSI spends its life between
+  roughly 30 and 70, so a third of a ~90px pane sat permanently empty and the line
+  read as flat — most of the signal thrown away. Worse, it made
+  double-click-to-reset a **no-op on indicator panes**: the gesture re-enabled
+  autoscale, and the fixed provider immediately handed back the same range, so
+  nothing visibly happened. Working on candles and dead on panes is exactly how it
+  was reported.
+
+  The provider now derives from the real autoscale info, with two adjustments:
+  **reference levels are folded in**, so RSI's 70/30 bands (or MACD's zero) stay on
+  screen through a quiet stretch that would otherwise scale them off; and a
+  declared `paneRange` acts as a **ceiling, never a floor** — it stops padding from
+  implying an RSI above 100 without ever forcing the view wider than the data. An
+  indicator with neither bounds nor bands gets no provider at all.
+- **Nothing forces `autoScale` back on.** Indicator price scales drag, zoom and
+  double-click-reset exactly like the price pane's. A brief experiment that
+  re-asserted the declared range on pointer movement made bounded panes impossible
+  to resize or zoom, and was the wrong fix for the wrong diagnosis.
+- Indicator panes take symmetric 10% scale margins. The library default reserves
+  20% above and 10% below — right for price, where the last-value badge and recent
+  action sit at the top, lopsided for an oscillator read against its own midline.
 - The price pane holds a stretch factor of 4 against 1 per indicator pane.
   Lightweight Charts gives every new pane the same stretch, which would leave
   price on 40% of the canvas with three indicators.
@@ -377,10 +388,11 @@ Measure before adding one.
   through it. Honest gaps need one series per segment, as
   `splitFinancialOverlaySegments` does for the financial overlay. Rare enough to
   defer; not free.
-- **A bounded pane's axis cannot be dragged.** That is deliberate — for RSI the
-  declared range IS the indicator — but it does mean you cannot zoom into, say,
-  RSI 40–60 for a closer look. Reversible by dropping the `enforceBoundedScales`
-  call from the pointer handlers.
+- **A quiet oscillator is scaled by its bands, not by its data.** Folding the
+  reference levels in means an RSI sitting at 47–53 renders against 30–70 rather
+  than filling the pane. That is the deliberate trade — the bands are what the
+  reading is judged against — but it does cap how far a flat stretch can be
+  magnified.
 - **`insufficientHistory` is reported but not explained.** The row and legend read
   "needs history" without saying how many bars are missing, though `warmup` has
   the number.
@@ -397,8 +409,8 @@ Measure before adding one.
 
 - Band fills via a series primitive.
 - Segment-split series so interior gaps read honestly.
-- Letting a bounded pane be zoomed deliberately while still recovering from an
-  accidental axis drag.
+- A per-indicator choice between band-anchored and pure-data scaling, for reading
+  a quiet stretch closely.
 - A "needs N more bars" reading on `insufficientHistory`.
 - Indicators computed on a comparison series, which would make Compare a plot
   rather than a mode — the end state `TICKER_WORKSPACE_REDESIGN.md` already
