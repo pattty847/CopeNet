@@ -84,13 +84,22 @@ explicit toolbar control.
 
 ![CopeNet Market Monitor — chart-first asset workspace](docs/imgs/market-ticker-workspace.png)
 
-**Multi-series and ratio comparison** — switch the chart from traded price to an
-indexed comparison and add up to five symbols or relative-strength expressions such
-as `XLK/GLD`. The asset popup searches Yahoo Finance symbols for either side of the
-expression. Every line is built from the same split-adjusted interval, rebased to
-zero at the selected range's first observation, and persisted in the URL for reloads
-and sharing. Ratios and ordinary symbols can be plotted together without mixing dollar
-prices and percentages on one axis.
+**Formula symbols** — type an expression such as `VOO/GLD`, `(VOO + GLD) / 2`, or
+`0.6 * VOO + 0.4 * TLT` into the Market search or the ticker workspace's `/` jump.
+Yahoo Finance assistance follows the operand being typed, while a distinct Formula
+Symbol result opens a reloadable synthetic chart. The safe expression grammar supports
+numbers, parentheses, and `+`, `-`, `*`, and `/`; it evaluates split-adjusted closes on
+shared timestamps and never fabricates candles or attaches issuer-only evidence to a
+synthetic series. The chart can show the formula's value or rebase it to indexed percent.
+
+![CopeNet Market Monitor — formula symbol workspace](docs/imgs/market-panel/copenet-formula-symbol.png)
+
+**Multi-series and formula comparison** — switch an asset chart from traded price to an
+indexed comparison and add up to five symbols or full formulas. Compare uses the same
+backend parser and price-history basis as the Formula Symbol workspace. Every line is
+rebased to zero at the selected range's first usable observation and persisted in the URL
+for reloads and sharing, so ordinary symbols, ratios, weighted baskets, and spreads can be
+examined together without mixing raw values and percentages on one axis.
 
 ![CopeNet Market Monitor — indexed ticker and ratio comparison](docs/imgs/market-panel/copenet-asset-comparison.png)
 
