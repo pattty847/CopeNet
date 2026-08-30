@@ -52,6 +52,17 @@ const MIN_CLUSTER_DAYS = 2; // single busy days are served by the day popup, not
 const PRICE_SPLIT_FRACTION = 0.06; // split a time-cluster where price shelves gap >6%
 const PRICE_PROBE_PX = 100; // second sample point for detecting vertical rescales
 
+/** Lightweight Charts briefly detaches a newly shown price scale while recalculating its
+ *  pane. Calling width() in that frame throws even though the chart and scale API are both
+ *  live; zero is the correct pre-layout offset and the next transform sample settles it. */
+function leftAxisWidth(chart: IChartApi): number {
+  try {
+    return chart.priceScale('left').width();
+  } catch {
+    return 0;
+  }
+}
+
 function formatMoney(value: number): string {
   const abs = Math.abs(value);
   const sign = value < 0 ? '-' : '';
@@ -480,7 +491,7 @@ export function CandleChart({
     // chart's left edge — so every pane x needs the axis width added back. This is zero
     // until a financial overlay makes the left scale visible, at which point every box
     // silently rendered one axis-width too far left.
-    const leftAxisPx = chart.priceScale('left').width();
+    const leftAxisPx = leftAxisWidth(chart);
 
     const sourceEvidence = evidenceRef.current.length ? evidenceRef.current : eventsAsEvidence(eventsRef.current);
     const buckets = buildBuckets(sourceEvidence, rows);
@@ -578,7 +589,7 @@ export function CandleChart({
       candle.coordinateToPrice(PRICE_PROBE_PX) ?? '',
       // Showing or hiding the left financial axis moves the pane sideways without
       // touching either range, so it has to be part of the transform identity.
-      chart.priceScale('left').width(),
+      leftAxisWidth(chart),
     ].join('|');
     if (key === transformKeyRef.current) return;
     transformKeyRef.current = key;
@@ -669,7 +680,7 @@ export function CandleChart({
         return;
       }
       // Same pane-vs-wrapper offset as the cluster boxes: param.point.x is pane-relative.
-      setDayPopup({ x: param.point.x + chart.priceScale('left').width(), y: param.point.y, time, items });
+      setDayPopup({ x: param.point.x + leftAxisWidth(chart), y: param.point.y, time, items });
     });
 
     // The day popup is anchored to a pixel position that stops meaning anything the moment

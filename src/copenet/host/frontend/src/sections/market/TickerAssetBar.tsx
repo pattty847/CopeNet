@@ -1,4 +1,4 @@
-import { ArrowLeft, RefreshCw, Search, Star } from 'lucide-react';
+import { ArrowLeft, RefreshCw, Star } from 'lucide-react';
 import type { AssetProfile } from './assetProfile';
 import { signedPct, toneHex, toneOf } from './workspaceViz';
 import type { TickerDetailPayload } from './types';
@@ -12,7 +12,6 @@ export function TickerAssetBar({
   onBack,
   onToggleWatch,
   onOpenPosition,
-  onOpenJump,
 }: {
   detail: TickerDetailPayload;
   profile: AssetProfile;
@@ -23,9 +22,6 @@ export function TickerAssetBar({
   onBack: () => void;
   onToggleWatch: () => void;
   onOpenPosition: () => void;
-  /** Symbol search. Present at every width because the rail is hidden on touch, where `/`
-   *  is not a reachable shortcut. */
-  onOpenJump: () => void;
 }) {
   const change = detail.quote.changePct;
   const position = detail.intelligence?.portfolio;
@@ -61,10 +57,6 @@ export function TickerAssetBar({
         aria-label={watched ? 'Remove from watchlist' : 'Add to watchlist'}
       >
         {watchBusy ? <RefreshCw size={13} className="tw-spin" /> : <Star size={13} fill={watched ? 'currentColor' : 'none'} />}
-      </button>
-
-      <button type="button" className="tw-iconbtn" onClick={onOpenJump} title="Search symbols  ( / )" aria-label="Search symbols">
-        <Search size={13} />
       </button>
 
       <div className="tw-assetbar__spacer" />

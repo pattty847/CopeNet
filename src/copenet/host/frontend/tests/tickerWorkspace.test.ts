@@ -3,7 +3,13 @@ import test from 'node:test';
 import { assetProfile } from '../src/sections/market/assetProfile';
 import { CHART_RANGES, timeframeLabel, visibleBars } from '../src/sections/market/chartRanges';
 import { buildRailEntries, stepRail } from '../src/sections/market/symbolRailModel';
-import { nextSnap, pushRecent } from '../src/sections/market/tickerWorkspaceState';
+import {
+  DRAWER_MAX_PERCENT,
+  DRAWER_MIN_PERCENT,
+  clampDrawerSize,
+  nextSnap,
+  pushRecent,
+} from '../src/sections/market/tickerWorkspaceState';
 import { fractionAsPercent, signedPct } from '../src/sections/market/workspaceViz';
 import type { TickerDetailPayload, WatchlistItem } from '../src/sections/market/types';
 
@@ -68,6 +74,12 @@ test('drawer snap cycles through all three heights', () => {
   assert.equal(nextSnap('collapsed'), 'half');
   assert.equal(nextSnap('half'), 'full');
   assert.equal(nextSnap('full'), 'collapsed');
+});
+
+test('manual drawer sizing preserves useful chart and research minimums', () => {
+  assert.equal(clampDrawerSize(50), 50);
+  assert.equal(clampDrawerSize(-20), DRAWER_MIN_PERCENT);
+  assert.equal(clampDrawerSize(120), DRAWER_MAX_PERCENT);
 });
 
 test('recents are newest-first, de-duplicated, and bounded', () => {

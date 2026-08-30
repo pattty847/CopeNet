@@ -1,13 +1,13 @@
 // Popover bodies for the chart toolbar.
 //
-// Each one answers a single question and closes. Two rules they all follow: the popover
-// manages STATE THAT IS ALREADY ON THE CHART and points elsewhere for browsing (a menu that
-// also has to be a catalogue becomes a graveyard), and any control that cannot work right now
-// is disabled WITH ITS REASON rather than hidden — a control that vanishes teaches nothing.
+// Each one answers a single question. Copy stays compact, the one long catalogue gets a
+// searchable nested picker, and controls that cannot work right now keep their place with a
+// short reason rather than vanishing.
 
 import { useEffect, useState, type FormEvent, type RefObject } from 'react';
-import { ArrowRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { MarketFloatingPopover } from './MarketFloatingPopover';
+import { FinancialSeriesPicker } from './FinancialSeriesPicker';
 import { wsClient } from '../../lib/wsClient';
 import { normalizeComparisonExpression } from './chartComparison';
 import { MM } from './marketUi';
@@ -58,10 +58,10 @@ export function PlotsMenu({
   frequency,
   onFrequency,
   onClearMetric,
+  onMetric,
   showVolume,
   onShowVolume,
   comparisonActive,
-  onBrowse,
 }: {
   anchor: RefObject<HTMLElement | null>;
   open: boolean;
@@ -71,22 +71,22 @@ export function PlotsMenu({
   frequency: FinancialFrequency;
   onFrequency: (value: FinancialFrequency) => void;
   onClearMetric: () => void;
+  onMetric: (metric: string) => void;
   showVolume: boolean;
   onShowVolume: (value: boolean) => void;
   comparisonActive: boolean;
-  onBrowse: () => void;
 }) {
   const info = metric ? metrics.find((entry) => entry.id === metric) ?? null : null;
   const valuation = info?.factType === 'valuation';
   const choices = info?.frequencies ?? (['quarterly', 'ttm', 'annual'] as FinancialFrequency[]);
 
   return (
-    <Shell anchor={anchor} open={open} onClose={onClose} title="Plots" subtitle="What is drawn on the chart right now." width={318}>
+    <Shell anchor={anchor} open={open} onClose={onClose} title="Plots" width={342}>
       <div className="tw-pop__section">
         <div className="tw-pop__label">On the chart</div>
         <div className="tw-pop__row">
           <label className="tw-switch" style={{ flex: 1 }}>
-            <span>Volume<small>Traded volume under the price</small></span>
+            <span>Volume</span>
             <input type="checkbox" checked={showVolume} onChange={(event) => onShowVolume(event.target.checked)} />
           </label>
         </div>
@@ -105,23 +105,21 @@ export function PlotsMenu({
                 ))}
               </div>
             )}
-            {valuation && <p className="tw-pop__note">Valuation multiples are trailing-twelve-month by definition.</p>}
+            {valuation && <p className="tw-pop__note">TTM series</p>}
           </div>
         ) : (
-          <p className="tw-pop__note">No fundamental series plotted.</p>
+          <p className="tw-pop__note">No financial plot</p>
         )}
       </div>
 
       <div className="tw-pop__section">
-        <button type="button" className="tw-plotrow" onClick={() => { onBrowse(); onClose(); }} disabled={comparisonActive}>
-          Browse fundamentals
-          <span className="tw-plotrow__val"><ArrowRight size={12} /></span>
-        </button>
-        <p className="tw-pop__note">
-          {comparisonActive
-            ? 'Fundamental plots are price-anchored and cannot be drawn while the chart is rebased for comparison.'
-            : 'Every series in the Fundamentals tab plots to the chart from its own card, so you see the shape before you commit to it.'}
-        </p>
+        <FinancialSeriesPicker
+          metrics={metrics}
+          selectedMetric={metric}
+          disabled={comparisonActive}
+          onSelect={onMetric}
+        />
+        {comparisonActive && <p className="tw-pop__note">Unavailable in Compare mode</p>}
       </div>
     </Shell>
   );
@@ -179,11 +177,10 @@ export function CompareMenu({
       open={open}
       onClose={onClose}
       title="Compare"
-      subtitle="Rebases the price pane to indexed % from the start of the visible range. Price-anchored plots — alerts, fundamentals, filing markers — cannot be drawn while this is on."
       width={352}
     >
       <form onSubmit={submit}>
-        <div className="tw-pop__label">Ticker or ratio</div>
+        <div className="tw-pop__label">Symbol or ratio</div>
         <div style={{ display: 'flex', gap: 6 }}>
           <input
             value={input}
@@ -218,12 +215,13 @@ export function CompareMenu({
             ))}
           </div>
         )}
+        <div className="tw-pop__status">Indexed from visible-range start</div>
       </form>
 
       <div className="tw-pop__section">
         <div className="tw-pop__label">Plotted</div>
         {expressions.length === 0 ? (
-          <p className="tw-pop__note">Nothing yet. <b style={{ color: '#a29b90' }}>VOO</b> compares total return; <b style={{ color: '#a29b90' }}>VOO/GLD</b> plots the relative-strength ratio.</p>
+          <p className="tw-pop__note">Try VOO or XLK/GLD</p>
         ) : (
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {expressions.map((expression) => (
@@ -271,12 +269,12 @@ export function EventsMenu({
       open={open}
       onClose={onClose}
       title="Filings & events"
-      subtitle={disabled ? 'Filing markers are price-anchored and are hidden while the chart is rebased for comparison.' : '8-K and Form 144 markers are always on. Form 4 transactions are optional because they are dense.'}
+      subtitle={disabled ? 'Unavailable in Compare mode' : undefined}
       width={330}
     >
       <fieldset disabled={disabled} style={{ border: 0, margin: 0, padding: 0, opacity: disabled ? 0.45 : 1 }}>
         <label className="tw-switch">
-          <span>Plot Form 4 transactions<small>Executed insider trades</small></span>
+          <span>Form 4 transactions<small>Executed insider trades</small></span>
           <input type="checkbox" checked={showInsider} onChange={(event) => onShowInsider(event.target.checked)} />
         </label>
 
@@ -297,7 +295,6 @@ export function EventsMenu({
             <button type="button" disabled={!showInsider} aria-pressed={displayMode === 'clusters'} onClick={() => onDisplayMode('clusters')}>Cluster boxes</button>
             <button type="button" disabled={!showInsider} aria-pressed={displayMode === 'individual'} onClick={() => onDisplayMode('individual')}>Individual trades</button>
           </div>
-          <p className="tw-pop__note">Clusters summarise net flow by date range. Individual mode is for inspecting single executed trades.</p>
         </div>
       </fieldset>
     </Shell>
@@ -314,8 +311,6 @@ export function SettingsMenu({
   anchor,
   open,
   onClose,
-  logScale,
-  onLogScale,
   intelligence,
   priceBasis,
   barCount,
@@ -324,8 +319,6 @@ export function SettingsMenu({
   anchor: RefObject<HTMLElement | null>;
   open: boolean;
   onClose: () => void;
-  logScale: boolean;
-  onLogScale: (value: boolean) => void;
   intelligence?: TickerIntelligence | null;
   priceBasis: string;
   barCount: number;
@@ -333,15 +326,7 @@ export function SettingsMenu({
 }) {
   const quality = intelligence?.dataQuality;
   return (
-    <Shell anchor={anchor} open={open} onClose={onClose} title="Chart settings & data" width={334}>
-      <div className="tw-pop__section">
-        <div className="tw-pop__label">Price axis</div>
-        <div className="tw-choices">
-          <button type="button" aria-pressed={!logScale} onClick={() => onLogScale(false)}>Linear</button>
-          <button type="button" aria-pressed={logScale} onClick={() => onLogScale(true)}>Logarithmic</button>
-        </div>
-      </div>
-
+    <Shell anchor={anchor} open={open} onClose={onClose} title="Chart data" width={334}>
       <div className="tw-pop__section">
         <div className="tw-pop__label">Price series</div>
         <div className="tw-kv"><span className="tw-kv__k">Basis</span><span className="tw-kv__v">{priceBasis.replace('_', '-')}</span></div>

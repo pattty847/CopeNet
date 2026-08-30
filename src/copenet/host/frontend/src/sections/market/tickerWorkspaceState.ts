@@ -8,6 +8,10 @@
 
 export type ResearchTab = 'overview' | 'fundamentals' | 'evidence' | 'synthesis';
 export type DrawerSnap = 'collapsed' | 'half' | 'full';
+export type DrawerSizes = Partial<Record<ResearchTab, number>>;
+
+export const DRAWER_MIN_PERCENT = 22;
+export const DRAWER_MAX_PERCENT = 78;
 
 export const RESEARCH_TABS: { id: ResearchTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
@@ -42,6 +46,7 @@ const TAB_KEY = 'mm-tw-tab';
 const SNAP_KEY = 'mm-tw-snap';
 const RAIL_KEY = 'mm-tw-rail';
 const LOG_KEY = 'mm-log-scale';
+const DRAWER_SIZE_KEY = 'mm-tw-drawer-size';
 
 function isTab(value: string | null): value is ResearchTab {
   return value != null && RESEARCH_TABS.some((tab) => tab.id === value);
@@ -81,6 +86,31 @@ export function loadSnaps(): Record<ResearchTab, DrawerSnap> {
 
 export function saveSnaps(snaps: Record<ResearchTab, DrawerSnap>): void {
   write(SNAP_KEY, JSON.stringify(snaps));
+}
+
+export function clampDrawerSize(value: number): number {
+  return Math.min(DRAWER_MAX_PERCENT, Math.max(DRAWER_MIN_PERCENT, value));
+}
+
+/** A manual height is remembered per tab for the same reason as its snap preset: the SEC
+ *  timeline and a compact overview have different useful working heights. */
+export function loadDrawerSizes(): DrawerSizes {
+  const raw = read(DRAWER_SIZE_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw) as Record<string, unknown>;
+    return RESEARCH_TABS.reduce<DrawerSizes>((sizes, tab) => {
+      const value = parsed[tab.id];
+      if (typeof value === 'number' && Number.isFinite(value)) sizes[tab.id] = clampDrawerSize(value);
+      return sizes;
+    }, {});
+  } catch {
+    return {};
+  }
+}
+
+export function saveDrawerSizes(sizes: DrawerSizes): void {
+  write(DRAWER_SIZE_KEY, JSON.stringify(sizes));
 }
 
 export function loadRailCollapsed(): boolean {

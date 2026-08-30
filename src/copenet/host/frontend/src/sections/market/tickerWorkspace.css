@@ -270,6 +270,20 @@
 
 .tw-toolbar__spacer { flex: 1 1 auto; }
 
+.tw-axis-toggle {
+  width: 34px;
+  height: 28px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 600 10px var(--mkt-mono);
+}
+
+.tw-axis-toggle:hover { border-color: var(--mkt-seam); background: var(--mkt-raise); color: var(--mkt-text); }
+.tw-axis-toggle:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: -2px; }
+
 /* ------------------------------------------------------------------- stage */
 
 .tw-stage {
@@ -366,6 +380,7 @@
 /* ------------------------------------------------------------------ drawer */
 
 .tw-drawer {
+  position: relative;
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
@@ -373,6 +388,32 @@
   border-top: 1px solid var(--mkt-seam);
   background: var(--mkt-dock);
 }
+
+.tw-drawer__resize {
+  position: absolute;
+  top: -4px;
+  right: 0;
+  left: 0;
+  z-index: 6;
+  display: grid;
+  height: 8px;
+  place-items: center;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.tw-drawer__resize span {
+  width: 42px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--mkt-seam);
+  transition: width .12s ease, background .12s ease;
+}
+
+.tw-drawer__resize:hover span,
+.tw-drawer__resize:focus-visible span,
+.tw-drawer__resize[data-dragging='true'] span { width: 58px; background: var(--mkt-soft); }
+.tw-drawer__resize:focus-visible { outline: none; }
 
 .tw-drawer__tabs {
   display: flex;
@@ -444,10 +485,8 @@
   background-color: rgba(254, 252, 244, 0.11);
 }
 
-/* Snap presets rather than a free drag: a drag gets used twice and then never again, has no
- * keyboard path, and resizes the chart canvas on every frame. `full` deliberately keeps a
- * live strip of chart — losing the price entirely while reading a filing reads as a
- * different page, not a taller drawer. */
+/* Snap presets remain fast landmarks; the seam also supports a persistent per-tab drag for
+ * analytical layouts between them. `full` deliberately keeps a live strip of chart. */
 .tw-drawer[data-snap='collapsed'] { height: auto; }
 .tw-drawer[data-snap='half'] { height: 40%; }
 .tw-drawer[data-snap='full'] { height: 68%; }
@@ -654,6 +693,7 @@
 }
 
 .tw-pop__note { margin: 8px 0 0; color: var(--mkt-dimmer); font-size: 10px; line-height: 1.5; }
+.tw-pop__status { margin-top: 7px; color: var(--mkt-dimmer); font: 500 9px var(--mkt-mono); }
 
 .tw-pop__row {
   display: flex;
@@ -833,7 +873,83 @@
 
 .tw-plotrow:hover { background: var(--mkt-raise); }
 .tw-plotrow[data-active='true'] { border-color: rgba(143, 184, 232, 0.34); background: rgba(143, 184, 232, 0.08); }
-.tw-plotrow__val { margin-left: auto; font-family: var(--mkt-mono); font-size: 10px; color: var(--mkt-dim); }
+.tw-plotrow__val {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  margin-left: auto;
+  overflow: hidden;
+  color: var(--mkt-dim);
+  font-family: var(--mkt-mono);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tw-plotrow__val svg { transition: transform .12s ease; }
+.tw-plotrow__val svg[data-open='true'] { transform: rotate(180deg); }
+
+.tw-series-picker__menu {
+  margin-top: 6px;
+  overflow: hidden;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: var(--mkt-canvas);
+}
+
+.tw-series-picker__search {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  color: var(--mkt-dim);
+}
+
+.tw-series-picker__search input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--mkt-text);
+  font: 500 10px Inter;
+}
+
+.tw-series-picker__search input::placeholder { color: var(--mkt-dimmer); }
+.tw-series-picker__list { max-height: 246px; overflow-y: auto; padding: 4px; }
+.tw-series-picker__group + .tw-series-picker__group { margin-top: 4px; }
+
+.tw-series-picker__group-label {
+  padding: 5px 6px 3px;
+  color: var(--mkt-dimmer);
+  font: 650 8px Inter;
+  letter-spacing: .11em;
+  text-transform: uppercase;
+}
+
+.tw-series-picker__option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-height: 27px;
+  padding: 4px 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 10px Inter;
+  text-align: left;
+}
+
+.tw-series-picker__option small { color: var(--mkt-dimmer); font: 500 8px var(--mkt-mono); white-space: nowrap; }
+.tw-series-picker__option:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.tw-series-picker__option[aria-pressed='true'] { border-left-color: var(--mkt-info); background: rgba(143, 184, 232, .08); color: var(--mkt-info); }
+.tw-series-picker__empty { padding: 18px 8px; color: var(--mkt-dimmer); font-size: 10px; text-align: center; }
 
 .tw-evidence__row {
   display: flex;

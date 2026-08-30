@@ -1,7 +1,8 @@
 // The ticker workspace frame.
 //
 // One fixed frame, no page scroll. Left edge navigates between assets, the chart owns the
-// canvas, research docks beneath it on snap presets. Everything the operator does happens
+// canvas, research docks beneath it on a resizable seam with snap presets. Everything the
+// operator does happens
 // inside this rectangle — which is the difference between an instrument and an article.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -28,21 +29,18 @@ import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinanci
 import { useChartComparisons } from './useChartComparisons';
 import { useFinancialSeries } from './useFinancialSeries';
 import { usePriceAlerts } from './usePriceAlerts';
+import { useTickerDrawerLayout } from './useTickerDrawerLayout';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import type { InsiderDisplayMode, InsiderLookback } from './chartRanges';
 import { isValuationPayload, type FinancialFrequency } from './types';
 import {
   loadLogScale,
   loadRailCollapsed,
-  loadSnaps,
   loadTab,
-  nextSnap,
   pushRecent,
   saveLogScale,
   saveRailCollapsed,
-  saveSnaps,
   saveTab,
-  type DrawerSnap,
   type ResearchTab,
 } from './tickerWorkspaceState';
 import './tickerWorkspace.css';
@@ -75,7 +73,7 @@ export function TickerWorkspace({
   const [logScale, setLogScale] = useState(loadLogScale);
   const [showVolume, setShowVolume] = useState(true);
   const [tab, setTab] = useState<ResearchTab>(loadTab);
-  const [snaps, setSnaps] = useState(loadSnaps);
+  const drawer = useTickerDrawerLayout(tab);
   const [railCollapsed, setRailCollapsed] = useState(loadRailCollapsed);
 
   // --- symbol-scoped: reset on switch, or a comparison silently follows you to the next
@@ -110,7 +108,6 @@ export function TickerWorkspace({
   }, [normalized]);
 
   useEffect(() => saveTab(tab), [tab]);
-  useEffect(() => saveSnaps(snaps), [snaps]);
   useEffect(() => saveLogScale(logScale), [logScale]);
   useEffect(() => saveRailCollapsed(railCollapsed), [railCollapsed]);
 
@@ -123,8 +120,14 @@ export function TickerWorkspace({
     if (!profile.tabs.includes(tab)) setTab(profile.tabs[0]);
   }, [profile.tabs, tab]);
 
-  const snap = snaps[tab] ?? 'half';
-  const setSnap = useCallback((next: DrawerSnap) => setSnaps((current) => ({ ...current, [tab]: next })), [tab]);
+  const {
+    snap,
+    size: drawerSize,
+    setSnap,
+    resize: resizeDrawer,
+    ensureOpen: ensureDrawerOpen,
+    cycleSnap: cycleDrawerSnap,
+  } = drawer;
 
   // Comparison rebases the price pane to indexed %, so every price-anchored plot — alerts,
   // fundamentals, filing markers — is genuinely inapplicable while it is on. The controls
@@ -188,8 +191,8 @@ export function TickerWorkspace({
 
   const openTab = useCallback((next: ResearchTab) => {
     setTab(next);
-    setSnaps((current) => ({ ...current, [next]: current[next] === 'collapsed' ? 'half' : current[next] }));
-  }, []);
+    ensureDrawerOpen(next);
+  }, [ensureDrawerOpen]);
 
   const plotMetric = useCallback((metric: string) => {
     setOverlayMetric((current) => (current === metric ? null : metric));
@@ -235,7 +238,7 @@ export function TickerWorkspace({
       if (key >= '1' && key <= '5') { setRange(CHART_RANGES[Number(key) - 1]); event.preventDefault(); return; }
       if (key === '0') { setRange('MAX'); event.preventDefault(); return; }
       if (key === 'l') { setLogScale((value) => !value); event.preventDefault(); return; }
-      if (key === '\\') { setSnaps((current) => ({ ...current, [tab]: nextSnap(current[tab] ?? 'half') })); event.preventDefault(); return; }
+      if (key === '\\') { cycleDrawerSnap(); event.preventDefault(); return; }
       if (key === 'j' || key === 'k') {
         const from = railCursor ?? normalized;
         const next = stepRail(railEntries, from, key === 'j' ? 1 : -1);
@@ -259,7 +262,7 @@ export function TickerWorkspace({
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [normalized, onNavigate, railCursor, railEntries, tab]);
+  }, [cycleDrawerSnap, normalized, onNavigate, railCursor, railEntries]);
 
   if (!detail) {
     return <TickerLoadState symbol={normalized} error={ticker.error} onClose={onClose} onRetry={ticker.reload} />;
@@ -310,7 +313,6 @@ export function TickerWorkspace({
         onBack={onClose}
         onToggleWatch={() => void toggleWatch()}
         onOpenPosition={() => openTab('overview')}
-        onOpenJump={() => { setJumpSeed(''); setJumpOpen(true); }}
       />
 
       <div className="tw-body">
@@ -347,10 +349,10 @@ export function TickerWorkspace({
                 frequency={effectiveFrequency}
                 onFrequency={setOverlayFrequency}
                 onClearMetric={() => setOverlayMetric(null)}
+                onMetric={plotMetric}
                 showVolume={showVolume}
                 onShowVolume={setShowVolume}
                 comparisonActive={comparing}
-                onBrowse={() => openTab('fundamentals')}
               />
             )}
             compareMenu={(anchor, open, close) => (
@@ -402,8 +404,6 @@ export function TickerWorkspace({
                 anchor={anchor}
                 open={open}
                 onClose={close}
-                logScale={logScale}
-                onLogScale={setLogScale}
                 intelligence={detail.intelligence}
                 priceBasis={detail.quote.priceBasis}
                 barCount={bars.length}
@@ -448,7 +448,7 @@ export function TickerWorkspace({
             insiderDisplayMode={insiderDisplay}
             logScale={logScale}
             showVolume={showVolume}
-            layoutKey={`${snap}:${railCollapsed}`}
+            layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}`}
             overlay={
               jumpOpen ? (
                 <SymbolJump
@@ -462,10 +462,13 @@ export function TickerWorkspace({
 
           <ResearchDrawer
             tab={tab}
-            onTab={setTab}
+            onTab={openTab}
             tabs={profile.tabs}
             snap={snap}
             onSnap={setSnap}
+            size={drawerSize}
+            onResize={resizeDrawer}
+            onCycleSnap={cycleDrawerSnap}
             warnings={{ evidence: secWarnings, fundamentals: overlayWarnings }}
           >
             {/* Each panel receives `active`, which is how Codex's panels gate their own

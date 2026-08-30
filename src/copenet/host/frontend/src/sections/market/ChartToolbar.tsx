@@ -93,10 +93,15 @@ export function ChartToolbar({
 
       <span className="tw-toolbar__spacer" />
 
-      <div className="tw-segment" role="group" aria-label="Price axis">
-        <button type="button" aria-pressed={!logScale} onClick={() => onLogScale(false)} title="Linear price axis">Lin</button>
-        <button type="button" aria-pressed={logScale} onClick={() => onLogScale(true)} title="Logarithmic price axis">Log</button>
-      </div>
+      <button
+        type="button"
+        className="tw-axis-toggle"
+        onClick={() => onLogScale(!logScale)}
+        aria-label={`Price axis: ${logScale ? 'logarithmic' : 'linear'}. Switch to ${logScale ? 'linear' : 'logarithmic'}`}
+        title={`${logScale ? 'Logarithmic' : 'Linear'} axis · click for ${logScale ? 'linear' : 'logarithmic'}`}
+      >
+        {logScale ? 'Log' : 'Lin'}
+      </button>
 
       <ToolbarMenu label="Chart settings & data source" icon={<Settings2 size={14} />} render={settingsMenu} />
 
