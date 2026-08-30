@@ -30,6 +30,27 @@ export function toneColor(tone: Tone): string {
   return tone === 'up' ? MM.up : tone === 'down' ? MM.down : MM.muted;
 }
 
+export type FreshnessTone = 'fresh' | 'aging' | 'stale' | 'unknown';
+
+/** Shared data-age rule: 0–3 days fresh, 4–5 aging, and 6+ stale. */
+export function dataFreshness(timestamp?: string | null, now = Date.now()): FreshnessTone {
+  if (!timestamp) return 'unknown';
+  const observedAt = Date.parse(timestamp);
+  if (!Number.isFinite(observedAt)) return 'unknown';
+  const ageDays = Math.floor(Math.max(0, now - observedAt) / 86_400_000);
+  if (ageDays <= 3) return 'fresh';
+  if (ageDays <= 5) return 'aging';
+  return 'stale';
+}
+
+export function freshnessColor(timestamp?: string | null, now = Date.now()): string {
+  const freshness = dataFreshness(timestamp, now);
+  if (freshness === 'fresh') return MM.up;
+  if (freshness === 'aging') return MM.accent;
+  if (freshness === 'stale') return MM.down;
+  return MM.dim;
+}
+
 export const label: CSSProperties = {
   margin: 0,
   font: '600 9.5px Inter',

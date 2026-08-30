@@ -1,6 +1,6 @@
 import { lazy, Suspense, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
-import { EvidenceFlagBadge, EvidenceToneGlyph, MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
+import { EvidenceFlagBadge, EvidenceToneGlyph, MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, freshnessColor, mono, toneColor } from './marketUi';
 import { sortEvidenceNewestFirst } from './marketEvidence';
 import { evidenceDay } from './secActivity';
 import { SEC_DEPTHS, type TickerEvidenceState } from './useMarketMonitorData';
@@ -105,7 +105,7 @@ export function TickerEvidencePanel({ state, active }: { state: TickerEvidenceSt
   return (
     <section className="ticker-evidence-panel is-embedded">
       <header className="ticker-embedded-panel-header">
-        <div><h3>SEC & event investigation</h3><p>{state.payload?.asOf ? `Cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'}</p></div>
+        <div><h3>SEC & event investigation</h3><p style={{ color: freshnessColor(state.payload?.asOf) }}>{state.payload?.asOf ? `Cached as of ${new Date(state.payload.asOf).toLocaleString()}` : 'Form 4, Form 144, and 8-K activity'}</p></div>
         {actions}
       </header>
       {body}

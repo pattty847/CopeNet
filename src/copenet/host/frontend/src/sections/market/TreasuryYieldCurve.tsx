@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useIsMobile } from '../../lib/responsive';
 import { wsClient } from '../../lib/wsClient';
-import { MM, mono } from './marketUi';
+import { MM, freshnessColor, mono } from './marketUi';
 import type { TreasuryYieldCurvePayload, TreasuryYieldPoint, YieldCurveRange } from './types';
 
 const RANGE_LABELS: { value: YieldCurveRange; label: string }[] = [
@@ -119,7 +119,7 @@ export function TreasuryYieldCurve() {
             <h2 id="treasury-curve-title" style={{ margin: 0, font: '700 11px Inter', letterSpacing: '.14em', color: MM.text, textTransform: 'uppercase' }}>Treasury curve</h2>
             <div style={{ marginTop: 3, fontSize: 9.5, color: MM.dim }}>US government yields · {asOf || 'latest close'}</div>
           </div>
-          {curve && <span style={{ border: '1px solid rgba(105,197,137,.25)', borderRadius: 999, padding: '2px 7px', color: MM.up, font: '700 8px Inter', letterSpacing: '.1em' }}>LATEST CLOSE</span>}
+          {curve && <span style={{ border: '1px solid currentColor', borderRadius: 999, padding: '2px 7px', color: freshnessColor(curve.asOf), font: '700 8px Inter', letterSpacing: '.1em' }}>LATEST CLOSE</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div role="group" aria-label="Yield change range" style={{ display: 'flex', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 2, background: '#050506' }}>

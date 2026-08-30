@@ -1,8 +1,4 @@
-// Popover bodies for the chart toolbar.
-//
-// Each one answers a single question. Copy stays compact, the one long catalogue gets a
-// searchable nested picker, and controls that cannot work right now keep their place with a
-// short reason rather than vanishing.
+// Compact popover bodies for the chart toolbar.
 
 import { useEffect, useState, type FormEvent, type RefObject } from 'react';
 import { X } from 'lucide-react';
@@ -19,7 +15,6 @@ function Shell({
   open,
   onClose,
   title,
-  subtitle,
   width = 320,
   children,
 }: {
@@ -27,7 +22,6 @@ function Shell({
   open: boolean;
   onClose: () => void;
   title: string;
-  subtitle?: string;
   width?: number;
   children: React.ReactNode;
 }) {
@@ -35,10 +29,7 @@ function Shell({
     <MarketFloatingPopover anchorRef={anchor} open={open} onClose={onClose} width={width}>
       <div className="tw-pop">
         <div className="tw-pop__head">
-          <div>
-            <div className="tw-pop__title">{title}</div>
-            {subtitle && <div className="tw-pop__sub">{subtitle}</div>}
-          </div>
+          <div className="tw-pop__title">{title}</div>
           <button type="button" className="tw-iconbtn" onClick={onClose} aria-label={`Close ${title}`}><X size={13} /></button>
         </div>
         <div className="tw-pop__body">{children}</div>
@@ -81,9 +72,8 @@ export function PlotsMenu({
   const choices = info?.frequencies ?? (['quarterly', 'ttm', 'annual'] as FinancialFrequency[]);
 
   return (
-    <Shell anchor={anchor} open={open} onClose={onClose} title="Plots" width={342}>
+    <Shell anchor={anchor} open={open} onClose={onClose} title="Plots" width={310}>
       <div className="tw-pop__section">
-        <div className="tw-pop__label">On the chart</div>
         <div className="tw-pop__row">
           <label className="tw-switch" style={{ flex: 1 }}>
             <span>Volume</span>
@@ -107,9 +97,7 @@ export function PlotsMenu({
             )}
             {valuation && <p className="tw-pop__note">TTM series</p>}
           </div>
-        ) : (
-          <p className="tw-pop__note">No financial plot</p>
-        )}
+        ) : null}
       </div>
 
       <div className="tw-pop__section">
@@ -160,8 +148,7 @@ export function CompareMenu({
     return () => window.clearTimeout(timer);
   }, [input]);
 
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
+  const addExpression = () => {
     const expression = normalizeComparisonExpression(input);
     if (!expression) return setError('Enter a ticker or one ratio, such as XLK/GLD.');
     if (expressions.includes(expression)) return setError('That comparison is already plotted.');
@@ -171,30 +158,35 @@ export function CompareMenu({
     setError(null);
   };
 
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    addExpression();
+  };
+
   return (
     <Shell
       anchor={anchor}
       open={open}
       onClose={onClose}
       title="Compare"
-      width={352}
+      width={316}
     >
       <form onSubmit={submit}>
-        <div className="tw-pop__label">Symbol or ratio</div>
-        <div style={{ display: 'flex', gap: 6 }}>
-          <input
-            value={input}
-            onChange={(event) => { setInput(event.target.value); if (error) setError(null); }}
-            placeholder="VOO or VOO/GLD"
-            autoCapitalize="characters"
-            spellCheck={false}
-            autoComplete="off"
-            aria-label="Comparison ticker or ratio"
-            className="tw-input"
-            style={{ flex: 1 }}
-          />
-          <button type="submit" className="tw-btn">Add</button>
-        </div>
+        <input
+          value={input}
+          onChange={(event) => { setInput(event.target.value); if (error) setError(null); }}
+          placeholder="Compare: VOO or XLK/GLD · Enter"
+          autoCapitalize="characters"
+          spellCheck={false}
+          autoComplete="off"
+          aria-label="Comparison ticker or ratio"
+          className="tw-input tw-pop__compare-input"
+          onKeyDown={(event) => {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            addExpression();
+          }}
+        />
         {error && <div role="alert" style={{ marginTop: 6, color: '#d96d5f', fontSize: 10 }}>{error}</div>}
         {suggestions.length > 0 && (
           <div style={{ marginTop: 6, border: '1px solid rgba(254,252,244,.07)', borderRadius: 4, overflow: 'hidden' }}>
@@ -215,14 +207,10 @@ export function CompareMenu({
             ))}
           </div>
         )}
-        <div className="tw-pop__status">Indexed from visible-range start</div>
       </form>
 
-      <div className="tw-pop__section">
-        <div className="tw-pop__label">Plotted</div>
-        {expressions.length === 0 ? (
-          <p className="tw-pop__note">Try VOO or XLK/GLD</p>
-        ) : (
+      {expressions.length > 0 && (
+        <div className="tw-pop__section tw-pop__chips">
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {expressions.map((expression) => (
               <span key={expression} className="tw-btn" style={{ gap: 5 }}>
@@ -231,9 +219,9 @@ export function CompareMenu({
               </span>
             ))}
           </div>
-        )}
-        {expressions.length > 0 && <button type="button" className="tw-btn" style={{ marginTop: 8 }} onClick={onClear}>Clear all</button>}
-      </div>
+          <button type="button" className="tw-btn" onClick={onClear}>Clear all</button>
+        </div>
+      )}
     </Shell>
   );
 }
@@ -269,33 +257,39 @@ export function EventsMenu({
       open={open}
       onClose={onClose}
       title="Filings & events"
-      subtitle={disabled ? 'Unavailable in Compare mode' : undefined}
-      width={330}
+      width={310}
     >
       <fieldset disabled={disabled} style={{ border: 0, margin: 0, padding: 0, opacity: disabled ? 0.45 : 1 }}>
         <label className="tw-switch">
-          <span>Form 4 transactions<small>Executed insider trades</small></span>
+          <span>Insider transactions</span>
           <input type="checkbox" checked={showInsider} onChange={(event) => onShowInsider(event.target.checked)} />
         </label>
 
-        <div className="tw-pop__section" style={{ opacity: showInsider ? 1 : 0.45 }}>
-          <div className="tw-pop__label">Form 4 lookback</div>
-          <div className="tw-choices">
-            {(['chart', '90D', '1Y', '3Y', '5Y', 'MAX'] as const).map((value) => (
-              <button key={value} type="button" disabled={!showInsider} aria-pressed={lookback === value} onClick={() => onLookback(value)}>
-                {value === 'chart' ? 'Chart range' : value === 'MAX' ? 'All' : value}
-              </button>
-            ))}
-          </div>
-        </div>
+        {showInsider && (
+          <>
+            <div className="tw-pop__section tw-pop__control-row">
+              <div className="tw-pop__label">Lookback</div>
+              <div className="tw-choices">
+                {(['chart', '90D', '1Y', '3Y', '5Y', 'MAX'] as const).map((value) => (
+                  <button key={value} type="button" aria-pressed={lookback === value} onClick={() => onLookback(value)}>
+                    {value === 'chart' ? 'Chart' : value === 'MAX' ? 'All' : value}
+                  </button>
+                ))}
+              </div>
+            </div>
 
-        <div className="tw-pop__section" style={{ opacity: showInsider ? 1 : 0.45 }}>
-          <div className="tw-pop__label">Display</div>
-          <div className="tw-choices">
-            <button type="button" disabled={!showInsider} aria-pressed={displayMode === 'clusters'} onClick={() => onDisplayMode('clusters')}>Cluster boxes</button>
-            <button type="button" disabled={!showInsider} aria-pressed={displayMode === 'individual'} onClick={() => onDisplayMode('individual')}>Individual trades</button>
-          </div>
-        </div>
+            <div className="tw-pop__section tw-pop__control-row">
+              <div className="tw-pop__label">Markers</div>
+              <div className="tw-choices">
+                <button type="button" aria-pressed={displayMode === 'clusters'} onClick={() => onDisplayMode('clusters')}>Clusters</button>
+                <button type="button" aria-pressed={displayMode === 'individual'} onClick={() => onDisplayMode('individual')}>Trades</button>
+              </div>
+            </div>
+          </>
+        )}
+        {disabled && (
+          <div className="tw-pop__note">Unavailable in Compare mode</div>
+        )}
       </fieldset>
     </Shell>
   );

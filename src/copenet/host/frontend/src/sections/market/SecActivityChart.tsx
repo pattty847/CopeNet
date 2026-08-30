@@ -58,13 +58,11 @@ export function SecActivityChart({
                 <Bar dataKey="executedValue" name={unit === 'money' ? 'Executed Form 4' : 'Executed Form 4 shares'} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false}>
                   {rows.map((row) => <Cell key={row.day} fill={row.executedValue >= 0 ? '#69c589' : '#d96d5f'} fillOpacity={selectedDay && selectedDay !== row.day ? 0.24 : 0.88} stroke={selectedDay === row.day ? '#fefcf4' : 'transparent'} strokeWidth={selectedDay === row.day ? 1 : 0} />)}
                 </Bar>
-                <Bar dataKey="plannedValue" name={unit === 'money' ? 'Planned Form 144' : 'Planned Form 144 shares'} fill="#c6924e" fillOpacity={selectedDay ? 0.72 : 0.82} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false} />
+                <Bar dataKey="plannedValue" name={unit === 'money' ? 'Planned Form 144' : 'Planned Form 144 shares'} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false}>
+                  {rows.map((row) => <Cell key={row.day} fill="#c6924e" fillOpacity={selectedDay && selectedDay !== row.day ? 0.24 : 0.82} stroke={selectedDay === row.day ? '#fefcf4' : 'transparent'} strokeWidth={selectedDay === row.day ? 1 : 0} />)}
+                </Bar>
               </BarChart>
             </ResponsiveContainer>
-          </div>
-          <div className="sec-activity-day-list" role="group" aria-label="Filter SEC filings by activity day">
-            <span>Filter</span>
-            {rows.map((row) => <button key={row.day} type="button" aria-pressed={selectedDay === row.day} onClick={() => onSelectDay(selectedDay === row.day ? null : row.day)}>{row.label}</button>)}
           </div>
           <footer>
             <span>Green/red = executed Form 4 net · amber = planned Form 144 sale</span>

@@ -161,8 +161,21 @@ html[data-theme='dark'] .shell-sidebar {
     var(--color-shell-sidebar);
 }
 
+.shell-top-command-bar {
+  box-sizing: border-box;
+  padding-right: 216px;
+}
+
 .shell-command-field {
+  max-width: 720px;
+  min-width: 0;
   overflow: hidden;
+}
+
+.shell-command-field > div:first-of-type {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 html[data-theme='dark'] .shell-command-field {

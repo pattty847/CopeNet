@@ -20,11 +20,11 @@ export function TopCommandBar() {
   const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
 
   return (
-    <div className="relative flex w-full items-center justify-center">
+    <div className="shell-top-command-bar relative flex w-full items-center justify-center">
       <button
         type="button"
         onClick={() => setCommandPaletteOpen(true)}
-        className="shell-command-field relative w-full max-w-[720px] text-left"
+        className="shell-command-field relative w-full text-left"
       >
           <Search className="pointer-events-none absolute left-4 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-shell-muted" />
           <div
@@ -38,7 +38,7 @@ export function TopCommandBar() {
           </div>
       </button>
 
-      <div className="absolute right-0 top-1/2 flex -translate-y-1/2 items-center justify-end gap-1.5">
+      <div className="shell-command-actions absolute right-0 top-1/2 flex -translate-y-1/2 items-center justify-end gap-1.5">
         <button type="button" className={iconBtn} title="Alerts">
           <Bell className="h-3.5 w-3.5" />
         </button>
