@@ -1,15 +1,16 @@
 // Active-indicator rows for the Plots menu.
 //
-// One row per configured indicator: colour, label, current reading, and three affordances —
-// show/hide, settings, remove. Settings expand IN PLACE below the row rather than opening a
-// second surface, because the whole popover exists to answer "what is on my chart" and a
-// nested dialog would put the answer behind another click.
+// THE SPLIT: the chart is where you tune what you can SEE; this list is where you manage the
+// SET. Settings and remove live on the chart itself — on a price overlay's legend row and on
+// each pane's head — so they are not duplicated into an inline panel here. Two things have no
+// chart affordance and so live only here: unhiding (a hidden indicator has no chart presence
+// at all, which makes this the only way back) and pane order.
 //
-// Deliberately no descriptions here. Discovery belongs in the picker; this list is for an
-// operator who already knows what they added and wants to change one number.
+// The gear on a row opens the same popover the chart's own gears open. One settings surface,
+// three doors onto it.
 
-import { ChevronDown, ChevronUp, Eye, EyeOff, Settings2, X } from 'lucide-react';
-import { IndicatorSettings } from './IndicatorSettings';
+import { ChevronDown, ChevronUp, Eye, EyeOff } from 'lucide-react';
+import { IndicatorControls } from './IndicatorControls';
 import { legendColor, legendOutputs, type ComputedIndicator } from './compute';
 import type { IndicatorConfig } from './types';
 import type { IndicatorInstance, IndicatorStyle } from './state';
@@ -27,14 +28,10 @@ export interface IndicatorRowActions {
 export function IndicatorRows({
   instances,
   computed,
-  expanded,
-  onToggleExpanded,
   actions,
 }: {
   instances: IndicatorInstance[];
   computed: ComputedIndicator[];
-  expanded: string | null;
-  onToggleExpanded: (instanceId: string | null) => void;
   actions: IndicatorRowActions;
 }) {
   if (!instances.length) return null;
@@ -45,25 +42,20 @@ export function IndicatorRows({
       {instances.map((instance, index) => {
         const indicator = byId.get(instance.instanceId);
         if (!indicator) return null;
-        const open = expanded === instance.instanceId;
         // One reading per row. A three-output indicator printing all three turns a compact
-        // list into a table; the primary series is what the row is identified by.
+        // list into a table, and the chart already carries the full set.
         const reading = legendOutputs(indicator).find((output) => output.latest != null)?.latest;
 
         return (
-          <div key={instance.instanceId} className="tw-ind-row" data-open={open}>
+          <div key={instance.instanceId} className="tw-ind-row">
             <div className="tw-ind-row__head">
-              <span
-                className="tw-ind-row__swatch"
-                style={{ background: legendColor(indicator) }}
-                aria-hidden="true"
-              />
+              <span className="tw-ind-row__swatch" style={{ background: legendColor(indicator) }} aria-hidden="true" />
               <span className="tw-ind-row__label" title={indicator.definition.name}>{indicator.label}</span>
               <span className="tw-ind-row__value">
                 {indicator.insufficientHistory ? 'needs history' : reading ?? '—'}
               </span>
               <span className="tw-ind-row__actions">
-                {/* Order matters only below the price pane, so the controls appear only there. */}
+                {/* Order only means something below the price pane. */}
                 {indicator.placement === 'pane' && (
                   <>
                     <button
@@ -94,44 +86,13 @@ export function IndicatorRows({
                   onClick={() => actions.onVisibility(instance.instanceId, !instance.visible)}
                   aria-pressed={!instance.visible}
                   aria-label={`${instance.visible ? 'Hide' : 'Show'} ${indicator.label}`}
-                  title={instance.visible ? 'Hide' : 'Show'}
+                  title={instance.visible ? 'Hide' : 'Show — the only way back once hidden'}
                 >
                   {instance.visible ? <Eye size={12} /> : <EyeOff size={12} />}
                 </button>
-                <button
-                  type="button"
-                  className="tw-iconbtn tw-iconbtn--xs"
-                  data-active={open}
-                  onClick={() => onToggleExpanded(open ? null : instance.instanceId)}
-                  aria-expanded={open}
-                  aria-label={`Settings for ${indicator.label}`}
-                  title="Settings"
-                >
-                  <Settings2 size={12} />
-                </button>
-                <button
-                  type="button"
-                  className="tw-iconbtn tw-iconbtn--xs"
-                  onClick={() => actions.onRemove(instance.instanceId)}
-                  aria-label={`Remove ${indicator.label}`}
-                  title="Remove"
-                >
-                  <X size={12} />
-                </button>
+                <IndicatorControls indicator={indicator} actions={actions} />
               </span>
             </div>
-
-            {open && (
-              <IndicatorSettings
-                definition={indicator.definition}
-                instance={instance}
-                onConfigure={(patch) => actions.onConfigure(instance.instanceId, patch)}
-                onStyle={(outputKey, style) => actions.onStyle(instance.instanceId, outputKey, style)}
-                onDuplicate={() => actions.onDuplicate(instance.instanceId)}
-                onReset={() => actions.onReset(instance.instanceId)}
-                onRemove={() => actions.onRemove(instance.instanceId)}
-              />
-            )}
           </div>
         );
       })}

@@ -221,6 +221,30 @@ transcriptions.
   on nearly every bar, and turns the adaptive average into a plain fast EMA that
   still looks entirely plausible on a chart.
 
+## Controls: where they live
+
+**The chart is where you tune what you can see; Plots is where you manage the set.**
+
+Settings and remove sit on the chart itself — on a price overlay's legend row and
+at the top-right of each indicator pane, anchored with
+`IPaneApi.getHTMLElement()`. The gear opens the same `IndicatorSettings` form the
+Plots menu uses: one settings surface, three doors onto it, never two copies.
+
+Two things have no chart affordance and so live only in Plots:
+
+- **Unhiding.** Hiding a pane indicator destroys its pane, so a hidden indicator
+  has no chart presence at all — the Plots row is the only way back.
+- **Pane order.**
+
+Pane geometry is measured with a `ResizeObserver` on the pane elements rather
+than sampled on an animation frame. Dragging a separator publishes no event, but
+it does resize the panes either side of it, and a pane above resizing moves every
+pane below it — whose own observers then fire. That covers separator drags, chart
+resizes and pane add/remove with no polling.
+
+Double-click-to-open-settings was considered and rejected: an invisible affordance
+where a visible gear is already one click away in three places.
+
 ## Plots-menu integration
 
 Plots is the home for chart layers, in the order an operator reaches for them:
@@ -259,6 +283,14 @@ The registry-wide sweep is the load-bearing half: per-indicator fixtures catch a
 wrong formula, but only a universal sweep catches the indicator added six months
 from now that emits NaN on a flat series or reads a future bar.
 
+**Do not read chart DOM from a background tab.** Lightweight Charts materialises a
+pane's DOM row on a paint, and a background tab does not paint — so the DOM shows
+the state from before your last change while the chart's own model is already
+correct. This produced a confident false diagnosis during development ("an empty
+pane is leaking 72px"); the row heights were simply stale. Query the model
+(`panes()`, `paneIndex()`, `paneSize()`) for structure, and force a paint with a
+screenshot before trusting any measured geometry.
+
 **The Ehlers tests avoid snapshots deliberately.** These filters are recursive and
 self-referential, so a snapshot of their own output proves only that they have not
 changed — a transposed coefficient would be captured as "correct" on the first
@@ -291,10 +323,12 @@ Measure before adding one.
 
 ## Known limitations
 
-- **No per-pane legends.** Lightweight Charts has no API for anchoring DOM to a
-  pane; one would mean deriving pane tops from summed heights and a guessed
-  separator, re-derived on every resize. All layers share the single top-left
-  stack. A pane indicator's reading therefore sits over the price pane.
+- ~~**No per-pane legends.**~~ **Fixed.** The earlier claim that no API existed for
+  anchoring DOM to a pane was wrong: `IPaneApi.getHTMLElement()` is a first-class
+  accessor. A pane indicator now carries its own legend and controls inside its
+  pane, measured against that element with a `ResizeObserver` — no knowledge of
+  Lightweight Charts' internal markup and no arithmetic over summed pane heights.
+  The top-left stack now carries price overlays only.
 - **Bands are two lines and a dashed midline, with no shaded fill.** A fill needs
   a custom series primitive (v5 supports `attachPrimitive` /
   `ICustomSeriesPaneView`) per band family.
@@ -303,9 +337,9 @@ Measure before adding one.
   through it. Honest gaps need one series per segment, as
   `splitFinancialOverlaySegments` does for the financial overlay. Rare enough to
   defer; not free.
-- **Pane heights are not persisted or operator-resizable.** They follow the fixed
-  4:1 stretch. Lightweight Charts supports dragging a pane separator, but the
-  resulting sizes are not read back into the layout.
+- **Pane heights are not persisted.** Separators drag fine and the controls track
+  the new geometry, but the resulting sizes are not read back into the layout, so
+  they reset on reload. The initial split follows the fixed 4:1 stretch.
 - **`insufficientHistory` is reported but not explained.** The row and legend read
   "needs history" without saying how many bars are missing, though `warmup` has
   the number.
@@ -322,7 +356,7 @@ Measure before adding one.
 
 - Band fills via a series primitive.
 - Segment-split series so interior gaps read honestly.
-- Operator-resizable panes, with heights persisted into the layout.
+- Persisting dragged pane heights into the layout.
 - A "needs N more bars" reading on `insufficientHistory`.
 - Indicators computed on a comparison series, which would make Compare a plot
   rather than a mode — the end state `TICKER_WORKSPACE_REDESIGN.md` already

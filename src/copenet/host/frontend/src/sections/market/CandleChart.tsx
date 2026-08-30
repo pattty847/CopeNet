@@ -34,6 +34,8 @@ import type { FinancialOverlayPoint } from './financialOverlay';
 import type { ChartComparisonLine } from './chartComparison';
 import type { InsiderDisplayMode } from './chartRanges';
 import type { ComputedIndicator } from './indicators/compute';
+import type { IndicatorRowActions } from './indicators/IndicatorRows';
+import { IndicatorPaneControls } from './indicators/IndicatorPaneControls';
 import { useChartIndicators } from './indicators/useChartIndicators';
 import { replaceComparisonSeries } from './chartComparisonSeries';
 import {
@@ -429,6 +431,7 @@ export function CandleChart({
   logScale = false,
   showVolume = true,
   indicators = [],
+  indicatorActions,
   onHoverBar,
 }: {
   bars: Ohlcv[];
@@ -456,6 +459,9 @@ export function CandleChart({
    *  each get their own pane below it. The chart hands these straight to the indicator layer
    *  and never inspects them. */
   indicators?: ComputedIndicator[];
+  /** Supplied when the operator may act on an indicator from the chart itself. Omitted, the
+   *  pane heads still show their legend but carry no controls. */
+  indicatorActions?: IndicatorRowActions;
   /** Crosshair bar under the pointer, or null when the pointer leaves the chart. Lets the
    *  legend live ON the chart instead of in a metadata strip wrapped around it. */
   onHoverBar?: (bar: Ohlcv | null) => void;
@@ -493,7 +499,7 @@ export function CandleChart({
   onHoverBarRef.current = onHoverBar;
   insiderDisplayModeRef.current = insiderDisplayMode;
   useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration, draftAlertPrice);
-  useChartIndicators(chartRef, chartGeneration, indicators);
+  const indicatorPaneRects = useChartIndicators(chartRef, chartGeneration, indicators, containerRef);
 
   /** Recompute markers + cluster boxes for the current data and zoom. Derived, never stored:
    *  runs on data change and (rAF-throttled) on every visible-range change. */
@@ -1067,6 +1073,11 @@ export function CandleChart({
           </div>
         </div>
       )}
+      <IndicatorPaneControls
+        rects={indicatorPaneRects}
+        indicators={indicators}
+        actions={indicatorActions}
+      />
       {alertPlacementActive && (
         <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px Inter', letterSpacing: '.04em', pointerEvents: 'none' }}>
           Click the chart to place a daily-close alert

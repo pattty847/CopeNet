@@ -498,6 +498,7 @@ export function TickerWorkspace({
             // indicator is genuinely inapplicable while it is on. The LAYOUT is untouched, so
             // leaving Compare restores exactly what was there.
             indicators={comparing ? [] : computedIndicators}
+            indicatorActions={indicatorActions}
             layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}`}
             overlay={
               jumpOpen ? (

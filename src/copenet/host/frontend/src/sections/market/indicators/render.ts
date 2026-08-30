@@ -95,6 +95,27 @@ export class IndicatorChartLayer {
     return [...this.entries.values()].filter((entry) => entry.pane != null).length;
   }
 
+  /** The live DOM element behind each indicator pane.
+   *
+   *  `IPaneApi.getHTMLElement()` is a first-class accessor, so anchoring controls to a pane
+   *  needs no knowledge of Lightweight Charts' internal markup and no arithmetic over summed
+   *  pane heights. It returns null before the pane has been laid out, which is why callers
+   *  measure on a ResizeObserver rather than once. */
+  paneElements(): { instanceId: string; element: HTMLElement }[] {
+    const found: { instanceId: string; element: HTMLElement }[] = [];
+    for (const [instanceId, entry] of this.entries) {
+      if (!entry.pane) continue;
+      let element: HTMLElement | null = null;
+      try {
+        element = entry.pane.getHTMLElement();
+      } catch {
+        element = null; // pane removed underneath us this frame
+      }
+      if (element) found.push({ instanceId, element });
+    }
+    return found;
+  }
+
   private create(indicator: ComputedIndicator): void {
     const pane = indicator.placement === 'pane' ? this.chart.addPane(true) : null;
     const entry: RenderedEntry = {
@@ -232,6 +253,14 @@ export class IndicatorChartLayer {
     }
   }
 
+  /** Remove an indicator and everything it owns.
+   *
+   *  The explicit `removePane(paneIndex())` is safe precisely BECAUSE panes are created with
+   *  `preserveEmptyPane`: Lightweight Charts will not collect the pane as its last series is
+   *  removed, so the index is still valid when we get there. Were that flag ever dropped, the
+   *  pane could self-collect first and the captured index would then address the NEXT pane —
+   *  removing a different indicator's. Verified in a real browser: removing the first of
+   *  three pane indicators leaves the other two intact and reclaims the space. */
   private teardown(instanceId: string, entry: RenderedEntry): void {
     for (const line of entry.priceLines) {
       try {
@@ -240,19 +269,16 @@ export class IndicatorChartLayer {
         /* already detached */
       }
     }
+
     for (const series of entry.series.values()) {
       try {
         this.chart.removeSeries(series);
-      } catch {
-        /* already removed with its pane */
-      }
+      } catch { /* already removed */ }
     }
     if (entry.pane) {
       try {
         this.chart.removePane(entry.pane.paneIndex());
-      } catch {
-        /* pane already gone */
-      }
+      } catch { /* pane already gone */ }
     }
     this.entries.delete(instanceId);
   }

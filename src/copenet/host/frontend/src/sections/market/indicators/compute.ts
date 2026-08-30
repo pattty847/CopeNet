@@ -45,6 +45,9 @@ export interface ComputedIndicator {
   instanceId: string;
   indicatorId: string;
   definition: IndicatorDefinition;
+  /** The configured instance behind this result. Carried so a control surface can render a
+   *  settings form without a second lookup against the layout. */
+  instance: IndicatorInstance;
   label: string;
   visible: boolean;
   placement: 'price' | 'pane';
@@ -136,6 +139,7 @@ export function createIndicatorComputer(): IndicatorComputer {
           instanceId: instance.instanceId,
           indicatorId: instance.indicatorId,
           definition,
+          instance,
           label: definition.short(instance.config),
           visible: instance.visible,
           placement: definition.placement,

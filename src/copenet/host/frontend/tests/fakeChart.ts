@@ -17,6 +17,19 @@ export class FakePane {
     this.stretchFactor = value;
   }
 
+  /** Stands in for the pane's DOM node. Null models the real API's documented behaviour
+   *  before the pane has been laid out, which is why the renderer must tolerate it. */
+  element: unknown = { pane: true };
+
+  getHTMLElement(): unknown {
+    return this.element;
+  }
+
+  /** Panes are created preserved, which is what keeps a captured pane index valid through
+   *  teardown. The renderer depends on this staying true; the flag is modelled so a future
+   *  change that clears it shows up here rather than as a wrongly-removed pane. */
+  preserve = true;
+
   paneIndex(): number {
     const index = this.chart.paneList.indexOf(this);
     if (index < 0) throw new Error('pane has been removed');
@@ -45,6 +58,8 @@ export class FakeSeries {
     public readonly definitionName: string,
     options: Record<string, unknown>,
     public readonly createdInPane: number,
+    /** The pane this series lives in, by reference — indices move when a pane is removed. */
+    public readonly pane: FakePane | null = null,
   ) {
     this.options = { ...options };
   }
@@ -99,7 +114,7 @@ export class FakeChart {
 
   addSeries(definition: { toString(): string }, options: Record<string, unknown>, paneIndex = 0): FakeSeries {
     const name = seriesName(definition);
-    const series = new FakeSeries(name, options, paneIndex);
+    const series = new FakeSeries(name, options, paneIndex, this.paneList[paneIndex] ?? null);
     this.series.push(series);
     return series;
   }

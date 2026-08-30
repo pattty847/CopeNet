@@ -12,6 +12,8 @@ import { MM, mono, toneColor } from './marketUi';
 import { timeframeLabel, type ChartTimeframe } from './chartRanges';
 import type { ChartComparisonLine } from './chartComparison';
 import { legendColor, legendOutputs, type ComputedIndicator } from './indicators/compute';
+import { IndicatorControls } from './indicators/IndicatorControls';
+import type { IndicatorRowActions } from './indicators/IndicatorRows';
 import type { FinancialOverlayPoint } from './financialOverlay';
 import type { InsiderDisplayMode } from './chartRanges';
 import type { ChartEvent, EvidenceItem, Ohlcv, PriceAlert } from './types';
@@ -60,6 +62,7 @@ export function ChartStage({
   logScale,
   showVolume,
   indicators,
+  indicatorActions,
   layoutKey,
   overlay,
 }: {
@@ -86,6 +89,7 @@ export function ChartStage({
   logScale: boolean;
   showVolume: boolean;
   indicators: ComputedIndicator[];
+  indicatorActions: IndicatorRowActions;
   /** Changes whenever something outside the chart resizes its region — the drawer snap, the
    *  rail. The chart is re-measured on this rather than only on a ResizeObserver, because an
    *  observer that silently never fires leaves the chart at its old height, overflowing. */
@@ -162,11 +166,12 @@ export function ChartStage({
                 )}
               </div>
             ))}
-            {/* One legend stack for every layer on the chart. Lightweight Charts has no API for
-                anchoring DOM to a pane, so a per-pane legend would mean deriving pane offsets
-                from summed heights and a guessed separator — fragile, and it re-derives on
-                every resize. A single compact list costs one glance and no geometry. */}
-            {indicators.filter((indicator) => indicator.visible).map((indicator) => (
+            {/* PRICE OVERLAYS ONLY. A pane indicator reports inside its own pane, anchored
+                with IPaneApi.getHTMLElement() — so its reading sits where its line is rather
+                than in a stack over the price pane describing something two panes down. */}
+            {indicators
+              .filter((indicator) => indicator.visible && indicator.placement === 'price')
+              .map((indicator) => (
               <div key={indicator.instanceId} className="tw-legend__row tw-legend__plot">
                 <span className="tw-legend__swatch" style={{ background: legendColor(indicator) }} />
                 <span style={{ color: MM.muted, fontSize: 10 }}>{indicator.label}</span>
@@ -181,6 +186,7 @@ export function ChartStage({
                       </span>
                     ))
                 )}
+                <IndicatorControls indicator={indicator} actions={indicatorActions} />
               </div>
             ))}
             {comparisonMode && (
@@ -217,6 +223,7 @@ export function ChartStage({
             logScale={logScale}
             showVolume={showVolume}
             indicators={indicators}
+            indicatorActions={indicatorActions}
             onHoverBar={setHovered}
           />
 

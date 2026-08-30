@@ -1039,7 +1039,6 @@
 .tw-ind-rows { display: flex; flex-direction: column; }
 
 .tw-ind-row + .tw-ind-row { border-top: 1px solid var(--mkt-seam-soft); }
-.tw-ind-row[data-open='true'] { background: var(--mkt-raise); }
 
 .tw-ind-row__head {
   display: flex;
@@ -1077,7 +1076,9 @@
  * icons per row turns an eight-row list into a wall of chrome. */
 .tw-ind-row__actions { display: flex; flex: 0 0 auto; align-items: center; gap: 1px; opacity: 0.45; }
 .tw-ind-row:hover .tw-ind-row__actions,
-.tw-ind-row[data-open='true'] .tw-ind-row__actions { opacity: 1; }
+.tw-ind-row:focus-within .tw-ind-row__actions { opacity: 1; }
+
+.tw-ind-controls { display: inline-flex; align-items: center; gap: 1px; }
 
 .tw-iconbtn--xs { width: 20px; height: 20px; border-radius: 3px; }
 
@@ -1169,3 +1170,51 @@
 /* The picker's right-hand stub says where the indicator will draw, which is the one thing
  * that is not obvious from the name and changes what adding it does to the layout. */
 .tw-ind-option small { text-transform: uppercase; letter-spacing: 0.08em; }
+
+/* ------------------------------------------------- pane heads
+ *
+ * A pane's own legend and controls, anchored to the pane element Lightweight Charts hands
+ * back from IPaneApi.getHTMLElement(). The strip spans the pane so the reading sits left and
+ * the controls sit right.
+ *
+ * pointer-events on the STRIP are off and re-enabled only on its children. A transparent band
+ * across the top of every pane would otherwise swallow the crosshair, the pane-separator drag
+ * and the chart's own click handling for the top few pixels of each pane. */
+
+.tw-panehead {
+  position: absolute;
+  left: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 6px 0 10px;
+  pointer-events: none;
+}
+
+.tw-panehead__legend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--mkt-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  white-space: nowrap;
+}
+
+.tw-panehead__label { color: var(--mkt-muted); font-family: Inter, sans-serif; }
+.tw-panehead__value { color: var(--mkt-soft); }
+
+/* The controls stay faint until the pane is hovered. Two lit icons on every pane is chrome
+ * competing with the data the pane exists to show. */
+.tw-panehead .tw-ind-controls { pointer-events: auto; opacity: 0.3; transition: opacity 120ms ease; }
+.tw-panehead:hover .tw-ind-controls,
+.tw-panehead:focus-within .tw-ind-controls { opacity: 1; }
+
+/* Same treatment for a price overlay's controls on the top-left legend stack. */
+.tw-legend__plot .tw-ind-controls { pointer-events: auto; opacity: 0; transition: opacity 120ms ease; }
+.tw-legend:hover .tw-ind-controls,
+.tw-legend__plot:focus-within .tw-ind-controls { opacity: 1; }

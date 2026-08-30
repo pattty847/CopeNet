@@ -209,6 +209,71 @@ test('a price-only layout leaves the pane sizing alone', () => {
   assert.equal(chart.paneList[0].stretchFactor, 1, 'nothing to balance against, nothing to change');
 });
 
+test('pane elements are exposed for anchoring, one per pane indicator, in layout order', () => {
+  const instances = build('ema', 'rsi', 'macd');
+  const { chart, layer } = layerFor(instances);
+  const anchored = layer.paneElements();
+  // The price overlay contributes nothing: it has no pane to anchor to.
+  assert.deepEqual(anchored.map((entry) => entry.instanceId), ['rsi#1', 'macd#1']);
+  assert.ok(anchored.every((entry) => entry.element));
+  assert.equal(new Set(anchored.map((entry) => entry.element)).size, 2, 'each pane is a distinct element');
+  assert.equal(chart.paneList.length, 3);
+});
+
+test('a pane that has not been laid out yet is skipped rather than anchored to null', () => {
+  // getHTMLElement() is documented to return null before layout. A control positioned
+  // against that would land at the top-left of the chart rather than on its pane.
+  const { chart, layer } = layerFor(build('rsi', 'atr'));
+  chart.paneList[1].element = null;
+  const anchored = layer.paneElements();
+  assert.equal(anchored.length, 1);
+  assert.equal(anchored[0].instanceId, 'atr#1');
+});
+
+test('removing an indicator stops exposing its pane element', () => {
+  const instances = build('rsi', 'macd');
+  const { layer, render } = layerFor(instances);
+  assert.equal(layer.paneElements().length, 2);
+  render(removeIndicator(instances, 'rsi#1'));
+  assert.deepEqual(layer.paneElements().map((entry) => entry.instanceId), ['macd#1']);
+  render([]);
+  assert.deepEqual(layer.paneElements(), []);
+});
+
+test('a hidden pane indicator exposes no element to anchor to', () => {
+  const instances = build('rsi');
+  const { layer, render } = layerFor(instances);
+  assert.equal(layer.paneElements().length, 1);
+  render(setIndicatorVisibility(instances, 'rsi#1', false));
+  assert.deepEqual(layer.paneElements(), [], 'a hidden indicator has no pane at all');
+});
+
+test('removing the FIRST of several pane indicators does not take a sibling with it', () => {
+  // removePane takes an INDEX, so this is the case that would go wrong if a pane ever
+  // self-collected before the explicit removal: the captured index would then address the
+  // NEXT pane and delete a different indicator's. Confirmed in a real browser too.
+  const instances = build('rsi', 'macd', 'atr');
+  const { chart, render } = layerFor(instances);
+  assert.equal(chart.paneList.length, 4);
+  render(removeIndicator(instances, 'rsi#1'));
+  assert.equal(chart.paneList.length, 3, 'exactly one pane should have gone');
+  const survivors = chart.series.filter((series) => series.data.length > 0);
+  assert.ok(survivors.some((series) => series.definitionName === 'Histogram'), 'MACD lost its histogram');
+  assert.equal(chart.series.filter((series) => series.options.color).length, chart.series.length);
+});
+
+test('an emptied pane is removed rather than left holding vertical space', () => {
+  // Panes are created preserved so the gap before their first series cannot drop them, which
+  // means nothing collects them on the way out either — the explicit removal is load-bearing.
+  const instances = build('macd');
+  const { chart, render } = layerFor(instances);
+  assert.equal(chart.paneList.length, 2);
+  assert.equal(chart.paneList[1].preserve, true, 'created preserved');
+  render([]);
+  assert.equal(chart.paneList.length, 1, 'an empty pane survived its indicator');
+  assert.equal(chart.series.length, 0);
+});
+
 test('destroy leaves the chart with nothing but its price pane', () => {
   const { chart, layer } = layerFor(build('ema', 'rsi', 'macd', 'bbands'));
   assert.ok(chart.series.length > 5);

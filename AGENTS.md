@@ -12,6 +12,7 @@ CopeNet is an agent harness. It provides:
 - operator-side stores for Pulse, memory, messaging routes, profile, and external-app credentials
 - a React operator workspace UI with a Home dashboard and agent console
 - a CopeNet-native harness layer that normalizes provider execution and tool capability work
+- An evergrowing stock market cockpick and terminal with agent integration
 
 The current product direction is:
 

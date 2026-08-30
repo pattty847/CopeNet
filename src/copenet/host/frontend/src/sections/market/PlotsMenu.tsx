@@ -56,7 +56,6 @@ export function PlotsMenu({
   onAddIndicator: (indicatorId: string) => void;
   indicatorActions: IndicatorRowActions;
 }) {
-  const [expanded, setExpanded] = useState<string | null>(null);
   const [picking, setPicking] = useState(false);
   const info = metric ? metrics.find((entry) => entry.id === metric) ?? null : null;
   const valuation = info?.factType === 'valuation';
@@ -75,13 +74,7 @@ export function PlotsMenu({
         <div className="tw-pop__label">
           Indicators{indicators.length > 0 ? ` · ${indicators.length}` : ''}
         </div>
-        <IndicatorRows
-          instances={indicators}
-          computed={computedIndicators}
-          expanded={expanded}
-          onToggleExpanded={setExpanded}
-          actions={indicatorActions}
-        />
+        <IndicatorRows instances={indicators} computed={computedIndicators} actions={indicatorActions} />
         {picking ? (
           <div className="tw-ind-add">
             <IndicatorPicker
