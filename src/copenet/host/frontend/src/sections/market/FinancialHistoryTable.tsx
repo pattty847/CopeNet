@@ -52,7 +52,7 @@ export function FinancialHistoryTable({
                     <td key={row.key}>
                       {typeof value === 'number' ? (
                         <>
-                          <span>{formatFinancialStoryValue(value, story.valueKind)}</span>
+                          <span>{formatFinancialStoryValue(value, story.valueKind, true)}</span>
                           {change == null ? <small>—</small> : <small>{change > 0 ? '+' : ''}{change.toFixed(1)}%</small>}
                           {meta?.source?.sourceUrl ? (
                             <a href={meta.source.sourceUrl} target="_blank" rel="noopener noreferrer" title={`Open ${meta.source.form} filed ${formatFinancialDate(meta.source.filed)}`} aria-label={`Open ${metric.label} source filing for ${row.label}`}>
