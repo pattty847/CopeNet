@@ -6,18 +6,27 @@
 // mock that happens to pass.
 
 export class FakePane {
+  /** Lightweight Charts' default. The renderer overrides it so the price pane keeps its
+   *  share; asserting the value here is what stops that override from being silently
+   *  swallowed by the try/catch that guards a mid-layout chart. */
+  stretchFactor = 1;
+
   constructor(private readonly chart: FakeChart) {}
 
+  setStretchFactor(value: number): void {
+    this.stretchFactor = value;
+  }
+
   paneIndex(): number {
-    const index = this.chart.panes.indexOf(this);
+    const index = this.chart.paneList.indexOf(this);
     if (index < 0) throw new Error('pane has been removed');
     return index;
   }
 
   moveTo(target: number): void {
     const from = this.paneIndex();
-    this.chart.panes.splice(from, 1);
-    this.chart.panes.splice(target, 0, this);
+    this.chart.paneList.splice(from, 1);
+    this.chart.paneList.splice(target, 0, this);
   }
 }
 
@@ -64,22 +73,28 @@ export class FakeSeries {
 }
 
 export class FakeChart {
-  panes: FakePane[] = [];
+  /** The backing array. `panes()` is the method the real API exposes; the array is kept
+   *  separately so assertions can read it without going through the accessor. */
+  paneList: FakePane[] = [];
   series: FakeSeries[] = [];
 
   constructor() {
-    this.panes.push(new FakePane(this)); // pane 0 is the price pane and is never removed
+    this.paneList.push(new FakePane(this)); // pane 0 is the price pane and is never removed
+  }
+
+  panes(): FakePane[] {
+    return this.paneList;
   }
 
   addPane(): FakePane {
     const pane = new FakePane(this);
-    this.panes.push(pane);
+    this.paneList.push(pane);
     return pane;
   }
 
   removePane(index: number): void {
-    if (index <= 0 || index >= this.panes.length) throw new Error(`cannot remove pane ${index}`);
-    this.panes.splice(index, 1);
+    if (index <= 0 || index >= this.paneList.length) throw new Error(`cannot remove pane ${index}`);
+    this.paneList.splice(index, 1);
   }
 
   addSeries(definition: { toString(): string }, options: Record<string, unknown>, paneIndex = 0): FakeSeries {

@@ -1028,3 +1028,144 @@
   .tw-drawer[data-snap='half'] { height: 52%; }
   .tw-jump { left: var(--mkt-s2); right: var(--mkt-s2); width: auto; }
 }
+
+/* ------------------------------------------------------- indicator layers
+ *
+ * The Plots popover's active list. Same grammar as everything else in the workspace: 4px
+ * radius on controls, seams instead of outlines, and orange reserved for an armed tool — a
+ * row that is merely selected or expanded is a lifted surface, never an accent colour.
+ * Rows are 24px so eight indicators fit in a popover without it becoming a page. */
+
+.tw-ind-rows { display: flex; flex-direction: column; }
+
+.tw-ind-row + .tw-ind-row { border-top: 1px solid var(--mkt-seam-soft); }
+.tw-ind-row[data-open='true'] { background: var(--mkt-raise); }
+
+.tw-ind-row__head {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  height: 24px;
+  padding: 0 2px;
+}
+
+.tw-ind-row__swatch {
+  flex: 0 0 auto;
+  width: 8px;
+  height: 2px;
+  border-radius: 1px;
+}
+
+.tw-ind-row__label {
+  min-width: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
+  color: var(--mkt-soft);
+  font: 500 10px Inter;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tw-ind-row__value {
+  flex: 0 0 auto;
+  color: var(--mkt-dim);
+  font-family: var(--mkt-mono);
+  font-size: 9.5px;
+}
+
+/* The controls stay quiet until the row is hovered or one of them is armed. Four always-lit
+ * icons per row turns an eight-row list into a wall of chrome. */
+.tw-ind-row__actions { display: flex; flex: 0 0 auto; align-items: center; gap: 1px; opacity: 0.45; }
+.tw-ind-row:hover .tw-ind-row__actions,
+.tw-ind-row[data-open='true'] .tw-ind-row__actions { opacity: 1; }
+
+.tw-iconbtn--xs { width: 20px; height: 20px; border-radius: 3px; }
+
+/* ---- settings, expanded in place under its row ---- */
+
+.tw-ind-settings {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 7px 2px 9px;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.tw-ind-settings__note { margin: 0 0 2px; color: var(--mkt-dimmer); font-size: 9.5px; line-height: 1.45; }
+
+.tw-ind-field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.tw-ind-field label { color: var(--mkt-dim); font: 500 10px Inter; }
+
+.tw-ind-number { width: 74px; height: 22px; padding: 0 6px; text-align: right; }
+
+.tw-ind-select {
+  height: 22px;
+  min-width: 96px;
+  padding: 0 5px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: var(--mkt-canvas);
+  color: var(--mkt-soft);
+  font: 500 10px Inter;
+}
+
+.tw-ind-select:focus-visible { border-color: var(--mkt-accent-line); outline: none; }
+
+.tw-ind-settings__styles { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
+
+.tw-ind-swatch { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+.tw-ind-swatch span { color: var(--mkt-dimmer); font: 500 9px Inter; }
+
+/* A native colour input with its chrome stripped back to the swatch itself. */
+.tw-ind-swatch input[type='color'] {
+  width: 16px;
+  height: 12px;
+  padding: 0;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 2px;
+  background: transparent;
+  cursor: pointer;
+}
+
+.tw-ind-swatch input[type='color']::-webkit-color-swatch-wrapper { padding: 0; }
+.tw-ind-swatch input[type='color']::-webkit-color-swatch { border: 0; border-radius: 1px; }
+
+.tw-ind-more {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 9px Inter;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.tw-ind-more:hover { color: var(--mkt-soft); }
+.tw-ind-more svg { transition: transform 120ms ease; }
+.tw-ind-more svg[data-open='true'] { transform: rotate(180deg); }
+
+.tw-ind-settings__actions { display: flex; gap: 5px; padding-top: 3px; }
+
+/* ---- adding ---- */
+
+.tw-ind-addrow { justify-content: flex-start; margin-top: 6px; color: var(--mkt-dim); }
+.tw-ind-addrow:hover:not([disabled]) { color: var(--mkt-text); }
+.tw-ind-addrow[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+.tw-ind-add { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-top: 6px; }
+.tw-ind-add .tw-series-picker__menu { width: 100%; margin-top: 0; }
+
+/* The picker's right-hand stub says where the indicator will draw, which is the one thing
+ * that is not obvious from the name and changes what adding it does to the layout. */
+.tw-ind-option small { text-transform: uppercase; letter-spacing: 0.08em; }

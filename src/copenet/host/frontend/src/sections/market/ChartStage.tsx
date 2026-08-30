@@ -11,6 +11,7 @@ import { CandleChart } from './CandleChart';
 import { MM, mono, toneColor } from './marketUi';
 import { timeframeLabel, type ChartTimeframe } from './chartRanges';
 import type { ChartComparisonLine } from './chartComparison';
+import { legendColor, legendOutputs, type ComputedIndicator } from './indicators/compute';
 import type { FinancialOverlayPoint } from './financialOverlay';
 import type { InsiderDisplayMode } from './chartRanges';
 import type { ChartEvent, EvidenceItem, Ohlcv, PriceAlert } from './types';
@@ -58,6 +59,7 @@ export function ChartStage({
   insiderDisplayMode,
   logScale,
   showVolume,
+  indicators,
   layoutKey,
   overlay,
 }: {
@@ -83,6 +85,7 @@ export function ChartStage({
   insiderDisplayMode: InsiderDisplayMode;
   logScale: boolean;
   showVolume: boolean;
+  indicators: ComputedIndicator[];
   /** Changes whenever something outside the chart resizes its region — the drawer snap, the
    *  rail. The chart is re-measured on this rather than only on a ResizeObserver, because an
    *  observer that silently never fires leaves the chart at its old height, overflowing. */
@@ -159,6 +162,27 @@ export function ChartStage({
                 )}
               </div>
             ))}
+            {/* One legend stack for every layer on the chart. Lightweight Charts has no API for
+                anchoring DOM to a pane, so a per-pane legend would mean deriving pane offsets
+                from summed heights and a guessed separator — fragile, and it re-derives on
+                every resize. A single compact list costs one glance and no geometry. */}
+            {indicators.filter((indicator) => indicator.visible).map((indicator) => (
+              <div key={indicator.instanceId} className="tw-legend__row tw-legend__plot">
+                <span className="tw-legend__swatch" style={{ background: legendColor(indicator) }} />
+                <span style={{ color: MM.muted, fontSize: 10 }}>{indicator.label}</span>
+                {indicator.insufficientHistory ? (
+                  <span style={{ color: MM.dimmer, fontFamily: mono, fontSize: 10 }}>needs history</span>
+                ) : (
+                  legendOutputs(indicator)
+                    .filter((output) => output.latest != null)
+                    .map((output) => (
+                      <span key={output.key} title={output.label} style={{ color: output.color, fontFamily: mono, fontSize: 10 }}>
+                        {output.latest}
+                      </span>
+                    ))
+                )}
+              </div>
+            ))}
             {comparisonMode && (
               <div className="tw-legend__row" style={{ gap: 12 }}>
                 {comparisonLines.map((line) => {
@@ -192,6 +216,7 @@ export function ChartStage({
             insiderDisplayMode={insiderDisplayMode}
             logScale={logScale}
             showVolume={showVolume}
+            indicators={indicators}
             onHoverBar={setHovered}
           />
 

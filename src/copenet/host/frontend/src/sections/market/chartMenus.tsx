@@ -1,117 +1,16 @@
 // Compact popover bodies for the chart toolbar.
+//
+// Plots lives in its own file: it grew a full indicator manager and this one was already at
+// the size where a second responsibility stops being findable.
 
 import { useEffect, useState, type FormEvent, type RefObject } from 'react';
 import { X } from 'lucide-react';
-import { MarketFloatingPopover } from './MarketFloatingPopover';
-import { FinancialSeriesPicker } from './FinancialSeriesPicker';
+import { ChartPopoverShell } from './chartPopoverShell';
 import { wsClient } from '../../lib/wsClient';
 import { normalizeComparisonExpression } from './chartComparison';
 import { MM } from './marketUi';
 import type { InsiderDisplayMode, InsiderLookback } from './chartRanges';
-import type { FinancialFrequency, FinancialMetricInfo, SymbolSearchResult, TickerIntelligence } from './types';
-
-function Shell({
-  anchor,
-  open,
-  onClose,
-  title,
-  width = 320,
-  children,
-}: {
-  anchor: RefObject<HTMLElement | null>;
-  open: boolean;
-  onClose: () => void;
-  title: string;
-  width?: number;
-  children: React.ReactNode;
-}) {
-  return (
-    <MarketFloatingPopover anchorRef={anchor} open={open} onClose={onClose} width={width}>
-      <div className="tw-pop">
-        <div className="tw-pop__head">
-          <div className="tw-pop__title">{title}</div>
-          <button type="button" className="tw-iconbtn" onClick={onClose} aria-label={`Close ${title}`}><X size={13} /></button>
-        </div>
-        <div className="tw-pop__body">{children}</div>
-      </div>
-    </MarketFloatingPopover>
-  );
-}
-
-// ------------------------------------------------------------------ plots
-
-export function PlotsMenu({
-  anchor,
-  open,
-  onClose,
-  metrics,
-  metric,
-  frequency,
-  onFrequency,
-  onClearMetric,
-  onMetric,
-  showVolume,
-  onShowVolume,
-  comparisonActive,
-}: {
-  anchor: RefObject<HTMLElement | null>;
-  open: boolean;
-  onClose: () => void;
-  metrics: FinancialMetricInfo[];
-  metric: string | null;
-  frequency: FinancialFrequency;
-  onFrequency: (value: FinancialFrequency) => void;
-  onClearMetric: () => void;
-  onMetric: (metric: string) => void;
-  showVolume: boolean;
-  onShowVolume: (value: boolean) => void;
-  comparisonActive: boolean;
-}) {
-  const info = metric ? metrics.find((entry) => entry.id === metric) ?? null : null;
-  const valuation = info?.factType === 'valuation';
-  const choices = info?.frequencies ?? (['quarterly', 'ttm', 'annual'] as FinancialFrequency[]);
-
-  return (
-    <Shell anchor={anchor} open={open} onClose={onClose} title="Plots" width={310}>
-      <div className="tw-pop__section">
-        <div className="tw-pop__row">
-          <label className="tw-switch" style={{ flex: 1 }}>
-            <span>Volume</span>
-            <input type="checkbox" checked={showVolume} onChange={(event) => onShowVolume(event.target.checked)} />
-          </label>
-        </div>
-        {info ? (
-          <div className="tw-pop__row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 7 }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ color: MM.info, font: '600 10px Inter' }}>{info.label}</span>
-              <button type="button" className="tw-iconbtn" onClick={onClearMetric} aria-label={`Remove ${info.label} plot`} title="Remove plot"><X size={12} /></button>
-            </div>
-            {!valuation && (
-              <div className="tw-choices">
-                {choices.map((value) => (
-                  <button key={value} type="button" aria-pressed={frequency === value} onClick={() => onFrequency(value)}>
-                    {value === 'ttm' ? 'TTM' : value === 'annual' ? 'Annual' : 'Quarter'}
-                  </button>
-                ))}
-              </div>
-            )}
-            {valuation && <p className="tw-pop__note">TTM series</p>}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="tw-pop__section">
-        <FinancialSeriesPicker
-          metrics={metrics}
-          selectedMetric={metric}
-          disabled={comparisonActive}
-          onSelect={onMetric}
-        />
-        {comparisonActive && <p className="tw-pop__note">Unavailable in Compare mode</p>}
-      </div>
-    </Shell>
-  );
-}
+import type { SymbolSearchResult, TickerIntelligence } from './types';
 
 // ---------------------------------------------------------------- compare
 
@@ -164,7 +63,7 @@ export function CompareMenu({
   };
 
   return (
-    <Shell
+    <ChartPopoverShell
       anchor={anchor}
       open={open}
       onClose={onClose}
@@ -222,7 +121,7 @@ export function CompareMenu({
           <button type="button" className="tw-btn" onClick={onClear}>Clear all</button>
         </div>
       )}
-    </Shell>
+    </ChartPopoverShell>
   );
 }
 
@@ -252,7 +151,7 @@ export function EventsMenu({
   disabled: boolean;
 }) {
   return (
-    <Shell
+    <ChartPopoverShell
       anchor={anchor}
       open={open}
       onClose={onClose}
@@ -291,7 +190,7 @@ export function EventsMenu({
           <div className="tw-pop__note">Unavailable in Compare mode</div>
         )}
       </fieldset>
-    </Shell>
+    </ChartPopoverShell>
   );
 }
 
@@ -320,7 +219,7 @@ export function SettingsMenu({
 }) {
   const quality = intelligence?.dataQuality;
   return (
-    <Shell anchor={anchor} open={open} onClose={onClose} title="Chart data" width={334}>
+    <ChartPopoverShell anchor={anchor} open={open} onClose={onClose} title="Chart data" width={334}>
       <div className="tw-pop__section">
         <div className="tw-pop__label">Price series</div>
         <div className="tw-kv"><span className="tw-kv__k">Basis</span><span className="tw-kv__v">{priceBasis.replace('_', '-')}</span></div>
@@ -349,6 +248,6 @@ export function SettingsMenu({
           )}
         </div>
       )}
-    </Shell>
+    </ChartPopoverShell>
   );
 }

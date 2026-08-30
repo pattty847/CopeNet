@@ -158,6 +158,22 @@ export function createIndicatorComputer(): IndicatorComputer {
   };
 }
 
+/** Legend ordering, which is NOT draw ordering.
+ *
+ *  Outputs are declared in the order they must be drawn — MACD's histogram is declared first
+ *  so the two lines paint over it rather than under. Reading order is the opposite: the line
+ *  is the indicator's headline number and the histogram is derived from it, so a legend led
+ *  by the histogram invites the wrong number to be read as the MACD value. */
+export function legendOutputs(indicator: ComputedIndicator): ComputedOutput[] {
+  const rank = (output: ComputedOutput) => (output.plot === 'histogram' ? 1 : 0);
+  return [...indicator.outputs].sort((left, right) => rank(left) - rank(right));
+}
+
+/** The colour that identifies the indicator: its first line, or its only series. */
+export function legendColor(indicator: ComputedIndicator): string | undefined {
+  return legendOutputs(indicator)[0]?.color;
+}
+
 function defaultFormat(value: number): string {
   const magnitude = Math.abs(value);
   if (magnitude >= 1e9) return `${(value / 1e9).toFixed(2)}B`;

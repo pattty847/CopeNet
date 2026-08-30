@@ -43,7 +43,7 @@ function build(...ids: string[]): IndicatorInstance[] {
 
 test('a price overlay draws on the candle pane and adds no pane of its own', () => {
   const { chart } = layerFor(build('ema'));
-  assert.equal(chart.panes.length, 1, 'price overlays must not create a pane');
+  assert.equal(chart.paneList.length, 1, 'price overlays must not create a pane');
   assert.equal(chart.series.length, 1);
   assert.equal(chart.series[0].createdInPane, 0);
   assert.equal(chart.series[0].options.priceScaleId, 'right', 'an overlay shares the candle scale');
@@ -51,7 +51,7 @@ test('a price overlay draws on the candle pane and adds no pane of its own', () 
 
 test('a pane indicator gets its own pane and every one of its outputs lands in it', () => {
   const { chart } = layerFor(build('macd'));
-  assert.equal(chart.panes.length, 2);
+  assert.equal(chart.paneList.length, 2);
   assert.equal(chart.series.length, 3, 'MACD is a histogram plus two lines');
   assert.ok(chart.series.every((series) => series.createdInPane === 1));
   assert.deepEqual(
@@ -62,7 +62,7 @@ test('a pane indicator gets its own pane and every one of its outputs lands in i
 
 test('a multi-output band creates one series per edge on the price pane', () => {
   const { chart } = layerFor(build('bbands'));
-  assert.equal(chart.panes.length, 1);
+  assert.equal(chart.paneList.length, 1);
   assert.equal(chart.series.length, 3);
   assert.ok(chart.series.every((series) => series.createdInPane === 0));
 });
@@ -91,11 +91,11 @@ test('changing a setting updates the existing series rather than rebuilding it',
 test('removing an indicator takes its series and its pane with it', () => {
   const instances = build('ema', 'rsi');
   const { chart, render } = layerFor(instances);
-  assert.equal(chart.panes.length, 2);
+  assert.equal(chart.paneList.length, 2);
   assert.equal(chart.series.length, 2);
   render(removeIndicator(instances, instances[1].instanceId));
   assert.equal(chart.series.length, 1, 'the RSI series leaked');
-  assert.equal(chart.panes.length, 1, 'the RSI pane leaked');
+  assert.equal(chart.paneList.length, 1, 'the RSI pane leaked');
 });
 
 test('hiding a pane indicator reclaims its space and showing it puts it back', () => {
@@ -103,10 +103,10 @@ test('hiding a pane indicator reclaims its space and showing it puts it back', (
   const { chart, render } = layerFor(instances);
   const hidden = setIndicatorVisibility(instances, instances[0].instanceId, false);
   render(hidden);
-  assert.equal(chart.panes.length, 1, 'a hidden pane must not keep holding vertical space');
+  assert.equal(chart.paneList.length, 1, 'a hidden pane must not keep holding vertical space');
   assert.equal(chart.series.length, 0);
   render(setIndicatorVisibility(hidden, instances[0].instanceId, true));
-  assert.equal(chart.panes.length, 2);
+  assert.equal(chart.paneList.length, 2);
   assert.equal(chart.series.length, 1);
   assert.ok(chart.series[0].data.length > 0, 'the restored series must carry its data');
 });
@@ -120,7 +120,7 @@ test('panes follow layout order, and reordering moves the pane with the row', ()
   // MACD now leads, so its pane must be the one directly under the price pane.
   const macdSeries = chart.series.filter((series) => series.definitionName === 'Histogram');
   assert.equal(macdSeries.length, 1);
-  assert.equal(chart.panes.length, 3);
+  assert.equal(chart.paneList.length, 3);
 });
 
 test('duplicating an indicator carries its configuration into a second series', () => {
@@ -191,26 +191,44 @@ test('narrowing the visible range shortens the drawn series without restarting w
   );
 });
 
+test('the price pane keeps the larger share however many indicator panes are added', () => {
+  // Lightweight Charts gives every new pane the same stretch, which would leave price on 40%
+  // of the canvas with three indicators. Price is what the other panes are read against.
+  const instances = build('rsi', 'macd', 'atr');
+  const { chart } = layerFor(instances);
+  assert.equal(chart.paneList.length, 4);
+  assert.equal(chart.paneList[0].stretchFactor, 4);
+  assert.deepEqual(chart.paneList.slice(1).map((pane) => pane.stretchFactor), [1, 1, 1]);
+  const total = chart.paneList.reduce((sum, pane) => sum + pane.stretchFactor, 0);
+  assert.ok(chart.paneList[0].stretchFactor / total > 0.5, 'price fell below half the canvas');
+});
+
+test('a price-only layout leaves the pane sizing alone', () => {
+  const { chart } = layerFor(build('ema', 'bbands'));
+  assert.equal(chart.paneList.length, 1);
+  assert.equal(chart.paneList[0].stretchFactor, 1, 'nothing to balance against, nothing to change');
+});
+
 test('destroy leaves the chart with nothing but its price pane', () => {
   const { chart, layer } = layerFor(build('ema', 'rsi', 'macd', 'bbands'));
   assert.ok(chart.series.length > 5);
-  assert.equal(chart.panes.length, 3);
+  assert.equal(chart.paneList.length, 3);
   layer.destroy();
   assert.equal(chart.series.length, 0);
-  assert.equal(chart.panes.length, 1);
+  assert.equal(chart.paneList.length, 1);
 });
 
 test('tearing down and rebuilding repeatedly leaks neither series nor panes', () => {
   const instances = build('ema', 'rsi', 'macd');
   const { chart, render } = layerFor(instances);
   const seriesCount = chart.series.length;
-  const paneCount = chart.panes.length;
+  const paneCount = chart.paneList.length;
   for (let i = 0; i < 20; i += 1) {
     render([]);
     render(instances);
   }
   assert.equal(chart.series.length, seriesCount);
-  assert.equal(chart.panes.length, paneCount);
+  assert.equal(chart.paneList.length, paneCount);
 });
 
 test('every catalogued indicator renders and tears down cleanly', () => {
@@ -227,6 +245,6 @@ test('every catalogued indicator renders and tears down cleanly', () => {
     assert.ok(drawn.length > 0, `${id} rendered no data at all`);
     layer.sync(computer.compute(BARS, BARS.length, [], CONTEXT));
     assert.equal(chart.series.length, 0, `${id} leaked a series`);
-    assert.equal(chart.panes.length, 1, `${id} leaked a pane`);
+    assert.equal(chart.paneList.length, 1, `${id} leaked a pane`);
   }
 });

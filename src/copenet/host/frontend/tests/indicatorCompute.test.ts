@@ -3,7 +3,12 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { barsPerYear, createIndicatorComputer } from '../src/sections/market/indicators/compute';
+import {
+  barsPerYear,
+  createIndicatorComputer,
+  legendColor,
+  legendOutputs,
+} from '../src/sections/market/indicators/compute';
 import { indicatorById } from '../src/sections/market/indicators/registry';
 import { addIndicator, configureIndicator } from '../src/sections/market/indicators/state';
 import { walkBars } from './indicatorFixtures';
@@ -164,6 +169,22 @@ test('changing the interval basis recomputes an interval-sensitive indicator', (
   const daily = computer.compute(BARS, 200, instances, { barsPerYear: 252 })[0].outputs[0].points.at(-1)!.value;
   const weekly = computer.compute(BARS, 200, instances, { barsPerYear: 52 })[0].outputs[0].points.at(-1)!.value;
   assert.ok(Math.abs(daily / weekly - Math.sqrt(252 / 52)) < 1e-9);
+});
+
+test('the legend reads lines before histograms, whatever order they are drawn in', () => {
+  // MACD declares its histogram FIRST so the two lines paint over it. Reading order is the
+  // opposite: a legend led by the histogram invites 0.54 to be read as the MACD value.
+  const macd = createIndicatorComputer().compute(BARS, 200, addIndicator([], 'macd'), CONTEXT)[0];
+  assert.deepEqual(macd.outputs.map((output) => output.key), ['histogram', 'macd', 'signal'], 'draw order');
+  assert.deepEqual(legendOutputs(macd).map((output) => output.key), ['macd', 'signal', 'histogram'], 'reading order');
+  assert.equal(legendColor(macd), macd.outputs.find((output) => output.key === 'macd')!.color);
+});
+
+test('a single-series indicator is unaffected by legend ordering', () => {
+  const cmf = createIndicatorComputer().compute(BARS, 200, addIndicator([], 'cmf'), CONTEXT)[0];
+  assert.deepEqual(legendOutputs(cmf).map((output) => output.key), ['cmf']);
+  const bbands = createIndicatorComputer().compute(BARS, 200, addIndicator([], 'bbands'), CONTEXT)[0];
+  assert.deepEqual(legendOutputs(bbands).map((output) => output.key), ['upper', 'middle', 'lower'], 'all lines keep declaration order');
 });
 
 test('an unknown indicator id in the layout is skipped rather than crashing the pass', () => {

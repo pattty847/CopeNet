@@ -11,7 +11,22 @@ import { assetProfile } from './assetProfile';
 import { buildRailEntries, stepRail } from './symbolRailModel';
 import { ChartStage, type StagePlot } from './ChartStage';
 import { ChartToolbar } from './ChartToolbar';
-import { CompareMenu, EventsMenu, PlotsMenu, SettingsMenu } from './chartMenus';
+import { CompareMenu, EventsMenu, SettingsMenu } from './chartMenus';
+import { PlotsMenu } from './PlotsMenu';
+import { barsPerYear, createIndicatorComputer } from './indicators/compute';
+import type { IndicatorRowActions } from './indicators/IndicatorRows';
+import {
+  addIndicator,
+  configureIndicator,
+  duplicateIndicator,
+  loadIndicatorLayout,
+  moveIndicator,
+  removeIndicator,
+  resetIndicator,
+  saveIndicatorLayout,
+  setIndicatorVisibility,
+  styleIndicator,
+} from './indicators/state';
 import { MM } from './marketUi';
 import { PriceAlertControl } from './PriceAlertControl';
 import { ResearchDrawer } from './ResearchDrawer';
@@ -73,6 +88,9 @@ export function TickerWorkspace({
   const [logScale, setLogScale] = useState(loadLogScale);
   const [showVolume, setShowVolume] = useState(true);
   const [tab, setTab] = useState<ResearchTab>(loadTab);
+  // Workspace-sticky, like the interval and the pane set: an analyst configures their
+  // instrument once and looks at every asset through it. The VALUES recompute per symbol.
+  const [indicators, setIndicators] = useState(loadIndicatorLayout);
   const drawer = useTickerDrawerLayout(tab);
   const [railCollapsed, setRailCollapsed] = useState(loadRailCollapsed);
 
@@ -108,6 +126,7 @@ export function TickerWorkspace({
   }, [normalized]);
 
   useEffect(() => saveTab(tab), [tab]);
+  useEffect(() => saveIndicatorLayout(indicators), [indicators]);
   useEffect(() => saveLogScale(logScale), [logScale]);
   useEffect(() => saveRailCollapsed(railCollapsed), [railCollapsed]);
 
@@ -146,6 +165,15 @@ export function TickerWorkspace({
 
   const rawBars = detail ? (timeframe === 'D' ? detail.series.daily : timeframe === 'M' ? detail.series.monthly : detail.series.weekly) : [];
   const bars = useMemo(() => visibleBars(rawBars, range), [rawBars, range]);
+
+  // Indicators compute over the FULL history and are sliced to the visible range afterwards,
+  // so changing 6M/1Y/5Y re-cuts one calculation instead of restarting every warm-up. The
+  // computer memoises per configuration, so an unrelated re-render costs nothing.
+  const indicatorComputer = useRef(createIndicatorComputer());
+  const computedIndicators = useMemo(
+    () => indicatorComputer.current.compute(rawBars, bars.length, indicators, { barsPerYear: barsPerYear(timeframe) }),
+    [rawBars, bars.length, indicators, timeframe],
+  );
 
   const comparisonLines = useMemo(
     () => buildComparisonLines(detail?.symbol ?? normalized, bars, comparisons, comparisonData.payload?.series ?? []),
@@ -196,6 +224,20 @@ export function TickerWorkspace({
 
   const plotMetric = useCallback((metric: string) => {
     setOverlayMetric((current) => (current === metric ? null : metric));
+  }, []);
+
+  const indicatorActions = useMemo<IndicatorRowActions>(() => ({
+    onConfigure: (instanceId, patch) => setIndicators((current) => configureIndicator(current, instanceId, patch)),
+    onStyle: (instanceId, outputKey, style) => setIndicators((current) => styleIndicator(current, instanceId, outputKey, style)),
+    onVisibility: (instanceId, visible) => setIndicators((current) => setIndicatorVisibility(current, instanceId, visible)),
+    onDuplicate: (instanceId) => setIndicators((current) => duplicateIndicator(current, instanceId)),
+    onReset: (instanceId) => setIndicators((current) => resetIndicator(current, instanceId)),
+    onRemove: (instanceId) => setIndicators((current) => removeIndicator(current, instanceId)),
+    onMove: (instanceId, delta) => setIndicators((current) => moveIndicator(current, instanceId, delta)),
+  }), []);
+
+  const addIndicatorToLayout = useCallback((indicatorId: string) => {
+    setIndicators((current) => addIndicator(current, indicatorId));
   }, []);
 
   const addComparison = useCallback((expression: string) => {
@@ -335,7 +377,7 @@ export function TickerWorkspace({
             onLogScale={setLogScale}
             comparisonActive={comparing}
             comparisonCount={comparisons.length}
-            plotCount={plots.length}
+            plotCount={plots.length + indicators.length}
             eventsActive={showInsider}
             drawerOpen={snap !== 'collapsed'}
             onToggleDrawer={() => setSnap(snap === 'collapsed' ? 'half' : 'collapsed')}
@@ -353,6 +395,10 @@ export function TickerWorkspace({
                 showVolume={showVolume}
                 onShowVolume={setShowVolume}
                 comparisonActive={comparing}
+                indicators={indicators}
+                computedIndicators={computedIndicators}
+                onAddIndicator={addIndicatorToLayout}
+                indicatorActions={indicatorActions}
               />
             )}
             compareMenu={(anchor, open, close) => (
@@ -448,6 +494,10 @@ export function TickerWorkspace({
             insiderDisplayMode={insiderDisplay}
             logScale={logScale}
             showVolume={showVolume}
+            // Comparison rebases the price pane to indexed percent, so every price-anchored
+            // indicator is genuinely inapplicable while it is on. The LAYOUT is untouched, so
+            // leaving Compare restores exactly what was there.
+            indicators={comparing ? [] : computedIndicators}
             layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}`}
             overlay={
               jumpOpen ? (

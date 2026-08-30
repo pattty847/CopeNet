@@ -50,6 +50,10 @@ const LINE_STYLES: Record<ComputedOutput['lineStyle'], LineStyle> = {
   dotted: LineStyle.Dotted,
 };
 
+/** Price against each indicator pane. Four is the point where one indicator reads as a strip
+ *  under the chart rather than as a second chart competing with it. */
+const PRICE_PANE_STRETCH = 4;
+
 function signatureOf(indicator: ComputedIndicator): string {
   return `${indicator.placement}:${indicator.outputs.map((output) => `${output.key}/${output.plot}`).join(',')}`;
 }
@@ -77,6 +81,7 @@ export class IndicatorChartLayer {
     }
 
     this.reorderPanes(active);
+    this.applyPaneSizing(active);
   }
 
   /** Remove every series and pane this layer owns. The caller still owns the chart. */
@@ -199,6 +204,31 @@ export class IndicatorChartLayer {
         /* a pane removed underneath us this frame — the next sync settles it */
       }
       target += 1;
+    }
+  }
+
+  /** Give the price pane the space it deserves.
+   *
+   *  Lightweight Charts hands every new pane the same stretch factor, which splits the chart
+   *  2:1 with one indicator and would leave price on 40% of the canvas with three. Price is
+   *  what the other panes are read AGAINST, so it keeps a fixed larger share: one indicator
+   *  takes 20%, four take 12.5% each and price still holds half. */
+  private applyPaneSizing(active: ComputedIndicator[]): void {
+    const panes = active.filter((indicator) => this.entries.get(indicator.instanceId)?.pane).length;
+    if (!panes) return;
+    try {
+      this.chart.panes()[0]?.setStretchFactor(PRICE_PANE_STRETCH);
+    } catch {
+      /* the chart is mid-layout; the next sync settles it */
+    }
+    for (const indicator of active) {
+      const entry = this.entries.get(indicator.instanceId);
+      if (!entry?.pane) continue;
+      try {
+        entry.pane.setStretchFactor(1);
+      } catch {
+        /* same */
+      }
     }
   }
 
