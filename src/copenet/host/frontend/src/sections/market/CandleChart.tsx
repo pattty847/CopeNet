@@ -33,6 +33,8 @@ import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
 import type { ChartComparisonLine } from './chartComparison';
 import type { InsiderDisplayMode } from './chartRanges';
+import type { ComputedIndicator } from './indicators/compute';
+import { useChartIndicators } from './indicators/useChartIndicators';
 import { replaceComparisonSeries } from './chartComparisonSeries';
 import {
   hasRenderableFinancialOverlay,
@@ -60,6 +62,23 @@ function leftAxisWidth(chart: IChartApi): number {
     return chart.priceScale('left').width();
   } catch {
     return 0;
+  }
+}
+
+/** Usable height of the PRICE pane.
+ *
+ *  Cluster boxes are absolutely-positioned HTML clamped to this. It used to be the chart's
+ *  own height less a guess at the time axis, which was close enough while the price pane was
+ *  the only pane. Indicator panes stack below it, so that clamp would now let a box overhang
+ *  into an RSI pane. Pane 0 is always the price pane and always starts at y=0, so its
+ *  measured height is both the correct clamp and the reason the rest of this positioning
+ *  code needs no pane awareness at all. */
+function pricePaneHeight(chart: IChartApi, fallback: number): number {
+  try {
+    const size = chart.paneSize(0);
+    return size.height > 0 ? size.height : fallback;
+  } catch {
+    return fallback;
   }
 }
 
@@ -409,6 +428,7 @@ export function CandleChart({
   insiderDisplayMode = 'individual',
   logScale = false,
   showVolume = true,
+  indicators = [],
   onHoverBar,
 }: {
   bars: Ohlcv[];
@@ -432,6 +452,10 @@ export function CandleChart({
   onAlertPriceSelected?: (price: number) => void;
   /** Volume is an ordinary plot the operator can remove, not a permanent fixture. */
   showVolume?: boolean;
+  /** Technical indicators, already computed. Price overlays share the candle pane; the rest
+   *  each get their own pane below it. The chart hands these straight to the indicator layer
+   *  and never inspects them. */
+  indicators?: ComputedIndicator[];
   /** Crosshair bar under the pointer, or null when the pointer leaves the chart. Lets the
    *  legend live ON the chart instead of in a metadata strip wrapped around it. */
   onHoverBar?: (bar: Ohlcv | null) => void;
@@ -469,6 +493,7 @@ export function CandleChart({
   onHoverBarRef.current = onHoverBar;
   insiderDisplayModeRef.current = insiderDisplayMode;
   useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration, draftAlertPrice);
+  useChartIndicators(chartRef, chartGeneration, indicators);
 
   /** Recompute markers + cluster boxes for the current data and zoom. Derived, never stored:
    *  runs on data change and (rAF-throttled) on every visible-range change. */
@@ -537,7 +562,7 @@ export function CandleChart({
       const botCoord = candle.priceToCoordinate(lo);
       if (topCoord == null || botCoord == null) return;
       const top = Math.max(0, Math.min(topCoord, botCoord) - 10);
-      const bottom = Math.min(height - 24, Math.max(topCoord, botCoord) + 10);
+      const bottom = Math.min(pricePaneHeight(chart, height - 24), Math.max(topCoord, botCoord) + 10);
       if (bottom - top < 8) return;
       const avgCoord = cluster.avgPrice != null ? candle.priceToCoordinate(cluster.avgPrice) : null;
       const tone: RenderedBox['tone'] = cluster.net > 0 ? 'up' : cluster.net < 0 ? 'down' : 'flat';
@@ -590,6 +615,10 @@ export function CandleChart({
       // Showing or hiding the left financial axis moves the pane sideways without
       // touching either range, so it has to be part of the transform identity.
       leftAxisWidth(chart),
+      // Adding or removing an indicator pane resizes the price pane vertically. The price
+      // probes above catch that in most cases, but not a rescale that happens to preserve
+      // both sample coordinates, so measure the pane itself too.
+      pricePaneHeight(chart, height),
     ].join('|');
     if (key === transformKeyRef.current) return;
     transformKeyRef.current = key;

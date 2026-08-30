@@ -1,0 +1,173 @@
+// Turning configured instances into drawable series.
+//
+// Two things happen here and nowhere else.
+//
+// FULL HISTORY, THEN SLICE. Indicators are computed over every bar the payload carries, and
+// only then cut to the visible range. Computing over the visible bars instead would restart
+// every warm-up on each range change, so switching 1Y to 6M would silently delete the first
+// 20 bars of an EMA and redraw the rest at different values. Because every calculation is
+// causal (asserted registry-wide in the tests), the slice is exact rather than approximate.
+//
+// MEMOISED BY CONFIGURATION, NOT BY INSTANCE. The cache key is the indicator id, its config
+// and the identity of the bar series. Opening a popover, hovering the chart or changing an
+// unrelated indicator's colour therefore recomputes nothing, and two instances configured
+// identically compute once.
+
+import { indicatorById } from './registry';
+import { instanceComputeKey, type IndicatorInstance } from './state';
+import type {
+  IndicatorBar,
+  IndicatorContext,
+  IndicatorDefinition,
+  IndicatorResult,
+  IndicatorSeries,
+} from './types';
+
+export interface IndicatorPoint {
+  t: number;
+  value: number;
+  color?: string;
+}
+
+export interface ComputedOutput {
+  key: string;
+  label: string;
+  plot: IndicatorDefinition['outputs'][number]['plot'];
+  color: string;
+  lineWidth: number;
+  lineStyle: 'solid' | 'dashed' | 'dotted';
+  points: IndicatorPoint[];
+  /** Last computable value in the visible range, already formatted for the legend. */
+  latest: string | null;
+}
+
+export interface ComputedIndicator {
+  instanceId: string;
+  indicatorId: string;
+  definition: IndicatorDefinition;
+  label: string;
+  visible: boolean;
+  placement: 'price' | 'pane';
+  outputs: ComputedOutput[];
+  references: IndicatorDefinition['references'];
+  paneRange: IndicatorDefinition['paneRange'];
+  /** True when the loaded history is shorter than the indicator needs. Drives the notice. */
+  insufficientHistory: boolean;
+}
+
+/** Identity of a bar series for memo purposes.
+ *
+ *  Length plus both endpoints plus the last close: enough to separate every real transition
+ *  (symbol change, interval change, a new bar arriving, a late revision of the last bar)
+ *  without hashing thousands of rows on every render. */
+function barsIdentity(bars: IndicatorBar[]): string {
+  if (!bars.length) return 'empty';
+  const first = bars[0];
+  const last = bars[bars.length - 1];
+  return `${bars.length}:${first.t}:${last.t}:${last.c}`;
+}
+
+export interface IndicatorComputer {
+  compute(
+    /** Every bar the payload carries, at the current interval. */
+    history: IndicatorBar[],
+    /** How many bars at the tail of `history` the chart is currently showing. */
+    visibleCount: number,
+    instances: IndicatorInstance[],
+    context: IndicatorContext,
+  ): ComputedIndicator[];
+}
+
+export function createIndicatorComputer(): IndicatorComputer {
+  const cache = new Map<string, IndicatorResult>();
+
+  return {
+    compute(history, visibleCount, instances, context) {
+      const identity = barsIdentity(history);
+      const live = new Set<string>();
+      const computed: ComputedIndicator[] = [];
+
+      for (const instance of instances) {
+        const definition = indicatorById(instance.indicatorId);
+        if (!definition) continue;
+
+        const key = `${identity}|${instanceComputeKey(instance)}|${context.barsPerYear}`;
+        live.add(key);
+        let result = cache.get(key);
+        if (!result) {
+          result = definition.compute(history, instance.config, context);
+          cache.set(key, result);
+        }
+
+        // The visible window is a suffix of the full history, so a single offset aligns
+        // every output without searching for timestamps.
+        const offset = Math.max(0, history.length - visibleCount);
+        const visibleBars = history.slice(offset);
+
+        const outputs = definition.outputs.map((output) => {
+          const style = instance.styles?.[output.key];
+          const values: IndicatorSeries = result.values[output.key] ?? [];
+          const colors = result.colors?.[output.key];
+          const points: IndicatorPoint[] = [];
+          for (let i = offset; i < history.length; i += 1) {
+            const value = values[i];
+            if (value == null || !Number.isFinite(value)) continue;
+            const perBarColor = colors?.[i];
+            points.push(perBarColor ? { t: history[i].t, value, color: perBarColor } : { t: history[i].t, value });
+          }
+          const lastValue = points.length ? points[points.length - 1].value : null;
+          return {
+            key: output.key,
+            label: output.label,
+            plot: output.plot,
+            color: style?.color ?? output.color,
+            lineWidth: style?.lineWidth ?? output.lineWidth ?? 2,
+            lineStyle: style?.lineStyle ?? output.lineStyle ?? 'solid',
+            points,
+            latest: lastValue == null
+              ? null
+              : definition.format
+                ? definition.format(lastValue, instance.config)
+                : defaultFormat(lastValue),
+          } satisfies ComputedOutput;
+        });
+
+        computed.push({
+          instanceId: instance.instanceId,
+          indicatorId: instance.indicatorId,
+          definition,
+          label: definition.short(instance.config),
+          visible: instance.visible,
+          placement: definition.placement,
+          outputs,
+          references: definition.references,
+          paneRange: definition.paneRange,
+          // Judged against the VISIBLE bar count, because that is what the operator can see
+          // being empty. The calculation itself still had the full history to work from.
+          insufficientHistory: visibleBars.length > 0 && outputs.every((output) => output.points.length === 0),
+        });
+      }
+
+      // Drop everything this pass did not touch. Without the sweep the cache grows by one
+      // entry per bar update per instance and never shrinks.
+      for (const key of [...cache.keys()]) {
+        if (!live.has(key)) cache.delete(key);
+      }
+      return computed;
+    },
+  };
+}
+
+function defaultFormat(value: number): string {
+  const magnitude = Math.abs(value);
+  if (magnitude >= 1e9) return `${(value / 1e9).toFixed(2)}B`;
+  if (magnitude >= 1e6) return `${(value / 1e6).toFixed(2)}M`;
+  if (magnitude >= 1000) return value.toFixed(0);
+  if (magnitude >= 1) return value.toFixed(2);
+  return value.toFixed(4);
+}
+
+/** Bars per year for the chart's interval, so annualising indicators do not assume daily. */
+export function barsPerYear(timeframe: 'D' | 'W' | 'M'): number {
+  return timeframe === 'D' ? 252 : timeframe === 'W' ? 52 : 12;
+}
