@@ -513,7 +513,12 @@ export function Watchlist({
           ))}
         </div>
       )}
-      <TickerSearch onSelect={(symbol, name) => onAdd(symbol, name)} fullWidth placeholder={`＋ Add a symbol to "${active}"…`} />
+      <TickerSearch
+        onSelect={(symbol, name) => onAdd(symbol, name)}
+        allowFormula={false}
+        fullWidth
+        placeholder={`＋ Add a symbol to "${active}"…`}
+      />
     </PanelCard>
   );
 }

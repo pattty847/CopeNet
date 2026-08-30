@@ -199,7 +199,12 @@ export function ChartStage({
                   const last = line.data[line.data.length - 1]?.value;
                   return (
                     <span key={line.id} style={{ color: line.color, fontSize: 10 }}>
-                      {line.label} {last == null ? '—' : `${last > 0 ? '+' : ''}${last.toFixed(1)}%`}
+                      {line.label}{' '}
+                      {last == null
+                        ? '—'
+                        : line.valueMode === 'percent'
+                          ? `${last > 0 ? '+' : ''}${last.toFixed(1)}%`
+                          : last.toLocaleString(undefined, { maximumFractionDigits: 4 })}
                     </span>
                   );
                 })}

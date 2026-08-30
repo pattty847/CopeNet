@@ -31,10 +31,21 @@ export function marketTickerFromPathname(pathname: string): string | null {
   if (!match) return null;
   try {
     const symbol = decodeURIComponent(match[1]).trim().toUpperCase();
-    return symbol || null;
+    return symbol && symbol !== 'FORMULA' ? symbol : null;
   } catch {
     return null;
   }
+}
+
+export function marketFormulaFromLocation(pathname: string, search: string): string | null {
+  if (normalizePathname(pathname) !== '/market/formula') return null;
+  const expression = new URLSearchParams(search).get('expression')?.trim() ?? '';
+  return expression || null;
+}
+
+export function marketFormulaPath(expression: string): string {
+  const params = new URLSearchParams({ expression: expression.trim() });
+  return `/market/formula?${params.toString()}`;
 }
 
 export function marketTickerPath(symbol: string | null): string {
@@ -45,6 +56,16 @@ export function marketTickerPath(symbol: string | null): string {
 export function marketTickerNavigationPath(symbol: string | null, currentPathname: string, currentSearch: string): string {
   const preserveTickerState = symbol != null && marketTickerFromPathname(currentPathname) != null;
   return `${marketTickerPath(symbol)}${preserveTickerState ? currentSearch : ''}`;
+}
+
+export function marketResultNavigationPath(
+  result: { type: 'symbol' | 'formula'; symbol: string },
+  currentPathname: string,
+  currentSearch: string,
+): string {
+  return result.type === 'formula'
+    ? marketFormulaPath(result.symbol)
+    : marketTickerNavigationPath(result.symbol, currentPathname, currentSearch);
 }
 
 export function pushAppSectionPath(

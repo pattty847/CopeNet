@@ -1,5 +1,11 @@
 import { useEffect, useState } from 'react';
-import { marketTickerFromPathname, marketTickerNavigationPath } from '../../lib/appSectionRouting';
+import {
+  marketFormulaFromLocation,
+  marketFormulaPath,
+  marketTickerFromPathname,
+  marketTickerNavigationPath,
+} from '../../lib/appSectionRouting';
+import { FormulaWorkspace } from './FormulaWorkspace';
 import { MarketDashboard } from './MarketDashboard';
 import { TickerWorkspace } from './TickerWorkspace';
 import { useMarketWatchlist } from './useMarketMonitorData';
@@ -7,29 +13,48 @@ import { useMarketWatchlist } from './useMarketMonitorData';
 export function MarketMonitor() {
   const watchlist = useMarketWatchlist();
   const [activeTicker, setActiveTicker] = useState(() => marketTickerFromPathname(window.location.pathname));
+  const [activeFormula, setActiveFormula] = useState(() => marketFormulaFromLocation(window.location.pathname, window.location.search));
 
   useEffect(() => {
-    const syncFromLocation = () => setActiveTicker(marketTickerFromPathname(window.location.pathname));
+    const syncFromLocation = () => {
+      setActiveTicker(marketTickerFromPathname(window.location.pathname));
+      setActiveFormula(marketFormulaFromLocation(window.location.pathname, window.location.search));
+    };
     window.addEventListener('popstate', syncFromLocation);
     return () => window.removeEventListener('popstate', syncFromLocation);
   }, []);
 
-  const navigateTicker = (symbol: string | null) => {
-    const nextPath = marketTickerNavigationPath(symbol, window.location.pathname, window.location.search);
+  const navigateMarket = (value: string | null, type: 'symbol' | 'formula' = 'symbol') => {
+    const nextPath = value == null
+      ? '/market'
+      : type === 'formula'
+        ? marketFormulaPath(value)
+        : marketTickerNavigationPath(value, window.location.pathname, window.location.search);
     if (`${window.location.pathname}${window.location.search}` !== nextPath) window.history.pushState({}, '', nextPath);
-    setActiveTicker(symbol?.trim().toUpperCase() || null);
+    setActiveTicker(type === 'symbol' ? value?.trim().toUpperCase() || null : null);
+    setActiveFormula(type === 'formula' ? value?.trim() || null : null);
   };
+
+  if (activeFormula) {
+    return (
+      <FormulaWorkspace
+        expression={activeFormula}
+        onClose={() => navigateMarket(null)}
+        onNavigate={(next, type = 'symbol') => navigateMarket(next, type)}
+      />
+    );
+  }
 
   if (activeTicker) {
     return (
       <TickerWorkspace
         symbol={activeTicker}
-        onClose={() => navigateTicker(null)}
-        onNavigate={(next) => navigateTicker(next)}
+        onClose={() => navigateMarket(null)}
+        onNavigate={(next, type = 'symbol') => navigateMarket(next, type)}
         watchlist={watchlist}
       />
     );
   }
 
-  return <MarketDashboard onOpenTicker={(symbol) => navigateTicker(symbol)} watchlist={watchlist} />;
+  return <MarketDashboard onOpenTicker={(symbol, type = 'symbol') => navigateMarket(symbol, type)} watchlist={watchlist} />;
 }

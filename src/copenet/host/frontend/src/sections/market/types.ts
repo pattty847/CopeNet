@@ -32,11 +32,22 @@ export interface WatchlistItem {
   spark: number[];
 }
 
-export interface SymbolSearchResult {
+export interface SymbolSearchTickerResult {
+  type: 'symbol';
   symbol: string;
   name: string;
   exchange: string;
 }
+
+export interface FormulaSearchResult {
+  type: 'formula';
+  symbol: string;
+  name: string;
+  exchange: 'SYNTHETIC';
+  components: string[];
+}
+
+export type SymbolSearchResult = SymbolSearchTickerResult | FormulaSearchResult;
 
 // ---------- dashboard ----------
 export interface AttentionItem {
@@ -253,6 +264,24 @@ export interface ChartSeriesPayload {
   timeframe: 'daily' | 'weekly' | 'monthly';
   priceBasis: 'split_adjusted';
   series: { symbol: string; bars: Ohlcv[] }[];
+}
+
+export interface FormulaPoint {
+  t: number;
+  value: number;
+}
+
+export interface FormulaSeries {
+  expression: string;
+  components: string[];
+  points: FormulaPoint[];
+  warnings: string[];
+}
+
+export interface ChartFormulasPayload {
+  timeframe: 'daily' | 'weekly' | 'monthly';
+  priceBasis: 'split_adjusted';
+  formulas: FormulaSeries[];
 }
 
 export interface TickerIntelligence {

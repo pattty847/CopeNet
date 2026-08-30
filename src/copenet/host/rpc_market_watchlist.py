@@ -7,6 +7,7 @@ import asyncio
 from typing import Any, Awaitable, Callable
 
 from copenet.core.market.data_sources import search_symbols
+from copenet.core.market.formulas import active_formula_symbol, formula_search_candidate
 from copenet.core.market.price_cache import PriceCache
 from copenet.core.market.quotes import quote_row, quote_rows
 from copenet.core.market.runtime import default_market_dir
@@ -165,5 +166,11 @@ async def handle_market_symbols_search(request_id: str, params: dict[str, Any] |
         limit = max(1, min(int(raw_limit), 15)) if raw_limit is not None else 8
     except (TypeError, ValueError):
         limit = 8
-    results = await asyncio.to_thread(search_symbols, query, limit=limit)
+    allow_formula = raw.get("allowFormula") is not False
+    candidate = formula_search_candidate(query) if allow_formula else None
+    search_query = active_formula_symbol(query) if candidate else query
+    result_limit = max(1, limit - 1) if candidate else limit
+    results = await asyncio.to_thread(search_symbols, search_query, limit=result_limit) if search_query else []
+    if candidate:
+        results.insert(0, candidate)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"results": results})))

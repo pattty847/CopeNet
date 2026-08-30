@@ -94,6 +94,22 @@
 /* The change % is what an operator actually scans, so it is not the smallest thing here. */
 .tw-assetbar__change { font-size: var(--mkt-t-body); }
 
+.tw-formula__identity { max-width: min(54vw, 760px); }
+.tw-formula__identity .tw-assetbar__symbol {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tw-formula__components { display: flex; gap: 4px; }
+.tw-formula__components > span {
+  padding: 2px 5px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 3px;
+  color: var(--mkt-dim);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+}
+.tw-formula__basis { color: var(--mkt-dimmer); font: 500 var(--mkt-t-micro) Inter; }
+
 /* A held position changes how every other number on the page reads, so it is one of the
  * few things that earns permanent pixels — but only when the position exists. */
 .tw-position-chip {

@@ -107,7 +107,7 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketAlertsCancelRpc, marketAlertsCreateRpc, marketAlertsListRpc, marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketAlertsCancelRpc, marketAlertsCreateRpc, marketAlertsListRpc, marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketChartFormulasRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import type { FinancialFrequency } from '../sections/market/types';
 import type { YieldCurveRange } from '../sections/market/types';
 import {
@@ -651,6 +651,10 @@ class WsClient {
     return marketChartSeriesRpc(this.request.bind(this), symbols, timeframe);
   }
 
+  async marketChartFormulas(expressions: string[], timeframe: 'daily' | 'weekly' | 'monthly') {
+    return marketChartFormulasRpc(this.request.bind(this), expressions, timeframe);
+  }
+
   async marketTickerEvidence(symbol: string, refresh = false, daysBack = 180) {
     return marketTickerEvidenceRpc(this.request.bind(this), symbol, refresh, daysBack);
   }
@@ -784,8 +788,8 @@ class WsClient {
     return marketWatchlistListSelectRpc(this.request.bind(this), name);
   }
 
-  async marketSymbolsSearch(query: string, limit = 8) {
-    return marketSymbolsSearchRpc(this.request.bind(this), query, limit);
+  async marketSymbolsSearch(query: string, limit = 8, allowFormula = true) {
+    return marketSymbolsSearchRpc(this.request.bind(this), query, limit, allowFormula);
   }
 
   async listPulses(): Promise<PulseRecord[]> {

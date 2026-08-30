@@ -81,6 +81,7 @@ from .rpc_market import (
     handle_market_backtest_run,
     handle_market_backtest_stress_test,
 )
+from .rpc_market_formula import handle_market_chart_formulas_get
 from .rpc_market_alerts import (
     handle_market_alerts_cancel,
     handle_market_alerts_create,
@@ -313,6 +314,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_ticker_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.chart.series.get":
         await handle_market_chart_series_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.chart.formulas.get":
+        await handle_market_chart_formulas_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.evidence.get":
         await handle_market_ticker_evidence_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ticker.fundamentals.get":

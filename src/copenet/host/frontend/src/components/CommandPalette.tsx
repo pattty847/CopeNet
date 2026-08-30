@@ -16,7 +16,7 @@ import {
   shouldAutoScrollCommandPalette,
   type CommandPaletteInteraction,
 } from '../lib/commandPalette';
-import { marketTickerNavigationPath } from '../lib/appSectionRouting';
+import { marketResultNavigationPath } from '../lib/appSectionRouting';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import type { SymbolSearchResult } from '../sections/market/types';
@@ -144,16 +144,16 @@ export function CommandPalette() {
   [sessions, setActiveSessionKey, setDraftOpen, setCurrentSection, setOpen]);
 
   const marketItems: PaletteItem[] = useMemo(() => marketResults.map((result) => ({
-    id: `market-symbol-${result.symbol}`,
-    label: result.symbol,
+    id: `market-${result.type}-${result.symbol}`,
+    label: result.type === 'formula' ? `ƒ ${result.symbol}` : result.symbol,
     hint: `${result.name}${result.exchange ? ` · ${result.exchange}` : ''}`,
     icon: TrendingUp,
     action: () => {
-      window.history.pushState({}, '', marketTickerNavigationPath(result.symbol, window.location.pathname, window.location.search));
+      window.history.pushState({}, '', marketResultNavigationPath(result, window.location.pathname, window.location.search));
       window.dispatchEvent(new PopStateEvent('popstate'));
       setOpen(false);
     },
-    group: 'Market symbols',
+    group: result.type === 'formula' ? 'Formula symbols' : 'Market symbols',
   })), [marketResults, setOpen]);
 
   const allItems = useMemo(() => [...marketItems, ...actionItems, ...navItems, ...sessionItems], [marketItems, actionItems, navItems, sessionItems]);
@@ -229,7 +229,7 @@ export function CommandPalette() {
               setQuery(e.target.value);
             }}
             onKeyDown={handleKeyDown}
-            placeholder={currentSection === 'market' ? 'Search a ticker, company, or command…' : 'Search commands, sessions, or navigate…'}
+            placeholder={currentSection === 'market' ? 'Search a ticker, formula, company, or command…' : 'Search commands, sessions, or navigate…'}
             className="flex-1 bg-transparent text-[14px] text-shell-text outline-none placeholder:text-shell-muted/60"
           />
           <kbd className="rounded-md border border-shell-border bg-shell-panel-strong px-1.5 py-0.5 text-[10px] font-semibold text-shell-muted">

@@ -3,16 +3,26 @@ import { wsClient } from '../../lib/wsClient';
 import { MM, mono } from './marketUi';
 import type { SymbolSearchResult } from './types';
 
+function hasFormulaIntent(value: string): boolean {
+  return /[+*/()]|\s-\s/.test(value);
+}
+
+function replaceActiveOperand(value: string, symbol: string): string {
+  return value.replace(/([A-Za-z0-9.^=_-]+)\s*$/, symbol);
+}
+
 /** Debounced ticker/company-name typeahead (market.symbols.search — live yfinance lookup, not
  * limited to the fixed dashboard UNIVERSE). Selecting a result navigates straight to the ticker
  * chart page via onSelect, same as clicking any symbol elsewhere on the dashboard. */
 export function TickerSearch({
   onSelect,
   fullWidth,
+  allowFormula = true,
   placeholder = 'Look up a ticker or company…',
 }: {
-  onSelect: (symbol: string, name: string) => void;
+  onSelect: (symbol: string, name: string, type: SymbolSearchResult['type']) => void;
   fullWidth?: boolean;
+  allowFormula?: boolean;
   placeholder?: string;
 }) {
   const [query, setQuery] = useState('');
@@ -33,7 +43,7 @@ export function TickerSearch({
     setLoading(true);
     debounceRef.current = setTimeout(() => {
       wsClient
-        .marketSymbolsSearch(trimmed, 8)
+        .marketSymbolsSearch(trimmed, 8, allowFormula)
         .then((next) => setResults(next))
         .catch(() => setResults([]))
         .finally(() => setLoading(false));
@@ -41,7 +51,7 @@ export function TickerSearch({
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
-  }, [query]);
+  }, [allowFormula, query]);
 
   useEffect(() => {
     const onClickAway = (event: MouseEvent) => {
@@ -52,10 +62,20 @@ export function TickerSearch({
   }, []);
 
   const pick = (result: SymbolSearchResult) => {
-    onSelect(result.symbol, result.name);
+    onSelect(result.symbol, result.name, result.type);
     setQuery('');
     setResults([]);
     setOpen(false);
+  };
+
+  const choose = (result: SymbolSearchResult) => {
+    if (allowFormula && result.type === 'symbol' && hasFormulaIntent(query)) {
+      setQuery(replaceActiveOperand(query, result.symbol));
+      setResults([]);
+      setOpen(true);
+      return;
+    }
+    pick(result);
   };
 
   return (
@@ -68,10 +88,11 @@ export function TickerSearch({
         }}
         onFocus={() => setOpen(true)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && results.length) pick(results[0]);
+          if (e.key === 'Enter' && results.length) choose(results[0]);
           if (e.key === 'Escape') setOpen(false);
         }}
-        placeholder={placeholder}
+        placeholder={allowFormula ? 'Ticker, company, or formula…' : placeholder}
+        aria-label={allowFormula ? 'Search ticker, company, or formula' : 'Search ticker or company'}
         style={{
           width: '100%',
           boxSizing: 'border-box',
@@ -103,8 +124,8 @@ export function TickerSearch({
           {!loading &&
             results.map((r) => (
               <button
-                key={r.symbol}
-                onClick={() => pick(r)}
+                key={`${r.type}:${r.symbol}`}
+                onClick={() => choose(r)}
                 style={{
                   cursor: 'pointer',
                   display: 'flex',
@@ -113,17 +134,19 @@ export function TickerSearch({
                   gap: 10,
                   width: '100%',
                   border: 'none',
-                  background: 'transparent',
+                  background: r.type === 'formula' ? 'rgba(251,148,35,.07)' : 'transparent',
                   borderRadius: 7,
                   padding: '7px 9px',
                   textAlign: 'left',
                 }}
               >
                 <span style={{ display: 'flex', alignItems: 'baseline', gap: 8, minWidth: 0 }}>
-                  <span style={{ fontFamily: mono, fontSize: 12.5, fontWeight: 600, color: MM.text }}>{r.symbol}</span>
+                  <span style={{ fontFamily: mono, fontSize: 12.5, fontWeight: 600, color: r.type === 'formula' ? MM.accent : MM.text }}>
+                    {r.type === 'formula' ? 'ƒ ' : ''}{r.symbol}
+                  </span>
                   <span style={{ fontSize: 11, color: MM.muted, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{r.name}</span>
                 </span>
-                <span style={{ fontSize: 9.5, color: MM.dim, flex: '0 0 auto' }}>{r.exchange}</span>
+                <span style={{ fontSize: 9.5, color: r.type === 'formula' ? MM.accent : MM.dim, flex: '0 0 auto' }}>{r.exchange}</span>
               </button>
             ))}
         </div>

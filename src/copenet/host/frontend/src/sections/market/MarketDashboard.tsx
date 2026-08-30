@@ -67,7 +67,7 @@ export function MarketDashboard({
   onOpenTicker,
   watchlist,
 }: {
-  onOpenTicker: (symbol: string) => void;
+  onOpenTicker: (symbol: string, type?: 'symbol' | 'formula') => void;
   watchlist: MarketWatchlistState;
 }) {
   const { dashboard: dash, refreshing, live, refresh, reload } = useMarketDashboard();
@@ -98,7 +98,7 @@ export function MarketDashboard({
     }
   };
 
-  const open = (symbol: string) => onOpenTicker(symbol);
+  const open = (symbol: string) => onOpenTicker(symbol, 'symbol');
 
   return (
     <div style={{ background: MM.bg, minHeight: '100%', color: MM.text }}>
@@ -126,7 +126,7 @@ export function MarketDashboard({
               <button onClick={() => void refresh()} disabled={refreshing} style={{ cursor: refreshing ? 'default' : 'pointer', border: `1px solid ${MM.borderHi}`, background: MM.accentSoft, color: MM.accent, borderRadius: 9, padding: '7px 13px', font: '600 10px Inter', letterSpacing: '.05em', opacity: refreshing ? 0.6 : 1 }}>
                 {refreshing ? '◍ Refreshing…' : '↻ Refresh data'}
               </button>
-              <TickerSearch onSelect={open} fullWidth={isMobile} />
+              <TickerSearch onSelect={(symbol, _name, type) => onOpenTicker(symbol, type)} fullWidth={isMobile} />
             </div>
           )}
         </div>

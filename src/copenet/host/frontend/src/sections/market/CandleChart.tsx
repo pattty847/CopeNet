@@ -856,10 +856,11 @@ export function CandleChart({
     if (!chart || !candle || !volume) return;
     const latestPrice = barsRef.current[barsRef.current.length - 1]?.c ?? 1;
     const pricePrecision = latestPrice < 1 ? 4 : 2;
+    const comparisonValueMode = comparisonLines[0]?.valueMode ?? 'percent';
     candle.applyOptions({
       visible: !comparisonMode,
       lastValueVisible: !comparisonMode,
-      priceFormat: comparisonMode
+      priceFormat: comparisonMode && comparisonValueMode === 'percent'
         ? { type: 'custom', minMove: 0.01, formatter: (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%` }
         : { type: 'price', precision: pricePrecision, minMove: 10 ** -pricePrecision },
     });

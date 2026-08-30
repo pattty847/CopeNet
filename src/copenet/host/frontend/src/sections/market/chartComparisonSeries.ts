@@ -18,7 +18,9 @@ export function replaceComparisonSeries(
       priceFormat: {
         type: 'custom',
         minMove: 0.01,
-        formatter: (value: number) => `${value > 0 ? '+' : ''}${value.toFixed(1)}%`,
+        formatter: (value: number) => line.valueMode === 'percent'
+          ? `${value > 0 ? '+' : ''}${value.toFixed(1)}%`
+          : value.toLocaleString(undefined, { maximumFractionDigits: 4 }),
       },
     });
     series.setData(line.data.map((point) => ({ time: point.t as UTCTimestamp, value: point.value })));

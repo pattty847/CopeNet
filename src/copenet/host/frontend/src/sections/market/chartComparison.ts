@@ -1,6 +1,6 @@
-import type { Ohlcv } from './types';
+import type { FormulaSeries, Ohlcv } from './types';
 
-const SYMBOL_PATTERN = /^[A-Z0-9.^=_-]{1,20}$/;
+const EXPRESSION_PATTERN = /^[A-Z0-9.^=_+\-*/()\s]+$/;
 const COLORS = ['#fb9423', '#8fb8e8', '#69c589', '#d9ad67', '#c594e8', '#e37d9f'];
 
 export interface ChartComparisonLine {
@@ -8,18 +8,13 @@ export interface ChartComparisonLine {
   label: string;
   color: string;
   data: { t: number; value: number }[];
+  valueMode: 'percent' | 'number';
 }
 
 export function normalizeComparisonExpression(raw: string): string | null {
-  const compact = raw.toUpperCase().replace(/\s+/g, '');
-  const parts = compact.split('/');
-  if (parts.length > 2 || parts.some((part) => !SYMBOL_PATTERN.test(part))) return null;
-  if (parts.length === 2 && parts[0] === parts[1]) return null;
-  return parts.join('/');
-}
-
-export function comparisonSymbols(expressions: string[]): string[] {
-  return [...new Set(expressions.flatMap((expression) => expression.split('/')))];
+  const normalized = raw.trim().toUpperCase().replace(/\s+/g, ' ');
+  if (!normalized || normalized.length > 200 || !EXPRESSION_PATTERN.test(normalized)) return null;
+  return normalized;
 }
 
 export function comparisonStateFromSearch(search: string): { expressions: string[]; active: boolean } {
@@ -42,36 +37,34 @@ export function comparisonSearch(expressions: string[], active: boolean): string
   return next ? `?${next}` : '';
 }
 
-function expressionPoints(expression: string, series: Map<string, Ohlcv[]>): { t: number; value: number }[] {
-  const [numerator, denominator] = expression.split('/');
-  const numeratorBars = series.get(numerator) ?? [];
-  if (!denominator) return numeratorBars.map((bar) => ({ t: bar.t, value: bar.c }));
-  const denominatorByTime = new Map((series.get(denominator) ?? []).map((bar) => [bar.t, bar.c]));
-  return numeratorBars.flatMap((bar) => {
-    const divisor = denominatorByTime.get(bar.t);
-    return divisor && Number.isFinite(divisor) ? [{ t: bar.t, value: bar.c / divisor }] : [];
-  });
-}
-
 export function buildComparisonLines(
   baseSymbol: string,
   baseBars: Ohlcv[],
   expressions: string[],
-  fetched: { symbol: string; bars: Ohlcv[] }[],
+  formulas: FormulaSeries[],
 ): ChartComparisonLine[] {
   if (!baseBars.length) return [];
   const start = baseBars[0].t;
   const end = baseBars[baseBars.length - 1].t;
-  const series = new Map(fetched.map((row) => [row.symbol, row.bars]));
-  series.set(baseSymbol, baseBars);
-  return [baseSymbol, ...expressions.filter((expression) => expression !== baseSymbol)].map((expression, index) => {
-    const raw = expressionPoints(expression, series).filter((point) => point.t >= start && point.t <= end && Number.isFinite(point.value) && point.value > 0);
-    const origin = raw[0]?.value;
+  const rows = [
+    { id: baseSymbol, label: baseSymbol, points: baseBars.map((bar) => ({ t: bar.t, value: bar.c })) },
+    ...formulas.map((formula, index) => ({
+      id: expressions[index] ?? formula.expression,
+      label: formula.expression,
+      points: formula.points,
+    })).filter((row) => row.label !== baseSymbol),
+  ];
+  return rows.map((row, index) => {
+    const raw = row.points.filter((point) => point.t >= start && point.t <= end && Number.isFinite(point.value));
+    const originIndex = raw.findIndex((point) => point.value !== 0);
+    const indexed = originIndex >= 0 ? raw.slice(originIndex) : [];
+    const origin = indexed[0]?.value;
     return {
-      id: expression,
-      label: expression,
+      id: row.id,
+      label: row.label,
       color: COLORS[index % COLORS.length],
-      data: origin ? raw.map((point) => ({ t: point.t, value: ((point.value / origin) - 1) * 100 })) : [],
+      valueMode: 'percent' as const,
+      data: origin ? indexed.map((point) => ({ t: point.t, value: ((point.value / origin) - 1) * 100 })) : [],
     };
   }).filter((line) => line.data.length > 1);
 }

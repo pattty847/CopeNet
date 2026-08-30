@@ -275,6 +275,7 @@ def search_symbols(query: str, *, limit: int = 8) -> list[dict[str, str]]:
         seen.add(symbol)
         results.append(
             {
+                "type": "symbol",
                 "symbol": symbol,
                 "name": str(quote.get("longname") or quote.get("shortname") or symbol),
                 "exchange": str(quote.get("exchDisp") or quote.get("exchange") or ""),

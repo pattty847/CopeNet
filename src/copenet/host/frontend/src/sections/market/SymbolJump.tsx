@@ -9,7 +9,23 @@ import { useEffect, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import type { SymbolSearchResult } from './types';
 
-export function SymbolJump({ seed, onClose, onPick }: { seed: string; onClose: () => void; onPick: (symbol: string) => void }) {
+function hasFormulaIntent(value: string): boolean {
+  return /[+*/()]|\s-\s/.test(value);
+}
+
+function replaceActiveOperand(value: string, symbol: string): string {
+  return value.replace(/([A-Za-z0-9.^=_-]+)\s*$/, symbol);
+}
+
+export function SymbolJump({
+  seed,
+  onClose,
+  onPick,
+}: {
+  seed: string;
+  onClose: () => void;
+  onPick: (value: string, type: SymbolSearchResult['type']) => void;
+}) {
   const [value, setValue] = useState(seed);
   const [hits, setHits] = useState<SymbolSearchResult[]>([]);
   const [cursor, setCursor] = useState(0);
@@ -35,9 +51,19 @@ export function SymbolJump({ seed, onClose, onPick }: { seed: string; onClose: (
     return () => window.clearTimeout(timer);
   }, [value]);
 
-  const commit = (symbol?: string) => {
-    const picked = (symbol ?? hits[cursor]?.symbol ?? value).trim().toUpperCase();
-    if (picked) onPick(picked);
+  const commit = (result?: SymbolSearchResult) => {
+    const selected = result ?? hits[cursor];
+    const picked = (selected?.symbol ?? value).trim().toUpperCase();
+    if (picked) onPick(picked, selected?.type ?? (hasFormulaIntent(picked) ? 'formula' : 'symbol'));
+  };
+
+  const choose = (hit: SymbolSearchResult) => {
+    if (hit.type === 'symbol' && hasFormulaIntent(value)) {
+      setValue(replaceActiveOperand(value, hit.symbol));
+      setHits([]);
+      return;
+    }
+    commit(hit);
   };
 
   return (
@@ -62,18 +88,18 @@ export function SymbolJump({ seed, onClose, onPick }: { seed: string; onClose: (
         <div className="tw-jump__hits">
           {hits.map((hit, index) => (
             <button
-              key={hit.symbol}
+              key={`${hit.type}:${hit.symbol}`}
               type="button"
               className="tw-jump__hit"
               data-cursor={index === cursor}
-              onMouseDown={(event) => { event.preventDefault(); commit(hit.symbol); }}
+              onMouseDown={(event) => { event.preventDefault(); choose(hit); }}
             >
-              <b>{hit.symbol}</b><span>{hit.name}</span><small>{hit.exchange}</small>
+              <b>{hit.type === 'formula' ? `ƒ ${hit.symbol}` : hit.symbol}</b><span>{hit.name}</span><small>{hit.exchange}</small>
             </button>
           ))}
         </div>
       )}
-      <div className="tw-jump__hint">Enter to open · Esc to cancel · j / k to step the rail</div>
+      <div className="tw-jump__hint">Enter to plot · + − × ÷ and parentheses supported · Esc to cancel</div>
     </div>
   );
 }

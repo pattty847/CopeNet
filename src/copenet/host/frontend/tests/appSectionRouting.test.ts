@@ -4,6 +4,9 @@ import test from 'node:test';
 import {
   APP_SECTION_PATHS,
   appSectionFromPathname,
+  marketFormulaFromLocation,
+  marketFormulaPath,
+  marketResultNavigationPath,
   marketTickerFromPathname,
   marketTickerNavigationPath,
   marketTickerPath,
@@ -38,9 +41,20 @@ test('market ticker paths are reloadable and preserve symbol punctuation', () =>
   assert.equal(marketTickerFromPathname('/market/%5EVIX/'), '^VIX');
   assert.equal(marketTickerFromPathname('/market'), null);
   assert.equal(marketTickerFromPathname('/market/NVDA/events'), null);
+  assert.equal(marketTickerFromPathname('/market/formula'), null);
   assert.equal(marketTickerPath('brk.a'), '/market/BRK.A');
   assert.equal(marketTickerPath('^vix'), '/market/%5EVIX');
   assert.equal(marketTickerPath(null), '/market');
+});
+
+test('formula symbols use a distinct reloadable route', () => {
+  assert.equal(marketFormulaPath('VOO / GLD'), '/market/formula?expression=VOO+%2F+GLD');
+  assert.equal(marketFormulaFromLocation('/market/formula', '?expression=VOO+%2F+GLD'), 'VOO / GLD');
+  assert.equal(marketFormulaFromLocation('/market/AAPL', '?expression=VOO'), null);
+  assert.equal(
+    marketResultNavigationPath({ type: 'formula', symbol: 'VOO / GLD' }, '/market/AAPL', '?compare=QQQ'),
+    '/market/formula?expression=VOO+%2F+GLD',
+  );
 });
 
 test('section navigation pushes only when the top-level path changes', () => {

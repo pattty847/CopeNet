@@ -154,14 +154,44 @@ async def test_symbols_search_wraps_results(tmp_path: Path, monkeypatch: pytest.
     def fake_search(query: str, *, limit: int) -> list[dict[str, str]]:
         captured["query"] = query
         captured["limit"] = limit
-        return [{"symbol": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ"}]
+        return [{"type": "symbol", "symbol": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ"}]
 
     monkeypatch.setattr(handlers, "search_symbols", fake_search)
     orchestrator = FakeOrchestrator(tmp_path)
 
     result = await _send(handlers.handle_market_symbols_search, {"query": "tesla", "limit": 3}, orchestrator)
-    assert result["payload"]["results"] == [{"symbol": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ"}]
+    assert result["payload"]["results"] == [{"type": "symbol", "symbol": "TSLA", "name": "Tesla, Inc.", "exchange": "NASDAQ"}]
     assert captured == {"query": "tesla", "limit": 3}
+
+
+async def test_symbols_search_places_formula_before_active_operand_assistance(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: dict[str, Any] = {}
+
+    def fake_search(query: str, *, limit: int) -> list[dict[str, str]]:
+        captured.update(query=query, limit=limit)
+        return [{"type": "symbol", "symbol": "GLD", "name": "SPDR Gold Shares", "exchange": "NYSE Arca"}]
+
+    monkeypatch.setattr(handlers, "search_symbols", fake_search)
+    result = await _send(
+        handlers.handle_market_symbols_search,
+        {"query": "voo/gld", "limit": 4, "allowFormula": True},
+        FakeOrchestrator(tmp_path),
+    )
+
+    assert result["payload"]["results"][0]["type"] == "formula"
+    assert result["payload"]["results"][0]["symbol"] == "VOO / GLD"
+    assert result["payload"]["results"][1]["symbol"] == "GLD"
+    assert captured == {"query": "GLD", "limit": 3}
+
+
+async def test_symbols_search_can_remain_ticker_only_for_watchlists(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(handlers, "search_symbols", lambda query, *, limit: [])
+    result = await _send(
+        handlers.handle_market_symbols_search,
+        {"query": "VOO/GLD", "allowFormula": False},
+        FakeOrchestrator(tmp_path),
+    )
+    assert result["payload"]["results"] == []
 
 
 async def test_symbols_search_requires_no_query_to_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

@@ -1,15 +1,14 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { buildComparisonLines, comparisonStateFromSearch, comparisonSymbols, normalizeComparisonExpression } from '../src/sections/market/chartComparison';
+import { buildComparisonLines, comparisonStateFromSearch, normalizeComparisonExpression } from '../src/sections/market/chartComparison';
 
 const bars = (values: number[]) => values.map((value, index) => ({ t: 100 + index, o: value, h: value, l: value, c: value, v: 1 }));
 
-test('comparison expressions accept tickers and one ratio', () => {
-  assert.equal(normalizeComparisonExpression(' xlk / gld '), 'XLK/GLD');
+test('comparison expressions accept ticker formulas', () => {
+  assert.equal(normalizeComparisonExpression(' xlk / gld '), 'XLK / GLD');
   assert.equal(normalizeComparisonExpression('BRK.A'), 'BRK.A');
-  assert.equal(normalizeComparisonExpression('XLK/GLD/VOO'), null);
-  assert.equal(normalizeComparisonExpression('XLK/XLK'), null);
-  assert.deepEqual(comparisonSymbols(['XLK/GLD', 'GLD', '^VIX']), ['XLK', 'GLD', '^VIX']);
+  assert.equal(normalizeComparisonExpression('(xlk + qqq) / 2'), '(XLK + QQQ) / 2');
+  assert.equal(normalizeComparisonExpression('XLK;DROP'), null);
 });
 
 test('comparison URL state is reloadable and deduplicated', () => {
@@ -20,11 +19,13 @@ test('comparison URL state is reloadable and deduplicated', () => {
 });
 
 test('symbols and ratios are indexed to zero at the visible-range origin', () => {
-  const lines = buildComparisonLines('AAPL', bars([100, 110, 121]), ['XLK/GLD'], [
-    { symbol: 'XLK', bars: bars([200, 220, 242]) },
-    { symbol: 'GLD', bars: bars([100, 100, 110]) },
-  ]);
-  assert.deepEqual(lines.map((line) => line.label), ['AAPL', 'XLK/GLD']);
+  const lines = buildComparisonLines('AAPL', bars([100, 110, 121]), ['XLK/GLD'], [{
+    expression: 'XLK / GLD',
+    components: ['XLK', 'GLD'],
+    points: [{ t: 100, value: 2 }, { t: 101, value: 2.2 }, { t: 102, value: 2.2 }],
+    warnings: [],
+  }]);
+  assert.deepEqual(lines.map((line) => line.label), ['AAPL', 'XLK / GLD']);
   assert.deepEqual(lines[0].data.map((point) => Math.round(point.value)), [0, 10, 21]);
   assert.deepEqual(lines[1].data.map((point) => Math.round(point.value)), [0, 10, 10]);
 });

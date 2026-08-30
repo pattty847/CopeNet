@@ -70,7 +70,7 @@ export function TickerWorkspace({
 }: {
   symbol: string;
   onClose: () => void;
-  onNavigate: (symbol: string) => void;
+  onNavigate: (symbol: string, type?: 'symbol' | 'formula') => void;
   watchlist: MarketWatchlistState;
 }) {
   const ticker = useTickerDetail(symbol);
@@ -200,9 +200,12 @@ export function TickerWorkspace({
   );
 
   const comparisonLines = useMemo(
-    () => buildComparisonLines(detail?.symbol ?? normalized, bars, comparisons, comparisonData.payload?.series ?? []),
-    [bars, comparisons, comparisonData.payload?.series, detail?.symbol, normalized],
+    () => buildComparisonLines(detail?.symbol ?? normalized, bars, comparisons, comparisonData.payload?.formulas ?? []),
+    [bars, comparisons, comparisonData.payload?.formulas, detail?.symbol, normalized],
   );
+  const comparisonWarning = comparisonData.error
+    ?? comparisonData.payload?.formulas.flatMap((formula) => formula.warnings)[0]
+    ?? null;
 
   const overlayPoints = useMemo(() => {
     if (!overlayMetric || !overlaySeries.data || bars.length === 0) return undefined;
@@ -503,7 +506,7 @@ export function TickerWorkspace({
             warning={dataWarning}
             comparisonMode={comparing}
             comparisonLines={comparisonLines}
-            comparisonError={comparing ? comparisonData.error : null}
+            comparisonError={comparing ? comparisonWarning : null}
             financialOverlay={comparing ? undefined : overlayPoints}
             financialOverlayKind={overlayMetric ?? undefined}
             financialOverlayUnit={
@@ -531,7 +534,7 @@ export function TickerWorkspace({
                 <SymbolJump
                   seed={jumpSeed}
                   onClose={() => setJumpOpen(false)}
-                  onPick={(picked) => { setJumpOpen(false); onNavigate(picked); }}
+                  onPick={(picked, type) => { setJumpOpen(false); onNavigate(picked, type); }}
                 />
               ) : null
             }

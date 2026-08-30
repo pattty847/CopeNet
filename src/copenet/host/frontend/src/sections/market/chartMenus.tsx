@@ -36,20 +36,20 @@ export function CompareMenu({
   const [suggestions, setSuggestions] = useState<SymbolSearchResult[]>([]);
 
   useEffect(() => {
-    const token = input.toUpperCase().replace(/\s+/g, '').split('/').at(-1) ?? '';
+    const token = input.match(/([A-Za-z0-9.^=_-]+)\s*$/)?.[1] ?? '';
     if (token.length < 2) {
       setSuggestions([]);
       return;
     }
     const timer = window.setTimeout(() => {
-      void wsClient.marketSymbolsSearch(token, 5).then(setSuggestions).catch(() => setSuggestions([]));
+      void wsClient.marketSymbolsSearch(input, 5, true).then(setSuggestions).catch(() => setSuggestions([]));
     }, 250);
     return () => window.clearTimeout(timer);
   }, [input]);
 
   const addExpression = () => {
     const expression = normalizeComparisonExpression(input);
-    if (!expression) return setError('Enter a ticker or one ratio, such as XLK/GLD.');
+    if (!expression) return setError('Enter a ticker or formula, such as (XLK + QQQ) / 2.');
     if (expressions.includes(expression)) return setError('That comparison is already plotted.');
     if (expressions.length >= 5) return setError('Remove a series before adding another.');
     onAdd(expression);
@@ -74,11 +74,11 @@ export function CompareMenu({
         <input
           value={input}
           onChange={(event) => { setInput(event.target.value); if (error) setError(null); }}
-          placeholder="Compare: VOO or XLK/GLD · Enter"
+          placeholder="Compare: VOO or (XLK + QQQ) / 2"
           autoCapitalize="characters"
           spellCheck={false}
           autoComplete="off"
-          aria-label="Comparison ticker or ratio"
+          aria-label="Comparison ticker or formula"
           className="tw-input tw-pop__compare-input"
           onKeyDown={(event) => {
             if (event.key !== 'Enter') return;
@@ -91,17 +91,17 @@ export function CompareMenu({
           <div style={{ marginTop: 6, border: '1px solid rgba(254,252,244,.07)', borderRadius: 4, overflow: 'hidden' }}>
             {suggestions.map((result) => (
               <button
-                key={result.symbol}
+                key={`${result.type}:${result.symbol}`}
                 type="button"
                 className="tw-jump__hit"
                 onClick={() => {
-                  const parts = input.toUpperCase().replace(/\s+/g, '').split('/');
-                  parts[parts.length - 1] = result.symbol;
-                  setInput(parts.join('/'));
+                  setInput(result.type === 'formula'
+                    ? result.symbol
+                    : input.replace(/([A-Za-z0-9.^=_-]+)\s*$/, result.symbol));
                   setSuggestions([]);
                 }}
               >
-                <b>{result.symbol}</b><span>{result.name}</span><small>{result.exchange}</small>
+                <b>{result.type === 'formula' ? `ƒ ${result.symbol}` : result.symbol}</b><span>{result.name}</span><small>{result.exchange}</small>
               </button>
             ))}
           </div>

@@ -5,6 +5,7 @@
 import type {
   DashboardPayload,
   ChartSeriesPayload,
+  ChartFormulasPayload,
   EconomicCalendarPayload,
   LedgerReport,
   MarketRead,
@@ -47,6 +48,15 @@ export async function marketChartSeriesRpc(
 ): Promise<ChartSeriesPayload> {
   const payload = await request<Record<string, unknown>>('market.chart.series.get', { symbols, timeframe });
   return payload as unknown as ChartSeriesPayload;
+}
+
+export async function marketChartFormulasRpc(
+  request: WsRpcRequest,
+  expressions: string[],
+  timeframe: 'daily' | 'weekly' | 'monthly',
+): Promise<ChartFormulasPayload> {
+  const payload = await request<Record<string, unknown>>('market.chart.formulas.get', { expressions, timeframe });
+  return payload as unknown as ChartFormulasPayload;
 }
 
 export async function marketTickerEvidenceRpc(request: WsRpcRequest, symbol: string, refresh = false, daysBack = 180): Promise<TickerEvidencePayload> {
@@ -368,8 +378,13 @@ export async function marketWatchlistListSelectRpc(request: WsRpcRequest, name: 
   return watchlistState(await request<Record<string, unknown>>('market.watchlist.list.select', { name }));
 }
 
-export async function marketSymbolsSearchRpc(request: WsRpcRequest, query: string, limit = 8): Promise<SymbolSearchResult[]> {
-  const payload = await request<{ results?: unknown }>('market.symbols.search', { query, limit });
+export async function marketSymbolsSearchRpc(
+  request: WsRpcRequest,
+  query: string,
+  limit = 8,
+  allowFormula = true,
+): Promise<SymbolSearchResult[]> {
+  const payload = await request<{ results?: unknown }>('market.symbols.search', { query, limit, allowFormula });
   return Array.isArray(payload.results) ? (payload.results as SymbolSearchResult[]) : [];
 }
 
