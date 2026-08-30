@@ -30,12 +30,15 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ComputedIndicator, ComputedOutput } from './compute';
+import { DEFAULT_PRICE_STRETCH } from './state';
 
 type AnySeries = ISeriesApi<SeriesType, Time>;
 
 interface RenderedEntry {
   /** null for price overlays, which live on pane 0 alongside the candles. */
   pane: IPaneApi<Time> | null;
+  /** Set when the indicator declares a fixed range, e.g. RSI's 0-100. */
+  bounded: boolean;
   /** Output keys and plot kinds. A change here means the series have to be rebuilt. */
   signature: string;
   series: Map<string, AnySeries>;
@@ -50,10 +53,6 @@ const LINE_STYLES: Record<ComputedOutput['lineStyle'], LineStyle> = {
   dotted: LineStyle.Dotted,
 };
 
-/** Price against each indicator pane. Four is the point where one indicator reads as a strip
- *  under the chart rather than as a second chart competing with it. */
-const PRICE_PANE_STRETCH = 4;
-
 function signatureOf(indicator: ComputedIndicator): string {
   return `${indicator.placement}:${indicator.outputs.map((output) => `${output.key}/${output.plot}`).join(',')}`;
 }
@@ -65,7 +64,7 @@ export class IndicatorChartLayer {
 
   /** Bring the chart in line with `indicators`. Safe to call on every render: unchanged
    *  entries are updated in place rather than rebuilt, so zoom, pan and scale all survive. */
-  sync(indicators: ComputedIndicator[]): void {
+  sync(indicators: ComputedIndicator[], priceStretch = DEFAULT_PRICE_STRETCH): void {
     const active = indicators.filter((indicator) => indicator.visible);
     const wanted = new Map(active.map((indicator) => [indicator.instanceId, indicator]));
 
@@ -81,12 +80,57 @@ export class IndicatorChartLayer {
     }
 
     this.reorderPanes(active);
-    this.applyPaneSizing(active);
+    this.applyPaneSizing(active, priceStretch);
+    this.enforceBoundedScales();
   }
 
   /** Remove every series and pane this layer owns. The caller still owns the chart. */
   destroy(): void {
     for (const [instanceId, entry] of [...this.entries]) this.teardown(instanceId, entry);
+  }
+
+  /** Keep a declared pane range actually in force.
+   *
+   *  `autoscaleInfoProvider` only applies while the scale is on AUTO, and dragging a price
+   *  axis silently turns auto off — after which RSI's declared 0-100 stops applying and the
+   *  scale drifts to whatever the drag left behind, flattening the series into a line. The
+   *  axis and the pane separator are a few pixels apart, so this is easy to trigger by
+   *  accident while resizing and gives no clue what happened.
+   *
+   *  A range the definition declares is not a preference, so it is re-asserted rather than
+   *  restored on request: for a bounded oscillator the scale IS the indicator. Unbounded
+   *  panes are left completely alone and still drag, zoom and double-click-reset normally. */
+  enforceBoundedScales(): void {
+    for (const entry of this.entries.values()) {
+      if (!entry.pane || !entry.bounded) continue;
+      try {
+        const scale = this.chart.priceScale('right', entry.pane.paneIndex());
+        if (!scale.options().autoScale) scale.applyOptions({ autoScale: true });
+      } catch {
+        /* pane removed or mid-layout */
+      }
+    }
+  }
+
+  /** How the operator has divided the panes, as stretch factors. Relative by nature, so it
+   *  restores proportionally on a different screen where pixel heights would not. */
+  readPaneStretch(): { priceStretch: number; byInstance: Record<string, number> } {
+    const byInstance: Record<string, number> = {};
+    let priceStretch = DEFAULT_PRICE_STRETCH;
+    try {
+      priceStretch = this.chart.panes()[0]?.getStretchFactor() ?? DEFAULT_PRICE_STRETCH;
+    } catch {
+      /* mid-layout */
+    }
+    for (const [instanceId, entry] of this.entries) {
+      if (!entry.pane) continue;
+      try {
+        byInstance[instanceId] = entry.pane.getStretchFactor();
+      } catch {
+        /* pane removed this frame */
+      }
+    }
+    return { priceStretch, byInstance };
   }
 
   /** Pane indices currently in use, price pane excluded. Exposed so the chart can clamp
@@ -120,12 +164,27 @@ export class IndicatorChartLayer {
     const pane = indicator.placement === 'pane' ? this.chart.addPane(true) : null;
     const entry: RenderedEntry = {
       pane,
+      bounded: indicator.paneRange != null,
       signature: signatureOf(indicator),
       series: new Map(),
       priceLines: [],
       anchor: null,
     };
     const paneIndex = pane ? pane.paneIndex() : 0;
+
+    // A bounded oscillator uses nearly its whole pane. Lightweight Charts' default margins
+    // reserve 30% of the height, which turns RSI's 0-100 into roughly -16..129 of usable
+    // scale and squashes the line into the middle.
+    if (pane && indicator.paneRange) {
+      try {
+        this.chart.priceScale('right', paneIndex).applyOptions({
+          autoScale: true,
+          scaleMargins: { top: 0.08, bottom: 0.08 },
+        });
+      } catch {
+        /* the pane is mid-layout; enforceBoundedScales settles it */
+      }
+    }
 
     for (const output of indicator.outputs) {
       const series = this.chart.addSeries(
@@ -234,11 +293,11 @@ export class IndicatorChartLayer {
    *  2:1 with one indicator and would leave price on 40% of the canvas with three. Price is
    *  what the other panes are read AGAINST, so it keeps a fixed larger share: one indicator
    *  takes 20%, four take 12.5% each and price still holds half. */
-  private applyPaneSizing(active: ComputedIndicator[]): void {
+  private applyPaneSizing(active: ComputedIndicator[], priceStretch: number): void {
     const panes = active.filter((indicator) => this.entries.get(indicator.instanceId)?.pane).length;
     if (!panes) return;
     try {
-      this.chart.panes()[0]?.setStretchFactor(PRICE_PANE_STRETCH);
+      this.chart.panes()[0]?.setStretchFactor(priceStretch);
     } catch {
       /* the chart is mid-layout; the next sync settles it */
     }
@@ -246,7 +305,8 @@ export class IndicatorChartLayer {
       const entry = this.entries.get(indicator.instanceId);
       if (!entry?.pane) continue;
       try {
-        entry.pane.setStretchFactor(1);
+        // A height the operator dragged, when there is one; otherwise the default weighting.
+        entry.pane.setStretchFactor(indicator.instance.paneStretch ?? 1);
       } catch {
         /* same */
       }

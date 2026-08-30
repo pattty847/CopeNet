@@ -17,6 +17,7 @@ import { barsPerYear, createIndicatorComputer } from './indicators/compute';
 import type { IndicatorRowActions } from './indicators/IndicatorRows';
 import {
   addIndicator,
+  applyPaneStretch,
   configureIndicator,
   duplicateIndicator,
   loadIndicatorLayout,
@@ -26,6 +27,7 @@ import {
   saveIndicatorLayout,
   setIndicatorVisibility,
   styleIndicator,
+  type IndicatorInstance,
 } from './indicators/state';
 import { MM } from './marketUi';
 import { PriceAlertControl } from './PriceAlertControl';
@@ -90,7 +92,29 @@ export function TickerWorkspace({
   const [tab, setTab] = useState<ResearchTab>(loadTab);
   // Workspace-sticky, like the interval and the pane set: an analyst configures their
   // instrument once and looks at every asset through it. The VALUES recompute per symbol.
-  const [indicators, setIndicators] = useState(loadIndicatorLayout);
+  const [indicatorLayout, setIndicatorLayout] = useState(loadIndicatorLayout);
+  const indicators = indicatorLayout.instances;
+  // The instance list is what every transition operates on; the pane division rides along
+  // beside it in the same persisted blob.
+  const setIndicators = useCallback(
+    (update: (current: IndicatorInstance[]) => IndicatorInstance[]) =>
+      setIndicatorLayout((layout) => ({ ...layout, instances: update(layout.instances) })),
+    [],
+  );
+
+  /** A pane separator has been dragged. Stored as stretch factors, which are relative, so a
+   *  division saved on a laptop restores proportionally on a monitor. */
+  const handlePaneStretch = useCallback(
+    (next: { priceStretch: number; byInstance: Record<string, number> }) => {
+      setIndicatorLayout((layout) => {
+        const instances = applyPaneStretch(layout.instances, next.byInstance);
+        const priceMoved = Math.abs(layout.priceStretch - next.priceStretch) >= 0.01;
+        if (instances === layout.instances && !priceMoved) return layout;
+        return { instances, priceStretch: priceMoved ? next.priceStretch : layout.priceStretch };
+      });
+    },
+    [],
+  );
   const drawer = useTickerDrawerLayout(tab);
   const [railCollapsed, setRailCollapsed] = useState(loadRailCollapsed);
 
@@ -126,7 +150,7 @@ export function TickerWorkspace({
   }, [normalized]);
 
   useEffect(() => saveTab(tab), [tab]);
-  useEffect(() => saveIndicatorLayout(indicators), [indicators]);
+  useEffect(() => saveIndicatorLayout(indicatorLayout), [indicatorLayout]);
   useEffect(() => saveLogScale(logScale), [logScale]);
   useEffect(() => saveRailCollapsed(railCollapsed), [railCollapsed]);
 
@@ -499,6 +523,8 @@ export function TickerWorkspace({
             // leaving Compare restores exactly what was there.
             indicators={comparing ? [] : computedIndicators}
             indicatorActions={indicatorActions}
+            indicatorPriceStretch={indicatorLayout.priceStretch}
+            onIndicatorPaneStretch={handlePaneStretch}
             layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}`}
             overlay={
               jumpOpen ? (

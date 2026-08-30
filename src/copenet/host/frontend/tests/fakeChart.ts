@@ -17,6 +17,10 @@ export class FakePane {
     this.stretchFactor = value;
   }
 
+  getStretchFactor(): number {
+    return this.stretchFactor;
+  }
+
   /** Stands in for the pane's DOM node. Null models the real API's documented behaviour
    *  before the pane has been laid out, which is why the renderer must tolerate it. */
   element: unknown = { pane: true };
@@ -87,6 +91,24 @@ export class FakeSeries {
   }
 }
 
+/** A price scale, modelled because `autoscaleInfoProvider` only applies while autoScale is
+ *  on — so "did the renderer put it back after a drag turned it off" is a real assertion. */
+export class FakePriceScale {
+  autoScale = true;
+  scaleMargins: { top: number; bottom: number } = { top: 0.2, bottom: 0.1 };
+  applyCount = 0;
+
+  applyOptions(options: { autoScale?: boolean; scaleMargins?: { top: number; bottom: number } }): void {
+    this.applyCount += 1;
+    if (options.autoScale != null) this.autoScale = options.autoScale;
+    if (options.scaleMargins) this.scaleMargins = options.scaleMargins;
+  }
+
+  options(): { autoScale: boolean; scaleMargins: { top: number; bottom: number } } {
+    return { autoScale: this.autoScale, scaleMargins: this.scaleMargins };
+  }
+}
+
 export class FakeChart {
   /** The backing array. `panes()` is the method the real API exposes; the array is kept
    *  separately so assertions can read it without going through the accessor. */
@@ -99,6 +121,20 @@ export class FakeChart {
 
   panes(): FakePane[] {
     return this.paneList;
+  }
+
+  /** Price scales are per pane in v5, keyed by id within that pane. */
+  private scales = new Map<string, FakePriceScale>();
+
+  priceScale(id: string, paneIndex = 0): FakePriceScale {
+    if (paneIndex >= this.paneList.length) throw new Error(`no pane ${paneIndex}`);
+    const key = `${paneIndex}:${id}`;
+    let scale = this.scales.get(key);
+    if (!scale) {
+      scale = new FakePriceScale();
+      this.scales.set(key, scale);
+    }
+    return scale;
   }
 
   addPane(): FakePane {

@@ -30,6 +30,35 @@ export interface IndicatorInstance {
   visible: boolean;
   /** Per-output overrides. Absent means "whatever the registry declares". */
   styles?: Record<string, IndicatorStyle>;
+  /** Pane height, stored as a STRETCH FACTOR rather than pixels.
+   *
+   *  Dragging a pane separator updates Lightweight Charts' stretch factors, which are
+   *  relative — so a layout saved on a laptop restores proportionally on a monitor, where a
+   *  pixel height would restore a pane that is right in absolute terms and wrong on screen.
+   *  Absent means "use the default weighting". */
+  paneStretch?: number;
+}
+
+/** A whole persisted layout: the indicators, plus how the panes are divided. */
+export interface IndicatorLayout {
+  instances: IndicatorInstance[];
+  /** Stretch factor of the PRICE pane, which no instance owns. */
+  priceStretch: number;
+}
+
+/** Price against each indicator pane, before the operator drags anything. Four is the point
+ *  where one indicator reads as a strip under the chart rather than a second chart competing
+ *  with it. */
+export const DEFAULT_PRICE_STRETCH = 4;
+
+/** Bounds for a stored stretch factor. Wide enough for any deliberate layout, narrow enough
+ *  that a corrupt value cannot collapse a pane to nothing or push the others off-screen. */
+const MIN_STRETCH = 0.05;
+const MAX_STRETCH = 50;
+
+function normalizeStretch(value: unknown, fallback: number): number {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return fallback;
+  return Math.min(MAX_STRETCH, Math.max(MIN_STRETCH, value));
 }
 
 export const LAYOUT_VERSION = 1;
@@ -42,6 +71,7 @@ export const MAX_INDICATORS = 12;
 interface StoredLayout {
   version: number;
   instances: unknown[];
+  priceStretch?: unknown;
 }
 
 function read(key: string): string | null {
@@ -66,15 +96,16 @@ function write(key: string, value: string): void {
  *  than repaired into something the operator did not ask for. An indicator id that no longer
  *  exists is dropped silently — the alternative is a layout that fails to load entirely
  *  because one entry was retired. */
-export function parseIndicatorLayout(raw: string | null): IndicatorInstance[] {
-  if (!raw) return [];
+export function parseIndicatorLayout(raw: string | null): IndicatorLayout {
+  const empty: IndicatorLayout = { instances: [], priceStretch: DEFAULT_PRICE_STRETCH };
+  if (!raw) return empty;
   let parsed: StoredLayout;
   try {
     parsed = JSON.parse(raw) as StoredLayout;
   } catch {
-    return [];
+    return empty;
   }
-  if (!parsed || parsed.version !== LAYOUT_VERSION || !Array.isArray(parsed.instances)) return [];
+  if (!parsed || parsed.version !== LAYOUT_VERSION || !Array.isArray(parsed.instances)) return empty;
 
   const instances: IndicatorInstance[] = [];
   const seen = new Set<string>();
@@ -87,6 +118,9 @@ export function parseIndicatorLayout(raw: string | null): IndicatorInstance[] {
     if (seen.has(candidate.instanceId)) continue;
     seen.add(candidate.instanceId);
     const styles = normalizeStyles(candidate.styles);
+    const stretch = typeof candidate.paneStretch === 'number' && Number.isFinite(candidate.paneStretch)
+      ? normalizeStretch(candidate.paneStretch, 1)
+      : undefined;
     instances.push({
       instanceId: candidate.instanceId,
       indicatorId: candidate.indicatorId,
@@ -96,10 +130,11 @@ export function parseIndicatorLayout(raw: string | null): IndicatorInstance[] {
       // structural comparison but not JSON, so the two disagree about whether a saved
       // layout round-tripped.
       ...(styles ? { styles } : {}),
+      ...(stretch != null ? { paneStretch: stretch } : {}),
     });
     if (instances.length >= MAX_INDICATORS) break;
   }
-  return instances;
+  return { instances, priceStretch: normalizeStretch(parsed.priceStretch, DEFAULT_PRICE_STRETCH) };
 }
 
 function normalizeStyles(raw: unknown): Record<string, IndicatorStyle> | undefined {
@@ -121,12 +156,37 @@ function normalizeStyles(raw: unknown): Record<string, IndicatorStyle> | undefin
   return Object.keys(styles).length ? styles : undefined;
 }
 
-export function loadIndicatorLayout(): IndicatorInstance[] {
+export function loadIndicatorLayout(): IndicatorLayout {
   return parseIndicatorLayout(read(STORAGE_KEY));
 }
 
-export function saveIndicatorLayout(instances: IndicatorInstance[]): void {
-  write(STORAGE_KEY, JSON.stringify({ version: LAYOUT_VERSION, instances } satisfies { version: number; instances: IndicatorInstance[] }));
+export function saveIndicatorLayout(layout: IndicatorLayout): void {
+  write(STORAGE_KEY, JSON.stringify({
+    version: LAYOUT_VERSION,
+    instances: layout.instances,
+    priceStretch: layout.priceStretch,
+  }));
+}
+
+/** Record a pane division the operator produced by dragging a separator. Returns the same
+ *  array when nothing moved, so persisting this is a no-op on an ordinary render. */
+export function applyPaneStretch(
+  instances: IndicatorInstance[],
+  byInstance: Record<string, number>,
+): IndicatorInstance[] {
+  let changed = false;
+  const next = instances.map((instance) => {
+    const stretch = byInstance[instance.instanceId];
+    if (stretch == null || !Number.isFinite(stretch)) return instance;
+    const normalized = normalizeStretch(stretch, instance.paneStretch ?? 1);
+    // Compared against the EFFECTIVE stretch, not the stored one, so a layout nobody has
+    // dragged does not acquire a paneStretch equal to its own default and rewrite storage on
+    // the first pointer-up.
+    if (Math.abs((instance.paneStretch ?? 1) - normalized) < 0.01) return instance;
+    changed = true;
+    return { ...instance, paneStretch: normalized };
+  });
+  return changed ? next : instances;
 }
 
 /** Smallest unused ordinal for this indicator, so ids stay readable ("ema#2") and

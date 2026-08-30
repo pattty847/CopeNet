@@ -432,6 +432,8 @@ export function CandleChart({
   showVolume = true,
   indicators = [],
   indicatorActions,
+  indicatorPriceStretch,
+  onIndicatorPaneStretch,
   onHoverBar,
 }: {
   bars: Ohlcv[];
@@ -462,6 +464,10 @@ export function CandleChart({
   /** Supplied when the operator may act on an indicator from the chart itself. Omitted, the
    *  pane heads still show their legend but carry no controls. */
   indicatorActions?: IndicatorRowActions;
+  /** How much of the chart the price pane holds against each indicator pane. */
+  indicatorPriceStretch: number;
+  /** Fires when a pane separator has been dragged, so the division can be persisted. */
+  onIndicatorPaneStretch?: (next: { priceStretch: number; byInstance: Record<string, number> }) => void;
   /** Crosshair bar under the pointer, or null when the pointer leaves the chart. Lets the
    *  legend live ON the chart instead of in a metadata strip wrapped around it. */
   onHoverBar?: (bar: Ohlcv | null) => void;
@@ -499,7 +505,14 @@ export function CandleChart({
   onHoverBarRef.current = onHoverBar;
   insiderDisplayModeRef.current = insiderDisplayMode;
   useChartPriceAlertLines(candleRef, priceAlerts, chartGeneration, draftAlertPrice);
-  const indicatorPaneRects = useChartIndicators(chartRef, chartGeneration, indicators, containerRef);
+  const indicatorPaneRects = useChartIndicators(
+    chartRef,
+    chartGeneration,
+    indicators,
+    containerRef,
+    indicatorPriceStretch,
+    onIndicatorPaneStretch,
+  );
 
   /** Recompute markers + cluster boxes for the current data and zoom. Derived, never stored:
    *  runs on data change and (rAF-throttled) on every visible-range change. */

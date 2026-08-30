@@ -86,8 +86,24 @@ switch.
 One versioned blob under `mm-tw-indicators`:
 
 ```json
-{ "version": 1, "instances": [ { "instanceId", "indicatorId", "config", "visible", "styles"? } ] }
+{
+  "version": 1,
+  "priceStretch": 4,
+  "instances": [ { "instanceId", "indicatorId", "config", "visible", "styles"?, "paneStretch"? } ]
+}
 ```
+
+**Pane heights persist as STRETCH FACTORS, not pixels.** Dragging a separator
+updates Lightweight Charts' stretch factors, which are relative — so a division
+set on a laptop restores proportionally on a monitor, where a stored pixel height
+would restore something correct in absolute terms and wrong on screen. The price
+pane's share has no instance to live on, so it sits beside the list as
+`priceStretch`. Both fields are optional *within* version 1 rather than a version
+bump: a blob written before they existed still loads and takes the defaults.
+
+The division is read back on pointer-up, never on a timer, and a layout nobody has
+dragged is compared against its own effective default so resting a pointer on the
+chart cannot rewrite storage.
 
 `parseIndicatorLayout` is total: it never throws and drops anything it cannot
 vouch for rather than repairing it into something the operator did not ask for.
@@ -138,7 +154,17 @@ chart series is. `CandleChart` gained one prop and one hook call.
   emptying it; an empty pane still holding vertical space is the worse behaviour
   when hiding is what you reach for to get the price back.
 - Bounded oscillators pin their own scale via `autoscaleInfoProvider`, so RSI at
-  45–55 does not fill its pane and read as violent.
+  45–55 does not fill its pane and read as violent. They also take tighter scale
+  margins (8% against the default 20/10), because the default reserves 30% of the
+  pane and turns a declared 0–100 into roughly −16…129 of usable scale.
+- **A declared range is re-asserted, not merely requested.** `autoscaleInfoProvider`
+  only applies while the scale is on AUTO, and dragging a price axis silently turns
+  auto off — after which RSI's 0–100 stops applying and the scale drifts to
+  whatever the drag left, flattening the series into a line. The axis sits a few
+  pixels from the pane separator, so this is easy to trigger while resizing and
+  gives no clue what happened. `enforceBoundedScales()` runs on pointer movement,
+  so a bounded axis reads as locked. Unbounded panes are untouched and still drag,
+  zoom and double-click-reset normally.
 - The price pane holds a stretch factor of 4 against 1 per indicator pane.
   Lightweight Charts gives every new pane the same stretch, which would leave
   price on 40% of the canvas with three indicators.
@@ -351,9 +377,10 @@ Measure before adding one.
   through it. Honest gaps need one series per segment, as
   `splitFinancialOverlaySegments` does for the financial overlay. Rare enough to
   defer; not free.
-- **Pane heights are not persisted.** Separators drag fine and the controls track
-  the new geometry, but the resulting sizes are not read back into the layout, so
-  they reset on reload. The initial split follows the fixed 4:1 stretch.
+- **A bounded pane's axis cannot be dragged.** That is deliberate — for RSI the
+  declared range IS the indicator — but it does mean you cannot zoom into, say,
+  RSI 40–60 for a closer look. Reversible by dropping the `enforceBoundedScales`
+  call from the pointer handlers.
 - **`insufficientHistory` is reported but not explained.** The row and legend read
   "needs history" without saying how many bars are missing, though `warmup` has
   the number.
@@ -370,7 +397,8 @@ Measure before adding one.
 
 - Band fills via a series primitive.
 - Segment-split series so interior gaps read honestly.
-- Persisting dragged pane heights into the layout.
+- Letting a bounded pane be zoomed deliberately while still recovering from an
+  accidental axis drag.
 - A "needs N more bars" reading on `insufficientHistory`.
 - Indicators computed on a comparison series, which would make Compare a plot
   rather than a mode — the end state `TICKER_WORKSPACE_REDESIGN.md` already

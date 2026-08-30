@@ -30,6 +30,11 @@ export function useChartIndicators(
   indicators: ComputedIndicator[],
   /** The positioned wrapper pane controls are placed against. */
   containerRef: RefObject<HTMLElement | null>,
+  /** Stretch factor for the price pane; each indicator carries its own. */
+  priceStretch: number,
+  /** Called when the operator finishes dragging a pane separator, so the new division can be
+   *  persisted. Never called for a division this hook applied itself. */
+  onPaneStretchChange?: (next: { priceStretch: number; byInstance: Record<string, number> }) => void,
 ): IndicatorPaneRect[] {
   const layerRef = useRef<IndicatorChartLayer | null>(null);
   const [paneRects, setPaneRects] = useState<IndicatorPaneRect[]>([]);
@@ -73,9 +78,43 @@ export function useChartIndicators(
   }, [containerRef]);
 
   useEffect(() => {
-    layerRef.current?.sync(indicators);
+    layerRef.current?.sync(indicators, priceStretch);
     measure();
-  }, [indicators, chartGeneration, measure]);
+  }, [indicators, chartGeneration, measure, priceStretch]);
+
+  // Pointer interaction on the chart is where BOTH of these are settled, and neither has an
+  // event of its own: Lightweight Charts publishes nothing for a price-scale change or a
+  // pane-separator drag.
+  //
+  //  * A bounded scale is re-asserted on every move, so an accidental drag on an RSI axis
+  //    cannot leave its declared 0-100 quietly switched off. The scale reads as locked,
+  //    which is what a declared range means.
+  //  * A separator drag is read back on release and handed up to be persisted.
+  const stretchRef = useRef(onPaneStretchChange);
+  stretchRef.current = onPaneStretchChange;
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    const hold = () => layerRef.current?.enforceBoundedScales();
+    const settle = () => {
+      const layer = layerRef.current;
+      if (!layer) return;
+      layer.enforceBoundedScales();
+      const next = layer.readPaneStretch();
+      if (Object.keys(next.byInstance).length) stretchRef.current?.(next);
+    };
+    container.addEventListener('pointermove', hold, { passive: true });
+    container.addEventListener('wheel', hold, { passive: true });
+    container.addEventListener('pointerup', settle, { passive: true });
+    container.addEventListener('pointerleave', settle, { passive: true });
+    return () => {
+      container.removeEventListener('pointermove', hold);
+      container.removeEventListener('wheel', hold);
+      container.removeEventListener('pointerup', settle);
+      container.removeEventListener('pointerleave', settle);
+    };
+  }, [containerRef, chartGeneration]);
 
   // Observe each pane element directly rather than sampling on an animation frame.
   //

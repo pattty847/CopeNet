@@ -11,9 +11,11 @@ import test from 'node:test';
 import { defaultConfig, normalizeConfig } from '../src/sections/market/indicators/config';
 import { indicatorById, INDICATORS, searchIndicators } from '../src/sections/market/indicators/registry';
 import {
+  DEFAULT_PRICE_STRETCH,
   LAYOUT_VERSION,
   MAX_INDICATORS,
   addIndicator,
+  applyPaneStretch,
   configureIndicator,
   duplicateIndicator,
   moveIndicator,
@@ -26,8 +28,8 @@ import {
   type IndicatorInstance,
 } from '../src/sections/market/indicators/state';
 
-function stored(instances: unknown[], version = LAYOUT_VERSION): string {
-  return JSON.stringify({ version, instances });
+function stored(instances: unknown[], version = LAYOUT_VERSION, priceStretch?: number): string {
+  return JSON.stringify({ version, instances, ...(priceStretch != null ? { priceStretch } : {}) });
 }
 
 // ------------------------------------------------------------------ transitions
@@ -131,22 +133,23 @@ test('a layout survives a save and load round trip', () => {
   let instances = configureIndicator(addIndicator([], 'ema'), 'ema#1', { period: 50, source: 'hlc3' });
   instances = styleIndicator(instances, 'ema#1', 'value', { color: '#8fb8e8', lineStyle: 'dashed' });
   instances = setIndicatorVisibility(addIndicator(instances, 'rsi'), 'rsi#1', false);
-  assert.deepEqual(parseIndicatorLayout(stored(instances)), instances);
+  assert.deepEqual(parseIndicatorLayout(stored(instances)).instances, instances);
 });
 
 test('a layout from a different version is discarded rather than half-read', () => {
   const instances = addIndicator([], 'ema');
-  assert.deepEqual(parseIndicatorLayout(stored(instances, LAYOUT_VERSION + 1)), []);
-  assert.deepEqual(parseIndicatorLayout(stored(instances, LAYOUT_VERSION - 1)), []);
+  assert.deepEqual(parseIndicatorLayout(stored(instances, LAYOUT_VERSION + 1)).instances, []);
+  assert.deepEqual(parseIndicatorLayout(stored(instances, LAYOUT_VERSION - 1)).instances, []);
 });
 
 test('corrupt or absent storage falls back to an empty layout instead of throwing', () => {
-  assert.deepEqual(parseIndicatorLayout(null), []);
-  assert.deepEqual(parseIndicatorLayout(''), []);
-  assert.deepEqual(parseIndicatorLayout('{not json'), []);
-  assert.deepEqual(parseIndicatorLayout('[]'), []);
-  assert.deepEqual(parseIndicatorLayout(JSON.stringify({ version: LAYOUT_VERSION })), []);
-  assert.deepEqual(parseIndicatorLayout(JSON.stringify({ version: LAYOUT_VERSION, instances: 'nope' })), []);
+  for (const raw of [null, '', '{not json', '[]',
+    JSON.stringify({ version: LAYOUT_VERSION }),
+    JSON.stringify({ version: LAYOUT_VERSION, instances: 'nope' })]) {
+    const layout = parseIndicatorLayout(raw);
+    assert.deepEqual(layout.instances, []);
+    assert.equal(layout.priceStretch, DEFAULT_PRICE_STRETCH, 'a fallback layout still divides the panes sanely');
+  }
 });
 
 test('a retired indicator is dropped without taking the rest of the layout with it', () => {
@@ -155,7 +158,7 @@ test('a retired indicator is dropped without taking the rest of the layout with 
     { instanceId: 'gone#1', indicatorId: 'an-indicator-we-removed', config: {}, visible: true },
     { instanceId: 'rsi#1', indicatorId: 'rsi', config: { period: 14 }, visible: true },
   ]);
-  const parsed = parseIndicatorLayout(layout);
+  const parsed = parseIndicatorLayout(layout).instances;
   assert.deepEqual(parsed.map((instance) => instance.indicatorId), ['ema', 'rsi']);
 });
 
@@ -163,7 +166,7 @@ test('a stored config outside the current bounds is repaired on load, not run', 
   // The case this exists for: a build where the maximum was higher, or a hand-edited blob.
   const parsed = parseIndicatorLayout(stored([
     { instanceId: 'ema#1', indicatorId: 'ema', config: { period: 5000, source: 'not-a-source' }, visible: true },
-  ]));
+  ])).instances;
   assert.equal(parsed[0].config.period, 400);
   assert.equal(parsed[0].config.source, 'close');
 });
@@ -176,7 +179,7 @@ test('malformed rows are skipped and duplicate ids collapse', () => {
     { instanceId: 'ema#1' },
     { instanceId: 'ema#1', indicatorId: 'ema', config: {}, visible: true },
     { instanceId: 'ema#1', indicatorId: 'sma', config: {}, visible: true },
-  ]));
+  ])).instances;
   assert.equal(parsed.length, 1);
   assert.equal(parsed[0].indicatorId, 'ema');
 });
@@ -188,7 +191,7 @@ test('a stored layout longer than the cap is truncated on load', () => {
     config: {},
     visible: true,
   }));
-  assert.equal(parseIndicatorLayout(stored(rows)).length, MAX_INDICATORS);
+  assert.equal(parseIndicatorLayout(stored(rows)).instances.length, MAX_INDICATORS);
 });
 
 test('a style that is not a colour, width or known dash pattern is dropped', () => {
@@ -202,13 +205,58 @@ test('a style that is not a colour, width or known dash pattern is dropped', () 
       other: { color: '#8fb8e8' },
     },
   }]));
-  assert.equal(parsed[0].styles?.value, undefined, 'no field of that style survived, so the entry goes');
-  assert.deepEqual(parsed[0].styles?.other, { color: '#8fb8e8' });
+  assert.equal(parsed.instances[0].styles?.value, undefined, 'no field of that style survived, so the entry goes');
+  assert.deepEqual(parsed.instances[0].styles?.other, { color: '#8fb8e8' });
 });
 
 test('visibility defaults to shown when the stored row does not say', () => {
-  const parsed = parseIndicatorLayout(stored([{ instanceId: 'ema#1', indicatorId: 'ema', config: {} }]));
+  const parsed = parseIndicatorLayout(stored([{ instanceId: 'ema#1', indicatorId: 'ema', config: {} }])).instances;
   assert.equal(parsed[0].visible, true);
+});
+
+test('a dragged pane division survives a save and load round trip', () => {
+  // Stored as STRETCH FACTORS, which are relative — a division set on a laptop has to come
+  // back proportional on a monitor, where a pixel height would restore something that is
+  // right in absolute terms and wrong on screen.
+  const instances = applyPaneStretch(addIndicator(addIndicator([], 'rsi'), 'macd'), { 'rsi#1': 2.4, 'macd#1': 0.8 });
+  assert.equal(instances[0].paneStretch, 2.4);
+  assert.equal(instances[1].paneStretch, 0.8);
+  const parsed = parseIndicatorLayout(stored(instances, LAYOUT_VERSION, 3.1));
+  assert.deepEqual(parsed.instances, instances);
+  assert.equal(parsed.priceStretch, 3.1);
+});
+
+test('a layout nobody has dragged is left alone rather than stamped with its own default', () => {
+  // Pane stretch is read back on every pointer-up. If the default weighting counted as a
+  // change, resting a pointer on the chart would rewrite storage.
+  const instances = addIndicator([], 'rsi');
+  assert.equal(applyPaneStretch(instances, { 'rsi#1': 1 }), instances, 'the array identity must survive');
+  assert.equal(applyPaneStretch(instances, { 'rsi#1': 1.004 }), instances, 'sub-threshold jitter is not a drag');
+  assert.notEqual(applyPaneStretch(instances, { 'rsi#1': 1.9 }), instances);
+});
+
+test('a corrupt or absurd pane stretch is clamped rather than collapsing a pane', () => {
+  const parsed = parseIndicatorLayout(stored([
+    { instanceId: 'rsi#1', indicatorId: 'rsi', config: {}, visible: true, paneStretch: 100000 },
+  ], LAYOUT_VERSION, -5));
+  assert.equal(parsed.instances[0].paneStretch, 50);
+  assert.equal(parsed.priceStretch, 0.05);
+  const nonNumeric = parseIndicatorLayout(stored([
+    { instanceId: 'rsi#1', indicatorId: 'rsi', config: {}, visible: true, paneStretch: 'tall' },
+  ]));
+  assert.equal(nonNumeric.instances[0].paneStretch, undefined, 'an unusable value falls back to the default weighting');
+});
+
+test('a layout written before pane heights were stored still loads', () => {
+  // The field is optional inside version 1 rather than a version bump, so a blob written by
+  // the build that shipped before it keeps working and simply takes the defaults.
+  const parsed = parseIndicatorLayout(JSON.stringify({
+    version: LAYOUT_VERSION,
+    instances: [{ instanceId: 'rsi#1', indicatorId: 'rsi', config: { period: 14 }, visible: true }],
+  }));
+  assert.equal(parsed.instances.length, 1);
+  assert.equal(parsed.instances[0].paneStretch, undefined);
+  assert.equal(parsed.priceStretch, DEFAULT_PRICE_STRETCH);
 });
 
 // ------------------------------------------------------------------ registry

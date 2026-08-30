@@ -63,6 +63,8 @@ export function ChartStage({
   showVolume,
   indicators,
   indicatorActions,
+  indicatorPriceStretch,
+  onIndicatorPaneStretch,
   layoutKey,
   overlay,
 }: {
@@ -90,6 +92,8 @@ export function ChartStage({
   showVolume: boolean;
   indicators: ComputedIndicator[];
   indicatorActions: IndicatorRowActions;
+  indicatorPriceStretch: number;
+  onIndicatorPaneStretch: (next: { priceStretch: number; byInstance: Record<string, number> }) => void;
   /** Changes whenever something outside the chart resizes its region — the drawer snap, the
    *  rail. The chart is re-measured on this rather than only on a ResizeObserver, because an
    *  observer that silently never fires leaves the chart at its old height, overflowing. */
@@ -224,6 +228,8 @@ export function ChartStage({
             showVolume={showVolume}
             indicators={indicators}
             indicatorActions={indicatorActions}
+            indicatorPriceStretch={indicatorPriceStretch}
+            onIndicatorPaneStretch={onIndicatorPaneStretch}
             onHoverBar={setHovered}
           />
 

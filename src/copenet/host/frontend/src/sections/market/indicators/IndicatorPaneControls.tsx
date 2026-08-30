@@ -52,8 +52,11 @@ export function IndicatorPaneControls({
                     </span>
                   ))
               )}
+              {/* Beside the label rather than at the far right of the pane. The right edge
+                  puts them against the price axis, which is both harder to reach and where
+                  the axis drag and double-click-reset live. */}
+              {actions && <IndicatorControls indicator={indicator} actions={actions} />}
             </span>
-            {actions && <IndicatorControls indicator={indicator} actions={actions} />}
           </div>
         );
       })}

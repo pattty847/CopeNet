@@ -1186,7 +1186,6 @@
   z-index: 5;
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 10px;
   padding: 0 6px 0 10px;
   pointer-events: none;
@@ -1197,7 +1196,6 @@
   align-items: center;
   gap: 6px;
   min-width: 0;
-  overflow: hidden;
   font-family: var(--mkt-mono);
   font-size: 10px;
   line-height: 1.45;

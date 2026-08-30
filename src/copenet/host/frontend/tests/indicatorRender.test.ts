@@ -31,8 +31,8 @@ function layerFor(instances: IndicatorInstance[], bars = BARS, visible = bars.le
   const chart = new FakeChart();
   const layer = new IndicatorChartLayer(chart as unknown as IChartApi);
   const computer = createIndicatorComputer();
-  const render = (next: IndicatorInstance[], nextBars = bars, nextVisible = visible) =>
-    layer.sync(computer.compute(nextBars, nextVisible, next, CONTEXT));
+  const render = (next: IndicatorInstance[], nextBars = bars, nextVisible = visible, priceStretch = 4) =>
+    layer.sync(computer.compute(nextBars, nextVisible, next, CONTEXT), priceStretch);
   render(instances);
   return { chart, layer, render };
 }
@@ -272,6 +272,70 @@ test('an emptied pane is removed rather than left holding vertical space', () =>
   render([]);
   assert.equal(chart.paneList.length, 1, 'an empty pane survived its indicator');
   assert.equal(chart.series.length, 0);
+});
+
+test('a bounded pane keeps its declared range even after its axis is dragged', () => {
+  // Dragging a price axis turns autoScale off, and `autoscaleInfoProvider` only applies while
+  // it is on — so RSI's declared 0-100 silently stops applying and the scale drifts to
+  // whatever the drag left, flattening the series into a line. The axis sits a few pixels
+  // from the pane separator, so this is easy to hit while resizing.
+  const instances = build('rsi');
+  const { chart, layer } = layerFor(instances);
+  const scale = chart.priceScale('right', 1);
+  assert.equal(scale.autoScale, true);
+  assert.deepEqual(scale.scaleMargins, { top: 0.08, bottom: 0.08 }, 'a bounded pane uses its full height');
+
+  scale.autoScale = false; // what an axis drag does
+  layer.enforceBoundedScales();
+  assert.equal(scale.autoScale, true, 'a declared range is not a preference');
+});
+
+test('an unbounded pane is left alone — it still drags, zooms and resets normally', () => {
+  const { chart, layer } = layerFor(build('atr'));
+  const scale = chart.priceScale('right', 1);
+  assert.deepEqual(scale.scaleMargins, { top: 0.2, bottom: 0.1 }, 'defaults untouched');
+  scale.autoScale = false;
+  layer.enforceBoundedScales();
+  assert.equal(scale.autoScale, false, 'a manual scale on an unbounded pane is the operator\'s to keep');
+});
+
+test('enforcing a bounded scale that is already on does no work', () => {
+  const { chart, layer } = layerFor(build('rsi'));
+  const scale = chart.priceScale('right', 1);
+  const before = scale.applyCount;
+  for (let i = 0; i < 20; i += 1) layer.enforceBoundedScales();
+  assert.equal(scale.applyCount, before, 'this runs on pointermove; it must not thrash the scale');
+});
+
+test('a stored pane division is applied instead of the default weighting', () => {
+  let instances = build('rsi', 'macd');
+  instances = instances.map((instance) => (instance.instanceId === 'rsi#1' ? { ...instance, paneStretch: 2.5 } : instance));
+  const { chart } = layerFor(instances);
+  const [price, rsi, macd] = chart.paneList;
+  assert.equal(rsi.stretchFactor, 2.5, 'the dragged height');
+  assert.equal(macd.stretchFactor, 1, 'the default, for a pane never dragged');
+  assert.equal(price.stretchFactor, 4);
+});
+
+test('the price pane honours a stored division too', () => {
+  const { chart } = layerFor(build('rsi'), BARS, BARS.length);
+  assert.equal(chart.paneList[0].stretchFactor, 4);
+  const chart2 = new FakeChart();
+  const layer2 = new IndicatorChartLayer(chart2 as unknown as IChartApi);
+  layer2.sync(createIndicatorComputer().compute(BARS, BARS.length, build('rsi'), CONTEXT), 2.2);
+  assert.equal(chart2.paneList[0].stretchFactor, 2.2);
+});
+
+test('pane divisions are read back for persistence, price pane included', () => {
+  const instances = build('rsi', 'macd');
+  const { chart, layer } = layerFor(instances);
+  chart.paneList[0].stretchFactor = 3.3;
+  chart.paneList[1].stretchFactor = 1.2;
+  chart.paneList[2].stretchFactor = 1.5;
+  const read = layer.readPaneStretch();
+  assert.equal(read.priceStretch, 3.3);
+  assert.deepEqual(read.byInstance, { 'rsi#1': 1.2, 'macd#1': 1.5 });
+  assert.equal(Object.keys(read.byInstance).length, 2, 'price overlays own no pane and are not reported');
 });
 
 test('destroy leaves the chart with nothing but its price pane', () => {
