@@ -245,6 +245,19 @@ For current behavior, assume:
 - **Lightweight Charts' time axis is index-based and pane-relative** — coordinate traps here already shipped as visible bugs twice; read `docs/plans/FINANCIAL_SERIES.md` before touching overlay positioning or `CandleChart.tsx`.
 - The model-facing `market.*` tools register through `core/tools/handlers/market.py`, category `context` — add new read-only market tools there, not a new category.
 - The backtest lab's named scenario presets (`SCENARIOS` in `backtester.py`) are hand-typed shock magnitudes on a synthetic curve, not a real historical replay — `run_portfolio_backtest` could replay the actual window instead; just hasn't been done.
+- **Chart indicators are registry-driven; adding one touches one file.** The subsystem lives in
+  `host/frontend/src/sections/market/indicators/`: a typed registry entry declares inputs,
+  outputs, placement, warm-up and a PURE compute function, and that single entry drives the
+  picker, the settings form, the legend, the persisted layout and the renderer. Calculations
+  never import React or `lightweight-charts`; `render.ts` is the only module that knows both
+  sides. Two invariants the registry-wide test sweep enforces for every indicator, including
+  ones added later: `null` is the only way to say "no value" (never NaN/Infinity), and every
+  calculation is causal — which is what lets indicators warm up over full history and then be
+  sliced to the visible range, so changing 6M/1Y/5Y does not restart them. Indicator points
+  carry **candle** timestamps for the index-based-axis reason in `FINANCIAL_SERIES.md`. When
+  you add a guarded call to `render.ts`, add that method to `tests/fakeChart.ts` in the same
+  commit — an incomplete fake hides the failure inside the renderer's own `try`/`catch`.
+  See `docs/plans/CHART_INDICATORS.md`.
 - Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`.
 
 ## Safe Collaboration Rules
