@@ -51,6 +51,7 @@ import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from '.
 import type { InsiderDisplayMode, InsiderLookback } from './chartRanges';
 import { isValuationPayload, type FinancialFrequency } from './types';
 import {
+  RESEARCH_TABS,
   loadLogScale,
   loadRailCollapsed,
   loadTab,
@@ -543,7 +544,7 @@ export function TickerWorkspace({
           <ResearchDrawer
             tab={tab}
             onTab={openTab}
-            tabs={profile.tabs}
+            entries={RESEARCH_TABS.filter((entry) => profile.tabs.includes(entry.id))}
             snap={snap}
             onSnap={setSnap}
             size={drawerSize}

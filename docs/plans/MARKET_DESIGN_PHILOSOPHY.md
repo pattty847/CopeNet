@@ -104,3 +104,20 @@ Mutually exclusive choices use segmented controls. Toggles expose selected state
 The selected structure is a full-width chart with a compact post-chart context strip and a tabbed lower research dock. A collapsible right inspector remains useful for item-level detail; a resizable terminal split is a future power-user evolution, not the default first implementation.
 
 This page establishes reusable principles for later Market cleanup. It does not authorize redesigning unrelated CopeNet surfaces.
+
+## Market cockpit
+
+The Market landing page applies the same grammar at market level. Its hierarchy is:
+
+**Market → Delta → Standing tape → Investigation → Model synthesis**
+
+One fixed frame, no page scroll. The market bar orients (regime, data freshness, VIX,
+breadth); the watch rail is the watchlist as navigation — every row opens an asset
+workspace, `j`/`k`/`Enter` step and commit, and list management lives in the rail head; the
+stage pairs "Since you last looked" (the sweep's delta rows plus the model read, stamped as
+interpretation) with the standing picture (macro tape tiles, a rates stub, flagged setups);
+and the resizable research dock beneath holds Rotation, Rates, Portfolio, Evidence,
+Signals, Ledger, and Backtest as docked destinations (`\` cycles height, exactly as on the
+ticker page). Permanent stage pixels are reserved for orientation and earned urgency —
+soft-bottoming flags and regime shifts appear only when present; everything enumerable
+lives one tab away, never in a card mosaic.

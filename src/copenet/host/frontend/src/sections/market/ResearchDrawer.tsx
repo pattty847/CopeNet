@@ -1,26 +1,24 @@
 // The bottom dock.
 //
-// This is the structural bet: the chart and the research it explains share ONE vertical axis
-// with snap presets, so moving between "look at the price" and "read the evidence" is a
-// keypress, never a scroll to somewhere the chart no longer exists. Heights are remembered
-// per tab because Fundamentals small multiples need room Overview would only waste.
+// This is the structural bet: the canvas and the research that explains it share ONE
+// vertical axis with snap presets, so moving between "look at the picture" and "read the
+// evidence" is a keypress, never a scroll to somewhere the picture no longer exists.
+// Generic over its tab set: the ticker workspace and the market cockpit are the two docks.
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Rows2 } from 'lucide-react';
 import {
   DRAWER_MAX_PERCENT,
   DRAWER_MIN_PERCENT,
-  RESEARCH_TABS,
   clampDrawerSize,
   type DrawerSnap,
-  type ResearchTab,
 } from './tickerWorkspaceState';
 import './financialResearch.css';
 
-export function ResearchDrawer({
+export function ResearchDrawer<T extends string>({
   tab,
   onTab,
-  tabs,
+  entries,
   snap,
   onSnap,
   size,
@@ -29,10 +27,10 @@ export function ResearchDrawer({
   warnings,
   children,
 }: {
-  tab: ResearchTab;
-  onTab: (tab: ResearchTab) => void;
-  /** Tabs that can show something real for this asset — a fund has no issuer filings. */
-  tabs: ResearchTab[];
+  tab: T;
+  onTab: (tab: T) => void;
+  /** Tabs that can show something real on this surface — a fund has no issuer filings. */
+  entries: { id: T; label: string }[];
   snap: DrawerSnap;
   onSnap: (snap: DrawerSnap) => void;
   size?: number;
@@ -40,7 +38,7 @@ export function ResearchDrawer({
   onCycleSnap: () => void;
   /** Per-tab problem counts. These must survive the collapsed drawer, or a workspace with a
    *  failed SEC pull and a healthy one look identical. */
-  warnings: Partial<Record<ResearchTab, number>>;
+  warnings: Partial<Record<T, number>>;
   children: ReactNode;
 }) {
   return (
@@ -53,7 +51,7 @@ export function ResearchDrawer({
     >
       {snap !== 'collapsed' && <DrawerResizeHandle size={size ?? (snap === 'full' ? 68 : 40)} onResize={onResize} />}
       <div className="tw-drawer__tabs" role="tablist">
-        {RESEARCH_TABS.filter((entry) => tabs.includes(entry.id)).map((entry) => {
+        {entries.map((entry) => {
           const count = warnings[entry.id] ?? 0;
           return (
             <button

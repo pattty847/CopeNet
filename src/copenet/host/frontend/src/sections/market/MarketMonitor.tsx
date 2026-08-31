@@ -6,7 +6,7 @@ import {
   marketTickerNavigationPath,
 } from '../../lib/appSectionRouting';
 import { FormulaWorkspace } from './FormulaWorkspace';
-import { MarketDashboard } from './MarketDashboard';
+import { MarketCockpit } from './MarketCockpit';
 import { TickerWorkspace } from './TickerWorkspace';
 import { useMarketWatchlist } from './useMarketMonitorData';
 
@@ -56,5 +56,5 @@ export function MarketMonitor() {
     );
   }
 
-  return <MarketDashboard onOpenTicker={(symbol, type = 'symbol') => navigateMarket(symbol, type)} watchlist={watchlist} />;
+  return <MarketCockpit onOpenTicker={(symbol, type = 'symbol') => navigateMarket(symbol, type)} watchlist={watchlist} />;
 }

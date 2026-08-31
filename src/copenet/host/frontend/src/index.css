@@ -1410,26 +1410,8 @@ html[data-theme='dark'] .shell-workbench-feature {
   font: 600 9px Inter;
 }
 
-.market-dashboard-canvas {
-  display: flex;
-  max-width: 1640px;
-  margin: 0 auto;
-  padding: 18px;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.market-panel-card,
-.market-morning-brief {
+.market-panel-card {
   padding: 12px;
-}
-
-.market-brief-row {
-  gap: 12px;
-}
-
-.market-brief-row__label {
-  flex: 0 0 62px;
 }
 
 .market-treasury-curve__header {
@@ -1450,30 +1432,8 @@ html[data-theme='dark'] .shell-workbench-feature {
 }
 
 @media (max-width: 1023px) {
-  .market-dashboard-canvas {
-    padding: 10px 4px 18px;
-    gap: 12px;
-  }
-
   .market-panel-card {
     padding: 10px;
-  }
-
-  .market-morning-brief {
-    padding: 12px 10px;
-  }
-
-  .market-brief-row {
-    gap: 8px;
-  }
-
-  .market-brief-row__label {
-    flex-basis: 50px;
-  }
-
-  .market-brief-symbol-chip {
-    gap: 6px !important;
-    padding: 7px 8px !important;
   }
 
   .market-treasury-curve__header {

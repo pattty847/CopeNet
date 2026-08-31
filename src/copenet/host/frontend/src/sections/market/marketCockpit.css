@@ -1,0 +1,588 @@
+@import './marketTokens.css';
+
+/* CopeNet Market — cockpit visual grammar.
+ *
+ * The market landing page is the market-level twin of the ticker workspace: one fixed
+ * frame, no page scroll, SEAMED NOT CARDED. The stage holds orientation — what changed
+ * since you last looked, and the standing tape — and everything deeper lives in the
+ * bottom research dock. Control classes (tw-btn, tw-iconbtn, tw-drawer, tw-rail,
+ * tw-jump) are shared with the ticker workspace; this file only adds the cockpit's own
+ * regions. */
+
+.mc {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mkt-ground);
+  color: var(--mkt-text);
+}
+
+/* ---------------------------------------------------------------- market bar */
+
+.mc-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+  padding: 0 12px;
+  height: 50px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.mc-bar__identity {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  min-width: 0;
+}
+
+.mc-bar__title {
+  margin: 0;
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-symbol);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--mkt-text);
+}
+
+/* The serif is the identity face; here the identity is the radar itself. */
+.mc-bar__name {
+  overflow: hidden;
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 15px;
+  color: var(--mkt-dim);
+  white-space: nowrap;
+}
+
+/* The regime is the market's headline state — the cockpit's analog of a live quote. */
+.mc-regime {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  font: 600 10px Inter;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mc-regime__dot { width: 6px; height: 6px; border-radius: 50%; }
+
+.mc-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mkt-dim);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+  white-space: nowrap;
+}
+
+.mc-freshness__dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+
+.mc-bar__spacer { flex: 1 1 auto; }
+
+.mc-bar__stat {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+
+.mc-bar__stat b {
+  font: 500 15px var(--mkt-mono);
+  color: var(--mkt-text);
+}
+
+.mc-bar__stat span {
+  color: var(--mkt-dimmer);
+  font: 650 8px Inter;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+/* --------------------------------------------------------------------- body */
+
+.mc-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.mc-main {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* The cockpit rail carries names AND management, so it runs wider than the ticker rail. */
+.mc-rail { width: 236px; }
+.mc-rail[data-collapsed='true'] { width: 40px; }
+
+.mc-rail__add {
+  flex: 0 0 auto;
+  padding: 6px;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.mc-rail__remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mkt-dimmer);
+  cursor: pointer;
+  opacity: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tw-rail__row:hover .mc-rail__remove,
+.mc-rail__remove:focus-visible { opacity: 1; }
+.mc-rail__remove:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+
+/* List menu, anchored under the rail head. */
+.mc-listmenu {
+  position: absolute;
+  top: 34px;
+  left: 6px;
+  z-index: 14;
+  width: 216px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-dock);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6);
+  padding: 4px;
+}
+
+.mc-listmenu__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mc-listmenu__row > button:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 10px Inter;
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-listmenu__row > button:first-child:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.mc-listmenu__row[data-active='true'] > button:first-child {
+  border-left-color: var(--mkt-accent);
+  background: var(--mkt-accent-soft);
+  color: var(--mkt-text);
+}
+
+.mc-listmenu__sep { height: 1px; margin: 4px 0; background: var(--mkt-seam-soft); }
+
+.mc-listmenu__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 10px Inter;
+  text-align: left;
+}
+
+.mc-listmenu__action:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.mc-listmenu__action[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+.mc-listmenu__input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0;
+  padding: 5px 6px;
+  border: 1px solid var(--mkt-accent-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-text);
+  font: 500 10px Inter;
+  outline: none;
+}
+
+/* -------------------------------------------------------------------- stage */
+
+.mc-stage {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: stretch;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--mkt-canvas);
+}
+
+.mc-stage::-webkit-scrollbar { width: 9px; }
+.mc-stage::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(254, 252, 244, 0.11);
+}
+
+.mc-brief {
+  flex: 1.3 1 0;
+  min-width: 0;
+  padding: var(--mkt-s3) var(--mkt-s4) var(--mkt-s4);
+}
+
+.mc-tape {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: var(--mkt-s3) var(--mkt-s4) var(--mkt-s4);
+  border-left: 1px solid var(--mkt-seam);
+  background: var(--mkt-dock);
+}
+
+.mc-sect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--mkt-control);
+  margin-bottom: var(--mkt-s2);
+}
+
+.mc-sect__label {
+  color: var(--mkt-dim);
+  font: 650 var(--mkt-t-micro) Inter;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mc-sect__meta {
+  overflow: hidden;
+  color: var(--mkt-dimmer);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-sect__spacer { flex: 1 1 auto; }
+
+/* The one serif sentence on the page: what changed, in words. */
+.mc-headline {
+  margin: 2px 0 var(--mkt-s3);
+  font-family: 'Cormorant Garamond', serif;
+  font-size: 23px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--mkt-text);
+  max-width: 64ch;
+}
+
+.mc-headline em {
+  font-style: normal;
+  color: var(--mkt-accent);
+}
+
+/* Labelled delta rows — the brief reads as an instrument readout, not a feed. */
+.mc-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mkt-s3);
+  padding: var(--mkt-s2) 0;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.mc-row__label {
+  flex: 0 0 58px;
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mc-row__body { flex: 1 1 auto; min-width: 0; }
+
+.mc-quiet {
+  color: var(--mkt-dim);
+  font: 400 var(--mkt-t-value) Inter;
+  line-height: 1.5;
+}
+
+/* A matter: one thing that changed, openable. */
+.mc-matter {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 4px 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 400 var(--mkt-t-value) Inter;
+  text-align: left;
+}
+
+.mc-matter:hover { border-left-color: var(--mkt-accent-line); background: var(--mkt-raise); }
+.mc-matter:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: -2px; }
+
+.mc-matter__kind {
+  flex: 0 0 auto;
+  min-width: 48px;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(254, 252, 244, 0.06);
+  color: var(--mkt-muted);
+  font: 600 8px Inter;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.mc-matter__sym {
+  flex: 0 0 auto;
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-value);
+  color: var(--mkt-text);
+}
+
+.mc-matter__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mc-matter__when {
+  flex: 0 0 auto;
+  color: var(--mkt-dimmer);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+}
+
+.mc-more {
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-label) Inter;
+}
+
+.mc-more:hover { color: var(--mkt-soft); }
+
+/* Movers ride in one mono line of chips. */
+.mc-mover {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-label);
+  color: var(--mkt-soft);
+}
+
+.mc-mover:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+
+/* ---------------------------------------------------------------- synthesis */
+
+.mc-synth {
+  margin-top: var(--mkt-s4);
+  padding-top: var(--mkt-s3);
+  border-top: 1px solid var(--mkt-seam);
+}
+
+.mc-synth__summary {
+  margin: var(--mkt-s2) 0 var(--mkt-s3);
+  max-width: 68ch;
+  color: var(--mkt-soft);
+  font-size: var(--mkt-t-body);
+  line-height: 1.55;
+}
+
+.mc-attn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--mkt-control);
+  padding: 0 9px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mc-attn:hover { background: var(--mkt-raise); }
+.mc-attn__sym { font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-text); }
+.mc-attn__kind {
+  color: var(--mkt-dim);
+  font: 600 8.5px Inter;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mc-caveat {
+  margin: var(--mkt-s3) 0 0;
+  color: var(--mkt-dimmer);
+  font: 400 var(--mkt-t-label) Inter;
+  line-height: 1.5;
+  max-width: 72ch;
+}
+
+/* --------------------------------------------------------------------- tape */
+
+.mc-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(138px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-seam);
+}
+
+.mc-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 9px 10px 7px;
+  background: var(--mkt-dock);
+}
+
+.mc-tile__k {
+  color: var(--mkt-dimmer);
+  font: 650 var(--mkt-t-micro) Inter;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mc-tile__v {
+  font: 500 var(--mkt-t-hero) var(--mkt-mono);
+  letter-spacing: -0.02em;
+  color: var(--mkt-text);
+}
+
+.mc-tile__delta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-label);
+}
+
+.mc-kv-list { display: flex; flex-direction: column; }
+
+.mc-kv {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.mc-kv:first-child { border-top: 0; }
+.mc-kv__k { color: var(--mkt-dim); font-size: var(--mkt-t-label); }
+.mc-kv__v { font-family: var(--mkt-mono); font-size: var(--mkt-t-value); color: var(--mkt-soft); }
+
+/* A flagged setup earns a green edge; nothing else on this page does. */
+.mc-setup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 6px;
+  margin: 0 -6px;
+  border: 0;
+  border-left: 2px solid rgba(105, 197, 137, 0.5);
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font-family: var(--mkt-mono);
+  font-size: var(--mkt-t-label);
+  text-align: left;
+}
+
+.mc-setup:hover { background: var(--mkt-raise); }
+.mc-setup__sym { color: var(--mkt-text); font-size: var(--mkt-t-value); }
+
+.mc-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) Inter;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mc-open:hover { color: var(--mkt-accent); }
+
+.mc-tape__section + .mc-tape__section { margin-top: var(--mkt-s4); }
+
+/* ---------------------------------------------------------------- dock body */
+
+.mc-dock-grid {
+  display: grid;
+  gap: var(--mkt-s3);
+  grid-template-columns: repeat(auto-fit, minmax(min(430px, 100%), 1fr));
+  align-items: start;
+}
+
+.mc-dock-note {
+  margin: 0 0 var(--mkt-s2);
+  border-left: 2px solid rgba(143, 184, 232, 0.35);
+  padding-left: 10px;
+  color: var(--mkt-soft);
+  font: 400 var(--mkt-t-value) Inter;
+  font-style: italic;
+  line-height: 1.5;
+}
+
+/* ----------------------------------------------------------------- narrower */
+
+@media (max-width: 1180px) {
+  .mc-stage { flex-direction: column; }
+  .mc-tape { border-left: 0; border-top: 1px solid var(--mkt-seam); }
+}
+
+@media (max-width: 900px) {
+  .mc-rail { display: none; }
+  .mc-bar { height: auto; flex-wrap: wrap; gap: var(--mkt-s2); padding: var(--mkt-s2) var(--mkt-s3); }
+  .mc-bar__name { display: none; }
+}

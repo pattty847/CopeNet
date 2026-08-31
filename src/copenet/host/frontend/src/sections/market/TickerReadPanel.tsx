@@ -1,5 +1,4 @@
-import { ModelBadge } from './panelsTop';
-import { MM, mono } from './marketUi';
+import { MM, ModelBadge, mono } from './marketUi';
 import { useTickerRead } from './useMarketMonitorData';
 
 const CONFIDENCE_COLORS: Record<string, string> = {
