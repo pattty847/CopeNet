@@ -80,7 +80,7 @@ test('two instances configured identically compute once between them', () => {
   }
 });
 
-test('a new bar invalidates the memo — the cache keys on the series, not just the config', () => {
+test('a new or revised bar series invalidates the memo', () => {
   const definition = indicatorById('rsi')!;
   const original = definition.compute;
   let calls = 0;
@@ -99,6 +99,17 @@ test('a new bar invalidates the memo — the cache keys on the series, not just 
     revised[499] = { ...revised[499], c: revised[499].c + 1 };
     computer.compute(revised, 200, instances, CONTEXT);
     assert.equal(calls, 3);
+
+    // A live candle can revise its range or volume without moving its close. ATR, bands,
+    // MFI, CMF, and volume-weighted indicators must still see that new payload.
+    const rangeRevision = [...BARS];
+    rangeRevision[499] = {
+      ...rangeRevision[499],
+      h: rangeRevision[499].h + 1,
+      v: rangeRevision[499].v + 10_000,
+    };
+    computer.compute(rangeRevision, 200, instances, CONTEXT);
+    assert.equal(calls, 4);
   } finally {
     definition.compute = original;
   }

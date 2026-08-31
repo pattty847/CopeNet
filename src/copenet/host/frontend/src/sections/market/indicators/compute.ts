@@ -58,18 +58,6 @@ export interface ComputedIndicator {
   insufficientHistory: boolean;
 }
 
-/** Identity of a bar series for memo purposes.
- *
- *  Length plus both endpoints plus the last close: enough to separate every real transition
- *  (symbol change, interval change, a new bar arriving, a late revision of the last bar)
- *  without hashing thousands of rows on every render. */
-function barsIdentity(bars: IndicatorBar[]): string {
-  if (!bars.length) return 'empty';
-  const first = bars[0];
-  const last = bars[bars.length - 1];
-  return `${bars.length}:${first.t}:${last.t}:${last.c}`;
-}
-
 export interface IndicatorComputer {
   compute(
     /** Every bar the payload carries, at the current interval. */
@@ -83,6 +71,20 @@ export interface IndicatorComputer {
 
 export function createIndicatorComputer(): IndicatorComputer {
   const cache = new Map<string, IndicatorResult>();
+  const seriesIds = new WeakMap<IndicatorBar[], number>();
+  let nextSeriesId = 1;
+
+  /** Market payloads replace their bar arrays rather than mutating them. Keying the memo by
+   *  that immutable series identity catches every kind of refresh — including a high, low,
+   *  or volume revision on an unchanged closing price — without hashing the full history. */
+  const barsIdentity = (bars: IndicatorBar[]): number => {
+    const existing = seriesIds.get(bars);
+    if (existing != null) return existing;
+    const identity = nextSeriesId;
+    nextSeriesId += 1;
+    seriesIds.set(bars, identity);
+    return identity;
+  };
 
   return {
     compute(history, visibleCount, instances, context) {

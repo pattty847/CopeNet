@@ -9,7 +9,7 @@
 // smoothing lengths are advanced on every indicator that has them, because the length and the
 // multiplier are what an analyst actually reaches for.
 
-import { useState } from 'react';
+import { useId, useState } from 'react';
 import { ChevronDown, Copy, RotateCcw, Trash2 } from 'lucide-react';
 import { INDICATOR_SOURCES } from './types';
 import type { IndicatorConfig, IndicatorDefinition, IndicatorInput } from './types';
@@ -33,6 +33,7 @@ export function IndicatorSettings({
   onRemove: () => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const fieldIdPrefix = useId();
   const basic = definition.inputs.filter((input) => !input.advanced);
   const advanced = definition.inputs.filter((input) => input.advanced);
 
@@ -41,7 +42,7 @@ export function IndicatorSettings({
       {definition.description && <p className="tw-ind-settings__note">{definition.description}</p>}
 
       {basic.map((input) => (
-        <InputRow key={input.key} input={input} config={instance.config} onConfigure={onConfigure} />
+        <InputRow key={input.key} idPrefix={fieldIdPrefix} input={input} config={instance.config} onConfigure={onConfigure} />
       ))}
 
       <div className="tw-ind-settings__styles">
@@ -69,7 +70,7 @@ export function IndicatorSettings({
             Advanced <ChevronDown size={11} data-open={showAdvanced} />
           </button>
           {showAdvanced && advanced.map((input) => (
-            <InputRow key={input.key} input={input} config={instance.config} onConfigure={onConfigure} />
+            <InputRow key={input.key} idPrefix={fieldIdPrefix} input={input} config={instance.config} onConfigure={onConfigure} />
           ))}
         </>
       )}
@@ -90,15 +91,19 @@ export function IndicatorSettings({
 }
 
 function InputRow({
+  idPrefix,
   input,
   config,
   onConfigure,
 }: {
+  idPrefix: string;
   input: IndicatorInput;
   config: IndicatorConfig;
   onConfigure: (patch: IndicatorConfig) => void;
 }) {
-  const id = `ind-${input.key}`;
+  // Settings can be opened from the Plots list and the chart at the same time. React's
+  // per-component prefix keeps every label bound to its own control across both portals.
+  const id = `${idPrefix}-ind-${input.key}`;
   return (
     <div className="tw-ind-field">
       <label htmlFor={id}>{input.label}</label>
