@@ -620,13 +620,15 @@ export interface LedgerHorizonSlot {
 export interface LedgerClaim {
   claim_id: string;
   created_at: string;
-  kind: 'regime' | 'lean' | 'attention';
+  kind: 'regime' | 'lean' | 'attention' | 'screen';
   target: string;
   value: string;
   confidence?: string | null;
   model: string;
   note: string;
   horizons: Record<string, LedgerHorizonSlot>;
+  /** Screen claims name the rule that fired: soft-bottoming | trend | accumulation. */
+  signal?: string | null;
 }
 
 export interface LedgerKindStats {
@@ -636,11 +638,20 @@ export interface LedgerKindStats {
   accuracyPct: number | null;
 }
 
+/** What a dart (or the best constant regime call) would have scored over the same windows. */
+export interface LedgerBaseline {
+  pct: number | null;
+  n: number;
+  label: string;
+}
 export interface LedgerReport {
   rulesVersion: string;
   totalClaims: number;
   pendingHorizons: number;
-  stats: Record<'regime' | 'lean' | 'attention', Record<string, LedgerKindStats>>;
+  stats: Record<LedgerClaim['kind'], Record<string, LedgerKindStats>>;
+  /** Screen claims broken out by the rule that fired. */
+  signals: Record<string, Record<string, LedgerKindStats>>;
+  baseline: Record<LedgerClaim['kind'], Record<string, LedgerBaseline>>;
   recent: LedgerClaim[];
 }
 

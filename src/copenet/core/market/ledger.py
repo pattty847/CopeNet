@@ -31,6 +31,20 @@ bump LEDGER_RULES_VERSION and start a fresh ledger file if they ever change):
     correct if abs(symbol return) >= 5.0%, or abs(symbol return - VOO return) >= 3.0%
     ("worth your attention" means it moved, either absolutely or vs the tape.)
 
+  screen @ horizon (added 2026-09-02, additive — no existing outcome changes):
+    The deterministic screens make claims too, so the ledger compares the model against
+    the rules the operator can actually tune. A claim is logged when a screen NEWLY fires
+    at the morning sweep: soft bottoming fires → bullish; a weekly trend flip to up that is
+    daily-confirmed → bullish; a flip to down → bearish; accumulation confluence reaching
+    3/4 → bullish. Scored exactly like leans (bullish correct if return > 0, bearish if < 0).
+
+  baseline (computed at report time, never stored):
+    A hit rate means nothing without the dart it is measured against. For attention, lean
+    and screen claims the baseline is the share of the tracked universe (holdings, watch,
+    trend, spec and sector names — never the index or macro rows) that would have satisfied
+    the same rule over the same window, averaged across the scored claims. For regime calls
+    the baseline is the best constant call ("always chop") over the same windows.
+
 Horizons: 4w (28 days) and 8w (56 days) from claim creation. Claims resolve during the
 morning sweep (prices are fresh) using the stored daily bars' latest close.
 """
@@ -41,11 +55,14 @@ import logging
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timedelta, timezone
 from typing import Any
+from bisect import bisect_right
+from statistics import mean
 from uuid import uuid4
 
 from copenet.core._json_store import read_json, write_json_atomic
 
 from .store import MarketStore
+from .universe import UNIVERSE
 
 _LOG = logging.getLogger(__name__)
 
@@ -59,6 +76,11 @@ _REGIME_RULES = {
 }
 _ATTENTION_ABS_MOVE_PCT = 5.0
 _ATTENTION_EXCESS_PCT = 3.0
+SCREEN_KIND = "screen"
+_SCREEN_ACCUMULATION_MIN_CONFLUENCE = 3
+_SCREEN_REFIRE_GRACE_DAYS = 7  # a flag that clears and re-fires within a week is one episode
+_DART_ROLES = ("holding", "watch", "trend", "spec", "sector")
+CLAIM_KINDS = ("regime", "lean", "attention", SCREEN_KIND)
 _MAX_CLAIMS = 5000  # oldest-resolved pruned beyond this; far above years of daily use
 
 
@@ -86,6 +108,7 @@ class LedgerClaim:
     snapshot_price: float | None
     snapshot_voo: float | None
     horizons: dict[str, HorizonSlot] = field(default_factory=dict)
+    signal: str | None = None  # screen claims: soft-bottoming | trend | accumulation
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)
@@ -108,6 +131,7 @@ class LedgerClaim:
             snapshot_price=raw.get("snapshot_price"),
             snapshot_voo=raw.get("snapshot_voo"),
             horizons=horizons,
+            signal=raw.get("signal"),
         )
 
 
@@ -244,6 +268,95 @@ def record_ticker_read_claim(store: MarketStore, symbol: str, read_wire: dict[st
 # ---------- resolution ----------
 
 
+def _wire_rows(wire: dict[str, Any], panel: str) -> list[dict[str, Any]]:
+    data = (wire.get(panel) or {}).get("data") if isinstance(wire.get(panel), dict) else None
+    return [row for row in data if isinstance(row, dict)] if isinstance(data, list) else []
+
+
+def _is_first_sweep(previous_wire: dict[str, Any]) -> bool:
+    as_of = str(previous_wire.get("asOf") or "")
+    return not as_of or as_of.startswith("as of no market refresh")
+
+
+def _screen_events(previous_wire: dict[str, Any], current_wire: dict[str, Any]) -> list[tuple[str, str, str, str]]:
+    """(signal, symbol, value, note) for every screen that NEWLY fires between two sweeps."""
+    events: list[tuple[str, str, str, str]] = []
+    prev_soft = {str(row.get("symbol")) for row in _wire_rows(previous_wire, "softBottoming")}
+    for row in _wire_rows(current_wire, "softBottoming"):
+        symbol = str(row.get("symbol") or "").upper()
+        if symbol and symbol not in prev_soft:
+            events.append(("soft-bottoming", symbol, "bullish", f"soft bottoming fired (score {row.get('score')}) · {row.get('drawdown')} dd · RSI {row.get('rsi')}"))
+    prev_trend = {str(row.get("symbol")): row for row in _wire_rows(previous_wire, "trend")}
+    for row in _wire_rows(current_wire, "trend"):
+        symbol = str(row.get("symbol") or "").upper()
+        before = prev_trend.get(symbol)
+        direction = str(row.get("direction") or "")
+        if not symbol or before is None or before.get("direction") == direction:
+            continue
+        if direction == "up" and row.get("confirmed"):
+            events.append(("trend", symbol, "bullish", f"weekly trend flipped {before.get('direction')} → up (confirmed)"))
+        elif direction == "down":
+            events.append(("trend", symbol, "bearish", f"weekly trend flipped {before.get('direction')} → down"))
+    prev_acc = {str(row.get("symbol")): int(row.get("confluence") or 0) for row in _wire_rows(previous_wire, "accumulation")}
+    for row in _wire_rows(current_wire, "accumulation"):
+        symbol = str(row.get("symbol") or "").upper()
+        confluence = int(row.get("confluence") or 0)
+        if symbol and confluence >= _SCREEN_ACCUMULATION_MIN_CONFLUENCE and prev_acc.get(symbol, 0) < _SCREEN_ACCUMULATION_MIN_CONFLUENCE:
+            events.append(("accumulation", symbol, "bullish", f"accumulation confluence {confluence}/4 · {row.get('why') or row.get('belowMa')}"))
+    return events
+
+
+def record_screen_claims(store: MarketStore, previous_wire: dict[str, Any], current_wire: dict[str, Any]) -> int:
+    """Log one claim per screen that newly fired between two sweeps. Never on the first
+    sweep (everything would look new), and never twice for the same symbol+screen within
+    the re-fire grace window. Returns claims added."""
+    if _is_first_sweep(previous_wire):
+        return 0
+    events = _screen_events(previous_wire, current_wire)
+    if not events:
+        return 0
+    ledger = LedgerStore(store)
+    claims = ledger.load()
+    now = datetime.now(timezone.utc)
+    grace = now - timedelta(days=_SCREEN_REFIRE_GRACE_DAYS)
+    recent = set()
+    for claim in claims:
+        if claim.kind != SCREEN_KIND:
+            continue
+        try:
+            created = datetime.fromisoformat(claim.created_at.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if created >= grace:
+            recent.add((claim.signal, claim.target))
+    voo = _last_close(store, "VOO")
+    added = 0
+    for signal, symbol, value, note in events:
+        if (signal, symbol) in recent:
+            continue
+        claims.append(
+            LedgerClaim(
+                claim_id=uuid4().hex[:12],
+                created_at=_now_iso(),
+                kind=SCREEN_KIND,
+                target=symbol,
+                value=value,
+                confidence=None,
+                model="screen",
+                note=note[:160],
+                snapshot_price=_last_close(store, symbol),
+                snapshot_voo=voo,
+                horizons=_new_horizons(now),
+                signal=signal,
+            )
+        )
+        recent.add((signal, symbol))
+        added += 1
+    if added:
+        ledger.save(claims)
+    return added
+
+
 def resolve_due_claims(store: MarketStore) -> int:
     """Score every horizon slot past due, using current stored daily closes. Returns slots resolved."""
     ledger = LedgerStore(store)
@@ -290,7 +403,7 @@ def _score(claim: LedgerClaim, slot: HorizonSlot) -> str:
         if rule is None:
             return "unscoreable"  # event-risk (and any unknown value)
         return "correct" if rule(r) else "incorrect"
-    if claim.kind == "lean":
+    if claim.kind in ("lean", SCREEN_KIND):
         if claim.value == "neutral":
             return "push"
         if claim.value == "bullish":
@@ -306,35 +419,132 @@ def _score(claim: LedgerClaim, slot: HorizonSlot) -> str:
 # ---------- reporting ----------
 
 
-def ledger_report(store: MarketStore, *, recent: int = 30) -> dict[str, Any]:
-    """Wire payload: calibration stats by kind/horizon (+ confidence slices for leans)
-    and the most recent claims, newest first."""
-    claims = LedgerStore(store).load()
-    stats: dict[str, Any] = {}
-    for kind in ("regime", "lean", "attention"):
+def _tally(claims: list[LedgerClaim], horizon: str) -> dict[str, Any]:
+    correct = incorrect = push = 0
+    for claim in claims:
+        slot = claim.horizons.get(horizon)
+        if not slot or not slot.resolved_at:
+            continue
+        if slot.outcome == "correct":
+            correct += 1
+        elif slot.outcome == "incorrect":
+            incorrect += 1
+        elif slot.outcome == "push":
+            push += 1
+    scored = correct + incorrect
+    return {"correct": correct, "incorrect": incorrect, "push": push, "accuracyPct": round(correct / scored * 100, 1) if scored else None}
+
+
+def _epoch(iso: str) -> float | None:
+    try:
+        return datetime.fromisoformat(iso.replace("Z", "+00:00")).timestamp()
+    except ValueError:
+        return None
+
+
+class _CloseLookup:
+    """Close on or before a moment, per symbol, from the stored daily bars. Bars are loaded
+    once per report; a few hundred claims against a few dozen names is a bisect each."""
+
+    def __init__(self, store: MarketStore) -> None:
+        self._store = store
+        self._bars: dict[str, tuple[list[int], list[float]]] = {}
+
+    def at(self, symbol: str, iso: str) -> float | None:
+        if symbol not in self._bars:
+            bars = sorted(self._store.load_bars(symbol, "daily"), key=lambda bar: bar.t)
+            self._bars[symbol] = ([bar.t for bar in bars], [float(bar.c) for bar in bars])
+        times, closes = self._bars[symbol]
+        moment = _epoch(iso)
+        if moment is None or not times:
+            return None
+        index = bisect_right(times, moment) - 1
+        return closes[index] if index >= 0 else None
+
+
+def dart_universe() -> list[str]:
+    """The names a dart could have landed on: everything tracked except the index and macro
+    rows, which rarely move 5% and would flatter the model."""
+    return [asset.symbol for asset in UNIVERSE if asset.role in _DART_ROLES]
+
+
+def _window_hit(kind: str, value: str, return_pct: float, excess_pct: float | None) -> bool:
+    if kind == "attention":
+        return abs(return_pct) >= _ATTENTION_ABS_MOVE_PCT or (excess_pct is not None and abs(excess_pct) >= _ATTENTION_EXCESS_PCT)
+    if value == "bullish":
+        return return_pct > 0
+    if value == "bearish":
+        return return_pct < 0
+    return False
+
+
+def _baseline(store: MarketStore, claims: list[LedgerClaim], universe: list[str]) -> dict[str, Any]:
+    """Per kind and horizon: what a dart (or the best constant regime call) would have scored
+    over the same windows as the scored claims."""
+    closes = _CloseLookup(store)
+    out: dict[str, Any] = {}
+    for kind in ("attention", "lean", SCREEN_KIND):
         by_horizon: dict[str, Any] = {}
         for horizon in HORIZON_DAYS:
-            correct = incorrect = push = 0
+            fractions: list[float] = []
             for claim in claims:
-                if claim.kind != kind:
+                if claim.kind != kind or claim.value == "neutral":
                     continue
                 slot = claim.horizons.get(horizon)
-                if not slot or not slot.resolved_at:
+                if not slot or not slot.resolved_at or slot.outcome not in ("correct", "incorrect"):
                     continue
-                if slot.outcome == "correct":
-                    correct += 1
-                elif slot.outcome == "incorrect":
-                    incorrect += 1
-                elif slot.outcome == "push":
-                    push += 1
-            scored = correct + incorrect
+                voo_start, voo_end = closes.at("VOO", claim.created_at), closes.at("VOO", slot.resolved_at)
+                voo_return = ((voo_end / voo_start) - 1) * 100 if voo_start and voo_end else None
+                hits = names = 0
+                for symbol in universe:
+                    start, end = closes.at(symbol, claim.created_at), closes.at(symbol, slot.resolved_at)
+                    if not start or end is None:
+                        continue
+                    return_pct = ((end / start) - 1) * 100
+                    excess = return_pct - voo_return if voo_return is not None else None
+                    names += 1
+                    hits += 1 if _window_hit(kind, claim.value, return_pct, excess) else 0
+                if names:
+                    fractions.append(hits / names)
             by_horizon[horizon] = {
-                "correct": correct,
-                "incorrect": incorrect,
-                "push": push,
-                "accuracyPct": round(correct / scored * 100, 1) if scored else None,
+                "pct": round(mean(fractions) * 100, 1) if fractions else None,
+                "n": len(universe),
+                "label": f"dart over {len(universe)} tracked names",
             }
-        stats[kind] = by_horizon
+        out[kind] = by_horizon
+
+    regime_by_horizon: dict[str, Any] = {}
+    for horizon in HORIZON_DAYS:
+        returns = [
+            claim.horizons[horizon].return_pct
+            for claim in claims
+            if claim.kind == "regime" and horizon in claim.horizons and claim.horizons[horizon].resolved_at and claim.horizons[horizon].return_pct is not None
+        ]
+        best_label, best_pct = None, None
+        for name, rule in _REGIME_RULES.items():
+            if not returns:
+                break
+            pct = round(sum(1 for r in returns if rule(r)) / len(returns) * 100, 1)
+            if best_pct is None or pct > best_pct:
+                best_label, best_pct = name, pct
+        regime_by_horizon[horizon] = {"pct": best_pct, "n": len(returns), "label": f"always {best_label}" if best_label else "no scored regime calls"}
+    out["regime"] = regime_by_horizon
+    return out
+
+
+def ledger_report(store: MarketStore, *, recent: int = 30, baseline_universe: list[str] | None = None) -> dict[str, Any]:
+    """Wire payload: calibration stats by kind/horizon, the same per screen signal, the
+    baseline each kind is measured against, and the most recent claims, newest first."""
+    claims = LedgerStore(store).load()
+    stats: dict[str, Any] = {
+        kind: {horizon: _tally([c for c in claims if c.kind == kind], horizon) for horizon in HORIZON_DAYS}
+        for kind in CLAIM_KINDS
+    }
+    signals: dict[str, Any] = {}
+    for signal in sorted({c.signal for c in claims if c.kind == SCREEN_KIND and c.signal}):
+        screen_claims = [c for c in claims if c.kind == SCREEN_KIND and c.signal == signal]
+        signals[signal] = {horizon: _tally(screen_claims, horizon) for horizon in HORIZON_DAYS}
+    universe = baseline_universe if baseline_universe is not None else dart_universe()
 
     pending = sum(1 for c in claims for s in c.horizons.values() if not s.resolved_at)
     ordered = sorted(claims, key=lambda c: c.created_at, reverse=True)
@@ -343,6 +553,8 @@ def ledger_report(store: MarketStore, *, recent: int = 30) -> dict[str, Any]:
         "totalClaims": len(claims),
         "pendingHorizons": pending,
         "stats": stats,
+        "signals": signals,
+        "baseline": _baseline(store, claims, universe),
         "recent": [c.to_json() for c in ordered[:recent]],
     }
 

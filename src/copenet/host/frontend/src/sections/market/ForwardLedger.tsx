@@ -8,12 +8,13 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
 import { claimIsScored, hitRate, weeklyOutcomes, type LedgerKind } from './ledgerModel';
-import type { LedgerClaim, LedgerReport, Tone } from './types';
+import type { LedgerBaseline, LedgerClaim, LedgerKindStats, LedgerReport, Tone } from './types';
 
 const KIND_LABEL: Record<LedgerKind, string> = {
   regime: 'Regime calls',
   lean: 'Ticker leans',
   attention: 'Attention flags',
+  screen: 'Screen fires',
 };
 
 const VALUE_TONE: Record<string, Tone> = {
@@ -71,6 +72,19 @@ function WeekStrip({ claims }: { claims: LedgerClaim[] }) {
   );
 }
 
+/** "vs dart 52% (+15)" — the hit rate only means something next to what chance scored. */
+function BaselineLine({ stats, baseline }: { stats: LedgerKindStats | undefined; baseline: LedgerBaseline | undefined }) {
+  if (!baseline || baseline.pct == null) return <span style={{ fontFamily: mono, fontSize: 9.5, color: MM.dimmer }}>baseline needs scored claims</span>;
+  const delta = stats?.accuracyPct != null ? stats.accuracyPct - baseline.pct : null;
+  const deltaColor = delta == null ? MM.dim : delta > 0 ? MM.up : delta < 0 ? MM.down : MM.dim;
+  return (
+    <span style={{ fontFamily: mono, fontSize: 10, color: MM.muted }} title={`${baseline.label} would have scored ${baseline.pct}% on the same windows`}>
+      vs {baseline.label.startsWith('dart') ? 'dart' : baseline.label} {baseline.pct}%
+      {delta != null && <span style={{ color: deltaColor, marginLeft: 6 }}>{delta > 0 ? '+' : ''}{delta.toFixed(0)}</span>}
+    </span>
+  );
+}
+
 function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -83,7 +97,7 @@ function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: str
       >
         <span style={{ color: MM.dimmer, flex: '0 0 auto', display: 'inline-flex' }}>{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
         <span style={{ fontFamily: mono, fontSize: 10, color: MM.dimmer, width: 44, flex: '0 0 auto' }}>{claimDate(claim.created_at)}</span>
-        <span style={{ flex: '0 0 auto', borderRadius: 3, padding: '2px 6px', font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: 'rgba(254,252,244,.05)', color: MM.muted }}>{claim.kind}</span>
+        <span style={{ flex: '0 0 auto', borderRadius: 3, padding: '2px 6px', font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: claim.kind === 'screen' ? 'rgba(105,197,137,.1)' : 'rgba(254,252,244,.05)', color: claim.kind === 'screen' ? MM.up : MM.muted }}>{claim.kind === 'screen' ? claim.signal ?? 'screen' : claim.kind}</span>
         <span
           role={onOpen ? 'link' : undefined}
           onClick={(event) => {
@@ -162,7 +176,7 @@ export function ForwardLedger({ report, loading, onOpen }: { report: LedgerRepor
     <PanelCard
       title="Forward Ledger"
       status={report && report.totalClaims > 0 ? 'live' : 'preview'}
-      subtitle="every model read's calls, logged with prices stamped and scored at 4w/8w — pre-registered rules, no backfilling"
+      subtitle="every model read's calls and every screen that fires, logged with prices stamped and scored at 4w/8w against a dart — pre-registered rules, no backfilling"
       right={report ? <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{report.totalClaims} claims · {report.pendingHorizons} pending</span> : undefined}
     >
       {!report || report.totalClaims === 0 ? (
@@ -193,6 +207,24 @@ export function ForwardLedger({ report, loading, onOpen }: { report: LedgerRepor
                     </div>
                   ) : (
                     <div style={{ fontFamily: mono, fontSize: 12, color: MM.dim }}>no claims yet</div>
+                  )}
+                  <BaselineLine stats={h4} baseline={report.baseline?.[entry]?.['4w']} />
+                  {entry === 'screen' && Object.keys(report.signals ?? {}).length > 0 && (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: mono, fontSize: 10, color: MM.dim }}>
+                      {Object.entries(report.signals).map(([signal, byHorizon]) => {
+                        const s4 = byHorizon['4w'];
+                        const done = (s4?.correct ?? 0) + (s4?.incorrect ?? 0);
+                        const open = kindClaims.filter((claim) => claim.signal === signal && !claimIsScored(claim)).length;
+                        return (
+                          <span key={signal} style={{ display: 'flex', justifyContent: 'space-between', gap: 8 }}>
+                            <span style={{ color: MM.muted }}>{signal}</span>
+                            <span style={{ color: done ? (s4!.accuracyPct != null && s4!.accuracyPct >= 50 ? MM.up : MM.down) : MM.dimmer }}>
+                              {done ? `${s4!.correct}/${done}` : '—'}{open ? ` · ${open} pending` : ''}
+                            </span>
+                          </span>
+                        );
+                      })}
+                    </div>
                   )}
                   <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
                     <WeekStrip claims={kindClaims} />

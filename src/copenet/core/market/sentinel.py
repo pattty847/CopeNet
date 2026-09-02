@@ -22,7 +22,7 @@ from copenet.core.pulse import PulseRecord
 
 from .alerts import evaluate_price_alerts
 from .brief import build_morning_brief, compute_movers
-from .ledger import resolve_due_claims
+from .ledger import record_screen_claims, resolve_due_claims
 from .runtime import MarketRuntime, resolve_market_runtime
 
 _LOG = logging.getLogger(__name__)
@@ -118,6 +118,14 @@ async def run_morning_sweep(
         )
         wire = brief.to_wire()
         runtime.store.save_morning_brief(wire)
+        try:
+            # The screens make their claims the moment they fire, so the ledger can score the
+            # rules the operator tunes on the same footing as the model.
+            screen_claims = record_screen_claims(runtime.store, previous, current)
+            if screen_claims:
+                _LOG.info("morning sweep: logged %d screen claim(s) to the forward ledger", screen_claims)
+        except Exception:
+            _LOG.warning("morning sweep: screen claim capture failed", exc_info=True)
         _LOG.info("morning sweep: brief for %s — %s", brief_date, brief.headline)
 
         if pulse_store is not None:
