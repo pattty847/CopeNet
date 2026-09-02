@@ -64,7 +64,7 @@ export function ForwardLedger({ report, loading }: { report: LedgerReport | null
                 .sort()[0];
               return (
                 <div key={kind} style={{ flex: 1, minWidth: 150, border: `1px solid ${MM.border}`, borderRadius: 10, padding: '9px 12px' }}>
-                  <div style={{ font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 4 }}>{KIND_LABEL[kind]}</div>
+                  <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 4 }}>{KIND_LABEL[kind]}</div>
                   {scored > 0 ? (
                     <div style={{ fontFamily: mono, fontSize: 15, color: h4!.accuracyPct != null && h4!.accuracyPct >= 50 ? MM.up : MM.down }}>
                       {h4!.correct}/{scored}
@@ -86,7 +86,7 @@ export function ForwardLedger({ report, loading }: { report: LedgerReport | null
             {recent.slice(0, 12).map((claim) => (
               <div key={claim.claim_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid rgba(254,252,244,.05)` }}>
                 <span style={{ fontFamily: mono, fontSize: 10, color: MM.dimmer, width: 44, flex: '0 0 auto' }}>{claimDate(claim.created_at)}</span>
-                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '2px 7px', font: '600 8px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: 'rgba(254,252,244,.05)', color: MM.muted }}>{claim.kind}</span>
+                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '2px 7px', font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: 'rgba(254,252,244,.05)', color: MM.muted }}>{claim.kind}</span>
                 <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 600, color: MM.text, width: 46, flex: '0 0 auto' }}>{claim.target}</span>
                 <span style={{ fontFamily: mono, fontSize: 11, color: toneColor(VALUE_TONE[claim.value] || 'flat'), flex: '0 0 auto' }}>{claim.value}</span>
                 <span style={{ flex: 1, fontSize: 10.5, color: MM.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{claim.note}</span>

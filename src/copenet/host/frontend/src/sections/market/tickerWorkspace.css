@@ -47,13 +47,13 @@
   color: var(--mkt-text);
 }
 
-/* Cormorant on the company name is CopeNet's signature. It is reserved for asset
+/* The company name is the one soft element in the bar — sans, small, dim. It is reserved for asset
  * identity alone — it never appears on a label, a control, or a number. */
 .tw-assetbar__name {
   overflow: hidden;
   max-width: 30ch;
-  font-family: 'Cormorant Garamond', serif;
-  font-size: 15px;
+  font-family: var(--mkt-sans);
+  font-size: 12px;
   color: var(--mkt-dim);
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -64,7 +64,7 @@
   border: 1px solid var(--mkt-seam);
   border-radius: 4px;
   color: var(--mkt-dim);
-  font: 600 9px Inter;
+  font: 600 9px var(--mkt-sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -108,7 +108,7 @@
   color: var(--mkt-dim);
   font: 500 var(--mkt-t-micro) var(--mkt-mono);
 }
-.tw-formula__basis { color: var(--mkt-dimmer); font: 500 var(--mkt-t-micro) Inter; }
+.tw-formula__basis { color: var(--mkt-dimmer); font: 500 var(--mkt-t-micro) var(--mkt-sans); }
 
 /* A held position changes how every other number on the page reads, so it is one of the
  * few things that earns permanent pixels — but only when the position exists. */
@@ -123,7 +123,7 @@
   background: rgba(143, 184, 232, 0.07);
   color: var(--mkt-info);
   cursor: pointer;
-  font: 600 10px Inter;
+  font: 600 10px var(--mkt-sans);
 }
 
 .tw-position-chip__pnl { font-family: var(--mkt-mono); }
@@ -143,7 +143,7 @@
   background: transparent;
   color: var(--mkt-muted);
   cursor: pointer;
-  font: 600 10px Inter;
+  font: 600 10px var(--mkt-sans);
   white-space: nowrap;
 }
 
@@ -197,7 +197,7 @@
   border-radius: 999px;
   background: var(--mkt-accent);
   color: #1a1205;
-  font: 700 9px Inter;
+  font: 700 9px var(--mkt-sans);
   line-height: 12px;
   text-align: center;
 }
@@ -238,7 +238,7 @@
   background: transparent;
   color: var(--mkt-dim);
   cursor: pointer;
-  font: 600 10px Inter;
+  font: 600 10px var(--mkt-sans);
 }
 
 .tw-segment > button:hover { color: var(--mkt-soft); }
@@ -382,7 +382,7 @@
   border-radius: 4px;
   background: rgba(20, 8, 6, 0.9);
   color: var(--mkt-down);
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
 }
 
 .tw-stage__empty {
@@ -390,7 +390,7 @@
   height: 100%;
   place-items: center;
   color: var(--mkt-dim);
-  font: 500 11px Inter;
+  font: 500 11px var(--mkt-sans);
 }
 
 /* ------------------------------------------------------------------ drawer */
@@ -451,7 +451,7 @@
   background: transparent;
   color: var(--mkt-dim);
   cursor: pointer;
-  font: 600 10px Inter;
+  font: 600 10px var(--mkt-sans);
 }
 
 .tw-tab:hover { color: var(--mkt-soft); }
@@ -482,7 +482,7 @@
   border-radius: 999px;
   background: rgba(217, 109, 95, 0.18);
   color: var(--mkt-down);
-  font: 700 9px Inter;
+  font: 700 9px var(--mkt-sans);
 }
 
 .tw-drawer__panel {
@@ -539,7 +539,7 @@
   height: 33px;
   border-bottom: 1px solid var(--mkt-seam-soft);
   color: var(--mkt-dim);
-  font: 600 9px Inter;
+  font: 600 9px var(--mkt-sans);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -564,7 +564,7 @@
 .tw-rail__group {
   padding: 9px 9px 4px;
   color: var(--mkt-dimmer);
-  font: 650 9px Inter;
+  font: 650 9px var(--mkt-sans);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -612,7 +612,7 @@
 .tw-rail__empty {
   padding: 10px 9px;
   color: var(--mkt-dimmer);
-  font: 400 10px Inter;
+  font: 400 10px var(--mkt-sans);
   line-height: 1.5;
 }
 
@@ -674,7 +674,7 @@
   padding: 5px 10px;
   border-top: 1px solid var(--mkt-seam);
   color: var(--mkt-dimmer);
-  font: 400 9px Inter;
+  font: 400 9px var(--mkt-sans);
 }
 
 /* ----------------------------------------------------------------- popovers */
@@ -695,14 +695,14 @@
   border-bottom: 1px solid var(--mkt-seam-soft);
 }
 
-.tw-pop__title { color: var(--mkt-text); font: 650 10.5px Inter; }
+.tw-pop__title { color: var(--mkt-text); font: 650 10.5px var(--mkt-sans); }
 .tw-pop__body { padding: 7px 8px 9px; }
 .tw-pop__section + .tw-pop__section { margin-top: 8px; }
 
 .tw-pop__label {
   margin-bottom: 4px;
   color: var(--mkt-dim);
-  font: 650 9px Inter;
+  font: 650 9px var(--mkt-sans);
   letter-spacing: 0.12em;
   text-transform: uppercase;
 }
@@ -730,7 +730,7 @@
   background: transparent;
   color: var(--mkt-dim);
   cursor: pointer;
-  font: 600 10px Inter;
+  font: 600 10px var(--mkt-sans);
 }
 
 .tw-choices button:hover { color: var(--mkt-soft); }
@@ -747,7 +747,7 @@
   gap: 14px;
   cursor: pointer;
   color: var(--mkt-soft);
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
 }
 
 .tw-switch small { display: block; margin-top: 2px; color: var(--mkt-dim); font-size: 10px; }
@@ -800,7 +800,7 @@
 
 .tw-card__title {
   color: var(--mkt-dim);
-  font: 650 9px Inter;
+  font: 650 9px var(--mkt-sans);
   letter-spacing: 0.13em;
   text-transform: uppercase;
 }
@@ -878,7 +878,7 @@
   text-align: center;
 }
 
-.tw-returns__k { color: var(--mkt-dimmer); font: 650 9px Inter; letter-spacing: 0.1em; text-transform: uppercase; }
+.tw-returns__k { color: var(--mkt-dimmer); font: 650 9px var(--mkt-sans); letter-spacing: 0.1em; text-transform: uppercase; }
 .tw-returns__v { font-family: var(--mkt-mono); font-size: 11px; }
 
 .tw-spark { display: block; width: 100%; height: 28px; overflow: visible; }
@@ -886,7 +886,7 @@
 .tw-empty {
   padding: 26px 0;
   color: var(--mkt-dimmer);
-  font: 400 11px Inter;
+  font: 400 11px var(--mkt-sans);
   line-height: 1.6;
   text-align: center;
 }
@@ -902,7 +902,7 @@
   background: transparent;
   color: var(--mkt-soft);
   cursor: pointer;
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
   text-align: left;
 }
 
@@ -949,7 +949,7 @@
   outline: 0;
   background: transparent;
   color: var(--mkt-text);
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
 }
 
 .tw-series-picker__search input::placeholder { color: var(--mkt-dimmer); }
@@ -959,7 +959,7 @@
 .tw-series-picker__group-label {
   padding: 5px 6px 3px;
   color: var(--mkt-dimmer);
-  font: 650 8px Inter;
+  font: 650 8px var(--mkt-sans);
   letter-spacing: .11em;
   text-transform: uppercase;
 }
@@ -977,7 +977,7 @@
   background: transparent;
   color: var(--mkt-soft);
   cursor: pointer;
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
   text-align: left;
 }
 
@@ -1008,7 +1008,7 @@
   min-width: 52px;
   padding: 3px 6px;
   border-radius: 3px;
-  font: 600 9px Inter;
+  font: 600 9px var(--mkt-sans);
   letter-spacing: 0.07em;
   text-align: center;
   text-transform: uppercase;
@@ -1076,7 +1076,7 @@
   flex: 1 1 auto;
   overflow: hidden;
   color: var(--mkt-soft);
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -1117,7 +1117,7 @@
   gap: 10px;
 }
 
-.tw-ind-field label { color: var(--mkt-dim); font: 500 10px Inter; }
+.tw-ind-field label { color: var(--mkt-dim); font: 500 10px var(--mkt-sans); }
 
 .tw-ind-number { width: 74px; height: 22px; padding: 0 6px; text-align: right; }
 
@@ -1129,7 +1129,7 @@
   border-radius: 4px;
   background: var(--mkt-canvas);
   color: var(--mkt-soft);
-  font: 500 10px Inter;
+  font: 500 10px var(--mkt-sans);
 }
 
 .tw-ind-select:focus-visible { border-color: var(--mkt-accent-line); outline: none; }
@@ -1137,7 +1137,7 @@
 .tw-ind-settings__styles { display: flex; flex-wrap: wrap; gap: 8px; padding-top: 2px; }
 
 .tw-ind-swatch { display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
-.tw-ind-swatch span { color: var(--mkt-dimmer); font: 500 9px Inter; }
+.tw-ind-swatch span { color: var(--mkt-dimmer); font: 500 9px var(--mkt-sans); }
 
 /* A native colour input with its chrome stripped back to the swatch itself. */
 .tw-ind-swatch input[type='color'] {
@@ -1163,7 +1163,7 @@
   background: transparent;
   color: var(--mkt-dim);
   cursor: pointer;
-  font: 600 9px Inter;
+  font: 600 9px var(--mkt-sans);
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
@@ -1218,7 +1218,7 @@
   white-space: nowrap;
 }
 
-.tw-panehead__label { color: var(--mkt-muted); font-family: Inter, sans-serif; }
+.tw-panehead__label { color: var(--mkt-muted); font-family: var(--mkt-sans); }
 .tw-panehead__value { color: var(--mkt-soft); }
 
 /* Controls appear while the pointer is anywhere on the chart, and are invisible otherwise.

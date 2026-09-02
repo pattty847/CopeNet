@@ -48,6 +48,28 @@ export function marketFormulaPath(expression: string): string {
   return `/market/formula?${params.toString()}`;
 }
 
+/** The market workstation's full-height destinations. `watchlist` only exists as a tab on
+ *  narrow screens, where the rail is hidden; on desktop it resolves to the briefing. */
+export const MARKET_SECTIONS = ['briefing', 'structure', 'signals', 'portfolio', 'evidence', 'ledger', 'backtest', 'watchlist'] as const;
+export type MarketSection = (typeof MARKET_SECTIONS)[number];
+
+export function isMarketSection(value: string | null | undefined): value is MarketSection {
+  return value != null && (MARKET_SECTIONS as readonly string[]).includes(value);
+}
+
+/** `/market?view=portfolio` → 'portfolio'. Null on any other path, or when the view is absent
+ *  or unknown, so the caller can fall back to its remembered section. */
+export function marketSectionFromLocation(pathname: string, search: string): MarketSection | null {
+  if (normalizePathname(pathname) !== '/market') return null;
+  const view = new URLSearchParams(search).get('view')?.trim().toLowerCase() ?? '';
+  return isMarketSection(view) ? view : null;
+}
+
+/** Briefing is home and owns the bare `/market`; every other section is addressable. */
+export function marketSectionPath(section: MarketSection): string {
+  return section === 'briefing' ? '/market' : `/market?view=${section}`;
+}
+
 export function marketTickerPath(symbol: string | null): string {
   const normalized = symbol?.trim().toUpperCase();
   return normalized ? `/market/${encodeURIComponent(normalized)}` : '/market';

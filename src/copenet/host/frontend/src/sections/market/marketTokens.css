@@ -9,8 +9,8 @@
  * that is genuinely a discrete object. Radius is 0 for regions, 4px for controls, 6px for
  * cards, and never more. Orange means "CopeNet accent / active tool" and nothing else:
  * warnings are red, data series are blue, and a merely-selected control is a lifted surface
- * rather than a colour. Every number is set in the mono face; prose is Inter; the serif is
- * reserved for asset identity alone.
+ * rather than a colour. Every number is set in the mono face (IBM Plex Mono); labels and prose in the
+ * sans (IBM Plex Sans). No serif on the market surfaces.
  *
  * These live on :root rather than on a workspace class because popovers and overlays portal
  * to document.body, where a scoped token resolves to nothing at all. */
@@ -37,7 +37,11 @@
   --mkt-down: #d96d5f;
   --mkt-info: #8fb8e8;
 
-  --mkt-mono: 'JetBrains Mono', ui-monospace, monospace;
+  /* IBM Plex: the sans carries labels and prose, the mono carries every number, price,
+   * timestamp and shortcut. One family in two cuts keeps the workstation reading as one
+   * instrument rather than a page that borrowed its numerals. */
+  --mkt-sans: 'IBM Plex Sans', Inter, ui-sans-serif, system-ui, sans-serif;
+  --mkt-mono: 'IBM Plex Mono', ui-monospace, monospace;
 
   /* Six sizes, and a reason for each. Sixteen sizes is an accumulation: the difference
    * between 9.5 and 10 is invisible as hierarchy and visible only as inconsistency. */

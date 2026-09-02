@@ -101,7 +101,7 @@ export function TickerSearch({
           borderRadius: 8,
           padding: '7px 11px',
           color: MM.text,
-          font: '500 12px Inter',
+          font: '500 12px var(--mkt-sans)',
           outline: 'none',
         }}
       />

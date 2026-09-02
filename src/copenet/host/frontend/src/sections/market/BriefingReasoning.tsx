@@ -24,7 +24,7 @@ function regimeLogic(breadthPct: number, vix: number): { call: string; rule: str
 }
 
 const sectionLabel = {
-  font: '600 9px Inter',
+  font: '600 9px var(--mkt-sans)',
   letterSpacing: '.14em',
   textTransform: 'uppercase' as const,
   color: MM.muted,
@@ -130,7 +130,7 @@ export function BriefingReasoning({
         <button
           onClick={onClose}
           aria-label="Close briefing"
-          style={{ cursor: 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '6px 12px', font: '600 10px Inter', minHeight: 32, flex: '0 0 auto' }}
+          style={{ cursor: 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '6px 12px', font: '600 10px var(--mkt-sans)', minHeight: 32, flex: '0 0 auto' }}
         >
           esc
         </button>
@@ -138,7 +138,7 @@ export function BriefingReasoning({
 
       <article style={{ maxWidth: 760, margin: '0 auto', padding: '38px 20px 96px', display: 'flex', flexDirection: 'column', gap: 34 }}>
         <header>
-          <h1 style={{ margin: '0 0 18px', fontFamily: "'Cormorant Garamond', serif", fontWeight: 600, fontSize: 42, lineHeight: 1.1, letterSpacing: '-.01em', color: MM.text }}>
+          <h1 style={{ margin: '0 0 18px', fontFamily: 'var(--mkt-sans)', fontWeight: 600, fontSize: 30, lineHeight: 1.1, letterSpacing: '-.01em', color: MM.text }}>
             {headline}
           </h1>
           {(read?.summary || b.summary) && <p style={{ ...prose, fontSize: 16.5, color: MM.muted }}>{read?.summary || b.summary}</p>}
@@ -183,7 +183,7 @@ export function BriefingReasoning({
                 <div key={i} style={{ borderLeft: `2px solid ${MM.accentSoft}`, paddingLeft: 14 }}>
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, marginBottom: 4 }}>
                     <span style={{ fontFamily: mono, fontSize: 13, fontWeight: 600, color: MM.text }}>{a.symbol}</span>
-                    <span style={{ font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim }}>{a.kind}</span>
+                    <span style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim }}>{a.kind}</span>
                   </div>
                   <p style={{ ...prose, fontSize: 13.5 }}>{a.why}</p>
                 </div>
@@ -203,7 +203,7 @@ export function BriefingReasoning({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
               {killers.map((c, i) => (
                 <div key={i} style={{ borderLeft: `2px solid rgba(251,148,35,.3)`, paddingLeft: 14 }}>
-                  <div style={{ font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', color: MM.muted, marginBottom: 4 }}>{c.signal}</div>
+                  <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', color: MM.muted, marginBottom: 4 }}>{c.signal}</div>
                   <p style={{ ...prose, fontSize: 13.5 }}>{c.kill}</p>
                 </div>
               ))}
@@ -232,7 +232,7 @@ export function BriefingReasoning({
                     )}
                   </div>
                   {s.regime && (
-                    <span style={{ font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', color: MM.muted, flex: '0 0 auto' }}>{s.regime}</span>
+                    <span style={{ font: '600 9px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', color: MM.muted, flex: '0 0 auto' }}>{s.regime}</span>
                   )}
                 </div>
               ))}
@@ -245,7 +245,7 @@ export function BriefingReasoning({
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 22px', marginBottom: 18 }}>
             {dash.macro.data.map((m) => (
               <div key={m.label} style={{ minWidth: 96 }}>
-                <div style={{ font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim }}>{m.label}</div>
+                <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim }}>{m.label}</div>
                 <div style={{ fontFamily: mono, fontSize: 13.5, color: MM.text }}>
                   {m.value} <span style={{ fontSize: 10, color: toneColor(m.tone) }}>{m.change}</span>
                 </div>
@@ -256,7 +256,7 @@ export function BriefingReasoning({
             <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
               {dash.evidence.data.slice(0, 8).map((e, i) => (
                 <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 12, color: MM.textSoft }}>
-                  <span style={{ flex: '0 0 auto', borderRadius: 5, padding: '2px 6px', font: '600 8px Inter', letterSpacing: '.06em', textTransform: 'uppercase', background: e.type === 'Insider' ? MM.accentSoft : 'rgba(254,252,244,.06)', color: e.type === 'Insider' ? MM.accent : MM.muted }}>{e.type}</span>
+                  <span style={{ flex: '0 0 auto', borderRadius: 5, padding: '2px 6px', font: '600 8px var(--mkt-sans)', letterSpacing: '.06em', textTransform: 'uppercase', background: e.type === 'Insider' ? MM.accentSoft : 'rgba(254,252,244,.06)', color: e.type === 'Insider' ? MM.accent : MM.muted }}>{e.type}</span>
                   <span style={{ fontFamily: mono, fontSize: 11, color: MM.text, width: 48, flex: '0 0 48px' }}>{e.symbol}</span>
                   <span style={{ flex: 1, minWidth: 0 }}>{e.headline}</span>
                 </div>

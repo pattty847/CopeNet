@@ -105,19 +105,29 @@ The selected structure is a full-width chart with a compact post-chart context s
 
 This page establishes reusable principles for later Market cleanup. It does not authorize redesigning unrelated CopeNet surfaces.
 
-## Market cockpit
+## Market workstation
 
-The Market landing page applies the same grammar at market level. Its hierarchy is:
+The Market landing page applies the same grammar at market level as a **sectioned
+workstation**. Its hierarchy is:
 
-**Market → Delta → Standing tape → Investigation → Model synthesis**
+**Market → What changed → Standing picture → Investigation → Model synthesis**
 
-One fixed frame, no page scroll. The market bar orients (regime, data freshness, VIX,
-breadth); the watch rail is the watchlist as navigation — every row opens an asset
-workspace, `j`/`k`/`Enter` step and commit, and list management lives in the rail head; the
-stage pairs "Since you last looked" (the sweep's delta rows plus the model read, stamped as
-interpretation) with the standing picture (macro tape tiles, a rates stub, flagged setups);
-and the resizable research dock beneath holds Rotation, Rates, Portfolio, Evidence,
-Signals, Ledger, and Backtest as docked destinations (`\` cycles height, exactly as on the
-ticker page). Permanent stage pixels are reserved for orientation and earned urgency —
-soft-bottoming flags and regime shifts appear only when present; everything enumerable
-lives one tab away, never in a card mosaic.
+Fixed chrome around one scrolling body. The market bar orients (regime, data freshness, VIX,
+breadth, density); the watch rail is the watchlist as navigation — every row opens an asset
+workspace, `j`/`k`/Enter step and commit, list management lives in the rail head, removal
+offers an undo, and the rail starts collapsed below 1366px; a flat row of section tabs
+(Briefing, Structure, Signals, Portfolio, Evidence, Ledger, Backtest — keys `1`–`7`) is a
+route (`/market?view=…`) and doubles as an inbox with "new since you opened it" counts.
+
+Briefing is home: the sweep's sentence is the page headline; "what changed" (regime, a ranked
+Matters table fed by the brief's flag-first composer and capped with an explicit
+"6 of N · all →", movers, book, next 7d, ledger) and the model synthesis stack on the left;
+the standing picture (regime scale, tape grid, rates stub, rotation quadrants, flagged
+setups) runs down the right. Every other section takes the whole body: nothing on the market
+page is split, because nothing here must stay visible while something else is read. The
+ticker workspace keeps its research dock for exactly that reason.
+
+Customization is constrained on purpose: per section, panels can be reordered, hidden, and set
+half or full width where they support it; the shell remembers rail state and density. Free
+positioning and free height are not offered. Phones get a preset one-column layout with the
+watchlist as its own tab.

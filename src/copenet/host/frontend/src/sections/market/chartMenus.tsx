@@ -113,7 +113,7 @@ export function CompareMenu({
           <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5 }}>
             {expressions.map((expression) => (
               <span key={expression} className="tw-btn" style={{ gap: 5 }}>
-                <span style={{ fontFamily: "'JetBrains Mono', monospace" }}>{expression}</span>
+                <span style={{ fontFamily: 'var(--mkt-mono)' }}>{expression}</span>
                 <button type="button" onClick={() => onRemove(expression)} aria-label={`Remove ${expression}`} style={{ display: 'inline-flex', border: 0, background: 'transparent', color: 'inherit', cursor: 'pointer', padding: 0 }}><X size={11} /></button>
               </span>
             ))}

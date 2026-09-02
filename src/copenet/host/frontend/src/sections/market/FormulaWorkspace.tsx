@@ -85,7 +85,7 @@ export function FormulaWorkspace({
   return (
     <div className="tw tw-formula">
       <header className="tw-assetbar">
-        <button type="button" className="tw-iconbtn" onClick={onClose} title="Back to Market cockpit" aria-label="Back to Market cockpit">
+        <button type="button" className="tw-iconbtn" onClick={onClose} title="Back to Market" aria-label="Back to Market">
           <ArrowLeft size={14} />
         </button>
         <div className="tw-assetbar__identity tw-formula__identity">

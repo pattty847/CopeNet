@@ -32,7 +32,7 @@ function shortDate(iso?: string): string {
 function Stat({ caption, value, color }: { caption: string; value: string; color?: string }) {
   return (
     <div style={{ minWidth: 108 }}>
-      <div style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.dimmer, marginBottom: 4 }}>{caption}</div>
+      <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.dimmer, marginBottom: 4 }}>{caption}</div>
       <div style={{ fontFamily: mono, fontSize: 15, color: color ?? MM.text }}>{value}</div>
     </div>
   );
@@ -96,7 +96,7 @@ export function AllTimePnl({
         color: MM.muted,
         borderRadius: 8,
         padding: '5px 10px',
-        font: '600 9px Inter',
+        font: '600 9px var(--mkt-sans)',
         letterSpacing: '.08em',
         textTransform: 'uppercase',
         opacity: syncing ? 0.6 : 1,
@@ -145,7 +145,7 @@ export function AllTimePnl({
         <Stat caption="Win rate" value={ledger.winRatePct == null ? '—' : `${ledger.winRatePct}%`} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0 2px', font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0 2px', font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
         <span style={{ width: 60 }}>Holding</span>
         <span style={{ flex: 1 }}>Record</span>
         <span style={{ width: 88, textAlign: 'right' }}>Realized</span>
@@ -167,7 +167,7 @@ export function AllTimePnl({
         <>
           <button
             onClick={() => setShowWorkings((value) => !value)}
-            style={{ marginTop: 10, alignSelf: 'flex-start', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, color: MM.muted, font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase' }}
+            style={{ marginTop: 10, alignSelf: 'flex-start', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, color: MM.muted, font: '600 9px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase' }}
           >
             {showWorkings ? '▴ Hide the workings' : `▾ How this was calculated (${workings})`}
           </button>
@@ -175,7 +175,7 @@ export function AllTimePnl({
             <div style={{ marginTop: 10 }}>
               {ledger.reconciliation.length > 0 && (
                 <div style={{ marginBottom: 10 }}>
-                  <div style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent, marginBottom: 6 }}>
+                  <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent, marginBottom: 6 }}>
                     ◆ Unreconciled with the broker
                   </div>
                   {ledger.reconciliation.map((row) => (

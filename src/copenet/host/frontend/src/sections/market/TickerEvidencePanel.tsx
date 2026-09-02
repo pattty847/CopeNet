@@ -28,7 +28,7 @@ function InsiderWindow({ window }: { window: InsiderNetWindow }) {
   const valueTone = window.netValue == null ? shareTone : signTone(window.netValue);
   return (
     <div style={{ flex: 1, minWidth: 145, border: `1px solid ${valueTone === 'up' ? 'rgba(105,197,137,.25)' : valueTone === 'down' ? 'rgba(217,109,95,.25)' : MM.border}`, background: valueTone === 'up' ? 'rgba(105,197,137,.05)' : valueTone === 'down' ? 'rgba(217,109,95,.05)' : 'transparent', borderRadius: 9, padding: '8px 10px' }}>
-      <div style={{ font: '600 8px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 3 }}>{window.days}d insider net</div>
+      <div style={{ font: '600 8px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 3 }}>{window.days}d insider net</div>
       <div style={{ fontFamily: mono, fontSize: 12, color: toneColor(valueTone) }}>{window.netValue != null ? compactNumber(window.netValue, 'money') : compactNumber(window.netShares, 'shares')}</div>
       {window.netValue != null && <div style={{ fontFamily: mono, fontSize: 9.5, color: toneColor(shareTone), marginTop: 2 }}>{compactNumber(window.netShares, 'shares')}</div>}
       <div style={{ fontFamily: mono, fontSize: 9.5, color: MM.dim, marginTop: 2 }}>{window.buys} buys · {window.sells} sells · {window.openMarketBuys ?? 0} open-market</div>
@@ -70,7 +70,7 @@ export function TickerEvidencePanel({ state, active }: { state: TickerEvidenceSt
       {insiderWindows.length > 0 && (
         <>
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 8 }}>{insiderWindows.map((window) => <InsiderWindow key={window.days} window={window} />)}</div>
-          <button type="button" onClick={() => setShowMethod((value) => !value)} aria-expanded={showMethod} style={{ border: 'none', background: 'transparent', color: MM.dim, padding: 0, marginBottom: 9, cursor: 'pointer', font: '500 10px Inter' }}>
+          <button type="button" onClick={() => setShowMethod((value) => !value)} aria-expanded={showMethod} style={{ border: 'none', background: 'transparent', color: MM.dim, padding: 0, marginBottom: 9, cursor: 'pointer', font: '500 10px var(--mkt-sans)' }}>
             {showMethod ? 'Hide insider-flow method' : 'How insider flow is classified'}
           </button>
           {showMethod && <p style={{ margin: '0 0 10px', color: MM.dim, fontSize: 10.5, lineHeight: 1.5 }}>Share counts include grants, vesting, and exercises. Dollar flow reflects cash spent or received and determines the tile tone; open-market purchases are called out separately.</p>}
@@ -87,7 +87,7 @@ export function TickerEvidencePanel({ state, active }: { state: TickerEvidenceSt
           {visibleEvidence.map((item, index) => {
             const body = (
               <>
-                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
+                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}><EvidenceToneGlyph tone={item.tone} />{item.headline}<EvidenceFlagBadge flag={item.flag} /></span>
                 <span style={{ flex: '0 0 auto', fontSize: 10, color: MM.dim, whiteSpace: 'nowrap', textAlign: 'right' }}>{item.source}<span style={{ display: 'block', color: MM.dimmer }}>{evidenceDate(item.t)}</span></span>
               </>

@@ -108,7 +108,7 @@ export function PlotsMenu({
         {info ? (
           <div className="tw-pop__row" style={{ flexDirection: 'column', alignItems: 'stretch', gap: 7 }}>
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-              <span style={{ color: MM.info, font: '600 10px Inter' }}>{info.label}</span>
+              <span style={{ color: MM.info, font: '600 10px var(--mkt-sans)' }}>{info.label}</span>
               <button type="button" className="tw-iconbtn" onClick={onClearMetric} aria-label={`Remove ${info.label} plot`} title="Remove plot"><X size={12} /></button>
             </div>
             {!valuation && (

@@ -245,7 +245,7 @@ export function Rrg({
                     background: active ? 'rgba(254,252,244,.08)' : 'transparent',
                     color: active ? MM.text : MM.dimmer,
                     padding: '5px 8px',
-                    font: `${active ? 700 : 500} 9px Inter`,
+                    font: `${active ? 700 : 500} 9px var(--mkt-sans)`,
                     letterSpacing: '.08em',
                   }}
                 >
@@ -265,7 +265,7 @@ export function Rrg({
               color: isZoomed ? MM.muted : MM.dimmer,
               borderRadius: 8,
               padding: '5px 9px',
-              font: '600 9px Inter',
+              font: '600 9px var(--mkt-sans)',
               letterSpacing: '.08em',
               textTransform: 'uppercase',
             }}

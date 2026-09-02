@@ -1,0 +1,835 @@
+@import './marketTokens.css';
+
+/* CopeNet Market — the sectioned workstation.
+ *
+ * One fixed frame of chrome (market bar, watch rail, section tabs) around a single scrolling
+ * section body. Permanent pixels go only to what stays true while the subject changes:
+ * freshness, regime, the instruments, and the way to the other sections. Every section takes
+ * the whole body — nothing on this page is split. SEAMED NOT CARDED: regions are divided by
+ * hairlines; a card is reserved for a discrete object (a panel inside a section). Control
+ * classes (tw-btn, tw-iconbtn, tw-tab, tw-rail) are shared with the ticker workspace so the
+ * two pages read as one instrument; this file adds only the workstation's own regions. */
+
+.mw {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mkt-ground);
+  color: var(--mkt-text);
+  font-family: var(--mkt-sans);
+  /* Row rhythm is a token so density can retune it in one place. */
+  --mw-row-pad: 7px;
+  --mw-tile-pad: 7px 9px 6px;
+  --mw-section-pad: var(--mkt-s3) var(--mkt-s4) var(--mkt-s4);
+}
+
+/* Comfortable density loosens the spacing scale without touching type sizes: the page
+ * stays legible at arm's length, it just breathes more. */
+.mw[data-density='comfortable'] {
+  --mkt-s1: 6px;
+  --mkt-s2: 10px;
+  --mkt-s3: 16px;
+  --mkt-s4: 22px;
+  --mkt-control: 30px;
+  --mw-row-pad: 10px;
+  --mw-tile-pad: 10px 12px 9px;
+  --mw-section-pad: var(--mkt-s3) var(--mkt-s4) var(--mkt-s4);
+}
+
+.mw button,
+.mw input,
+.mw select { font-family: var(--mkt-sans); }
+
+.mw *:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+
+/* ---------------------------------------------------------------- market bar */
+
+.mw-bar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 14px;
+  height: 50px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.mw-bar__identity { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+
+.mw-bar__title {
+  margin: 0;
+  font: 600 var(--mkt-t-quote) var(--mkt-sans);
+  letter-spacing: 0.02em;
+  color: var(--mkt-text);
+}
+
+.mw-bar__sub {
+  overflow: hidden;
+  color: var(--mkt-dim);
+  font: 500 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+/* The regime is the market's headline state — the workstation's analog of a live quote. */
+.mw-regime {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  font: 600 var(--mkt-t-label) var(--mkt-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mw-regime__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+
+.mw-freshness {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--mkt-dim);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+  white-space: nowrap;
+}
+
+.mw-freshness__dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+
+.mw-bar__spacer { flex: 1 1 auto; }
+
+.mw-bar__stat { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.mw-bar__stat b { font: 500 14px var(--mkt-mono); color: var(--mkt-text); font-variant-numeric: tabular-nums; }
+.mw-bar__stat span { color: var(--mkt-dimmer); font: 600 8px var(--mkt-sans); letter-spacing: 0.12em; text-transform: uppercase; }
+
+/* Density is a two-state segmented control; the selected state is a lifted surface, not orange. */
+.mw-density {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+}
+
+.mw-density button {
+  height: 20px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.06em;
+}
+
+.mw-density button[aria-pressed='true'] { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+
+/* --------------------------------------------------------------------- body */
+
+.mw-body { display: flex; flex: 1 1 auto; min-height: 0; }
+
+.mw-main {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+/* --------------------------------------------------------------------- rail */
+
+/* The workstation rail carries names AND management, so it runs wider than the ticker rail. */
+.mw-rail { width: 236px; }
+.mw-rail[data-collapsed='true'] { width: 40px; }
+
+/* Quiet by default: the change reads in mono, the sparkline appears only on the row you
+ * are pointing at or stepping onto. Ten red lines at once is a wall, not information. */
+.mw-rail .mw-rail__spark { display: none; width: 34px; flex: 0 0 auto; }
+.mw-rail .tw-rail__row:hover .mw-rail__spark,
+.mw-rail .tw-rail__row[data-cursor='true'] .mw-rail__spark { display: block; }
+.mw-rail .tw-rail__chg { color: var(--mkt-muted); font-variant-numeric: tabular-nums; }
+.mw-rail .tw-rail__row:hover .tw-rail__chg,
+.mw-rail .tw-rail__row[data-cursor='true'] .tw-rail__chg { color: var(--tone, var(--mkt-muted)); }
+
+.mw-rail__remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mkt-dimmer);
+  cursor: pointer;
+  opacity: 0;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.tw-rail__row:hover .mw-rail__remove,
+.mw-rail__remove:focus-visible { opacity: 1; }
+.mw-rail__remove:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+
+/* Removal is immediate and reversible: the row goes, this line offers it back for a while. */
+.mw-rail__undo {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 9px;
+  border-top: 1px solid var(--mkt-seam-soft);
+  background: var(--mkt-raise);
+  color: var(--mkt-soft);
+  font: 500 var(--mkt-t-label) var(--mkt-sans);
+}
+
+.mw-rail__undo b { font-family: var(--mkt-mono); font-weight: 500; color: var(--mkt-text); }
+.mw-rail__undo button {
+  margin-left: auto;
+  padding: 2px 6px;
+  border: 1px solid var(--mkt-accent-line);
+  border-radius: 3px;
+  background: var(--mkt-accent-soft);
+  color: var(--mkt-accent);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.mw-rail__add { flex: 0 0 auto; padding: 6px; border-top: 1px solid var(--mkt-seam-soft); }
+
+/* The rail as a full section on narrow screens. */
+.mw-rail--sheet { width: 100%; max-width: 560px; border-right: 0; background: transparent; }
+.mw-rail--sheet .tw-rail__row { padding: 8px 9px; }
+.mw-rail--sheet .mw-rail__spark { display: block; }
+.mw-rail--sheet .mw-rail__remove { opacity: 1; }
+
+/* List menu, anchored under the rail head. */
+.mw-listmenu {
+  position: absolute;
+  top: 34px;
+  left: 6px;
+  z-index: 14;
+  width: 216px;
+  padding: 4px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-dock);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6);
+}
+
+.mw-listmenu__row { display: flex; align-items: center; gap: 4px; }
+
+.mw-listmenu__row > button:first-child {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  padding: 5px 6px;
+  border: 0;
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 var(--mkt-t-label) var(--mkt-sans);
+  text-align: left;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mw-listmenu__row > button:first-child:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.mw-listmenu__row[data-active='true'] > button:first-child {
+  border-left-color: var(--mkt-accent);
+  background: var(--mkt-accent-soft);
+  color: var(--mkt-text);
+}
+
+.mw-listmenu__sep { height: 1px; margin: 4px 0; background: var(--mkt-seam-soft); }
+
+.mw-listmenu__action {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-label) var(--mkt-sans);
+  text-align: left;
+}
+
+.mw-listmenu__action:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.mw-listmenu__action[disabled] { opacity: 0.4; cursor: not-allowed; }
+
+.mw-listmenu__input {
+  width: 100%;
+  box-sizing: border-box;
+  margin: 2px 0;
+  padding: 5px 6px;
+  border: 1px solid var(--mkt-accent-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-text);
+  font: 500 var(--mkt-t-label) var(--mkt-sans);
+  outline: none;
+}
+
+.mw-kbd {
+  padding: 0 3px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 3px;
+  color: var(--mkt-dimmer);
+  font: 600 9px var(--mkt-mono);
+  letter-spacing: 0;
+}
+
+/* --------------------------------------------------------------- section tabs */
+
+.mw-tabs {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  padding: 0 6px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.mw-tabs::-webkit-scrollbar { display: none; }
+.mw-tabs .tw-tab { flex: 0 0 auto; }
+
+/* "New since you opened it" is a count, not an alarm: neutral surface, mono digits. Errors
+ * keep the red badge the drawer already uses. */
+.mw-tab__new {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 15px;
+  height: 15px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--mkt-raise-hi);
+  color: var(--mkt-soft);
+  font: 600 9px var(--mkt-mono);
+}
+
+.mw-tabs__spacer { flex: 1 1 auto; }
+.mw-tabs__tools { display: flex; flex: 0 0 auto; align-items: center; gap: 6px; padding-right: 4px; }
+
+/* ------------------------------------------------------------------ section */
+
+.mw-section {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: var(--mw-section-pad);
+  overflow-y: auto;
+  background: var(--mkt-canvas);
+}
+
+.mw-section::-webkit-scrollbar { width: 9px; }
+.mw-section::-webkit-scrollbar-thumb {
+  border: 3px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+  background-color: rgba(254, 252, 244, 0.11);
+}
+
+/* Section header row: what this is, where the data stands, and the tools that act on the
+ * section as a whole. */
+.mw-sect {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: var(--mkt-control);
+  margin-bottom: var(--mkt-s2);
+}
+
+.mw-sect__label {
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mw-sect__meta {
+  overflow: hidden;
+  color: var(--mkt-dimmer);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mw-sect__spacer { flex: 1 1 auto; }
+
+/* Panels inside a section: two columns, a full-width panel spans both. Radius is the
+ * token's card radius — panels are the one genuine object on the page. */
+.mw-grid {
+  display: grid;
+  gap: var(--mkt-s3);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  align-items: start;
+}
+
+.mw-grid > [data-width='full'] { grid-column: 1 / -1; }
+.mw-grid > * { min-width: 0; }
+.mw .market-panel-card { border-radius: 6px !important; min-width: 0 !important; flex: initial !important; }
+
+/* Arrange popover: order, visibility and width per panel. Constrained on purpose. */
+.mw-arrange {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 16;
+  width: 300px;
+  padding: 6px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-dock);
+  box-shadow: 0 16px 34px rgba(0, 0, 0, 0.6);
+}
+
+.mw-arrange__row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 4px;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.mw-arrange__row:first-child { border-top: 0; }
+.mw-arrange__row[data-hidden='true'] .mw-arrange__title { color: var(--mkt-dimmer); text-decoration: line-through; }
+
+.mw-arrange__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mkt-soft);
+  font: 500 var(--mkt-t-label) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mw-arrange__foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 4px;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--mkt-seam);
+  color: var(--mkt-dimmer);
+  font: 400 var(--mkt-t-micro) var(--mkt-sans);
+}
+
+.mw-arrange__anchor { position: relative; }
+
+/* ----------------------------------------------------------------- briefing */
+
+.mw-headline-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--mkt-s3);
+  margin-bottom: var(--mkt-s3);
+}
+
+.mw-headline {
+  flex: 1 1 auto;
+  margin: 0;
+  max-width: 72ch;
+  font: 600 22px var(--mkt-sans);
+  letter-spacing: -0.015em;
+  line-height: 1.25;
+  color: var(--mkt-text);
+  text-wrap: balance;
+}
+
+.mw-headline-row__tools { display: flex; flex: 0 0 auto; align-items: center; gap: 8px; padding-top: 3px; }
+
+/* Two columns: what changed and the synthesis stack on the left, the standing picture runs
+ * the full height on the right. The model's read therefore starts where the delta rows end,
+ * which puts its headline on screen at 1440×900 instead of below a long right column. */
+.mw-brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+  grid-template-rows: auto 1fr;
+  gap: 0;
+  border-top: 1px solid var(--mkt-seam);
+}
+
+.mw-brief__changed { grid-column: 1; min-width: 0; padding: var(--mkt-s2) var(--mkt-s4) 0 0; }
+.mw-brief > .mw-synth { grid-column: 1; margin-right: var(--mkt-s4); }
+
+.mw-brief__standing {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  min-width: 0;
+  padding: var(--mkt-s2) 0 var(--mkt-s3) var(--mkt-s4);
+  border-left: 1px solid var(--mkt-seam);
+}
+
+/* Labelled delta rows — the brief reads as an instrument readout, not a feed. */
+.mw-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--mkt-s3);
+  padding: var(--mw-row-pad) 0;
+  border-top: 1px solid var(--mkt-seam-soft);
+}
+
+.mw-row:first-child { border-top: 0; }
+
+.mw-row__label {
+  flex: 0 0 58px;
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.mw-row__body { flex: 1 1 auto; min-width: 0; }
+
+.mw-quiet { color: var(--mkt-dim); font: 400 var(--mkt-t-value) var(--mkt-sans); line-height: 1.5; }
+
+.mw-more {
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-label) var(--mkt-sans);
+}
+
+.mw-more:hover { color: var(--mkt-soft); }
+
+/* Doors: small uppercase links that lead from a glance into the section that owns the fact. */
+.mw-open {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mw-open:hover { color: var(--mkt-accent); }
+
+/* The matters table: signal · why now · source. One row per change, ranked, openable. */
+.mw-matters { display: flex; flex-direction: column; }
+
+.mw-matters__head,
+.mw-matter {
+  display: grid;
+  grid-template-columns: minmax(118px, 0.6fr) minmax(0, 2fr) minmax(112px, 0.7fr) 18px;
+  gap: 10px;
+  align-items: center;
+}
+
+.mw-matters__head {
+  padding: 0 6px 4px;
+  color: var(--mkt-dimmer);
+  font: 600 8.5px var(--mkt-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.mw-matter {
+  width: 100%;
+  min-height: 30px;
+  padding: 3px 6px;
+  border: 0;
+  border-top: 1px solid var(--mkt-seam-soft);
+  border-left: 2px solid transparent;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+  text-align: left;
+}
+
+.mw-matter:hover { border-left-color: var(--mkt-accent-line); background: var(--mkt-raise); }
+
+.mw-matter__signal { display: flex; align-items: center; gap: 7px; min-width: 0; }
+
+.mw-matter__kind {
+  flex: 0 0 auto;
+  padding: 2px 5px;
+  border-radius: 3px;
+  background: rgba(254, 252, 244, 0.06);
+  color: var(--mkt-muted);
+  font: 600 8px var(--mkt-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.mw-matter__sym { flex: 0 0 auto; font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-text); }
+
+.mw-matter__text { min-width: 0; overflow: hidden; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+
+.mw-matter__source { overflow: hidden; color: var(--mkt-dimmer); font: 500 var(--mkt-t-micro) var(--mkt-mono); text-overflow: ellipsis; white-space: nowrap; }
+
+.mw-matter__link { display: inline-flex; color: var(--mkt-accent); text-decoration: none; }
+
+.mw-matters__foot { display: flex; align-items: center; gap: 10px; padding: 4px 6px 0; color: var(--mkt-dimmer); font: 500 var(--mkt-t-micro) var(--mkt-mono); }
+
+/* Movers ride in one mono line of chips. */
+.mw-mover {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 7px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 var(--mkt-t-label) var(--mkt-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.mw-mover:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+
+/* Standing picture: sub-blocks separated by seams, each with its own door. */
+.mw-standing__block + .mw-standing__block { margin-top: var(--mkt-s3); padding-top: var(--mkt-s2); border-top: 1px solid var(--mkt-seam-soft); }
+
+.mw-regime-scale { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3px; margin: 4px 0 6px; }
+.mw-regime-scale div { display: grid; gap: 5px; }
+.mw-regime-scale div > span { height: 3px; background: var(--mkt-seam); }
+.mw-regime-scale div[data-active='true'] > span { background: var(--mkt-accent); }
+.mw-regime-scale small { overflow: hidden; color: var(--mkt-dimmer); font: 500 8px var(--mkt-sans); letter-spacing: 0.06em; text-overflow: ellipsis; text-transform: uppercase; white-space: nowrap; }
+.mw-regime-scale div[data-active='true'] small { color: var(--mkt-soft); }
+
+.mw-regime-metrics { display: flex; gap: 18px; }
+.mw-regime-metrics div { display: flex; align-items: baseline; gap: 6px; }
+.mw-regime-metrics b { font: 500 var(--mkt-t-hero) var(--mkt-mono); color: var(--mkt-text); font-variant-numeric: tabular-nums; }
+.mw-regime-metrics span { color: var(--mkt-dim); font: 600 var(--mkt-t-micro) var(--mkt-sans); letter-spacing: 0.1em; text-transform: uppercase; }
+
+/* Tape tiles: reference data at the working number size, every tile visible, no scroll.
+ * The delta headline is the largest type on the page; this is deliberately not. */
+.mw-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 1px;
+  overflow: hidden;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: var(--mkt-seam);
+}
+
+.mw-tile { display: flex; flex-direction: column; gap: 2px; padding: var(--mw-tile-pad); background: var(--mkt-dock); }
+.mw-tile__k { color: var(--mkt-dimmer); font: 600 8px var(--mkt-sans); letter-spacing: 0.1em; text-transform: uppercase; }
+.mw-tile__v { font: 500 var(--mkt-t-body) var(--mkt-mono); color: var(--mkt-text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
+.mw-tile__delta { display: flex; align-items: center; justify-content: space-between; gap: 6px; font: 500 var(--mkt-t-micro) var(--mkt-mono); font-variant-numeric: tabular-nums; }
+.mw-tile__delta > span:last-child { width: 30px; flex: 0 0 auto; }
+
+.mw-kv-list { display: flex; flex-direction: column; }
+.mw-kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--mkt-seam-soft); }
+.mw-kv:first-child { border-top: 0; }
+.mw-kv__k { color: var(--mkt-dim); font-size: var(--mkt-t-label); }
+.mw-kv__v { font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-soft); font-variant-numeric: tabular-nums; }
+
+/* Rotation quadrants: the glanceable proxy for the RRG. Green for the two constructive
+ * quadrants, red for the two deteriorating ones — direction, not decoration. */
+.mw-quadrants { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); border: 1px solid var(--mkt-seam); border-radius: 4px; overflow: hidden; }
+.mw-quadrant { min-height: 58px; padding: 7px 8px; }
+.mw-quadrant:nth-child(odd) { border-right: 1px solid var(--mkt-seam); }
+.mw-quadrant:nth-child(-n + 2) { border-bottom: 1px solid var(--mkt-seam); }
+.mw-quadrant > span { color: var(--mkt-dimmer); font: 600 8px var(--mkt-sans); letter-spacing: 0.11em; text-transform: uppercase; }
+.mw-quadrant[data-quadrant='leading'] > span,
+.mw-quadrant[data-quadrant='improving'] > span { color: var(--mkt-up); }
+.mw-quadrant[data-quadrant='weakening'] > span,
+.mw-quadrant[data-quadrant='lagging'] > span { color: var(--mkt-down); }
+.mw-quadrant > div { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.mw-quadrant button {
+  padding: 2px 5px;
+  border: 0;
+  border-radius: 3px;
+  background: var(--mkt-raise);
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 var(--mkt-t-label) var(--mkt-mono);
+}
+.mw-quadrant button:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+.mw-quadrant small { color: var(--mkt-dimmer); font: 400 var(--mkt-t-label) var(--mkt-sans); }
+
+/* A flagged setup earns a green edge; nothing else on the briefing does. */
+.mw-setup {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  margin: 0 -6px;
+  padding: 4px 6px;
+  border: 0;
+  border-left: 2px solid rgba(105, 197, 137, 0.5);
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 500 var(--mkt-t-label) var(--mkt-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+
+.mw-setup:hover { background: var(--mkt-raise); }
+.mw-setup__sym { color: var(--mkt-text); font-size: var(--mkt-t-value); }
+
+/* ---------------------------------------------------------------- synthesis */
+
+.mw-synth { margin-top: var(--mkt-s2); padding-top: var(--mkt-s3); border-top: 1px solid var(--mkt-seam); }
+
+.mw-synth__headline { margin: 6px 0 0; max-width: 70ch; font: 600 15px var(--mkt-sans); line-height: 1.45; color: var(--mkt-text); }
+.mw-synth__headline em { font-style: normal; color: var(--mkt-accent); }
+.mw-synth__summary { margin: var(--mkt-s2) 0 var(--mkt-s3); max-width: 78ch; color: var(--mkt-soft); font-size: var(--mkt-t-body); line-height: 1.55; }
+
+.mw-attn {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: var(--mkt-control);
+  padding: 0 9px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+}
+
+.mw-attn:hover { background: var(--mkt-raise); }
+.mw-attn__sym { font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-text); }
+.mw-attn__kind { color: var(--mkt-dim); font: 600 8.5px var(--mkt-sans); letter-spacing: 0.08em; text-transform: uppercase; }
+
+.mw-caveat { margin: var(--mkt-s3) 0 0; max-width: 78ch; color: var(--mkt-dimmer); font: 400 var(--mkt-t-label) var(--mkt-sans); line-height: 1.5; }
+
+/* Thesis-killers sit under the read they qualify, folded until asked. */
+.mw-killers { margin-top: var(--mkt-s3); }
+.mw-killers__list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(320px, 100%), 1fr)); gap: var(--mkt-s3); margin-top: var(--mkt-s2); }
+.mw-killer { padding-left: 10px; border-left: 2px solid var(--mkt-accent-line); }
+.mw-killer b { display: block; margin-bottom: 3px; color: var(--mkt-muted); font: 600 var(--mkt-t-micro) var(--mkt-sans); letter-spacing: 0.08em; text-transform: uppercase; }
+.mw-killer p { margin: 0; color: var(--mkt-soft); font-size: var(--mkt-t-value); line-height: 1.5; }
+
+.mw-inline-error { display: inline-flex; align-items: center; gap: 6px; color: var(--mkt-down); font: 500 var(--mkt-t-label) var(--mkt-sans); }
+
+/* ----------------------------------------------------------------- evidence */
+
+.mw-filters { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; }
+
+.mw-chip {
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.06em;
+}
+
+.mw-chip:hover { color: var(--mkt-soft); }
+.mw-chip[aria-pressed='true'] { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+
+.mw-evidence { display: flex; flex-direction: column; border-top: 1px solid var(--mkt-seam); }
+
+.mw-evrow {
+  display: grid;
+  grid-template-columns: 74px 62px minmax(0, 1fr) minmax(120px, 0.4fr) 18px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  min-height: 36px;
+  padding: 6px 6px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: var(--mkt-soft);
+  cursor: pointer;
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+  text-align: left;
+}
+
+.mw-evrow:hover { background: var(--mkt-raise); }
+.mw-evrow__type { padding: 2px 6px; border-radius: 3px; font: 600 8px var(--mkt-sans); letter-spacing: 0.08em; text-align: center; text-transform: uppercase; }
+.mw-evrow__sym { font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-text); }
+.mw-evrow__text { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; line-height: 1.4; }
+.mw-evrow__source { color: var(--mkt-dim); font: 500 var(--mkt-t-micro) var(--mkt-mono); text-align: right; white-space: nowrap; }
+.mw-evrow__source small { display: block; color: var(--mkt-dimmer); }
+
+.mw-empty { padding: 22px 6px; color: var(--mkt-dim); font: 400 var(--mkt-t-value) var(--mkt-sans); }
+
+.mw-footnote { margin-top: var(--mkt-s4); color: var(--mkt-dimmer); font: 400 var(--mkt-t-micro) var(--mkt-sans); }
+
+/* ----------------------------------------------------------------- narrower */
+
+@media (max-width: 1180px) {
+  .mw-brief { grid-template-columns: 1fr; grid-template-rows: none; }
+  .mw-brief__changed { grid-column: auto; padding-right: 0; padding-bottom: var(--mkt-s3); }
+  .mw-brief__standing { grid-column: auto; grid-row: auto; order: 2; padding-left: 0; border-left: 0; border-top: 1px solid var(--mkt-seam); }
+  .mw-brief > .mw-synth { grid-column: auto; order: 3; margin-right: 0; }
+}
+
+@media (max-width: 1024px) {
+  .mw-grid { grid-template-columns: 1fr; }
+  .mw-grid > [data-width='full'] { grid-column: auto; }
+  .mw-matters__head { display: none; }
+  .mw-matter { grid-template-columns: minmax(110px, 0.7fr) minmax(0, 1fr) 18px; }
+  .mw-matter__source { display: none; }
+}
+
+@media (max-width: 900px) {
+  .mw-rail:not(.mw-rail--sheet) { display: none; }
+  /* The ticker stylesheet hides every rail under 900px; the sheet is the one that must show. */
+  .mw-rail.mw-rail--sheet { display: flex; }
+  .mw-headline-row { flex-direction: column; gap: var(--mkt-s2); }
+  .mw-headline-row__tools { padding-top: 0; }
+  /* Matters fold to two lines: signal on the first, the reason beneath it, the door beside. */
+  .mw-matter { grid-template-columns: minmax(0, 1fr) 18px; grid-template-rows: auto auto; row-gap: 2px; padding: 6px 6px; }
+  .mw-matter__signal { grid-column: 1; grid-row: 1; }
+  .mw-matter__text { grid-column: 1; grid-row: 2; white-space: normal; }
+  .mw-matter__link, .mw-matter > span:last-child { grid-column: 2; grid-row: 1 / span 2; }
+  .mw-bar { height: auto; flex-wrap: wrap; gap: var(--mkt-s2); padding: var(--mkt-s2) var(--mkt-s3); }
+  .mw-bar__sub, .mw-density { display: none; }
+  .mw-headline { font-size: 19px; }
+  .mw-evrow { grid-template-columns: 62px minmax(0, 1fr) 18px; }
+  .mw-evrow__type, .mw-evrow__source { display: none; }
+  .mw-tiles { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mw * { transition: none !important; }
+}
+
+/* Matter cells are buttons inside a row, so the row itself is not one interactive element
+ * wrapping another. They inherit the row's type and colour. */
+.mw-matter__signal,
+.mw-matter__text {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}

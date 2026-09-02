@@ -28,7 +28,7 @@ export function TickerAssetBar({
 
   return (
     <header className="tw-assetbar">
-      <button type="button" className="tw-iconbtn" onClick={onBack} title="Back to Market cockpit" aria-label="Back to Market cockpit">
+      <button type="button" className="tw-iconbtn" onClick={onBack} title="Back to Market" aria-label="Back to Market">
         <ArrowLeft size={14} />
       </button>
 

@@ -53,13 +53,13 @@ export function freshnessColor(timestamp?: string | null, now = Date.now()): str
 
 export const label: CSSProperties = {
   margin: 0,
-  font: '600 9.5px Inter',
+  font: '600 9.5px var(--mkt-sans)',
   letterSpacing: '.14em',
   textTransform: 'uppercase',
   color: MM.muted,
 };
 
-export const mono = "'JetBrains Mono', monospace";
+export const mono = 'var(--mkt-mono)';
 
 export function modelStamp(model: string, generatedAt: string): string {
   try {
@@ -80,7 +80,7 @@ export function ModelBadge({ model, generatedAt }: { model: string; generatedAt:
         border: `1px solid rgba(90,143,199,.35)`,
         background: 'rgba(90,143,199,.1)',
         padding: '3px 9px',
-        font: '600 9px Inter',
+        font: '600 9px var(--mkt-sans)',
         letterSpacing: '.1em',
         textTransform: 'uppercase',
         color: MM.info,
@@ -145,7 +145,7 @@ export function EvidenceFlagBadge({ flag }: { flag?: EvidenceItem['flag'] }) {
         flex: '0 0 auto',
         borderRadius: 999,
         padding: '2px 7px',
-        font: '700 8px Inter',
+        font: '700 8px var(--mkt-sans)',
         letterSpacing: '.1em',
         textTransform: 'uppercase',
         background: cluster ? 'rgba(105,197,137,.14)' : 'rgba(90,143,199,.14)',
@@ -169,7 +169,7 @@ export function PreviewBadge({ status }: { status: PanelStatus }) {
         borderRadius: 999,
         border: `1px solid ${MM.border}`,
         padding: '2px 8px',
-        font: '600 8px Inter',
+        font: '600 8px var(--mkt-sans)',
         letterSpacing: '.12em',
         textTransform: 'uppercase',
         color,

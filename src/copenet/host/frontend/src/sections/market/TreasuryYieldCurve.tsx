@@ -75,7 +75,7 @@ function EmptyCurve({ loading, error, onRetry }: { loading: boolean; error: stri
         <div style={{ fontSize: 24, marginBottom: 8 }}>{loading ? '◌' : '∿'}</div>
         <div style={{ fontSize: 12, color: MM.textSoft }}>{loading ? 'Loading the Treasury curve…' : 'Treasury curve unavailable'}</div>
         {error && <div style={{ fontSize: 10.5, marginTop: 5, maxWidth: 420 }}>{error}</div>}
-        {!loading && <button onClick={onRetry} style={{ marginTop: 12, cursor: 'pointer', border: `1px solid ${MM.borderHi}`, borderRadius: 8, background: MM.accentSoft, color: MM.accent, padding: '6px 11px', font: '600 10px Inter' }}>Retry</button>}
+        {!loading && <button onClick={onRetry} style={{ marginTop: 12, cursor: 'pointer', border: `1px solid ${MM.borderHi}`, borderRadius: 8, background: MM.accentSoft, color: MM.accent, padding: '6px 11px', font: '600 10px var(--mkt-sans)' }}>Retry</button>}
       </div>
     </div>
   );
@@ -116,31 +116,31 @@ export function TreasuryYieldCurve() {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <span aria-hidden="true" style={{ color: MM.accent, fontFamily: mono, fontSize: 18 }}>∿</span>
           <div>
-            <h2 id="treasury-curve-title" style={{ margin: 0, font: '700 11px Inter', letterSpacing: '.14em', color: MM.text, textTransform: 'uppercase' }}>Treasury curve</h2>
+            <h2 id="treasury-curve-title" style={{ margin: 0, font: '700 11px var(--mkt-sans)', letterSpacing: '.14em', color: MM.text, textTransform: 'uppercase' }}>Treasury curve</h2>
             <div style={{ marginTop: 3, fontSize: 9.5, color: MM.dim }}>US government yields · {asOf || 'latest close'}</div>
           </div>
-          {curve && <span style={{ border: '1px solid currentColor', borderRadius: 999, padding: '2px 7px', color: freshnessColor(curve.asOf), font: '700 8px Inter', letterSpacing: '.1em' }}>LATEST CLOSE</span>}
+          {curve && <span style={{ border: '1px solid currentColor', borderRadius: 999, padding: '2px 7px', color: freshnessColor(curve.asOf), font: '700 8px var(--mkt-sans)', letterSpacing: '.1em' }}>LATEST CLOSE</span>}
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
           <div role="group" aria-label="Yield change range" style={{ display: 'flex', border: `1px solid ${MM.border}`, borderRadius: 8, padding: 2, background: '#050506' }}>
             {RANGE_LABELS.map((option) => (
-              <button key={option.value} onClick={() => setSelectedRange(option.value)} aria-pressed={selectedRange === option.value} style={{ cursor: 'pointer', border: 'none', borderRadius: 6, minHeight: isMobile ? 44 : undefined, padding: isMobile ? '8px 12px' : '4px 9px', background: selectedRange === option.value ? MM.accentSoft : 'transparent', color: selectedRange === option.value ? MM.accent : MM.dim, font: '700 9px Inter' }}>{option.label}</button>
+              <button key={option.value} onClick={() => setSelectedRange(option.value)} aria-pressed={selectedRange === option.value} style={{ cursor: 'pointer', border: 'none', borderRadius: 6, minHeight: isMobile ? 44 : undefined, padding: isMobile ? '8px 12px' : '4px 9px', background: selectedRange === option.value ? MM.accentSoft : 'transparent', color: selectedRange === option.value ? MM.accent : MM.dim, font: '700 9px var(--mkt-sans)' }}>{option.label}</button>
             ))}
           </div>
           <button onClick={() => void load(selectedRange, true)} disabled={loading} aria-label="Refresh Treasury curve" title="Refresh Treasury curve" style={{ cursor: loading ? 'default' : 'pointer', border: `1px solid ${MM.border}`, borderRadius: 7, minWidth: isMobile ? 44 : 28, minHeight: isMobile ? 44 : 26, background: 'transparent', color: MM.muted, opacity: loading ? .5 : 1 }}>↻</button>
-          <a href={curve?.sourceUrl || 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates'} target="_blank" rel="noreferrer" style={{ border: `1px solid ${MM.border}`, borderRadius: 7, padding: '4px 8px', color: MM.muted, font: '600 8px Inter', letterSpacing: '.1em', textDecoration: 'none' }}>US TREASURY</a>
+          <a href={curve?.sourceUrl || 'https://home.treasury.gov/resource-center/data-chart-center/interest-rates'} target="_blank" rel="noreferrer" style={{ border: `1px solid ${MM.border}`, borderRadius: 7, padding: '4px 8px', color: MM.muted, font: '600 8px var(--mkt-sans)', letterSpacing: '.1em', textDecoration: 'none' }}>US TREASURY</a>
         </div>
       </div>
 
       {!curve ? <EmptyCurve loading={loading} error={error} onRetry={() => void load(selectedRange)} /> : (
         <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 2fr) minmax(260px, .8fr)' }}>
           <div className="market-treasury-curve__chart" style={{ minWidth: 0 }}>
-            <div style={{ font: '600 8.5px Inter', letterSpacing: '.13em', color: MM.dim, textTransform: 'uppercase' }}>Yield (%)</div>
+            <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.13em', color: MM.dim, textTransform: 'uppercase' }}>Yield (%)</div>
             <div style={{ overflowX: 'auto', paddingBottom: 2 }}><CurveChart points={curve.points} /></div>
             <div style={{ display: 'grid', gridTemplateColumns: `repeat(${curve.points.length}, minmax(76px, 1fr))`, border: `1px solid ${MM.border}`, borderRadius: 10, overflowX: 'auto' }}>
               {curve.points.map((point, index) => (
                 <div key={point.symbol} title={point.name} style={{ padding: '10px 12px', borderLeft: index ? `1px solid ${MM.border}` : 'none', minWidth: 76 }}>
-                  <div style={{ font: '700 9px Inter', color: MM.muted }}>{point.label}</div>
+                  <div style={{ font: '700 9px var(--mkt-sans)', color: MM.muted }}>{point.label}</div>
                   <div style={{ marginTop: 5, font: `600 15px ${mono}`, color: MM.text }}>{point.yield.toFixed(2)}%</div>
                   <div style={{ marginTop: 3, font: `600 9.5px ${mono}`, color: tone(point.changeBps) }}>{signedBps(point.changeBps)}</div>
                 </div>
@@ -155,12 +155,12 @@ export function TreasuryYieldCurve() {
 
           <aside className="market-treasury-curve__insights" aria-label="Treasury curve insights" style={{ borderLeft: isMobile ? 'none' : `1px solid ${MM.border}`, borderTop: isMobile ? `1px solid ${MM.border}` : 'none', display: 'flex', flexDirection: 'column' }}>
             <div className="market-treasury-curve__insight-card" style={{ border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset }}>
-              <div style={{ font: '700 8.5px Inter', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase' }}>Curve shape</div>
-              <div style={{ marginTop: 8, font: '500 19px Inter', color: MM.text }}>{curve.shape.label}</div>
+              <div style={{ font: '700 8.5px var(--mkt-sans)', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase' }}>Curve shape</div>
+              <div style={{ marginTop: 8, font: '500 19px var(--mkt-sans)', color: MM.text }}>{curve.shape.label}</div>
               <div style={{ marginTop: 7, fontSize: 10.5, lineHeight: 1.55, color: MM.muted }}>{curve.shape.detail}</div>
             </div>
             <div className="market-treasury-curve__insight-card" style={{ border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset }}>
-              <div style={{ font: '700 8.5px Inter', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase', marginBottom: 7 }}>Key spreads</div>
+              <div style={{ font: '700 8.5px var(--mkt-sans)', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase', marginBottom: 7 }}>Key spreads</div>
               {curve.spreads.map((spread) => (
                 <div key={spread.label} style={{ display: 'flex', justifyContent: 'space-between', gap: 16, padding: '7px 0', borderTop: `1px solid ${MM.border}` }}>
                   <span style={{ fontSize: 11, color: MM.textSoft }}>{spread.label}</span>
@@ -169,7 +169,7 @@ export function TreasuryYieldCurve() {
               ))}
             </div>
             <div className="market-treasury-curve__insight-card" style={{ border: `1px solid ${MM.border}`, borderRadius: 11, background: MM.panelInset, flex: 1 }}>
-              <div style={{ font: '700 8.5px Inter', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase' }}>Why it matters</div>
+              <div style={{ font: '700 8.5px var(--mkt-sans)', letterSpacing: '.14em', color: MM.accent, textTransform: 'uppercase' }}>Why it matters</div>
               <p style={{ margin: '9px 0 0', fontSize: 10.5, lineHeight: 1.55, color: MM.textSoft }}>The curve prices expectations for growth, inflation, and Federal Reserve policy across time.</p>
               <p style={{ margin: '8px 0 0', fontSize: 10.5, lineHeight: 1.55, color: MM.muted }}>Watch the 10Y–2Y spread for the policy cycle and 10Y–3M for deeper inversion risk.</p>
             </div>

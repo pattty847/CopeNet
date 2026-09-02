@@ -26,7 +26,7 @@ export function SymbolRail({
           <span style={{ flex: 1, display: 'inline-flex', alignItems: 'baseline', gap: 6 }}>
             Symbols
             {/* The shortcut is only worth having if it is visible where the task lives. */}
-            <kbd style={{ border: '1px solid var(--mkt-seam)', borderRadius: 3, padding: '0 3px', color: 'var(--mkt-dimmer)', font: '600 9px "JetBrains Mono", monospace', letterSpacing: 0 }}>/</kbd>
+            <kbd style={{ border: '1px solid var(--mkt-seam)', borderRadius: 3, padding: '0 3px', color: 'var(--mkt-dimmer)', font: '600 9px var(--mkt-mono)', letterSpacing: 0 }}>/</kbd>
           </span>
         )}
         <button

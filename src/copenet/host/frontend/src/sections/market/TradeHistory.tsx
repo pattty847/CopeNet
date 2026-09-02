@@ -97,7 +97,7 @@ export function TradeHistory({ ledger, loading, onOpen }: { ledger: TradeLedger 
         color: winnersOnly === value ? MM.accent : MM.muted,
         borderRadius: 7,
         padding: '3px 8px',
-        font: '600 8.5px Inter',
+        font: '600 8.5px var(--mkt-sans)',
         letterSpacing: '.06em',
         textTransform: 'uppercase',
       }}
@@ -143,7 +143,7 @@ export function TradeHistory({ ledger, loading, onOpen }: { ledger: TradeLedger 
       {visible < trades.length && (
         <button
           onClick={() => setVisible((value) => value + PAGE * 2)}
-          style={{ marginTop: 10, alignSelf: 'flex-start', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, color: MM.muted, font: '600 9.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase' }}
+          style={{ marginTop: 10, alignSelf: 'flex-start', cursor: 'pointer', background: 'transparent', border: 'none', padding: 0, color: MM.muted, font: '600 9.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase' }}
         >
           ▾ Show more ({trades.length - visible} left)
         </button>

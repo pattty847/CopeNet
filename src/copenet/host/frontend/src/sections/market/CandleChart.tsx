@@ -656,7 +656,7 @@ export function CandleChart({
       layout: {
         background: { type: ColorType.Solid, color: 'transparent' },
         textColor: MM.muted,
-        fontFamily: "'JetBrains Mono', monospace",
+        fontFamily: "'IBM Plex Mono', monospace",
         fontSize: 10,
       },
       grid: { vertLines: { color: 'rgba(254,252,244,.04)' }, horzLines: { color: 'rgba(254,252,244,.04)' } },
@@ -1052,7 +1052,7 @@ export function CandleChart({
           }}
         >
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, marginBottom: 8 }}>
-            <span style={{ font: '600 9px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>
+            <span style={{ font: '600 9px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>
               SEC activity · {dayPopup.rangeLabel ?? evidenceDate(dayPopup.time)}
             </span>
             <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -1067,7 +1067,7 @@ export function CandleChart({
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {dayPopup.items.map((item, i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 8, padding: '7px 0', borderTop: i ? `1px solid rgba(254,252,244,.05)` : 'none' }}>
-                <span style={{ flex: '0 0 auto', borderRadius: 5, padding: '2px 6px', font: '600 8px Inter', letterSpacing: '.06em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
+                <span style={{ flex: '0 0 auto', borderRadius: 5, padding: '2px 6px', font: '600 8px var(--mkt-sans)', letterSpacing: '.06em', textTransform: 'uppercase', background: evidenceTypeBg(item.type), color: evidenceTypeColor(item.type) }}>{item.type}</span>
                 <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: MM.textSoft, lineHeight: 1.45 }}>
                   {item.tone !== 'flat' && <span style={{ fontFamily: mono, fontSize: 10, color: toneColor(item.tone), marginRight: 5 }}>{item.tone === 'up' ? '▲' : '▼'}</span>}
                   {item.headline}
@@ -1093,7 +1093,7 @@ export function CandleChart({
         actions={indicatorActions}
       />
       {alertPlacementActive && (
-        <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px Inter', letterSpacing: '.04em', pointerEvents: 'none' }}>
+        <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px var(--mkt-sans)', letterSpacing: '.04em', pointerEvents: 'none' }}>
           Click the chart to place a daily-close alert
         </span>
       )}

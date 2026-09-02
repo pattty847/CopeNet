@@ -2,37 +2,60 @@ import { useEffect, useState } from 'react';
 import {
   marketFormulaFromLocation,
   marketFormulaPath,
+  marketSectionFromLocation,
+  marketSectionPath,
   marketTickerFromPathname,
   marketTickerNavigationPath,
+  type MarketSection,
 } from '../../lib/appSectionRouting';
 import { FormulaWorkspace } from './FormulaWorkspace';
-import { MarketCockpit } from './MarketCockpit';
+import { MarketWorkstation } from './MarketWorkstation';
+import { loadLastSection, saveLastSection } from './marketWorkstationState';
 import { TickerWorkspace } from './TickerWorkspace';
 import { useMarketWatchlist } from './useMarketMonitorData';
+
+/** The URL wins when it names a section; otherwise the remembered one, so a return from a
+ *  ticker (or a plain visit to /market) lands where the operator last was. */
+function sectionFromLocation(): MarketSection {
+  return marketSectionFromLocation(window.location.pathname, window.location.search) ?? loadLastSection();
+}
 
 export function MarketMonitor() {
   const watchlist = useMarketWatchlist();
   const [activeTicker, setActiveTicker] = useState(() => marketTickerFromPathname(window.location.pathname));
   const [activeFormula, setActiveFormula] = useState(() => marketFormulaFromLocation(window.location.pathname, window.location.search));
+  const [activeSection, setActiveSection] = useState<MarketSection>(sectionFromLocation);
 
   useEffect(() => {
     const syncFromLocation = () => {
       setActiveTicker(marketTickerFromPathname(window.location.pathname));
       setActiveFormula(marketFormulaFromLocation(window.location.pathname, window.location.search));
+      setActiveSection(sectionFromLocation());
     };
     window.addEventListener('popstate', syncFromLocation);
     return () => window.removeEventListener('popstate', syncFromLocation);
   }, []);
 
+  const pushPath = (nextPath: string) => {
+    if (`${window.location.pathname}${window.location.search}` !== nextPath) window.history.pushState({}, '', nextPath);
+  };
+
   const navigateMarket = (value: string | null, type: 'symbol' | 'formula' = 'symbol') => {
     const nextPath = value == null
-      ? '/market'
+      ? marketSectionPath(loadLastSection())
       : type === 'formula'
         ? marketFormulaPath(value)
         : marketTickerNavigationPath(value, window.location.pathname, window.location.search);
-    if (`${window.location.pathname}${window.location.search}` !== nextPath) window.history.pushState({}, '', nextPath);
+    pushPath(nextPath);
     setActiveTicker(type === 'symbol' ? value?.trim().toUpperCase() || null : null);
     setActiveFormula(type === 'formula' ? value?.trim() || null : null);
+    if (value == null) setActiveSection(loadLastSection());
+  };
+
+  const selectSection = (section: MarketSection) => {
+    saveLastSection(section);
+    pushPath(marketSectionPath(section));
+    setActiveSection(section);
   };
 
   if (activeFormula) {
@@ -56,5 +79,12 @@ export function MarketMonitor() {
     );
   }
 
-  return <MarketCockpit onOpenTicker={(symbol, type = 'symbol') => navigateMarket(symbol, type)} watchlist={watchlist} />;
+  return (
+    <MarketWorkstation
+      section={activeSection}
+      onSelectSection={selectSection}
+      onOpenTicker={(symbol, type = 'symbol') => navigateMarket(symbol, type)}
+      watchlist={watchlist}
+    />
+  );
 }

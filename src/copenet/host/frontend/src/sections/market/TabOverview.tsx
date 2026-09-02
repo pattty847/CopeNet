@@ -72,7 +72,7 @@ export function TabOverview({ detail, profile }: { detail: TickerDetailPayload; 
           <KeyValue k="MA stack" v={trend.maStack ?? '—'} />
           <KeyValue k="Distance from 40w MA" v={signedPct(trend.distMa40Pct)} tone={toneOf(trend.distMa40Pct)} />
           {structure.compression && (
-            <span style={{ alignSelf: 'flex-start', border: '1px solid rgba(143,184,232,.28)', borderRadius: 4, padding: '2px 7px', color: MM.info, font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase' }}>
+            <span style={{ alignSelf: 'flex-start', border: '1px solid rgba(143,184,232,.28)', borderRadius: 4, padding: '2px 7px', color: MM.info, font: '600 9px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase' }}>
               {structure.compressionShape ?? 'range'} compression
             </span>
           )}

@@ -57,7 +57,7 @@ function MetricCard({ label, value, sub, tone = 'neutral', icon: Icon }: MetricC
       }}
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
-        <span style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted }}>
+        <span style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted }}>
           {label}
         </span>
         {Icon && <Icon size={12} style={{ color: tone === 'neutral' ? MM.dim : valColor }} />}
@@ -301,7 +301,7 @@ export function BacktestLab() {
               
               {/* Preset Scenarios Block */}
               <div>
-                <span style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.dim, display: 'block', marginBottom: 6 }}>
+                <span style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.dim, display: 'block', marginBottom: 6 }}>
                   Macro Scenario Presets
                 </span>
                 <div style={{ display: 'flex', gap: 8 }}>
@@ -315,7 +315,7 @@ export function BacktestLab() {
                       color: MM.down,
                       borderRadius: 8,
                       padding: '8px 12px',
-                      font: '600 10.5px Inter',
+                      font: '600 10.5px var(--mkt-sans)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -335,7 +335,7 @@ export function BacktestLab() {
                       color: MM.accent,
                       borderRadius: 8,
                       padding: '8px 12px',
-                      font: '600 10.5px Inter',
+                      font: '600 10.5px var(--mkt-sans)',
                       display: 'flex',
                       alignItems: 'center',
                       justifyContent: 'center',
@@ -350,7 +350,7 @@ export function BacktestLab() {
 
               {/* Ticker inputs */}
               <div>
-                <label style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
+                <label style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
                   Tickers (comma separated)
                 </label>
                 <input
@@ -375,7 +375,7 @@ export function BacktestLab() {
               {symbolsList.length > 0 && (
                 <div>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
-                    <span style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted }}>
+                    <span style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted }}>
                       Portfolio Allocation Weights
                     </span>
                     <span style={{ fontFamily: mono, fontSize: 10.5, color: totalWeight === 100 ? MM.up : MM.accent }}>
@@ -418,7 +418,7 @@ export function BacktestLab() {
               {/* Date pickers */}
               <div style={{ display: 'flex', gap: 10 }}>
                 <div style={{ flex: 1 }}>
-                  <label style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
+                  <label style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
                     Start Date
                   </label>
                   <input
@@ -438,7 +438,7 @@ export function BacktestLab() {
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
+                  <label style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
                     End Date
                   </label>
                   <input
@@ -461,7 +461,7 @@ export function BacktestLab() {
 
               {/* Benchmark Input */}
               <div>
-                <label style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
+                <label style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
                   Benchmark Index
                 </label>
                 <input
@@ -484,7 +484,7 @@ export function BacktestLab() {
 
               {/* Rebalancing Strategy */}
               <div>
-                <label style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
+                <label style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
                   Rebalancing Mode
                 </label>
                 <select
@@ -508,7 +508,7 @@ export function BacktestLab() {
 
               {rebalance === 'periodic' && (
                 <div>
-                  <label style={{ font: '600 8.5px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
+                  <label style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted, display: 'block', marginBottom: 5 }}>
                     Rebalance Interval
                   </label>
                   <select
@@ -543,7 +543,7 @@ export function BacktestLab() {
                   color: MM.accent,
                   borderRadius: 9,
                   padding: '10px 16px',
-                  font: '600 12px Inter',
+                  font: '600 12px var(--mkt-sans)',
                   letterSpacing: '.05em',
                   display: 'flex',
                   alignItems: 'center',
@@ -587,7 +587,7 @@ export function BacktestLab() {
                         {run.title}
                       </span>
                     </div>
-                    <span style={{ font: '600 8px Inter', color: MM.dim }}>
+                    <span style={{ font: '600 8px var(--mkt-sans)', color: MM.dim }}>
                       {new Date(run.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </button>

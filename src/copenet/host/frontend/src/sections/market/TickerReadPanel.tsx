@@ -13,12 +13,12 @@ export function TickerReadPanel({ symbol }: { symbol: string }) {
   return (
     <section className="ticker-synthesis-panel is-embedded" aria-labelledby="ticker-model-read" style={{ background: 'transparent', border: 'none', borderRadius: 0, padding: 14 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, marginBottom: read ? 12 : 0, flexWrap: 'wrap' }}>
-        <span id="ticker-model-read" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px Inter', letterSpacing: '.14em', textTransform: 'uppercase', color: '#8fb8e8' }}>
+        <span id="ticker-model-read" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, font: '600 9.5px var(--mkt-sans)', letterSpacing: '.14em', textTransform: 'uppercase', color: '#8fb8e8' }}>
           ✦ Model synthesis
         </span>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           {read && <ModelBadge model={read.model} generatedAt={read.generatedAt} />}
-          <button type="button" onClick={() => void run()} disabled={running} style={{ cursor: running ? 'default' : 'pointer', border: `1px solid rgba(90,143,199,.35)`, background: 'rgba(90,143,199,.1)', color: '#8fb8e8', borderRadius: 9, padding: '7px 13px', font: '600 10px Inter', letterSpacing: '.05em', opacity: running ? 0.6 : 1 }}>
+          <button type="button" onClick={() => void run()} disabled={running} style={{ cursor: running ? 'default' : 'pointer', border: `1px solid rgba(90,143,199,.35)`, background: 'rgba(90,143,199,.1)', color: '#8fb8e8', borderRadius: 9, padding: '7px 13px', font: '600 10px var(--mkt-sans)', letterSpacing: '.05em', opacity: running ? 0.6 : 1 }}>
             {running ? 'Reading evidence…' : read ? 'Re-run read' : 'Run model read'}
           </button>
         </div>
@@ -38,11 +38,11 @@ export function TickerReadPanel({ symbol }: { symbol: string }) {
         <div style={{ display: 'flex', flexDirection: 'column', gap: 13 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
             {read.lean && (
-              <span style={{ borderRadius: 999, border: `1px solid ${MM.border}`, padding: '3px 10px', font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: read.lean === 'bullish' ? MM.up : read.lean === 'bearish' ? MM.down : MM.muted }}>
+              <span style={{ borderRadius: 999, border: `1px solid ${MM.border}`, padding: '3px 10px', font: '600 9px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: read.lean === 'bullish' ? MM.up : read.lean === 'bearish' ? MM.down : MM.muted }}>
                 {read.lean} lean
               </span>
             )}
-            <span style={{ borderRadius: 999, border: `1px solid ${MM.border}`, padding: '3px 9px', font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: CONFIDENCE_COLORS[read.confidence] || MM.muted }}>
+            <span style={{ borderRadius: 999, border: `1px solid ${MM.border}`, padding: '3px 9px', font: '600 9px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: CONFIDENCE_COLORS[read.confidence] || MM.muted }}>
               {read.confidence} confidence
             </span>
             <span style={{ flex: 1, minWidth: 220, fontSize: 10.5, color: MM.dim }}>{read.confidenceReason}</span>
@@ -72,7 +72,7 @@ export function TickerReadPanel({ symbol }: { symbol: string }) {
 function ReadCase({ label, color, text }: { label: string; color: string; text: string }) {
   return (
     <div style={{ flex: 1, minWidth: 240, borderLeft: `2px solid ${color}66`, paddingLeft: 11 }}>
-      <div style={{ font: '600 9px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color, marginBottom: 5 }}>{label}</div>
+      <div style={{ font: '600 9px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color, marginBottom: 5 }}>{label}</div>
       <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.55 }}>{text}</div>
     </div>
   );

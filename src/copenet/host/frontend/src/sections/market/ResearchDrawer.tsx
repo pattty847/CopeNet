@@ -3,7 +3,7 @@
 // This is the structural bet: the canvas and the research that explains it share ONE
 // vertical axis with snap presets, so moving between "look at the picture" and "read the
 // evidence" is a keypress, never a scroll to somewhere the picture no longer exists.
-// Generic over its tab set: the ticker workspace and the market cockpit are the two docks.
+// Generic over its tab set: the ticker workspace is its only host now that the market page uses full sections.
 
 import { useRef, useState, type KeyboardEvent, type PointerEvent, type ReactNode } from 'react';
 import { Rows2 } from 'lucide-react';

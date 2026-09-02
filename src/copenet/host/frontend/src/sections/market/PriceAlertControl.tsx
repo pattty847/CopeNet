@@ -107,7 +107,7 @@ export function PriceAlertControl({
             </label>
             <label style={{ display: 'grid', gap: 4, fontSize: 9, color: MM.dim }}>
               Trigger when
-              <select value={direction} onChange={(event) => setDirection(event.target.value as 'above' | 'below')} className="tw-input" style={{ fontFamily: 'Inter', fontSize: 10 }}>
+              <select value={direction} onChange={(event) => setDirection(event.target.value as 'above' | 'below')} className="tw-input" style={{ fontFamily: 'var(--mkt-sans)', fontSize: 10 }}>
                 <option value="above">Closes above</option>
                 <option value="below">Closes below</option>
               </select>

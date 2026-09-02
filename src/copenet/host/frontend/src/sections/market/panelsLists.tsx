@@ -124,7 +124,7 @@ export function Portfolio({
               onClick={onSyncWebull}
               disabled={syncing}
               title={fromWebull ? 'Re-sync positions from Webull (read-only)' : 'Sync positions from Webull (read-only)'}
-              style={{ cursor: syncing ? 'default' : 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '5px 10px', font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', opacity: syncing ? 0.6 : 1 }}
+              style={{ cursor: syncing ? 'default' : 'pointer', border: `1px solid ${MM.border}`, background: 'transparent', color: MM.muted, borderRadius: 8, padding: '5px 10px', font: '600 9px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', opacity: syncing ? 0.6 : 1 }}
             >
               {syncing ? '◍ Syncing…' : '↻ Webull'}
             </button>
@@ -137,7 +137,7 @@ export function Portfolio({
       }
     >
       <div style={{ display: 'flex', flexDirection: 'column' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 6, font: '600 8.5px Inter', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingBottom: 6, font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
           <span style={{ width: 54 }} />
           <span style={{ flex: 1 }}>Position</span>
           <span style={{ width: 74, textAlign: 'right' }}>Price</span>
@@ -190,7 +190,7 @@ export function Speculative({ panel, onOpen, comment }: { panel: Panel<SpecPosit
     >
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 4 }}>
         <span style={{ ...label, color: MM.accent }}>⚠ Speculative lane</span>
-        <span style={{ borderRadius: 999, border: `1px solid rgba(251,148,35,.28)`, padding: '2px 8px', font: '600 8px Inter', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>sized small</span>
+        <span style={{ borderRadius: 999, border: `1px solid rgba(251,148,35,.28)`, padding: '2px 8px', font: '600 8px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.accent }}>sized small</span>
       </div>
       <div style={{ fontSize: 11, color: MM.faint, marginBottom: 13, fontStyle: 'italic' }}>Separate from the core. Every position has a defined exit.</div>
       {comment && (
@@ -213,50 +213,6 @@ export function Speculative({ panel, onOpen, comment }: { panel: Panel<SpecPosit
               <span style={{ flex: 1, textAlign: 'center', padding: '4px 0', borderRadius: 6, background: 'rgba(217,109,95,.08)', color: MM.down }}>inval {s.invalidation}</span>
             </div>
           </button>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-export function Evidence({ panel, onOpen }: { panel: Panel<EvidenceItem[]>; onOpen: (s: string) => void }) {
-  return (
-    <PanelCard title="Evidence & News — why it moved" status={panel.status} style={{ flex: 1.4, minWidth: 380 }} right={<span style={{ fontSize: 10, color: MM.dim }}>cited · last 72h</span>}>
-      <div style={{ display: 'flex', flexDirection: 'column' }}>
-        {panel.data.map((e, i) => (
-          <button key={i} onClick={() => onOpen(e.symbol)} style={{ cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 12, padding: '10px 0', borderTop: `1px solid rgba(254,252,244,.05)`, background: 'transparent', border: 'none', borderTopColor: 'rgba(254,252,244,.05)', textAlign: 'left' }}>
-            <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '3px 7px', font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', background: evidenceTypeBg(e.type), color: evidenceTypeColor(e.type) }}>{e.type}</span>
-            <span style={{ fontFamily: mono, fontSize: 12, fontWeight: 600, color: MM.text, width: 50 }}>{e.symbol}</span>
-            <span style={{ flex: 1, fontSize: 12, color: MM.textSoft, lineHeight: 1.4, display: 'inline-flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-              <EvidenceToneGlyph tone={e.tone} />
-              {e.headline}
-              <EvidenceFlagBadge flag={e.flag} />
-            </span>
-            <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap', textAlign: 'right' }}>
-              {e.source}
-              {evidenceDate(e.t) && <span style={{ display: 'block', color: MM.dimmer }}>{evidenceDate(e.t)}</span>}
-            </span>
-          </button>
-        ))}
-      </div>
-    </PanelCard>
-  );
-}
-
-export function Contrarian({ panel }: { panel: Panel<ContrarianNote[]> }) {
-  return (
-    <div style={{ flex: 1, minWidth: 300, background: `linear-gradient(180deg, rgba(251,148,35,.05), transparent 40%), ${MM.panel}`, border: `1px solid rgba(251,148,35,.16)`, borderRadius: 14, padding: 16 }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-        <span style={{ color: MM.accent, fontSize: 11 }}>◆</span>
-        <span style={{ ...label, color: MM.accent }}>Contrarian · thesis-killers</span>
-      </div>
-      <div style={{ fontSize: 11, color: MM.faint, marginBottom: 13, fontStyle: 'italic' }}>For every highlighted signal: what would make this wrong?</div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-        {panel.data.map((c, i) => (
-          <div key={i} style={{ borderLeft: `2px solid rgba(251,148,35,.3)`, paddingLeft: 12 }}>
-            <div style={{ font: '600 9px Inter', letterSpacing: '.08em', textTransform: 'uppercase', color: MM.muted, marginBottom: 4 }}>{c.signal}</div>
-            <div style={{ fontSize: 12, color: MM.textSoft, lineHeight: 1.5 }}>{c.kill}</div>
-          </div>
         ))}
       </div>
     </div>

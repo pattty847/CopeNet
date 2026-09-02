@@ -75,14 +75,14 @@ export function EconomicCalendarWidget({ calendar, loading, refreshing, error, o
         <span style={{ color: MM.dim, fontSize: 11.5, fontStyle: 'italic' }}>No medium- or high-impact US releases in the next seven days.</span>
       ) : Object.entries(groups).map(([key, events]) => (
         <div key={key}>
-          <div style={{ color: MM.dimmer, font: '600 8.5px Inter', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 3 }}>{dayLabel(events[0].date)}</div>
+          <div style={{ color: MM.dimmer, font: '600 8.5px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', marginTop: 3 }}>{dayLabel(events[0].date)}</div>
           {events.map((event) => <EventRow key={event.id} event={event} />)}
         </div>
       ))}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: visible.length ? 6 : 3 }}>
-        {upcoming.length > 3 && <button type="button" onClick={() => setExpanded((value) => !value)} style={{ border: 0, padding: 0, background: 'transparent', color: MM.accent, cursor: 'pointer', font: '600 10px Inter' }}>{expanded ? 'Show next 3' : `Show all ${upcoming.length}`}</button>}
-        <button type="button" onClick={onRefresh} disabled={refreshing} style={{ border: 0, padding: 0, background: 'transparent', color: MM.dim, cursor: refreshing ? 'default' : 'pointer', font: '600 10px Inter', opacity: refreshing ? 0.55 : 1 }}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
-        {calendar?.sourceUrl && <a href={calendar.sourceUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 'auto', color: MM.dim, font: '500 9px Inter', textDecoration: 'none' }}>Trading Economics ↗</a>}
+        {upcoming.length > 3 && <button type="button" onClick={() => setExpanded((value) => !value)} style={{ border: 0, padding: 0, background: 'transparent', color: MM.accent, cursor: 'pointer', font: '600 10px var(--mkt-sans)' }}>{expanded ? 'Show next 3' : `Show all ${upcoming.length}`}</button>}
+        <button type="button" onClick={onRefresh} disabled={refreshing} style={{ border: 0, padding: 0, background: 'transparent', color: MM.dim, cursor: refreshing ? 'default' : 'pointer', font: '600 10px var(--mkt-sans)', opacity: refreshing ? 0.55 : 1 }}>{refreshing ? 'Refreshing…' : 'Refresh'}</button>
+        {calendar?.sourceUrl && <a href={calendar.sourceUrl} target="_blank" rel="noreferrer" style={{ marginLeft: 'auto', color: MM.dim, font: '500 9px var(--mkt-sans)', textDecoration: 'none' }}>Trading Economics ↗</a>}
       </div>
     </div>
   );
