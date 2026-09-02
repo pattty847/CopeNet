@@ -153,10 +153,10 @@
  * at the edge. Ten red lines at once is a wall, not information. */
 .mw-rail .tw-rail__row { position: relative; min-height: 26px; }
 .mw-rail .tw-rail__sym { flex: 0 0 auto; min-width: 46px; }
-.mw-rail .mw-rail__spark { display: none; flex: 1 1 auto; min-width: 0; height: 18px; }
+.mw-rail .mw-rail__spark { display: block; flex: 1 1 auto; min-width: 0; height: 18px; opacity: 0.38; }
 .mw-rail .mw-rail__spark .tw-spark { width: 100%; height: 18px; display: block; }
 .mw-rail .tw-rail__row:hover .mw-rail__spark,
-.mw-rail .tw-rail__row[data-cursor='true'] .mw-rail__spark { display: block; }
+.mw-rail .tw-rail__row[data-cursor='true'] .mw-rail__spark { opacity: 1; }
 .mw-rail .tw-rail__chg { margin-left: auto; color: var(--mkt-muted); font-variant-numeric: tabular-nums; }
 .mw-rail .tw-rail__row:hover,
 .mw-rail .tw-rail__row[data-cursor='true'] { padding-right: 26px; }
@@ -670,11 +670,14 @@
   background: var(--mkt-seam);
 }
 
-.mw-tile { display: flex; flex-direction: column; gap: 2px; padding: var(--mw-tile-pad); background: var(--mkt-dock); }
+.mw-tile { display: flex; flex-direction: column; gap: 3px; padding: var(--mw-tile-pad); background: var(--mkt-dock); }
+.mw-tile__head { display: flex; align-items: baseline; justify-content: space-between; gap: 6px; }
 .mw-tile__k { color: var(--mkt-dimmer); font: 600 8px var(--mkt-sans); letter-spacing: 0.1em; text-transform: uppercase; }
+.mw-tile__chg { font: 500 var(--mkt-t-micro) var(--mkt-mono); font-variant-numeric: tabular-nums; }
 .mw-tile__v { font: 500 var(--mkt-t-body) var(--mkt-mono); color: var(--mkt-text); font-variant-numeric: tabular-nums; letter-spacing: -0.01em; }
-.mw-tile__delta { display: flex; align-items: center; justify-content: space-between; gap: 6px; font: 500 var(--mkt-t-micro) var(--mkt-mono); font-variant-numeric: tabular-nums; }
-.mw-tile__delta > span:last-child { width: 30px; flex: 0 0 auto; }
+/* The five-day path gets the whole tile width: the shape is the point of a tape tile. */
+.mw-tile__spark { display: block; width: 100%; margin-top: 2px; }
+.mw-tile__spark .tw-spark { width: 100%; height: 26px; display: block; }
 
 .mw-kv-list { display: flex; flex-direction: column; }
 .mw-kv { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; padding: 4px 0; border-top: 1px solid var(--mkt-seam-soft); }

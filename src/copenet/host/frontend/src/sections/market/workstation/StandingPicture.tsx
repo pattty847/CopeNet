@@ -93,12 +93,12 @@ export function StandingPicture({
         <div className="mw-tiles">
           {dashboard.macro.data.map((item) => (
             <div key={item.label} className="mw-tile">
-              <span className="mw-tile__k">{item.label}</span>
-              <span className="mw-tile__v">{item.value}</span>
-              <span className="mw-tile__delta">
-                <span style={{ color: toneColor(item.tone) }}>{item.change}</span>
-                <span>{item.spark.length > 1 && <Sparkline points={item.spark} color={toneColor(item.tone)} height={12} />}</span>
+              <span className="mw-tile__head">
+                <span className="mw-tile__k">{item.label}</span>
+                <span className="mw-tile__chg" style={{ color: toneColor(item.tone) }}>{item.change}</span>
               </span>
+              <span className="mw-tile__v">{item.value}</span>
+              <span className="mw-tile__spark">{item.spark.length > 1 && <Sparkline points={item.spark} color={toneColor(item.tone)} height={26} />}</span>
             </div>
           ))}
         </div>
