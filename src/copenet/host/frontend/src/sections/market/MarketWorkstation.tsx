@@ -253,7 +253,7 @@ export function MarketWorkstation({
               <PortfolioSection dashboard={dashboard} read={read} tradeLedger={tradeLedger} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} onOpen={open} isMobile={isMobile} />
             )}
             {active === 'evidence' && <EvidenceSection dashboard={dashboard} watched={watchlist.symbols} onOpen={open} />}
-            {active === 'ledger' && <LedgerSection report={forwardLedger.report} loading={forwardLedger.loading} />}
+            {active === 'ledger' && <LedgerSection report={forwardLedger.report} loading={forwardLedger.loading} onOpen={open} />}
             {active === 'backtest' && <BacktestSection />}
             {active === 'watchlist' && (
               <WatchRail variant="sheet" watchlist={watchlist} entries={railEntries} cursor={railCursor} collapsed={false} onToggle={toggleRail} onSelect={open} />

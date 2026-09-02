@@ -289,6 +289,9 @@ export function useTickerRead(symbol: string) {
   return useModelRead<TickerRead>(symbol);
 }
 
+/** Enough claims for the Ledger section to show outcomes by week, not just the last few days. */
+const LEDGER_RECENT_CLAIMS = 400;
+
 export function useForwardLedger(): { report: LedgerReport | null; loading: boolean } {
   const [report, setReport] = useState<LedgerReport | null>(null);
   const [loading, setLoading] = useState(true);
@@ -296,7 +299,7 @@ export function useForwardLedger(): { report: LedgerReport | null; loading: bool
   useEffect(() => {
     let alive = true;
     wsClient
-      .marketLedgerGet()
+      .marketLedgerGet(LEDGER_RECENT_CLAIMS)
       .then((next) => {
         if (alive) setReport(next);
       })

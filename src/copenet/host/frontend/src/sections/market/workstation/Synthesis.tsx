@@ -11,7 +11,7 @@ import { ModelBadge } from '../marketUi';
 import type { ContrarianNote, MarketRead, Panel } from '../types';
 
 /** Headline with its emphasis substring lifted into the accent, when the two align. */
-function Emphasized({ text, emphasis }: { text: string; emphasis?: string }) {
+export function Emphasized({ text, emphasis }: { text: string; emphasis?: string }) {
   if (!emphasis || !text.includes(emphasis)) return <>{text}</>;
   const [before, after] = text.split(emphasis);
   return (
@@ -84,7 +84,6 @@ export function Synthesis({
 
       {read ? (
         <>
-          <p className="mw-synth__headline"><Emphasized text={read.headline} emphasis={read.emphasis} /></p>
           <p className="mw-synth__summary">{read.summary}</p>
           {read.attention.length > 0 && (
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>

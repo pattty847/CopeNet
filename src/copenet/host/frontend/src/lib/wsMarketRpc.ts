@@ -119,8 +119,8 @@ export async function marketFinancialMetricsRpc(request: WsRpcRequest): Promise<
   return Array.isArray(payload.metrics) ? (payload.metrics as FinancialMetricInfo[]) : [];
 }
 
-export async function marketLedgerGetRpc(request: WsRpcRequest): Promise<LedgerReport> {
-  const payload = await request<Record<string, unknown>>('market.ledger.get', {});
+export async function marketLedgerGetRpc(request: WsRpcRequest, recent = 30): Promise<LedgerReport> {
+  const payload = await request<Record<string, unknown>>('market.ledger.get', { recent });
   return payload as unknown as LedgerReport;
 }
 

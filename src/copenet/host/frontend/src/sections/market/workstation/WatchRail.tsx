@@ -212,7 +212,7 @@ export function WatchRail({
                 </span>
                 {!folded && entry.spark && entry.spark.length > 1 && (
                   <span className="mw-rail__spark">
-                    <Sparkline points={entry.spark} color={tone} height={13} />
+                    <Sparkline points={entry.spark} color={tone} height={18} />
                   </span>
                 )}
                 {!folded && entry.change && <span className="tw-rail__chg">{entry.change}</span>}

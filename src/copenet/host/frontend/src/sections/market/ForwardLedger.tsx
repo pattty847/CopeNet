@@ -1,10 +1,16 @@
 // Forward Ledger — the model's market calls, logged at read time and scored at horizon
 // with pre-registered rules. Calibration ("when it says X, it's right N%") over prediction.
+//
+// Three layers: the per-kind scorecard, how each kind performed week by week, and every
+// claim as an openable row — the reason, the confidence, and each horizon's outcome.
 
+import { useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight } from 'lucide-react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
+import { claimIsScored, hitRate, weeklyOutcomes, type LedgerKind } from './ledgerModel';
 import type { LedgerClaim, LedgerReport, Tone } from './types';
 
-const KIND_LABEL: Record<LedgerClaim['kind'], string> = {
+const KIND_LABEL: Record<LedgerKind, string> = {
   regime: 'Regime calls',
   lean: 'Ticker leans',
   attention: 'Attention flags',
@@ -17,12 +23,15 @@ const VALUE_TONE: Record<string, Tone> = {
   bearish: 'down',
 };
 
-function outcomeGlyph(outcome?: string | null): { text: string; color: string } {
-  if (outcome === 'correct') return { text: '✓', color: MM.up };
-  if (outcome === 'incorrect') return { text: '✗', color: MM.down };
-  if (outcome === 'push') return { text: '–', color: MM.dim };
-  if (outcome === 'unscoreable') return { text: '·', color: MM.dimmer };
-  return { text: '…', color: MM.dimmer }; // pending
+const HORIZONS = ['4w', '8w'] as const;
+const ROWS_STEP = 30;
+
+function outcomeGlyph(outcome?: string | null): { text: string; color: string; label: string } {
+  if (outcome === 'correct') return { text: '✓', color: MM.up, label: 'correct' };
+  if (outcome === 'incorrect') return { text: '✗', color: MM.down, label: 'incorrect' };
+  if (outcome === 'push') return { text: '–', color: MM.dim, label: 'neutral' };
+  if (outcome === 'unscoreable') return { text: '·', color: MM.dimmer, label: 'unscoreable' };
+  return { text: '…', color: MM.dimmer, label: 'pending' };
 }
 
 function claimDate(iso: string): string {
@@ -31,20 +40,130 @@ function claimDate(iso: string): string {
   return parsed.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-export function ForwardLedger({ report, loading }: { report: LedgerReport | null; loading: boolean }) {
-  const recent = report?.recent ?? [];
+function signedPct(value?: number | null): string {
+  if (value == null || !Number.isFinite(value)) return '—';
+  return `${value > 0 ? '+' : ''}${value.toFixed(1)}%`;
+}
+
+/** One stacked bar per week: correct over incorrect, neutral as a dim cap, pending as an
+ *  outline. Height is the number of claims, so a busy week reads busy. */
+function WeekStrip({ claims }: { claims: LedgerClaim[] }) {
+  const weeks = weeklyOutcomes(claims).slice(-16);
+  if (weeks.length === 0) return <span style={{ fontFamily: mono, fontSize: 10, color: MM.dimmer }}>no claims yet</span>;
+  const tallest = Math.max(1, ...weeks.map((week) => week.correct + week.incorrect + week.push + week.pending));
+  return (
+    <div style={{ display: 'flex', alignItems: 'flex-end', gap: 3, height: 34 }}>
+      {weeks.map((week) => {
+        const total = week.correct + week.incorrect + week.push + week.pending;
+        const rate = hitRate(week);
+        const unit = 34 / tallest;
+        const title = `week of ${claimDate(week.weekStart)} · ${week.correct}/${week.correct + week.incorrect} correct${week.push ? ` · ${week.push} neutral` : ''}${week.pending ? ` · ${week.pending} pending` : ''}${rate != null ? ` · ${rate}%` : ''}`;
+        return (
+          <div key={week.weekStart} title={title} style={{ display: 'flex', flexDirection: 'column-reverse', width: 12, height: total * unit, flex: '0 0 auto' }}>
+            <span style={{ height: week.correct * unit, background: MM.up, opacity: 0.85 }} />
+            <span style={{ height: week.incorrect * unit, background: MM.down, opacity: 0.85 }} />
+            <span style={{ height: week.push * unit, background: MM.dim, opacity: 0.6 }} />
+            <span style={{ height: week.pending * unit, border: `1px solid ${MM.dimmer}`, boxSizing: 'border-box' }} />
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: string) => void }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div style={{ borderTop: `1px solid rgba(254,252,244,.05)` }}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        aria-expanded={open}
+        style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 4px', border: 0, background: open ? 'rgba(254,252,244,.03)' : 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}
+      >
+        <span style={{ color: MM.dimmer, flex: '0 0 auto', display: 'inline-flex' }}>{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
+        <span style={{ fontFamily: mono, fontSize: 10, color: MM.dimmer, width: 44, flex: '0 0 auto' }}>{claimDate(claim.created_at)}</span>
+        <span style={{ flex: '0 0 auto', borderRadius: 3, padding: '2px 6px', font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: 'rgba(254,252,244,.05)', color: MM.muted }}>{claim.kind}</span>
+        <span
+          role={onOpen ? 'link' : undefined}
+          onClick={(event) => {
+            if (!onOpen) return;
+            event.stopPropagation();
+            onOpen(claim.target);
+          }}
+          title={onOpen ? `Open ${claim.target}` : undefined}
+          style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 600, color: MM.text, width: 50, flex: '0 0 auto', textDecoration: onOpen ? 'underline dotted rgba(254,252,244,.25)' : 'none', textUnderlineOffset: 3 }}
+        >
+          {claim.target}
+        </span>
+        <span style={{ fontFamily: mono, fontSize: 11, color: toneColor(VALUE_TONE[claim.value] || 'flat'), flex: '0 0 auto', width: 64 }}>{claim.value}</span>
+        <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: open ? MM.textSoft : MM.dim, whiteSpace: open ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.45 }}>{claim.note}</span>
+        {HORIZONS.map((horizon) => {
+          const slot = claim.horizons?.[horizon];
+          const glyph = outcomeGlyph(slot?.resolved_at ? slot.outcome : undefined);
+          return (
+            <span key={horizon} title={`${horizon}: ${glyph.label}${slot?.return_pct != null ? ` · ${signedPct(slot.return_pct)}` : ''}`} style={{ fontFamily: mono, fontSize: 10.5, color: glyph.color, width: 34, textAlign: 'right', flex: '0 0 auto' }}>
+              {horizon} {glyph.text}
+            </span>
+          );
+        })}
+      </button>
+      {open && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, padding: '2px 4px 12px 30px' }}>
+          <div style={{ fontFamily: mono, fontSize: 10, color: MM.dim, display: 'flex', flexWrap: 'wrap', gap: '4px 14px', alignSelf: 'start' }}>
+            <span>logged {new Date(claim.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
+            <span>model {claim.model}</span>
+            {claim.confidence && <span>confidence {claim.confidence}</span>}
+          </div>
+          <table style={{ borderCollapse: 'collapse', fontFamily: mono, fontSize: 10.5, color: MM.textSoft }}>
+            <thead>
+              <tr style={{ color: MM.dimmer, font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                <th style={{ textAlign: 'left', padding: '0 10px 4px 0' }}>Horizon</th>
+                <th style={{ textAlign: 'left', padding: '0 10px 4px 0' }}>Due</th>
+                <th style={{ textAlign: 'right', padding: '0 10px 4px 0' }}>Return</th>
+                <th style={{ textAlign: 'right', padding: '0 10px 4px 0' }}>vs VOO</th>
+                <th style={{ textAlign: 'right', padding: '0 0 4px 0' }}>Outcome</th>
+              </tr>
+            </thead>
+            <tbody>
+              {HORIZONS.map((horizon) => {
+                const slot = claim.horizons?.[horizon];
+                const glyph = outcomeGlyph(slot?.resolved_at ? slot.outcome : undefined);
+                return (
+                  <tr key={horizon}>
+                    <td style={{ padding: '2px 10px 2px 0' }}>{horizon}</td>
+                    <td style={{ padding: '2px 10px 2px 0', color: MM.dim }}>{slot ? claimDate(slot.resolved_at ?? slot.due_at) : '—'}{slot && !slot.resolved_at ? ' (due)' : ''}</td>
+                    <td style={{ padding: '2px 10px 2px 0', textAlign: 'right', color: slot?.return_pct != null ? toneColor(slot.return_pct > 0 ? 'up' : slot.return_pct < 0 ? 'down' : 'flat') : MM.dimmer }}>{signedPct(slot?.return_pct)}</td>
+                    <td style={{ padding: '2px 10px 2px 0', textAlign: 'right', color: slot?.excess_pct != null ? toneColor(slot.excess_pct > 0 ? 'up' : slot.excess_pct < 0 ? 'down' : 'flat') : MM.dimmer }}>{signedPct(slot?.excess_pct)}</td>
+                    <td style={{ padding: '2px 0', textAlign: 'right', color: glyph.color }}>{glyph.text} {glyph.label}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+    </div>
+  );
+}
+
+export function ForwardLedger({ report, loading, onOpen }: { report: LedgerReport | null; loading: boolean; onOpen?: (symbol: string) => void }) {
+  const recent = useMemo(() => report?.recent ?? [], [report]);
+  const [kind, setKind] = useState<LedgerKind | 'all'>('all');
+  const [scoredOnly, setScoredOnly] = useState(false);
+  const [limit, setLimit] = useState(ROWS_STEP);
+
+  const rows = recent.filter((claim) => (kind === 'all' || claim.kind === kind) && (!scoredOnly || claimIsScored(claim)));
+  const chip = (active: boolean, label: string, onClick: () => void) => (
+    <button key={label} type="button" className="mw-chip" aria-pressed={active} onClick={onClick}>{label}</button>
+  );
+
   return (
     <PanelCard
       title="Forward Ledger"
       status={report && report.totalClaims > 0 ? 'live' : 'preview'}
       subtitle="every model read's calls, logged with prices stamped and scored at 4w/8w — pre-registered rules, no backfilling"
-      right={
-        report ? (
-          <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>
-            {report.totalClaims} claims · {report.pendingHorizons} pending
-          </span>
-        ) : undefined
-      }
+      right={report ? <span style={{ fontSize: 10, color: MM.dim, whiteSpace: 'nowrap' }}>{report.totalClaims} claims · {report.pendingHorizons} pending</span> : undefined}
     >
       {!report || report.totalClaims === 0 ? (
         <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic' }}>
@@ -52,19 +171,16 @@ export function ForwardLedger({ report, loading }: { report: LedgerReport | null
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            {(Object.keys(KIND_LABEL) as LedgerClaim['kind'][]).map((kind) => {
-              const h4 = report.stats[kind]?.['4w'];
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+            {(Object.keys(KIND_LABEL) as LedgerKind[]).map((entry) => {
+              const h4 = report.stats[entry]?.['4w'];
               const scored = (h4?.correct ?? 0) + (h4?.incorrect ?? 0);
-              const kindClaims = recent.filter((c) => c.kind === kind);
-              const pending = kindClaims.filter((c) => !c.horizons?.['4w']?.resolved_at);
-              const nextDue = pending
-                .map((c) => c.horizons?.['4w']?.due_at)
-                .filter(Boolean)
-                .sort()[0];
+              const kindClaims = recent.filter((claim) => claim.kind === entry);
+              const pending = kindClaims.filter((claim) => !claimIsScored(claim));
+              const nextDue = pending.map((claim) => claim.horizons?.['4w']?.due_at).filter(Boolean).sort()[0];
               return (
-                <div key={kind} style={{ flex: 1, minWidth: 150, border: `1px solid ${MM.border}`, borderRadius: 10, padding: '9px 12px' }}>
-                  <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim, marginBottom: 4 }}>{KIND_LABEL[kind]}</div>
+                <div key={entry} style={{ border: `1px solid ${MM.border}`, borderRadius: 6, padding: '9px 12px', display: 'flex', flexDirection: 'column', gap: 6 }}>
+                  <div style={{ font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dim }}>{KIND_LABEL[entry]}</div>
                   {scored > 0 ? (
                     <div style={{ fontFamily: mono, fontSize: 15, color: h4!.accuracyPct != null && h4!.accuracyPct >= 50 ? MM.up : MM.down }}>
                       {h4!.correct}/{scored}
@@ -78,30 +194,33 @@ export function ForwardLedger({ report, loading }: { report: LedgerReport | null
                   ) : (
                     <div style={{ fontFamily: mono, fontSize: 12, color: MM.dim }}>no claims yet</div>
                   )}
+                  <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 10 }}>
+                    <WeekStrip claims={kindClaims} />
+                    <span style={{ font: '500 8px var(--mkt-mono)', color: MM.dimmer, whiteSpace: 'nowrap' }}>by week · 4w</span>
+                  </div>
                 </div>
               );
             })}
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', maxHeight: 220, overflowY: 'auto', paddingRight: 4 }}>
-            {recent.slice(0, 12).map((claim) => (
-              <div key={claim.claim_id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '7px 0', borderTop: `1px solid rgba(254,252,244,.05)` }}>
-                <span style={{ fontFamily: mono, fontSize: 10, color: MM.dimmer, width: 44, flex: '0 0 auto' }}>{claimDate(claim.created_at)}</span>
-                <span style={{ flex: '0 0 auto', borderRadius: 6, padding: '2px 7px', font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: 'rgba(254,252,244,.05)', color: MM.muted }}>{claim.kind}</span>
-                <span style={{ fontFamily: mono, fontSize: 11.5, fontWeight: 600, color: MM.text, width: 46, flex: '0 0 auto' }}>{claim.target}</span>
-                <span style={{ fontFamily: mono, fontSize: 11, color: toneColor(VALUE_TONE[claim.value] || 'flat'), flex: '0 0 auto' }}>{claim.value}</span>
-                <span style={{ flex: 1, fontSize: 10.5, color: MM.dim, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{claim.note}</span>
-                {(['4w', '8w'] as const).map((h) => {
-                  const slot = claim.horizons?.[h];
-                  const glyph = outcomeGlyph(slot?.resolved_at ? slot.outcome : undefined);
-                  return (
-                    <span key={h} title={slot?.return_pct != null ? `${h}: ${slot.return_pct > 0 ? '+' : ''}${slot.return_pct}%` : `${h}: pending`} style={{ fontFamily: mono, fontSize: 10.5, color: glyph.color, width: 34, textAlign: 'right', flex: '0 0 auto' }}>
-                      {h} {glyph.text}
-                    </span>
-                  );
-                })}
-              </div>
-            ))}
+
+          <div className="mw-filters">
+            {chip(kind === 'all', 'All', () => setKind('all'))}
+            {(Object.keys(KIND_LABEL) as LedgerKind[]).map((entry) => chip(kind === entry, KIND_LABEL[entry], () => setKind(entry)))}
+            <span className="tw-sep" style={{ margin: '0 4px' }} />
+            {chip(scoredOnly, 'Scored only', () => setScoredOnly((value) => !value))}
+            <span style={{ fontFamily: mono, fontSize: 9, color: MM.dimmer, marginLeft: 6 }}>{rows.length} of {recent.length} recent · click a row for the reason and each horizon</span>
           </div>
+
+          <div style={{ display: 'flex', flexDirection: 'column' }}>
+            {rows.length === 0 && <div style={{ padding: '14px 4px', fontSize: 11, color: MM.dim }}>Nothing matches these filters.</div>}
+            {rows.slice(0, limit).map((claim) => <ClaimRow key={claim.claim_id} claim={claim} onOpen={onOpen} />)}
+            {rows.length > limit && (
+              <button type="button" className="mw-more" style={{ padding: '8px 4px' }} onClick={() => setLimit((value) => value + ROWS_STEP)}>
+                show {Math.min(ROWS_STEP, rows.length - limit)} more ↓
+              </button>
+            )}
+          </div>
+
           <div style={{ fontSize: 10, color: MM.dimmer, fontStyle: 'italic' }}>
             Scoring rules are pre-registered (v{report.rulesVersion.replace('v', '')}): risk-on ≥ +1%, chop ±3%, risk-off ≤ -1% on VOO; leans by forward return sign (neutral = push); attention by ≥5% move or ≥3% vs VOO. Calibration, not forecasts.
           </div>

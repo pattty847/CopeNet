@@ -208,16 +208,27 @@ async def handle_market_brief_run(request_id: str, params: dict[str, Any] | None
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": _now_iso()})))
 
 
+def _clamped_int(value: object, *, default: int, low: int, high: int) -> int:
+    """Boundary coercion for an optional integer RPC param."""
+    try:
+        parsed = int(value)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        return default
+    return max(low, min(high, parsed))
+
+
 async def handle_market_ledger_get(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     """Forward-ledger calibration report. Resolves any past-due claims first so the page
-    always shows current outcomes (resolution is cheap — stored bars, no network)."""
-    del params
+    always shows current outcomes (resolution is cheap — stored bars, no network).
+    `recent` bounds the claim list (default 30); the Ledger section asks for enough to show
+    performance by week."""
+    recent = _clamped_int((params or {}).get("recent"), default=30, low=1, high=1000)
     runtime = _runtime(orchestrator)
     try:
         await asyncio.to_thread(resolve_due_claims, runtime.store)
     except Exception:
         pass  # stale outcomes beat a failed page
-    payload = await asyncio.to_thread(ledger_report, runtime.store)
+    payload = await asyncio.to_thread(ledger_report, runtime.store, recent=recent)
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload)))
 
 

@@ -516,7 +516,7 @@
   display: flex;
   flex: 0 0 auto;
   flex-direction: column;
-  width: 186px;
+  width: 236px;
   min-height: 0;
   border-right: 1px solid var(--mkt-seam);
   background: var(--mkt-dock);

@@ -223,7 +223,7 @@ export function Rrg({
         // Desktop gets a floor to fill its grid cell. Mobile must NOT: a min-height-only card
         // has no definite height, so the aspect-sized chart below would be padded out by
         // whatever the floor exceeded — and the plot itself never grows to meet it.
-        minHeight: isMobile ? 0 : 520,
+        minHeight: 0,
         height: 'auto',
       }}
       right={
@@ -275,18 +275,9 @@ export function Rrg({
         </>
       }
     >
-      {note && (
-        <div style={{ fontSize: 11.5, color: MM.textSoft, fontStyle: 'italic', margin: '2px 0 8px', lineHeight: 1.5 }}>
-          <span style={{ color: '#8fb8e8' }}>✦ </span>
-          {note}
-        </div>
-      )}
-      {/* `flex:1 1 0` + `height:0` only resolves to a real height when the card has a DEFINITE
-          one — true on desktop, where react-grid-layout pins the panel to its cell in pixels.
-          The mobile layout stacks panels in an auto-height column, so that same pair collapsed
-          the chart to zero and the RRG rendered blank. Mobile instead sizes from the viewBox
-          aspect ratio, which never depends on the parent resolving a height. */}
-      <div style={{ flex: isMobile ? '0 0 auto' : '1 1 0', minHeight: 0, height: isMobile ? 'auto' : 0, display: 'flex', alignItems: 'stretch', justifyContent: 'center', overflow: 'hidden' }}>
+      {/* The plot sizes from its viewBox aspect ratio so it never depends on the card resolving
+          a height: width decides, and two charts side by side come out the same size. */}
+      <div style={{ flex: '0 0 auto', minHeight: 0, height: 'auto', display: 'flex', alignItems: 'stretch', justifyContent: 'center', overflow: 'hidden' }}>
         <svg
           ref={svgRef}
           viewBox={`0 0 ${W} ${H}`}
@@ -298,10 +289,9 @@ export function Rrg({
           onMouseLeave={() => setHoveredSymbol(null)}
           style={{
             width: '100%',
-            height: isMobile ? 'auto' : '100%',
+            height: 'auto',
             minHeight: 0,
-            maxHeight: isMobile ? 'none' : '100%',
-            aspectRatio: isMobile ? `${W} / ${H}` : undefined,
+            aspectRatio: `${W} / ${H}`,
             display: 'block',
             cursor: isZoomed ? 'grab' : 'zoom-in',
             touchAction: 'none',
@@ -353,7 +343,7 @@ export function Rrg({
               ['WEAKENING', W - R - 8, H - B - 7, 'end', MM.muted],
               ['LAGGING', L + 8, H - B - 7, 'start', MM.dim],
             ].map((q, i) => (
-              <text key={i} x={q[1] as number} y={q[2] as number} fill={q[4] as string} fontSize={9 / view.scale} letterSpacing=".14em" fontWeight={600} fontFamily="Inter" textAnchor={q[3] as 'start' | 'end'} opacity={0.85}>
+              <text key={i} x={q[1] as number} y={q[2] as number} fill={q[4] as string} fontSize={10 / view.scale} letterSpacing=".14em" fontWeight={600} fontFamily="var(--mkt-sans)" textAnchor={q[3] as 'start' | 'end'} opacity={0.85}>
                 {q[0] as string}
               </text>
             ))}
@@ -385,7 +375,7 @@ export function Rrg({
                     <circle key={ti} cx={tp.x} cy={tp.y} r={(active ? 2.3 : 1.7) / view.scale} fill={color} opacity={dimmed ? 0.18 : (ti / tail.length) * 0.6 + 0.15} />
                   ))}
                   <circle cx={head.x} cy={head.y} r={(active ? 6 : 4.8) / view.scale} fill="#0c0c0d" stroke={color} strokeWidth={(active ? 2.5 : 1.8) / view.scale} />
-                  <text x={head.x + 8 / view.scale} y={head.y + 3 / view.scale} fill={color} fontSize={9.5 / view.scale} fontWeight={700} fontFamily={mono} opacity={dimmed ? 0.3 : 1}>
+                  <text x={head.x + 8 / view.scale} y={head.y + 3.5 / view.scale} fill={color} fontSize={(active ? 12.5 : 10.5) / view.scale} fontWeight={700} fontFamily={mono} opacity={dimmed ? 0.3 : 1}>
                     {s.symbol}
                   </text>
                 </g>
@@ -432,6 +422,12 @@ export function Rrg({
               </button>
             );
           })}
+        </div>
+      )}
+      {note && (
+        <div style={{ fontSize: 11.5, color: MM.textSoft, fontStyle: 'italic', margin: '10px 0 0', lineHeight: 1.5, borderLeft: '2px solid rgba(143,184,232,.35)', paddingLeft: 10 }}>
+          <span style={{ color: '#8fb8e8' }}>✦ </span>
+          {note}
         </div>
       )}
     </PanelCard>

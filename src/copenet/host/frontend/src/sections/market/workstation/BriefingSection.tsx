@@ -7,7 +7,7 @@ import { RefreshCw } from 'lucide-react';
 import type { MarketSection } from '../../../lib/appSectionRouting';
 import { EconomicCalendarWidget } from '../EconomicCalendarWidget';
 import { StandingPicture } from './StandingPicture';
-import { Synthesis } from './Synthesis';
+import { Emphasized, Synthesis } from './Synthesis';
 import { WhatChanged } from './WhatChanged';
 import type { EconomicCalendarState } from '../useEconomicCalendar';
 import type { DashboardPayload, LedgerReport, MarketRead, MorningBriefPayload } from '../types';
@@ -62,6 +62,12 @@ export function BriefingSection({
           </button>
         </div>
       </div>
+      {read && (
+        <p className="mw-masthead__read" title="The model's read of the tape — interpretation, stamped as such below">
+          <span className="mw-masthead__stamp">✦ {read.model}</span>
+          <Emphasized text={read.headline} emphasis={read.emphasis} />
+        </p>
+      )}
       {brief?.note && <p className="mw-quiet" style={{ margin: '-6px 0 10px', fontStyle: 'italic' }}>{brief.note}</p>}
 
       <div className="mw-brief">

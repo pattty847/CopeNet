@@ -6,6 +6,8 @@
 // — and must reset on switch. The baseline carried a comparison into the next ticker and
 // rewrote the URL as if the operator had asked for it, which is the bug this split prevents.
 
+import { loadRailPreference, railCollapsed, saveRailPreference } from './marketWorkstationState';
+
 export type ResearchTab = 'overview' | 'fundamentals' | 'evidence' | 'synthesis';
 export type DrawerSnap = 'collapsed' | 'half' | 'full';
 export type DrawerSizes = Partial<Record<ResearchTab, number>>;
@@ -44,7 +46,6 @@ function write(key: string, value: string): void {
 
 const TAB_KEY = 'mm-tw-tab';
 const SNAP_KEY = 'mm-tw-snap';
-const RAIL_KEY = 'mm-tw-rail';
 const LOG_KEY = 'mm-log-scale';
 const DRAWER_SIZE_KEY = 'mm-tw-drawer-size';
 
@@ -113,12 +114,14 @@ export function saveDrawerSizes(sizes: DrawerSizes): void {
   write(DRAWER_SIZE_KEY, JSON.stringify(sizes));
 }
 
+/** The rail is one instrument across the market and ticker pages, so its state is one
+ *  preference: the workstation's width rule decides until the operator chooses. */
 export function loadRailCollapsed(): boolean {
-  return read(RAIL_KEY) === '1';
+  return railCollapsed(loadRailPreference(), typeof window === 'undefined' ? 1440 : window.innerWidth);
 }
 
 export function saveRailCollapsed(collapsed: boolean): void {
-  write(RAIL_KEY, collapsed ? '1' : '0');
+  saveRailPreference(collapsed);
 }
 
 export function loadLogScale(): boolean {

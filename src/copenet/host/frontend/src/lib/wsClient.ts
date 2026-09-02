@@ -707,8 +707,8 @@ class WsClient {
     return marketYieldCurveGetRpc(this.request.bind(this), selectedRange, refresh);
   }
 
-  async marketLedgerGet() {
-    return marketLedgerGetRpc(this.request.bind(this));
+  async marketLedgerGet(recent = 30) {
+    return marketLedgerGetRpc(this.request.bind(this), recent);
   }
 
   async marketWebullStatus() {

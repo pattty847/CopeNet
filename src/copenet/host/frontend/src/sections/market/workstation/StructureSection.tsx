@@ -20,11 +20,11 @@ export function StructureSection({
   const panels = useMemo<SectionPanel[]>(
     () => [
       { id: 'treasury', title: 'Treasury curve', defaultWidth: 'full', canHalf: false, node: <TreasuryYieldCurve /> },
-      { id: 'sectorRrg', title: 'Sector rotation', defaultWidth: 'half', canHalf: true, node: <Rrg panel={dashboard.rrg} onOpen={onOpen} note={read?.rotationRead} /> },
+      { id: 'sectorRrg', title: 'Sector rotation', defaultWidth: 'full', canHalf: true, node: <Rrg panel={dashboard.rrg} onOpen={onOpen} note={read?.rotationRead} /> },
       {
         id: 'industryRrg',
         title: 'Industry rotation',
-        defaultWidth: 'half',
+        defaultWidth: 'full',
         canHalf: true,
         node: <Rrg panel={dashboard.industryRrg} onOpen={onOpen} title="Industry Rotation · RRG" subtitle="Regional banks, biotech, retail, homebuilders, defense vs S&P 500 · weekly" />,
       },
