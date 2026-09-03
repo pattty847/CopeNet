@@ -13,7 +13,8 @@ of the stored bars and are applied here on demand.
 
 from __future__ import annotations
 
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from .models import MarketBar
 
@@ -36,6 +37,15 @@ def bar_date(bar: MarketBar) -> date:
 def utc_midnight(day: date) -> int:
     """Unix seconds at UTC midnight — the timestamp convention every bar uses."""
     return int(datetime(day.year, day.month, day.day, tzinfo=timezone.utc).timestamp())
+
+
+def daily_close_available_at(bar: MarketBar) -> datetime:
+    """Conservative US-equity daily-close availability, not the UTC session label.
+
+    Early-close sessions deliberately wait until 16:00 New York. The caller must also
+    establish that the cached bar was fetched after this moment, not just that time passed.
+    """
+    return datetime.combine(bar_date(bar), time(16), ZoneInfo("America/New_York"))
 
 
 def split_fingerprint(splits: list[tuple[str, float]]) -> str:

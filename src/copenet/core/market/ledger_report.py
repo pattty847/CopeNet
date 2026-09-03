@@ -3,17 +3,17 @@
 from __future__ import annotations
 
 from bisect import bisect_right
-from datetime import datetime, time, timezone
+from datetime import datetime
 from math import isclose
 from statistics import mean
 from typing import Any
-from zoneinfo import ZoneInfo
 
 from .ledger import (
     CLAIM_KINDS, HORIZON_DAYS, LEDGER_RULES_VERSION, SCREEN_KIND,
     LedgerClaim, LedgerStore, _ATTENTION_ABS_MOVE_PCT, _ATTENTION_EXCESS_PCT, _REGIME_RULES,
 )
 from .store import MarketStore
+from .price_history import daily_close_available_at
 from .universe import UNIVERSE
 
 _DART_ROLES = ("holding", "watch", "trend", "spec", "sector")
@@ -62,7 +62,7 @@ class _CloseLookup:
         if symbol not in self._bars:
             bars = sorted(self._store.load_bars(symbol, "daily"), key=lambda bar: bar.t)
             available = [
-                datetime.combine(datetime.fromtimestamp(bar.t, timezone.utc).date(), time(16), ZoneInfo("America/New_York")).timestamp()
+                daily_close_available_at(bar).timestamp()
                 for bar in bars
             ]
             self._bars[symbol] = (available, [float(bar.c) for bar in bars])

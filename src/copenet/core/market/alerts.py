@@ -14,7 +14,7 @@ from uuid import uuid4
 from copenet.core._json_store import append_jsonl, read_json, write_json_atomic
 from copenet.core.pulse import PulseRecord
 
-from .price_history import SPLIT_ADJUSTED
+from .price_history import daily_close_available_at
 
 
 AlertDirection = Literal["above", "below"]
@@ -149,7 +149,7 @@ class PriceAlertStore:
                     return updated
         raise ValueError(f"no alert found: {alert_id}")
 
-    def evaluate(self, prices: dict[str, float]) -> list[PriceAlert]:
+    def evaluate(self, prices: dict[str, float], *, close_times: dict[str, datetime] | None = None) -> list[PriceAlert]:
         """Evaluate every active rule atomically and return newly triggered rules."""
         now = _now_iso()
         triggered: list[PriceAlert] = []
@@ -159,6 +159,10 @@ class PriceAlertStore:
             for alert in alerts:
                 current = prices.get(alert.symbol)
                 if alert.status != "active" or current is None or current <= 0:
+                    updated_alerts.append(alert)
+                    continue
+                # A rule armed intraday must not fire backwards against yesterday's close.
+                if close_times is not None and close_times[alert.symbol] <= datetime.fromisoformat(alert.created_at):
                     updated_alerts.append(alert)
                     continue
                 crossed = (
@@ -211,19 +215,30 @@ def evaluate_price_alerts(runtime, pulse_store=None) -> list[PriceAlert]:
     store = resolve_price_alert_store(runtime)
     active = store.list(status="active")
     prices: dict[str, float] = {}
+    close_times: dict[str, datetime] = {}
     for symbol in {alert.symbol for alert in active}:
         try:
             # A chart alert may target a ticker outside the dashboard scan universe. Refresh
             # every explicitly armed symbol, while the short freshness window avoids a second
             # vendor request when the full market sweep just refreshed it moments earlier.
-            runtime.prices.refresh(symbol, max_age_seconds=60)
-            bars = runtime.prices.bars(symbol, timeframe="daily", basis=SPLIT_ADJUSTED)
+            history = runtime.prices.refresh(symbol, max_age_seconds=60)
+            if history is None:
+                continue
+            fetched_at = datetime.fromisoformat(history.updated_at)
+            if fetched_at.tzinfo is None:
+                continue  # unknown provenance cannot establish a finalized candle
+            available_at = min(datetime.now(timezone.utc), fetched_at)
+            # A pre-close cache stays provisional even after the wall clock passes 16:00.
+            completed = [bar for bar in history.bars if daily_close_available_at(bar) <= available_at]
         except Exception:
             logging.warning("market alerts: %s daily close unavailable", symbol, exc_info=True)
             continue
-        if bars:
-            prices[symbol] = float(bars[-1].c)
-    triggered = store.evaluate(prices)
+        if completed:
+            latest = max(completed, key=lambda bar: bar.t)
+            if math.isfinite(latest.c) and latest.c > 0:
+                prices[symbol] = float(latest.c)
+                close_times[symbol] = daily_close_available_at(latest)
+    triggered = store.evaluate(prices, close_times=close_times)
     if pulse_store is not None:
         for alert in triggered:
             _publish_pulse(pulse_store, alert)
