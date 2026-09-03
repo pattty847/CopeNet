@@ -107,7 +107,8 @@ import {
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
-import { marketAlertsCancelRpc, marketAlertsCreateRpc, marketAlertsListRpc, marketBriefGetRpc, marketBriefRunRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketRefreshRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketChartFormulasRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { marketBriefGetRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketChartFormulasRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
+import { createMarketMonitoringApi } from './wsMarketMonitoring';
 import type { FinancialFrequency } from '../sections/market/types';
 import type { YieldCurveRange } from '../sections/market/types';
 import {
@@ -675,10 +676,6 @@ class WsClient {
     return marketUniverseRpc(this.request.bind(this));
   }
 
-  async marketRefresh(scope: 'all' | 'macro' | 'signals' | 'edgar' = 'all') {
-    return marketRefreshRpc(this.request.bind(this), scope);
-  }
-
   async marketInterpret(target: string = 'market') {
     return marketInterpretRpc(this.request.bind(this), target);
   }
@@ -693,10 +690,6 @@ class WsClient {
 
   async marketBriefGet() {
     return marketBriefGetRpc(this.request.bind(this));
-  }
-
-  async marketBriefRun(force = true) {
-    return marketBriefRunRpc(this.request.bind(this), force);
   }
 
   async marketCalendarGet(days = 7, refresh = false) {
@@ -756,17 +749,7 @@ class WsClient {
     return marketWatchlistGetRpc(this.request.bind(this));
   }
 
-  async marketAlertsList(symbol: string) {
-    return marketAlertsListRpc(this.request.bind(this), symbol);
-  }
-
-  async marketAlertsCreate(params: { symbol: string; direction: 'above' | 'below'; threshold: number; referencePrice: number }) {
-    return marketAlertsCreateRpc(this.request.bind(this), params);
-  }
-
-  async marketAlertsCancel(alertId: string, symbol: string) {
-    return marketAlertsCancelRpc(this.request.bind(this), alertId, symbol);
-  }
+  readonly marketMonitoring = createMarketMonitoringApi(this.request.bind(this));
 
   async marketWatchlistAdd(symbol: string, name = '') {
     return marketWatchlistAddRpc(this.request.bind(this), symbol, name);

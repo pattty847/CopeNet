@@ -23,7 +23,7 @@ export function useChartPriceAlertLines(
       lineWidth: 1,
       lineStyle: LineStyle.Dashed,
       axisLabelVisible: true,
-      title: `Alert ${alert.direction === 'above' ? '≥' : '≤'}`,
+      title: `Alert ${alert.direction === 'above' ? '>' : '<'}`,
     }));
     if (draftPrice != null && Number.isFinite(draftPrice) && draftPrice > 0) {
       linesRef.current.push(candle.createPriceLine({

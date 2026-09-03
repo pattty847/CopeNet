@@ -27,6 +27,11 @@ export function MarketSectionTabs({
   const shortcutTabs = tabs.filter((entry) => entry.id !== 'watchlist');
   useEffect(() => {
     tabList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const observer = new ResizeObserver(() => {
+      tabList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    });
+    if (tabList.current) observer.observe(tabList.current);
+    return () => observer.disconnect();
   }, [active]);
   return (
     <div ref={tabList} className="mw-tabs" role="tablist" aria-label="Market sections">

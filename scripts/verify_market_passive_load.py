@@ -15,7 +15,7 @@ from playwright.async_api import async_playwright
 from copenet.core.market.models import DashboardPayload
 
 DIST = Path(__file__).resolve().parents[1] / "src/copenet/host/frontend/dist"
-SCAN_METHODS = {"market.refresh", "market.brief.run"}
+SCAN_METHODS = {"market.refresh", "market.brief.run", "market.scans.run"}
 
 
 async def verify(browser, scenario):
@@ -74,14 +74,12 @@ async def verify(browser, scenario):
         await page.reload(wait_until="networkidle")
         assert "market.dashboard.get" in requests and "market.brief.get" in requests
         assert not SCAN_METHODS.intersection(requests), (scenario, requests)
-        await page.get_by_role("button", name="Refresh data", exact=True).click()
+        await page.get_by_role("button", name="Scan controls", exact=False).click()
         await page.wait_for_timeout(100)
-        assert requests.count("market.refresh") == 1
-        await page.get_by_role("button", name="Sweep again" if brief else "Run sweep", exact=True).click()
-        await page.wait_for_timeout(100)
-        assert requests.count("market.brief.run") == 1
+        assert "market.scans.get" in requests
+        assert not SCAN_METHODS.intersection(requests)
         assert not errors, errors
-        print(f"PASS {scenario}: mount/navigation/reload read-only; explicit scan controls work")
+        print(f"PASS {scenario}: mount/navigation/reload/scan controls read-only")
     finally:
         await context.close()
 

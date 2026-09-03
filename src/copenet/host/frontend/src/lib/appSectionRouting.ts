@@ -50,7 +50,7 @@ export function marketFormulaPath(expression: string): string {
 
 /** The market workstation's full-height destinations. `watchlist` only exists as a tab on
  *  narrow screens, where the rail is hidden; on desktop it resolves to the briefing. */
-export const MARKET_SECTIONS = ['briefing', 'structure', 'signals', 'portfolio', 'evidence', 'ledger', 'backtest', 'watchlist'] as const;
+export const MARKET_SECTIONS = ['briefing', 'structure', 'signals', 'portfolio', 'evidence', 'ledger', 'backtest', 'scans', 'watchlist'] as const;
 export type MarketSection = (typeof MARKET_SECTIONS)[number];
 
 export function isMarketSection(value: string | null | undefined): value is MarketSection {

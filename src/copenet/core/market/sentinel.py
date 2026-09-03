@@ -1,191 +1,29 @@
-"""Scheduled market sentinel — the sweep that powers the morning brief.
-
-One sweep per day, default 09:45 operator-local: refresh the
-dashboard, diff it against the pre-sweep snapshot into a morning brief, publish
-a Pulse inbox item, then chain the automatic whole-market model read (which
-now sees the overnight delta in its fact packet). Missed runs are skipped, never
-caught up on server startup or after machine sleep. Manual runs remain explicit.
-
-Env knobs:
-  COPNET_MARKET_SENTINEL=0        disable the background loop entirely
-  COPNET_MARKET_BRIEF_TIME=HH:MM  sweep time, operator-local (default 09:45)
-"""
-
+"""One persisted scan scheduler. Startup/sleep never replay missed occurrences."""
 from __future__ import annotations
 
 import asyncio
 import logging
 import os
-from datetime import datetime, timedelta
-from typing import Any
+from datetime import datetime, timezone
 
-from copenet.core.pulse import PulseRecord
-
-from .alerts import evaluate_price_alerts
-from .brief import build_morning_brief, compute_movers
-from .ledger import record_screen_claims, resolve_due_claims
-from .runtime import MarketRuntime, resolve_market_runtime
+from .scans.definitions import next_run_at
+from .scans.service import resolve_scan_service
+from .monitoring_delivery import monitoring_delivery_tick
 
 _LOG = logging.getLogger(__name__)
-
-DEFAULT_BRIEF_TIME = "09:45"
-
-# Allow normal event-loop jitter, not a scan hours after a sleeping Mac wakes.
-_SCHEDULE_GRACE_SECONDS = 60.0
-
-# Serializes the scheduler-triggered sweep against operator-triggered market.brief.run.
-_sweep_lock = asyncio.Lock()
+_SCHEDULE_GRACE_SECONDS = 60
 
 
 def sentinel_enabled() -> bool:
     return os.environ.get("COPNET_MARKET_SENTINEL", "1").strip() != "0"
 
 
-def _brief_time() -> tuple[int, int]:
-    raw = os.environ.get("COPNET_MARKET_BRIEF_TIME", DEFAULT_BRIEF_TIME).strip()
-    try:
-        hour, minute = raw.split(":")
-        parsed = int(hour), int(minute)
-        if not (0 <= parsed[0] < 24 and 0 <= parsed[1] < 60):
-            raise ValueError("time out of range")
-        return parsed
-    except ValueError:
-        _LOG.warning("COPNET_MARKET_BRIEF_TIME=%r is not HH:MM — using %s", raw, DEFAULT_BRIEF_TIME)
-        return 9, 45
-
-
-def _next_sweep_at(now: datetime) -> datetime:
-    """Next strictly future slot, independent of missing/stale stored briefs."""
-    hour, minute = _brief_time()
-    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    return target + timedelta(days=1) if now >= target else target
-
-
-def _today() -> str:
-    return datetime.now().strftime("%Y-%m-%d")
-
-
-def _sweep_satisfied(existing: dict[str, Any] | None, now: datetime) -> bool:
-    """Whether today's scheduled sweep is already covered by the stored brief.
-
-    Before brief time, any same-day brief counts (a pre-dawn manual sweep is current
-    enough). At/after brief time, only a brief generated at/after today's brief time
-    counts — so an early manual brief never suppresses the scheduled sweep."""
-    if not existing or existing.get("briefDate") != now.strftime("%Y-%m-%d"):
-        return False
-    hour, minute = _brief_time()
-    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-    if now < target:
-        return True
-    raw = str(existing.get("generatedAt") or "")
-    try:
-        generated = datetime.fromisoformat(raw.replace("Z", "+00:00")).astimezone()
-    except ValueError:
-        return True  # unparseable stamp — treat as satisfied rather than sweep-looping
-    return generated >= target.astimezone()
-
-
-async def run_morning_sweep(
-    runtime: MarketRuntime,
-    provider,
-    pulse_store=None,
-    *,
-    force: bool = False,
-) -> dict[str, Any] | None:
-    """Refresh → diff → persist brief → Pulse item → chained model read.
-
-    Idempotent per day unless ``force`` (the operator's "run now" button): a second
-    call on the same date returns the existing brief without re-sweeping.
-    """
-    async with _sweep_lock:
-        brief_date = _today()
-        existing = runtime.store.load_morning_brief()
-        if not force and _sweep_satisfied(existing, datetime.now()):
-            return existing
-
-        previous = runtime.store.load_dashboard_wire()
-        await asyncio.to_thread(runtime.refresh, scope="all")
-        current = runtime.store.load_dashboard_wire()
-        try:
-            await asyncio.to_thread(evaluate_price_alerts, runtime, pulse_store)
-        except Exception:
-            _LOG.warning("morning sweep: price-alert evaluation failed", exc_info=True)
-        try:
-            # Prices are fresh — score any forward-ledger claims that just came due, BEFORE
-            # the chained model read so its track-record line is current.
-            resolve_due_claims(runtime.store)
-        except Exception:
-            _LOG.warning("morning sweep: ledger resolution failed", exc_info=True)
-        movers, movers_label = compute_movers(runtime.store, universe=runtime.scan_universe())
-        brief = build_morning_brief(
-            previous,
-            current,
-            movers=movers,
-            movers_label=movers_label,
-            brief_date=brief_date,
-        )
-        wire = brief.to_wire()
-        runtime.store.save_morning_brief(wire)
-        try:
-            # The screens make their claims the moment they fire, so the ledger can score the
-            # rules the operator tunes on the same footing as the model.
-            screen_claims = record_screen_claims(runtime.store, previous, current)
-            if screen_claims:
-                _LOG.info("morning sweep: logged %d screen claim(s) to the forward ledger", screen_claims)
-        except Exception:
-            _LOG.warning("morning sweep: screen claim capture failed", exc_info=True)
-        _LOG.info("morning sweep: brief for %s — %s", brief_date, brief.headline)
-
-        if pulse_store is not None:
-            try:
-                _publish_pulse(pulse_store, wire)
-            except Exception:
-                _LOG.warning("morning sweep: pulse publish failed", exc_info=True)
-
-        if provider is not None:
-            try:
-                await runtime.interpret(provider, target="market")
-            except Exception:
-                # The deterministic brief still stands; the model read stays stale.
-                _LOG.warning("morning sweep: chained model read failed", exc_info=True)
-        return wire
-
-
-def _publish_pulse(pulse_store, wire: dict[str, Any]) -> None:
-    brief_date = str(wire.get("briefDate") or _today())
-    pulse_id = f"market-brief-{brief_date}"
-    existing = pulse_store.get(pulse_id)
-    if existing is not None and existing.status != "new":
-        return  # the operator already acted on today's item — don't resurrect it
-    new_evidence = wire.get("newEvidence") or []
-    flips = wire.get("signalFlips") or []
-    now = datetime.now().astimezone().isoformat()
-    record = PulseRecord(
-        pulse_id=pulse_id,
-        status="new",
-        title=f"Morning market brief · {brief_date}",
-        summary=str(wire.get("headline") or "Morning market brief is ready."),
-        why_now=(
-            f"Market sweep found {len(new_evidence)} new SEC filing(s) and "
-            f"{len(flips)} signal flip(s) since the previous sweep."
-        ),
-        source_session_keys=["market-sentinel"],
-        source_run_ids=[],
-        created_at=existing.created_at if existing else now,
-        updated_at=now,
-    )
-    if existing is None:
-        pulse_store.create(record)
-    else:
-        pulse_store.save(record)  # a fresher same-day sweep updates the unread item in place
-
-
 class MarketSentinel:
-    """Background loop that fires the morning sweep at brief time every day."""
-
     def __init__(self, orchestrator) -> None:
         self._orchestrator = orchestrator
         self._task: asyncio.Task | None = None
+        self._delivery_task: asyncio.Task | None = None
+        self._scan_tasks: set[asyncio.Task] = set()
 
     def start(self) -> None:
         if self._task is None or self._task.done():
@@ -195,29 +33,59 @@ class MarketSentinel:
         if self._task is not None:
             self._task.cancel()
             self._task = None
+        for task in self._scan_tasks:
+            task.cancel()
+        if self._delivery_task is not None:
+            self._delivery_task.cancel()
+
+    def _launch_delivery(self) -> None:
+        if self._delivery_task is not None and not self._delivery_task.done():
+            return
+        self._delivery_task = asyncio.create_task(
+            monitoring_delivery_tick(self._orchestrator), name="market-delivery",
+        )
+
+        def completed(finished):
+            if not finished.cancelled() and finished.exception():
+                _LOG.warning("Market notification delivery failed; pending evidence remains durable: %s", finished.exception())
+
+        self._delivery_task.add_done_callback(completed)
+
+    def _launch(self, service, scan, target):
+        task = asyncio.create_task(service.run(scan["id"], reason="scheduled", scheduled_at=target.isoformat(), expected_revision=scan["revision"]), name=f"market-scan-{scan['id']}")
+        self._scan_tasks.add(task)
+        service.tasks.add(task)
+
+        def completed(finished):
+            self._scan_tasks.discard(finished)
+            service.tasks.discard(finished)
+            if not finished.cancelled() and finished.exception():
+                _LOG.warning("Scheduled market scan did not run: %s", finished.exception())
+
+        task.add_done_callback(completed)
 
     async def _loop(self) -> None:
-        runtime = resolve_market_runtime(self._orchestrator)
+        service = resolve_scan_service(self._orchestrator)
+        targets = {}
         while True:
-            now = datetime.now()
-            target = _next_sweep_at(now).astimezone()
-            delay = (target - now.astimezone()).total_seconds()
-            _LOG.info("market sentinel: next sweep in %.0f min", delay / 60)
-            await asyncio.sleep(delay)
-            lateness = (datetime.now().astimezone() - target).total_seconds()
-            if lateness < 0 or lateness > _SCHEDULE_GRACE_SECONDS:
-                _LOG.info("market sentinel: missed slot skipped; waiting for next scheduled scan")
-                continue
-            try:
-                await run_morning_sweep(runtime, self._provider(), self._pulse_store())
-            except asyncio.CancelledError:
-                raise
-            except Exception:
-                _LOG.exception("market sentinel: sweep failed — next attempt at next scheduled slot")
-
-    def _provider(self):
-        providers = getattr(self._orchestrator, "_providers", None)
-        return providers.get("openai-codex") if isinstance(providers, dict) else None
-
-    def _pulse_store(self):
-        return getattr(self._orchestrator, "_pulse_store", None)
+            # A slow Telegram response must not turn an on-time scan into a missed run.
+            # One tracked tick also bounds background threads during transport outages.
+            self._launch_delivery()
+            now = datetime.now(timezone.utc)
+            scans = service.store.definitions()
+            keys = {(scan["id"], scan["revision"]) for scan in scans}
+            targets = {key: value for key, value in targets.items() if key in keys}
+            for scan in scans:
+                key = (scan["id"], scan["revision"])
+                if key not in targets:
+                    targets[key] = next_run_at(scan, now)
+                target = targets[key]
+                if target is None or now < target:
+                    continue
+                targets[key] = next_run_at(scan, now)
+                if not sentinel_enabled() or (now - target).total_seconds() > _SCHEDULE_GRACE_SECONDS:
+                    continue
+                self._launch(service, scan, target)
+            # Scan acquisition runs under its own root lease. It must not block delivery
+            # retries or admission of another on-time job while a large scan is running.
+            await asyncio.sleep(15)

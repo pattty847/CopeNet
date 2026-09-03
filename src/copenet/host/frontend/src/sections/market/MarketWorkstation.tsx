@@ -48,6 +48,7 @@ import { PortfolioSection } from './workstation/PortfolioSection';
 import { SignalsSection } from './workstation/SignalsSection';
 import { StructureSection } from './workstation/StructureSection';
 import { WatchRail } from './workstation/WatchRail';
+import { MonitoringSection } from './monitoring/MonitoringSection';
 import './tickerWorkspace.css';
 import './marketWorkstation.css';
 import './marketWorkstationMobile.css';
@@ -63,7 +64,7 @@ export function MarketWorkstation({
   onOpenTicker: (symbol: string, type?: 'symbol' | 'formula') => void;
   watchlist: MarketWatchlistState;
 }) {
-  const { dashboard, refreshing, live, refresh, reload } = useMarketDashboard();
+  const { dashboard, live, reload } = useMarketDashboard();
   const { read, running: reading, error: readError, run: runRead } = useMarketRead();
   const marketSessions = useMarketSessions();
   const morningBrief = useMorningBrief(reload);
@@ -207,8 +208,7 @@ export function MarketWorkstation({
         asOf={dashboard.asOf}
         vix={briefing.vix}
         breadthPct={briefing.breadthPct}
-        refreshing={refreshing}
-        onRefresh={() => void refresh()}
+        onRefresh={() => onSelectSection('scans')}
         density={density}
         onDensity={setDensity}
         onJump={() => setJumpOpen(true)}
@@ -234,8 +234,8 @@ export function MarketWorkstation({
               <BriefingSection
                 dashboard={dashboard}
                 brief={morningBrief.brief}
-                generating={morningBrief.generating}
-                onRunSweep={() => void morningBrief.runNow()}
+                generating={false}
+                onRunSweep={() => onSelectSection('scans')}
                 read={read}
                 reading={reading}
                 readError={readError}
@@ -255,6 +255,7 @@ export function MarketWorkstation({
             {active === 'evidence' && <EvidenceSection dashboard={dashboard} watched={watchlist.symbols} onOpen={open} />}
             {active === 'ledger' && <LedgerSection report={forwardLedger.report} loading={forwardLedger.loading} onOpen={open} />}
             {active === 'backtest' && <BacktestSection />}
+            {active === 'scans' && <MonitoringSection />}
             {active === 'watchlist' && (
               <WatchRail variant="sheet" watchlist={watchlist} entries={railEntries} cursor={railCursor} collapsed={false} onToggle={toggleRail} onSelect={open} />
             )}

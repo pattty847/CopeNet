@@ -11,7 +11,6 @@ import type {
   MarketRead,
   MarketSession,
   MorningBriefPayload,
-  PriceAlert,
   TickerEvidencePayload,
   TickerFundamentals,
   FinancialFrequency,
@@ -72,14 +71,6 @@ export async function marketUniverseRpc(request: WsRpcRequest): Promise<Universe
   return arr as UniverseAsset[];
 }
 
-export async function marketRefreshRpc(
-  request: WsRpcRequest,
-  scope: 'all' | 'macro' | 'signals' | 'edgar' = 'all',
-): Promise<{ startedAt: string; runId: string }> {
-  const payload = await request<Record<string, unknown>>('market.refresh', { scope });
-  return { startedAt: String(payload.startedAt || ''), runId: String(payload.runId || '') };
-}
-
 export async function marketInterpretRpc(
   request: WsRpcRequest,
   target: string = 'market',
@@ -128,11 +119,6 @@ export async function marketBriefGetRpc(request: WsRpcRequest): Promise<MorningB
   const payload = await request<{ brief?: unknown }>('market.brief.get', {});
   const brief = payload.brief;
   return brief && typeof brief === 'object' ? (brief as MorningBriefPayload) : null;
-}
-
-export async function marketBriefRunRpc(request: WsRpcRequest, force = true): Promise<{ startedAt: string }> {
-  const payload = await request<Record<string, unknown>>('market.brief.run', { force });
-  return { startedAt: String(payload.startedAt || '') };
 }
 
 export async function marketCalendarGetRpc(
@@ -337,25 +323,6 @@ function watchlistState(payload: { items?: unknown; lists?: unknown; active?: un
 
 export async function marketWatchlistGetRpc(request: WsRpcRequest): Promise<WatchlistWireState> {
   return watchlistState(await request<Record<string, unknown>>('market.watchlist.get', {}));
-}
-
-function priceAlerts(payload: { alerts?: unknown }): PriceAlert[] {
-  return Array.isArray(payload.alerts) ? (payload.alerts as PriceAlert[]) : [];
-}
-
-export async function marketAlertsListRpc(request: WsRpcRequest, symbol: string): Promise<PriceAlert[]> {
-  return priceAlerts(await request<{ alerts?: unknown }>('market.alerts.list', { symbol }));
-}
-
-export async function marketAlertsCreateRpc(
-  request: WsRpcRequest,
-  params: { symbol: string; direction: 'above' | 'below'; threshold: number; referencePrice: number },
-): Promise<PriceAlert[]> {
-  return priceAlerts(await request<{ alerts?: unknown }>('market.alerts.create', params));
-}
-
-export async function marketAlertsCancelRpc(request: WsRpcRequest, alertId: string, symbol: string): Promise<PriceAlert[]> {
-  return priceAlerts(await request<{ alerts?: unknown }>('market.alerts.cancel', { alertId, symbol }));
 }
 
 export async function marketWatchlistAddRpc(request: WsRpcRequest, symbol: string, name = ''): Promise<WatchlistWireState> {

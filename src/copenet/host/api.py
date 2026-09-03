@@ -9,7 +9,7 @@ from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
-from copenet.core.market.sentinel import MarketSentinel, sentinel_enabled
+from copenet.core.market.sentinel import MarketSentinel
 from copenet.core.media import MediaIngestionService
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.web_ingest import WebIngestionService
@@ -40,8 +40,7 @@ def create_app(
     async def lifespan(_app: FastAPI):
         # Scheduled market sweep; no startup catch-up. Tests that span a scheduled
         # slot must disable the sentinel with COPNET_MARKET_SENTINEL=0.
-        if sentinel_enabled():
-            sentinel.start()
+        sentinel.start()  # Delivery processing remains available when scans are paused.
         yield
         sentinel.stop()
 

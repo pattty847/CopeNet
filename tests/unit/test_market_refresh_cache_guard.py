@@ -15,6 +15,7 @@ import pandas as pd
 import pytest
 
 from copenet.core.market import runtime as runtime_module
+from copenet.core.market import dashboard_runtime
 from copenet.core.market import price_cache as price_cache_module
 from copenet.core.market.models import MarketBar
 from copenet.core.market.runtime import MarketRuntime
@@ -63,7 +64,7 @@ def test_refresh_marks_regime_stale_not_live_riskoff_on_total_failure(
     async def _no_evidence(symbols: list[str]) -> list[Any]:
         return []
 
-    monkeypatch.setattr(runtime_module, "fetch_evidence", _no_evidence)
+    monkeypatch.setattr(dashboard_runtime, "fetch_evidence", _no_evidence)
 
     runtime = MarketRuntime(store=store)
     dashboard = runtime.refresh(scope="all")
@@ -111,7 +112,7 @@ def test_refresh_makes_exactly_one_price_request_per_symbol(
     async def _no_evidence(symbols: list[str]) -> list[Any]:
         return []
 
-    monkeypatch.setattr(runtime_module, "fetch_evidence", _no_evidence)
+    monkeypatch.setattr(dashboard_runtime, "fetch_evidence", _no_evidence)
     monkeypatch.setenv("COPNET_MARKET_FETCH_PACE", "0")
     runtime = MarketRuntime(store=MarketStore(tmp_path / "market"))
 

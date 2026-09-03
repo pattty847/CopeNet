@@ -141,11 +141,11 @@ async def handle_market_webull_sync(request_id: str, params: dict[str, Any] | No
     account_id = _account_id()
     runtime = resolve_market_runtime(orchestrator)
 
-    def _sync_then_refresh() -> None:
-        fetch_snapshot(trade_client(config), account_id)
-        runtime.refresh(scope="signals")  # rebuild the dashboard so the portfolio panel reflects the broker
+    def _sync_then_project() -> None:
+        snapshot = fetch_snapshot(trade_client(config), account_id)
+        runtime.update_portfolio(snapshot.to_dict())
 
-    _track_background(orchestrator, "portfolio-sync", asyncio.to_thread(_sync_then_refresh))
+    _track_background(orchestrator, "portfolio-sync", asyncio.to_thread(_sync_then_project))
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": _now_iso()})))
 
 

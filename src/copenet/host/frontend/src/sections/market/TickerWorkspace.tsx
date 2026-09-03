@@ -46,6 +46,8 @@ import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinanci
 import { useChartComparisons } from './useChartComparisons';
 import { useFinancialSeries } from './useFinancialSeries';
 import { usePriceAlerts } from './usePriceAlerts';
+import { TickerLoadState } from './TickerLoadState';
+import { TickerAlertProvider } from './monitoring/TickerAlertContext';
 import { useTickerDrawerLayout } from './useTickerDrawerLayout';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import type { InsiderDisplayMode, InsiderLookback } from './chartRanges';
@@ -373,6 +375,7 @@ export function TickerWorkspace({
     : null;
 
   return (
+    <TickerAlertProvider symbol={viewSymbol} timeframe={timeframe}>
     <div className="tw">
       <TickerAssetBar
         detail={detail}
@@ -466,7 +469,7 @@ export function TickerWorkspace({
                 onStartPlacing={() => setAlertPlacing(true)}
                 onStopPlacing={() => { setAlertPlacing(false); setPickedAlertPrice(null); }}
                 onCreate={async (direction, threshold) => {
-                  const created = await priceAlerts.create(direction, threshold, detail.quote.price ?? 0);
+                  const created = await priceAlerts.create(direction, threshold);
                   if (created) setPickedAlertPrice(null);
                   return created;
                 }}
@@ -563,25 +566,6 @@ export function TickerWorkspace({
         </div>
       </div>
     </div>
-  );
-}
-
-function TickerLoadState({ symbol, error, onClose, onRetry }: { symbol: string; error: string | null; onClose: () => void; onRetry: () => Promise<void> }) {
-  return (
-    <div className="tw" style={{ display: 'grid', placeItems: 'center' }}>
-      <div style={{ width: 'min(440px, 100%)', border: `1px solid ${error ? 'rgba(217,109,95,.3)' : MM.border}`, borderRadius: 6, background: MM.panel, padding: 22, textAlign: 'center' }}>
-        <div style={{ color: error ? MM.down : MM.accent, font: '650 9px var(--mkt-sans)', letterSpacing: '.13em', textTransform: 'uppercase' }}>
-          {error ? 'Asset unavailable' : 'Loading workspace'}
-        </div>
-        <h1 style={{ color: MM.text, margin: '11px 0 8px', fontFamily: 'var(--mkt-mono)', fontSize: 22 }}>{symbol}</h1>
-        <p role={error ? 'alert' : undefined} style={{ color: MM.dim, fontSize: 11, lineHeight: 1.55 }}>
-          {error ?? 'Loading price history, deterministic signals, and current evidence…'}
-        </p>
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 8, marginTop: 15 }}>
-          <button type="button" className="tw-btn" onClick={onClose}><ArrowLeft size={13} /> Market</button>
-          {error && <button type="button" className="tw-btn" onClick={() => void onRetry()}><RefreshCw size={12} /> Retry</button>}
-        </div>
-      </div>
-    </div>
+    </TickerAlertProvider>
   );
 }

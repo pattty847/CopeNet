@@ -18,7 +18,6 @@ from copenet.core.market.financials import (
 from copenet.core.market.ledger import resolve_due_claims
 from copenet.core.market.ledger_report import ledger_report
 from copenet.core.market.runtime import resolve_market_runtime
-from copenet.core.market.sentinel import run_morning_sweep
 from copenet.core.runtime.runs import RunRecord
 from copenet.host.rpc_schema import ResponseFrame, make_response_frame
 
@@ -136,29 +135,7 @@ async def handle_market_universe_get(request_id: str, params: dict[str, Any] | N
 
 
 async def handle_market_refresh(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
-    raw = params or {}
-    scope = str(raw.get("scope") or "all").strip() or "all"
-    if scope not in {"all", "macro", "signals", "edgar"}:
-        raise ValueError("scope must be one of: all, macro, signals, edgar")
-    runtime = _runtime(orchestrator)
-    started_at = _now_iso()
-    run_id = f"market-refresh-{uuid4().hex[:12]}"
-    provider = _interpret_provider(orchestrator)
-
-    async def _refresh_then_interpret() -> None:
-        await asyncio.to_thread(runtime.refresh, scope=scope)
-        # A manual daytime refresh includes today's still-forming daily candle. Daily-close
-        # alerts therefore evaluate only in the pre-market sentinel, after the prior session
-        # is complete; treating this refresh as a close can fire a rule on an intraday print.
-        # Default lane: one automatic whole-market model read per refresh (operator design).
-        if provider is not None and scope in {"all", "signals"}:
-            try:
-                await runtime.interpret(provider, target="market")
-            except Exception:
-                pass  # the deterministic briefing still stands; the read stays stale
-
-    _track_task(orchestrator, asyncio.create_task(_refresh_then_interpret()))
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": started_at, "runId": run_id})))
+    raise ValueError("Choose a scan in Market → Scans & alerts, preview its scope, then Run now")
 
 
 async def handle_market_interpret(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
@@ -198,15 +175,7 @@ async def handle_market_brief_get(request_id: str, params: dict[str, Any] | None
 
 
 async def handle_market_brief_run(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
-    """Kick a morning sweep now (background). The operator asked, so force a regenerate even
-    if today's brief already exists — same semantics as the Refresh button."""
-    raw = params or {}
-    force = raw.get("force") is not False
-    runtime = _runtime(orchestrator)
-    provider = _interpret_provider(orchestrator)
-    pulse_store = getattr(orchestrator, "_pulse_store", None)
-    _track_task(orchestrator, asyncio.create_task(run_morning_sweep(runtime, provider, pulse_store, force=force)))
-    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"startedAt": _now_iso()})))
+    raise ValueError("Choose the morning scan in Market → Scans & alerts and preview its scope before running")
 
 
 def _clamped_int(value: object, *, default: int, low: int, high: int) -> int:

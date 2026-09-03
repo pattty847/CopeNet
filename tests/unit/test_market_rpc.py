@@ -105,7 +105,7 @@ async def test_market_chart_series_returns_split_adjusted_batch_contract(tmp_pat
     assert [row["symbol"] for row in payload["series"]] == ["XLK", "GLD"]
 
 
-async def test_market_refresh_returns_run_identifier(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_unscoped_market_refresh_requires_explicit_scan(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     orchestrator = FakeOrchestrator(tmp_path)
     refresh_scopes: list[str] = []
 
@@ -119,15 +119,10 @@ async def test_market_refresh_returns_run_identifier(tmp_path: Path, monkeypatch
     async def send_json(frame: dict[str, Any]) -> None:
         frames.append(frame)
 
-    await handle_market_refresh("refresh", {"scope": "macro"}, send_json, orchestrator)
-    # The handler fire-and-forgets the refresh; drain it so nothing outlives the test.
-    await asyncio.gather(*orchestrator._background_tasks)
-
-    payload = frames[0]["payload"]
-    assert frames[0]["ok"] is True
-    assert payload["runId"].startswith("market-refresh-")
-    assert payload["startedAt"].endswith("Z")
-    assert refresh_scopes == ["macro"]
+    with pytest.raises(ValueError, match="Choose a scan"):
+        await handle_market_refresh("refresh", {"scope": "macro"}, send_json, orchestrator)
+    assert frames == []
+    assert refresh_scopes == []
 
 
 async def test_manual_signal_refresh_does_not_evaluate_daily_close_alerts(
@@ -151,9 +146,7 @@ async def test_manual_signal_refresh_does_not_evaluate_daily_close_alerts(
     async def send_json(frame: dict[str, Any]) -> None:
         del frame
 
-    await handle_market_refresh("refresh", {"scope": "signals"}, send_json, orchestrator)
-    await asyncio.gather(*orchestrator._background_tasks)
-
-    # Today's daily candle remains provisional during market hours. Only the pre-market
-    # sentinel may treat the latest cached candle as a completed daily close.
+    with pytest.raises(ValueError, match="Choose a scan"):
+        await handle_market_refresh("refresh", {"scope": "signals"}, send_json, orchestrator)
+    # Unscoped refresh cannot bypass scan acquisition or close-gated evaluation.
     assert price_refreshes == []

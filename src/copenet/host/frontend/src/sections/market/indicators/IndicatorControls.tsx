@@ -10,6 +10,7 @@ import { MarketFloatingPopover } from '../MarketFloatingPopover';
 import { IndicatorSettings } from './IndicatorSettings';
 import type { ComputedIndicator } from './compute';
 import type { IndicatorRowActions } from './IndicatorRows';
+import { IndicatorAlertButton } from '../monitoring/TickerAlertContext';
 
 export function IndicatorControls({
   indicator,
@@ -24,6 +25,7 @@ export function IndicatorControls({
 
   return (
     <span className="tw-ind-controls">
+      <IndicatorAlertButton indicator={indicator} />
       <button
         ref={anchor}
         type="button"

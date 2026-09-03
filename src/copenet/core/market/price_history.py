@@ -28,6 +28,15 @@ WEEKLY = "weekly"
 MONTHLY = "monthly"
 TIMEFRAMES = (DAILY, WEEKLY, MONTHLY)
 
+# Chart transport and background indicators must share their recursive-calculation prefix.
+# W/M stay unbounded so financial overlays retain their earliest historical anchors.
+CHART_BAR_LIMITS: dict[str, int | None] = {DAILY: 2_600, WEEKLY: None, MONTHLY: None}
+
+
+def chart_history_window(bars: list[MarketBar], timeframe: str) -> list[MarketBar]:
+    limit = CHART_BAR_LIMITS[timeframe]
+    return bars[-limit:] if limit else list(bars)
+
 
 def bar_date(bar: MarketBar) -> date:
     """The UTC calendar date a bar belongs to."""

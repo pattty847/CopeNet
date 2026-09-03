@@ -84,7 +84,7 @@ export function PriceAlertControl({
           <div className="tw-pop__head">
             <div>
               <div className="tw-pop__title">Price alert</div>
-              <div className="tw-pop__sub">Evaluated on the daily close after the morning sweep.</div>
+              <div className="tw-pop__sub">Completed daily candles, after the linked price scan.</div>
             </div>
             <button type="button" className="tw-iconbtn" onClick={close} aria-label="Close price alerts"><X size={13} /></button>
           </div>
@@ -117,12 +117,12 @@ export function PriceAlertControl({
           <button type="button" className="tw-btn" onClick={() => void save()} disabled={loading || !valid} style={{ width: '100%', marginTop: 9, borderColor: 'var(--mkt-accent-line)', background: 'var(--mkt-accent-soft)', color: 'var(--mkt-accent)' }}>
             {loading ? (thresholdText ? 'Saving…' : 'Loading alerts…') : 'Arm one-shot alert'}
           </button>
-          <div style={{ marginTop: 7, color: MM.dimmer, fontSize: 9, lineHeight: 1.4 }}>Evaluated after the unattended morning market sweep. A crossing creates a Pulse item.</div>
+          <div style={{ marginTop: 7, color: MM.dim, fontSize: 10, lineHeight: 1.4 }}>A crossing creates a Pulse item. Choose timeframes, indicators and Telegram delivery in <a href="/market?view=scans&panel=alerts" style={{ color: MM.accent }}>Scans & alerts</a>.</div>
           {alerts.length > 0 && (
             <div style={{ marginTop: 10, borderTop: `1px solid ${MM.border}`, paddingTop: 8, display: 'grid', gap: 6 }}>
               {alerts.map((alert) => (
                 <div key={alert.alertId} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <span style={{ flex: 1, fontFamily: mono, fontSize: 10, color: MM.textSoft }}>{alert.direction === 'above' ? '≥' : '≤'} ${alert.threshold.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                  <span style={{ flex: 1, fontFamily: mono, fontSize: 10, color: MM.textSoft }}>{alert.direction === 'above' ? '>' : '<'} ${alert.threshold.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
                   <button type="button" onClick={() => void onCancel(alert.alertId)} disabled={loading} style={{ cursor: loading ? 'default' : 'pointer', border: 0, background: 'transparent', color: MM.dim, fontSize: 9.5 }}>Cancel</button>
                 </div>
               ))}

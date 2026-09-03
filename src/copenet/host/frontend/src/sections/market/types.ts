@@ -218,19 +218,12 @@ export interface Ohlcv {
   v: number;
 }
 
+/** Chart-only projection of an enabled canonical AlertRule, never a persisted rule. */
 export interface PriceAlert {
   alertId: string;
   symbol: string;
   direction: 'above' | 'below';
   threshold: number;
-  status: 'active' | 'triggered' | 'cancelled';
-  evaluationBasis: 'daily_close';
-  createdAt: string;
-  updatedAt: string;
-  lastObservedPrice: number;
-  lastEvaluatedAt?: string | null;
-  triggeredAt?: string | null;
-  triggerPrice?: number | null;
 }
 
 export interface VerdictRow {

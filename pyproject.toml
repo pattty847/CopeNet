@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "copetech-edgar",
+    "exchange-calendars>=4.13.2",
     "fastapi>=0.110.0",
     "pandas>=2.2.0",
     "playwright>=1.52.0",
@@ -39,6 +40,9 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/copenet"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/copenet/host/frontend/dist/indicator-alerts.cjs" = "copenet/host/frontend/dist/indicator-alerts.cjs"
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

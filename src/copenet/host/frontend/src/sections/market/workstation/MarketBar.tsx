@@ -4,7 +4,8 @@
 // colour how every other number is read. Actions here act on the whole page (refresh, jump,
 // density); anything that acts on one section lives in that section.
 
-import { RefreshCw, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
+import { NextScanControl } from '../monitoring/NextScanControl';
 import type { Density } from '../marketWorkstationState';
 import { formatBreadth, formatVix, regimeLabel } from '../marketBriefModel';
 
@@ -22,7 +23,6 @@ export function MarketBar({
   asOf,
   vix,
   breadthPct,
-  refreshing,
   onRefresh,
   density,
   onDensity,
@@ -34,7 +34,6 @@ export function MarketBar({
   asOf: string;
   vix: number;
   breadthPct: number;
-  refreshing: boolean;
   onRefresh: () => void;
   density: Density;
   onDensity: (density: Density) => void;
@@ -75,10 +74,7 @@ export function MarketBar({
         <button type="button" aria-pressed={density === 'comfortable'} onClick={() => onDensity('comfortable')} title="Comfortable density">Comfortable</button>
       </div>
 
-      <button type="button" className="tw-btn" onClick={onRefresh} disabled={refreshing} data-active={refreshing || undefined}>
-        <RefreshCw size={12} className={refreshing ? 'tw-spin' : undefined} />
-        {refreshing ? 'Refreshing…' : 'Refresh data'}
-      </button>
+      <NextScanControl onOpen={onRefresh} />
       <button type="button" className="tw-iconbtn" onClick={onJump} title="Jump to symbol ( / )" aria-label="Jump to symbol">
         <Search size={14} />
       </button>
