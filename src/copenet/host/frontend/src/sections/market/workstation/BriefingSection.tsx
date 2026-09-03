@@ -48,7 +48,7 @@ export function BriefingSection({
   ledger: LedgerReport | null;
 }) {
   const ledgerLine = ledger && ledger.totalClaims > 0 ? `${ledger.totalClaims} claims logged · ${ledger.pendingHorizons} horizons pending` : null;
-  const headline = brief?.headline ?? (generating ? 'Building the first delta snapshot…' : 'No sweep yet — the standing picture is current, the delta is not.');
+  const headline = brief?.headline ?? (generating ? 'Building the first delta snapshot…' : 'No sweep yet — run one now or wait for the next scheduled scan.');
 
   return (
     <div className="mw-briefing">

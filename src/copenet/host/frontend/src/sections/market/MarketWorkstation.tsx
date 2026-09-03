@@ -32,13 +32,12 @@ import { SymbolJump } from './SymbolJump';
 import { useEconomicCalendar } from './useEconomicCalendar';
 import {
   useForwardLedger,
-  useMarketDashboard,
   useMarketRead,
   useMarketSessions,
-  useMorningBrief,
   useTradeLedger,
   type MarketWatchlistState,
 } from './useMarketMonitorData';
+import { useMarketDashboard, useMorningBrief } from './useMarketSweepData';
 import { BacktestSection } from './workstation/BacktestSection';
 import { BriefingSection } from './workstation/BriefingSection';
 import { EvidenceSection } from './workstation/EvidenceSection';

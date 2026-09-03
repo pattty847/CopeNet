@@ -1,13 +1,14 @@
-"""Overnight market sentinel — the pre-market sweep that powers the morning brief.
+"""Scheduled market sentinel — the sweep that powers the morning brief.
 
-One sweep per day, default 07:00 operator-local (pre-market ET): refresh the
+One sweep per day, default 09:45 operator-local: refresh the
 dashboard, diff it against the pre-sweep snapshot into a morning brief, publish
 a Pulse inbox item, then chain the automatic whole-market model read (which
-now sees the overnight delta in its fact packet).
+now sees the overnight delta in its fact packet). Missed runs are skipped, never
+caught up on server startup or after machine sleep. Manual runs remain explicit.
 
 Env knobs:
   COPNET_MARKET_SENTINEL=0        disable the background loop entirely
-  COPNET_MARKET_BRIEF_TIME=HH:MM  sweep time, operator-local (default 07:00)
+  COPNET_MARKET_BRIEF_TIME=HH:MM  sweep time, operator-local (default 09:45)
 """
 
 from __future__ import annotations
@@ -27,13 +28,10 @@ from .runtime import MarketRuntime, resolve_market_runtime
 
 _LOG = logging.getLogger(__name__)
 
-DEFAULT_BRIEF_TIME = "07:00"
+DEFAULT_BRIEF_TIME = "09:45"
 
-# Startup catch-up delay: long enough that short-lived test apps (TestClient
-# lifespans) never trigger a real network sweep, short enough that a server
-# restarted after brief time still self-heals within a minute.
-_CATCHUP_DELAY_SECONDS = 60.0
-_RETRY_BACKOFF_SECONDS = 600.0
+# Allow normal event-loop jitter, not a scan hours after a sleeping Mac wakes.
+_SCHEDULE_GRACE_SECONDS = 60.0
 
 # Serializes the scheduler-triggered sweep against operator-triggered market.brief.run.
 _sweep_lock = asyncio.Lock()
@@ -47,10 +45,20 @@ def _brief_time() -> tuple[int, int]:
     raw = os.environ.get("COPNET_MARKET_BRIEF_TIME", DEFAULT_BRIEF_TIME).strip()
     try:
         hour, minute = raw.split(":")
-        return int(hour) % 24, int(minute) % 60
+        parsed = int(hour), int(minute)
+        if not (0 <= parsed[0] < 24 and 0 <= parsed[1] < 60):
+            raise ValueError("time out of range")
+        return parsed
     except ValueError:
         _LOG.warning("COPNET_MARKET_BRIEF_TIME=%r is not HH:MM — using %s", raw, DEFAULT_BRIEF_TIME)
-        return 7, 0
+        return 9, 45
+
+
+def _next_sweep_at(now: datetime) -> datetime:
+    """Next strictly future slot, independent of missing/stale stored briefs."""
+    hour, minute = _brief_time()
+    target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
+    return target + timedelta(days=1) if now >= target else target
 
 
 def _today() -> str:
@@ -62,7 +70,7 @@ def _sweep_satisfied(existing: dict[str, Any] | None, now: datetime) -> bool:
 
     Before brief time, any same-day brief counts (a pre-dawn manual sweep is current
     enough). At/after brief time, only a brief generated at/after today's brief time
-    counts — so a 3 AM manual brief never suppresses the real 7 AM sweep."""
+    counts — so an early manual brief never suppresses the scheduled sweep."""
     if not existing or existing.get("briefDate") != now.strftime("%Y-%m-%d"):
         return False
     hour, minute = _brief_time()
@@ -158,7 +166,7 @@ def _publish_pulse(pulse_store, wire: dict[str, Any]) -> None:
         title=f"Morning market brief · {brief_date}",
         summary=str(wire.get("headline") or "Morning market brief is ready."),
         why_now=(
-            f"Pre-market sweep found {len(new_evidence)} new SEC filing(s) and "
+            f"Market sweep found {len(new_evidence)} new SEC filing(s) and "
             f"{len(flips)} signal flip(s) since the previous sweep."
         ),
         source_session_keys=["market-sentinel"],
@@ -191,26 +199,21 @@ class MarketSentinel:
     async def _loop(self) -> None:
         runtime = resolve_market_runtime(self._orchestrator)
         while True:
-            delay = self._seconds_until_next_sweep(runtime)
+            now = datetime.now()
+            target = _next_sweep_at(now).astimezone()
+            delay = (target - now.astimezone()).total_seconds()
             _LOG.info("market sentinel: next sweep in %.0f min", delay / 60)
             await asyncio.sleep(delay)
+            lateness = (datetime.now().astimezone() - target).total_seconds()
+            if lateness < 0 or lateness > _SCHEDULE_GRACE_SECONDS:
+                _LOG.info("market sentinel: missed slot skipped; waiting for next scheduled scan")
+                continue
             try:
                 await run_morning_sweep(runtime, self._provider(), self._pulse_store())
             except asyncio.CancelledError:
                 raise
             except Exception:
-                _LOG.exception("market sentinel: sweep failed — retrying after backoff")
-                await asyncio.sleep(_RETRY_BACKOFF_SECONDS)
-
-    def _seconds_until_next_sweep(self, runtime: MarketRuntime) -> float:
-        hour, minute = _brief_time()
-        now = datetime.now()
-        target = now.replace(hour=hour, minute=minute, second=0, microsecond=0)
-        if now >= target:
-            if not _sweep_satisfied(runtime.store.load_morning_brief(), now):
-                return _CATCHUP_DELAY_SECONDS  # server was down at brief time — catch up
-            target += timedelta(days=1)
-        return max((target - now).total_seconds(), _CATCHUP_DELAY_SECONDS)
+                _LOG.exception("market sentinel: sweep failed — next attempt at next scheduled slot")
 
     def _provider(self):
         providers = getattr(self._orchestrator, "_providers", None)

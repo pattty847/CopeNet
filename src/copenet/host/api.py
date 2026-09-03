@@ -38,9 +38,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        # Overnight market sentinel: pre-market sweep + morning brief. Disabled via
-        # COPNET_MARKET_SENTINEL=0. Its startup catch-up delay keeps short-lived test
-        # apps from ever triggering a real sweep.
+        # Scheduled market sweep; no startup catch-up. Tests that span a scheduled
+        # slot must disable the sentinel with COPNET_MARKET_SENTINEL=0.
         if sentinel_enabled():
             sentinel.start()
         yield
