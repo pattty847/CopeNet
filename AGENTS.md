@@ -239,6 +239,15 @@ For current behavior, assume:
 
 ### Market Monitor
 
+- **Scans own broad acquisition.** `core/market/scans/` holds named definitions, scope resolution,
+  source plans, schedules and immutable runs. UI lives in `sections/market/monitoring/`.
+  Never add a full refresh to boot, page load or broker sync. Manual runs require the scope
+  token from preview; stale definitions/list expansion require a new confirmation.
+- **Alerts reuse chart math.** `alert_engine.py` evaluates canonical `AlertRule` records from
+  completed cached D/W/M US-equity candles. `npm run build` also generates the headless Node
+  registry evaluator; build it before backend alert tests. Telegram outbox delivery is independent
+  of scan admission, requires explicit per-rule consent/approval and preserves uncertain sends.
+
 - File map (`src/copenet/core/market/`): `data_sources.py` (yfinance), `signals.py`/`features.py` (technical signals, RRG, soft-bottoming), `edgar.py` (CopeTech-Edgar insider/8-K evidence + legacy fundamentals), `financials.py` (canonical point-in-time financial-series boundary), `interpretation.py`/`fact_packets.py` (LLM read pipeline), `replay.py`/`base_rates.py` (point-in-time pattern calibration), `backtester.py` (portfolio backtest + scenario stress), `webull/` (read-only broker lane — `sync.py` portfolio, `orders.py` fills, `pnl.py` all-time FIFO P&L, `watchlists.py` import; audit in `docs/plans/WEBULL_API_SURFACE.md`), `store.py` (`MarketStore` disk cache), `price_cache.py`/`price_history.py` (durable split-only daily history — every candle and P/E price reads from here), `quotes.py` (watchlist rows off that cache), `watchlist_store.py` (`WatchlistStore`, distinct from the fixed `UNIVERSE` in `universe.py`).
 - **Splits always invalidate the price cache; dividends never do.** `auto_adjust=True` hides two different adjustments behind one flag — dividend-adjusting retroactively shifts all prior prices, which would drift an append-only cache invisibly at the seam, so the cache stores split-only bars plus separate split/dividend histories. Every `fetch_ohlcv()` call must stay split-adjusted (pinned by `tests/unit/test_market_data_contracts.py`); the one sanctioned split-only bypass is `fetch_daily_price_history()`, which never writes the shared cache.
 - **Trailing P/E divides split-only price by point-in-time TTM diluted EPS**, not a dividend-adjusted price — the wrong basis silently understates the multiple (measured up to 35% at the 10-year mark before this was fixed).

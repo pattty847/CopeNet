@@ -62,6 +62,29 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
 
+**Scans & alerts** — named asset baskets, linked watchlists, exclusions, source selection,
+and multiple timezone-aware schedules live in one Market workspace. The morning default
+is **09:45**; missed times are skipped, never caught up at startup. Preview exact inclusion
+reasons and cached/source work before an explicit run. Focused scans keep separate results;
+they do not replace the broad-market briefing.
+
+![Market scan controls — synthetic demonstration data](docs/imgs/market-scans-alerts.png)
+
+Technical alerts use the chart’s own price/SMA/EMA/RSI/MACD calculations on completed
+daily, weekly, or monthly US-equity candles. Arming establishes a baseline, not an old
+crossing. Rules can repeat or stop after one event. Every crossing is recorded in Pulse;
+optional Telegram delivery has per-rule consent, approval, receipts, retry, and explicit
+uncertain-send handling. An indicator’s bell carries its current settings into the editor.
+
+![Technical alert editor — synthetic demonstration data](docs/imgs/market-alert-editor.png)
+
+Build the frontend with `npm run build` before running the host: it also produces the
+headless indicator evaluator. **Node.js is required by background technical alerts.**
+Telegram uses the existing `COPNET_TELEGRAM_BOT_TOKEN` and configured Messaging
+destinations. Optionally set `COPNET_PUBLIC_URL` to a private, device-reachable origin for
+ticker links; never put credentials in that URL. Use Activity’s explicit test-message action
+to verify real delivery. No message is sent just by opening these controls.
+
 On mobile, the Market workstation uses section tabs and a fixed, stacked layout: every
 widget stays accessible, while your desktop arrangement remains saved separately. Lists
 flow with the section instead of trapping vertical scrolling; wide financial tables scroll
@@ -119,10 +142,10 @@ examined together without mixing raw values and percentages on one axis.
 **Chart-created price alerts** — click **Add alert**, place a level directly on the
 candlestick chart, and choose whether a daily close should cross above or below it.
 The picked level immediately appears as a labeled draft line and stays in the popup for
-review before it is armed. Rules are durable and one-shot; active levels return as chart lines, and a crossing
-from the unattended morning market sweep creates a Pulse item. The control labels the
-daily-close cadence explicitly while the separately designed intraday lane remains in
-data validation.
+review before it is armed. Rules are durable and one-shot; active levels return as chart
+lines. Evaluation follows the linked price scan and creates a Pulse item on a completed
+daily-candle crossing. Manage timeframe, scan, repeating behavior, and Telegram delivery
+in Scans & alerts. Intraday alerts remain out of scope.
 
 ![CopeNet Market Monitor — chart-created daily-close price alert](docs/imgs/market-panel/copenet-price-alert.png)
 
