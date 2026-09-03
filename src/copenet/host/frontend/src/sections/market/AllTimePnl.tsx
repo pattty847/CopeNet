@@ -145,18 +145,20 @@ export function AllTimePnl({
         <Stat caption="Win rate" value={ledger.winRatePct == null ? '—' : `${ledger.winRatePct}%`} />
       </div>
 
-      <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0 2px', font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
-        <span style={{ width: 60 }}>Holding</span>
-        <span style={{ flex: 1 }}>Record</span>
-        <span style={{ width: 88, textAlign: 'right' }}>Realized</span>
-        <span style={{ width: 88, textAlign: 'right' }}>Open</span>
-        <span style={{ width: 92, textAlign: 'right' }}>Total</span>
+      <div className="market-holdings-table">
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '12px 0 2px', font: '600 8.5px var(--mkt-sans)', letterSpacing: '.1em', textTransform: 'uppercase', color: MM.dimmer }}>
+          <span style={{ width: 60 }}>Holding</span>
+          <span style={{ flex: 1 }}>Record</span>
+          <span style={{ width: 88, textAlign: 'right' }}>Realized</span>
+          <span style={{ width: 88, textAlign: 'right' }}>Open</span>
+          <span style={{ width: 92, textAlign: 'right' }}>Total</span>
+        </div>
+        {holdings.length === 0 ? (
+          <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', padding: '8px 0' }}>No open positions at the broker.</div>
+        ) : (
+          holdings.map((row) => <HoldingRow key={row.symbol} row={row} onOpen={onOpen} />)
+        )}
       </div>
-      {holdings.length === 0 ? (
-        <div style={{ fontSize: 11.5, color: MM.dim, fontStyle: 'italic', padding: '8px 0' }}>No open positions at the broker.</div>
-      ) : (
-        holdings.map((row) => <HoldingRow key={row.symbol} row={row} onOpen={onOpen} />)
-      )}
 
       <div style={{ marginTop: 12, paddingTop: 10, borderTop: `1px solid ${MM.border}`, fontSize: 11, color: MM.dim }}>
         Closed out: <span style={{ fontFamily: mono, color: MM.textSoft }}>{closed.length}</span> symbols,{' '}

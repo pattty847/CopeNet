@@ -35,7 +35,7 @@ export interface SectionLayout {
   reset: () => void;
 }
 
-export function useSectionLayout(section: MarketSection, panels: SectionPanel[]): SectionLayout {
+export function useSectionLayout(section: MarketSection, panels: SectionPanel[], isMobile: boolean): SectionLayout {
   const [pref, setPref] = useState<SectionLayoutPref>(() => loadSectionLayout(section));
 
   useEffect(() => {
@@ -51,7 +51,7 @@ export function useSectionLayout(section: MarketSection, panels: SectionPanel[])
   );
 
   const ids = useMemo(() => panels.map((panel) => panel.id), [panels]);
-  const resolved = useMemo(() => resolveSectionLayout(panels, pref), [panels, pref]);
+  const resolved = useMemo(() => resolveSectionLayout(panels, pref, isMobile), [panels, pref, isMobile]);
 
   return {
     panels: resolved,

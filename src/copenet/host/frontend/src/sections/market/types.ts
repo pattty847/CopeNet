@@ -643,6 +643,10 @@ export interface LedgerBaseline {
   pct: number | null;
   n: number;
   label: string;
+  matchedClaims: number;
+  scoredClaims: number;
+  /** Hit rate of the same matched claims, not the larger all-time population. */
+  accuracyPct: number | null;
 }
 export interface LedgerReport {
   rulesVersion: string;

@@ -57,12 +57,12 @@ export function isMarketSection(value: string | null | undefined): value is Mark
   return value != null && (MARKET_SECTIONS as readonly string[]).includes(value);
 }
 
-/** `/market?view=portfolio` → 'portfolio'. Null on any other path, or when the view is absent
- *  or unknown, so the caller can fall back to its remembered section. */
+/** The URL owns navigation: bare /market and unknown views resolve to Briefing.
+ *  Null only outside the workstation, where ticker return state can be remembered. */
 export function marketSectionFromLocation(pathname: string, search: string): MarketSection | null {
   if (normalizePathname(pathname) !== '/market') return null;
   const view = new URLSearchParams(search).get('view')?.trim().toLowerCase() ?? '';
-  return isMarketSection(view) ? view : null;
+  return isMarketSection(view) ? view : 'briefing';
 }
 
 /** Briefing is home and owns the bare `/market`; every other section is addressable. */

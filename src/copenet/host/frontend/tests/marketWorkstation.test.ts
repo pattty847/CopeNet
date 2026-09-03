@@ -48,8 +48,8 @@ test('market sections are addressable by query and briefing owns the bare path',
   assert.equal(marketSectionPath('portfolio'), '/market?view=portfolio');
   assert.equal(marketSectionFromLocation('/market', '?view=portfolio'), 'portfolio');
   assert.equal(marketSectionFromLocation('/market/', '?view=LEDGER'), 'ledger');
-  assert.equal(marketSectionFromLocation('/market', ''), null);
-  assert.equal(marketSectionFromLocation('/market', '?view=nonsense'), null);
+  assert.equal(marketSectionFromLocation('/market', ''), 'briefing');
+  assert.equal(marketSectionFromLocation('/market', '?view=nonsense'), 'briefing');
   assert.equal(marketSectionFromLocation('/market/NVDA', '?view=portfolio'), null);
 });
 
@@ -133,4 +133,17 @@ test('section layouts honour saved order, drop unknown ids, append new panels, a
   assert.deepEqual(movePanel(moved, ids, 'treasury', -1).order, moved.order, 'moving the first panel up is a no-op');
   assert.deepEqual(togglePanelHidden(togglePanelHidden(moved, 'sector'), 'sector').hidden, []);
   assert.equal(setPanelWidth(moved, 'sector', 'full').width.sector, 'full');
+});
+
+test('mobile uses canonical order and restores every panel without altering desktop preferences', () => {
+  const panels: SectionPanelSpec[] = [
+    { id: 'first', title: 'First', defaultWidth: 'half', canHalf: true },
+    { id: 'second', title: 'Second', defaultWidth: 'half', canHalf: true },
+  ];
+  const pref: SectionLayoutPref = { order: ['second', 'first'], hidden: ['first', 'second'], width: { second: 'half' } };
+  const before = JSON.stringify(pref);
+  const mobile = resolveSectionLayout(panels, pref, true);
+  assert.deepEqual(mobile.map(({ spec, width, hidden }) => [spec.id, width, hidden]), [['first', 'full', false], ['second', 'full', false]]);
+  assert.equal(JSON.stringify(pref), before);
+  assert.deepEqual(resolveSectionLayout(panels, pref).map(({ spec, hidden }) => [spec.id, hidden]), [['second', true], ['first', true]]);
 });

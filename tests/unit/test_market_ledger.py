@@ -7,12 +7,11 @@ from pathlib import Path
 
 from copenet.core.market.ledger import (
     LedgerStore,
-    ledger_report,
     record_market_read_claims,
     record_ticker_read_claim,
     resolve_due_claims,
-    track_record_line,
 )
+from copenet.core.market.ledger_report import ledger_report, track_record_line
 from copenet.core.market.models import MarketBar
 from copenet.core.market.store import MarketStore
 
@@ -212,10 +211,10 @@ def test_baseline_measures_the_dart_and_the_best_constant_regime_call(tmp_path: 
     store.save_bars("VOO", "daily", _bars([100.0, 102.0]))
     resolve_due_claims(store)
     report = ledger_report(store, baseline_universe=["SOFI", "XLK"])
-    # Bars are dated Dec 2024 and the claim was created now, so every close resolves to the
-    # latest bar on both ends of the window: the dart sees no move at all.
+    # December 2024 bars cannot reconstruct a current claim's window. Do not silently
+    # call the stale price a zero return and flatter the model's comparison.
     attention = report["baseline"]["attention"]["4w"]
-    assert attention == {"pct": 0.0, "n": 2, "label": "dart over 2 tracked names"}
+    assert attention == {"pct": None, "n": 2, "label": "dart over 2 tracked names", "matchedClaims": 0, "scoredClaims": 1, "accuracyPct": None}
     regime = report["baseline"]["regime"]["4w"]
     assert regime["n"] == 1 and regime["pct"] == 100.0 and regime["label"] in ("always risk-on", "always chop")
     assert report["baseline"]["screen"]["4w"]["pct"] is None  # nothing scored for screens yet

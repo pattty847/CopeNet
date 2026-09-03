@@ -41,7 +41,7 @@ export function PortfolioSection({
     ],
     [dashboard.portfolio, dashboard.speculative, onOpen, onSyncWebull, read?.speculativeComment, syncing, tradeLedger],
   );
-  const layout = useSectionLayout('portfolio', panels);
+  const layout = useSectionLayout('portfolio', panels, isMobile);
   const positions = dashboard.portfolio.data.positions.length;
 
   return (

@@ -1,0 +1,21 @@
+/* One vertical scroll owner: section bodies grow; only wide tables scroll sideways.
+ * Keep this scoped to the workstation, not the ticker's deliberately docked research. */
+@media (max-width: 1023px) {
+  .mw-section { overscroll-behavior-y: contain; }
+  .mw .market-panel-drag-handle { flex-wrap: wrap; }
+  .mw .market-panel-header__actions { flex-wrap: wrap; min-width: 0; }
+  .mw .market-panel-header__actions .tw-btn { min-height: 36px; min-width: 36px; }
+  .mw .market-panel-list { max-height: none !important; overflow: visible !important; }
+  .mw-rail.mw-rail--sheet { height: auto; min-height: 0; flex: initial; }
+  .mw-rail--sheet .tw-rail__list { flex: initial; overflow: visible; }
+  .mw-tabs .tw-tab { min-height: 44px; padding-inline: 14px; }
+  .mw .market-ledger-row { flex-wrap: wrap; }
+  .mw .market-ledger-row > span:nth-child(6) { flex-basis: 100% !important; order: 1; }
+  .mw .market-ledger-details { grid-template-columns: minmax(0, 1fr) !important; padding-left: 4px !important; }
+  .mw .market-ledger-outcomes { overflow-x: auto; }
+  .mw .market-trade-row { display: grid !important; grid-template-columns: auto 1fr auto auto; }
+  .mw .market-trade-row > span { width: auto !important; }
+  .mw .market-trade-row > span:nth-child(3) { grid-row: 2; grid-column: 1 / -1; white-space: normal !important; }
+  .mw .market-holdings-table { overflow-x: auto; }
+  .mw .market-holdings-table > * { min-width: 460px; }
+}

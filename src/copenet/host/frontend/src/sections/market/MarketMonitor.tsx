@@ -14,8 +14,8 @@ import { loadLastSection, saveLastSection } from './marketWorkstationState';
 import { TickerWorkspace } from './TickerWorkspace';
 import { useMarketWatchlist } from './useMarketMonitorData';
 
-/** The URL wins when it names a section; otherwise the remembered one, so a return from a
- *  ticker (or a plain visit to /market) lands where the operator last was. */
+/** A workstation URL always wins, including the bare Briefing route. The remembered
+ *  section is only the return destination when entering directly through an asset URL. */
 function sectionFromLocation(): MarketSection {
   return marketSectionFromLocation(window.location.pathname, window.location.search) ?? loadLastSection();
 }
@@ -25,6 +25,10 @@ export function MarketMonitor() {
   const [activeTicker, setActiveTicker] = useState(() => marketTickerFromPathname(window.location.pathname));
   const [activeFormula, setActiveFormula] = useState(() => marketFormulaFromLocation(window.location.pathname, window.location.search));
   const [activeSection, setActiveSection] = useState<MarketSection>(sectionFromLocation);
+
+  useEffect(() => {
+    if (!activeTicker && !activeFormula) saveLastSection(activeSection);
+  }, [activeSection, activeTicker, activeFormula]);
 
   useEffect(() => {
     const syncFromLocation = () => {
@@ -42,14 +46,13 @@ export function MarketMonitor() {
 
   const navigateMarket = (value: string | null, type: 'symbol' | 'formula' = 'symbol') => {
     const nextPath = value == null
-      ? marketSectionPath(loadLastSection())
+      ? marketSectionPath(activeSection)
       : type === 'formula'
         ? marketFormulaPath(value)
         : marketTickerNavigationPath(value, window.location.pathname, window.location.search);
     pushPath(nextPath);
     setActiveTicker(type === 'symbol' ? value?.trim().toUpperCase() || null : null);
     setActiveFormula(type === 'formula' ? value?.trim() || null : null);
-    if (value == null) setActiveSection(loadLastSection());
   };
 
   const selectSection = (section: MarketSection) => {

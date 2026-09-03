@@ -183,7 +183,8 @@ export function saveSectionLayout(section: MarketSection, pref: SectionLayoutPre
 /** Stored order wins for panels that still exist, new panels append at their default slot,
  *  unknown ids drop — so adding or removing a panel never strands a saved layout. Hidden
  *  panels stay in the list (the arrange menu needs them) with `hidden: true`. */
-export function resolveSectionLayout<T extends SectionPanelSpec>(panels: readonly T[], pref: SectionLayoutPref): ResolvedPanel<T>[] {
+export function resolveSectionLayout<T extends SectionPanelSpec>(panels: readonly T[], pref: SectionLayoutPref, isMobile = false): ResolvedPanel<T>[] {
+  if (isMobile) return panels.map((spec) => ({ spec, width: 'full', hidden: false }));
   const byId = new Map(panels.map((panel) => [panel.id, panel]));
   const ordered: T[] = [];
   for (const id of pref.order) {

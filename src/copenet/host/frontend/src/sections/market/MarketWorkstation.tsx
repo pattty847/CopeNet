@@ -51,6 +51,7 @@ import { StructureSection } from './workstation/StructureSection';
 import { WatchRail } from './workstation/WatchRail';
 import './tickerWorkspace.css';
 import './marketWorkstation.css';
+import './marketWorkstationMobile.css';
 
 export function MarketWorkstation({
   section,

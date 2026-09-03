@@ -15,7 +15,8 @@ from copenet.core.market.financials import (
     get_financial_series,
     supported_financial_metrics,
 )
-from copenet.core.market.ledger import ledger_report, resolve_due_claims
+from copenet.core.market.ledger import resolve_due_claims
+from copenet.core.market.ledger_report import ledger_report
 from copenet.core.market.runtime import resolve_market_runtime
 from copenet.core.market.sentinel import run_morning_sweep
 from copenet.core.runtime.runs import RunRecord

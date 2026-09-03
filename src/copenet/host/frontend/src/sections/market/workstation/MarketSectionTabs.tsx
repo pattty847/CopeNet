@@ -5,6 +5,7 @@
 // Both survive on every screen width because the strip is chrome.
 
 import type { ReactNode } from 'react';
+import { useEffect, useRef } from 'react';
 import type { MarketSection } from '../../../lib/appSectionRouting';
 
 export function MarketSectionTabs({
@@ -22,12 +23,18 @@ export function MarketSectionTabs({
   warnings: Partial<Record<MarketSection, number>>;
   tools?: ReactNode;
 }) {
+  const tabList = useRef<HTMLDivElement>(null);
+  const shortcutTabs = tabs.filter((entry) => entry.id !== 'watchlist');
+  useEffect(() => {
+    tabList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [active]);
   return (
-    <div className="mw-tabs" role="tablist" aria-label="Market sections">
-      {tabs.map((tab, index) => {
+    <div ref={tabList} className="mw-tabs" role="tablist" aria-label="Market sections">
+      {tabs.map((tab) => {
         const fresh = newCounts[tab.id] ?? 0;
         const broken = warnings[tab.id] ?? 0;
-        const shortcut = index < 9 && tab.id !== 'watchlist' ? ` (${index + 1})` : '';
+        const index = shortcutTabs.findIndex((entry) => entry.id === tab.id);
+        const shortcut = index >= 0 && index < 9 ? ` (${index + 1})` : '';
         return (
           <button
             key={tab.id}

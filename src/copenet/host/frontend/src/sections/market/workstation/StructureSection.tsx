@@ -31,7 +31,7 @@ export function StructureSection({
     ],
     [dashboard.industryRrg, dashboard.rrg, onOpen, read?.rotationRead],
   );
-  const layout = useSectionLayout('structure', panels);
+  const layout = useSectionLayout('structure', panels, isMobile);
 
   return (
     <>

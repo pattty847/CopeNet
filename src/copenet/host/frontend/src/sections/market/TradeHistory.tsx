@@ -26,6 +26,7 @@ function TradeRow({ trade, onOpen }: { trade: RealizedTrade; onOpen: (symbol: st
   const isOption = trade.instrumentType === 'OPTION';
   return (
     <button
+      className="market-trade-row"
       onClick={() => onOpen(trade.symbol)}
       style={{
         cursor: 'pointer',

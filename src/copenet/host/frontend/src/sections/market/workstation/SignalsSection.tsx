@@ -15,7 +15,7 @@ export function SignalsSection({ dashboard, onOpen, isMobile }: { dashboard: Das
     ],
     [dashboard.accumulation, dashboard.softBottoming, dashboard.trend, onOpen],
   );
-  const layout = useSectionLayout('signals', panels);
+  const layout = useSectionLayout('signals', panels, isMobile);
   const flagged = dashboard.softBottoming.data.length + dashboard.trend.data.length + dashboard.accumulation.data.length;
 
   return (

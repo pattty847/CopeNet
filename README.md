@@ -62,6 +62,19 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
 
+On mobile, the Market workstation uses section tabs and a fixed, stacked layout: every
+widget stays accessible, while your desktop arrangement remains saved separately. Lists
+flow with the section instead of trapping vertical scrolling; wide financial tables scroll
+sideways. RRG scrolling moves the page by default, with explicit zoom controls and an
+opt-in touch-pan mode.
+
+<details>
+<summary>Mobile Signals workspace (synthetic demonstration data)</summary>
+
+![Market mobile Signals workspace with synthetic data](docs/imgs/market-mobile-signals.png)
+
+</details>
+
 **Asset workspace** — every ticker opens as a reloadable `/market/{symbol}` research
 surface with the price chart in command. Identity, quote provenance, watchlist state,
 asset switching, interval and visible-range controls, split-adjusted price history,

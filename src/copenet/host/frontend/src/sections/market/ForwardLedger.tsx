@@ -8,7 +8,7 @@ import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
 import { claimIsScored, hitRate, weeklyOutcomes, type LedgerKind } from './ledgerModel';
-import type { LedgerBaseline, LedgerClaim, LedgerKindStats, LedgerReport, Tone } from './types';
+import type { LedgerBaseline, LedgerClaim, LedgerReport, Tone } from './types';
 
 const KIND_LABEL: Record<LedgerKind, string> = {
   regime: 'Regime calls',
@@ -73,14 +73,15 @@ function WeekStrip({ claims }: { claims: LedgerClaim[] }) {
 }
 
 /** "vs dart 52% (+15)" — the hit rate only means something next to what chance scored. */
-function BaselineLine({ stats, baseline }: { stats: LedgerKindStats | undefined; baseline: LedgerBaseline | undefined }) {
-  if (!baseline || baseline.pct == null) return <span style={{ fontFamily: mono, fontSize: 9.5, color: MM.dimmer }}>baseline needs scored claims</span>;
-  const delta = stats?.accuracyPct != null ? stats.accuracyPct - baseline.pct : null;
+function BaselineLine({ baseline }: { baseline: LedgerBaseline | undefined }) {
+  if (!baseline || baseline.pct == null) return <span style={{ fontFamily: mono, fontSize: 9.5, color: MM.dimmer }}>{baseline?.scoredClaims ? 'Baseline unavailable · historical snapshots cannot be matched' : 'Baseline needs scored claims'}</span>;
+  const delta = baseline.accuracyPct != null ? baseline.accuracyPct - baseline.pct : null;
   const deltaColor = delta == null ? MM.dim : delta > 0 ? MM.up : delta < 0 ? MM.down : MM.dim;
   return (
-    <span style={{ fontFamily: mono, fontSize: 10, color: MM.muted }} title={`${baseline.label} would have scored ${baseline.pct}% on the same windows`}>
+    <span style={{ fontFamily: mono, fontSize: 10, color: MM.muted }} title={`${baseline.label}: ${baseline.pct}% vs calls ${baseline.accuracyPct}% on ${baseline.matchedClaims} of ${baseline.scoredClaims} scored claims with matching historical snapshots`}>
       vs {baseline.label.startsWith('dart') ? 'dart' : baseline.label} {baseline.pct}%
       {delta != null && <span style={{ color: deltaColor, marginLeft: 6 }}>{delta > 0 ? '+' : ''}{delta.toFixed(0)}</span>}
+      <small style={{ display: 'block', color: MM.dim }}>{baseline.matchedClaims}/{baseline.scoredClaims} matched claims</small>
     </span>
   );
 }
@@ -91,6 +92,7 @@ function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: str
     <div style={{ borderTop: `1px solid rgba(254,252,244,.05)` }}>
       <button
         type="button"
+        className="market-ledger-row"
         onClick={() => setOpen((value) => !value)}
         aria-expanded={open}
         style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 4px', border: 0, background: open ? 'rgba(254,252,244,.03)' : 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}
@@ -123,13 +125,13 @@ function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: str
         })}
       </button>
       {open && (
-        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, padding: '2px 4px 12px 30px' }}>
+        <div className="market-ledger-details" style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 12, padding: '2px 4px 12px 30px' }}>
           <div style={{ fontFamily: mono, fontSize: 10, color: MM.dim, display: 'flex', flexWrap: 'wrap', gap: '4px 14px', alignSelf: 'start' }}>
             <span>logged {new Date(claim.created_at).toLocaleString([], { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</span>
             <span>model {claim.model}</span>
             {claim.confidence && <span>confidence {claim.confidence}</span>}
           </div>
-          <table style={{ borderCollapse: 'collapse', fontFamily: mono, fontSize: 10.5, color: MM.textSoft }}>
+          <div className="market-ledger-outcomes"><table style={{ borderCollapse: 'collapse', fontFamily: mono, fontSize: 10.5, color: MM.textSoft }}>
             <thead>
               <tr style={{ color: MM.dimmer, font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase' }}>
                 <th style={{ textAlign: 'left', padding: '0 10px 4px 0' }}>Horizon</th>
@@ -154,7 +156,7 @@ function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: str
                 );
               })}
             </tbody>
-          </table>
+          </table></div>
         </div>
       )}
     </div>
@@ -208,7 +210,7 @@ export function ForwardLedger({ report, loading, onOpen }: { report: LedgerRepor
                   ) : (
                     <div style={{ fontFamily: mono, fontSize: 12, color: MM.dim }}>no claims yet</div>
                   )}
-                  <BaselineLine stats={h4} baseline={report.baseline?.[entry]?.['4w']} />
+                  <BaselineLine baseline={report.baseline?.[entry]?.['4w']} />
                   {entry === 'screen' && Object.keys(report.signals ?? {}).length > 0 && (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 2, fontFamily: mono, fontSize: 10, color: MM.dim }}>
                       {Object.entries(report.signals).map(([signal, byHorizon]) => {

@@ -1,101 +1,15 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useId, useMemo, useState } from 'react';
 import type { Panel, RrgMode, RrgSector } from './types';
 import { MM, PanelCard, mono } from './marketUi';
 import { useIsMobile } from '../../lib/responsive';
+import { useRrgInteraction } from './useRrgInteraction';
+import { W, H, L, R, T, B, MIN_SCALE, MAX_SCALE, smoothPath, rrgColor, axisTicks, formatAxisValue, rrgLabelSize } from './rrgGeometry';
 
 const RRG_MODES: { mode: RrgMode; label: string; title: string }[] = [
   { mode: 'fast', label: 'FAST', title: 'Fast · 8w level · 2w momentum · EMA 2' },
   { mode: 'default', label: 'STD', title: 'Standard · 13w level · 4w momentum · EMA 3' },
   { mode: 'slow', label: 'SLOW', title: 'Slow · 26w level · 8w momentum · EMA 5' },
 ];
-
-/** Catmull-Rom -> cubic bezier, so rotation tails read as smooth curves not jagged polylines. */
-function smoothPath(p: { x: number; y: number }[]): string {
-  if (p.length < 2) return p.length ? `M${p[0].x.toFixed(1)},${p[0].y.toFixed(1)}` : '';
-  let d = `M${p[0].x.toFixed(1)},${p[0].y.toFixed(1)}`;
-  for (let i = 0; i < p.length - 1; i += 1) {
-    const p0 = p[i - 1] || p[i];
-    const p1 = p[i];
-    const p2 = p[i + 1];
-    const p3 = p[i + 2] || p2;
-    const c1x = p1.x + (p2.x - p0.x) / 6;
-    const c1y = p1.y + (p2.y - p0.y) / 6;
-    const c2x = p2.x - (p3.x - p1.x) / 6;
-    const c2y = p2.y - (p3.y - p1.y) / 6;
-    d += `C${c1x.toFixed(1)},${c1y.toFixed(1)} ${c2x.toFixed(1)},${c2y.toFixed(1)} ${p2.x.toFixed(1)},${p2.y.toFixed(1)}`;
-  }
-  return d;
-}
-
-// One distinct, legible-on-dark color per sector tail, assigned by symbol order so it stays stable across renders.
-const RRG_PALETTE = [
-  '#6fb8f2',
-  '#f2a65a',
-  '#7fd88f',
-  '#e07be0',
-  '#f2d75a',
-  '#f27b7b',
-  '#7be0c9',
-  '#b39ddb',
-  '#f2955a',
-  '#8fc9f2',
-  '#c9e07b',
-];
-
-function rrgColor(symbol: string, allSymbols: string[]): string {
-  const idx = allSymbols.indexOf(symbol);
-  return RRG_PALETTE[idx % RRG_PALETTE.length];
-}
-
-type RrgView = {
-  scale: number;
-  panX: number;
-  panY: number;
-};
-
-const W = 980;
-const H = 560;
-const L = 48;
-const R = 24;
-const T = 24;
-const B = 36;
-const MIN_SCALE = 1;
-const MAX_SCALE = 5;
-
-function clamp(v: number, min: number, max: number): number {
-  return Math.max(min, Math.min(max, v));
-}
-
-function axisTicks(domain: number): number[] {
-  return [-domain, -domain / 2, 0, domain / 2, domain];
-}
-
-function formatAxisValue(value: number): string {
-  if (Math.abs(value) < 0.005) return '0';
-  return Math.abs(value) >= 10 ? value.toFixed(0) : value.toFixed(1);
-}
-
-function screenToPlotPoint(clientX: number, clientY: number, svg: SVGSVGElement, view: RrgView) {
-  const rect = svg.getBoundingClientRect();
-  const px = ((clientX - rect.left) / rect.width) * W;
-  const py = ((clientY - rect.top) / rect.height) * H;
-  return {
-    x: L + (px - L) / view.scale - view.panX,
-    y: T + (py - T) / view.scale - view.panY,
-  };
-}
-
-function constrainView(next: RrgView): RrgView {
-  const plotW = W - L - R;
-  const plotH = H - T - B;
-  const extraX = plotW * (next.scale - 1) / next.scale;
-  const extraY = plotH * (next.scale - 1) / next.scale;
-  return {
-    scale: next.scale,
-    panX: clamp(next.panX, -extraX, 0),
-    panY: clamp(next.panY, -extraY, 0),
-  };
-}
 
 export function Rrg({
   panel,
@@ -113,10 +27,7 @@ export function Rrg({
 }) {
   const isMobile = useIsMobile();
   const clipId = useId();
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const dragRef = useRef<{ pointerId: number; x: number; y: number; panX: number; panY: number; moved: boolean } | null>(null);
-  const suppressClickRef = useRef(false);
-  const [view, setView] = useState<RrgView>({ scale: 1, panX: 0, panY: 0 });
+  const { svgRef, view, setView, setZoom, pixelScale, touchPan, setTouchPan, suppressClickRef, handlePointerDown, handlePointerMove, endDrag } = useRrgInteraction();
   const [hoveredSymbol, setHoveredSymbol] = useState<string | null>(null);
   const [pinnedSymbol, setPinnedSymbol] = useState<string | null>(null);
   const [mode, setMode] = useState<RrgMode>('default');
@@ -154,60 +65,6 @@ export function Rrg({
   const visibleYMax = domY - ((visibleSYMin - T) / plotH) * 2 * domY;
   const visibleYMin = domY - ((visibleSYMax - T) / plotH) * 2 * domY;
 
-  const setZoom = (nextScale: number, anchor?: { x: number; y: number }) => {
-    setView((current) => {
-      const scale = clamp(nextScale, MIN_SCALE, MAX_SCALE);
-      const target = anchor || { x: L + (W - L - R) / 2, y: T + (H - T - B) / 2 };
-      const ratio = current.scale / scale;
-      return constrainView({
-        scale,
-        panX: L + (target.x + current.panX - L) * ratio - target.x,
-        panY: T + (target.y + current.panY - T) * ratio - target.y,
-      });
-    });
-  };
-
-  useEffect(() => {
-    const svg = svgRef.current;
-    if (!svg) return undefined;
-
-    const handleNativeWheel = (event: WheelEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      const anchor = screenToPlotPoint(event.clientX, event.clientY, svg, view);
-      const factor = event.deltaY < 0 ? 1.14 : 0.88;
-      setZoom(view.scale * factor, anchor);
-    };
-
-    svg.addEventListener('wheel', handleNativeWheel, { passive: false });
-    return () => svg.removeEventListener('wheel', handleNativeWheel);
-  }, [view]);
-
-  const handlePointerDown = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (event.button !== 0) return;
-    event.currentTarget.setPointerCapture(event.pointerId);
-    dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, panX: view.panX, panY: view.panY, moved: false };
-  };
-
-  const handlePointerMove = (event: React.PointerEvent<SVGSVGElement>) => {
-    const drag = dragRef.current;
-    const svg = svgRef.current;
-    if (!drag || drag.pointerId !== event.pointerId || !svg || view.scale <= 1) return;
-    const rect = svg.getBoundingClientRect();
-    if (Math.hypot(event.clientX - drag.x, event.clientY - drag.y) > 3) drag.moved = true;
-    setView(constrainView({
-      scale: view.scale,
-      panX: drag.panX + ((event.clientX - drag.x) / rect.width) * W / view.scale,
-      panY: drag.panY + ((event.clientY - drag.y) / rect.height) * H / view.scale,
-    }));
-  };
-
-  const endDrag = (event: React.PointerEvent<SVGSVGElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId) {
-      suppressClickRef.current = dragRef.current.moved;
-      dragRef.current = null;
-    }
-  };
 
   return (
     <PanelCard
@@ -254,8 +111,11 @@ export function Rrg({
               );
             })}
           </div>
+          <button type="button" className="tw-btn" aria-label="Zoom out RRG" disabled={!isZoomed} onClick={() => setZoom(view.scale / 1.25)}>−</button>
+          <button type="button" className="tw-btn" aria-label="Zoom in RRG" disabled={view.scale >= MAX_SCALE} onClick={() => setZoom(view.scale * 1.25)}>+</button>
+          {isMobile && <button type="button" className="tw-btn" aria-pressed={touchPan} onClick={() => setTouchPan(!touchPan)}>{touchPan ? 'Done panning' : 'Pan chart'}</button>}
           <button
-            onClick={() => setView({ scale: 1, panX: 0, panY: 0 })}
+            onClick={() => { setView({ scale: MIN_SCALE, panX: 0, panY: 0 }); setTouchPan(false); }}
             disabled={!isZoomed}
             title="Reset zoom and pan"
             style={{
@@ -275,6 +135,9 @@ export function Rrg({
         </>
       }
     >
+      <span style={{ color: MM.dim, fontSize: 10, marginBottom: 4 }}>
+        {isMobile ? (touchPan ? 'Drag to pan · Done panning restores page scroll' : 'Swipe to scroll · + / − to zoom') : 'Scroll the page · Ctrl/⌘ + wheel to zoom · drag to pan'}
+      </span>
       {/* The plot sizes from its viewBox aspect ratio so it never depends on the card resolving
           a height: width decides, and two charts side by side come out the same size. */}
       <div style={{ flex: '0 0 auto', minHeight: 0, height: 'auto', display: 'flex', alignItems: 'stretch', justifyContent: 'center', overflow: 'hidden' }}>
@@ -293,8 +156,8 @@ export function Rrg({
             minHeight: 0,
             aspectRatio: `${W} / ${H}`,
             display: 'block',
-            cursor: isZoomed ? 'grab' : 'zoom-in',
-            touchAction: 'none',
+            cursor: isZoomed ? 'grab' : 'default',
+            touchAction: touchPan ? 'none' : 'pan-y pinch-zoom',
             userSelect: 'none',
           }}
         >
@@ -375,7 +238,7 @@ export function Rrg({
                     <circle key={ti} cx={tp.x} cy={tp.y} r={(active ? 2.3 : 1.7) / view.scale} fill={color} opacity={dimmed ? 0.18 : (ti / tail.length) * 0.6 + 0.15} />
                   ))}
                   <circle cx={head.x} cy={head.y} r={(active ? 6 : 4.8) / view.scale} fill="#0c0c0d" stroke={color} strokeWidth={(active ? 2.5 : 1.8) / view.scale} />
-                  <text x={head.x + 8 / view.scale} y={head.y + 3.5 / view.scale} fill={color} fontSize={(active ? 12.5 : 10.5) / view.scale} fontWeight={700} fontFamily={mono} opacity={dimmed ? 0.3 : 1}>
+                  <text x={head.x + 8 / view.scale} y={head.y + 3.5 / view.scale} fill={color} fontSize={rrgLabelSize(active, view.scale, pixelScale)} fontWeight={700} fontFamily={mono} opacity={dimmed ? 0.3 : 1}>
                     {s.symbol}
                   </text>
                 </g>
