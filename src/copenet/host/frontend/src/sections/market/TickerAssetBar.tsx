@@ -2,6 +2,7 @@ import { ArrowLeft, RefreshCw, Star } from 'lucide-react';
 import type { AssetProfile } from './assetProfile';
 import { signedPct, toneHex, toneOf } from './workspaceViz';
 import type { TickerDetailPayload } from './types';
+import { TickerLiveQuote } from './TickerLiveQuote';
 
 export function TickerAssetBar({
   detail,
@@ -23,7 +24,6 @@ export function TickerAssetBar({
   onToggleWatch: () => void;
   onOpenPosition: () => void;
 }) {
-  const change = detail.quote.changePct;
   const position = detail.intelligence?.portfolio;
 
   return (
@@ -71,14 +71,7 @@ export function TickerAssetBar({
         </button>
       )}
 
-      <div className="tw-assetbar__quote" style={{ opacity: pending ? 0.5 : 1, transition: 'opacity .12s ease' }}>
-        <span className="tw-assetbar__price">
-          {detail.quote.price == null
-            ? '—'
-            : detail.quote.price.toLocaleString(undefined, { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 4 })}
-        </span>
-        <span className="tw-assetbar__change" style={{ color: toneHex(toneOf(change)) }}>{signedPct(change, 2)}</span>
-      </div>
+      <TickerLiveQuote symbol={detail.symbol} price={detail.quote.price} changePct={detail.quote.changePct} pending={pending != null} />
     </header>
   );
 }

@@ -109,6 +109,8 @@ import {
 } from './wsSupportRpc';
 import { marketBriefGetRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketChartFormulasRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import { createMarketMonitoringApi } from './wsMarketMonitoring';
+import { createMarketQuoteApi } from './wsMarketQuote';
+import { getAuthToken, getWsUrl } from './wsConnectionConfig';
 import type { FinancialFrequency } from '../sections/market/types';
 import type { YieldCurveRange } from '../sections/market/types';
 import {
@@ -158,29 +160,6 @@ type PendingRequest = {
 const RECONNECT_DELAY_MS = 3000;
 const CONNECT_TIMEOUT_MS = 10000;
 const REQUEST_TIMEOUT_MS = 45000;
-const DEFAULT_DEV_TOKEN = 'dev-token';
-
-function getEnvString(name: 'VITE_COPNET_WS_URL' | 'VITE_COPNET_TOKEN'): string {
-  const meta = typeof import.meta !== 'undefined' ? (import.meta as ImportMeta & { env?: Record<string, unknown> }) : undefined;
-  const value = meta?.env?.[name];
-  return typeof value === 'string' ? value.trim() : '';
-}
-
-function getWsUrl(): string {
-  const envUrl = getEnvString('VITE_COPNET_WS_URL');
-  if (envUrl) return envUrl;
-  if (typeof window === 'undefined') return 'ws://127.0.0.1:17123/ws';
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/ws`;
-}
-
-function getAuthToken(): string {
-  const envToken = getEnvString('VITE_COPNET_TOKEN');
-  const fromWindow = typeof window !== 'undefined' && typeof window.COPNET_TOKEN === 'string' ? window.COPNET_TOKEN.trim() : '';
-  const fromStorage = typeof window !== 'undefined' ? window.localStorage.getItem('copnet.token') || '' : '';
-  const fromMeta = typeof document !== 'undefined' ? document.querySelector('meta[name="copnet-token"]')?.getAttribute('content')?.trim() || '' : '';
-  return envToken || fromWindow || fromStorage || fromMeta || DEFAULT_DEV_TOKEN;
-}
 
 class WsClient {
   private ws: WebSocket | null = null;
@@ -339,6 +318,10 @@ class WsClient {
   }
 
   private async handleEventFrame(frame: EventFrame) {
+    if (frame.event === 'market.quote') {
+      this.marketQuote.receive(frame.payload);
+      return;
+    }
     if (frame.event === 'connect.challenge') {
       const requestId = this.nextRequestId('connect');
       this.connectRequestId = requestId;
@@ -750,6 +733,7 @@ class WsClient {
   }
 
   readonly marketMonitoring = createMarketMonitoringApi(this.request.bind(this));
+  readonly marketQuote = createMarketQuoteApi(this.request.bind(this), () => useAppStore.getState().wsStatus === 'connected');
 
   async marketWatchlistAdd(symbol: string, name = '') {
     return marketWatchlistAddRpc(this.request.bind(this), symbol, name);

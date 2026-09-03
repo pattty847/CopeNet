@@ -239,6 +239,12 @@ For current behavior, assume:
 
 ### Market Monitor
 
+- **Live quotes belong to a visible ticker view, not the scan engine.** `live_quote.py`
+  owns one Yahoo connection per authenticated browser connection, with explicit cleanup
+  and a renewable 75-second lease. `yahoo_stream.py` shares yfinance's protobuf decoder
+  with the bounded probe. Never persist these messages as canonical candles or feed
+  completed-candle alerts with them; missing day volume is unknown, not zero.
+
 - **Scans own broad acquisition.** `core/market/scans/` holds named definitions, scope resolution,
   source plans, schedules and immutable runs. UI lives in `sections/market/monitoring/`.
   Never add a full refresh to boot, page load or broker sync. Manual runs require the scope

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import asyncio
-import base64
 from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -13,12 +12,11 @@ from pathlib import Path
 import time
 from typing import Any
 
-from google.protobuf.json_format import MessageToDict
 from websockets.asyncio.client import connect
 
 from copenet.core._json_store import write_json_atomic
 
-YAHOO_STREAM_URL = "wss://streamer.finance.yahoo.com/?version=2"
+from .yahoo_stream import YAHOO_STREAM_URL, decode_yahoo_stream_message
 
 
 @dataclass(frozen=True)
@@ -175,20 +173,6 @@ async def _capture_connection(
             await websocket.send(json.dumps({"subscribe": list(config.symbols)}))
             _write_jsonl(events_file, _connection_event("subscription_heartbeat"))
             next_heartbeat = time.monotonic() + config.heartbeat_seconds
-
-
-def decode_yahoo_stream_message(raw_message: str | bytes) -> dict[str, Any]:
-    from yfinance.pricing_pb2 import PricingData
-
-    if isinstance(raw_message, bytes):
-        raw_message = raw_message.decode("utf-8")
-    envelope = json.loads(raw_message)
-    encoded = envelope.get("message")
-    if not encoded:
-        raise ValueError("stream envelope did not contain a message")
-    pricing_data = PricingData()
-    pricing_data.ParseFromString(base64.b64decode(encoded))
-    return MessageToDict(pricing_data, preserving_proto_field_name=True)
 
 
 def record_message_stats(

@@ -120,6 +120,16 @@ explicit toolbar control.
 
 ![CopeNet Market Monitor — chart-first asset workspace](docs/imgs/market-ticker-workspace.png)
 
+**View-scoped live quote** — opening one ticker subscribes to Yahoo's price stream;
+the asset bar shows last price, vendor time, session and reported day volume. Leaving
+the ticker or hiding the browser tab closes the subscription. Switching assets closes
+the old stream first; returning opens only the current asset. Quotes may be delayed,
+and missing volume stays unknown. This ephemeral readout never rewrites historical
+candles, evaluates completed-candle alerts, or triggers a scan. Each connected browser
+has at most one upstream ticker subscription, with a 75-second expiry for abandoned views.
+
+![Ticker live quote — synthetic demonstration data](docs/imgs/ticker-live-quote-1440.png)
+
 **Formula symbols** — type an expression such as `VOO/GLD`, `(VOO + GLD) / 2`, or
 `0.6 * VOO + 0.4 * TLT` into the Market search or the ticker workspace's `/` jump.
 Yahoo Finance assistance follows the operand being typed, while a distinct Formula

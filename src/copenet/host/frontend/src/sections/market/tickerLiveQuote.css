@@ -1,0 +1,36 @@
+.tw-livequote {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 3px;
+  min-width: 0;
+  font-variant-numeric: tabular-nums;
+}
+.tw-livequote__label,
+.tw-livequote__meta {
+  color: var(--mkt-muted);
+  font-size: var(--mkt-t-micro);
+}
+.tw-livequote__meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 4px 10px;
+}
+.tw-livequote__meta button {
+  color: inherit;
+  background: none;
+  border: 0;
+  text-decoration: underline;
+  cursor: pointer;
+}
+@media (max-width: 700px) {
+  .tw-livequote {
+    flex-basis: 100%;
+    align-items: flex-start;
+  }
+  .tw-livequote__meta {
+    justify-content: flex-start;
+    font-size: 9px;
+  }
+}

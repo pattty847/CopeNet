@@ -410,7 +410,7 @@ requires-dist = [
     { name = "uvicorn", specifier = ">=0.27.0" },
     { name = "websockets", specifier = ">=12.0" },
     { name = "webull-openapi-python-sdk", specifier = ">=2.0.12" },
-    { name = "yfinance", specifier = ">=0.2.40" },
+    { name = "yfinance", specifier = ">=1.5.1" },
     { name = "yt-dlp", marker = "extra == 'media'" },
 ]
 provides-extras = ["dev", "media"]

@@ -83,6 +83,8 @@ from .rpc_market import (
 )
 from .rpc_market_formula import handle_market_chart_formulas_get
 from .rpc_market_monitoring import MARKET_MONITORING_HANDLERS
+from .rpc_market_quote import MARKET_QUOTE_METHODS, handle_market_quote
+from .rpc_errors import respond_rpc_errors
 from .rpc_market_webull import (
     handle_market_webull_account_select,
     handle_market_webull_accounts,
@@ -151,7 +153,7 @@ from copenet.host.rpc_workspace import (
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
 
 
-async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadcast: SendJson | None = None) -> None:
+async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadcast: SendJson | None = None, *, quote_subscription=None) -> None:
     """Route one already-authenticated RPC request.
 
     Wrapped in a generic exception boundary so a malformed param (e.g. int("lol"))
@@ -162,36 +164,14 @@ async def dispatch_rpc(req, send_json: SendJson, orchestrator, tasks: set, broad
     client; chat streaming uses it so a reconnected socket or second device
     receives live frames. Falls back to the per-connection `send_json`.
     """
-    try:
-        await _route_rpc(req, send_json, orchestrator, tasks, broadcast or send_json)
-    except ValueError as exc:
-        await send_json(
-            make_response_frame(
-                ResponseFrame(
-                    id=req.id,
-                    ok=False,
-                    error=RpcError(code="INVALID_REQUEST", message=str(exc) or "invalid request"),
-                )
-            )
-        )
-    except Exception as exc:  # noqa: BLE001 — last-resort socket-saver
-        await send_json(
-            make_response_frame(
-                ResponseFrame(
-                    id=req.id,
-                    ok=False,
-                    error=RpcError(
-                        code="INTERNAL_ERROR",
-                        message=f"{exc.__class__.__name__}: {exc}",
-                    ),
-                )
-            )
-        )
+    await respond_rpc_errors(req.id, send_json, _route_rpc(req, send_json, orchestrator, tasks, broadcast or send_json, quote_subscription))
 
 
-async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadcast: SendJson) -> None:
+async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadcast: SendJson, quote_subscription=None) -> None:
     """Inner dispatch — original method table. Errors bubble to dispatch_rpc."""
-    if req.method == "chat.send":
+    if req.method in MARKET_QUOTE_METHODS:
+        await handle_market_quote(req, send_json, quote_subscription)
+    elif req.method == "chat.send":
         await handle_chat_send(req.id, req.params, send_json, tasks, orchestrator, broadcast=broadcast)
     elif req.method == "chat.abort":
         await handle_chat_abort(req.id, req.params, send_json, orchestrator)

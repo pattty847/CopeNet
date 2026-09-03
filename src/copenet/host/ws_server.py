@@ -11,6 +11,7 @@ from uuid import uuid4
 from fastapi import WebSocket, WebSocketDisconnect
 
 from copenet.core.orchestrator import Orchestrator
+from copenet.core.market.live_quote import LiveQuoteSubscription
 from copenet.host.rpc_dispatch import dispatch_rpc
 from copenet.host.rpc_schema import (
     EventFrame,
@@ -61,6 +62,11 @@ class CopeNetWsServer:
         async def send_json(payload: dict[str, Any]) -> None:
             async with send_lock:
                 await websocket.send_json(payload)
+
+        async def send_quote(payload: dict[str, Any]) -> None:
+            await send_json(make_event_frame(EventFrame(event="market.quote", payload=payload)))
+
+        quote_subscription = LiveQuoteSubscription(send_quote)
 
         await send_json(make_event_frame(EventFrame(event="connect.challenge", payload={"nonce": nonce})))
 
@@ -117,7 +123,7 @@ class CopeNetWsServer:
                     continue
                 if os.environ.get("COPNET_RPC_DEBUG") == "1":
                     print(f"RPC {req.method} {req.id}", flush=True)
-                await dispatch_rpc(req, send_json, self._orchestrator, tasks, self.broadcast)
+                await dispatch_rpc(req, send_json, self._orchestrator, tasks, self.broadcast, quote_subscription=quote_subscription)
         except WebSocketDisconnect:
             pass
         finally:
@@ -126,6 +132,7 @@ class CopeNetWsServer:
             # socket — remote/mobile clients can reconnect during a run and the
             # run keeps streaming to whatever connections remain.
             self._connections.discard(send_json)
+            await quote_subscription.close()
 
     async def _handle_connect(
         self,
@@ -211,6 +218,8 @@ class CopeNetWsServer:
                                 "messaging.routes.resolve",
                                 "market.dashboard.get",
                                 "market.ticker.get",
+                                "market.quote.subscribe",
+                                "market.quote.unsubscribe",
                                 "market.ticker.evidence.get",
                                 "market.ticker.fundamentals.get",
                                 "market.financial.series.get",
@@ -262,7 +271,7 @@ class CopeNetWsServer:
                                 "permissions.allowlist.add",
                                 "permissions.allowlist.remove",
                             ],
-                            "events": ["connect.challenge", "chat", "fleet.event", "briefing.ready", "memory.changed", "userNotes.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated", "approval.pending", "approval.resolved"],
+                            "events": ["connect.challenge", "chat", "fleet.event", "briefing.ready", "memory.changed", "userNotes.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated", "approval.pending", "approval.resolved", "market.quote"],
                         },
                     },
                 )
