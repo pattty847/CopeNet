@@ -282,6 +282,13 @@ For current behavior, assume:
   you add a guarded call to `render.ts`, add that method to `tests/fakeChart.ts` in the same
   commit — an incomplete fake hides the failure inside the renderer's own `try`/`catch`.
   See `docs/plans/CHART_INDICATORS.md`.
+- **Chart agent turns capture render inputs, never refetch them.** `core/market/chart_workspace/`
+  owns immutable observations and revision-checked drawing documents; `orchestrator/market_context.py`
+  binds them to ordinary sessions. The ticker's `viewState/` contributions and `useTickerViewModel`
+  share committed data with capture; `chartAgent/` owns the companion and `drawings/` the canvas
+  primitive. Preserve explicit-session routing, chart-only tool scope, manual object ownership,
+  account-panel exclusion, and saved-versus-rendered receipts. Verification/limits and the
+  deferred crypto adapter are documented in `docs/initiatives/chart-agent/DEMO.md`.
 - Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`.
 
 ## Version Control & Commit Discipline

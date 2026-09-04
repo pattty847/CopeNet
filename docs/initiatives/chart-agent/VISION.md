@@ -1,6 +1,7 @@
 # Chart Agent — Vision & Execution Brief
 
-Status: demo implementation plan complete; implementation has not started.
+Status: initial chart agent demo implemented and verified.
+Implementation and usage: [DEMO.md](DEMO.md).
 Date: 2026-09-04.
 
 Detailed design: [ARCHITECTURE.md](ARCHITECTURE.md).
