@@ -19,6 +19,7 @@ const ACTION_CLASS_LABELS: Record<string, { label: string; icon: typeof ShieldAl
   external_communication: { label: 'External Communication', icon: Send, tone: 'text-operator-accent' },
   filesystem_write: { label: 'File System Write', icon: Pencil, tone: 'text-amber-400' },
   process_execution: { label: 'Process Execution', icon: ShieldAlert, tone: 'text-operator-error' },
+  chart_annotation: { label: 'Chart Annotation', icon: Pencil, tone: 'text-operator-accent' },
   network_side_effect: { label: 'Network Side Effect', icon: ShieldAlert, tone: 'text-amber-400' },
   credential_or_sensitive_target: { label: 'Sensitive Target', icon: ShieldAlert, tone: 'text-operator-error' },
 };
@@ -72,7 +73,7 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
 
   // "Always allow" only makes sense for a concrete shell command we can persist.
   const command = approval.proposedAction.payload?.command;
-  const canAlwaysAllow = typeof command === 'string' && command.trim().length > 0;
+  const canAlwaysAllow = approval.toolId === 'shell.exec' && typeof command === 'string' && command.trim().length > 0;
 
   const statusBadge = () => {
     if (approval.status === 'approved') return <span className="text-[10px] font-semibold text-operator-success uppercase tracking-wider">Approved</span>;
@@ -185,6 +186,15 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
               {approval.outcome.note && <span> · {approval.outcome.note}</span>}
             </div>
           )}
+        </div>
+      )}
+
+      {approval.actionClass === 'chart_annotation' && (
+        <div className="border-t border-operator-border/60 px-3 py-2" aria-label="Chart annotation batch">
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-operator-muted">Proposed drawing changes</div>
+          <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-operator-border bg-operator-bg p-2 text-[11px] text-operator-text">
+            {JSON.stringify(approval.proposedAction.payload, null, 2)}
+          </pre>
         </div>
       )}
 

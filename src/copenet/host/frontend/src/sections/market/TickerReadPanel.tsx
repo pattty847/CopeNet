@@ -1,3 +1,4 @@
+import { useViewResource } from './viewState/resources';
 import { MM, ModelBadge, mono } from './marketUi';
 import { useTickerRead } from './useMarketMonitorData';
 
@@ -9,6 +10,11 @@ const CONFIDENCE_COLORS: Record<string, string> = {
 
 export function TickerReadPanel({ symbol }: { symbol: string }) {
   const { read, running, error, run } = useTickerRead(symbol);
+  useViewResource(symbol, { key: 'panel:synthesis', kind: 'panel', label: 'Saved model synthesis',
+    status: error ? 'error' : read ? 'loaded' : 'empty', observedAt: read?.generatedAt,
+    rows: read ? [{ ...read }] : [], metadata: { running, error, accountContext: true,
+      description: 'Saved synthesis may incorporate prior account context; it does not describe the current chart viewport.' } });
+
 
   return (
     <section className="ticker-synthesis-panel is-embedded" aria-labelledby="ticker-model-read" style={{ background: 'transparent', border: 'none', borderRadius: 0, padding: 14 }}>

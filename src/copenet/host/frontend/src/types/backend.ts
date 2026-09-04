@@ -1,3 +1,5 @@
+import type { MarketContext } from '../sections/market/chartAgent/types';
+
 export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'auth_failed';
 export type ChatState = 'delta' | 'reasoning_delta' | 'final' | 'error' | 'aborted' | 'tool_called' | 'tool_result';
 export type MessageRole = 'user' | 'assistant' | 'system';
@@ -147,6 +149,7 @@ export interface Message {
   content: string;
   attachments?: ChatAttachment[] | null;
   requestedToolIds?: string[] | null;
+  marketContext?: (MarketContext & { hasExternalProse?: boolean; symbol?: string; timeframe?: 'D' | 'W' | 'M' }) | null;
   timestamp: string;
   provider: string | null;
   model: string | null;
@@ -484,6 +487,7 @@ export interface PublicMessagePayload {
   toolExecution?: ToolExecution | null;
   attachments?: unknown[] | null;
   requestedToolIds?: unknown[] | null;
+  marketContext?: unknown;
 }
 
 export interface ChatEventPayload {
@@ -709,6 +713,7 @@ export type ApprovalActionClass =
   | 'external_communication'
   | 'filesystem_write'
   | 'process_execution'
+  | 'chart_annotation'
   | 'network_side_effect'
   | 'credential_or_sensitive_target';
 

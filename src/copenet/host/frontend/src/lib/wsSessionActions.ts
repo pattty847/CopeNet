@@ -54,6 +54,7 @@ export async function refreshSessionsAction(request: WsRpcRequest): Promise<void
 }
 
 export async function loadHistoryAction(request: WsRpcRequest, sessionKey: string): Promise<void> {
+  const before = useAppStore.getState().messages[sessionKey] || [];
   const payload = await request<{ sessionKey: string; messages: PublicMessagePayload[] }>('chat.history', {
     sessionKey,
     limit: 200,
@@ -67,7 +68,20 @@ export async function loadHistoryAction(request: WsRpcRequest, sessionKey: strin
       (message.state as Message['state']) || 'final',
     ),
   );
-  useAppStore.getState().setMessages(sessionKey, normalized);
+  const current = useAppStore.getState();
+  // A history response can race admission or streaming. Preserve newer local
+  // messages and the pending assistant's ID until durable completion arrives.
+  for (const local of current.messages[sessionKey] || []) {
+    const pending = local.runId ? current.pendingAssistants[local.runId]?.localId === local.localId : false;
+    const changed = before.find((item) => item.localId === local.localId) !== local;
+    if (!pending && !changed && !local.optimistic) continue;
+    const index = normalized.findIndex((item) => item.role === local.role && (
+      local.runId ? item.runId === local.runId : item.content === local.content
+    ));
+    if (index < 0) normalized.push(local);
+    else if (pending && local.state === 'delta' && normalized[index].state !== 'final') normalized[index] = local;
+  }
+  current.setMessages(sessionKey, normalized);
 }
 
 export function beginDraftAction(): void {

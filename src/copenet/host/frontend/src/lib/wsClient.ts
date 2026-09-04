@@ -110,6 +110,7 @@ import {
 import { marketBriefGetRpc, marketCalendarGetRpc, marketYieldCurveGetRpc, marketLedgerGetRpc, marketTickerFundamentalsRpc, marketFinancialSeriesRpc, marketFinancialMetricsRpc, marketDashboardRpc, marketInterpretRpc, marketReadGetRpc, marketSessionsGetRpc, marketTickerEvidenceRpc, marketTickerRpc, marketChartSeriesRpc, marketChartFormulasRpc, marketUniverseRpc, marketWebullStatusRpc, marketWebullSyncRpc, marketWebullPnlGetRpc, marketWebullOrdersSyncRpc, marketWebullWatchlistsImportRpc, marketBacktestRunRpc, marketBacktestStressTestRpc, marketWatchlistGetRpc, marketWatchlistAddRpc, marketWatchlistRemoveRpc, marketWatchlistListCreateRpc, marketWatchlistListDeleteRpc, marketWatchlistListSelectRpc, marketSymbolsSearchRpc } from './wsMarketRpc';
 import { createMarketMonitoringApi } from './wsMarketMonitoring';
 import { createMarketQuoteApi } from './wsMarketQuote';
+import { createMarketChartApi } from './wsMarketChart';
 import { getAuthToken, getWsUrl } from './wsConnectionConfig';
 import type { FinancialFrequency } from '../sections/market/types';
 import type { YieldCurveRange } from '../sections/market/types';
@@ -318,6 +319,10 @@ class WsClient {
   }
 
   private async handleEventFrame(frame: EventFrame) {
+    if (frame.event === 'market.chart.document') {
+      this.marketChart.receive(frame.payload as Record<string, unknown>);
+      return;
+    }
     if (frame.event === 'market.quote') {
       this.marketQuote.receive(frame.payload);
       return;
@@ -733,6 +738,7 @@ class WsClient {
   }
 
   readonly marketMonitoring = createMarketMonitoringApi(this.request.bind(this));
+  readonly marketChart = createMarketChartApi(this.request.bind(this));
   readonly marketQuote = createMarketQuoteApi(this.request.bind(this), () => useAppStore.getState().wsStatus === 'connected');
 
   async marketWatchlistAdd(symbol: string, name = '') {

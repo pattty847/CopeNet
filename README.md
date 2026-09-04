@@ -134,6 +134,21 @@ explicit toolbar control.
 
 ![CopeNet Market Monitor — chart-first asset workspace](docs/imgs/market-ticker-workspace.png)
 
+**Chart agent preview** — open **Agent** beside the ticker chart to ask about its
+actual candles, plotted indicators, quote and research panels. Every send freezes those
+render inputs into an immutable observation. Quick, Balanced and Deep adjust the initial
+context and exact-read budgets while retaining the complete captured source data.
+
+The companion uses ordinary CopeNet sessions and scoped chart tools. Agents can create
+levels, zones, trendlines and labels with evidence links; you can select, edit, hide,
+delete or undo them. Manual edits protect an object from later agent changes. Drawing
+revisions persist across reloads, and a paint receipt distinguishes saved work from
+what is visible. Account panel data is excluded by default; prior conversation, drawings
+and profile context remain. Crypto/order-book feeds and proactive commentary are later
+adapters. See the [demo guide and verification record](docs/initiatives/chart-agent/DEMO.md).
+
+![Chart agent — synthetic candles, editable levels and scoped conversation](docs/imgs/market-chart-agent.png)
+
 **View-scoped live quote** — opening one ticker subscribes to Yahoo's price stream;
 the asset bar shows last price, vendor time, session and reported day volume. Leaving
 the ticker or hiding the browser tab closes the subscription. Switching assets closes

@@ -1,3 +1,5 @@
+import { useViewResource } from './viewState/resources';
+import { financialPanelResource } from './viewState/panelResources';
 import { lazy, Suspense, useMemo, useState } from 'react';
 import { FinancialHistoryTable } from './FinancialHistoryTable';
 import {
@@ -71,6 +73,9 @@ function FinancialStoryView({
   const errors = metricStates.flatMap((state, index) => story.metrics[index] && state.error ? [`${story.metrics[index].shortLabel}: ${state.error}`] : []);
   const warnings = [...new Set(metricStates.flatMap((state) => state.data?.warnings ?? []))];
   const observations = metricStates.reduce((total, state) => total + (state.data?.observations.length ?? 0), 0);
+
+  useViewResource(symbol, financialPanelResource({ story, frequency, active, visibleMetrics, rows,
+    series: metricStates.map((state) => state.data), loading, errors, warnings }));
 
   const toggleMetric = (metricId: string) => {
     setVisibleMetrics((current) => {

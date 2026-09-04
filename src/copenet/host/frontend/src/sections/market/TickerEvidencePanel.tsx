@@ -1,3 +1,5 @@
+import { useViewResource } from './viewState/resources';
+import { evidencePanelResource } from './viewState/panelResources';
 import { lazy, Suspense, useState } from 'react';
 import { RefreshCw } from 'lucide-react';
 import { EvidenceFlagBadge, EvidenceToneGlyph, MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, freshnessColor, mono, toneColor } from './marketUi';
@@ -36,13 +38,17 @@ function InsiderWindow({ window }: { window: InsiderNetWindow }) {
   );
 }
 
-export function TickerEvidencePanel({ state, active }: { state: TickerEvidenceState; active: boolean }) {
+export function TickerEvidencePanel({ symbol, state, active }: { symbol: string; state: TickerEvidenceState; active: boolean }) {
   const [showMethod, setShowMethod] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const evidence = sortEvidenceNewestFirst(state.payload?.evidence ?? []);
   const effectiveSelectedDay = selectedDay && evidence.some((item) => evidenceDay(item) === selectedDay) ? selectedDay : null;
   const visibleEvidence = effectiveSelectedDay ? evidence.filter((item) => evidenceDay(item) === effectiveSelectedDay) : evidence;
   const insiderWindows = Object.values(state.payload?.insiderNet ?? {}).sort((a, b) => a.days - b.days);
+  useViewResource(symbol, evidencePanelResource({ visibleEvidence, selectedDay: effectiveSelectedDay, insiderWindows,
+    depthDays: state.depthDays, active, showMethod, loading: state.loading, error: state.error,
+    asOf: state.payload?.asOf, warnings: state.payload?.warnings ?? [] }));
+
 
   const actions = (
     <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>

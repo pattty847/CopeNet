@@ -7,6 +7,7 @@
 
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { TriangleAlert, X } from 'lucide-react';
+import type { ChartWorkspaceBridge } from './drawings/types';
 import { CandleChart } from './CandleChart';
 import { MM, mono, toneColor } from './marketUi';
 import { timeframeLabel, type ChartTimeframe } from './chartRanges';
@@ -67,7 +68,9 @@ export function ChartStage({
   onIndicatorPaneStretch,
   layoutKey,
   overlay,
+  chartWorkspace,
 }: {
+  chartWorkspace?: ChartWorkspaceBridge;
   symbol: string;
   timeframe: ChartTimeframe;
   bars: Ohlcv[];
@@ -213,6 +216,7 @@ export function ChartStage({
           </div>
 
           <CandleChart
+            chartWorkspace={chartWorkspace}
             bars={bars}
             events={events}
             evidence={evidence}

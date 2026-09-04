@@ -1,3 +1,4 @@
+import { normalizeMarketContext } from './wsMarketContext';
 import type {
   ApprovalRequest,
   IdentityContextRuntime,
@@ -725,6 +726,7 @@ export function normalizeMessage(
     optimistic,
     parts: normalizeMessageParts(raw?.parts),
     attachments: normalizeChatAttachments(raw?.attachments),
+    marketContext: normalizeMarketContext(raw?.marketContext),
     requestedToolIds: Array.isArray(raw?.requestedToolIds)
       ? [...new Set(raw.requestedToolIds.map((toolId) => String(toolId).trim()).filter(Boolean))]
       : null,

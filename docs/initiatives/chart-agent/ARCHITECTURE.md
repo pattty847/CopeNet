@@ -1,6 +1,6 @@
 # Chart Agent architecture
 
-Status: implementation plan, 2026-09-04. No feature code has been implemented.
+Status: initial demo implemented, 2026-09-04. See [DEMO.md](DEMO.md) for shipped boundaries, verification and remaining performance work.
 Product intent: [VISION.md](VISION.md). Build sequence: [ROADMAP.md](ROADMAP.md).
 
 ## Architectural decision
@@ -74,11 +74,11 @@ Capture at send time includes partially visible edge candles and identifies whit
 separately; a selected 5Y toolbar preset does not imply all five years are visible.
 Keep semantic selection separate from a transient crosshair hover.
 
-Live quote state currently lives below `TickerAssetBar`, in `TickerLiveQuote`, specifically
-to avoid chart rerenders. Move subscription ownership into a view-scoped external store
-with narrow subscribers; share its getter with capture and its subscription with the quote
-component. Do not open a second Yahoo connection for the agent. Quote revisions do not
-recompute historical indicators or invalidate drawing edits.
+Live quote state remains below `TickerAssetBar`, in `TickerLiveQuote`, to avoid chart
+rerenders. The committed quote render model is published into the view-scoped
+`ViewResources` registry; capture reads its getter synchronously. This implements shared
+state without moving the existing subscription lifecycle or opening another Yahoo
+connection. Quote revisions do not recompute historical indicators or invalidate drawings.
 
 On Send, synchronously assemble a consistent local capture after pending semantic view
 changes are committed. Include component resource revisions; do not await network requests
@@ -126,8 +126,9 @@ a failed capture. Larger sources can gain chunked ingestion later without changi
 Delete unbound captures after 24 hours; retain run-bound observations and document evidence
 until explicit removal. At capacity, fail new captures clearly rather than evict referenced
 evidence. Run/session archive is not deletion. Garbage collection only removes unreferenced
-resources. Add an explicit workspace cleanup action with dependency checks; old citations
-must return “removed/unavailable” if an operator intentionally deletes their evidence.
+resources. Unbound captures expire after 24 hours. A destructive workspace cleanup UI remains a
+follow-on; referenced observations are not evicted to make room. Any future explicit
+removal must check dependencies and make old citations report “removed/unavailable”.
 
 Use ArtifactStore for a compact per-run observation manifest and action receipts that link
 to this store. Do not store the only exact dataset there: its current `get()` searches the

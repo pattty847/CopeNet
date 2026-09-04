@@ -1,6 +1,8 @@
 # Chart Agent demo implementation plan
 
-Status: planning complete; implementation not started. Updated 2026-09-04.
+Status: initial demo implemented and verified. Updated 2026-09-04.
+See [DEMO.md](DEMO.md) for the implementation record, measured limits and remaining work.
+The milestones below retain the design rationale and acceptance scope.
 Architecture decisions: [ARCHITECTURE.md](ARCHITECTURE.md).
 Product brief: [VISION.md](VISION.md).
 
@@ -233,5 +235,6 @@ privacy/syntax checks. No temporary probes or real account data in commits.
 - API/resource identity includes source/time/basis now; order-book infrastructure is built when
   a feed is chosen. This avoids making D/W/M US-equity assumptions permanent in the new domain.
 
-No founder decision blocks starting milestone 1 once implementation is requested. The initial
-rendering and capture benchmarks may adjust engineering limits, not the shared-state promise.
+The initial implementation is available. Browser long-task profiling and provider-specific
+latency/quality comparisons remain follow-on measurements; they must not weaken the
+shared-state or exact-evidence contract.

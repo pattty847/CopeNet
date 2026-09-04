@@ -1,3 +1,4 @@
+import { useViewResource } from './viewState/resources';
 import { signedPct, toneHex, toneOf } from './workspaceViz';
 import { useLiveQuote } from './useLiveQuote';
 import './tickerLiveQuote.css';
@@ -31,6 +32,12 @@ export function TickerLiveQuote({
   const change = quote ? quote.changePct : changePct;
   const timestamp = quote ? new Date(quote.quoteTime * 1000).toLocaleString() : null;
   const currency = quote?.currency;
+  useViewResource(symbol, { key: 'quote:displayed', kind: 'quote', label: 'Displayed quote',
+    status: live.status === 'streaming' ? 'loaded' : shownPrice == null ? 'empty' : 'stale',
+    observedAt: quote ? new Date(quote.quoteTime * 1000).toISOString() : null,
+    rows: [{ price: shownPrice, changePct: change, ...(quote ?? {}) }],
+    metadata: { status: live.status, source: quote ? 'yahoo_stream' : 'cached', pending } });
+
   const formattedPrice =
     shownPrice == null
       ? '—'
