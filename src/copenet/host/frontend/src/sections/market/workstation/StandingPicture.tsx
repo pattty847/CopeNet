@@ -9,7 +9,7 @@
 import { useEffect, useState } from 'react';
 import { wsClient } from '../../../lib/wsClient';
 import type { MarketSection } from '../../../lib/appSectionRouting';
-import { REGIME_ORDER, RRG_QUADRANTS, flaggedSetups, formatBreadth, formatVix, regimeLabel, rotationQuadrants } from '../marketBriefModel';
+import { REGIME_ORDER, RRG_QUADRANTS, flaggedSetups, formatBreadth, formatVix, observedPanelData, regimeLabel, rotationQuadrants } from '../marketBriefModel';
 import { PreviewBadge, toneColor } from '../marketUi';
 import { Sparkline } from '../workspaceViz';
 import type { DashboardPayload, MarketRead, TreasuryYieldCurvePayload } from '../types';
@@ -65,15 +65,15 @@ export function StandingPicture({
   onGoTo: (section: MarketSection) => void;
 }) {
   const curve = useYieldCurveStub();
-  const briefing = dashboard.briefing.data;
-  const activeRegime = read?.regime ?? dashboard.regime.data.current;
+  const briefing = observedPanelData(dashboard.briefing);
+  const activeRegime = read?.regime ?? observedPanelData(dashboard.regime)?.current ?? 'unknown';
   const quadrants = rotationQuadrants(dashboard.rrg.data);
   const setups = flaggedSetups(dashboard);
   const tenYear = curve?.points.find((point) => point.label === '10Y');
 
   return (
     <aside className="mw-brief__standing" aria-label="Standing picture">
-      <Block label="Regime" meta={read ? 'model read' : 'computed'}>
+      <Block label="Regime" meta={read ? 'model read' : activeRegime === 'unknown' ? 'not available' : 'computed'}>
         <div className="mw-regime-scale" aria-label={`Current regime: ${regimeLabel(activeRegime)}`}>
           {REGIME_ORDER.map((regime) => (
             <div key={regime} data-active={activeRegime === regime}>
@@ -83,8 +83,8 @@ export function StandingPicture({
           ))}
         </div>
         <div className="mw-regime-metrics">
-          <div><b>{formatVix(briefing.vix)}</b><span>VIX</span></div>
-          <div><b>{formatBreadth(briefing.breadthPct)}</b><span>Breadth</span></div>
+          <div><b>{briefing ? formatVix(briefing.vix) : '—'}</b><span>VIX</span></div>
+          <div><b>{briefing ? formatBreadth(briefing.breadthPct) : '—'}</b><span>Breadth</span></div>
         </div>
       </Block>
 

@@ -10,7 +10,7 @@
 import { useState, type ReactNode } from 'react';
 import { ArrowUpRight } from 'lucide-react';
 import type { MarketSection } from '../../../lib/appSectionRouting';
-import { MATTERS_VISIBLE, composeMatters, regimeLabel, truncationLabel } from '../marketBriefModel';
+import { MATTERS_VISIBLE, composeMatters, observedPanelData, regimeLabel, truncationLabel } from '../marketBriefModel';
 import { toneColor } from '../marketUi';
 import type { MorningBriefPayload, Panel, Regime } from '../types';
 
@@ -83,6 +83,7 @@ function Matters({ brief, onOpen }: { brief: MorningBriefPayload; onOpen: (symbo
 export function WhatChanged({
   brief,
   generating,
+  briefUnavailable,
   regime,
   calendar,
   ledgerLine,
@@ -92,6 +93,7 @@ export function WhatChanged({
 }: {
   brief: MorningBriefPayload | null;
   generating: boolean;
+  briefUnavailable?: boolean;
   regime: Panel<Regime>;
   calendar: ReactNode;
   ledgerLine: string | null;
@@ -99,7 +101,7 @@ export function WhatChanged({
   onExplain: () => void;
   onGoTo: (section: MarketSection) => void;
 }) {
-  const regimeCurrent = regime.data.current;
+  const regimeCurrent = observedPanelData(regime)?.current ?? 'unknown';
   const movers = brief?.movers ?? [];
 
   return (
@@ -108,7 +110,7 @@ export function WhatChanged({
         <span style={{ fontFamily: 'var(--mkt-mono)', fontSize: 'var(--mkt-t-value)', color: REGIME_COLOR[regimeCurrent] ?? 'var(--mkt-soft)' }}>
           {brief?.regimeShift
             ? `${regimeLabel(brief.regimeShift.from)} → ${regimeLabel(brief.regimeShift.to)} today`
-            : `${regimeLabel(regimeCurrent)} — ${brief ? 'unchanged since last sweep' : 'current read'}`}
+            : regimeCurrent === 'unknown' ? 'No saved regime yet.' : `${regimeLabel(regimeCurrent)} — ${brief ? 'unchanged since last sweep' : 'current read'}`}
         </span>
         <button type="button" className="mw-more" style={{ marginLeft: 8 }} onClick={onExplain}>why →</button>
       </BriefRow>
@@ -118,9 +120,9 @@ export function WhatChanged({
           <Matters brief={brief} onOpen={onOpen} />
         ) : (
           <span className="mw-quiet">
-            {generating
-              ? 'First pre-market sweep is running — refreshing every symbol, diffing SEC filings and signals…'
-              : 'No morning brief yet. The sentinel sweeps pre-market every day and reports what changed overnight.'}
+            {briefUnavailable ? 'Saved briefing could not be loaded. Retry above.' : generating
+              ? 'Building the first saved briefing…'
+              : 'No saved briefing. Review your schedule or run a scan in Scans & alerts.'}
           </span>
         )}
       </BriefRow>

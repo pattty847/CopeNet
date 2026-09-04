@@ -2,6 +2,7 @@
 // changed (as Matters) and what is currently flagged by the rare calibrated screen.
 
 import { useMemo } from 'react';
+import { SIGNAL_PANELS } from '../marketSectionPanels';
 import { AccumulationWatch, SoftBottomingWatch, TrendWatch } from '../panelsLists';
 import { ArrangeMenu, SectionGrid, SectionHeader, useSectionLayout, type SectionPanel } from './SectionGrid';
 import type { DashboardPayload } from '../types';
@@ -9,9 +10,9 @@ import type { DashboardPayload } from '../types';
 export function SignalsSection({ dashboard, onOpen, isMobile }: { dashboard: DashboardPayload; onOpen: (symbol: string) => void; isMobile: boolean }) {
   const panels = useMemo<SectionPanel[]>(
     () => [
-      { id: 'softBottoming', title: 'Soft bottoming watch', defaultWidth: 'full', canHalf: true, node: <SoftBottomingWatch panel={dashboard.softBottoming} onOpen={onOpen} /> },
-      { id: 'accumulation', title: 'Accumulation watch', defaultWidth: 'half', canHalf: true, node: <AccumulationWatch panel={dashboard.accumulation} onOpen={onOpen} /> },
-      { id: 'trend', title: 'Trend-change watch', defaultWidth: 'half', canHalf: true, node: <TrendWatch panel={dashboard.trend} onOpen={onOpen} /> },
+      { ...SIGNAL_PANELS.softBottoming, node: <SoftBottomingWatch panel={dashboard.softBottoming} onOpen={onOpen} /> },
+      { ...SIGNAL_PANELS.accumulation, node: <AccumulationWatch panel={dashboard.accumulation} onOpen={onOpen} /> },
+      { ...SIGNAL_PANELS.trend, node: <TrendWatch panel={dashboard.trend} onOpen={onOpen} /> },
     ],
     [dashboard.accumulation, dashboard.softBottoming, dashboard.trend, onOpen],
   );

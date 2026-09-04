@@ -4,7 +4,12 @@
 // and grouped for the first screen, and it does so once so the table, the count and the
 // keyboard all agree. No fetching, no React.
 
-import type { BriefMover, DashboardPayload, MorningBriefPayload, PortfolioPosition, RrgSector, Tone, WatchlistItem } from './types';
+import type { BriefMover, DashboardPayload, MorningBriefPayload, Panel, PortfolioPosition, RrgSector, Tone, WatchlistItem } from './types';
+
+/** The server's pre-scan placeholders (including zero metrics) are not observations. */
+export function observedPanelData<T>(panel: Panel<T> | undefined): T | null {
+  return panel && panel.status !== 'preview' ? panel.data : null;
+}
 
 export interface MatterItem {
   key: string;

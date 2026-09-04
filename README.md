@@ -62,6 +62,20 @@ Market Monitor is the current favorite: a 60-second morning brief on your watchl
 
 ![CopeNet Market Monitor — daily brief](docs/imgs/market-briefing.png)
 
+Market and ticker share a quiet loading treatment: workspace-shaped outlines, one
+status label, and a thin orange sweep (static with reduced motion). Navigation stays
+usable, desktop panel preferences remain intact, and ready data appears immediately.
+Startup never substitutes a demo dashboard. Empty results and connection failures
+have distinct states; background refresh failures retain the last real snapshot.
+
+<details>
+<summary>Workspace loading states (isolated synthetic previews)</summary>
+
+![Market workspace loading](docs/imgs/market-workspace-loading.png)
+![Ticker workspace loading](docs/imgs/ticker-workspace-loading.png)
+
+</details>
+
 **Scans & alerts** — named asset baskets, linked watchlists, exclusions, source selection,
 and multiple timezone-aware schedules live in one Market workspace. The morning default
 is **09:45**; missed times are skipped, never caught up at startup. Preview exact inclusion

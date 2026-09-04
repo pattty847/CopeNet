@@ -1,6 +1,7 @@
 // Structure — rates and relative rotation, at full workspace height.
 
 import { useMemo } from 'react';
+import { STRUCTURE_PANELS } from '../marketSectionPanels';
 import { Rrg } from '../RrgChart';
 import { TreasuryYieldCurve } from '../TreasuryYieldCurve';
 import { ArrangeMenu, SectionGrid, SectionHeader, useSectionLayout, type SectionPanel } from './SectionGrid';
@@ -19,13 +20,10 @@ export function StructureSection({
 }) {
   const panels = useMemo<SectionPanel[]>(
     () => [
-      { id: 'treasury', title: 'Treasury curve', defaultWidth: 'full', canHalf: false, node: <TreasuryYieldCurve /> },
-      { id: 'sectorRrg', title: 'Sector rotation', defaultWidth: 'full', canHalf: true, node: <Rrg panel={dashboard.rrg} onOpen={onOpen} note={read?.rotationRead} /> },
+      { ...STRUCTURE_PANELS.treasury, node: <TreasuryYieldCurve /> },
+      { ...STRUCTURE_PANELS.sectorRrg, node: <Rrg panel={dashboard.rrg} onOpen={onOpen} note={read?.rotationRead} /> },
       {
-        id: 'industryRrg',
-        title: 'Industry rotation',
-        defaultWidth: 'full',
-        canHalf: true,
+        ...STRUCTURE_PANELS.industryRrg,
         node: <Rrg panel={dashboard.industryRrg} onOpen={onOpen} title="Industry Rotation · RRG" subtitle="Regional banks, biotech, retail, homebuilders, defense vs S&P 500 · weekly" />,
       },
     ],

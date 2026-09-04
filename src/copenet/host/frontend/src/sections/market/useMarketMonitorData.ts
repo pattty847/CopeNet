@@ -3,85 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { wsClient } from '../../lib/wsClient';
 import type { TradeLedger } from '../../lib/wsMarketRpc';
-import { SAMPLE_UNIVERSE } from './sampleData';
-import type { LedgerReport, MarketRead, MarketSession, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, UniverseAsset, WatchlistItem } from './types';
+import { useModelRead } from './useModelRead';
+import type { LedgerReport, MarketRead, MarketSession, TickerDetailPayload, TickerEvidencePayload, TickerFundamentals, TickerRead, WatchlistItem } from './types';
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
-
-
-export function useMarketUniverse(): UniverseAsset[] {
-  const [universe, setUniverse] = useState<UniverseAsset[]>(SAMPLE_UNIVERSE);
-  useEffect(() => {
-    let alive = true;
-    wsClient
-      .marketUniverse()
-      .then((next) => {
-        if (alive && next && next.length) setUniverse(next);
-      })
-      .catch(() => {});
-    return () => {
-      alive = false;
-    };
-  }, []);
-  return universe;
-}
-
-/** Generic model-read lane (Insight Engine Phase D): load the stored read, and expose a
- *  trigger that kicks market.interpret then polls market.read.get until a FRESH read lands
- *  (generatedAt advances). The model call runs server-side in the background. */
-function useModelRead<T extends MarketRead | TickerRead>(target: string) {
-  const [read, setRead] = useState<T | null>(null);
-  const [running, setRunning] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const alive = useRef(true);
-
-  useEffect(() => {
-    alive.current = true;
-    setRead(null);
-    setError(null);
-    wsClient
-      .marketReadGet(target)
-      .then((next) => {
-        if (alive.current && next) setRead(next as T);
-      })
-      .catch((caught) => {
-        if (alive.current) setError(caught instanceof Error ? caught.message : 'The saved model read could not be loaded. Retry after checking the connection.');
-      });
-    return () => {
-      alive.current = false;
-    };
-  }, [target]);
-
-  const run = useCallback(async () => {
-    setRunning(true);
-    setError(null);
-    const before = (read as { generatedAt?: string } | null)?.generatedAt || '';
-    let receivedFreshRead = false;
-    try {
-      await wsClient.marketInterpret(target);
-      for (let i = 0; i < 30 && alive.current; i += 1) {
-        await sleep(3000);
-        try {
-          const next = await wsClient.marketReadGet(target);
-          if (next && (next as { generatedAt?: string }).generatedAt !== before) {
-            if (alive.current) setRead(next as T);
-            receivedFreshRead = true;
-            break;
-          }
-        } catch {
-          /* transient — keep polling */
-        }
-      }
-      if (!receivedFreshRead && alive.current) setError('No fresh model read arrived within 90 seconds. Try again after checking provider availability.');
-    } catch (caught) {
-      if (alive.current) setError(caught instanceof Error ? caught.message : 'The model read could not be started. Check provider availability and retry.');
-    } finally {
-      if (alive.current) setRunning(false);
-    }
-  }, [target, read]);
-
-  return { read, running, error, run };
-}
 
 export function useMarketRead() {
   return useModelRead<MarketRead>('market');

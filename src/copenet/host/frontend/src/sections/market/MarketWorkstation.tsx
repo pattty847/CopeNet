@@ -13,7 +13,7 @@ import type { MarketSection } from '../../lib/appSectionRouting';
 import { useIsMobile, useViewportWidth } from '../../lib/responsive';
 import { wsClient } from '../../lib/wsClient';
 import { BriefingReasoning } from './BriefingReasoning';
-import { buildWorkstationRail, stepSymbols } from './marketBriefModel';
+import { buildWorkstationRail, observedPanelData, stepSymbols } from './marketBriefModel';
 import {
   MARKET_SECTION_TABS,
   RAIL_HIDDEN_PX,
@@ -30,13 +30,7 @@ import {
 } from './marketWorkstationState';
 import { SymbolJump } from './SymbolJump';
 import { useEconomicCalendar } from './useEconomicCalendar';
-import {
-  useForwardLedger,
-  useMarketRead,
-  useMarketSessions,
-  useTradeLedger,
-  type MarketWatchlistState,
-} from './useMarketMonitorData';
+import { useForwardLedger, useMarketRead, useMarketSessions, useTradeLedger, type MarketWatchlistState } from './useMarketMonitorData';
 import { useMarketDashboard, useMorningBrief } from './useMarketSweepData';
 import { BacktestSection } from './workstation/BacktestSection';
 import { BriefingSection } from './workstation/BriefingSection';
@@ -48,6 +42,8 @@ import { PortfolioSection } from './workstation/PortfolioSection';
 import { SignalsSection } from './workstation/SignalsSection';
 import { StructureSection } from './workstation/StructureSection';
 import { WatchRail } from './workstation/WatchRail';
+import { MarketLoading } from './loading/MarketLoading';
+import { WorkspaceLoadError } from './loading/WorkspaceLoading';
 import { MonitoringSection } from './monitoring/MonitoringSection';
 import './tickerWorkspace.css';
 import './marketWorkstation.css';
@@ -64,10 +60,11 @@ export function MarketWorkstation({
   onOpenTicker: (symbol: string, type?: 'symbol' | 'formula') => void;
   watchlist: MarketWatchlistState;
 }) {
-  const { dashboard, live, reload } = useMarketDashboard();
-  const { read, running: reading, error: readError, run: runRead } = useMarketRead();
+  const dashboardState = useMarketDashboard();
+  const { dashboard, reload } = dashboardState;
+  const { read, loading: readLoading, running: reading, error: readError, run: runRead, reload: reloadRead } = useMarketRead();
   const marketSessions = useMarketSessions();
-  const morningBrief = useMorningBrief(reload);
+  const morningBrief = useMorningBrief();
   const economicCalendar = useEconomicCalendar();
   const forwardLedger = useForwardLedger();
   const tradeLedger = useTradeLedger();
@@ -106,7 +103,7 @@ export function MarketWorkstation({
     delete counts[active];
     return counts;
   }, [active, morningBrief.brief, visits]);
-  const warnings = useMemo(() => ({ evidence: dashboard.evidence.status === 'error' ? 1 : 0 }), [dashboard.evidence.status]);
+  const warnings = useMemo(() => ({ evidence: dashboard?.evidence.status === 'error' ? 1 : 0 }), [dashboard?.evidence.status]);
 
   const open = useCallback((symbol: string) => onOpenTicker(symbol, 'symbol'), [onOpenTicker]);
   const toggleRail = useCallback(() => {
@@ -116,8 +113,8 @@ export function MarketWorkstation({
   }, [collapsed]);
 
   const railEntries = useMemo(
-    () => buildWorkstationRail(watchlist, dashboard.portfolio.data.positions, morningBrief.brief?.movers ?? []),
-    [dashboard.portfolio.data.positions, morningBrief.brief?.movers, watchlist],
+    () => buildWorkstationRail(watchlist, dashboard?.portfolio.data.positions ?? [], morningBrief.brief?.movers ?? []),
+    [dashboard?.portfolio.data.positions, morningBrief.brief?.movers, watchlist],
   );
 
   const syncWebull = useCallback(async () => {
@@ -152,12 +149,12 @@ export function MarketWorkstation({
       // Text fields and dialogs own every key; a focused button or link owns only Enter, so
       // clicking a tab never switches the shortcuts off.
       const typing = Boolean(
-        target
-          && (target.tagName === 'INPUT'
-            || target.tagName === 'TEXTAREA'
-            || target.tagName === 'SELECT'
-            || target.isContentEditable
-            || target.closest('[role="dialog"]')),
+        target &&
+          (target.tagName === 'INPUT' ||
+            target.tagName === 'TEXTAREA' ||
+            target.tagName === 'SELECT' ||
+            target.isContentEditable ||
+            target.closest('[role="dialog"]')),
       );
       const focusedControl = Boolean(target && (target.tagName === 'BUTTON' || target.tagName === 'A'));
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -196,18 +193,30 @@ export function MarketWorkstation({
     return () => window.removeEventListener('keydown', handler);
   }, [onSelectSection, open]);
 
-  const briefing = dashboard.briefing.data;
-  const activeRegime = read?.regime ?? dashboard.regime.data.current;
+  const briefing = observedPanelData(dashboard?.briefing);
+  const activeRegime = read?.regime ?? observedPanelData(dashboard?.regime)?.current ?? 'unknown';
+  const needsSnapshot = ['briefing', 'structure', 'signals', 'portfolio', 'evidence'].includes(active);
+  const waiting =
+    needsSnapshot &&
+    (!dashboardState.settled ||
+      (!dashboard && dashboardState.loading) ||
+      (dashboard != null && active === 'briefing' && (!morningBrief.settled || readLoading)));
+  const loadError = dashboardState.error ?? (active === 'briefing' ? morningBrief.error : null);
+  const retry = () => {
+    void reload();
+    void morningBrief.reload();
+    if (readError) reloadRead();
+  };
 
   return (
     <div className="mw" data-density={density}>
       <MarketBar
         regime={activeRegime}
         regimeReasoning={read?.regimeReasoning}
-        live={live}
-        asOf={dashboard.asOf}
-        vix={briefing.vix}
-        breadthPct={briefing.breadthPct}
+        loaded={dashboard != null}
+        asOf={dashboard?.asOf ?? (dashboardState.error ? 'Snapshot unavailable' : 'Loading snapshot')}
+        vix={briefing?.vix ?? null}
+        breadthPct={briefing?.breadthPct ?? null}
         onRefresh={() => onSelectSection('scans')}
         density={density}
         onDensity={setDensity}
@@ -230,34 +239,66 @@ export function MarketWorkstation({
           <MarketSectionTabs tabs={tabs} active={active} onSelect={onSelectSection} newCounts={newCounts} warnings={warnings} />
 
           <div className="mw-section" key={active}>
-            {active === 'briefing' && (
-              <BriefingSection
-                dashboard={dashboard}
-                brief={morningBrief.brief}
-                generating={false}
-                onRunSweep={() => onSelectSection('scans')}
-                read={read}
-                reading={reading}
-                readError={readError}
-                onRunRead={() => void runRead()}
-                onExplain={() => setReasoningOpen(true)}
-                onOpen={open}
-                onGoTo={onSelectSection}
-                calendar={economicCalendar}
-                ledger={forwardLedger.report}
+            {loadError && needsSnapshot && !waiting && (
+              <WorkspaceLoadError
+                title={dashboard ? 'Refresh unavailable · showing saved data' : 'Market snapshot unavailable'}
+                error={loadError}
+                onRetry={retry}
               />
             )}
-            {active === 'structure' && <StructureSection dashboard={dashboard} read={read} onOpen={open} isMobile={isMobile} />}
-            {active === 'signals' && <SignalsSection dashboard={dashboard} onOpen={open} isMobile={isMobile} />}
-            {active === 'portfolio' && (
-              <PortfolioSection dashboard={dashboard} read={read} tradeLedger={tradeLedger} onSyncWebull={() => void syncWebull()} syncing={webullSyncing} onOpen={open} isMobile={isMobile} />
-            )}
-            {active === 'evidence' && <EvidenceSection dashboard={dashboard} watched={watchlist.symbols} onOpen={open} />}
-            {active === 'ledger' && <LedgerSection report={forwardLedger.report} loading={forwardLedger.loading} onOpen={open} />}
-            {active === 'backtest' && <BacktestSection />}
-            {active === 'scans' && <MonitoringSection />}
-            {active === 'watchlist' && (
-              <WatchRail variant="sheet" watchlist={watchlist} entries={railEntries} cursor={railCursor} collapsed={false} onToggle={toggleRail} onSelect={open} />
+            {waiting ? (
+              <MarketLoading section={active} isMobile={isMobile} />
+            ) : (
+              <>
+                {active === 'briefing' && dashboard && (
+                  <BriefingSection
+                    dashboard={dashboard}
+                    brief={morningBrief.brief}
+                    generating={false}
+                    onRunSweep={() => onSelectSection('scans')}
+                    read={read}
+                    reading={reading}
+                    readError={readError}
+                    onRunRead={() => void runRead()}
+                    onExplain={() => setReasoningOpen(true)}
+                    onOpen={open}
+                    onGoTo={onSelectSection}
+                    calendar={economicCalendar}
+                    ledger={forwardLedger.report}
+                    briefError={morningBrief.error}
+                  />
+                )}
+                {active === 'structure' && dashboard && (
+                  <StructureSection dashboard={dashboard} read={read} onOpen={open} isMobile={isMobile} />
+                )}
+                {active === 'signals' && dashboard && <SignalsSection dashboard={dashboard} onOpen={open} isMobile={isMobile} />}
+                {active === 'portfolio' && dashboard && (
+                  <PortfolioSection
+                    dashboard={dashboard}
+                    read={read}
+                    tradeLedger={tradeLedger}
+                    onSyncWebull={() => void syncWebull()}
+                    syncing={webullSyncing}
+                    onOpen={open}
+                    isMobile={isMobile}
+                  />
+                )}
+                {active === 'evidence' && dashboard && <EvidenceSection dashboard={dashboard} watched={watchlist.symbols} onOpen={open} />}
+                {active === 'ledger' && <LedgerSection report={forwardLedger.report} loading={forwardLedger.loading} onOpen={open} />}
+                {active === 'backtest' && <BacktestSection />}
+                {active === 'scans' && <MonitoringSection />}
+                {active === 'watchlist' && (
+                  <WatchRail
+                    variant="sheet"
+                    watchlist={watchlist}
+                    entries={railEntries}
+                    cursor={railCursor}
+                    collapsed={false}
+                    onToggle={toggleRail}
+                    onSelect={open}
+                  />
+                )}
+              </>
             )}
           </div>
 
@@ -274,7 +315,9 @@ export function MarketWorkstation({
         </div>
       </div>
 
-      {reasoningOpen && <BriefingReasoning dash={dashboard} read={read} sessions={marketSessions} onClose={() => setReasoningOpen(false)} />}
+      {reasoningOpen && dashboard && (
+        <BriefingReasoning dash={dashboard} read={read} sessions={marketSessions} onClose={() => setReasoningOpen(false)} />
+      )}
     </div>
   );
 }

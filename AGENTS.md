@@ -245,6 +245,13 @@ For current behavior, assume:
   with the bounded probe. Never persist these messages as canonical candles or feed
   completed-candle alerts with them; missing day volume is unknown, not zero.
 
+- **Market loading never substitutes demo data.** Stored dashboard/brief readers use
+  `useStoredMarketResource`; `loading/` owns the shared Market/ticker skeleton language.
+  Initial loading, valid empty responses, and errors are distinct; background failures
+  retain the last real snapshot. Loading outlines share `marketSectionPanels.ts` with
+  loaded sections so saved panel preferences apply to both. Never delay ready data to
+  showcase an animation. `scripts/verify_market_loading.py` verifies this offline.
+
 - **Scans own broad acquisition.** `core/market/scans/` holds named definitions, scope resolution,
   source plans, schedules and immutable runs. UI lives in `sections/market/monitoring/`.
   Never add a full refresh to boot, page load or broker sync. Manual runs require the scope

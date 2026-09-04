@@ -1,0 +1,181 @@
+.workspace-loading {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+}
+.workspace-loading__status {
+  display: flex;
+  align-items: center;
+  gap: var(--mkt-s2);
+  height: 28px;
+  margin-bottom: var(--mkt-s3);
+  color: var(--mkt-muted);
+  font: 10px var(--mkt-mono);
+}
+.workspace-loading__status > span {
+  width: 4px;
+  height: 4px;
+  background: var(--mkt-accent);
+}
+.workspace-loading::after {
+  content: '';
+  position: absolute;
+  top: 28px;
+  left: 0;
+  width: 22%;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--mkt-accent), transparent);
+  opacity: 0.6;
+  animation: workspace-sweep 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+.workspace-loading__panel {
+  min-width: 0;
+  padding: var(--mkt-s3);
+  border: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+.workspace-loading__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--mkt-s3);
+  padding-bottom: var(--mkt-s3);
+  border-bottom: 1px solid var(--mkt-seam);
+}
+.workspace-loading__panel i,
+.workspace-loading__rail i {
+  display: block;
+  height: 7px;
+  background: var(--mkt-seam);
+  border-radius: 1px;
+}
+.workspace-loading__heading i:first-child {
+  width: 28%;
+}
+.workspace-loading__heading i:last-child {
+  width: 12%;
+}
+.workspace-loading__lines > div {
+  display: grid;
+  grid-template-columns: 18% 1fr 13%;
+  align-items: center;
+  gap: 12%;
+  min-height: 39px;
+  border-bottom: 1px solid var(--mkt-seam);
+}
+.workspace-loading__lines > div:last-child {
+  border-bottom: 0;
+}
+.workspace-loading__lines > div:nth-child(even) i:nth-child(2) {
+  width: 72%;
+}
+.workspace-loading__chart {
+  min-height: 250px;
+  margin-top: var(--mkt-s3);
+  border-right: 1px solid var(--mkt-seam);
+  border-bottom: 1px solid var(--mkt-seam);
+  background-image: linear-gradient(var(--mkt-seam) 1px, transparent 1px), linear-gradient(90deg, var(--mkt-seam) 1px, transparent 1px);
+  background-size:
+    100% 25%,
+    16.666% 100%;
+  opacity: 0.5;
+}
+.workspace-loading__brief {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(300px, 1fr);
+  gap: 0;
+}
+.workspace-loading__brief > :nth-child(2) {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+}
+.workspace-loading__brief > :nth-child(2) .workspace-loading__chart {
+  min-height: 460px;
+}
+.workspace-load-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--mkt-s3);
+  padding: var(--mkt-s3) 0;
+  color: var(--mkt-muted);
+  font: var(--mkt-t-body) var(--mkt-sans);
+}
+.workspace-load-error strong {
+  color: var(--mkt-text);
+  font-weight: 500;
+}
+.workspace-load-error p {
+  margin: 5px 0 0;
+  overflow-wrap: anywhere;
+}
+.workspace-load-error button {
+  flex: 0 0 auto;
+}
+.workspace-loading__rail {
+  padding: var(--mkt-s3);
+}
+.workspace-loading__rail::after {
+  display: none;
+}
+.workspace-loading__ticker {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  padding: var(--mkt-s3);
+}
+.workspace-loading__ticker .workspace-loading {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.workspace-loading__ticker .workspace-loading__outlines {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--mkt-s3);
+}
+.workspace-loading__ticker .workspace-loading__panel--chart {
+  flex: 1;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+}
+.workspace-loading__ticker .workspace-loading__chart {
+  flex: 1;
+  min-height: 60px;
+}
+.workspace-loading__ticker-research {
+  flex: 0 1 36%;
+  overflow: hidden;
+}
+@keyframes workspace-sweep {
+  from {
+    transform: translateX(-110%);
+  }
+  to {
+    transform: translateX(560%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .workspace-loading::after {
+    animation: none;
+    width: 100%;
+    opacity: 0.25;
+  }
+}
+@media (max-width: 900px) {
+  .workspace-loading__brief {
+    grid-template-columns: 1fr;
+  }
+  .workspace-loading__brief > :nth-child(2) {
+    grid-column: auto;
+    grid-row: auto;
+  }
+  .workspace-loading__brief > :nth-child(2) .workspace-loading__chart {
+    min-height: 220px;
+  }
+}

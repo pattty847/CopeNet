@@ -16,6 +16,7 @@ import { TickerSearch } from '../TickerSearch';
 import { Sparkline } from '../workspaceViz';
 import type { RailEntry } from '../marketBriefModel';
 import type { MarketWatchlistState } from '../useMarketMonitorData';
+import { SkeletonLines } from '../loading/WorkspaceLoading';
 
 const UNDO_WINDOW_MS = 8000;
 
@@ -187,9 +188,10 @@ export function WatchRail({
       </div>
 
       <div className="tw-rail__list">
-        {entries.length === 0 && (
+        {watchlist.loading && entries.length === 0 && <div className="workspace-loading workspace-loading__rail" aria-label="Loading watchlist" aria-busy="true"><SkeletonLines rows={9} /></div>}
+        {!watchlist.loading && entries.length === 0 && (
           <p className="tw-rail__empty">
-            {watchlist.loading ? 'Loading watchlist…' : `"${watchlist.active}" is empty. Add a symbol below — every row opens its workspace.`}
+            {`"${watchlist.active}" is empty. Add a symbol below — every row opens its workspace.`}
           </p>
         )}
         {entries.map((entry) => {

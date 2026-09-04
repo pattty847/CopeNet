@@ -32,6 +32,7 @@ export function BriefingSection({
   onGoTo,
   calendar,
   ledger,
+  briefError,
 }: {
   dashboard: DashboardPayload;
   brief: MorningBriefPayload | null;
@@ -46,9 +47,10 @@ export function BriefingSection({
   onGoTo: (section: MarketSection) => void;
   calendar: EconomicCalendarState;
   ledger: LedgerReport | null;
+  briefError?: string | null;
 }) {
   const ledgerLine = ledger && ledger.totalClaims > 0 ? `${ledger.totalClaims} claims logged · ${ledger.pendingHorizons} horizons pending` : null;
-  const headline = brief?.headline ?? (generating ? 'Building the first delta snapshot…' : 'No sweep yet — run one now or wait for the next scheduled scan.');
+  const headline = brief?.headline ?? (briefError ? 'Saved briefing unavailable.' : generating ? 'Building the first delta snapshot…' : 'No saved briefing yet.');
 
   return (
     <div className="mw-briefing">
@@ -74,6 +76,7 @@ export function BriefingSection({
         <WhatChanged
           brief={brief}
           generating={generating}
+          briefUnavailable={Boolean(briefError)}
           regime={dashboard.regime}
           calendar={
             <EconomicCalendarWidget
@@ -101,7 +104,7 @@ export function BriefingSection({
         />
       </div>
 
-      <p className="mw-footnote">Reads are evidence-based with caveats — never forecasts. Panels marked “preview” are illustrative until their live data loads.</p>
+      <p className="mw-footnote">Reads are evidence-based with caveats — never forecasts. Scans refresh the saved market snapshot.</p>
     </div>
   );
 }

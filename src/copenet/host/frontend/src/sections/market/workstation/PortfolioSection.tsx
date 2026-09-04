@@ -2,6 +2,7 @@
 // all-time P&L and every fill. The brief's Book row is the glance; this is the room.
 
 import { useMemo } from 'react';
+import { PORTFOLIO_PANELS } from '../marketSectionPanels';
 import { AllTimePnl } from '../AllTimePnl';
 import { Portfolio, Speculative } from '../panelsLists';
 import { TradeHistory } from '../TradeHistory';
@@ -28,16 +29,13 @@ export function PortfolioSection({
 }) {
   const panels = useMemo<SectionPanel[]>(
     () => [
-      { id: 'positions', title: 'Positions · live P&L', defaultWidth: 'full', canHalf: false, node: <Portfolio panel={dashboard.portfolio} onOpen={onOpen} onSyncWebull={onSyncWebull} syncing={syncing} /> },
-      { id: 'speculative', title: 'Speculative lane', defaultWidth: 'half', canHalf: true, node: <Speculative panel={dashboard.speculative} onOpen={onOpen} comment={read?.speculativeComment} /> },
+      { ...PORTFOLIO_PANELS.positions, node: <Portfolio panel={dashboard.portfolio} onOpen={onOpen} onSyncWebull={onSyncWebull} syncing={syncing} /> },
+      { ...PORTFOLIO_PANELS.speculative, node: <Speculative panel={dashboard.speculative} onOpen={onOpen} comment={read?.speculativeComment} /> },
       {
-        id: 'allTimePnl',
-        title: 'All-time P&L',
-        defaultWidth: 'half',
-        canHalf: true,
+        ...PORTFOLIO_PANELS.allTimePnl,
         node: <AllTimePnl ledger={tradeLedger.ledger} loading={tradeLedger.loading} syncing={tradeLedger.syncing} error={tradeLedger.error} onSync={() => void tradeLedger.sync()} onOpen={onOpen} />,
       },
-      { id: 'tradeHistory', title: 'Trade history', defaultWidth: 'full', canHalf: false, node: <TradeHistory ledger={tradeLedger.ledger} loading={tradeLedger.loading} onOpen={onOpen} /> },
+      { ...PORTFOLIO_PANELS.tradeHistory, node: <TradeHistory ledger={tradeLedger.ledger} loading={tradeLedger.loading} onOpen={onOpen} /> },
     ],
     [dashboard.portfolio, dashboard.speculative, onOpen, onSyncWebull, read?.speculativeComment, syncing, tradeLedger],
   );

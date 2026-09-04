@@ -19,7 +19,7 @@ const REGIME_COLORS: Record<string, string> = {
 export function MarketBar({
   regime,
   regimeReasoning,
-  live,
+  loaded,
   asOf,
   vix,
   breadthPct,
@@ -30,10 +30,10 @@ export function MarketBar({
 }: {
   regime: string;
   regimeReasoning?: string;
-  live: boolean;
+  loaded: boolean;
   asOf: string;
-  vix: number;
-  breadthPct: number;
+  vix: number | null;
+  breadthPct: number | null;
   onRefresh: () => void;
   density: Density;
   onDensity: (density: Density) => void;
@@ -52,18 +52,18 @@ export function MarketBar({
       </span>
 
       <span className="mw-freshness" role="status">
-        <span className="mw-freshness__dot" style={{ background: live ? 'var(--mkt-up)' : 'var(--mkt-dim)' }} />
-        {live ? asOf : 'illustrative preview'}
+        <span className="mw-freshness__dot" style={{ background: loaded ? 'var(--mkt-muted)' : 'var(--mkt-dim)' }} />
+        {asOf}
       </span>
 
       <div className="mw-bar__spacer" />
 
       <div className="mw-bar__stat" title="CBOE Volatility Index">
-        <b>{formatVix(vix)}</b>
+        <b>{vix == null ? '—' : formatVix(vix)}</b>
         <span>VIX</span>
       </div>
       <div className="mw-bar__stat" title="Share of tracked names above their weekly trend">
-        <b>{formatBreadth(breadthPct)}</b>
+        <b>{breadthPct == null ? '—' : formatBreadth(breadthPct)}</b>
         <span>Breadth</span>
       </div>
 
