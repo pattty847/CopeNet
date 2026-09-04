@@ -14,6 +14,47 @@ The core promise is **shared attention with inspectable evidence**: “this cand
 “that zone,” and “the divergence I highlighted” refer to durable, identifiable things.
 Full detail remains accessible without placing every historical bar in every prompt.
 
+Founder clarification: awareness primarily means access to the structured data behind
+the webpage. The rendered view and agent context derive from the same state. Vision
+is an optional supplement, not the mechanism that makes the agent aware.
+
+## Shared view state
+
+Maintain a typed `marketViewState` projection of the same data and configuration used
+to render the workspace. It includes displayed values and exact series references,
+not just a list of panel names. Derive it from existing owners rather than maintain a
+second independently updated market database. Chart-owned viewport changes must feed
+this projection too, so panning updates it even without a toolbar range change.
+
+The flow is:
+
+```text
+Canonical data + view settings + chart objects
+                 ↓
+       Current marketViewState
+          ↙              ↘
+    Rendered UI     Snapshot when model is invoked
+                          ↓
+                 Model context + exact-data tools
+                          ↓
+                 Validated state actions
+                          ↓
+             Updated state and rendered UI
+```
+
+Changing the ticker, range, indicators, drawings, or panel data updates the current
+state and its revision. The next invocation automatically receives the current view
+through the selected detail projection; no manual copying or attaching is required.
+Detail controls serialization and retrieval budgets, not what the shared state retains.
+Any displayed supported value must be resolvable exactly from the captured revision.
+
+Updating a JavaScript variable does not alter an already-running model request. A run
+keeps the snapshot it started with; an explicit current-state tool read or a later model
+invocation can receive the new revision and its changes. This keeps live UI updates
+cheap without silently changing the evidence underneath an answer. Agent actions also
+update the same state through validated operations, so their results appear in the UI
+and in subsequent model context.
+
 ## The experience
 
 Open a ticker and open Agent beside the chart. A compact context line shows the
@@ -190,6 +231,8 @@ prove this product. Keep the first tool surface small, but preserve the full obs
 and action contracts so richer tools extend the same system.
 
 Verification uses synthetic market/account fixtures and temporary stores. Exercise
+rendered-value/context parity after view changes and agent edits, automatic current-state
+capture on invocation, explicit revision changes during a run,
 symbol-switch and multi-tab races, stale document edits, reconnect/retry deduplication,
 partial candles, missing data, full-history indicator warm-up, comparison/log scales,
 pan/zoom/resize alignment, persistence/reload, and model/tool/vision capability differences.
