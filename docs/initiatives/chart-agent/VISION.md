@@ -1,7 +1,12 @@
 # Chart Agent — Vision & Execution Brief
 
-Status: shaped for discussion; implementation has not started.
+Status: demo implementation plan complete; implementation has not started.
 Date: 2026-09-04.
+
+Detailed design: [ARCHITECTURE.md](ARCHITECTURE.md).
+Demo milestones and acceptance: [ROADMAP.md](ROADMAP.md).
+Those documents resolve the preliminary choices below, including shared-state ownership,
+observation storage, scoped drawing access, and future crypto/order-book boundaries.
 
 ## Product intent
 
@@ -174,9 +179,9 @@ These are design recommendations, not existing contracts or final API names.
    results, and inspector. Pass observation/chart bindings as validated turn context;
    do not create a second market chatbot or inject them as a replacement system prompt.
 
-Suggested homes: `core/market/chart_agent/` for observations, queries, and document actions;
-`sections/market/chartAgent/` for the companion UI and scene capture; a focused drawing
-module for chart rendering; focused market tool handlers registered through the existing
+Selected homes: `core/market/chart_workspace/` for observations, queries, and document actions;
+`sections/market/chartAgent/` for the companion, `viewState/` for shared capture, and `drawings/`
+for chart objects/rendering; focused market tool handlers registered through the existing
 aggregation point. Chart read tools use the existing context category. Chart mutations
 need explicit descriptor side effects and scoped authorization in the shared policy path.
 They must not be disguised as reads or require granting unrestricted shell access.
@@ -255,13 +260,15 @@ Defer multi-agent competing analyses, autonomous trading, tick-by-tick narration
 code execution, and a new intraday history pipeline. They are not prerequisites for shared
 chart awareness. No automatic trading or outgoing messages are authorized by this brief.
 
-Before build, resolve exact observation retention and baseline chart-write policy as part
-of slice 1's implementation plan. Extract focused concerns before expanding the existing
+The implementation plan resolves observation retention and scoped chart-write policy.
+Extract focused concerns before expanding the existing
 571-line `TickerWorkspace.tsx` and 1,107-line `CandleChart.tsx`.
 
 Discovery also confirmed the old `market.ticker.fundamentals.get` backend/client path still
 exists beside canonical financial series. Reported here under the repository's no-shim
 rule; do not extend it for this initiative. Removal is separate work.
 
-Next move: implement slice 1 end to end. The acceptance demo is one request—“Inspect this
-region and draw the levels you can justify”—followed by a targeted revision and undo.
+Next move after implementation is requested: follow the demo milestones in ROADMAP.md.
+The acceptance demo is one request—“Inspect this region and draw the levels you can
+justify”—followed by a targeted revision and undo. Crypto/order-book support extends
+the observation/resource boundary later; the demo does not acquire those feeds.
