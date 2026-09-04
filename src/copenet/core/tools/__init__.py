@@ -1,7 +1,7 @@
 """CopeNet-native tool contracts, policy, and v1 safe tool runtime."""
 
+from .projection import build_tool_effect_payload
 from .contracts import (
-    build_tool_effect_payload,
     build_openai_tool_schemas,
     build_responses_tool_schemas,
     responses_safe_tool_name,

@@ -29,7 +29,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 
 # A check returns (passed, detail).
 Check = Callable[[Path], "tuple[bool, str]"]

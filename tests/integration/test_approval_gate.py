@@ -1,7 +1,7 @@
 """In-process integration of the approval gate pause-and-resume behavior.
 
 Exercises the real pieces together — the executor wrapper
-(_make_approval_gated_executor), the shell handler's approval gate + pre-approval
+(make_approval_gated_executor), the shell handler's approval gate + pre-approval
 bypass, and the orchestrator await/decide registry — without the live provider
 loop or a browser.
 """
@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 from copenet.core.orchestrator import Orchestrator
-from copenet.core.orchestrator.runtime import _make_approval_gated_executor
+from copenet.core.orchestrator.approval_execution import make_approval_gated_executor
 from copenet.core.permissions.store import PermissionStore
 from copenet.core.sessions.session_store import SessionStore
 from copenet.core.sessions.transcript_store import TranscriptStore
@@ -63,7 +63,7 @@ async def test_high_risk_command_pauses_then_runs_on_approve(tmp_path: Path) -> 
             await asyncio.sleep(0)
             orch.decide_approval(approval_id=approval_id, decision="approved")
 
-    gated = _make_approval_gated_executor(
+    gated = make_approval_gated_executor(
         ToolRegistry().execute,
         orchestrator=orch,
         emit_event=emit_event,
@@ -96,7 +96,7 @@ async def test_high_risk_command_stays_blocked_on_reject(tmp_path: Path) -> None
             approval_id = payload["approval"]["approvalId"]
             orch.decide_approval(approval_id=approval_id, decision="rejected")
 
-    gated = _make_approval_gated_executor(
+    gated = make_approval_gated_executor(
         ToolRegistry().execute,
         orchestrator=orch,
         emit_event=emit_event,
@@ -122,7 +122,7 @@ async def test_no_emit_event_falls_back_to_blocked(tmp_path: Path) -> None:
     # CLI path (no side channel) — no operator to ask, so the blocked result
     # is returned as before instead of hanging.
     orch = _orch(tmp_path)
-    gated = _make_approval_gated_executor(
+    gated = make_approval_gated_executor(
         ToolRegistry().execute,
         orchestrator=orch,
         emit_event=None,
@@ -157,7 +157,7 @@ async def test_approving_a_non_shell_write_does_not_grant_standing_shell_authori
             approval_id = payload["approval"]["approvalId"]
             orch.decide_approval(approval_id=approval_id, decision="approved_always")
 
-    gated = _make_approval_gated_executor(
+    gated = make_approval_gated_executor(
         ToolRegistry().execute,
         orchestrator=orch,
         emit_event=emit_event,

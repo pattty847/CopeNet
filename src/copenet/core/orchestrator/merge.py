@@ -14,7 +14,8 @@ from copenet.core.sessions.session_store import utc_now_iso
 from copenet.prompts import PromptPurpose, compose_prompt
 
 if TYPE_CHECKING:
-    from . import Orchestrator, SideEventEmit
+    from . import Orchestrator
+    from .requests import SideEventEmit
 
 
 @dataclass(frozen=True)

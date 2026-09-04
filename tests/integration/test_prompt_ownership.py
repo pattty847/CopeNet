@@ -13,7 +13,8 @@ from typing import Any
 
 import pytest
 
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 from copenet.prompts import compose_prompt
 from copenet.prompts.loader import PERSONA_PLACEHOLDER, get_task_mode_text
 from copenet.providers import ProviderEvent

@@ -147,7 +147,7 @@ class FleetCoordinator:
         return room
 
     async def _run_lane(self, room_id: str, participant_id: str) -> dict[str, Any]:
-        from copenet.core.orchestrator import ChatSendRequest
+        from copenet.core.orchestrator.requests import ChatSendRequest
 
         room = self._store.get(room_id)
         if room is None:

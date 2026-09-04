@@ -72,6 +72,22 @@ class ToolRegistry:
                     "policySummary": "Unknown tools are blocked.",
                 },
             )
+        # A chart turn cannot use broader tools to escape its captured data scope.
+        # Enforce independently of the model manifest, including approved retries.
+        from copenet.core.market.chart_workspace.models import CHART_TOOL_IDS
+        chart_tool = request.tool_id in CHART_TOOL_IDS
+        forbidden = context.allowed_tool_ids is not None and request.tool_id not in context.allowed_tool_ids
+        if context.market_context is not None:
+            forbidden = forbidden or not chart_tool
+            if request.tool_id in {"market.chart.apply", "market.chart.undo"}:
+                forbidden = forbidden or context.market_context.access != "annotate"
+        elif chart_tool:
+            forbidden = True
+        if forbidden:
+            return ToolExecutionResult(
+                tool_id=request.tool_id, ok=False, summary="Tool outside this turn's chart authority",
+                error="tool outside bound scope", output={"policyDecision": "write_blocked", "policySummary": "This tool is not authorized by the current chart binding."},
+            )
         if descriptor.category not in context.policy.allowed_categories:
             if descriptor.category == "repo-write":
                 error = "write tool unavailable in current mode"

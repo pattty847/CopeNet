@@ -12,7 +12,8 @@ import asyncio
 
 import pytest
 
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.providers import ProviderEvent, resolved_model_event
 

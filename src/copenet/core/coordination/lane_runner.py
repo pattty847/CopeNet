@@ -131,7 +131,7 @@ async def run_lane_turn(orchestrator: Any, spec: LaneTurnSpec) -> dict[str, Any]
     gathering lane) check the returned `toolCallCount` against their own
     target and log accordingly; V1 is a soft guard, not a hard cap.
     """
-    from copenet.core.orchestrator import ChatSendRequest
+    from copenet.core.orchestrator.requests import ChatSendRequest
 
     lane = orchestrator._session_store.get(spec.session_key)
     text_chunks: list[str] = []

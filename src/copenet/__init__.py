@@ -1,7 +1,7 @@
 """CopeNet: local agent gateway (orchestrator, providers, WebSocket RPC, sessions)."""
 
+from copenet.core.orchestrator.requests import ChatSendRequest
 from copenet.core.orchestrator import (
-    ChatSendRequest,
     Orchestrator,
     SessionInFlightError,
 )

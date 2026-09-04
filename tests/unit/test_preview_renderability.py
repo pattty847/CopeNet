@@ -15,10 +15,10 @@ from __future__ import annotations
 from pathlib import Path
 import re
 
-from copenet.core.tools.contracts import _generic_preview, _preview_payload
+from copenet.core.tools.projection import _generic_preview, _preview_payload
 
 
-CONTRACTS = Path(__file__).resolve().parents[2] / "src" / "copenet" / "core" / "tools" / "contracts.py"
+CONTRACTS = Path(__file__).resolve().parents[2] / "src" / "copenet" / "core" / "tools" / "projection.py"
 FRONTEND_TYPES = (
     Path(__file__).resolve().parents[2]
     / "src" / "copenet" / "host" / "frontend" / "src" / "types" / "backend.ts"
@@ -26,7 +26,7 @@ FRONTEND_TYPES = (
 
 
 def _emitted_preview_types() -> set[str]:
-    """Preview `type` literals produced by contracts.py."""
+    """Preview `type` literals produced by projection.py."""
     source = CONTRACTS.read_text(encoding="utf-8")
     # Only the preview builders use this exact key shape; JSON-schema "type": "object"
     # and "function" are tool schemas, not previews.
@@ -54,7 +54,7 @@ def _rendered_preview_types() -> set[str]:
 def test_every_emitted_preview_type_has_a_frontend_renderer() -> None:
     orphaned = _emitted_preview_types() - _rendered_preview_types()
     assert not orphaned, (
-        f"contracts.py emits preview types the inspector cannot render: {sorted(orphaned)}. "
+        f"projection.py emits preview types the inspector cannot render: {sorted(orphaned)}. "
         "Add the renderer to ToolResultPreview, or drop the projection and let "
         "_generic_preview return a raw body."
     )

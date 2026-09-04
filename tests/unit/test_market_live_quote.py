@@ -178,9 +178,10 @@ async def test_browser_disconnect_closes_only_its_own_upstream(monkeypatch):
         async def close(self, **kwargs):
             pass
 
-        async def receive_json(self):
+        async def receive_text(self):
+            import json
             try:
-                return next(self.requests)
+                return json.dumps(next(self.requests))
             except StopIteration:
                 await eventually(lambda: feed.active == 1)
                 raise WebSocketDisconnect()

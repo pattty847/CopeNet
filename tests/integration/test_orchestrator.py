@@ -3,7 +3,8 @@ import json
 
 import pytest
 
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptMessage, TranscriptStore
 from copenet.providers import ProviderEvent
 

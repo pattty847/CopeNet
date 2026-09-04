@@ -8,7 +8,8 @@ from typing import Any, Awaitable, Callable
 from uuid import uuid4
 
 from copenet.host.rpc_schema import ChatEventPayload, EventFrame, ResponseFrame, RpcError, make_chat_event, make_event_frame, make_response_frame
-from copenet.core.orchestrator import ChatSendRequest, SessionInFlightError
+from copenet.core.orchestrator.requests import ChatSendRequest, MarketContextRequest
+from copenet.core.orchestrator import SessionInFlightError
 
 
 SendJson = Callable[[dict[str, Any]], Awaitable[None]]
@@ -58,11 +59,15 @@ class ChatSendParams:
     timeout_ms: int | None
     system_prompt: str | None
     workspace_root: str | None
+    market_context: MarketContextRequest | None
 
 
 def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
     session_key = _required_text(raw, "sessionKey")
     message = _required_text(raw, "message")
+    market_context = MarketContextRequest.from_dict(raw["marketContext"]) if raw.get("marketContext") is not None else None
+    if market_context is not None and not _optional_text(raw, "idempotencyKey"):
+        raise ValueError("Chart sends require a stable idempotencyKey")
     run_id = _optional_text(raw, "idempotencyKey") or str(uuid4())
     system_prompt_id = _optional_text(raw, "systemPromptId")
     task_prompt_id = _optional_text(raw, "taskPromptId")
@@ -84,6 +89,7 @@ def _normalize_chat_send_params(raw: dict[str, Any]) -> ChatSendParams:
         # gets the same instructions. Only an explicit `systemPrompt` overrides it.
         system_prompt=_optional_text(raw, "systemPrompt"),
         workspace_root=_optional_text(raw, "workspaceRoot"),
+        market_context=market_context,
     )
 
 
@@ -117,7 +123,11 @@ async def handle_chat_send(
     # receiving live frames. The direct request response stays point-to-point.
     emit_to = broadcast or send_json
     raw = params or {}
-    request = _normalize_chat_send_params(raw)
+    try:
+        request = _normalize_chat_send_params(raw)
+    except (ValueError, TypeError) as exc:
+        await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc)))))
+        return
     if not request.session_key or (not request.message and not request.attachment_ids):
         await send_json(
             make_response_frame(
@@ -130,11 +140,18 @@ async def handle_chat_send(
         )
         return
 
-    await send_json(
-        make_response_frame(
-            ResponseFrame(id=request_id, ok=True, payload={"runId": request.run_id, "status": "started"})
-        )
-    )
+    accepted = False
+
+    async def accept(payload: dict[str, Any]) -> None:
+        nonlocal accepted
+        if not accepted:
+            accepted = True
+            await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload)))
+
+    # Ordinary sends retain their existing immediate response. A chart send is
+    # accepted only after durable admission, ownership checks, and the session lock.
+    if request.market_context is None:
+        await accept({"runId": request.run_id, "status": "started"})
 
     async def emit_chat(payload: dict[str, Any]) -> None:
         try:
@@ -145,6 +162,9 @@ async def handle_chat_send(
             return
 
     async def emit_side_event(event: str, payload: dict[str, Any]) -> None:
+        if event == "chat.admitted":
+            await accept(payload)
+            return
         try:
             await emit_to(make_event_frame(EventFrame(event=event, payload=payload)))
         except Exception:
@@ -152,7 +172,7 @@ async def handle_chat_send(
 
     async def run() -> None:
         try:
-            await orchestrator.send_chat(
+            result = await orchestrator.send_chat(
                 ChatSendRequest(
                     session_key=request.session_key,
                     message=request.message,
@@ -169,24 +189,23 @@ async def handle_chat_send(
                     timeout_ms=request.timeout_ms,
                     system_prompt=request.system_prompt,
                     workspace_root=request.workspace_root,
+                    market_context=request.market_context,
                 ),
                 emit=emit_chat,
                 emit_event=emit_side_event,
             )
+            if not accepted:
+                await accept(result)
         except SessionInFlightError as exc:
-            try:
-                await send_json(
-                    make_response_frame(
-                        ResponseFrame(
-                            id=request_id,
-                            ok=True,
-                            payload={"runId": exc.run_id, "status": "in_flight"},
-                        )
-                    )
-                )
-            except Exception:
-                return
+            if not accepted:
+                await accept({"runId": exc.run_id, "status": "in_flight"})
+            else:
+                await emit_chat({"runId": request.run_id, "sessionKey": request.session_key,
+                                 "seq": 1, "state": "error", "errorMessage": str(exc)})
         except Exception as exc:
+            if not accepted:
+                await send_json(make_response_frame(ResponseFrame(id=request_id, ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc)))))
+                return
             await emit_chat(
                 {
                     "runId": request.run_id,

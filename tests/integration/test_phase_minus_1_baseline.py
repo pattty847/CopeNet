@@ -16,7 +16,8 @@ from pathlib import Path
 
 import pytest
 
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.rpc_dispatch import dispatch_rpc
 from copenet.host.rpc_schema import RequestFrame

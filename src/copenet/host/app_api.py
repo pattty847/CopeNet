@@ -26,7 +26,8 @@ from copenet.core.meme_ideation import (
 )
 from copenet.core.attachments import ChatAttachmentError
 from copenet.core.media import MediaDependencyError, MediaDownloadError, MediaIngestionService, MediaTranscriptionError
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 from copenet.core.web_ingest import WebIngestError, WebIngestionService
 
 

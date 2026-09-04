@@ -81,7 +81,7 @@ def test_a_blocked_call_has_no_preview_to_render() -> None:
     Without this the whole policy object was JSON-dumped into the transcript
     beside a panel already showing policyDecision, target, and policySummary.
     """
-    from copenet.core.tools.contracts import _preview_payload
+    from copenet.core.tools.projection import _preview_payload
 
     blocked = {
         "target": "echo hi",
@@ -95,7 +95,7 @@ def test_a_blocked_call_has_no_preview_to_render() -> None:
 
 
 def test_a_real_result_that_happens_to_carry_policy_fields_still_previews() -> None:
-    from copenet.core.tools.contracts import _preview_payload
+    from copenet.core.tools.projection import _preview_payload
 
     allowed = {
         "policyDecision": "allowed",

@@ -32,7 +32,7 @@ class ApprovalPermissionFacadeMixin:
             "runId": run_id,
             "sessionKey": session_key,
             "status": "pending",
-            "actionClass": "process_execution",
+            "actionClass": request_payload.get("actionClass", "process_execution"),
             "toolId": str(request_payload.get("toolId") or "shell.exec"),
             "proposedAction": {
                 "description": str(request_payload.get("description") or ""),

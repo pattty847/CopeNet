@@ -13,6 +13,8 @@ from fastapi import WebSocket, WebSocketDisconnect
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.market.live_quote import LiveQuoteSubscription
 from copenet.host.rpc_dispatch import dispatch_rpc
+from copenet.host.rpc_market_chart import MARKET_CHART_HANDLERS
+from copenet.host.ws_frames import RpcFrameTooLarge, decode_rpc_frame
 from copenet.host.rpc_schema import (
     EventFrame,
     ResponseFrame,
@@ -72,7 +74,17 @@ class CopeNetWsServer:
 
         try:
             while True:
-                frame_raw = await websocket.receive_json()
+                frame_text = await websocket.receive_text()
+                try:
+                    frame_raw = decode_rpc_frame(frame_text)
+                except ValueError as exc:
+                    await send_json(make_response_frame(ResponseFrame(
+                        id="unknown", ok=False, error=RpcError(code="INVALID_REQUEST", message=str(exc)),
+                    )))
+                    if isinstance(exc, RpcFrameTooLarge):
+                        await websocket.close(code=1009)
+                        return
+                    continue
                 if not isinstance(frame_raw, dict):
                     await send_json(
                         make_response_frame(
@@ -218,6 +230,7 @@ class CopeNetWsServer:
                                 "messaging.routes.resolve",
                                 "market.dashboard.get",
                                 "market.ticker.get",
+                                *MARKET_CHART_HANDLERS,
                                 "market.quote.subscribe",
                                 "market.quote.unsubscribe",
                                 "market.ticker.evidence.get",
@@ -271,7 +284,7 @@ class CopeNetWsServer:
                                 "permissions.allowlist.add",
                                 "permissions.allowlist.remove",
                             ],
-                            "events": ["connect.challenge", "chat", "fleet.event", "briefing.ready", "memory.changed", "userNotes.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated", "approval.pending", "approval.resolved", "market.quote"],
+                            "events": ["connect.challenge", "chat", "fleet.event", "briefing.ready", "memory.changed", "userNotes.changed", "sessions.merge.updated", "pulse.updated", "messaging.updated", "approval.pending", "approval.resolved", "market.quote", "market.chart.document"],
                         },
                     },
                 )

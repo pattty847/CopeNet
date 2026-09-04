@@ -13,6 +13,12 @@ from copenet.core._config import (
 )
 from copenet.core.harness import PromptOverlay
 from copenet.core.harness.responses_items import image_content_part
+from copenet.core.orchestrator.market_context import (
+    resolve_market_context, admit_chart_turn, update_chart_admission, chart_retry_status,
+    chart_tool_ids, chart_policy, chart_store, chart_reference_with_trust,
+    current_chart_message, chart_system_overlay, prepare_chart_tool_context, create_chart_manifest,
+)
+from copenet.core.orchestrator.approval_execution import make_approval_gated_executor
 from copenet.core.orchestrator.context_budget import resolve_context_budget
 from copenet.core.orchestrator.messages import (
     build_chat_messages,
@@ -31,7 +37,6 @@ from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import (
     ToolExecutionContext,
-    ToolExecutionResult,
     describe_available_tools,
     disclose_policy_in_descriptions,
     policy_for_task_mode,
@@ -49,100 +54,10 @@ from copenet.prompts import (
 _RESUME_CLI_PROVIDERS = {"claude-cli"}
 
 if TYPE_CHECKING:
-    from . import ChatSendRequest, Orchestrator
+    from . import Orchestrator
+    from .requests import ChatSendRequest
 
 
-def _make_approval_gated_executor(base_executor, *, orchestrator, emit_event, session_key, run_id, abort_event):
-    """Wrap a tool executor so a high-risk result pauses for operator approval.
-
-    When a tool returns policyDecision == "approval_required", the run parks
-    (await_tool_approval) until the operator decides via the decide RPC. On
-    approve the exact command is re-run with the gate bypassed; on reject or
-    timeout the blocked result is returned so the model adapts. With no
-    emit_event side channel (e.g. CLI) there's no operator to ask, so the
-    blocked result is returned as before.
-    """
-
-    async def execute(request, context):
-        result = await base_executor(request, context)
-        output = result.output if isinstance(result.output, dict) else {}
-        if result.ok or output.get("policyDecision") != "approval_required" or emit_event is None:
-            return result
-
-        approval_id = f"appr-{uuid4().hex[:12]}"
-        command = str(output.get("command") or output.get("target") or "")
-        decision, note = await orchestrator.await_tool_approval(
-            session_key=session_key,
-            run_id=run_id,
-            approval_id=approval_id,
-            request_payload={
-                "toolId": result.tool_id,
-                "description": f"Run shell command: {command}" if command else f"Run {result.tool_id}",
-                "target": command,
-                "payload": {"command": command},
-                "rationale": output.get("policySummary"),
-            },
-            emit_event=emit_event,
-            abort_event=abort_event,
-        )
-        if decision in ("approved", "approved_always"):
-            # Re-run the exact call with the gate bypassed. The shell pattern gate
-            # checks `approved_commands` by command string; the Barricade side-
-            # effect gate checks `barricade_approved` by an argument-DIGEST key, so
-            # approving one write doesn't bless a different write to the same path.
-            from copenet.core.tools.barricade import approval_key
-
-            command_key = command or str(output.get("target") or result.tool_id)
-            # "Always allow" → persist to the global shell allowlist (Brick E) so
-            # this exact command runs without asking on future runs. Scoped to
-            # shell.exec specifically: `command` falls back to `output["target"]`
-            # for non-shell tools (barricade._side_effect_gate sets "command" only
-            # for shell.exec), and a target like a file path must never be written
-            # into the shell allowlist — that would grant standing, cross-session,
-            # cross-Access-mode shell authority from approving an unrelated write.
-            # Best-effort: a store failure must not break the in-flight approve.
-            if (
-                decision == "approved_always"
-                and result.tool_id == "shell.exec"
-                and command
-                and getattr(context, "permission_store", None) is not None
-            ):
-                try:
-                    context.permission_store.add(command)
-                except Exception:  # noqa: BLE001 - persistence is best-effort here
-                    pass
-            shell_approved = context.ephemeral.setdefault("approved_commands", set())
-            (shell_approved if isinstance(shell_approved, set) else set()).add(command_key)
-            if not isinstance(shell_approved, set):
-                context.ephemeral["approved_commands"] = {command_key}
-            barricade_approved = context.ephemeral.setdefault("barricade_approved", set())
-            (barricade_approved if isinstance(barricade_approved, set) else set()).add(approval_key(request))
-            if not isinstance(barricade_approved, set):
-                context.ephemeral["barricade_approved"] = {approval_key(request)}
-            return await base_executor(request, context)
-        # Rejected / timed out / aborted. Without this the model gets back the
-        # original approval_required payload — indistinguishable from the pending
-        # state — and plausibly re-issues the same command, re-paging the operator.
-        # Tell it a human decided, so it adapts instead of retrying.
-        rejected_output = {
-            **output,
-            "policyDecision": "rejected_by_operator",
-            "operatorDecision": decision,
-            "operatorNote": note,
-            "policySummary": (
-                f"The operator {decision} this command. Do not retry it; "
-                "choose a different approach or ask the user."
-            ),
-        }
-        return ToolExecutionResult(
-            tool_id=result.tool_id,
-            ok=False,
-            summary=f"Operator {decision} the command.",
-            error=f"operator {decision} the command",
-            output=rejected_output,
-        )
-
-    return execute
 
 
 async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", emit, *, emit_event=None) -> dict:
@@ -198,6 +113,9 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             raise RuntimeError(f"provider unavailable: {provider_name} ({init_error})")
         raise ValueError(f"unsupported provider: {provider_name}")
 
+    market_context = resolve_market_context(orchestrator, request, run_id)
+    market_reference = chart_reference_with_trust(orchestrator, market_context)
+    market_metadata = {"marketContext": market_reference} if market_reference else {}
     dedupe_key = f"chat:{session_key}:{idempotency_key}" if idempotency_key else None
     prior_history = orchestrator.history(session_key=session_key, limit=2)
     working_history = orchestrator.history(session_key=session_key, limit=12)
@@ -229,8 +147,18 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
     normalized_tool_results: list[dict] = []
     tool_steps: list[dict] = []
     persisted_tool_artifact_ids: list[str] = []
+    chart_manifest_id: str | None = None
 
     async with orchestrator._lock:
+        if market_context is not None:
+            active_run = orchestrator._active_run_by_session.get(session_key)
+            if active_run and active_run != run_id:
+                from . import SessionInFlightError
+                raise SessionInFlightError(active_run)
+            admission = admit_chart_turn(orchestrator, request, market_context)
+            if not admission["new"]:
+                status = chart_retry_status(orchestrator, request, admission, active_run)
+                return {"runId": admission["runId"], "status": status}
         if dedupe_key is not None:
             cached = orchestrator._idempotency_cache.get(dedupe_key)
             if cached is not None:
@@ -292,9 +220,12 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         orchestrator._active_run_by_session[session_key] = run_id
 
     try:
+        if market_context is not None and emit_event is not None:
+            await emit_event("chat.admitted", {"runId": run_id, "status": "started", "sessionKey": session_key})
         trace.record(
             "run_started",
             {
+                **market_metadata,
                 "messageChars": len(message),
                 "attachmentCount": len(attachment_refs or []),
                 "requestedToolIds": list(request.requested_tool_ids),
@@ -323,6 +254,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             entry.task_prompt_id or request.task_prompt_id,
             provider=provider_name,
         )
+        effective_tool_policy = chart_policy(effective_tool_policy, market_context)
+        scoped_tool_ids = chart_tool_ids(market_context) if market_context is not None else None
         # Offer the tools this Access level permits, and tell the model what the
         # level actually is. Without the disclosure a read-only run learns the
         # allowlist by being blocked, which costs a tool call to discover a fact
@@ -332,6 +265,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool
                 for tool in registered_tools
                 if tool.category in effective_tool_policy.allowed_categories
+                and (tool.id in scoped_tool_ids if scoped_tool_ids is not None else not tool.id.startswith("market.chart."))
             ],
             effective_tool_policy,
         ) if request.allow_tools else []
@@ -355,6 +289,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 timestamp=transcript_now(),
                 attachments=attachment_refs or None,
                 requested_tool_ids=list(requested_tool_ids) or None,
+                market_context=market_reference,
             ),
         )
         session_state = orchestrator._session_state_store.get_or_create(session_key)
@@ -378,6 +313,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             request.system_prompt or composed_system_prompt,
             requested_tool_overlay(active_requested_tool_ids),
         )
+        effective_system_prompt = append_system_overlay(effective_system_prompt, chart_system_overlay(market_context))
         prompt_policy = prompt_context_policy_for_chat(resolved_system_prompt_id)
         trace.record(
             "prompt_context_policy_resolved",
@@ -403,9 +339,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         # and a clean flattened prompt for prompt-only providers (CLI / LM Studio).
         full_history = orchestrator.history(session_key=session_key, limit=400)
         history_for_replay = _history_excluding_current(full_history, run_id=run_id)
+        current_message = current_chart_message(orchestrator, message, market_context)
         unbounded_chat_messages = build_chat_messages(
             transcript_messages=history_for_replay,
-            current_user_message=message,
+            current_user_message=current_message,
             current_user_image_parts=current_image_parts or None,
             attachment_resolver=_resolve_attachment_images,
         )
@@ -422,7 +359,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         # LM Studio, Ollama, or a CLI with no session to resume) gets the full
         # multi-turn replay.
         cli_resume = provider_name in _RESUME_CLI_PROVIDERS and bool(entry.provider_session_id)
-        chat_prompt = message if cli_resume else flatten_messages_to_prompt(chat_messages)
+        chat_prompt = current_message if cli_resume else flatten_messages_to_prompt(chat_messages)
         input_token_estimate = estimate_input_tokens(chat_messages)
         message_count = len(chat_messages)
         trace.record(
@@ -462,6 +399,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             session_state=session_state,
         )
         model_input_snapshot: dict[str, Any] | None = {} if trace.debug else None
+        chart_manifest_id = create_chart_manifest(orchestrator, market_context, market_reference)
+        update_chart_admission(orchestrator, request, "dispatched")
         plan, event_stream = await orchestrator._harness.run_turn(
             provider=provider,
             prompt=chat_prompt,
@@ -475,7 +414,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             input_token_budget=context_budget.input_tokens,
             debug_snapshot=model_input_snapshot,
             available_tools=available_tools,
-            tool_executor=_make_approval_gated_executor(
+            tool_executor=make_approval_gated_executor(
                 orchestrator._tool_registry.execute,
                 orchestrator=orchestrator,
                 emit_event=emit_event,
@@ -483,7 +422,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 run_id=run_id,
                 abort_event=abort_event,
             ),
-            tool_context=ToolExecutionContext(
+            tool_context=prepare_chart_tool_context(ToolExecutionContext(
                 workdir=session_workspace_root,
                 session_workspace_root=session_workspace_root,
                 session_key=session_key,
@@ -504,7 +443,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 task_prompt_id=entry.task_prompt_id or request.task_prompt_id,
                 run_id=run_id,
                 trace=trace.record,
-            ),
+                market_context=market_context,
+                chart_store=chart_store(orchestrator) if market_context is not None else None,
+                allowed_tool_ids=scoped_tool_ids if request.allow_tools else frozenset(),
+                ephemeral={"chart_event_emit": emit_event} if market_context is not None and emit_event is not None else {},
+            ), orchestrator=orchestrator, market_context=market_context, history=history_for_replay),
             trace=trace.record,
             prompt_context_builder=lambda resolved_plan: _build_identity_memory_overlay(
                 orchestrator=orchestrator,
@@ -707,6 +650,8 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             assistant_text=assistant_text,
         )
         created_artifact_ids: list[str] = list(persisted_tool_artifact_ids)
+        if chart_manifest_id:
+            created_artifact_ids.append(chart_manifest_id)
         for draft in artifact_drafts:
             created = orchestrator._artifact_store.create(
                 session_key=session_key,
@@ -764,6 +709,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     provider_session_id=entry.provider_session_id,
                     timestamp=transcript_now(),
                     state="final" if assistant_text else "tool_only",
+                    market_context=market_reference,
                     tool_execution=tool_execution_payload,
                     parts=[dict(part) for part in assistant_message_parts] if assistant_message_parts else None,
                 ),
@@ -826,6 +772,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             pending_input_count=int(latest_turn_state.get("pendingInputCount") or 0),
             oversized_tool_artifact_ids=list(persisted_tool_artifact_ids),
             metadata={
+                **market_metadata,
                 "capabilityProfile": {
                     "toolCalls": plan.capability_profile.tool_calls,
                     "promptedToolUse": plan.capability_profile.prompted_tool_use,
@@ -942,6 +889,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         if dedupe_key is not None:
             async with orchestrator._lock:
                 orchestrator._idempotency_cache[dedupe_key] = final_payload
+        update_chart_admission(orchestrator, request, "completed")
         return {"runId": run_id, "status": "ok"}
     except Exception as exc:
         import traceback as _tb
@@ -972,7 +920,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             message_count=message_count if "message_count" in locals() else 0,
             input_token_estimate=input_token_estimate if "input_token_estimate" in locals() else 0,
             tool_steps=tool_steps,
-            artifact_ids=list(persisted_tool_artifact_ids),
+            artifact_ids=[*persisted_tool_artifact_ids, *([chart_manifest_id] if chart_manifest_id else [])],
             output_summary="",
             error=str(exc),
             transition_reason=str(latest_turn_state.get("transitionReason") or "model_error"),
@@ -982,6 +930,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             oversized_tool_artifact_ids=list(persisted_tool_artifact_ids),
             metadata=(
                 {
+                    **market_metadata,
                     "workspaceRoot": str(session_workspace_root),
                     "harnessDecision": dict(plan.harness_decision),
                     "requestedToolIds": list(requested_tool_ids),
@@ -990,7 +939,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     **agent_runtime_payload,
                 }
                 if "session_workspace_root" in locals() and "plan" in locals()
-                else ({"workspaceRoot": str(session_workspace_root)} if "session_workspace_root" in locals() else {})
+                else ({**market_metadata, "workspaceRoot": str(session_workspace_root)} if "session_workspace_root" in locals() else market_metadata)
             ),
         )
         orchestrator._run_store.create(failed_run)
@@ -1015,6 +964,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         if dedupe_key is not None:
             async with orchestrator._lock:
                 orchestrator._idempotency_cache[dedupe_key] = error_payload
+        update_chart_admission(orchestrator, request, "failed")
         return {"runId": run_id, "status": "error", "summary": str(exc)}
     finally:
         async with orchestrator._lock:

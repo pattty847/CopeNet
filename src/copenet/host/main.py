@@ -17,7 +17,8 @@ from typing import Any
 
 import uvicorn
 
-from copenet.core.orchestrator import ChatSendRequest, Orchestrator
+from copenet.core.orchestrator.requests import ChatSendRequest
+from copenet.core.orchestrator import Orchestrator
 from copenet.core.nasa.wallpaper import (
     apply_apod_wallpaper,
     install_launch_agent,

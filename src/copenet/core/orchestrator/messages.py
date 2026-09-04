@@ -18,6 +18,7 @@ No keyword extraction. No session-state synthesis. Just transcript -> API items.
 
 from __future__ import annotations
 
+import json
 from typing import Any
 
 from copenet.core.harness import responses_items
@@ -49,7 +50,7 @@ def build_chat_messages(
     omitted from the provider view. Durable transcript storage is untouched.
     """
     messages = responses_items.transcript_to_input_array(
-        transcript_messages=transcript_messages,
+        transcript_messages=_with_chart_references(transcript_messages),
         current_user_message=current_user_message,
         current_user_image_parts=current_user_image_parts,
         attachment_resolver=attachment_resolver,
@@ -132,3 +133,25 @@ def _render_history_item(item: dict[str, Any]) -> str:
             output = output[:2000] + " …[truncated]"
         return f"tool result: {output}" if output else ""
     return ""
+
+
+def _with_chart_references(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replay immutable attribution, never expand an old observation into raw data."""
+    rows = []
+    for row in messages:
+        reference = row.get("marketContext") or row.get("market_context")
+        if reference and row.get("role") == "user":
+            row = {**row, "content": row.get("content", "") + "\nHistorical chart observation: " + json.dumps(reference, separators=(",", ":"))}
+        if reference and row.get("parts"):
+            parts = []
+            for part in row["parts"]:
+                execution = part.get("toolExecution")
+                if part.get("kind") == "tool_result" and execution and execution.get("toolId", "").startswith("market.chart."):
+                    replay = {"summary": execution.get("summary"), "ok": execution.get("ok"),
+                              "artifactId": execution.get("artifactId"), "marketContext": reference,
+                              "notice": "Historical chart result; exact evidence is retained in the observation store. Re-read within current scope if needed."}
+                    part = {**part, "toolExecution": {**execution, "replayOutput": json.dumps(replay, separators=(",", ":"))}}
+                parts.append(part)
+            row = {**row, "parts": parts}
+        rows.append(row)
+    return rows

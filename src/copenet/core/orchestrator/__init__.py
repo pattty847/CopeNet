@@ -4,9 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import os
-from dataclasses import dataclass
 from pathlib import Path
-from typing import Awaitable, Callable
+from typing import TYPE_CHECKING
 
 from copenet.core.apps import AppStore
 from copenet.core.attachments import ChatAttachmentStore
@@ -72,34 +71,8 @@ from copenet._paths import (
 )
 
 
-ChatEmit = Callable[[dict], Awaitable[None]]
-SideEventEmit = Callable[[str, dict], Awaitable[None]]
-
-
-@dataclass(frozen=True)
-class ChatSendRequest:
-    """Normalized chat send request."""
-
-    session_key: str
-    message: str
-    idempotency_key: str | None = None
-    # Chat attachment ids (resolved to inline images for the model). Tuple keeps
-    # the frozen dataclass hashable; default empty for text-only sends.
-    attachment_ids: tuple[str, ...] = ()
-    # Structured operator intent for this turn. These ids are validated against
-    # the registry and Access policy before they influence the hidden prompt.
-    requested_tool_ids: tuple[str, ...] = ()
-    provider: str = "openai-codex"
-    model: str | None = None
-    system_prompt_id: str | None = None
-    task_prompt_id: str | None = None
-    persona_id: str | None = None
-    persona_flavor_id: str | None = None
-    persona_privacy_tier: PersonaPrivacyTier | None = None
-    timeout_ms: int | None = None
-    system_prompt: str | None = None
-    allow_tools: bool = True
-    workspace_root: str | None = None
+if TYPE_CHECKING:
+    from copenet.core.orchestrator.requests import ChatEmit, ChatSendRequest, SideEventEmit
 
 
 class SessionInFlightError(RuntimeError):

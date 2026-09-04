@@ -83,6 +83,7 @@ from .rpc_market import (
 )
 from .rpc_market_formula import handle_market_chart_formulas_get
 from .rpc_market_monitoring import MARKET_MONITORING_HANDLERS
+from .rpc_market_chart import MARKET_CHART_HANDLERS
 from .rpc_market_quote import MARKET_QUOTE_METHODS, handle_market_quote
 from .rpc_errors import respond_rpc_errors
 from .rpc_market_webull import (
@@ -318,6 +319,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_yield_curve_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.ledger.get":
         await handle_market_ledger_get(req.id, req.params, send_json, orchestrator)
+    elif req.method in MARKET_CHART_HANDLERS:
+        await MARKET_CHART_HANDLERS[req.method](req.id, req.params, send_json, orchestrator, broadcast=broadcast)
     elif req.method in MARKET_MONITORING_HANDLERS:
         await MARKET_MONITORING_HANDLERS[req.method](req.id, req.params, send_json, orchestrator)
     elif req.method == "market.webull.status":

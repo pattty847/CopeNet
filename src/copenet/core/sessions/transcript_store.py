@@ -41,6 +41,7 @@ class TranscriptMessage:
     # Operator-selected tool chips for this user turn. This is audit metadata;
     # replay does not turn it back into an instruction on later turns.
     requested_tool_ids: list[str] | None = None
+    market_context: dict[str, Any] | None = None
 
     def to_json(self) -> dict[str, Any]:
         """Convert message into a JSON-serializable dictionary."""
@@ -63,12 +64,15 @@ class TranscriptMessage:
             payload["attachments"] = [dict(ref) for ref in self.attachments]
         if self.requested_tool_ids:
             payload["requested_tool_ids"] = list(self.requested_tool_ids)
+        if self.market_context:
+            payload["market_context"] = dict(self.market_context)
         return payload
 
 
 def to_public_message(record: dict[str, Any]) -> dict[str, Any]:
     """Convert one storage transcript record into the wire/public shape."""
     return {
+        "marketContext": record.get("market_context"),
         "runId": record.get("run_id"),
         "role": record.get("role"),
         "content": record.get("content"),
@@ -145,6 +149,7 @@ class TranscriptStore:
                     provider=str(record.get("provider") or ""),
                     model=str(record.get("model")) if record.get("model") is not None else None,
                     provider_session_id=str(record.get("provider_session_id")) if record.get("provider_session_id") is not None else None,
+                    market_context=record.get("market_context"),
                     timestamp=str(record.get("timestamp") or utc_now_iso()),
                     state=str(record.get("state")) if record.get("state") is not None else None,
                     tool_execution=dict(record.get("tool_execution")) if isinstance(record.get("tool_execution"), dict) else None,
