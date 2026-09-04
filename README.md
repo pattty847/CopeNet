@@ -149,6 +149,16 @@ adapters. See the [demo guide and verification record](docs/initiatives/chart-ag
 
 ![Chart agent — synthetic candles, editable levels and scoped conversation](docs/imgs/market-chart-agent.png)
 
+On phones, chart and companion switch between full-width views. Pinch zoom keeps its
+chosen time range through viewport updates and background document refreshes.
+
+<details>
+<summary>Mobile chart zoom (synthetic demonstration data)</summary>
+
+![Mobile chart with a preserved pinch-zoom range](docs/imgs/market-chart-mobile-zoom.png)
+
+</details>
+
 **View-scoped live quote** — opening one ticker subscribes to Yahoo's price stream;
 the asset bar shows last price, vendor time, session and reported day volume. Leaving
 the ticker or hiding the browser tab closes the subscription. Switching assets closes

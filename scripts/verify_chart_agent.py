@@ -106,7 +106,7 @@ async def verify(browser, directory):
                                 transcript_store=TranscriptStore(root_dir=directory), sessions_dir=directory,
                                 providers={provider.name: provider})
     store = get_chart_store(orchestrator)
-    context = await browser.new_context(viewport={"width": 1600, "height": 1000})
+    context = await browser.new_context(viewport={"width": 1600, "height": 1000}, has_touch=True)
     errors, requests, captures, render_receipts = [], [], [], []
     tasks = set()
     documents = set()
@@ -282,8 +282,31 @@ async def verify(browser, directory):
             await page.set_viewport_size({"width": width, "height": 900})
             assert await page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Horizontal overflow at {width}px"
             await page.screenshot(path=str(directory / f"chart-agent-{width}.png"))
+        # Real two-finger touch input on the phone layout must change the time viewport
+        # and survive both viewport publication and document reconciliation rerenders.
+        await page.locator('.ca-panel').get_by_role('button', name='Close chart agent', exact=True).click()
+        await page.get_by_role('button', name='D', exact=True).click()
+        stage = await page.locator('.tw-stage').bounding_box()
+        assert stage and stage['width'] > 100
+        cdp = await context.new_cdp_session(page)
+        await cdp.send('Emulation.setTouchEmulationEnabled', {'enabled': True, 'maxTouchPoints': 2})
+        x, y = stage['x'] + stage['width'] * 0.45, stage['y'] + 60
+        before = await page.locator('.ca-context').text_content()
+        for step in range(11):
+            spread = 15 + step * 6
+            await cdp.send('Input.dispatchTouchEvent', {'type': 'touchStart' if step == 0 else 'touchMove',
+                'touchPoints': [{'id': 0, 'x': x - spread, 'y': y}, {'id': 1, 'x': x + spread, 'y': y}]})
+            await asyncio.sleep(0.04)
+        await cdp.send('Input.dispatchTouchEvent', {'type': 'touchEnd', 'touchPoints': []})
+        await asyncio.sleep(0.3)
+        zoomed = await page.locator('.ca-context').text_content()
+        assert zoomed != before, 'Mobile pinch zoom snapped back to fitted data'
+        await asyncio.sleep(5.5)
+        assert await page.locator('.ca-context').text_content() == zoomed, 'Document polling reset mobile zoom'
+        await page.screenshot(path=str(ROOT / 'docs/imgs/market-chart-mobile-zoom.png'), animations='disabled')
+        await cdp.detach()
         assert not errors, errors
-        print("PASS: all four drawing tools/edit/delete, persistence, interval hiding, range selection, exact capture, normal harness, approval, agent level, paint receipt, batch undo, 1600/1100/390 geometry; all data synthetic")
+        print("PASS: all four drawing tools/edit/delete, persistence, interval hiding, range selection, exact capture, normal harness, approval, agent level, paint receipt, batch undo, 1600/1100/390 geometry, mobile pinch zoom persists across polling; all data synthetic")
         print(f"Screenshot: {SCREENSHOT}")
     except Exception:
         await page.screenshot(path=str(directory / "chart-agent-failure.png"))

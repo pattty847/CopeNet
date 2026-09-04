@@ -175,19 +175,21 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
 
   const lookbackDays = insiderLookback === '90D' ? 90 : insiderLookback === '1Y' ? 366 : insiderLookback === '3Y' ? 3 * 366 : insiderLookback === '5Y' ? 5 * 366 : null;
   const latestBarTime = bars[bars.length - 1]?.t;
-  const chartEvidence = evidence.filter((item) => {
+  // Viewport publication rerenders this owner. Preserve these inputs so a pan/zoom
+  // does not trigger CandleChart data replacement and fitContent again.
+  const chartEvidence = useMemo(() => evidence.filter((item) => {
     if (item.type !== 'Insider') return true;
     if (!showInsider) return false;
     if (insiderLookback === 'chart') return item.t == null || bars.length === 0 || item.t >= bars[0].t;
     if (lookbackDays == null || latestBarTime == null || item.t == null) return true;
     return item.t >= latestBarTime - lookbackDays * 86400;
-  });
-  const chartEventRows = chartEvents.filter((event) => {
+  }), [evidence, showInsider, insiderLookback, bars, lookbackDays, latestBarTime]);
+  const chartEventRows = useMemo(() => chartEvents.filter((event) => {
     if (event.kind !== 'insider') return true;
     if (!showInsider) return false;
     if (insiderLookback === 'chart') return bars.length === 0 || event.t >= bars[0].t;
     return lookbackDays == null || latestBarTime == null || event.t >= latestBarTime - lookbackDays * 86400;
-  });
+  }), [chartEvents, showInsider, insiderLookback, bars, lookbackDays, latestBarTime]);
 
   const openTab = useCallback((next: ResearchTab) => {
     setTab(next);
