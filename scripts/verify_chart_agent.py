@@ -111,7 +111,7 @@ async def verify(browser, directory):
                                 transcript_store=TranscriptStore(root_dir=directory), sessions_dir=directory,
                                 providers={provider.name: provider})
     store = get_chart_store(orchestrator)
-    context = await browser.new_context(viewport={"width": 1600, "height": 1000}, has_touch=True)
+    context = await browser.new_context(viewport={"width": 1600, "height": 1000})
     errors, requests, captures, render_receipts = [], [], [], []
     tasks = set()
     documents = set()
@@ -248,7 +248,9 @@ async def verify(browser, directory):
             await page.mouse.click(stage["x"] + stage["width"] * fraction, stage["y"] + stage["height"] * 0.55)
         await expect(page.get_by_role("button", name="Clear chart selection", exact=True)).to_be_visible()
         await page.get_by_role("button", name="Select chart drawing", exact=True).click()
+        await page.get_by_role("button", name="Chart agent settings", exact=True).click()
         await page.get_by_label("Chart agent provider", exact=True).select_option("chart-test")
+        await page.get_by_role("button", name="Close Chart agent settings", exact=True).click()
         await page.get_by_label("Chart agent model", exact=True).select_option("chart-fixture")
         await page.get_by_label("Ask about this chart", exact=True).fill("Inspect the candles and draw a level at an exact captured close.")
         await page.get_by_role("button", name="Send chart question", exact=True).click()
@@ -284,9 +286,41 @@ async def verify(browser, directory):
                 await asyncio.sleep(0.05)
         assert store.document(document_id)["document"]["objects"][0]["label"] == "Operator level"
         await page.get_by_role("tab", name="Conversation", exact=True).click()
-        for width in (1100, 390):
+        await page.get_by_role("button", name="Clear chart selection", exact=True).click()
+        for width in (1100, 320, 390):
             await page.set_viewport_size({"width": width, "height": 900})
             assert await page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Horizontal overflow at {width}px"
+            composer = page.locator('.ca-composer')
+            height = (await composer.bounding_box())['height']
+            if width <= 600:
+                assert await page.locator('#chart-question').evaluate("element => getComputedStyle(element).fontSize") == '16px', 'Phone input must not trigger iOS focus zoom'
+            assert height <= 128, f"Composer too tall at {width}px: {height}"
+            detail = page.get_by_label('Chart context detail', exact=True)
+            for value in ('quick', 'deep', 'balanced'):
+                await detail.select_option(value)
+                await expect(detail).to_have_value(value)
+            annotations = page.get_by_role('button', name='Allow chart annotations', exact=True)
+            await annotations.click()
+            await expect(annotations).to_have_attribute('aria-pressed', 'false')
+            await annotations.click()
+            await expect(annotations).to_have_attribute('aria-pressed', 'true')
+            settings = page.get_by_role('button', name='Chart agent settings', exact=True)
+            await settings.click()
+            await expect(page.get_by_label('Chart agent provider', exact=True)).to_be_disabled()
+            await expect(page.get_by_role('dialog', name='Chart agent settings')).to_be_focused()
+            account = page.get_by_label('Include new account context', exact=True)
+            await account.check()
+            await expect(settings).to_have_attribute('data-account-context', 'true')
+            await account.uncheck()
+            assert (await composer.bounding_box())['height'] == height, 'Settings must overlay, not consume chat space'
+            await page.keyboard.press('Escape')
+            await expect(settings).to_be_focused()
+            await expect(settings).to_have_attribute('aria-expanded', 'false')
+            await settings.click()
+            await page.get_by_label('Ask about this chart', exact=True).click()
+            await expect(settings).to_have_attribute('aria-expanded', 'false')
+            print(f'Composer at {width}px: {height}px; detail, annotation, provider lock, account opt-in, dismissal passed')
+            await page.get_by_role("tab", name="Conversation", exact=True).click()
             await page.screenshot(path=str(directory / f"chart-agent-{width}.png"))
         await page.screenshot(path=str(ROOT / "docs/imgs/market-chart-agent-mobile.png"), animations="disabled")
         # Real two-finger touch input on the phone layout must change the time viewport

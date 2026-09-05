@@ -113,6 +113,13 @@ Frontend paths above are relative to `src/copenet/host`; core/host paths are rel
 
 ## Verification record
 
+- Compact composer: type checking, production build and 27 chart frontend tests pass.
+  Offline browser checks cover 320/390px phones and desktop, detail changes, annotation
+  toggling, provider lock, account opt-in, Escape/focus return and outside dismissal.
+  Idle composer height is 103px on desktop and about 127px on phones, with 44px touch
+  targets and 16px phone input text. Settings overlay the transcript without expanding
+  the composer. Screenshots use synthetic data.
+
 - CSV update: 76 targeted tests cover precision/null/missing-field round trips, quoted
   column names, nested/empty JSON, complete-row pagination, raw artifact retention,
   ordinary chart sessions/replay and delivery through all three harness tool loops.

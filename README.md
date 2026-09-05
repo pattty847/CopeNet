@@ -159,6 +159,8 @@ adapters. See the [demo guide and verification record](docs/initiatives/chart-ag
 
 On phones, chart and companion switch between full-width views. Pinch zoom keeps its
 chosen time range through viewport updates and background document refreshes.
+The compact composer keeps model, detail and drawing controls on one row, with provider
+and account-context options in a settings popover and Send/Stop beside the message field.
 
 <details>
 <summary>Mobile companion and chart zoom (synthetic demonstration data)</summary>

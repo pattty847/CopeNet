@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
-import { ArrowUp, ChevronRight, MessageSquare, Square, X } from 'lucide-react';
+import { ChevronRight, MessageSquare, X } from 'lucide-react';
 import { MessageBubble } from '../../../components/MessageBubble';
 import { ApprovalRequestCard } from '../../../components/ApprovalRequestCard';
 import { InspectorDrawer } from '../../../components/runtime/InspectorDrawer';
@@ -7,11 +7,9 @@ import { useAppStore } from '../../../store/useAppStore';
 import { useChartConversation } from './useChartConversation';
 import { ChartDrawingsPanel } from './ChartDrawingsPanel';
 import type { ChartWorkspaceController } from './useChartWorkspace';
-import type { ChartDetail } from './types';
+import { ChartAgentComposer } from './ChartAgentComposer';
 import './chartAgent.css';
 
-const DETAILS: ChartDetail[] = ['quick', 'balanced', 'deep'];
-const DETAIL_COPY = { quick: 'Compact context · precise reads on demand', balanced: 'Recent candles, indicators and focused inspection', deep: 'Wider history and a larger evidence budget' };
 function date(value: number | null) { return value == null ? '…' : new Date(value * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' }); }
 
 export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: ChartWorkspaceController; symbol: string; timeframe: string }) {
@@ -25,7 +23,6 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
   const end = useRef<HTMLDivElement>(null);
   const approvals = useAppStore((state) => state.pendingApprovalsById);
   const inspect = useAppStore((state) => state.setInspectorTarget);
-  const connection = useAppStore((state) => state.wsStatus);
   const pendingApproval = Object.values(approvals).find((approval) => approval.sessionKey === conversation.sessionKey && approval.status === 'pending');
   useEffect(() => { if (workspace.selectedObjectId) setTab('drawings'); }, [workspace.selectedObjectId]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }); }, [conversation.messages.length, conversation.activeRun]);
@@ -34,7 +31,6 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
     const next = Math.min(640, Math.max(320, resizeStart.current.width + resizeStart.current.x - event.clientX));
     setWidth(next); localStorage.setItem('copenet.chart.panelWidth', String(next));
   };
-  const disabled = conversation.sending || Boolean(conversation.activeRun) || !workspace.document || connection !== 'connected' || Boolean(conversation.session?.archived);
   const captured = conversation.lastCapture;
 
   return <>
@@ -78,32 +74,7 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
           <div ref={end} />
         </>}
       </div>
-      <form className="ca-composer" onSubmit={(event) => { event.preventDefault(); setTab('chat'); void conversation.send(); }}>
-        <div className="ca-runtime">
-          <label>Provider<select aria-label="Chart agent provider" value={conversation.provider} disabled={Boolean(conversation.sessionKey) || conversation.sending} onChange={(event) => conversation.changeProvider(event.target.value)}>
-            {conversation.providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.available}>{provider.displayName}</option>)}
-          </select></label>
-          <label>Model<select aria-label="Chart agent model" value={conversation.model ?? ''} disabled={Boolean(conversation.activeRun) || conversation.sending} onChange={(event) => conversation.changeModel(event.target.value)}>
-            <option value="">Provider default</option>{conversation.model && !conversation.models.some((model) => model.id === conversation.model) && <option value={conversation.model}>{conversation.model}</option>}
-            {conversation.models.map((model) => <option key={model.id} value={model.id}>{model.displayName}</option>)}
-          </select></label>
-        </div>
-        <div className="ca-detail"><label htmlFor="chart-detail">Detail <strong>{conversation.detail}</strong></label>
-          <input id="chart-detail" type="range" min={0} max={2} step={1} value={DETAILS.indexOf(conversation.detail)} aria-valuetext={conversation.detail}
-            onChange={(event) => conversation.setDetail(DETAILS[Number(event.target.value)])} />
-          <small>{DETAIL_COPY[conversation.detail]}</small></div>
-        <div className="ca-access"><label><input type="checkbox" checked={conversation.access === 'annotate'} onChange={(event) => conversation.setAccess(event.target.checked ? 'annotate' : 'read')} /> Allow chart annotations</label>
-          <details><summary>Context settings</summary><label><input type="checkbox" checked={workspace.includeAccountContext} onChange={(event) => workspace.setIncludeAccountContext(event.target.checked)} /> Include new account context</label><small>Earlier conversation, drawings and profile context are retained.</small></details></div>
-        {workspace.selection && <div className="ca-selection">Selected {date(workspace.selection.from)} — {date(workspace.selection.to)}<button type="button" aria-label="Clear chart selection" onClick={() => workspace.setSelection(null)}><X size={12} /></button></div>}
-        <label className="ca-input-label" htmlFor="chart-question">Ask about this chart</label>
-        <textarea id="chart-question" value={conversation.input} onChange={(event) => conversation.setInput(event.target.value)} placeholder="Ask about a pattern, level, or selected region…" rows={2}
-          onKeyDown={(event) => { if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!disabled) { setTab('chat'); void conversation.send(); } } }} />
-        {conversation.error && <div className="ca-error" role="alert">{conversation.error}<button type="button" onClick={conversation.resetSubmission}>Use current view for a new request</button></div>}
-        <div className="ca-send-row"><span>{connection !== 'connected' ? 'Host disconnected' : conversation.session?.archived ? 'Session archived' : conversation.sending ? 'Capturing chart…' : 'Current view captured on send'}</span>
-          {conversation.activeRun ? <button type="button" aria-label="Stop chart agent" onClick={() => void conversation.stop()}><Square size={14} /> Stop</button>
-            : <button type="submit" aria-label="Send chart question" disabled={disabled || !conversation.input.trim()}><ArrowUp size={16} /></button>}
-        </div>
-      </form>
+      <ChartAgentComposer conversation={conversation} workspace={workspace} onSend={() => { setTab('chat'); void conversation.send(); }} />
     </aside>
     {workspace.open && <InspectorDrawer />}
   </>;
