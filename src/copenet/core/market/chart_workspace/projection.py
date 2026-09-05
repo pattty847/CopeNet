@@ -1,5 +1,5 @@
 """Bounded turn context; source resources remain complete in the observation store."""
-import json
+from .model_tables import format_context
 
 DETAIL_BUDGETS = {
     "quick": {"initialTokens": 2000, "readCalls": 4, "sampleRows": 12},
@@ -9,7 +9,7 @@ DETAIL_BUDGETS = {
 
 
 def _size(value):
-    return len(json.dumps(value))
+    return len(format_context(value))
 
 
 def project_context(store, context, observation):
@@ -58,11 +58,14 @@ def project_context(store, context, observation):
         if selection is None and sample["matchedCount"] > budget["sampleRows"]:
             sample = store.read_resource(context, resource["key"], limit=budget["sampleRows"],
                                          offset=sample["matchedCount"] - budget["sampleRows"], from_time=start, to_time=end)
-        projected = {"key": resource["key"], "matchedCount": sample["matchedCount"],
+        projected = {"key": resource["key"], "kind": resource["kind"],
+                     "metadata": sample["metadata"], "unit": resource.get("unit"),
+                     "status": resource["status"], "observedAt": resource.get("observedAt"),
+                     "matchedCount": sample["matchedCount"],
                      "returnedCount": sample["returnedCount"], "offset": sample["offset"],
                      "nextOffset": sample["nextOffset"], "rows": sample["rows"]}
-        if _size(payload) + _size(projected) > max_chars:
-            break
+        if _size({**payload, "samples": [*payload["samples"], projected]}) > max_chars:
+            continue
         payload["samples"].append(projected)
     payload["estimatedTokens"] = (_size(payload) + 3) // 4
     return payload

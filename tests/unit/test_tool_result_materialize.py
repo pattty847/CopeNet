@@ -101,3 +101,22 @@ def test_small_result_passes_through_unchanged(tmp_path: Path) -> None:
     # under the 4000 threshold: no artifact, body untouched
     assert persisted.body == {"path": "big.py", "content": "small file body"}
     assert persisted.artifact_id is None
+
+
+def test_compact_model_body_keeps_full_structured_artifact(tmp_path):
+    import json
+    from copenet.core.harness.tool_loop_common import _force_call_id
+    from copenet.core.market.chart_workspace.model_tables import format_read
+    rows = [{"t": 1720000000 + i, "c": i / 13} for i in range(1000)]
+    payload = {"key": "candles:D", "kind": "candles", "metadata": {}, "rows": rows,
+               "offset": 0, "totalCount": 1000, "matchedCount": 1000, "returnedCount": 1000, "nextOffset": None}
+    model_body = format_read(payload, max_chars=30000)
+    result = _force_call_id(ToolExecutionResult(tool_id="market.chart.read", ok=True, summary="Captured candles",
+                                               output=payload, model_body=model_body), "call-csv")
+    context = _ctx(tmp_path)
+    persisted, _ = _materialize_tool_result_artifact(tool_result=result, tool_context=context, trace=None)
+    assert json.loads(context.artifact_store.created[0]["body"])["rows"] == rows
+    assert persisted.body["rows"] == rows
+    assert persisted.to_model_payload()["body"] == model_body
+    assert persisted.to_runtime_input()["body"] == model_body
+    assert persisted.call_id == "call-csv" and persisted.artifact_id

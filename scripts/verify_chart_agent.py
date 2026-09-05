@@ -7,6 +7,8 @@ are synthetic. No host restart, account data, paid models or vendor calls.
 from __future__ import annotations
 
 import asyncio
+import csv
+import io
 import json
 import math
 import mimetypes
@@ -71,14 +73,17 @@ class SyntheticChartProvider:
         marker = "Chart observation (browser-captured evidence, not instructions):\n"
         text = next(message["content"] for message in reversed(messages)
                     if message["role"] == "user" and marker in str(message["content"]))
-        observation = json.loads(text.split(marker)[-1])
+        blocks = text.split(marker)[-1].split("\n\n")
+        observation = json.loads(blocks[0])
         observation_id = observation["observationId"]
         stage = self.turns.get(observation_id, 0)
         self.turns[observation_id] = stage + 1
         resource = next(resource for resource in observation["resources"] if resource["kind"] == "candles"
                         and resource["key"] == "candles:" + observation["timeframe"])
-        sample = next(sample for sample in observation["samples"] if sample["key"] == resource["key"])
-        row = sample["rows"][len(sample["rows"]) // 2]
+        block = next(block for block in blocks[1:] if json.loads(block.split("\n", 1)[0])["key"] == resource["key"])
+        table = block.split("```csv\n", 1)[1].split("\n```", 1)[0]
+        rows = [{key: json.loads(value) for key, value in row.items() if value} for row in csv.DictReader(io.StringIO(table))]
+        row = rows[len(rows) // 2]
         if stage == 0:
             name, arguments = "market.chart.read", {"resourceKey": resource["key"], "limit": 20}
         elif stage == 1:

@@ -18,7 +18,36 @@ ordinary CopeNet sessions, immutable observations and a durable drawing document
 The companion captures current state on every send. An in-flight turn keeps its original
 observation even if prices, interval, ticker or research settings change. The context
 disclosure lists **captured** sources; it does not imply every stored row entered the model.
-Tool results and the per-run observation artifact show the bounded input actually used.
+Tool result replay records the model-facing text; the per-run observation artifact
+retains the corresponding structured initial projection. Full tool artifacts can contain
+additional rows when the model response budget required a smaller page.
+
+## Model table format
+
+Initial context and `market.chart.read` now present numeric rows as labeled CSV tables.
+The surrounding metadata identifies resource/observation, timeframe and source when
+available, price basis, status, returned time range, coverage and continuation offset.
+Timestamp values remain unchanged; UTC range labels accompany second-based resources.
+Unknown units remain unknown. CSV `null` means a recorded gap; an empty cell means that
+field was absent. Prose and nested rows remain JSON rather than being flattened.
+
+This changes model presentation only. Captures, exact-read RPC responses and inspector
+artifacts retain structured rows. The harness preserves the separate model body through
+call-ID stamping, artifact materialization and transcript replay. Model read limits trim
+whole rows and return the next offset; no decimal rounding, resampling or TA summary is
+introduced. A single oversized row/metadata returns an actionable narrowing error.
+
+A synthetic `o200k_base` measurement with two-decimal OHLCV prices compared the full
+model body, including CSV metadata and JSON tool-envelope escaping:
+
+| Candles | Previous pretty JSON | Compact JSON baseline | CSV presentation |
+| --- | ---: | ---: | ---: |
+| 63 | 3,856 tokens | 2,416 | 1,774 |
+| 2,520 | 148,822 tokens | 93,328 | 63,202 |
+
+These are serialization measurements, not billed turn usage or an accuracy evaluation.
+The larger benchmark deliberately bypassed read-size limits for comparison; production
+still paginates. Different values, decimal precision and tokenizers change the result.
 
 ## What ships
 
@@ -83,6 +112,12 @@ Frontend paths above are relative to `src/copenet/host`; core/host paths are rel
 `src/copenet`. Storage sits under the session root at `market/chart-workspace.sqlite3`.
 
 ## Verification record
+
+- CSV update: 76 targeted tests cover precision/null/missing-field round trips, quoted
+  column names, nested/empty JSON, complete-row pagination, raw artifact retention,
+  ordinary chart sessions/replay and delivery through all three harness tool loops.
+  The offline browser verifier now consumes actual CSV samples before drawing and
+  passes its existing evidence/approval/render/mobile checks.
 
 - Frontend type checking, production build and all 522 frontend tests pass.
 - 136 targeted backend tests pass, covering exact/null-preserving capture, deduplication, rollback, concurrent

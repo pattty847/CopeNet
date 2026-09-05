@@ -177,6 +177,7 @@ class ObservationStore:
                 raise ValueError("One row exceeds the query budget; request narrower fields or metadataPath")
             selected = selected[:len(selected) // 2]
         return {**resource, "observationId": observation_id, "provenance": "browser_capture",
+                "instrument": observation["instrument"], "requestedRange": {"from": from_time, "to": to_time},
                 "totalCount": total, "matchedCount": matched, "returnedCount": len(selected),
                 "offset": offset, "nextOffset": offset + len(selected) if offset + len(selected) < matched else None,
                 "rows": selected}

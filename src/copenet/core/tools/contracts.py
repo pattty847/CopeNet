@@ -139,6 +139,8 @@ class ToolExecutionResult:
     body: Any = None
     error: str | None = None
     artifact_id: str | None = None
+    # Presentation for the model only; events/artifacts retain the structured body.
+    model_body: str | None = None
 
     def to_model_payload(self) -> dict[str, Any]:
         """The one model-facing tool-result shape, identical on every tool loop.
@@ -154,7 +156,7 @@ class ToolExecutionResult:
             "channel": self.channel,
             "ok": self.ok,
             "summary": self.summary,
-            "body": self.body if self.body is not None else self.output,
+            "body": self.model_body if self.model_body is not None else self.body if self.body is not None else self.output,
         }
         if self.error:
             payload["error"] = self.error
@@ -229,7 +231,7 @@ class ToolExecutionResult:
             "toolId": self.tool_id,
             "channel": self.channel,
             "success": self.ok,
-            "body": self.body if self.body is not None else self.output,
+            "body": self.model_body if self.model_body is not None else self.body if self.body is not None else self.output,
             "summary": self.summary,
         }
         if self.error:

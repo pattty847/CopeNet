@@ -13,7 +13,8 @@ verify the vendor candles or treat a model's description of its own calls as a t
    selection, plotted indicators, financial/comparison data, displayed quote, drawings,
    settings and contributed panels. Capture does not fetch newer data behind the UI.
 3. `chart_workspace/projection.py` introduces the instrument, resource inventory,
-   settings, coverage counts and bounded exact samples. It prioritizes the active
+   settings, coverage counts and bounded exact samples, presented as numeric CSV tables
+   with source metadata (implemented 2026-09-05). It prioritizes the active
    candle interval, then indicators. Unselected samples favor the recent visible tail;
    a selected region starts at its beginning. These samples are not a whole-chart summary.
 4. `market.chart.read` supports time ranges, fields, offsets and metadata paths. It
@@ -112,8 +113,9 @@ Recommended sequence:
   reasoning tokens included in a provider's output total. Missing usage stays unknown.
 - **Reserve orientation.** Source/basis, quote freshness, forming-candle caveats, selected
   region and coverage should survive sample allocation. Today resource metadata generally
-  requires an exact read, and the sample loop stops at the first non-fitting sample. A
-  large earlier resource can crowd out a later quote or indicator. Test this explicitly.
+  requires an exact read for inventory-only resources; sampled tables now carry their
+  metadata. The allocator skips non-fitting samples, but does not reserve a guaranteed
+  share for quotes or individual indicators. Test this explicitly.
 - **Summarize deterministically, retain exact source.** Offer bounded range extrema,
   returns, gaps and indicator values computed by shared chart/market math. Each result
   should name the observation, time window, method and supporting rows. A broad market
@@ -122,10 +124,11 @@ Recommended sequence:
   price structure. A question about one candle should retrieve that candle and relevant
   neighbors. Re-reading `market.chart.context` repeats a payload already attached to
   the initial message; the environment explanation should make this clear.
-- **Benchmark serialization.** Compare current row objects with a declared column list
-  and row arrays on the same tasks and tokenizer. Repeated field names may cost tokens,
-  but column confusion can cost accuracy. Never round prices, collapse nulls or replace
-  source candles with downsampled rows merely to report a smaller payload.
+- **Benchmark serialization.** Numeric CSV with declared columns now replaces repeated
+  row objects in model input; canonical storage stays structured. A synthetic tokenizer
+  comparison is recorded in DEMO.md. Analytical accuracy comparisons remain deferred.
+  Never round prices, collapse nulls or replace source candles with downsampled rows
+  merely to report a smaller payload.
 - **Separate numerical and prose retrieval.** Time/field queries and deterministic
   calculations suit candles and order books. Search over filings or research prose can
   retrieve passages with filing dates and source references. Semantic similarity does

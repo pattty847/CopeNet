@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import os
+from dataclasses import replace
 from typing import Any, Callable
 from uuid import uuid4
 
 from copenet.core.tools import ToolExecutionContext, ToolExecutionResult
+from copenet.core.tools.result_limits import model_facing_result_char_limit
 
 
 TraceRecorder = Callable[[str, dict[str, Any] | None], None]
@@ -26,20 +27,6 @@ LARGE_TOOL_RESULT_CHAR_LIMIT = 4000
 # hard ceiling via BASH_MAX_OUTPUT_LENGTH is 150,000). Their file Read is
 # token-aware (no char cap) — set COPNET_MODEL_TOOL_RESULT_CHARS higher if you
 # want to lean that way; lower it on a phone to save tokens.
-_DEFAULT_MODEL_FACING_RESULT_CHARS = 30000
-
-
-def model_facing_result_char_limit() -> int:
-    """Max chars of a persisted tool result fed back to the model (env-overridable)."""
-    raw = os.environ.get("COPNET_MODEL_TOOL_RESULT_CHARS", "").strip()
-    if raw:
-        try:
-            value = int(raw)
-        except ValueError:
-            value = 0
-        if value > 0:
-            return value
-    return _DEFAULT_MODEL_FACING_RESULT_CHARS
 
 
 def _materialize_tool_result_artifact(
@@ -48,19 +35,14 @@ def _materialize_tool_result_artifact(
     tool_context: ToolExecutionContext,
     trace: TraceRecorder | None,
 ) -> tuple[ToolExecutionResult, dict[str, Any] | None]:
+    if tool_result.model_body is not None and len(json.dumps(tool_result.model_body, ensure_ascii=False)) > model_facing_result_char_limit():
+        raise ValueError("Model-facing tool body exceeds the response budget")
     body = tool_result.body if tool_result.body is not None else tool_result.output
     payload_text = json.dumps(body, ensure_ascii=False, indent=2) if not isinstance(body, str) else body
     if not payload_text.strip():
-        normalized = ToolExecutionResult(
-            tool_id=tool_result.tool_id,
-            call_id=tool_result.call_id,
-            channel=tool_result.channel,
-            ok=tool_result.ok,
-            summary=tool_result.summary,
+        normalized = replace(
+            tool_result,
             body=f"({tool_result.tool_id} completed with no output)",
-            output=dict(tool_result.output),
-            error=tool_result.error,
-            artifact_id=tool_result.artifact_id,
         )
         return normalized, None
     if len(payload_text) <= LARGE_TOOL_RESULT_CHAR_LIMIT or tool_context.artifact_store is None or not tool_context.session_key:
@@ -94,7 +76,7 @@ def _materialize_tool_result_artifact(
     # can actually use the result. Keep the structured body when it fits; only
     # clip (to a string + continuation pointer) when it genuinely exceeds budget.
     model_limit = model_facing_result_char_limit()
-    if len(payload_text) <= model_limit:
+    if tool_result.model_body is not None or len(payload_text) <= model_limit:
         base = dict(body) if isinstance(body, dict) else {"content": body}
         persisted_body = {**base, "artifactId": artifact.artifact_id, "persistedOutput": True}
     else:
@@ -111,15 +93,9 @@ def _materialize_tool_result_artifact(
                 f"again — with a higher offset, or with start_line/end_line to read a specific range."
             ),
         }
-    persisted = ToolExecutionResult(
-        tool_id=tool_result.tool_id,
-        call_id=tool_result.call_id,
-        channel=tool_result.channel,
-        ok=tool_result.ok,
-        summary=tool_result.summary,
+    persisted = replace(
+        tool_result,
         body=persisted_body,
-        output=dict(tool_result.output),
-        error=tool_result.error,
         artifact_id=artifact.artifact_id,
     )
     if trace is not None:

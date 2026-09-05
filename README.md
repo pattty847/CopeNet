@@ -142,6 +142,8 @@ explicit toolbar control.
 actual candles, plotted indicators, quote and research panels. Every send freezes those
 render inputs into an immutable observation. Quick, Balanced and Deep adjust the initial
 context and exact-read budgets while retaining the complete captured source data.
+Numeric candle and indicator tables reach the model as CSV with source and coverage
+metadata; stored evidence and inspector artifacts keep their structured rows.
 
 The companion uses ordinary CopeNet sessions and scoped chart tools. Agents can create
 levels, zones, trendlines and labels with evidence links; you can select, edit, hide,

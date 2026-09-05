@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 import json
 from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
 from uuid import uuid4
@@ -587,17 +587,7 @@ def _force_call_id(result: ToolExecutionResult, call_id: str) -> ToolExecutionRe
     """Stamp a pre-generated call_id so the tool_call/tool_result parts pair up."""
     if result.call_id == call_id:
         return result
-    return ToolExecutionResult(
-        tool_id=result.tool_id,
-        call_id=call_id,
-        channel=result.channel,
-        ok=result.ok,
-        summary=result.summary,
-        body=result.body,
-        output=dict(result.output),
-        error=result.error,
-        artifact_id=result.artifact_id,
-    )
+    return replace(result, call_id=call_id)
 
 
 def _new_call_id(tool_id: str) -> str:
