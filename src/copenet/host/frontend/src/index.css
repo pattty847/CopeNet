@@ -126,41 +126,6 @@ select {
   font: inherit;
 }
 
-/* ── Shell backdrop: subtle radial accent wash ── */
-.shell-backdrop {
-  background: radial-gradient(
-    ellipse 80% 50% at 18% 8%,
-    var(--color-shell-accent-glow),
-    transparent 60%
-  );
-}
-
-html[data-theme='dark'] .shell-backdrop {
-  background:
-    radial-gradient(ellipse 54% 36% at 62% 12%, rgba(251, 148, 35, 0.11), transparent 64%),
-    radial-gradient(ellipse 28% 22% at 82% 28%, rgba(105, 197, 137, 0.05), transparent 72%),
-    linear-gradient(180deg, rgba(251, 148, 35, 0.025), transparent 18%),
-    linear-gradient(180deg, #000103 0%, #010204 100%);
-}
-
-.shell-app-frame {
-  backdrop-filter: blur(12px);
-}
-
-html[data-theme='dark'] .shell-app-frame {
-  background:
-    linear-gradient(180deg, rgba(251, 148, 35, 0.022), transparent 14%),
-    linear-gradient(180deg, rgba(254, 252, 244, 0.01), rgba(254, 252, 244, 0)),
-    var(--color-shell-canvas);
-}
-
-html[data-theme='dark'] .shell-sidebar {
-  background:
-    linear-gradient(180deg, rgba(251, 148, 35, 0.032), rgba(251, 148, 35, 0) 16%),
-    linear-gradient(180deg, rgba(254, 252, 244, 0.01), rgba(254, 252, 244, 0)),
-    var(--color-shell-sidebar);
-}
-
 .shell-top-command-bar {
   box-sizing: border-box;
   padding-right: 216px;

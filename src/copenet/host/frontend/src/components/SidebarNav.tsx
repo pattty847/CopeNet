@@ -37,12 +37,12 @@ export function SidebarNav() {
 
   return (
     <aside
-      className={`shell-sidebar flex shrink-0 flex-col rounded-[24px] border border-shell-border bg-shell-sidebar py-4 shadow-shell transition-[width,padding] duration-200 ${
-        primaryNavCollapsed ? 'w-[78px] px-2.5' : 'w-[216px] px-3'
+      className={`shell-sidebar flex shrink-0 flex-col border-r border-shell-border bg-shell-sidebar transition-[width] duration-200 ${
+        primaryNavCollapsed ? 'w-16' : 'w-[216px]'
       }`}
     >
       {/* Brand */}
-      <div className={`flex items-center px-2 pb-5 ${primaryNavCollapsed ? 'justify-center' : 'justify-between gap-2.5'}`}>
+      <div className={`flex h-[57px] shrink-0 items-center border-b border-shell-border px-3 ${primaryNavCollapsed ? 'justify-center' : 'justify-between gap-2.5'}`}>
         <div className={`flex items-center ${primaryNavCollapsed ? 'justify-center' : 'gap-2.5'}`}>
           <button
             type="button"
@@ -50,7 +50,7 @@ export function SidebarNav() {
               if (primaryNavCollapsed) setPrimaryNavCollapsed(false);
             }}
             disabled={!primaryNavCollapsed}
-            className={`flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent ${
+            className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-shell-accent/20 bg-shell-accent-soft text-shell-accent ${
               primaryNavCollapsed ? 'transition-colors hover:bg-shell-accent/10' : ''
             }`}
             title={primaryNavCollapsed ? 'Expand navigation' : undefined}
@@ -66,11 +66,11 @@ export function SidebarNav() {
           )}
         </div>
         {!primaryNavCollapsed && (
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-sm border border-shell-accent/20 bg-shell-accent-soft text-shell-accent">
             <button
               type="button"
               onClick={() => setPrimaryNavCollapsed(true)}
-              className="flex h-full w-full items-center justify-center rounded-xl transition-colors hover:bg-shell-accent/10"
+              className="flex h-full w-full items-center justify-center rounded-sm transition-colors hover:bg-shell-accent/10"
               title="Collapse navigation"
               aria-label="Collapse navigation"
             >
@@ -81,7 +81,7 @@ export function SidebarNav() {
       </div>
 
       {/* Navigation */}
-      <nav className="flex flex-col gap-0.5">
+      <nav className="flex flex-col py-2">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
           const active = currentSection === item.id;
@@ -92,8 +92,8 @@ export function SidebarNav() {
               type="button"
               onClick={() => setCurrentSection(item.id)}
               title={primaryNavCollapsed ? item.label : undefined}
-              className={`group relative flex rounded-xl py-2 text-left text-[13px] font-medium transition-all duration-150 ${
-                primaryNavCollapsed ? 'justify-center px-2.5' : 'items-center gap-2.5 px-3'
+              className={`group relative flex min-h-10 items-center py-2 text-left text-[13px] font-medium transition-colors duration-150 ${
+                primaryNavCollapsed ? 'justify-center' : 'gap-2.5 px-3'
               } ${
                 active
                   ? 'bg-shell-accent-soft text-shell-text'
@@ -101,10 +101,7 @@ export function SidebarNav() {
               }`}
             >
               {active && (
-                <>
-                  <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-shell-accent shadow-[0_0_10px_var(--color-shell-accent)]" />
-                  <span className="pointer-events-none absolute inset-y-1 right-2 w-1/3 rounded-xl bg-shell-accent-glow blur-md" />
-                </>
+                <span className="absolute inset-y-0 left-0 w-0.5 bg-shell-accent" />
               )}
               <Icon className={`h-[15px] w-[15px] transition-colors duration-150 ${active ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
               {!primaryNavCollapsed && <span>{item.label}</span>}
@@ -114,14 +111,14 @@ export function SidebarNav() {
       </nav>
 
       {currentSection === 'agents' && (
-        <div className="pt-3">
+        <div className="border-t border-shell-border py-2">
           <button
             type="button"
             onClick={() => setSessionDrawerOpen(!sessionDrawerOpen)}
             title="Open Resume Session"
             aria-label="Open Resume Session"
-            className={`group relative flex w-full rounded-xl py-2 text-left text-[13px] font-medium transition-all duration-150 ${
-              primaryNavCollapsed ? 'justify-center px-2.5' : 'items-center gap-2.5 px-3'
+            className={`group relative flex min-h-10 w-full items-center py-2 text-left text-[13px] font-medium transition-colors duration-150 ${
+              primaryNavCollapsed ? 'justify-center' : 'gap-2.5 px-3'
             } ${
               sessionDrawerOpen
                 ? 'bg-shell-accent-soft text-shell-text'
@@ -129,10 +126,7 @@ export function SidebarNav() {
             }`}
           >
             {sessionDrawerOpen && (
-              <>
-                <span className="absolute left-0 top-1/2 h-6 w-[3px] -translate-y-1/2 rounded-r-full bg-shell-accent shadow-[0_0_10px_var(--color-shell-accent)]" />
-                <span className="pointer-events-none absolute inset-y-1 right-2 w-1/3 rounded-xl bg-shell-accent-glow blur-md" />
-              </>
+              <span className="absolute inset-y-0 left-0 w-0.5 bg-shell-accent" />
             )}
             <PanelLeft className={`h-[15px] w-[15px] transition-colors duration-150 ${sessionDrawerOpen ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
             {!primaryNavCollapsed && <span>Resume Session</span>}
@@ -141,15 +135,15 @@ export function SidebarNav() {
       )}
 
       {/* Footer */}
-      <div className="mt-auto space-y-3 pt-4">
-        <div className={`rounded-2xl border border-shell-border bg-shell-panel ${primaryNavCollapsed ? 'px-2 py-2.5' : 'px-3 py-3'}`}>
+      <div className="mt-auto">
+        <div className="border-t border-shell-border px-3 py-3" title={primaryNavCollapsed ? systemLabel : undefined}>
           {!primaryNavCollapsed && (
             <>
               <div className="mb-1.5 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-muted">System Health</div>
               <div className="text-[13px] text-shell-text">{systemLabel}</div>
             </>
           )}
-          <div className="mt-2 flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${primaryNavCollapsed ? 'justify-center' : 'mt-2'}`}>
             <span className="relative flex h-2 w-2">
               {wsStatus === 'connected' && (
                 <span className="pulse-live absolute inline-flex h-full w-full rounded-full bg-shell-success opacity-60" />
@@ -169,7 +163,7 @@ export function SidebarNav() {
         </div>
 
         <div
-          className={`flex rounded-2xl border border-shell-border bg-shell-panel ${primaryNavCollapsed ? 'justify-center px-2 py-2.5' : 'items-center gap-2.5 px-3 py-2.5'}`}
+          className={`flex items-center border-t border-shell-border px-3 py-2.5 ${primaryNavCollapsed ? 'flex-col gap-2' : 'gap-2.5'}`}
           title={primaryNavCollapsed ? 'Local Operator' : undefined}
         >
           <div className="flex h-9 w-9 items-center justify-center rounded-full bg-shell-ink text-[11px] font-semibold text-white">LO</div>

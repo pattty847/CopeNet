@@ -76,20 +76,19 @@ export function AppShell() {
 
   return (
     <div className="flex h-screen w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">
-      <div className="absolute inset-0 shell-backdrop pointer-events-none" />
       <CommandPalette />
       <PersonaFlavorReviewModal />
-      <div className={`relative flex h-full w-full max-w-full overflow-x-hidden ${isMobile ? 'p-0' : 'gap-2 p-2'}`}>
+      <div className="relative flex h-full w-full max-w-full overflow-x-hidden">
         {!isMobile && <SidebarNav />}
         <div
-          className={`shell-app-frame flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden border border-shell-border bg-shell-canvas shadow-shell-xl ${
-            isMobile ? 'rounded-none border-x-0 border-t-0 pb-[calc(env(safe-area-inset-bottom)+6rem)]' : 'rounded-[20px] px-3 pb-3 pt-2.5'
+          className={`shell-app-frame flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden bg-shell-canvas ${
+            isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+6rem)]' : ''
           }`}
         >
           {showMobileTopBar && <MobileTopBar />}
           <ConnectionBanner />
           {!isMobile && currentSection !== 'agents' && (
-            <div className="flex items-center gap-2 pb-2">
+            <div className="flex shrink-0 items-center gap-2 border-b border-shell-border px-3 py-2">
               <TopCommandBar />
             </div>
           )}

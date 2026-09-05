@@ -11,6 +11,10 @@ CopeNet is a *continuity engine* agent operator for people who want more than a 
 
 ## Product Tour
 
+The shared app shell uses an edge-to-edge workspace with a narrow navigation rail,
+square outer edges, and thin section borders. Market panels meet the shell directly,
+without an inset rounded container or surrounding gutters.
+
 ### Home Dashboard — workspace overview and operator launchpad
 The Home dashboard is the front door to CopeNet: the operator console with live workspace signal (active sessions, provider health, tools available), recent activity, system health, quick-start actions, and an ambient NASA *Picture of the Day* to orient you when you sit back down.
 
