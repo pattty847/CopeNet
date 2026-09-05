@@ -27,14 +27,14 @@
 .ca-panel[hidden] { display:none; }
 .ca-resizer { position:absolute; inset:0 auto 0 -4px; width:7px; z-index:4; cursor:col-resize; }
 .ca-resizer:focus-visible,.ca-resizer:hover { background:var(--mkt-accent-soft); }
-.ca-header { display:flex; align-items:center; justify-content:space-between; padding:11px 13px 8px; }
+.ca-header { display:flex; align-items:center; justify-content:space-between; padding:8px 10px 5px; }
 .ca-header>div { display:flex; gap:8px; align-items:center; }
 .ca-header strong { font-size:13px; font-weight:600; }
 .ca-beta { font:9px var(--mkt-mono); color:var(--mkt-dim); border:1px solid var(--mkt-seam); padding:2px 4px; border-radius:3px; }
-.ca-context { display:flex; flex-wrap:wrap; gap:9px; padding:0 13px 11px; font:10px var(--mkt-mono); color:var(--mkt-dim); }
+.ca-context { display:flex; flex-wrap:wrap; gap:9px; padding:0 10px 8px; font:10px var(--mkt-mono); color:var(--mkt-dim); }
 .ca-context strong { color:var(--mkt-text); }
-.ca-tabs { display:flex; padding:0 10px; border-block:1px solid var(--mkt-seam); gap:4px; }
-.ca-tabs button { padding:9px 10px; border-radius:0; }
+.ca-tabs { display:flex; padding:0 8px; border-block:1px solid var(--mkt-seam); gap:4px; }
+.ca-tabs button { padding:7px 8px; border-radius:0; }
 .ca-tabs span { font:10px var(--mkt-mono); opacity:.7; }
 .ca-scroll { overflow:auto; flex:1; min-height:100px; overscroll-behavior:contain; }
 .ca-empty { padding:26px 17px; }
@@ -42,25 +42,31 @@
 .ca-empty h3 { font-size:21px; font-weight:500; letter-spacing:-.03em; margin:9px 0; }
 .ca-empty p,.ca-muted { color:var(--mkt-dim); line-height:1.65; font-size:11px; }
 .ca-empty button { display:flex; width:100%; justify-content:space-between; text-align:left; border-bottom:1px solid var(--mkt-seam); padding:11px 0; border-radius:0; }
-.ca-messages { padding:13px 11px 0; overflow-wrap:anywhere; }
-.ca-messages .text-\[14px\] { font-size:12px; }
+.ca-messages { padding:10px 8px 0; overflow-wrap:anywhere; }
+/* Keep the full console's typography, with a shorter marker and less chart-panel gutter. */
+.ca-messages .message-assistant { padding-left:10px; padding-bottom:14px; }
+.ca-messages .message-rail { left:3px; bottom:auto; height:24px; opacity:.6; }
+.ca-messages .message-marker { left:1px; width:5px; height:5px; }
+.ca-messages :is(.message-heading,.message-body) { padding-inline:0; }
+.ca-messages .message-user { padding-bottom:12px; }
+.ca-messages .message-user>div { max-width:92%; }
 .ca-messages pre { max-width:100%; overflow:auto; }
 .ca-working { padding:0 15px; color:var(--mkt-accent); font-size:11px; }
 .ca-evidence { margin:10px 13px; padding:9px 0; border-top:1px solid var(--mkt-seam); font-size:10px; color:var(--mkt-dim); }
 .ca-evidence summary { cursor:pointer; }
 .ca-evidence p { margin:7px 0; overflow-wrap:anywhere; }
 .ca-evidence>div { display:flex; justify-content:space-between; gap:8px; padding:3px 0; }
-.ca-composer { border-top:1px solid var(--mkt-seam); padding:10px 12px; flex-shrink:0; }
+.ca-composer { border-top:1px solid var(--mkt-seam); padding:8px 10px; flex-shrink:0; }
 .ca-runtime { display:flex; gap:8px; }
 .ca-runtime label { flex:1; min-width:0; font-size:9px; color:var(--mkt-dim); }
 .ca-panel :is(select,input:not([type=checkbox]):not([type=range]),textarea) { width:100%; padding:7px 8px; border:1px solid var(--mkt-seam); border-radius:4px; background:var(--mkt-ground); color:var(--mkt-text); font:11px var(--mkt-sans); }
 .ca-runtime select { margin-top:4px; text-overflow:ellipsis; }
-.ca-detail { display:grid; grid-template-columns:95px 1fr; align-items:center; gap:2px 10px; margin-top:11px; }
+.ca-detail { display:grid; grid-template-columns:95px 1fr; align-items:center; gap:2px 10px; margin-top:8px; }
 .ca-detail label { color:var(--mkt-dim); font-size:10px; }
 .ca-detail strong { color:var(--mkt-text); text-transform:capitalize; font-weight:500; }
 .ca-detail input { width:100%; accent-color:var(--mkt-accent); }
 .ca-detail small { grid-column:1/-1; color:var(--mkt-dim); font-size:9px; }
-.ca-access { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:9px 0; font-size:10px; color:var(--mkt-dim); }
+.ca-access { display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; padding:7px 0; font-size:10px; color:var(--mkt-dim); }
 .ca-access label { display:flex; gap:5px; align-items:center; }
 .ca-access input { accent-color:var(--mkt-accent); }
 .ca-access details[open] { width:100%; }
@@ -68,7 +74,7 @@
 .ca-access details label { padding-top:8px; }
 .ca-access small { display:block; padding-top:5px; line-height:1.5; }
 .ca-input-label { display:block; font-size:10px; color:var(--mkt-dim); margin-bottom:5px; }
-.ca-panel textarea { resize:vertical; min-height:62px; max-height:160px; line-height:1.55; }
+.ca-panel textarea { resize:vertical; min-height:52px; max-height:160px; line-height:1.55; }
 .ca-selection { display:flex; align-items:center; justify-content:space-between; padding:4px 7px; margin-bottom:7px; background:var(--mkt-accent-soft); color:var(--mkt-accent); font-size:10px; border-radius:4px; }
 .ca-send-row { display:flex; justify-content:space-between; align-items:center; gap:10px; margin-top:6px; }
 .ca-send-row span { font-size:9px; color:var(--mkt-dim); }

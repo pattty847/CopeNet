@@ -278,10 +278,12 @@ async def verify(browser, directory):
             while len(store.document(document_id)["document"]["objects"]) != 1:
                 await asyncio.sleep(0.05)
         assert store.document(document_id)["document"]["objects"][0]["label"] == "Operator level"
+        await page.get_by_role("tab", name="Conversation", exact=True).click()
         for width in (1100, 390):
             await page.set_viewport_size({"width": width, "height": 900})
             assert await page.evaluate("document.documentElement.scrollWidth <= innerWidth"), f"Horizontal overflow at {width}px"
             await page.screenshot(path=str(directory / f"chart-agent-{width}.png"))
+        await page.screenshot(path=str(ROOT / "docs/imgs/market-chart-agent-mobile.png"), animations="disabled")
         # Real two-finger touch input on the phone layout must change the time viewport
         # and survive both viewport publication and document reconciliation rerenders.
         await page.locator('.ca-panel').get_by_role('button', name='Close chart agent', exact=True).click()

@@ -204,7 +204,7 @@ export function MessageBubble({ message }: { message: Message }) {
 
   if (isUser) {
     return (
-      <div className="animate-message group relative flex w-full justify-end pb-4">
+      <div className="message-user animate-message group relative flex w-full justify-end pb-4">
         <div className="relative max-w-[80%] min-w-0">
           {message.requestedToolIds && message.requestedToolIds.length > 0 ? (
             <div className="mb-1.5 flex flex-wrap justify-end gap-1">
@@ -250,17 +250,17 @@ export function MessageBubble({ message }: { message: Message }) {
 
   // Assistant
   return (
-    <div className="animate-message group relative flex w-full pb-5 pl-4">
-      <div className="absolute left-2 top-2 bottom-2 w-px bg-operator-border/55" />
-      <div className="absolute left-[5px] top-2 w-2 h-2 rounded-full bg-operator-accent/60 ring-2 ring-operator-bg z-10" />
+    <div className="message-assistant animate-message group relative flex w-full pb-5 pl-4">
+      <div className="message-rail absolute left-2 top-2 bottom-2 w-px bg-operator-border/55" />
+      <div className="message-marker absolute left-[5px] top-2 w-2 h-2 rounded-full bg-operator-accent/60 ring-2 ring-operator-bg z-10" />
 
       <div className="relative min-w-0 flex-1">
-        <div className="mb-1 flex items-center gap-2 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-operator-muted/85">
+        <div className="message-heading mb-1 flex items-center gap-2 px-1 text-[10px] font-medium uppercase tracking-[0.14em] text-operator-muted/85">
           <span>Assistant</span>
           <span className="tabular-nums text-operator-muted/55">{formatTimestamp(message.timestamp)}</span>
         </div>
 
-        <div className="px-1 text-[13.5px] leading-relaxed text-operator-text font-sans break-words">
+        <div className="message-body px-1 text-[13.5px] leading-relaxed text-operator-text font-sans break-words">
           {message.optimistic && !message.content && !message.parts?.length ? (
             <div
               className="mt-2.5 flex min-h-8 items-center"

@@ -141,7 +141,9 @@ context and exact-read budgets while retaining the complete captured source data
 
 The companion uses ordinary CopeNet sessions and scoped chart tools. Agents can create
 levels, zones, trendlines and labels with evidence links; you can select, edit, hide,
-delete or undo them. Manual edits protect an object from later agent changes. Drawing
+delete or undo them. Compact chat spacing and a short assistant marker leave more room
+for research, with per-turn **Inspect context** access. Manual edits protect an object
+from later agent changes. Drawing
 revisions persist across reloads, and a paint receipt distinguishes saved work from
 what is visible. Account panel data is excluded by default; prior conversation, drawings
 and profile context remain. Crypto/order-book feeds and proactive commentary are later
@@ -153,7 +155,9 @@ On phones, chart and companion switch between full-width views. Pinch zoom keeps
 chosen time range through viewport updates and background document refreshes.
 
 <details>
-<summary>Mobile chart zoom (synthetic demonstration data)</summary>
+<summary>Mobile companion and chart zoom (synthetic demonstration data)</summary>
+
+![Compact mobile chart companion with context inspection](docs/imgs/market-chart-agent-mobile.png)
 
 ![Mobile chart with a preserved pinch-zoom range](docs/imgs/market-chart-mobile-zoom.png)
 
