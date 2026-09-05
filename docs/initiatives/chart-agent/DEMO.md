@@ -113,6 +113,9 @@ vendor responses, auth material or live model transcript was added as a fixture.
 
 ## Next slices
 
+See [Context, tools and evidence efficiency](CONTEXT_AND_TOOLS.md) for the researched
+extension contract, current token-accounting limits and proposed evaluation sequence.
+
 Crypto/order-book ingestion will use the existing backend the operator plans to bring in.
 Its adapter needs explicit sequencing/gap recovery, decimal precision, depth coverage and
 replay semantics. It is not simulated by the present daily/weekly/monthly candle model.

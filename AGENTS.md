@@ -289,6 +289,13 @@ For current behavior, assume:
   primitive. Preserve explicit-session routing, chart-only tool scope, manual object ownership,
   account-panel exclusion, and saved-versus-rendered receipts. Verification/limits and the
   deferred crypto adapter are documented in `docs/initiatives/chart-agent/DEMO.md`.
+- **New Market features should declare their chart-agent exposure.** Read
+  `docs/initiatives/chart-agent/CONTEXT_AND_TOOLS.md` when adding a panel, chart data,
+  or an agent action. Contribute the committed render model with provenance, coverage,
+  loading state and account scope through the existing `viewState/` path; extend the
+  exact-read resource inventory before adding tools. Distinct actions need registered
+  contracts, existing domain validation/policy, and inspectable results. Record unavailable
+  capabilities honestly; do not imply every Market feature is already model-accessible.
 - Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`.
 
 ## Version Control & Commit Discipline
