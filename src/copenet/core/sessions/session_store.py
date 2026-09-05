@@ -151,7 +151,7 @@ class SessionStore:
         if not include_archived:
             entries = [entry for entry in entries if not entry.archived]
         if not include_lanes:
-            entries = [entry for entry in entries if entry.session_type != "fleet_lane"]
+            entries = [entry for entry in entries if entry.session_type not in {"fleet_lane", "forecast_lane"}]
         entries.sort(key=lambda item: item.updated_at, reverse=True)
         return entries
 

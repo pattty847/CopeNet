@@ -12,6 +12,7 @@ from .admissions import AdmissionStore
 from .documents import DocumentStore
 from .models import InstrumentRef
 from .observations import ObservationStore
+from ..forecasts.schema import FORECAST_SCHEMA, used_bytes as forecast_used_bytes
 
 
 class ChartStore(ObservationStore, DocumentStore, AdmissionStore):
@@ -63,6 +64,7 @@ class ChartStore(ObservationStore, DocumentStore, AdmissionStore):
                     state TEXT NOT NULL, PRIMARY KEY(session_key,idempotency_key)
                 );
             """)
+            db.executescript(FORECAST_SCHEMA)
         self.cleanup_orphans()
 
     @staticmethod
@@ -73,7 +75,7 @@ class ChartStore(ObservationStore, DocumentStore, AdmissionStore):
                           "COALESCE((SELECT SUM(length(CAST(body AS BLOB))+length(CAST(receipt AS BLOB))) FROM operations),0) + "
                           "COALESCE((SELECT SUM(length(CAST(body AS BLOB))) FROM render_receipts),0) + "
                           "COALESCE((SELECT SUM(length(session_key)+length(idempotency_key)+length(fingerprint)+length(run_id)+length(observation_id)+length(state)) FROM admissions),0) + "
-                          "COALESCE((SELECT SUM(length(id)+COALESCE(length(session_key),0)) FROM workspaces),0)").fetchone()[0]
+                          "COALESCE((SELECT SUM(length(id)+COALESCE(length(session_key),0)) FROM workspaces),0)").fetchone()[0] + forecast_used_bytes(db)
 
     @contextmanager
     def connect(self):
@@ -128,7 +130,7 @@ class ChartStore(ObservationStore, DocumentStore, AdmissionStore):
     def cleanup_orphans(self, *, now: float | None = None) -> int:
         with self.connect() as db:
             db.execute("BEGIN IMMEDIATE")
-            count = db.execute("DELETE FROM observations WHERE bound=0 AND created_at<?",
+            count = db.execute("DELETE FROM observations WHERE bound=0 AND created_at<? AND id NOT IN (SELECT observation_id FROM forecast_requests) AND id NOT IN (SELECT observation_id FROM forecast_lanes)",
                                ((now or time.time()) - 86400,)).rowcount
-            db.execute("DELETE FROM resources WHERE id NOT IN (SELECT resource_id FROM observation_resources)")
+            db.execute("DELETE FROM resources WHERE id NOT IN (SELECT resource_id FROM observation_resources) AND id NOT IN (SELECT resource_id FROM forecast_resources)")
             return count

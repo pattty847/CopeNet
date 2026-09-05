@@ -228,9 +228,9 @@ class MarketRuntime(DashboardRuntime):
         # The asset workspace shows historical prices that actually traded. Total-return
         # series remain appropriate for portfolio/replay analytics, but dividend-adjusted
         # history makes old chart levels and operator annotations misleading.
-        daily = self.cached_bars(normalized, "daily", basis=SPLIT_ADJUSTED)
-        weekly = self.cached_bars(normalized, "weekly", basis=SPLIT_ADJUSTED)
-        monthly = self.cached_bars(normalized, "monthly", basis=SPLIT_ADJUSTED)
+        from .chart_prices import chart_price_snapshot
+        series, price_provenance = chart_price_snapshot(self, normalized)
+        daily, weekly, monthly = (series[frame] for frame in ('daily', 'weekly', 'monthly'))
         weekly_frame = _bars_to_frame(weekly)
         evidence = [item for item in _evidence_from_dashboard(self.store.load_dashboard_wire()) if item.symbol == normalized]
         latest_bars = daily or weekly or monthly
@@ -282,6 +282,7 @@ class MarketRuntime(DashboardRuntime):
                 price_basis="split_adjusted",
             ),
             series={"daily": daily, "weekly": weekly, "monthly": monthly},
+            price_provenance=price_provenance,
             verdict=verdict,
             signals=_signal_rows(signals),
             evidence=evidence,

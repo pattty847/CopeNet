@@ -94,7 +94,10 @@ class ObservationStore:
             referenced = any(evidence["observationId"] == observation_id and evidence["resourceKey"] == resource_key
                              for obj in document["objects"] for evidence in obj["evidence"])
             if not referenced:
-                raise ValueError("This evidence is not referenced by the current chart document")
+                from ..forecasts.store import ForecastStore
+                referenced = ForecastStore(self).references_chart_evidence(document_id, observation_id, resource_key)
+            if not referenced:
+                raise ValueError("This evidence is not referenced by the current chart document or a published forecast")
             row = db.execute("SELECT body FROM observations WHERE id=? AND document_id=?",
                              (observation_id, document_id)).fetchone()
             if row is None:

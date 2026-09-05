@@ -167,3 +167,5 @@ class MarketTurnContext:
     include_account_context: bool = False
     resource_keys: tuple[str, ...] = ()
     allowed_tool_ids: tuple[str, ...] = CHART_TOOL_IDS
+    forecast_id: str | None = None
+    forecast_lane: str | None = None

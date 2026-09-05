@@ -15,7 +15,7 @@ from copenet.core.harness import PromptOverlay
 from copenet.core.harness.responses_items import image_content_part
 from copenet.core.orchestrator.market_context import (
     resolve_market_context, admit_chart_turn, update_chart_admission, chart_retry_status,
-    chart_tool_ids, chart_policy, chart_store, chart_reference_with_trust,
+    chart_tool_ids, chart_policy, chart_store, chart_reference_with_trust, chart_prompt_policy,
     current_chart_message, chart_system_overlay, prepare_chart_tool_context, create_chart_manifest,
 )
 from copenet.core.orchestrator.approval_execution import make_approval_gated_executor
@@ -46,7 +46,6 @@ from copenet.core.tracing import RunTraceWriter
 from copenet.prompts import (
     PromptContextPolicy,
     compose_prompt,
-    prompt_context_policy_for_chat,
 )
 
 # Providers that maintain their own conversation thread and resume it via
@@ -265,7 +264,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                 tool
                 for tool in registered_tools
                 if tool.category in effective_tool_policy.allowed_categories
-                and (tool.id in scoped_tool_ids if scoped_tool_ids is not None else not tool.id.startswith("market.chart."))
+                and (tool.id in scoped_tool_ids if scoped_tool_ids is not None else not tool.id.startswith(("market.chart.", "market.forecast.")))
             ],
             effective_tool_policy,
         ) if request.allow_tools else []
@@ -314,7 +313,7 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             requested_tool_overlay(active_requested_tool_ids),
         )
         effective_system_prompt = append_system_overlay(effective_system_prompt, chart_system_overlay(market_context))
-        prompt_policy = prompt_context_policy_for_chat(resolved_system_prompt_id)
+        prompt_policy = chart_prompt_policy(market_context, resolved_system_prompt_id)
         trace.record(
             "prompt_context_policy_resolved",
             {

@@ -30,11 +30,12 @@ async def finish_inflight(awaitable):
 
 
 class ScanService:
-    def __init__(self, runtime, *, sources=None, post_prices=None, provider=None, pulse_store=None, pace=0.25):
+    def __init__(self, runtime, *, sources=None, post_prices=None, forecast_prices=None, provider=None, pulse_store=None, pace=0.25):
         self.runtime = runtime
         self.store = ScanStore(runtime.store.root_dir, runtime.watchlists)
         self.sources = sources or ScanSources(runtime)
         self.post_prices = post_prices
+        self.forecast_prices = forecast_prices
         self.provider = provider
         self.pulse_store = pulse_store
         self.pace = max(0.0, pace)
@@ -147,6 +148,11 @@ class ScanService:
                         run["triggerEvents"] = await finish_inflight(asyncio.to_thread(evaluate_scan_alerts, self.runtime, identifier, plan["resolvedSymbols"]))
                     except Exception as exc:
                         run["errors"].append({"source": "alerts", "symbol": "", "message": str(exc)[:300]})
+                    if self.forecast_prices:
+                        try:
+                            run["forecastResults"] = await self.forecast_prices(identifier, plan["resolvedSymbols"])
+                        except Exception as exc:
+                            run["errors"].append({"source": "forecasts", "symbol": "", "message": str(exc)[:300]})
                     if self.post_prices and run["triggerEvents"]:
                         try:
                             await self.post_prices(run["triggerEvents"])
@@ -229,12 +235,14 @@ class ScanService:
 def resolve_scan_service(orchestrator) -> ScanService:
     from functools import partial
     from ..monitoring_delivery import on_scan_alert_events
+    from ..forecasts.tracking import on_forecast_prices
     from ..runtime import resolve_market_runtime
     service = getattr(orchestrator, "_market_scan_service", None)
     if service is None:
         providers = getattr(orchestrator, "_providers", {})
         service = ScanService(resolve_market_runtime(orchestrator), provider=providers.get("openai-codex"),
                               pulse_store=getattr(orchestrator, "_pulse_store", None),
-                              post_prices=partial(on_scan_alert_events, orchestrator))
+                              post_prices=partial(on_scan_alert_events, orchestrator),
+                              forecast_prices=partial(on_forecast_prices, orchestrator))
         orchestrator._market_scan_service = service
     return service

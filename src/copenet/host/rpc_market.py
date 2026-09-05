@@ -199,6 +199,10 @@ async def handle_market_ledger_get(request_id: str, params: dict[str, Any] | Non
     except Exception:
         pass  # stale outcomes beat a failed page
     payload = await asyncio.to_thread(ledger_report, runtime.store, recent=recent)
+    from copenet.core.orchestrator.market_forecasts import resolve_forecast_service
+    from copenet.core.market.forecasts.ledger import ledger_forecasts
+    service = resolve_forecast_service(orchestrator)
+    payload["forecasts"] = await asyncio.to_thread(ledger_forecasts, service, params or {})
     await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=payload)))
 
 

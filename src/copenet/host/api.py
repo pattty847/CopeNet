@@ -41,8 +41,13 @@ def create_app(
         # Scheduled market sweep; no startup catch-up. Tests that span a scheduled
         # slot must disable the sentinel with COPNET_MARKET_SENTINEL=0.
         sentinel.start()  # Delivery processing remains available when scans are paused.
-        yield
-        sentinel.stop()
+        try:
+            yield
+        finally:
+            sentinel.stop()
+            forecasts = getattr(ws_server.orchestrator, '_market_forecast_service', None)
+            if forecasts is not None:
+                await forecasts.shutdown()
 
     app = FastAPI(title="CopeNet Gateway", version="0.1.0", lifespan=lifespan)
 
