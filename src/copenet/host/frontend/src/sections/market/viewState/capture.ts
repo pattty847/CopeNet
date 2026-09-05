@@ -31,7 +31,7 @@ export function captureTickerView(options: {
     const rows = detail.series[seriesKey];
     resources.push({ key: `candles:${timeframe}`, kind: 'candles', label: `${detail.symbol} ${timeframe} candles`,
       status: view.ticker.stale ? 'stale' : rows.length ? 'loaded' : 'empty', observedAt: detail.asOf,
-      rows: rows.map((bar) => ({ ...bar })), metadata: { timeframe, timestampUnit: 'seconds', priceBasis: detail.quote.priceBasis, source: 'yahoo',
+      rows: rows.map((bar) => ({ ...bar })), metadata: { timeframe, timestampUnit: 'seconds', priceBasis: detail.quote.priceBasis, source: 'yahoo', priceProvenance: detail.priceProvenance,
         completeness: 'Latest daily/weekly/monthly candle may be forming; do not infer completion from capture time.' } });
   }
   for (const indicator of view.computedIndicators) {

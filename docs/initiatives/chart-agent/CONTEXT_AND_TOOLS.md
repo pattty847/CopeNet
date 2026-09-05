@@ -23,6 +23,12 @@ verify the vendor candles or treat a model's description of its own calls as a t
 5. Ordinary harness sessions execute five registered chart tools. Drawing writes are
    revision checked and scoped to the agent's layer; saved and rendered are separate.
    The next send captures a new observation; in-flight evidence remains fixed.
+6. Manual chart forecasts (2026-09-05) contribute `panel:forecasts` from the committed
+   visible records, overlay visibility and loaded coverage. Ordinary chart reads inspect
+   these frozen rows through `market.chart.read`. Explicit forecast requests create isolated
+   lanes with only context/read plus `market.forecast.submit` and `.read`; ordinary chat
+   cannot register a forecast. Forecast levels belong to their immutable records, outside
+   drawing drag/undo. See [forecast status](../chart-forecasts/STATUS.md).
 
 This is structured context plus targeted retrieval. A screenshot could later supplement
 layout or visual-pattern questions, but numeric evidence should remain addressable data.

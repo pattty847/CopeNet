@@ -6,7 +6,7 @@ import type { ChartObject } from '../chartAgent/types';
 import { hitDrawing, projectDrawing, type DrawingGeometry } from './geometry';
 import type { ChartWorkspaceBridge } from './types';
 
-function paintDrawing(context: CanvasRenderingContext2D, geometry: DrawingGeometry, selected: boolean): void {
+export function paintDrawing(context: CanvasRenderingContext2D, geometry: DrawingGeometry, selected: boolean): void {
   const { object, points, width } = geometry;
   const [a, b] = points;
   context.strokeStyle = object.color;

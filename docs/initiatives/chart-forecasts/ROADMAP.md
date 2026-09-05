@@ -1,7 +1,7 @@
 # Chart forecasts and forward-ledger evaluation
 
-Status: implementation plan; product code has not been changed.
-Prepared 2026-09-05 using FORGE plan mode.
+Status: approved and implemented; final verification is recorded in [STATUS.md](STATUS.md).
+Prepared and approved 2026-09-05 using FORGE.
 
 ## Product contract
 
@@ -350,9 +350,9 @@ details stay in the existing overlay pattern, not nested tables inside chat.
 
 ## Implementation slices and verification gates
 
-No product implementation is authorized by this plan-only request. Once build is approved,
-land these as coherent commits, with the feature unavailable until its required contracts
-and evaluators exist. Intermediate fixtures stay synthetic and offline.
+Build was explicitly authorized by the founder on 2026-09-05. The implementation follows
+these slices as coherent commits, with the feature unavailable until its required contracts
+and evaluators exist. Verification fixtures stay synthetic and offline.
 
 | Slice | Deliverable and likely homes | Gate |
 | --- | --- | --- |
@@ -389,7 +389,7 @@ counted as a win. These are the key product truths, not optional edge-case polis
 
 ## Decisions for the build
 
-Recommended defaults above are proposals, not shipped behavior. The one founder preference
+The defaults above are implemented in the first release. The one founder preference
 raised during planning is whether to enable paired comparison for each manual request;
 the plan supports an explicit option and recommends it when evaluating improvement. It
 costs one additional model run, so single-run mode remains available.

@@ -1,3 +1,7 @@
+import { ForecastRequestSheet } from '../forecasts/ForecastRequestSheet';
+import { ForecastInspector } from '../forecasts/ForecastInspector';
+import { ForecastList } from '../forecasts/ForecastList';
+import { useViewResource } from '../viewState/resources';
 import { useEffect, useRef, useState, type CSSProperties, type PointerEvent } from 'react';
 import { ChevronRight, MessageSquare, X } from 'lucide-react';
 import { MessageBubble } from '../../../components/MessageBubble';
@@ -14,7 +18,12 @@ function date(value: number | null) { return value == null ? '…' : new Date(va
 
 export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: ChartWorkspaceController; symbol: string; timeframe: string }) {
   const conversation = useChartConversation(workspace);
-  const [tab, setTab] = useState<'chat' | 'drawings'>('chat');
+  const [tab, setTab] = useState<'chat' | 'drawings' | 'forecasts'>('chat');
+  const [requestOpen, setRequestOpen] = useState(false);
+  useViewResource(symbol, { key: 'panel:forecasts', kind: 'panel', label: 'Chart forecasts',
+    status: workspace.forecasts.error ? 'stale' : workspace.forecasts.loading ? 'not-loaded' : workspace.forecasts.records.length ? 'loaded' : 'empty',
+    rows: workspace.forecasts.records.filter((record) => record.documentId === workspace.document?.documentId).map((record) => ({ ...record, overlayVisible: !workspace.hiddenForecasts.has(record.forecastId) })),
+    metadata: { source: 'forecast_store', accountContext: false, active: workspace.open && tab === 'forecasts', coverage: { loadedCount: workspace.forecasts.records.length, nextOffset: workspace.forecasts.nextOffset }, complete: workspace.forecasts.nextOffset == null, error: workspace.forecasts.error } });
   const [width, setWidth] = useState(() => {
     const stored = Number(localStorage.getItem('copenet.chart.panelWidth'));
     return stored >= 320 && stored <= 640 ? stored : 380;
@@ -47,10 +56,17 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
       <div className="ca-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'chat'} onClick={() => setTab('chat')}>Conversation</button>
         <button role="tab" aria-selected={tab === 'drawings'} onClick={() => setTab('drawings')}>Drawings <span>{workspace.document?.objects.length ?? 0}</span></button>
+        <button role="tab" aria-selected={tab === 'forecasts'} onClick={() => setTab('forecasts')}>Forecasts <span>{workspace.forecasts.records.length}</span></button>
       </div>
       {workspace.error && <div className="ca-error" role="alert">{workspace.error} <button onClick={workspace.retry}>Retry</button></div>}
       <div className="ca-scroll" role="tabpanel">
-        {tab === 'drawings' ? <ChartDrawingsPanel workspace={workspace} /> : <>
+        {tab === 'forecasts' ? <>
+          <p className="cf-empty">Latest setup shown. Use the eye controls to compare earlier overlays.</p>
+          {workspace.forecasts.error && <p className="ca-error" role="alert">{workspace.forecasts.error}</p>}
+          {workspace.forecasts.loading ? <p className="cf-empty" role="status">Loading forecasts…</p> : <ForecastList records={workspace.forecasts.records} hidden={workspace.hiddenForecasts} onToggle={workspace.toggleForecast} onSelect={workspace.setSelectedForecastId} />}
+          {workspace.forecasts.nextOffset != null && <button type="button" className="tw-btn" onClick={workspace.forecasts.loadMore}>Load more forecasts</button>}
+          <button type="button" className="tw-btn" style={{ margin: 12 }} onClick={() => setRequestOpen(true)} disabled={!workspace.document || conversation.sending || Boolean(conversation.activeRun)}>Forecast this chart</button>
+        </> : tab === 'drawings' ? <ChartDrawingsPanel workspace={workspace} /> : <>
           {conversation.messages.length === 0 && <div className="ca-empty"><span className="ca-eyebrow">WORK WITH THE CHART</span>
             <h3>Ask. Inspect. Draw.</h3><p>Your current candles, indicators and research panels are captured when you send.</p>
             <button onClick={() => conversation.setInput('Inspect the visible range and draw the price levels you can justify. Explain the evidence for each one.')}>
@@ -74,8 +90,10 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
           <div ref={end} />
         </>}
       </div>
-      <ChartAgentComposer conversation={conversation} workspace={workspace} onSend={() => { setTab('chat'); void conversation.send(); }} />
+      <ChartAgentComposer onForecast={() => setRequestOpen(true)} conversation={conversation} workspace={workspace} onSend={() => { setTab('chat'); void conversation.send(); }} />
     </aside>
     {workspace.open && <InspectorDrawer />}
+    {requestOpen && <ForecastRequestSheet symbol={symbol} conversation={conversation} workspace={workspace} onClose={() => setRequestOpen(false)} />}
+    {workspace.selectedForecastId && <ForecastInspector forecastId={workspace.selectedForecastId} onClose={() => workspace.setSelectedForecastId(null)} />}
   </>;
 }

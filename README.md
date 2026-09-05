@@ -157,6 +157,27 @@ adapters. See the [demo guide and verification record](docs/initiatives/chart-ag
 
 ![Chart agent — synthetic candles, editable levels and scoped conversation](docs/imgs/market-chart-agent.png)
 
+**Chart forecasts** — choose **Forecast this chart** in the companion settings to
+manually register a setup for one ticker. The model submits an entry, fixed stop,
+fractional profit targets and explanatory zones from frozen chart evidence. Published
+levels remain immutable and separate from editable drawings. Completed daily candles
+track simulated fills, ambiguous paths and four/eight-week directional outcomes without
+additional model calls. An optional independent directional run enables paired comparison
+in **Ledger → Comparison**; historical calls retain their original scoring rules.
+The offline browser example verifies a stopped trade and an ambiguous, unscored trade
+whose eight-week directional calls both succeed; later recovery never erases a stop-out.
+
+![Chart forecasts — synthetic entry, stop and target overlays](docs/imgs/market-chart-forecasts.png)
+
+<details>
+<summary>Forecasts on mobile and Ledger comparison (synthetic demonstration data)</summary>
+
+![Mobile forecast companion](docs/imgs/market-chart-forecasts-mobile.png)
+
+![Forecast Ledger with independent trade and direction scores](docs/imgs/market-chart-forecasts-ledger.png)
+
+</details>
+
 On phones, chart and companion switch between full-width views. Pinch zoom keeps its
 chosen time range through viewport updates and background document refreshes.
 The compact composer keeps model, detail and drawing controls on one row, with provider

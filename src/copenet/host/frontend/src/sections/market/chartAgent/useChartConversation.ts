@@ -98,6 +98,24 @@ export function useChartConversation(workspace: ChartWorkspaceController) {
     finally { sendInProgress.current = false; setSending(false); }
   };
 
+  const captureForForecast = async () => {
+    if (workspace.sessionKey && !session) throw new Error('Wait for the linked chart session to load.');
+    const capture = workspace.capture(false);
+    const key = safeUUID();
+    let owner = session;
+    if (!owner) {
+      localStorage.setItem(DRAFT_KEY, JSON.stringify(draft));
+      owner = await wsClient.marketChart.createSession(draft.key, draft.settings);
+    }
+    if (workspace.sessionKey !== owner.key) {
+      await wsClient.marketChart.linkSession(owner.key);
+      workspace.setSessionKey(owner.key);
+      localStorage.removeItem(DRAFT_KEY);
+    }
+    const receipt = await wsClient.marketChart.capture(owner.key, key, capture);
+    return { sessionKey: owner.key, observationId: receipt.observationId, documentId: capture.documentId };
+  };
+
   const newConversation = async () => {
     if (sendInProgress.current || activeRun) return;
     sendInProgress.current = true; setSending(true); setError(null);
@@ -119,6 +137,6 @@ export function useChartConversation(workspace: ChartWorkspaceController) {
     catch (reason) { setError(reason instanceof Error ? reason.message : 'Could not stop this turn.'); }
   };
   return { session, sessionKey, input, setInput, detail, setDetail, access, setAccess, sending, error, activeRun, messages,
-    providers, provider, models, model, changeProvider, changeModel, send, stop, lastCapture, newConversation,
+    captureForForecast, providers, provider, models, model, changeProvider, changeModel, send, stop, lastCapture, newConversation,
     resetSubmission: () => { pending.current = null; setError(null); } };
 }

@@ -714,6 +714,7 @@ export type ApprovalActionClass =
   | 'filesystem_write'
   | 'process_execution'
   | 'chart_annotation'
+  | 'chart_forecast'
   | 'network_side_effect'
   | 'credential_or_sensitive_target';
 

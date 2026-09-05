@@ -9,10 +9,11 @@ import type { ChartDetail } from './types';
 const DETAIL_COPY = { quick: 'Compact context · precise reads on demand', balanced: 'Recent candles, indicators and focused inspection', deep: 'Wider history and a larger evidence budget' };
 function date(value: number) { return new Date(value * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' }); }
 
-export function ChartAgentComposer({ conversation, workspace, onSend }: {
+export function ChartAgentComposer({ conversation, workspace, onSend, onForecast }: {
   conversation: ReturnType<typeof useChartConversation>;
   workspace: ChartWorkspaceController;
   onSend: () => void;
+  onForecast: () => void;
 }) {
   const connection = useAppStore((state) => state.wsStatus);
   const [settingsOpen, setSettingsOpen] = useState(false);
@@ -49,6 +50,7 @@ export function ChartAgentComposer({ conversation, workspace, onSend }: {
     </div>
     <ChartPopoverShell anchor={settingsAnchor} open={settingsOpen && workspace.open} onClose={closeSettings} title="Chart agent settings" width={300}>
       <div className="ca-settings" ref={settingsBody} role="dialog" aria-label="Chart agent settings" tabIndex={-1}>
+        <button className="tw-btn" type="button" disabled={disabled} onClick={() => { closeSettings(); onForecast(); }}>Forecast this chart</button>
         <label>Provider<select aria-label="Chart agent provider" value={conversation.provider} disabled={Boolean(conversation.sessionKey) || conversation.sending}
           onChange={(event) => conversation.changeProvider(event.target.value)}>
           {conversation.providers.map((provider) => <option key={provider.id} value={provider.id} disabled={!provider.available}>{provider.displayName}</option>)}

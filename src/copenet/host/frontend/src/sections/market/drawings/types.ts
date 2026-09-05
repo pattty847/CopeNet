@@ -1,3 +1,4 @@
+import type { ForecastBridge } from '../forecasts/types';
 import type { ChartObject, ChartSelection, ChartViewport } from '../chartAgent/types';
 
 export type DrawingMode = 'select' | 'range' | ChartObject['kind'];
@@ -14,6 +15,7 @@ export interface ChartRenderReceipt {
   reason?: string;
 }
 export interface ChartWorkspaceBridge {
+  forecasts?: ForecastBridge;
   documentId: string;
   revision: number;
   objects: ChartObject[];

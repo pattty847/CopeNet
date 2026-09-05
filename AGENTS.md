@@ -289,6 +289,12 @@ For current behavior, assume:
   primitive. Preserve explicit-session routing, chart-only tool scope, manual object ownership,
   account-panel exclusion, and saved-versus-rendered receipts. Verification/limits and the
   deferred crypto adapter are documented in `docs/initiatives/chart-agent/DEMO.md`.
+- **Chart forecasts are manual, frozen experiments.** `core/market/forecasts/` owns typed
+  records, daily-candle simulation and reporting; `orchestrator/market_forecasts.py` admits
+  isolated chart-bound model lanes. Preserve publication clocks, exact evidence, no-account
+  scope, original setup ownership and paired answer isolation. Tracking reuses explicit
+  price-only scans without model calls. Never rescore historical Ledger JSON using the
+  forecast evaluator. See `docs/initiatives/chart-forecasts/STATUS.md` and `ROADMAP.md`.
 - **New Market features should declare their chart-agent exposure.** Read
   `docs/initiatives/chart-agent/CONTEXT_AND_TOOLS.md` when adding a panel, chart data,
   or an agent action. Contribute the committed render model with provenance, coverage,

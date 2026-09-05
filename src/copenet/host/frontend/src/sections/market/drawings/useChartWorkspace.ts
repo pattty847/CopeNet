@@ -1,3 +1,4 @@
+import { ForecastPrimitive } from '../forecasts/primitive';
 import { useEffect, useRef, type RefObject } from 'react';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { ChartAnchor, ChartObject, ChartViewport } from '../chartAgent/types';
@@ -42,6 +43,7 @@ export function useChartWorkspace(
   const current = useRef({ bridge, comparisonMode });
   current.current = { bridge, comparisonMode };
   const primitiveRef = useRef<DrawingPrimitive | null>(null);
+  const forecastRef = useRef<ForecastPrimitive | null>(null);
   const resetGesture = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -52,6 +54,15 @@ export function useChartWorkspace(
     const primitive = new DrawingPrimitive(() => container.getClientRects().length > 0 && container.clientWidth > 0 && container.clientHeight > 0);
     primitiveRef.current = primitive;
     candle.attachPrimitive(primitive);
+    const forecast = new ForecastPrimitive(() => container.getClientRects().length > 0 && container.clientWidth > 0);
+    forecastRef.current = forecast;
+    candle.attachPrimitive(forecast);
+    forecast.setState(current.current.bridge?.forecasts, current.current.comparisonMode);
+    const selectForecast = (event: { hoveredObjectId?: unknown }) => {
+      const active = current.current.bridge;
+      if (active?.mode === 'select' && typeof event.hoveredObjectId === 'string' && event.hoveredObjectId.startsWith('forecast:')) active.forecasts?.onSelect(event.hoveredObjectId.slice(9));
+    };
+    chart.subscribeClick(selectForecast);
     primitive.setState(current.current.bridge, current.current.comparisonMode);
     let first: ChartAnchor | null = null;
     let drag: { object: ChartObject; index: number; anchor: ChartAnchor; revision: number } | null = null;
@@ -177,6 +188,9 @@ export function useChartWorkspace(
       document.removeEventListener('visibilitychange', onVisibility);
       // The owning chart may already have been removed during React's unmount cleanup.
       if (chartRef.current === chart) candle.detachPrimitive(primitive);
+      chart.unsubscribeClick(selectForecast);
+      if (chartRef.current === chart) candle.detachPrimitive(forecast);
+      forecast.detached(); forecastRef.current = null;
       primitive.detached();
       primitiveRef.current = null;
     };
@@ -184,6 +198,7 @@ export function useChartWorkspace(
 
   useEffect(() => {
     primitiveRef.current?.setState(bridge, comparisonMode);
+    forecastRef.current?.setState(bridge?.forecasts, comparisonMode);
   }, [bridge, comparisonMode]);
 
   useEffect(() => {
