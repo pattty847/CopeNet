@@ -78,3 +78,18 @@ frontend tests, TypeScript and production build pass. Offline browser checks cov
 setup map at 320/390px and the chart's reverse drag, two-tap selection, cancellation,
 touch selection without panning, and restored pinch zoom. The former text-only level
 layout and its CSS were replaced; original forecast records and scoring are unchanged.
+
+Setup/outcome chart refinement (2026-09-05): replaces the price ladder with a daily-close
+line over quiet risk/reward bands. The lead-in is the last 60 completed frozen daily
+candles; forward points reuse evaluation `consumedBars`, already normalized to publication
+prices and bounded by completed-session/gap rules. The plot keeps the full eight-week
+horizon blank until observations arrive, shows retained-evidence health, and labels that
+intraday touches can differ from daily closes. Exact levels/returns and the model thesis
+expand separately. `market.forecast.get` supplies this bounded projection only when
+`includeChart` is requested; opening it performs no additional acquisition or model call.
+
+Verification: 81 focused backend tests and 531 frontend tests passed, plus TypeScript,
+production build and offline browser checks at 320/390px and desktop. The browser verifies
+both an empty future path and the real evaluated path after synthetic eight-week catch-up.
+New screenshots contain synthetic data only. The running host's chart response and health
+endpoint were checked after restart.

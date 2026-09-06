@@ -8,21 +8,26 @@ import { useAppStore } from '../../../store/useAppStore';
 import { ApprovalRequestCard } from '../../../components/ApprovalRequestCard';
 import { MonitoringSheet } from '../monitoring/MonitoringSheet';
 import { ChartEvidenceViewer } from '../chartAgent/ChartEvidenceViewer';
-import { forecastSetup, type ForecastRecord } from './types';
+import { forecastSetup, type ForecastRecord, type ForecastChart } from './types';
 import { forecastDate, forecastRisk, forecastStatus, forecastTracking, forecastThesis } from './model';
 import type { Scan } from '../monitoring/types';
 import '../monitoring/monitoring.css';
 import './forecasts.css';
 
 export function ForecastInspector({ forecastId, onClose, onOpen }: { forecastId: string; onClose: () => void; onOpen?: (symbol: string) => void }) {
-  const [record, setRecord] = useState<ForecastRecord | null>(null);
+  const [snapshot, setSnapshot] = useState<{ record: ForecastRecord; chart: ForecastChart | null } | null>(null);
+  const record = snapshot?.record ?? null;
+  const chart = snapshot?.chart ?? null;
+  const setRecord = (next: ForecastRecord) => setSnapshot((previous) => ({ record: next, chart: previous?.chart ?? null }));
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
   const [scans, setScans] = useState<Scan[]>([]);
   const approvals = useAppStore((state) => state.pendingApprovalsById);
   useEffect(() => {
-    let alive = true; setRecord(null);
-    const refresh = () => wsClient.marketForecast.get(forecastId).then(({ forecast }) => { if (alive) { setRecord((previous) => previous && previous.forecastId === forecast.forecastId && previous.revision > forecast.revision ? previous : forecast); setError(''); } })
+    let alive = true; setSnapshot(null);
+    const refresh = () => wsClient.marketForecast.get(forecastId).then(({ forecast, chart: nextChart }) => { if (alive) {
+      setSnapshot((previous) => previous && previous.record.forecastId === forecast.forecastId && previous.record.revision > forecast.revision
+        ? previous : { record: forecast, chart: nextChart }); setError(''); } })
       .catch((reason) => { if (alive) setError(String(reason)); });
     void refresh();
     const off = wsClient.marketForecast.subscribe(() => void refresh());
@@ -47,14 +52,14 @@ export function ForecastInspector({ forecastId, onClose, onOpen }: { forecastId:
       {!record ? <p role="status">Loading forecast…</p> : <>
         <div className="cf-summary"><strong>{forecastStatus(record)}</strong><span>{forecastRisk(record)} <small>planned-risk R</small></span></div>
         <p>{record.model} · {forecastDate(record.publishedAt ?? record.requestedAt)} · {record.paired ? 'Paired request' : 'Single model run'}</p>
-        <p>{forecastThesis(record)}</p>
+        {!setup && <p>{forecastThesis(record)}</p>}
         {members.map((member) => Object.values(approvals).filter((approval) => approval.sessionKey === member.sessionKey && approval.status === 'pending').map((approval) => <ApprovalRequestCard key={approval.approvalId} approval={approval} />))}
         {(record.status === 'generating' || record.status === 'requested') && <button className="tw-btn" disabled={busy} onClick={() => void change(() => wsClient.marketForecast.cancel(forecastId))}>Cancel unfinished request</button>}
         {record.failureReason && <p role="alert" className="mm-monitor-error">{record.failureReason}</p>}
         {members.flatMap((member) => member.errors).map((message, index) => <p className="mm-monitor-error" key={index}>{message.reason}</p>)}
-        {setup && <section><h3>Original setup · {setup.direction}</h3><ForecastSetupVisual setup={setup} /><p>Entry expiry: {record.entryExpirySessions} exchange sessions · deadline {forecastDate(record.deadlineAt)}</p>
+        {setup && <section><h3>Original setup · {setup.direction}</h3><ForecastSetupVisual setup={setup} chart={chart} /><details><summary>Model thesis</summary><p>{forecastThesis(record)}</p></details><p>Entry expiry: {record.entryExpirySessions} exchange sessions · deadline {forecastDate(record.deadlineAt)}</p>
           {setup.zones.map((zone, index) => <p key={index}>{zone.label} · {zone.lower}–{zone.upper}</p>)}
-          <small>Original publication price basis. Chart levels adjust only for confirmed splits. Gross simulated returns exclude costs.</small>
+          <small>Original publication prices; later closes use the same split basis. Gross simulated returns exclude costs.</small>
         </section>}
         <section><h3>Tracking · {forecastTracking(record)}</h3><p>{(evaluation?.health ?? 'unevaluated').replaceAll('_', ' ')}{evaluation?.reason ? ` · ${evaluation.reason}` : ''}</p>
           <label>Price schedule<select className="tw-input" value={record.trackingScanId ?? ''} disabled={busy} onChange={(event) => void change(() => wsClient.marketForecast.tracking(forecastId, event.target.value || null))}>

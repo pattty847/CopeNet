@@ -70,3 +70,9 @@ export interface ForecastReport {
   trade: { activatedCount: number; activationRate: number | null; scoredCount: number; meanPlannedRiskR: number | null; positiveCount: number; negativeCount: number; meanHoldingSessions: number | null };
   methodology: string;
 }
+
+export interface ForecastChart {
+  publishedAt: number; deadlineAt: number;
+  history: { t: number; close: number }[]; outcome: { t: number; close: number }[];
+  health: string; reason: string | null; basis: 'publication'; historyAvailable: boolean;
+}

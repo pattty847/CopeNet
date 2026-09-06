@@ -1,15 +1,17 @@
-.cf-setup-visual { margin: 12px 0; }
-.cf-setup-map { display: flex; align-items: flex-start; gap: 8px; }
-.cf-setup-map svg { flex: 0 0 88px; overflow: visible; }
-.cf-setup-map dl { flex: 1; min-width: 0; margin: 0; }
-.cf-setup-row { height: 56px; display: flex; flex-direction: column; justify-content: center; gap: 3px; }
-.cf-setup-row dt { font-size: 12px; }
-.cf-setup-row dd { margin: 0; display: flex; align-items: baseline; justify-content: space-between; gap: 8px; font-family: var(--mkt-mono); flex-wrap: wrap; }
-.cf-setup-row dd strong { color: var(--mkt-text); font-size: 15px; font-weight: 500; overflow-wrap: anywhere; }
-.cf-setup-row small, .cf-setup-visual figcaption { color: var(--mkt-muted); font-size: 10px; }
-.cf-setup-visual figcaption { line-height: 1.5; margin-top: 8px; }
-.cf-setup-target { color: #67bb8c; }
+.cf-setup-visual { margin: 12px 0; min-width: 0; }
+.cf-setup-caption { display: flex; justify-content: space-between; gap: 8px; color: var(--mkt-muted); font-size: 10px; min-height: 20px; }
+.cf-setup-caption i { display: inline-block; width: 10px; height: 2px; margin: 0 4px 3px 0; background: #36b7ef; }
+.cf-setup-visual svg { display: block; overflow: hidden; font-family: var(--mkt-mono); }
+.cf-setup-line { fill: none; stroke: #36b7ef; stroke-width: 1.5; stroke-linejoin: round; stroke-linecap: round; }
+.cf-setup-target { color: #67bbac; }
 .cf-setup-stop { color: #eb8479; }
-.cf-setup-entry { color: var(--mkt-accent); }
-.cf-setup-reward { fill: #67bb8c26; }
-.cf-setup-risk { fill: #eb847926; }
+.cf-setup-entry { color: #d3c8a2; }
+.cf-setup-reward { fill: #269a812b; }
+.cf-setup-risk { fill: #d2574b30; }
+.cf-setup-visual figcaption, .cf-setup-visual small { color: var(--mkt-muted); font-size: 10px; line-height: 1.5; }
+.cf-setup-visual details { margin-top: 12px; font-size: 11px; }
+.cf-setup-values { margin: 12px 0; }
+.cf-setup-values > div { display: flex; justify-content: space-between; gap: 12px; padding: 5px 0; }
+.cf-setup-values dd { margin: 0; text-align: right; font-family: var(--mkt-mono); }
+.cf-setup-values small { display: block; }
+.cf-setup-notice { font-size: 11px; color: var(--mkt-muted); }

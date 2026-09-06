@@ -164,8 +164,9 @@ adapters. See the [demo guide and verification record](docs/initiatives/chart-ag
 manually register a setup for one ticker. The model submits an entry, fixed stop,
 fractional profit targets and explanatory zones from frozen chart evidence. Published
 levels remain immutable and separate from editable drawings. The original-setup inspector
-maps entry, stop and targets on a proportional price ladder with exact prices, percentage
-moves and planned-risk R multiples, including short setups. Completed daily candles
+shows frozen daily history flowing into actual completed closes, with quiet entry/stop/target
+bands across the eight-week horizon. Future space stays empty until observed prices arrive.
+Exact prices, percentage moves and planned-risk R multiples live under **Levels and returns**. Completed daily candles
 track simulated fills, ambiguous paths and four/eight-week directional outcomes without
 additional model calls. An optional independent directional run enables paired comparison
 in **Ledger → Comparison**; historical calls retain their original scoring rules.
@@ -178,6 +179,8 @@ whose eight-week directional calls both succeed; later recovery never erases a s
 <summary>Forecasts on mobile and Ledger comparison (synthetic demonstration data)</summary>
 
 ![Mobile forecast companion](docs/imgs/market-chart-forecasts-mobile.png)
+
+![Setup and observed outcome — synthetic completed daily closes](docs/imgs/market-forecast-outcome.png)
 
 ![Forecast Ledger with independent trade and direction scores](docs/imgs/market-chart-forecasts-ledger.png)
 

@@ -235,3 +235,10 @@ Research informing the direction:
 - [Chen et al., 2024](https://arxiv.org/abs/2409.11540) find over-extrapolation of recent
   returns and forecast miscalibration in the models/settings they study. Fluent technical
   explanations are not validation of a forecast; prospective scoring is the product test.
+
+The setup ladder was subsequently replaced by a setup/outcome mini chart. Its operator
+projection (`forecasts/chart.py`, opt-in `market.forecast.get includeChart`) combines the
+last 60 completed frozen daily rows with retained evaluation closes, on publication price
+basis. This introduces no model tool or acquisition path. Chart agents still inspect the
+underlying captured candles and committed forecast records, including evaluation evidence;
+future chart space is a horizon, never a fabricated model forecast path.

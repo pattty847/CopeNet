@@ -1,5 +1,5 @@
 import type { LedgerReport } from '../sections/market/types';
-import type { ForecastRecord, ForecastRenderReceipt, ForecastRequest } from '../sections/market/forecasts/types';
+import type { ForecastChart, ForecastRecord, ForecastRenderReceipt, ForecastRequest } from '../sections/market/forecasts/types';
 
 type Request = <T extends Record<string, unknown>>(method: string, params: Record<string, unknown>) => Promise<T>;
 export function createMarketForecastApi(request: Request) {
@@ -10,7 +10,7 @@ export function createMarketForecastApi(request: Request) {
     subscribe(listener: () => void) { listeners.add(listener); return () => { listeners.delete(listener); }; },
     request: (params: ForecastRequest) => request<{ forecast: ForecastRecord }>('market.forecast.request', { ...params }),
     evidence: (forecastId: string, evidenceId: string) => request<{ evidence: Record<string, unknown> }>('market.forecast.get', { forecastId, evidenceId }),
-    get: (forecastId: string) => request<{ forecast: ForecastRecord }>('market.forecast.get', { forecastId }),
+    get: (forecastId: string) => request<{ forecast: ForecastRecord; chart: ForecastChart | null }>('market.forecast.get', { forecastId, includeChart: true }),
     list: (documentId?: string, offset = 0) => request<{ forecasts: ForecastRecord[]; nextOffset: number | null; offset: number }>('market.forecast.list', { documentId, offset, limit: 100 }),
     cancel: (forecastId: string) => request<{ forecast: ForecastRecord }>('market.forecast.cancel', { forecastId }),
     amend: (forecastId: string, expectedRevision: number, amendment: Record<string, unknown>) =>

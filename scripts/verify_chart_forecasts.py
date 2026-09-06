@@ -11,6 +11,7 @@ from datetime import datetime, timedelta, timezone
 import json
 import math
 import mimetypes
+import re
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from unittest.mock import patch
@@ -213,6 +214,9 @@ async def verify(browser, directory):
             inspector = page.get_by_role('dialog', name='TEST · Forecast', exact=True)
             await expect(inspector.get_by_text('Original setup · long', exact=True)).to_be_visible()
             await expect(inspector.get_by_role('figure', name='Original setup price map')).to_be_visible()
+            await expect(inspector.locator('[data-price-history]')).to_have_attribute('d', re.compile('^M'))
+            await expect(inspector.locator('[data-price-outcome]')).to_have_attribute('d', '')
+            await inspector.get_by_text('Levels and returns', exact=True).click()
             await expect(inspector.get_by_text('Stop loss', exact=True)).to_be_visible()
             await inspector.get_by_role('button', name='Inspect candles:D', exact=True).click()
             evidence = inspector.locator('.ca-source pre')
@@ -277,6 +281,12 @@ async def verify(browser, directory):
         assert single['evaluation']['state'] == 'stopped' and single['evaluation']['plannedRiskR'] == -1
         assert paired['evaluation']['state'] == 'ambiguous' and paired['evaluation']['plannedRiskR'] is None
         assert all(record['evaluation']['horizons']['8w']['members']['ta']['outcome'] == 'correct' for record in records)
+        await page.locator('.cf-row-main').first.click()
+        outcome_chart = page.get_by_role('figure', name='Original setup price map')
+        await expect(outcome_chart.locator('[data-price-outcome]')).to_have_attribute('d', re.compile('^M.+L'))
+        await expect(outcome_chart).to_contain_text('Tracking through')
+        await outcome_chart.screenshot(path=str(ROOT/'docs/imgs/market-forecast-outcome.png'), animations='disabled')
+        await page.get_by_role('dialog', name='TEST · Forecast', exact=True).get_by_role('button', name='Close editor', exact=True).click()
         report = forecast_report(records)
         assert report['trade']['scoredCount'] == 1 and report['states']['ambiguous'] == 1
         await page.goto('http://127.0.0.1:17124/market?view=ledger', wait_until='networkidle')

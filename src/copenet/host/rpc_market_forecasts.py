@@ -7,6 +7,7 @@ from pydantic import Field
 
 from copenet.core.market.chart_workspace.models import Contract
 from copenet.core.market.forecasts.models import Identifier
+from copenet.core.market.forecasts.chart import forecast_chart
 from copenet.core.market.forecasts.tracking import validate_tracking
 from copenet.core.market.scans.service import resolve_scan_service
 from copenet.core.orchestrator.market_forecasts import resolve_forecast_service
@@ -35,6 +36,7 @@ class Start(Contract):
 class Get(Contract):
     forecastId: Identifier
     evidenceId: Identifier | None = None
+    includeChart: bool = False
 
 
 class ForecastId(Contract):
@@ -92,7 +94,11 @@ async def get_forecast(identifier, params, send, orchestrator):
     if args.evidenceId:
         await _reply(identifier, send, {'evidence': service.store.evidence(args.forecastId, args.evidenceId)})
     else:
-        await _reply(identifier, send, {'forecast': await asyncio.to_thread(service.get, args.forecastId)})
+        record = await asyncio.to_thread(service.get, args.forecastId)
+        payload = {'forecast': record}
+        if args.includeChart:
+            payload['chart'] = await asyncio.to_thread(forecast_chart, service.charts, record)
+        await _reply(identifier, send, payload)
 
 
 async def list_forecasts(identifier, params, send, orchestrator):
