@@ -85,6 +85,16 @@ class Capture(Contract):
 class Anchor(Contract):
     t: int = Field(ge=0, le=9007199254740991)
     value: float
+    # Which field of the cited candle this level came from. Declaring it converts the
+    # citation from a gesture into a checkable claim: the backend rejects the drawing if
+    # the anchor does not match that field. Omitting it is allowed and honest — a level
+    # between two candles, or a projected target, has no single source field.
+    evidenceField: Literal["o", "h", "l", "c"] | None = None
+    # Server-stamped on every apply, never trusted from the caller. "exact" means the
+    # anchor matched its declared field; "in-range" means it sits inside the cited
+    # candle; "out-of-range" means it does not, and the citation does not support it;
+    # "unchecked" means no cited candle covers this timestamp.
+    verified: Literal["exact", "in-range", "out-of-range", "unchecked"] = "unchecked"
 
 
 class EvidenceRef(Contract):
