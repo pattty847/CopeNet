@@ -52,6 +52,7 @@ from .market_tape import build_market_tape
 from .market_tape_formatter import format_market_tape
 from .price_cache import PriceCache
 from .price_history import CHART_BAR_LIMITS, SPLIT_ADJUSTED, TOTAL_RETURN, chart_history_window
+from .mama_regime import mama_regime
 from .signals import compute_price_signals, compute_rrg_tail
 from .webull.config import include_portfolio_context_enabled
 from .webull.context_pack import build_portfolio_context_pack
@@ -244,7 +245,11 @@ class MarketRuntime(DashboardRuntime):
         # per-symbol signals (written by the last dashboard refresh) can be stale enough
         # to disagree with the live-fetched intelligence packet (e.g. drawdown %) in the
         # same response, which is confusing rather than just imprecise.
-        signals = compute_price_signals(weekly_frame, benchmark=voo_frame).__dict__ if not weekly_frame.empty else {}
+        signals = (
+            compute_price_signals(weekly_frame, benchmark=voo_frame, mama_regime=mama_regime(weekly_frame)).__dict__
+            if not weekly_frame.empty
+            else {}
+        )
         # Default benchmarks are the broad market/growth read (VOO/XLK/QQQ); `compare` lets the
         # caller add specific symbols (a sector ETF, a direct competitor) on top — it never
         # replaces the defaults, so the human-facing Market page's verdict table is unaffected.

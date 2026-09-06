@@ -14,6 +14,7 @@ from .base_rates import load_base_rate
 from .edgar import fetch_evidence
 from .features import compute_features
 from .models import AccumulationRow, DashboardPayload, EvidenceItem, MarketPanel, SoftBottomItem, UniverseAsset
+from .mama_regime import mama_regime
 from .signals import compute_price_signals, compute_rrg_tail
 from .synthesis import synthesize_briefing
 from .universe import INDUSTRY_SYMBOLS, SECTOR_SYMBOLS, SIGNAL_ROLES
@@ -105,7 +106,7 @@ class DashboardRuntime:
             frame = weekly.get(asset.symbol, pd.DataFrame())
             if frame.empty:
                 continue
-            signals = compute_price_signals(frame, benchmark=benchmark)
+            signals = compute_price_signals(frame, benchmark=benchmark, mama_regime=mama_regime(frame))
             self.store.save_signals(asset.symbol, signals.__dict__)
             if asset.symbol in live_signal_symbols:
                 total_trend += 1
