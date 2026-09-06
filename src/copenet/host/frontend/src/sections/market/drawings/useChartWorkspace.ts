@@ -1,3 +1,4 @@
+import { createRangeOverlay } from './rangeOverlay';
 import { ForecastPrimitive } from '../forecasts/primitive';
 import { useEffect, useRef, type RefObject } from 'react';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
@@ -44,6 +45,7 @@ export function useChartWorkspace(
   current.current = { bridge, comparisonMode };
   const primitiveRef = useRef<DrawingPrimitive | null>(null);
   const forecastRef = useRef<ForecastPrimitive | null>(null);
+  const refreshRange = useRef<(() => void) | null>(null);
   const resetGesture = useRef<(() => void) | null>(null);
 
   useEffect(() => {
@@ -69,8 +71,21 @@ export function useChartWorkspace(
     let ownsPointer = false;
     let pointerId: number | null = null;
     let viewportKey = '';
+    let rangeDown: ChartAnchor | null = null;
+    let rangeLast: ChartAnchor | null = null;
+    const rangeOverlay = createRangeOverlay(container, chart);
+    const updateRange = () => {
+      const active = current.current.bridge;
+      const start = first ?? rangeDown;
+      const selection = rangeLast && start ? { from: start.t, to: rangeLast.t } : active?.selection;
+      rangeOverlay.update(active?.enabled && !current.current.comparisonMode ? selection : null);
+    };
+    refreshRange.current = updateRange;
+    const resizeObserver = new ResizeObserver(updateRange);
+    resizeObserver.observe(container);
 
     const publishViewport = () => {
+      updateRange();
       const active = current.current.bridge;
       if (!active) return;
       const viewport = readChartViewport(chart, candle);
@@ -79,6 +94,9 @@ export function useChartWorkspace(
     };
     const clear = () => {
       first = null;
+      rangeDown = null;
+      rangeLast = null;
+      updateRange();
       drag = null;
       ownsPointer = false;
       primitive.setPreview(null);
@@ -92,9 +110,10 @@ export function useChartWorkspace(
     };
     const anchorAt = (point: { x: number; y: number }): ChartAnchor | null => {
       const pane = chart.paneSize(0);
-      if (point.x < 0 || point.x > pane.width || point.y < 0 || point.y > pane.height) return null;
+      const rangeMode = current.current.bridge?.mode === 'range';
+      if (point.x < 0 || point.x > pane.width || point.y < 0 || point.y > (rangeMode ? container.clientHeight - chart.timeScale().height() : pane.height)) return null;
       const time = chart.timeScale().coordinateToTime(point.x);
-      const value = candle.coordinateToPrice(point.y);
+      const value = rangeMode ? 1 : candle.coordinateToPrice(point.y);
       if (typeof time !== 'number' || value == null || !Number.isFinite(value) || value <= 0) return null;
       // Whitespace can have a chart timestamp but no candle; those are not valid anchors.
       const logical = chart.timeScale().coordinateToLogical(point.x);
@@ -108,10 +127,11 @@ export function useChartWorkspace(
     };
     const onDown = (event: PointerEvent) => {
       const active = current.current.bridge;
-      if (!active?.enabled || active.interactionEnabled === false || current.current.comparisonMode || event.button !== 0) return;
+      if (!active?.enabled || active.interactionEnabled === false || current.current.comparisonMode || event.button !== 0 || ownsPointer) return;
       const point = pointFromEvent(event);
       const anchor = anchorAt(point);
       if (!anchor) return;
+      if (active.mode === 'range') { rangeDown = anchor; rangeLast = anchor; updateRange(); }
       if (active.mode === 'select') {
         const hit = [...primitive.geometries()].reverse().find((geometry) => geometry.object.id !== '__preview' && hitDrawing(geometry, point));
         if (!hit) { active.onSelectObject(null); return; }
@@ -130,7 +150,11 @@ export function useChartWorkspace(
       if (!active?.enabled || active.interactionEnabled === false || current.current.comparisonMode) return;
       const anchor = anchorAt(pointFromEvent(event));
       if (!anchor) return;
-      if (drag) {
+      if (active.mode === 'range' && (first || rangeDown)) {
+        if (ownsPointer && event.pointerId !== pointerId) return;
+        rangeLast = anchor; updateRange();
+        if (ownsPointer) { event.preventDefault(); event.stopImmediatePropagation(); }
+      } else if (drag) {
         drag.anchor = anchor;
         primitive.setPreview({ ...drag.object, id: '__preview', anchors: replaceAnchor(drag.object.anchors, drag.index, anchor) });
         event.preventDefault();
@@ -138,9 +162,9 @@ export function useChartWorkspace(
       } else if (first) preview(active, [first, anchor]);
     };
     const onUp = (event: PointerEvent) => {
-      if (!ownsPointer) return;
+      if (!ownsPointer || event.pointerId !== pointerId) return;
       const active = current.current.bridge;
-      const anchor = anchorAt(pointFromEvent(event));
+      const anchor = anchorAt(pointFromEvent(event)) ?? (active?.mode === 'range' ? rangeLast : null);
       ownsPointer = false;
       if (container.hasPointerCapture(event.pointerId)) container.releasePointerCapture(event.pointerId);
       pointerId = null;
@@ -152,12 +176,10 @@ export function useChartWorkspace(
         active.onUpdate({ id: drag.object.id, anchors: replaceAnchor(drag.object.anchors, drag.index, drag.anchor) });
         clear();
       } else if (active.mode === 'range') {
-        if (!first) {
-          first = anchor;
-          primitive.setPreview({ id: '__preview', kind: 'label', anchors: [anchor], timeframe: active.timeframe,
-            color: '#fb9423', label: 'Choose end candle · Esc cancels', rationale: '', evidence: [], owner: { kind: 'operator' }, visible: true });
-        }
-        else { active.onSelectRange({ from: Math.min(first.t, anchor.t), to: Math.max(first.t, anchor.t) }); clear(); }
+        const start = first ?? rangeDown;
+        if (start && (first || start.t !== anchor.t)) {
+          active.onSelectRange({ from: Math.min(start.t, anchor.t), to: Math.max(start.t, anchor.t) }); clear();
+        } else { first = anchor; rangeDown = null; rangeLast = anchor; updateRange(); }
       } else if (active.mode === 'level' || active.mode === 'label') {
         active.onCreate({ kind: active.mode, anchors: [anchor], timeframe: active.timeframe }); clear();
       } else if (active.mode === 'zone' || active.mode === 'trendline') {
@@ -178,6 +200,9 @@ export function useChartWorkspace(
     return () => {
       clear();
       resetGesture.current = null;
+      refreshRange.current = null;
+      resizeObserver.disconnect();
+      rangeOverlay.destroy();
       cancelAnimationFrame(frame);
       chart.timeScale().unsubscribeVisibleLogicalRangeChange(publishViewport);
       container.removeEventListener('pointerdown', onDown, true);
@@ -198,6 +223,7 @@ export function useChartWorkspace(
 
   useEffect(() => {
     primitiveRef.current?.setState(bridge, comparisonMode);
+    refreshRange.current?.();
     forecastRef.current?.setState(bridge?.forecasts, comparisonMode);
   }, [bridge, comparisonMode]);
 
@@ -206,6 +232,22 @@ export function useChartWorkspace(
     const candle = candleRef.current;
     if (chart && candle && current.current.bridge) current.current.bridge.onViewport(readChartViewport(chart, candle));
   }, [chartRef, candleRef, bridge?.documentId, bridge?.timeframe]);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    const chart = chartRef.current;
+    if (!container || !chart || bridge?.mode !== 'range' || !bridge.enabled || comparisonMode) return;
+    const previous = container.style.touchAction;
+    const handleScroll = structuredClone(chart.options().handleScroll);
+    const handleScale = structuredClone(chart.options().handleScale);
+    // Lightweight Charts also handles touch events independently of pointer capture.
+    chart.applyOptions({ handleScroll: false, handleScale: false });
+    container.style.touchAction = 'none';
+    return () => {
+      container.style.touchAction = previous;
+      if (chartRef.current === chart) chart.applyOptions({ handleScroll, handleScale });
+    };
+  }, [chartRef, containerRef, generation, bridge?.mode, bridge?.enabled, comparisonMode]);
 
   useEffect(() => { resetGesture.current?.(); }, [bridge?.documentId, bridge?.revision, bridge?.timeframe, bridge?.mode, bridge?.enabled, bridge?.interactionEnabled, comparisonMode]);
 }

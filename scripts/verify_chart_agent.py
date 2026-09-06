@@ -18,6 +18,7 @@ from tempfile import TemporaryDirectory
 from unittest.mock import patch
 from urllib.parse import urlparse
 
+from chart_range_verification import verify_touch_range
 from playwright.async_api import async_playwright, expect
 
 from copenet.core.market.chart_workspace import get_chart_store
@@ -244,9 +245,27 @@ async def verify(browser, directory):
         await page.get_by_role("button", name="Open chart agent", exact=True).click()
         await page.get_by_role("button", name="Select chart region", exact=True).click()
         stage = await page.locator(".tw-stage").bounding_box()
-        for fraction in (0.38, 0.65):
-            await page.mouse.click(stage["x"] + stage["width"] * fraction, stage["y"] + stage["height"] * 0.55)
+        # Drag backwards: the committed range must still be chronological.
+        await page.mouse.move(stage["x"] + stage["width"] * 0.65, stage["y"] + stage["height"] * 0.55)
+        await page.mouse.down()
+        await page.mouse.move(stage["x"] + stage["width"] * 0.38, stage["y"] + stage["height"] * 0.55, steps=12)
+        await expect(page.locator('[data-chart-selection]')).to_be_visible()
+        await page.mouse.up()
+        await expect(page.locator('.ca-context')).to_contain_text('Selected range')
         await expect(page.get_by_role("button", name="Clear chart selection", exact=True)).to_be_visible()
+        # Escape cancels a replacement gesture without losing the committed selection.
+        selected_context = await page.locator('.ca-context').text_content()
+        await page.get_by_role('button', name='Select chart region', exact=True).click()
+        await page.mouse.move(stage['x'] + stage['width'] * .45, stage['y'] + 60)
+        await page.mouse.down()
+        await page.mouse.move(stage['x'] + stage['width'] * .55, stage['y'] + 60, steps=5)
+        await page.keyboard.press('Escape')
+        await page.mouse.up()
+        assert await page.locator('.ca-context').text_content() == selected_context
+        # The two-tap alternative remains available.
+        for fraction in (.38, .65):
+            await page.mouse.click(stage['x'] + stage['width'] * fraction, stage['y'] + stage['height'] * .55)
+        await expect(page.get_by_role('button', name='Select chart drawing', exact=True)).to_have_attribute('aria-pressed', 'true')
         await page.get_by_role("button", name="Select chart drawing", exact=True).click()
         await page.get_by_role("button", name="Chart agent settings", exact=True).click()
         await page.get_by_label("Chart agent provider", exact=True).select_option("chart-test")
@@ -345,6 +364,7 @@ async def verify(browser, directory):
         await asyncio.sleep(5.5)
         assert await page.locator('.ca-context').text_content() == zoomed, 'Document polling reset mobile zoom'
         await page.screenshot(path=str(ROOT / 'docs/imgs/market-chart-mobile-zoom.png'), animations='disabled')
+        await verify_touch_range(page, cdp, stage, y, zoomed)
         await cdp.detach()
         assert not errors, errors
         print("PASS: all four drawing tools/edit/delete, persistence, interval hiding, range selection, exact capture, normal harness, approval, agent level, paint receipt, batch undo, 1600/1100/390 geometry, mobile pinch zoom persists across polling; all data synthetic")

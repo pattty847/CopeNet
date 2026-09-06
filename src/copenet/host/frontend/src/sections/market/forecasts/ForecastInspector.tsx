@@ -1,3 +1,4 @@
+import { ForecastSetupVisual } from './ForecastSetupVisual';
 import { ForecastAttribution } from './ForecastAttribution';
 import { ForecastAmendment } from './ForecastAmendment';
 import { ForecastEventEvidence } from './ForecastEventEvidence';
@@ -51,10 +52,7 @@ export function ForecastInspector({ forecastId, onClose, onOpen }: { forecastId:
         {(record.status === 'generating' || record.status === 'requested') && <button className="tw-btn" disabled={busy} onClick={() => void change(() => wsClient.marketForecast.cancel(forecastId))}>Cancel unfinished request</button>}
         {record.failureReason && <p role="alert" className="mm-monitor-error">{record.failureReason}</p>}
         {members.flatMap((member) => member.errors).map((message, index) => <p className="mm-monitor-error" key={index}>{message.reason}</p>)}
-        {setup && <section><h3>Original setup · {setup.direction}</h3><dl className="cf-levels">
-          <dt>{setup.entry.kind === 'limit' ? 'Limit' : 'Stop'} entry</dt><dd>{setup.entry.price}</dd><dt>Stop loss</dt><dd>{setup.stop}</dd>
-          {setup.targets.map((target, index) => <div className="cf-level-pair" key={index}><dt>Target {index + 1} · {Math.round(target.fraction * 100)}%</dt><dd>{target.price}</dd></div>)}
-        </dl><p>Entry expiry: {record.entryExpirySessions} exchange sessions · deadline {forecastDate(record.deadlineAt)}</p>
+        {setup && <section><h3>Original setup · {setup.direction}</h3><ForecastSetupVisual setup={setup} /><p>Entry expiry: {record.entryExpirySessions} exchange sessions · deadline {forecastDate(record.deadlineAt)}</p>
           {setup.zones.map((zone, index) => <p key={index}>{zone.label} · {zone.lower}–{zone.upper}</p>)}
           <small>Original publication price basis. Chart levels adjust only for confirmed splits. Gross simulated returns exclude costs.</small>
         </section>}

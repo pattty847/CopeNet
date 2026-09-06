@@ -142,6 +142,9 @@ explicit toolbar control.
 actual candles, plotted indicators, quote and research panels. Every send freezes those
 render inputs into an immutable observation. Quick, Balanced and Deep adjust the initial
 context and exact-read budgets while retaining the complete captured source data.
+**Range** supports dragging across candles or tapping start/end, with a time band
+across price and indicator panes. The companion names its next-message focus as
+**Visible range** or **Selected range**; exact surrounding history stays queryable.
 Numeric candle and indicator tables reach the model as CSV with source and coverage
 metadata; stored evidence and inspector artifacts keep their structured rows.
 
@@ -160,7 +163,9 @@ adapters. See the [demo guide and verification record](docs/initiatives/chart-ag
 **Chart forecasts** — choose **Forecast this chart** in the companion settings to
 manually register a setup for one ticker. The model submits an entry, fixed stop,
 fractional profit targets and explanatory zones from frozen chart evidence. Published
-levels remain immutable and separate from editable drawings. Completed daily candles
+levels remain immutable and separate from editable drawings. The original-setup inspector
+maps entry, stop and targets on a proportional price ladder with exact prices, percentage
+moves and planned-risk R multiples, including short setups. Completed daily candles
 track simulated fills, ambiguous paths and four/eight-week directional outcomes without
 additional model calls. An optional independent directional run enables paired comparison
 in **Ledger → Comparison**; historical calls retain their original scoring rules.

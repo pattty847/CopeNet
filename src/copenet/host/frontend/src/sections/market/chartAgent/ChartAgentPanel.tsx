@@ -52,7 +52,7 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
       <header className="ca-header"><div><MessageSquare size={15} /><strong>Chart agent</strong><span className="ca-beta">Preview</span></div>
         <button type="button" onClick={() => void conversation.newConversation()} disabled={conversation.sending || Boolean(conversation.activeRun)} title="Start a separate chart conversation">New chat</button>
         <button aria-label="Close chart agent" onClick={() => workspace.setOpen(false)}><X size={16} /></button></header>
-      <div className="ca-context"><strong>{symbol}</strong><span>{timeframe} candles</span><span>{date(workspace.viewport.from)} — {date(workspace.viewport.to)}</span></div>
+      <div className="ca-context"><strong>{symbol}</strong><span>{timeframe} candles</span><span title="Focus for the next message. Exact surrounding history remains available on request.">{workspace.selection ? 'Selected range' : 'Visible range'} · {date((workspace.selection ?? workspace.viewport).from)} — {date((workspace.selection ?? workspace.viewport).to)}</span></div>
       <div className="ca-tabs" role="tablist">
         <button role="tab" aria-selected={tab === 'chat'} onClick={() => setTab('chat')}>Conversation</button>
         <button role="tab" aria-selected={tab === 'drawings'} onClick={() => setTab('drawings')}>Drawings <span>{workspace.document?.objects.length ?? 0}</span></button>

@@ -15,9 +15,6 @@
 .cf-inspector h3 { font-size: 12px; margin: 0 0 10px; font-weight: 600; }
 .cf-inspector section { border-top: 1px solid var(--mkt-seam); padding-top: 18px; }
 .cf-inspector small { color: var(--mkt-muted); line-height: 1.7; }
-.cf-levels { display: grid; grid-template-columns: 1fr auto; gap: 12px; font-size: 12px; }
-.cf-levels dd { margin: 0; font-family: var(--mkt-mono); }
-.cf-level-pair { display: contents; }
 .cf-timeline { list-style: none; padding: 0; }
 .cf-timeline li { display: flex; flex-wrap: wrap; gap: 8px 14px; border-bottom: 1px solid var(--mkt-seam); padding: 12px 0; font-size: 11px; }
 .cf-timeline time { color: var(--mkt-muted); }

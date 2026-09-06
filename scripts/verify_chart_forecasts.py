@@ -212,6 +212,7 @@ async def verify(browser, directory):
                     await asyncio.sleep(.1)
             inspector = page.get_by_role('dialog', name='TEST · Forecast', exact=True)
             await expect(inspector.get_by_text('Original setup · long', exact=True)).to_be_visible()
+            await expect(inspector.get_by_role('figure', name='Original setup price map')).to_be_visible()
             await expect(inspector.get_by_text('Stop loss', exact=True)).to_be_visible()
             await inspector.get_by_role('button', name='Inspect candles:D', exact=True).click()
             evidence = inspector.locator('.ca-source pre')
@@ -247,6 +248,11 @@ async def verify(browser, directory):
                 assert composer['height'] <= 128, composer
         await page.locator('.cf-row-main').first.click()
         await expect(page.get_by_role('dialog', name='TEST · Forecast', exact=True)).to_be_visible()
+        for width in (320, 390):
+            await page.set_viewport_size({'width': width, 'height': 900})
+            figure = page.get_by_role('figure', name='Original setup price map')
+            await expect(figure).to_be_visible()
+            assert await figure.evaluate('element => element.scrollWidth <= element.clientWidth'), f'Setup map overflows at {width}px'
         await page.screenshot(path=str(ROOT/'docs/imgs/market-chart-forecasts-mobile.png'), animations='disabled')
         await page.get_by_role('dialog', name='TEST · Forecast', exact=True).get_by_role('button', name='Close editor', exact=True).click()
         await page.set_viewport_size({'width': 1600, 'height': 1400})

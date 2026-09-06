@@ -70,3 +70,11 @@ not reconstruct intraday ordering or simulate liquidity. Scores are gross price 
 fees, spreads, slippage models, borrow and dividend cash flows are excluded. Tracking needs
 the host/scheduler and fresh cached data; pause, unavailable scope and stale/gapped data
 are visible. Crypto/order books, actual broker orders and notifications remain separate work.
+
+Follow-up UI verification (2026-09-05): the original setup inspector now includes a
+proportional price ladder, exact entry/stop/target prices and direction-aware percentage
+and R labels. Unit coverage includes shorts and nearly adjacent target labels. All 530
+frontend tests, TypeScript and production build pass. Offline browser checks cover the
+setup map at 320/390px and the chart's reverse drag, two-tap selection, cancellation,
+touch selection without panning, and restored pinch zoom. The former text-only level
+layout and its CSS were replaced; original forecast records and scoring are unchanged.

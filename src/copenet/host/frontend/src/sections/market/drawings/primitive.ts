@@ -73,15 +73,6 @@ export class DrawingPrimitive implements ISeriesPrimitive {
             context.beginPath();
             context.rect(0, 0, mediaSize.width, mediaSize.height);
             context.clip();
-            const scale = this.attachedState?.chart.timeScale();
-            if (!hidden && bridge.selection && scale) {
-              const from = scale.timeToCoordinate(bridge.selection.from as UTCTimestamp);
-              const to = scale.timeToCoordinate(bridge.selection.to as UTCTimestamp);
-              if (from != null && to != null) {
-                context.fillStyle = 'rgba(251,148,35,.09)';
-                context.fillRect(Math.min(from, to) - 3, 0, Math.abs(to - from) + 6, mediaSize.height);
-              }
-            }
             for (const geometry of this.geometry) paintDrawing(context, geometry, geometry.object.id === bridge.selectedObjectId);
           } finally { context.restore(); }
         });

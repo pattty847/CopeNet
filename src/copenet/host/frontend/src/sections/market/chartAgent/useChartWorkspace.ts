@@ -136,7 +136,7 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
     forecasts: { splitFingerprint: view.detail?.priceProvenance?.splitFingerprint, records: forecasts.records.filter((record) => record.documentId === document.documentId), hidden: hiddenForecasts, viewId,
       onSelect: setSelectedForecastId,
       onRendered: async (receipt) => { await wsClient.marketForecast.rendered(receipt); } },
-    onViewport, onSelectRange: setSelection, onSelectObject: (id) => { setSelectedObjectId(id); if (id) setOpen(true); },
+    onViewport, onSelectRange: (range) => { setSelection(range); setMode('select'); }, onSelectObject: (id) => { setSelectedObjectId(id); if (id) setOpen(true); },
     onCreate: (proposal) => {
       const id = safeUUID();
       void apply([{ kind: 'create', object: { ...proposal, id, label: proposal.kind === 'level' ? 'Price level' : proposal.kind === 'zone' ? 'Price zone' : proposal.kind === 'trendline' ? 'Trendline' : 'Note',
