@@ -43,20 +43,93 @@ export function evaluateOperand(bars: IndicatorBar[], operand: AlertOperand, bar
   return indicatorById(operand.indicatorId)!.compute(bars, operand.config, { barsPerYear }).values[operand.output];
 }
 
-export function evaluateAlertRequest(raw: Record<string, unknown>) {
-  if (raw.action === 'catalogue') return { indicators: alertCatalogue() };
-  const left = validateOperand(raw.left), right = validateOperand(raw.right);
-  if (left.kind === 'constant' && right.kind === 'constant') throw new Error('At least one operand must observe the market');
-  if (raw.action === 'validate') return { left, right };
-  if (!Array.isArray(raw.bars) || raw.bars.length > 30000) throw new Error('Expected at most 30000 candles');
-  const bars = raw.bars as IndicatorBar[];
+/** One indicator to evaluate against one symbol's bars. */
+export type IndicatorSpec = { indicatorId: string; config: IndicatorConfig };
+
+/** One symbol's final-bar reading. `error` is per symbol, never for the whole batch. */
+export type LatestResult = {
+  key: string;
+  t: number | null;
+  values: Record<string, Record<string, number | null>>;
+  error: string | null;
+};
+
+function validateIndicatorSpec(raw: unknown): IndicatorSpec {
+  if (!raw || typeof raw !== 'object') throw new Error('An indicator is required');
+  const spec = raw as Record<string, unknown>;
+  if (typeof spec.indicatorId !== 'string') throw new Error('Unsupported indicator');
+  const definition = indicatorById(spec.indicatorId);
+  if (!definition) throw new Error('Unsupported indicator');
+  if (spec.config && (typeof spec.config !== 'object' || Array.isArray(spec.config))) throw new Error('Invalid indicator config');
+  const config = normalizeConfig(definition, spec.config as IndicatorConfig | undefined);
+  for (const [key, value] of Object.entries((spec.config ?? {}) as IndicatorConfig)) {
+    if (!(key in config) || config[key] !== value) throw new Error(`Invalid indicator setting: ${key}`);
+  }
+  return { indicatorId: definition.id, config };
+}
+
+function validateBars(raw: unknown): IndicatorBar[] {
+  if (!Array.isArray(raw) || raw.length > 30000) throw new Error('Expected at most 30000 candles');
+  const bars = raw as IndicatorBar[];
   for (let i = 0; i < bars.length; i++) {
     if (!['t', 'o', 'h', 'l', 'c', 'v'].every((key) => typeof bars[i]?.[key] === 'number' && Number.isFinite(bars[i][key]))) throw new Error('Invalid candle');
     if (i && bars[i].t <= bars[i - 1].t) throw new Error('Candles must be strictly ordered');
   }
-  const periods = { daily: 252, weekly: 52, monthly: 12 };
-  if (!(String(raw.timeframe) in periods)) throw new Error('Unsupported timeframe');
-  const context = periods[String(raw.timeframe) as keyof typeof periods];
+  return bars;
+}
+
+const BARS_PER_YEAR: Record<string, number> = { daily: 252, weekly: 52, monthly: 12 };
+
+/** Evaluate indicators for many symbols in ONE process, returning only each one's final bar.
+ *
+ *  A per-symbol subprocess costs ~80ms of Node startup, which is tolerable for one ticker and
+ *  not for a universe sweep. Returning only the last point is what keeps the response bounded:
+ *  the callers this exists for — the MAMA/FAMA regime, and breadth counted across constituents
+ *  — ask "where does this symbol stand now", never for the whole series. Full history still
+ *  goes IN, because these are recursive filters whose value depends on their seed, and a
+ *  truncated window would quietly disagree with the chart.
+ *
+ *  One bad symbol reports its own error rather than failing the batch. A sweep that loses a
+ *  whole chunk to one malformed frame is how a breadth number silently loses its denominator.
+ */
+export function evaluateLatestRequest(raw: Record<string, unknown>) {
+  const timeframe = String(raw.timeframe);
+  if (!(timeframe in BARS_PER_YEAR)) throw new Error('Unsupported timeframe');
+  const barsPerYear = BARS_PER_YEAR[timeframe];
+  if (!Array.isArray(raw.requests) || !raw.requests.length || raw.requests.length > 1000) {
+    throw new Error('Expected 1-1000 symbol requests');
+  }
+  const results: LatestResult[] = (raw.requests as Record<string, unknown>[]).map((request): LatestResult => {
+    const key = String(request?.key ?? '');
+    try {
+      const specs = (Array.isArray(request.indicators) ? request.indicators : []).map(validateIndicatorSpec);
+      if (!specs.length) throw new Error('At least one indicator is required');
+      const bars = validateBars(request.bars);
+      if (!bars.length) return { key, t: null, values: {}, error: null };
+      const values: Record<string, Record<string, number | null>> = {};
+      for (const spec of specs) {
+        const computed = indicatorById(spec.indicatorId)!.compute(bars, spec.config, { barsPerYear }).values;
+        values[spec.indicatorId] = Object.fromEntries(
+          Object.entries(computed).map(([output, series]) => [output, series[bars.length - 1] ?? null]),
+        );
+      }
+      return { key, t: bars[bars.length - 1].t, values, error: null };
+    } catch (error) {
+      return { key, t: null, values: {}, error: error instanceof Error ? error.message : 'Evaluation failed' };
+    }
+  });
+  return { results };
+}
+
+export function evaluateAlertRequest(raw: Record<string, unknown>) {
+  if (raw.action === 'catalogue') return { indicators: alertCatalogue() };
+  if (raw.action === 'latest') return evaluateLatestRequest(raw);
+  const left = validateOperand(raw.left), right = validateOperand(raw.right);
+  if (left.kind === 'constant' && right.kind === 'constant') throw new Error('At least one operand must observe the market');
+  if (raw.action === 'validate') return { left, right };
+  const bars = validateBars(raw.bars);
+  if (!(String(raw.timeframe) in BARS_PER_YEAR)) throw new Error('Unsupported timeframe');
+  const context = BARS_PER_YEAR[String(raw.timeframe)];
   const lhs = evaluateOperand(bars, left, context), rhs = evaluateOperand(bars, right, context);
   return { points: bars.map((bar, index) => ({ t: bar.t, left: lhs[index] ?? null, right: rhs[index] ?? null })) };
 }

@@ -174,16 +174,23 @@ class ScanService:
 
     def _screens(self, run):
         from ..runtime import _bars_to_frame
-        from ..mama_regime import mama_regime
+        from ..mama_regime import mama_regimes
         from ..signals import compute_price_signals
         benchmark = _bars_to_frame(self.runtime._cache_bars("VOO", "weekly", 261))
         screens = []
         failed = {row["symbol"] for row in run["errors"] if row["source"] == "prices"}
+        frames = {}
         for symbol in run["resolvedSymbols"]:
             frame = _bars_to_frame(self.runtime._cache_bars(symbol, "weekly", 261))
             if symbol in failed or frame.empty:
                 continue
-            signals = compute_price_signals(frame, benchmark=benchmark, mama_regime=mama_regime(frame))
+            frames[symbol] = frame
+        # Batched before the loop: a scan can resolve to a thousand symbols.
+        regimes = mama_regimes(frames)
+        for symbol, frame in frames.items():
+            signals = compute_price_signals(
+                frame, benchmark=benchmark, mama_regime=regimes.get(symbol, "n/a")
+            )
             self.runtime.store.save_signals(symbol, signals.__dict__)
             screens.append({"symbol": symbol, "signals": signals.__dict__})
         run["screens"] = screens

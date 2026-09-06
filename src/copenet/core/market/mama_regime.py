@@ -17,6 +17,8 @@ approximation, because an approximation wearing this name is the original bug.
 
 from __future__ import annotations
 
+import json
+
 import pandas as pd
 
 from .alert_evaluator import evaluator_request
@@ -25,13 +27,22 @@ ABOVE = "MAMA above FAMA"
 BELOW = "MAMA below FAMA"
 WARMING_UP = "warming up"
 UNAVAILABLE = "unavailable (indicator evaluator not built)"
+UNREADABLE = "unreadable history"
+
+# The evaluator refuses payloads over 8 MB. Weekly history is unbounded by CHART_BAR_LIMITS —
+# a long-listed symbol carries ~2,400 bars, ~170 KB of JSON — so a universe sweep has to be
+# chunked, not merely batched. Half the ceiling leaves room for the Node heap the bundle runs
+# under. Sending a shorter window instead is not an option: these are recursive filters whose
+# value depends on their seed, so a truncated window would disagree with the chart.
+_CHUNK_BUDGET_BYTES = 4_000_000
+_MAX_SYMBOLS_PER_CHUNK = 1000
 
 # The chart's own default settling region for MAMA. Stated here only so callers can size
 # history; the authoritative value is the registry's `warmup` input and the evaluator
 # returns nulls across it regardless of what this constant says.
 SETTLING_BARS = 32
 
-_OPERAND = {"kind": "indicator", "indicatorId": "mama", "config": {}}
+_MAMA_SPEC = {"indicatorId": "mama", "config": {}}
 
 
 def _bars_payload(frame: pd.DataFrame) -> list[dict[str, float]]:
@@ -74,29 +85,67 @@ def _bars_payload(frame: pd.DataFrame) -> list[dict[str, float]]:
     return rows
 
 
-def mama_regime(frame: pd.DataFrame, *, timeframe: str = "weekly") -> str:
-    """Return the MAMA/FAMA state for the final bar of ``frame``.
-
-    Never raises: an unbuilt evaluator, a missing Node, or a frame the evaluator refuses
-    all resolve to a string the caller can display and the model can read as absent.
-    """
-    bars = _bars_payload(frame)
-    if len(bars) < 2:
-        return WARMING_UP
-    try:
-        response = evaluator_request(
-            {
-                "action": "evaluate",
-                "timeframe": timeframe,
-                "bars": bars,
-                "left": {**_OPERAND, "output": "mama"},
-                "right": {**_OPERAND, "output": "fama"},
-            }
-        )
-    except ValueError:
-        return UNAVAILABLE
-    latest = (response.get("points") or [{}])[-1]
-    mama, fama = latest.get("left"), latest.get("right")
+def _state(values: dict) -> str:
+    reading = (values or {}).get("mama") or {}
+    mama, fama = reading.get("mama"), reading.get("fama")
     if mama is None or fama is None:
         return WARMING_UP
     return ABOVE if mama >= fama else BELOW
+
+
+def _chunks(payloads: list[tuple[str, list[dict[str, float]]]]) -> list[list[dict]]:
+    """Group symbol payloads into evaluator requests that fit the input ceiling."""
+    chunks: list[list[dict]] = []
+    current: list[dict] = []
+    size = 0
+    for key, bars in payloads:
+        request = {"key": key, "bars": bars, "indicators": [_MAMA_SPEC]}
+        cost = len(json.dumps(request, allow_nan=False))
+        if current and (size + cost > _CHUNK_BUDGET_BYTES or len(current) >= _MAX_SYMBOLS_PER_CHUNK):
+            chunks.append(current)
+            current, size = [], 0
+        current.append(request)
+        size += cost
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def mama_regimes(frames: dict[str, pd.DataFrame], *, timeframe: str = "weekly") -> dict[str, str]:
+    """MAMA/FAMA state for many symbols, in as few Node processes as the ceiling allows.
+
+    Spawning the evaluator costs roughly 80ms before it computes anything, which is fine for
+    one ticker and is the whole cost of a universe sweep. Batching turns a per-symbol spawn
+    into a handful of them.
+
+    Never raises. A chunk the evaluator cannot run reports UNAVAILABLE for its symbols; a
+    single symbol the evaluator rejects reports UNREADABLE for itself alone, so one bad frame
+    cannot quietly remove names from a count computed over this result.
+    """
+    payloads = [(key, _bars_payload(frame)) for key, frame in frames.items()]
+    states = {key: WARMING_UP for key, bars in payloads if len(bars) < 2}
+    runnable = [(key, bars) for key, bars in payloads if len(bars) >= 2]
+
+    for chunk in _chunks(runnable):
+        try:
+            response = evaluator_request({"action": "latest", "timeframe": timeframe, "requests": chunk})
+        except ValueError:
+            states.update({request["key"]: UNAVAILABLE for request in chunk})
+            continue
+        returned = {str(row.get("key")): row for row in response.get("results") or []}
+        for request in chunk:
+            row = returned.get(request["key"])
+            if row is None or row.get("error"):
+                states[request["key"]] = UNREADABLE
+            else:
+                states[request["key"]] = _state(row.get("values") or {})
+    return states
+
+
+def mama_regime(frame: pd.DataFrame, *, timeframe: str = "weekly") -> str:
+    """MAMA/FAMA state for the final bar of ``frame``.
+
+    A batch of one, deliberately: one code path means a symbol cannot read differently
+    on the ticker page than it does in the sweep.
+    """
+    return mama_regimes({"symbol": frame}, timeframe=timeframe)["symbol"]

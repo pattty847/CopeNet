@@ -14,7 +14,7 @@ from .base_rates import load_base_rate
 from .edgar import fetch_evidence
 from .features import compute_features
 from .models import AccumulationRow, DashboardPayload, EvidenceItem, MarketPanel, SoftBottomItem, UniverseAsset
-from .mama_regime import mama_regime
+from .mama_regime import mama_regimes
 from .signals import compute_price_signals, compute_rrg_tail
 from .synthesis import synthesize_briefing
 from .universe import INDUSTRY_SYMBOLS, SECTOR_SYMBOLS, SIGNAL_ROLES
@@ -102,11 +102,19 @@ class DashboardRuntime:
         soft_bottoms: list[SoftBottomItem] = []
         above_trend = 0
         total_trend = 0
+        # One batched evaluator run for the whole universe. Per-symbol calls spend ~80ms of
+        # Node startup each before computing anything, which is the entire cost at this size.
+        regimes = mama_regimes(
+            {asset.symbol: weekly[asset.symbol] for asset in universe
+             if not weekly.get(asset.symbol, pd.DataFrame()).empty}
+        )
         for asset in universe:
             frame = weekly.get(asset.symbol, pd.DataFrame())
             if frame.empty:
                 continue
-            signals = compute_price_signals(frame, benchmark=benchmark, mama_regime=mama_regime(frame))
+            signals = compute_price_signals(
+                frame, benchmark=benchmark, mama_regime=regimes.get(asset.symbol, "n/a")
+            )
             self.store.save_signals(asset.symbol, signals.__dict__)
             if asset.symbol in live_signal_symbols:
                 total_trend += 1
