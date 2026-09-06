@@ -4,22 +4,40 @@ A practical bring-up checklist for running CopeNet on a fresh machine.
 
 ## 1) Install prerequisites
 
-- Python 3.11+
+- Python 3.12+
+- Node.js 22+ with npm (frontend build and background indicator alerts)
+- Git
 - `uv` package manager
 - Optional local model runtimes:
   - Ollama
   - LM Studio (local server mode)
-- Optional Codex CLI (for `codex-cli` provider)
+- One model provider: CopeNet OpenAI Codex OAuth, an authenticated Claude/Codex CLI, or a running local runtime
 
 ## 2) Clone + install
 
 ```bash
-git clone <your-repo-url>
+git clone https://github.com/pattty847/CopeTech-Edgar.git
+git clone https://github.com/pattty847/CopeNet.git
 cd CopeNet
+npm --prefix src/copenet/host/frontend ci
+npm --prefix src/copenet/host/frontend run build
 uv sync
 ```
 
-## 3) Start local runtimes (optional but recommended)
+CopeTech-Edgar must be a sibling directory: `pyproject.toml` currently resolves it
+from `../CopeTech-Edgar` as an editable dependency. The frontend build creates both
+the browser UI and the Node indicator evaluator. Without the built UI, `/` returns 503.
+
+## 3) Configure a provider
+
+For OpenAI Codex through CopeNet's OAuth adapter:
+
+```bash
+uv run copenet auth login --provider openai-codex
+```
+
+For `claude-cli` or `codex-cli`, install and authenticate the corresponding CLI first.
+For local models, start the runtime and load a model:
 
 - Ollama endpoint default: `http://127.0.0.1:11434`
 - LM Studio endpoint default: `http://127.0.0.1:1234`
@@ -43,10 +61,19 @@ Open:
 
 ## 5) First-run flow in UI
 
-1. Click **New Chat**
-2. Choose provider + model
-3. Choose profile + Access
-4. Send your first prompt
+For the chart agent:
+
+1. Open **Market** and search for a ticker.
+2. Wait for the chart to load, then select **Agent** beside the chart.
+3. Choose a provider and model with chart-tool support.
+4. Ask about the chart; use **Inspect context** to review the captured evidence.
+
+Market does not run a broad scan just because the page opened. If data is missing,
+use the relevant acquisition control; named scans require reviewing their scope
+before running. Missing provider data is shown as unavailable, not replaced by a demo.
+
+For a general agent session, open **Agents**, create a new chat, choose provider,
+model, profile and Access, and send a prompt.
 
 After first send, provider/profile/persona/workspace remain locked. The operator may
 change model within the same provider and may change Access; each run records what it
@@ -92,7 +119,8 @@ COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 ```bash
 # Build the React UI first. Without frontend/dist, the host returns 503 at /.
 # Run this before packaging a wheel so the production UI is included.
-cd src/copenet/host/frontend && npm ci && npm run build && cd -
+npm --prefix src/copenet/host/frontend ci
+npm --prefix src/copenet/host/frontend run build
 
 # Full app (only `copenet` and `copenet-browser-demo` entry points exist)
 uv run copenet
@@ -104,3 +132,23 @@ COPNET_PORT=17124 uv run copenet
 # (defaults to the directory you launched from)
 COPNET_WORKDIR=/path/to/project uv run copenet
 ```
+
+## Configuration reference
+
+| Variable | Purpose / default |
+| --- | --- |
+| `COPNET_HOST` | Bind address; `127.0.0.1` by default, or `tailscale` for a private tailnet bind |
+| `COPNET_PORT` | Host port; `17123` |
+| `COPNET_TOKEN` | `dev-token` is loopback-only; use a private token for remote access |
+| `COPNET_DATA_DIR` | Data root override; sessions are stored in its `sessions/` subdirectory (default sessions: `~/.copenet/sessions`) |
+| `COPNET_WORKDIR` | Workspace for file/shell tools; launch directory by default |
+| `COPNET_TRACE` | Set to `1` to enable debug capture; lifecycle traces are always written |
+| `COPNET_LM_STUDIO_BASE_URL` | LM Studio endpoint; `http://127.0.0.1:1234` |
+| `COPNET_OLLAMA_BASE_URL` | Ollama endpoint; `http://127.0.0.1:11434` |
+
+For a puzzling run, open **Observability**, enable **Debug capture**, then reproduce
+it. Capture applies to subsequent runs. See [TRACING.md](TRACING.md) for retained
+content and [DEBUGGING.md](DEBUGGING.md) for the investigation workflow.
+
+Optional calendar and broker configuration lives in [INTEGRATIONS.md](INTEGRATIONS.md).
+Knowledge-source overrides and cache settings are in [KNOWLEDGE-BASES.md](KNOWLEDGE-BASES.md).
