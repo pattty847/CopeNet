@@ -182,3 +182,56 @@ depth coverage, feed-specific sequence/gap handling and reconnect behavior. Agen
 receive coherent snapshots and bounded event windows with retained evidence, not every
 WebSocket update as a new prompt. Proposed live commentary should use explicit activation,
 meaningful event triggers, coalescing, cooldowns and a user-visible spending budget.
+
+## Follow-up: selected periods and forecasting evidence (2026-09-05)
+
+Shipped: the Range tool accepts a drag or two taps, highlights the time column across
+price and indicator panes, and returns to normal chart interaction after selection.
+Escape cancels the current gesture while retaining a prior selection. The companion
+explicitly labels the next-message focus as Visible range or Selected range. Selection
+is a sampling/read focus, not a restriction on the captured resource inventory.
+Forecast inspectors show the immutable setup as a proportional price ladder with exact
+prices, direction-aware returns and planned-risk multiples; it draws no invented path.
+
+Current delivery remains inventory plus bounded samples, followed by model-directed
+exact reads. Quick/Balanced/Deep cap samples at 12/40/100 rows per resource and target
+roughly 2k/5k/10k initial chart tokens. These are character-based estimates for the chart
+projection, not total provider input, conversation history, schemas or output. The local
+observation retains the exact loaded rows. More detail does not establish greater accuracy.
+
+Recommended next slice: a deterministic **period evidence packet**, with raw CSV still
+available for audit and drill-down. Build from existing committed resources and causal
+indicator math, not a separate acquisition path. Evaluate this proposal before expanding
+model-facing tools:
+
+1. Price structure: period return/drawdown, trend and volatility, close location, candle
+   body/wicks, gaps in ATR units, relative volume and distance to named levels. Include
+   definitions, warm-up, missing coverage and source references. These derived summaries
+   complement the exact rows; they are not lossless substitutes for them.
+2. Dated catalysts: earnings, filings and news with separate event time and publication/
+   availability time. The current generic range reader filters numeric `t` rows; do not
+   claim arbitrary panel/news rows already satisfy this contract. Future event adapters
+   need explicit time semantics, point-in-time filtering and exact-source access.
+3. Market and sector context: reuse available benchmark/sector observations for relative
+   strength and regime comparisons; disclose absent context rather than silently fetching.
+4. Historical analogues: reuse the replay/base-rate subsystem with strict as-of cutoffs,
+   sample counts and outcome distributions. Similarity must be defined and testable, not
+   a model remembering an attractive example. Compare with simple same-horizon baselines.
+5. Crypto later: time-bounded depth, spread, imbalance and flow summaries with exact
+   snapshot/delta provenance. Do not stream every order-book update into a chat prompt.
+
+A compact orientation → derived facts → exact CSV reads → optional image hierarchy is
+our proposed design, not a proven forecasting advantage. Measure token consumption and
+forecast outcomes prospectively, with identical evidence/horizons, transaction-cost
+assumptions, model attribution and honest ambiguous-path handling. The existing paired
+Ledger is a useful experiment; it still needs non-LLM baselines before claiming an edge.
+
+Research informing the direction:
+
+- [Lopez-Lira & Tang, revised 2025](https://arxiv.org/abs/2304.07619) report predictive
+  information in LLM interpretations of news headlines, including subsequent drift;
+  their strongest initial-reaction result is explicitly non-tradable. This does not
+  establish that eight-week raw-candle chat forecasts are profitable.
+- [Chen et al., 2024](https://arxiv.org/abs/2409.11540) find over-extrapolation of recent
+  returns and forecast miscalibration in the models/settings they study. Fluent technical
+  explanations are not validation of a forecast; prospective scoring is the product test.
