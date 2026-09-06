@@ -43,8 +43,13 @@ export function evaluateOperand(bars: IndicatorBar[], operand: AlertOperand, bar
   return indicatorById(operand.indicatorId)!.compute(bars, operand.config, { barsPerYear }).values[operand.output];
 }
 
-/** One indicator to evaluate against one symbol's bars. */
-export type IndicatorSpec = { indicatorId: string; config: IndicatorConfig };
+/** One indicator to evaluate against one symbol's bars.
+ *
+ *  `label` names the reading in the result. It defaults to the indicator id and only has
+ *  to be given when one request asks for the same indicator twice — a 50- and a 200-day
+ *  average, say — where keying by id alone would silently return one of them under both
+ *  names. Labels are unique within a request for that reason. */
+export type IndicatorSpec = { indicatorId: string; config: IndicatorConfig; label: string };
 
 /** One symbol's final-bar reading. `error` is per symbol, never for the whole batch. */
 export type LatestResult = {
@@ -65,7 +70,8 @@ function validateIndicatorSpec(raw: unknown): IndicatorSpec {
   for (const [key, value] of Object.entries((spec.config ?? {}) as IndicatorConfig)) {
     if (!(key in config) || config[key] !== value) throw new Error(`Invalid indicator setting: ${key}`);
   }
-  return { indicatorId: definition.id, config };
+  if (spec.label !== undefined && (typeof spec.label !== 'string' || !spec.label)) throw new Error('Invalid indicator label');
+  return { indicatorId: definition.id, config, label: (spec.label as string) ?? definition.id };
 }
 
 function validateBars(raw: unknown): IndicatorBar[] {
@@ -104,12 +110,13 @@ export function evaluateLatestRequest(raw: Record<string, unknown>) {
     try {
       const specs = (Array.isArray(request.indicators) ? request.indicators : []).map(validateIndicatorSpec);
       if (!specs.length) throw new Error('At least one indicator is required');
+      if (new Set(specs.map((spec) => spec.label)).size !== specs.length) throw new Error('Indicator labels must be unique');
       const bars = validateBars(request.bars);
       if (!bars.length) return { key, t: null, values: {}, error: null };
       const values: Record<string, Record<string, number | null>> = {};
       for (const spec of specs) {
         const computed = indicatorById(spec.indicatorId)!.compute(bars, spec.config, { barsPerYear }).values;
-        values[spec.indicatorId] = Object.fromEntries(
+        values[spec.label] = Object.fromEntries(
           Object.entries(computed).map(([output, series]) => [output, series[bars.length - 1] ?? null]),
         );
       }

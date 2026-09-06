@@ -101,3 +101,26 @@ test('the batch rejects an oversized or empty symbol list rather than truncating
   assert.throws(() => evaluateLatestRequest({ timeframe: 'yearly',
     requests: [{ key: 'A', bars, indicators: [{ indicatorId: 'mama', config: {} }] }] }), /Unsupported timeframe/);
 });
+
+test('the same indicator twice in one request keeps its readings apart', () => {
+  const { results } = evaluateLatestRequest({
+    timeframe: 'daily',
+    requests: [{ key: 'A', bars, indicators: [
+      { indicatorId: 'sma', config: { period: 50 }, label: 'ma50' },
+      { indicatorId: 'sma', config: { period: 200 }, label: 'ma200' },
+    ] }],
+  });
+  const values = results[0].values;
+  const fifty = indicatorById('sma')!.compute(bars, { period: 50, source: 'close' }, { barsPerYear: 252 }).values.value;
+  const two = indicatorById('sma')!.compute(bars, { period: 200, source: 'close' }, { barsPerYear: 252 }).values.value;
+
+  assert.equal(values.ma50.value, fifty[bars.length - 1]);
+  assert.equal(values.ma200.value, two[bars.length - 1]);
+  assert.notEqual(values.ma50.value, values.ma200.value);
+
+  // Unlabelled duplicates would both key on 'sma'. That must be refused, not resolved
+  // by last-write-wins, which would return the 200-day average under both names.
+  const collided = evaluateLatestRequest({ timeframe: 'daily', requests: [{ key: 'A', bars,
+    indicators: [{ indicatorId: 'sma', config: { period: 50 } }, { indicatorId: 'sma', config: { period: 200 } }] }] });
+  assert.match(collided.results[0].error!, /labels must be unique/);
+});
