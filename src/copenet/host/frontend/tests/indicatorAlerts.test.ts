@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { ALERT_INDICATOR_IDS, alertCatalogue, evaluateAlertRequest, evaluateOperand, validateOperand } from '../src/sections/market/indicators/alertEvaluator';
-import { indicatorById } from '../src/sections/market/indicators/registry';
+import { alertCatalogue, evaluateAlertRequest, evaluateOperand, validateOperand } from '../src/sections/market/indicators/alertEvaluator';
+import { INDICATORS } from '../src/sections/market/indicators/registry';
 import { defaultConfig } from '../src/sections/market/indicators/config';
 
 const bars = Array.from({ length: 300 }, (_, i) => {
@@ -10,8 +10,8 @@ const bars = Array.from({ length: 300 }, (_, i) => {
 });
 
 test('alerts share chart formula and full-history outputs for every offered indicator', () => {
-  for (const id of ALERT_INDICATOR_IDS) {
-    const definition = indicatorById(id)!;
+  for (const definition of INDICATORS) {
+    const id = definition.id;
     for (const timeframe of [252, 52, 12]) {
       for (const output of definition.outputs) {
         const operand = validateOperand({ kind: 'indicator', indicatorId: id, config: defaultConfig(definition), output: output.key });
@@ -22,7 +22,7 @@ test('alerts share chart formula and full-history outputs for every offered indi
 });
 
 test('alert catalogue comes from chart inputs and settings cannot silently clamp', () => {
-  assert.deepEqual(alertCatalogue().map((item) => item.id), [...ALERT_INDICATOR_IDS]);
+  assert.deepEqual(alertCatalogue().map((item) => item.id), INDICATORS.map((definition) => definition.id));
   assert.throws(() => validateOperand({ kind: 'indicator', indicatorId: 'rsi', output: 'rsi', config: { period: 0 } }), /Invalid indicator setting/);
   assert.throws(() => validateOperand({ kind: 'indicator', indicatorId: 'rsi', output: 'unknown', config: {} }), /Invalid indicator output/);
 });

@@ -1,18 +1,21 @@
 /** The background evaluator uses exactly the chart registry, never a second formula set. */
-import { indicatorById } from './registry';
+import { INDICATORS, indicatorById } from './registry';
 import { defaultConfig, normalizeConfig } from './config';
 import type { IndicatorBar, IndicatorConfig } from './types';
 
-export const ALERT_INDICATOR_IDS = ['sma', 'ema', 'rsi', 'macd'] as const;
 export type AlertOperand = { kind: 'price' } | { kind: 'constant'; value: number }
   | { kind: 'indicator'; indicatorId: string; config: IndicatorConfig; output: string };
 
+/** Every registry indicator is alertable. There is deliberately no second allowlist: the
+ *  registry already guarantees what an alert needs — a pure, causal calculation that returns
+ *  null (never NaN) where it has no value, and a declared warm-up. A hand-maintained subset
+ *  could only ever drift behind it, which is how MAMA/FAMA came to be plotted on the chart
+ *  but unreachable from an alert. */
 export function alertCatalogue() {
-  return ALERT_INDICATOR_IDS.map((id) => {
-    const definition = indicatorById(id)!;
-    return { id, name: definition.name, inputs: definition.inputs, outputs: definition.outputs,
-      defaults: defaultConfig(definition), warmup: definition.warmup(defaultConfig(definition)) };
-  });
+  return INDICATORS.map((definition) => ({
+    id: definition.id, name: definition.name, inputs: definition.inputs, outputs: definition.outputs,
+    defaults: defaultConfig(definition), warmup: definition.warmup(defaultConfig(definition)),
+  }));
 }
 
 export function validateOperand(raw: unknown): AlertOperand {
@@ -22,10 +25,9 @@ export function validateOperand(raw: unknown): AlertOperand {
   if (operand.kind === 'constant' && typeof operand.value === 'number' && Number.isFinite(operand.value)) {
     return { kind: 'constant', value: operand.value };
   }
-  if (operand.kind !== 'indicator' || !ALERT_INDICATOR_IDS.includes(operand.indicatorId as typeof ALERT_INDICATOR_IDS[number])) {
-    throw new Error('Unsupported alert operand');
-  }
-  const definition = indicatorById(operand.indicatorId as string)!;
+  if (operand.kind !== 'indicator' || typeof operand.indicatorId !== 'string') throw new Error('Unsupported alert operand');
+  const definition = indicatorById(operand.indicatorId);
+  if (!definition) throw new Error('Unsupported alert operand');
   if (!definition.outputs.some((output) => output.key === operand.output)) throw new Error('Invalid indicator output');
   const config = normalizeConfig(definition, operand.config);
   if (operand.config && (typeof operand.config !== 'object' || Array.isArray(operand.config))) throw new Error('Invalid indicator config');
