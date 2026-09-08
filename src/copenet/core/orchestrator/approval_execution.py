@@ -3,6 +3,14 @@ from copy import deepcopy
 from uuid import uuid4
 from copenet.core.tools import ToolExecutionResult
 
+_TOOL_APPROVAL_ACTION_CLASSES = {
+    "market.forecast.submit": "chart_forecast",
+    "market.chart.apply": "chart_annotation",
+    "market.chart.undo": "chart_annotation",
+    "web.fetch": "network_side_effect",
+}
+
+
 def make_approval_gated_executor(base_executor, *, orchestrator, emit_event, session_key, run_id, abort_event):
     """Wrap a tool executor so a high-risk result pauses for operator approval.
 
@@ -29,7 +37,7 @@ def make_approval_gated_executor(base_executor, *, orchestrator, emit_event, ses
             approval_id=approval_id,
             request_payload={
                 "toolId": result.tool_id,
-                "actionClass": "chart_forecast" if request.tool_id == "market.forecast.submit" else "chart_annotation" if request.tool_id in {"market.chart.apply", "market.chart.undo"} else "process_execution",
+                "actionClass": _TOOL_APPROVAL_ACTION_CLASSES.get(request.tool_id, "process_execution"),
                 "description": f"Run shell command: {command}" if command else f"Run {result.tool_id}",
                 "target": target,
                 "payload": deepcopy(request.arguments),
