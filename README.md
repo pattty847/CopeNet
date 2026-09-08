@@ -142,9 +142,6 @@ explicit toolbar control.
 actual candles, plotted indicators, quote and research panels. Every send freezes those
 render inputs into an immutable observation. Quick, Balanced and Deep adjust the initial
 context and exact-read budgets while retaining the complete captured source data.
-**Range** supports dragging across candles or tapping start/end, with a time band
-across price and indicator panes. The companion names its next-message focus as
-**Visible range** or **Selected range**; exact surrounding history stays queryable.
 Numeric candle and indicator tables reach the model as CSV with source and coverage
 metadata; stored evidence and inspector artifacts keep their structured rows.
 
@@ -159,32 +156,6 @@ and profile context remain. Crypto/order-book feeds and proactive commentary are
 adapters. See the [demo guide and verification record](docs/initiatives/chart-agent/DEMO.md).
 
 ![Chart agent — synthetic candles, editable levels and scoped conversation](docs/imgs/market-chart-agent.png)
-
-**Chart forecasts** — choose **Forecast this chart** in the companion settings to
-manually register a setup for one ticker. The model submits an entry, fixed stop,
-fractional profit targets and explanatory zones from frozen chart evidence. Published
-levels remain immutable and separate from editable drawings. The original-setup inspector
-shows frozen daily history flowing into actual completed closes, with quiet entry/stop/target
-bands across the eight-week horizon. Future space stays empty until observed prices arrive.
-Exact prices, percentage moves and planned-risk R multiples live under **Levels and returns**. Completed daily candles
-track simulated fills, ambiguous paths and four/eight-week directional outcomes without
-additional model calls. An optional independent directional run enables paired comparison
-in **Ledger → Comparison**; historical calls retain their original scoring rules.
-The offline browser example verifies a stopped trade and an ambiguous, unscored trade
-whose eight-week directional calls both succeed; later recovery never erases a stop-out.
-
-![Chart forecasts — synthetic entry, stop and target overlays](docs/imgs/market-chart-forecasts.png)
-
-<details>
-<summary>Forecasts on mobile and Ledger comparison (synthetic demonstration data)</summary>
-
-![Mobile forecast companion](docs/imgs/market-chart-forecasts-mobile.png)
-
-![Setup and observed outcome — synthetic completed daily closes](docs/imgs/market-forecast-outcome.png)
-
-![Forecast Ledger with independent trade and direction scores](docs/imgs/market-chart-forecasts-ledger.png)
-
-</details>
 
 On phones, chart and companion switch between full-width views. Pinch zoom keeps its
 chosen time range through viewport updates and background document refreshes.
