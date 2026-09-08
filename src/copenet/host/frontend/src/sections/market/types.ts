@@ -653,6 +653,10 @@ export interface LedgerClaim {
   confidence?: string | null;
   model: string;
   note: string;
+  /** The claim's own price when it was made — the pre-registration proof. Scoring divides
+   *  by it, and until now the page never showed it. */
+  snapshot_price?: number | null;
+  snapshot_voo?: number | null;
   horizons: Record<string, LedgerHorizonSlot>;
   /** Screen claims name the rule that fired: soft-bottoming | trend | accumulation. */
   signal?: string | null;

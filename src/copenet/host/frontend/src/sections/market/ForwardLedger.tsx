@@ -7,7 +7,7 @@
 import { useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight } from 'lucide-react';
 import { MM, PanelCard, mono, toneColor } from './marketUi';
-import { claimIsScored, hitRate, weeklyOutcomes, type LedgerKind } from './ledgerModel';
+import { claimIsScored, daysUntilDue, groupByDay, hitRate, overallScorecard, weeklyOutcomes, type LedgerKind } from './ledgerModel';
 import type { LedgerBaseline, LedgerClaim, LedgerReport, Tone } from './types';
 
 const KIND_LABEL: Record<LedgerKind, string> = {
@@ -39,6 +39,15 @@ function claimDate(iso: string): string {
   const parsed = new Date(iso);
   if (Number.isNaN(parsed.getTime())) return '';
   return parsed.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+/** A bare "YYYY-MM-DD" day key, formatted without a timezone round-trip. `new Date('2026-09-07')`
+ *  is UTC midnight, which renders as the 6th anywhere west of Greenwich — so a day heading
+ *  disagreed with the timestamps of the rows underneath it. */
+function dayLabel(day: string): string {
+  const [year, month, date] = day.split('-').map(Number);
+  if (!year || !month || !date) return day;
+  return new Date(year, month - 1, date).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
 function signedPct(value?: number | null): string {
@@ -86,6 +95,52 @@ function BaselineLine({ baseline }: { baseline: LedgerBaseline | undefined }) {
   );
 }
 
+/** The one line the page never stated: across every kind, is this beating chance? Four cards
+ *  each held a piece of it and the operator had to do the arithmetic. */
+function Verdict({ report }: { report: LedgerReport }) {
+  const card = overallScorecard(report);
+  if (!card.scored) {
+    return (
+      <div style={{ border: `1px solid ${MM.border}`, borderRadius: 7, background: MM.panelInset, padding: '12px 14px', fontSize: 12, color: MM.textSoft, lineHeight: 1.5 }}>
+        Nothing has scored yet — {card.pending} horizons are still open. The ledger is only
+        worth reading once claims start resolving.
+      </div>
+    );
+  }
+  const edge = card.edge;
+  const tone = edge == null ? MM.muted : edge > 2 ? MM.up : edge < -2 ? MM.down : MM.muted;
+  const verdict =
+    edge == null ? 'No matched baseline to compare against yet.'
+    : edge > 2 ? 'Ahead of chance so far.'
+    : edge < -2 ? 'Behind chance so far.'
+    : 'Level with chance so far.';
+  return (
+    <div style={{ border: `1px solid ${MM.border}`, borderRadius: 7, background: MM.panelInset, padding: '12px 14px', display: 'flex', alignItems: 'center', gap: 22, flexWrap: 'wrap' }}>
+      <div>
+        <div style={{ fontFamily: mono, fontSize: 22, color: tone, lineHeight: 1.05 }}>
+          {card.pct!.toFixed(0)}
+          <span style={{ fontSize: 12, color: MM.dim, marginLeft: 2 }}>%</span>
+        </div>
+        <div style={{ fontSize: 9.5, color: MM.dim, marginTop: 3 }}>{card.correct} of {card.scored} scored · 4w</div>
+      </div>
+      {card.baselinePct != null && (
+        <div>
+          <div style={{ fontFamily: mono, fontSize: 22, color: MM.dimmer, lineHeight: 1.05 }}>
+            {card.baselinePct.toFixed(0)}
+            <span style={{ fontSize: 12, marginLeft: 2 }}>%</span>
+          </div>
+          <div style={{ fontSize: 9.5, color: MM.dim, marginTop: 3 }}>a dart, same windows</div>
+        </div>
+      )}
+      <div style={{ flex: 1, minWidth: 200, fontSize: 12, color: MM.textSoft, lineHeight: 1.5 }}>
+        <span style={{ color: tone }}>{verdict}</span>{' '}
+        {edge != null && <span style={{ color: MM.faint }}>{edge > 0 ? '+' : ''}{edge.toFixed(0)} points versus chance. </span>}
+        <span style={{ color: MM.faint }}>{card.pending} horizons still open.</span>
+      </div>
+    </div>
+  );
+}
+
 function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: string) => void }) {
   const [open, setOpen] = useState(false);
   return (
@@ -98,7 +153,6 @@ function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: str
         style={{ display: 'flex', alignItems: 'center', gap: 10, width: '100%', padding: '7px 4px', border: 0, background: open ? 'rgba(254,252,244,.03)' : 'transparent', color: 'inherit', cursor: 'pointer', textAlign: 'left', font: 'inherit' }}
       >
         <span style={{ color: MM.dimmer, flex: '0 0 auto', display: 'inline-flex' }}>{open ? <ChevronDown size={12} /> : <ChevronRight size={12} />}</span>
-        <span style={{ fontFamily: mono, fontSize: 10, color: MM.dimmer, width: 44, flex: '0 0 auto' }}>{claimDate(claim.created_at)}</span>
         <span style={{ flex: '0 0 auto', borderRadius: 3, padding: '2px 6px', font: '600 8px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase', background: claim.kind === 'screen' ? 'rgba(105,197,137,.1)' : 'rgba(254,252,244,.05)', color: claim.kind === 'screen' ? MM.up : MM.muted }}>{claim.kind === 'screen' ? claim.signal ?? 'screen' : claim.kind}</span>
         <span
           role={onOpen ? 'link' : undefined}
@@ -112,14 +166,38 @@ function ClaimRow({ claim, onOpen }: { claim: LedgerClaim; onOpen?: (symbol: str
         >
           {claim.target}
         </span>
-        <span style={{ fontFamily: mono, fontSize: 11, color: toneColor(VALUE_TONE[claim.value] || 'flat'), flex: '0 0 auto', width: 64 }}>{claim.value}</span>
+        {/* An attention claim's `value` is the literal word "attention" — the tag beside it
+            already says that, so the column was one word repeated down the whole page. Give
+            the space to the price the claim was stamped at, which is the pre-registration
+            proof the panel's own subtitle advertises and never showed. */}
+        <span style={{ fontFamily: mono, fontSize: 11, flex: '0 0 auto', width: 70, color: claim.value === claim.kind ? MM.dimmer : toneColor(VALUE_TONE[claim.value] || 'flat') }}>
+          {claim.value === claim.kind
+            ? (claim.snapshot_price != null ? `@ ${claim.snapshot_price.toFixed(2)}` : '')
+            : claim.value}
+        </span>
         <span style={{ flex: 1, minWidth: 0, fontSize: 11, color: open ? MM.textSoft : MM.dim, whiteSpace: open ? 'normal' : 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', lineHeight: 1.45 }}>{claim.note}</span>
         {HORIZONS.map((horizon) => {
           const slot = claim.horizons?.[horizon];
-          const glyph = outcomeGlyph(slot?.resolved_at ? slot.outcome : undefined);
+          const resolved = Boolean(slot?.resolved_at);
+          const glyph = outcomeGlyph(resolved ? slot!.outcome : undefined);
+          const days = daysUntilDue(slot);
           return (
-            <span key={horizon} title={`${horizon}: ${glyph.label}${slot?.return_pct != null ? ` · ${signedPct(slot.return_pct)}` : ''}`} style={{ fontFamily: mono, fontSize: 10.5, color: glyph.color, width: 34, textAlign: 'right', flex: '0 0 auto' }}>
-              {horizon} {glyph.text}
+            <span
+              key={horizon}
+              title={resolved ? `${horizon}: ${glyph.label}${slot?.return_pct != null ? ` · ${signedPct(slot.return_pct)} vs VOO ${signedPct(slot.excess_pct)}` : ''}` : `${horizon}: scores ${slot ? claimDate(slot.due_at) : 'when due'}`}
+              style={{ fontFamily: mono, fontSize: 10, width: 62, textAlign: 'right', flex: '0 0 auto', color: resolved ? glyph.color : MM.dimmer }}
+            >
+              <span style={{ color: MM.dimmer }}>{horizon}</span>{' '}
+              {resolved ? (
+                <>
+                  {glyph.text}
+                  {slot?.return_pct != null && <span style={{ marginLeft: 4 }}>{signedPct(slot.return_pct)}</span>}
+                </>
+              ) : (
+                /* This cell used to be an ellipsis on 456 horizons — "unknown" about the one
+                   thing the ledger knows exactly. */
+                days != null ? `${days}d` : '—'
+              )}
             </span>
           );
         })}
@@ -187,6 +265,7 @@ export function ForwardLedger({ report, loading, onOpen }: { report: LedgerRepor
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+          <Verdict report={report} />
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
             {(Object.keys(KIND_LABEL) as LedgerKind[]).map((entry) => {
               const h4 = report.stats[entry]?.['4w'];
@@ -247,7 +326,16 @@ export function ForwardLedger({ report, loading, onOpen }: { report: LedgerRepor
 
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {rows.length === 0 && <div style={{ padding: '14px 4px', fontSize: 11, color: MM.dim }}>Nothing matches these filters.</div>}
-            {rows.slice(0, limit).map((claim) => <ClaimRow key={claim.claim_id} claim={claim} onOpen={onOpen} />)}
+            {/* One heading per day rather than the same date repeated down every row. */}
+            {groupByDay(rows.slice(0, limit)).map(({ day, claims }) => (
+              <div key={day}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 9, padding: '13px 4px 5px' }}>
+                  <span style={{ font: '600 9px var(--mkt-sans)', letterSpacing: '.12em', textTransform: 'uppercase', color: MM.muted }}>{dayLabel(day)}</span>
+                  <span style={{ fontFamily: mono, fontSize: 9.5, color: MM.dimmer }}>{claims.length} {claims.length === 1 ? 'claim' : 'claims'}</span>
+                </div>
+                {claims.map((claim) => <ClaimRow key={claim.claim_id} claim={claim} onOpen={onOpen} />)}
+              </div>
+            ))}
             {rows.length > limit && (
               <button type="button" className="mw-more" style={{ padding: '8px 4px' }} onClick={() => setLimit((value) => value + ROWS_STEP)}>
                 show {Math.min(ROWS_STEP, rows.length - limit)} more ↓

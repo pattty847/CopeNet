@@ -162,6 +162,24 @@ def _fully_resolved(claim: LedgerClaim) -> bool:
     return all(slot.resolved_at for slot in claim.horizons.values())
 
 
+def _claim_note(text: Any, limit: int = 220) -> str:
+    """Trim a claim's display note without cutting a word in half.
+
+    A hard `[:160]` slice ended every row mid-word ("...also includes Satya "), which read as
+    a rendering bug rather than a deliberate summary. Prefer the last sentence end, else the
+    last word boundary, and mark the trim.
+    """
+    note = str(text or "").strip()
+    if len(note) <= limit:
+        return note
+    window = note[:limit]
+    stop = max(window.rfind(". "), window.rfind("; "))
+    if stop > limit * 0.5:
+        return window[: stop + 1]
+    space = window.rfind(" ")
+    return (window[:space] if space > 0 else window).rstrip(",;:") + "…"
+
+
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
@@ -201,7 +219,7 @@ def record_market_read_claims(store: MarketStore, read_wire: dict[str, Any]) -> 
                 value=regime,
                 confidence=None,
                 model=model,
-                note=str(read_wire.get("regimeReasoning") or "")[:160],
+                note=_claim_note(read_wire.get("regimeReasoning")),
                 snapshot_price=voo,
                 snapshot_voo=voo,
                 horizons=_new_horizons(now),
@@ -224,7 +242,7 @@ def record_market_read_claims(store: MarketStore, read_wire: dict[str, Any]) -> 
                 value="attention",
                 confidence=None,
                 model=model,
-                note=str(item.get("why") or "")[:160],
+                note=_claim_note(item.get("why")),
                 snapshot_price=_last_close(store, symbol),
                 snapshot_voo=voo,
                 horizons=_new_horizons(now),
@@ -253,7 +271,7 @@ def record_ticker_read_claim(store: MarketStore, symbol: str, read_wire: dict[st
             value=lean,
             confidence=str(read_wire.get("confidence") or "") or None,
             model=str(read_wire.get("model") or ""),
-            note=str(read_wire.get("read") or "")[:160],
+            note=_claim_note(read_wire.get("read")),
             snapshot_price=_last_close(store, symbol.strip().upper()),
             snapshot_voo=_last_close(store, "VOO"),
             horizons=_new_horizons(datetime.now(timezone.utc)),
@@ -341,7 +359,7 @@ def record_screen_claims(store: MarketStore, previous_wire: dict[str, Any], curr
                 value=value,
                 confidence=None,
                 model="screen",
-                note=note[:160],
+                note=_claim_note(note),
                 snapshot_price=_last_close(store, symbol),
                 snapshot_voo=voo,
                 horizons=_new_horizons(now),
