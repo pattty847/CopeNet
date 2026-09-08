@@ -14,6 +14,29 @@ export interface Panel<T> {
   data: T;
   asOf?: string;
   note?: string;
+  /** Full base-rate record for a calibrated screen. Present only where the screen has been
+   *  replayed against history — `note` is the one-line fallback. */
+  calibration?: ScreenCalibration;
+}
+
+/** What actually happened the last time a screen's pattern fired, mirroring
+ *  `core/market/base_rates.BaseRate`. The downside (`meanMae`), the benchmark comparison and
+ *  the regime split are the honest half — a hit rate alone flatters every screen. */
+export interface ScreenCalibration {
+  pattern: string;
+  horizonWeeks: number;
+  n: number;
+  pctUp: number;
+  medianFwd: number;
+  meanFwd: number;
+  pctBeatBench: number;
+  meanMae: number;
+  bullN: number;
+  bullPctUp: number;
+  bearN: number;
+  bearPctUp: number;
+  sampleStart: string;
+  sampleEnd: string;
 }
 
 export interface UniverseAsset {
@@ -121,14 +144,21 @@ export interface AccumulationRow {
   drawdown: string;
   rsi: string;
   confluence: number; // 0..4
+  /** Plain-language summary of the conditions in `factors`. */
   why: string;
+  /** Canonical ids of the accumulation conditions that fired — see CONFLUENCE_FACTORS. */
+  factors: ConfluenceFactor[];
 }
+
+export type ConfluenceFactor = 'extended_below_ma' | 'deep_drawdown' | 'rsi_oversold' | 'reclaimed_10w';
 
 export interface TrendRow {
   symbol: string;
   direction: Direction;
-  note: string;
-  when: string;
+  /** Distance from the 40-week anchor, e.g. "+8.3%". */
+  belowMa: string;
+  /** Weekly bars the current direction has held. */
+  weeksInTrend: number;
   confirmed: boolean;
 }
 
@@ -185,9 +215,13 @@ export interface ContrarianNote {
 export interface SoftBottomItem {
   symbol: string;
   name: string;
+  /** Share of the screen's tests this name passes — `testsPassed.length / testsTotal`. */
   score: number;
   drawdown: string;
   rsi: string;
+  /** Ids of the pre-registered bottoming tests that passed — see SB_TEST_LABELS. */
+  testsPassed: string[];
+  testsTotal: number;
 }
 
 export interface DashboardPayload {

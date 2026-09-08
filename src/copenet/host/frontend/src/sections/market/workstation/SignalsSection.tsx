@@ -3,7 +3,7 @@
 
 import { useMemo } from 'react';
 import { SIGNAL_PANELS } from '../marketSectionPanels';
-import { AccumulationWatch, SoftBottomingWatch, TrendWatch } from '../panelsLists';
+import { AccumulationWatch, SoftBottomingWatch, TrendWatch } from '../signalPanels';
 import { ArrangeMenu, SectionGrid, SectionHeader, useSectionLayout, type SectionPanel } from './SectionGrid';
 import type { DashboardPayload } from '../types';
 

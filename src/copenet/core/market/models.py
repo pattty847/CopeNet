@@ -46,6 +46,11 @@ class MarketPanel:
     data: Any
     as_of: str | None = None
     note: str | None = None
+    #: Full base-rate record for a calibrated screen (see ``base_rates.BaseRate``). The panel
+    #: used to carry only ``note`` — one flattened sentence — which threw away the downside
+    #: (``mean_mae``), the benchmark comparison and the regime split the calibration already
+    #: computes. The UI reads the record; ``note`` stays the fallback for uncalibrated panels.
+    calibration: dict[str, Any] | None = None
 
 
 @dataclass
@@ -101,15 +106,23 @@ class AccumulationRow:
     drawdown: str
     rsi: str
     confluence: int
+    #: Human summary of which confluence conditions fired, e.g. "deep drawdown · oversold".
     why: str
+    #: Canonical ids of the conditions that fired — see ``signals.CONFLUENCE_FACTORS``.
+    factors: list[str] = field(default_factory=list)
 
 
 @dataclass
 class TrendRow:
     symbol: str
     direction: Direction
-    note: str
-    when: str
+    #: Distance from the 40-week anchor, e.g. "+8.3%". This column used to repeat "above
+    #: weekly moving-average stack" on every up row — the same thing the direction already
+    #: says, on every row, in the panel whose entire subject is direction.
+    below_ma: str
+    #: Weekly bars the current direction has held. ``when`` used to be the dashboard's own
+    #: refresh label, which made every row claim it changed at the same instant.
+    weeks_in_trend: int
     confirmed: bool
 
 
@@ -203,6 +216,11 @@ class SoftBottomItem:
     score: float
     drawdown: str
     rsi: str
+    #: Ids of the pre-registered bottoming tests this name passed, and how many were
+    #: evaluated. The score is their ratio; on its own "0.86" tells the operator nothing
+    #: about which part of the base actually formed.
+    tests_passed: list[str] = field(default_factory=list)
+    tests_total: int = 0
 
 
 @dataclass
@@ -449,6 +467,8 @@ class PriceSignals:
     trend_direction: Direction
     trend_note: str
     confirmed: bool
+    confluence_factors: list[str] = field(default_factory=list)
+    weeks_in_trend: int = 0
     relative_strength: str = "n/a"
     mama_regime: str = "n/a"
     atr_move: str = "n/a"

@@ -23,6 +23,30 @@ FEATURE_CATALOG_VERSION = "v1"
 SB_SCORE_THRESHOLD = 0.6
 SB_MIN_DRAWDOWN = -10.0  # soft bottoming only applies after a real decline
 
+# The pre-registered bottoming tests, named. `soft_bottoming_score` is the ratio of these that
+# passed, so the score alone ("0.86") says how many without ever saying which — and which part
+# of the base formed is the whole reason to look at the name.
+SB_TESTS: dict[str, str] = {
+    "sb_lower_lows_stopped": "lower lows stopped",
+    "sb_higher_low": "higher low",
+    "sb_ma_reclaim": "reclaimed 10W",
+    "sb_drawdown_stabilized": "drawdown stabilized",
+    "sb_rs_improving": "outperforming again",
+    "sb_volume_drying": "selling volume drying",
+    "sb_momentum_divergence": "momentum divergence",
+}
+
+
+def soft_bottoming_tests(features: "FeatureSet") -> tuple[list[str], int]:
+    """Which bottoming tests passed, and how many were evaluated for this name.
+
+    `sb_rs_improving` only counts toward the denominator when a benchmark was available, which
+    mirrors how `_soft_bottoming` builds the score.
+    """
+    evaluated = [key for key in SB_TESTS if key != "sb_rs_improving" or features.rs_momentum is not None]
+    passed = [key for key in evaluated if getattr(features, key, False)]
+    return passed, len(evaluated)
+
 
 @dataclass(frozen=True)
 class FeatureSet:

@@ -177,10 +177,31 @@ class MarketStore:
         return self._root / "signals" / f"{symbol.upper()}.json"
 
 
+def _migrate_signal_rows(payload: dict[str, Any]) -> dict[str, Any]:
+    """Fill the signal fields a cache written before named-conditions is missing.
+
+    Migration, not a shim: `latest-dashboard.json` on disk may predate `factors` /
+    `testsPassed` / `weeksInTrend`, and the UI reads those as lists and numbers. The next
+    full sweep rewrites the file with them, so this is removable once no deployment can
+    still be holding a pre-sweep cache.
+    """
+    for row in ((payload.get("accumulation") or {}).get("data") or []):
+        row.setdefault("factors", [])
+    for row in ((payload.get("softBottoming") or {}).get("data") or []):
+        row.setdefault("testsPassed", [])
+        row.setdefault("testsTotal", 0)
+    for row in ((payload.get("trend") or {}).get("data") or []):
+        row.setdefault("weeksInTrend", 0)
+        row.setdefault("belowMa", "n/a")
+        row.pop("when", None)
+        row.pop("note", None)
+    return payload
+
+
 def _dashboard_from_wire(payload: dict[str, Any]) -> DashboardPayload:
     # Keep the store permissive: the canonical persisted shape is the wire dict.
     # For callers that need a DTO, rehydrate through JSON into empty panels and
     # preserve exact payload via monkey-patched serializer.
     dashboard = DashboardPayload.empty(as_of=str(payload.get("asOf") or "as of no market refresh yet"))
-    dashboard.to_wire = lambda: json.loads(json.dumps(payload))  # type: ignore[method-assign]
+    dashboard.to_wire = lambda: _migrate_signal_rows(json.loads(json.dumps(payload)))  # type: ignore[method-assign]
     return dashboard

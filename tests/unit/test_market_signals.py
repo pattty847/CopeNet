@@ -81,3 +81,19 @@ def test_rrg_axes_use_smoothed_log_relative_strength_for_level_and_momentum() ->
     expected_y = _zscore(smoothed.diff(2), window=8, min_periods=4)
     pd.testing.assert_series_equal(x, expected_x)
     pd.testing.assert_series_equal(y, expected_y)
+
+
+def test_confluence_factors_name_every_condition_that_fired() -> None:
+    """The accumulation count is the length of its named factors — never a bare number."""
+    from copenet.core.market.signals import CONFLUENCE_FACTORS
+
+    # A long advance, then a deep sustained decline: drawdown, extended below the 40W, oversold.
+    frame = _weekly_bars(100, [2] * 45 + [-4] * 25)
+    signals = compute_price_signals(frame)
+
+    assert signals.confluence == len(signals.confluence_factors)
+    assert set(signals.confluence_factors) <= set(CONFLUENCE_FACTORS)
+    assert "deep_drawdown" in signals.confluence_factors
+    assert "extended_below_ma" in signals.confluence_factors
+    # And the trend row can say how long it has held that side instead of a refresh timestamp.
+    assert signals.weeks_in_trend > 0

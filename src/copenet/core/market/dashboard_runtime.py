@@ -12,13 +12,25 @@ import pandas as pd
 
 from .base_rates import load_base_rate
 from .edgar import fetch_evidence
-from .features import compute_features
+from .features import compute_features, soft_bottoming_tests
 from .models import AccumulationRow, DashboardPayload, EvidenceItem, MarketPanel, SoftBottomItem, UniverseAsset
 from .mama_regime import mama_regimes
-from .signals import compute_price_signals, compute_rrg_tail
+from .signals import CONFLUENCE_FACTORS, compute_price_signals, compute_rrg_tail
 from .synthesis import synthesize_briefing
 from .universe import INDUSTRY_SYMBOLS, SECTOR_SYMBOLS, SIGNAL_ROLES
 from .webull.sync import load_snapshot as load_webull_snapshot
+
+
+def _confluence_summary(factors: list[str]) -> str:
+    """Plain-language reason a name is on the accumulation list.
+
+    This field used to be the trend note, so every row read "above weekly moving-average
+    stack" — the same sentence the Trend panel already showed, and never the reason the row
+    was there at all.
+    """
+    if not factors:
+        return "in a pullback, no accumulation condition met yet"
+    return " · ".join(CONFLUENCE_FACTORS.get(factor, factor) for factor in factors)
 
 
 class DashboardRuntime:
@@ -120,6 +132,7 @@ class DashboardRuntime:
                 total_trend += 1
                 fs = compute_features(frame, benchmark, symbol=asset.symbol)
                 if fs.soft_bottoming:
+                    passed, total = soft_bottoming_tests(fs)
                     soft_bottoms.append(
                         SoftBottomItem(
                             symbol=asset.symbol,
@@ -127,10 +140,16 @@ class DashboardRuntime:
                             score=fs.soft_bottoming_score,
                             drawdown=signals.drawdown,
                             rsi=signals.rsi,
+                            tests_passed=passed,
+                            tests_total=total,
                         )
                     )
                 above_trend += 1 if signals.trend_direction == "up" else 0
-                if signals.confluence > 0 or signals.drawdown.startswith("-"):
+                # Admission is one met condition, not "has any drawdown at all". Every
+                # drawdown that isn't exactly 0.0% starts with "-", so the old test admitted
+                # essentially the whole universe: a panel titled "sitting in pullback zones"
+                # was listing names 8-37% ABOVE their 40-week average and near their highs.
+                if signals.confluence > 0:
                     accumulation.append(
                         AccumulationRow(
                             symbol=asset.symbol,
@@ -139,18 +158,22 @@ class DashboardRuntime:
                             drawdown=signals.drawdown,
                             rsi=signals.rsi,
                             confluence=signals.confluence,
-                            why=signals.trend_note,
+                            why=_confluence_summary(signals.confluence_factors),
+                            factors=list(signals.confluence_factors),
                         )
                     )
                 trend.append(
                     {
                         "symbol": asset.symbol,
                         "direction": signals.trend_direction,
-                        "note": signals.trend_note,
-                        "when": as_of,
+                        "belowMa": signals.below_ma,
+                        "weeksInTrend": signals.weeks_in_trend,
                         "confirmed": signals.confirmed,
                     }
                 )
+        # The panel is ranked by conditions met, so rank it here rather than leaving it in
+        # universe order under a header that claims otherwise.
+        accumulation.sort(key=lambda row: row.confluence, reverse=True)
         if accumulation:
             dashboard.accumulation = MarketPanel(status="live", data=accumulation[:12], as_of=_now_iso())
         if trend:
@@ -162,6 +185,7 @@ class DashboardRuntime:
             data=soft_bottoms,
             as_of=_now_iso(),
             note=_sb_rate.headline() if _sb_rate else "base rate calibrating",
+            calibration=_sb_rate.to_dict() if _sb_rate else None,
         )
 
         rrg = [
@@ -270,5 +294,5 @@ def project_cached_dashboard(payload: dict) -> DashboardPayload:
         parts = name.split("_")
         wire_name = parts[0] + "".join(part.title() for part in parts[1:])
         panel = payload[wire_name]
-        setattr(dashboard, name, MarketPanel(status=panel["status"], data=panel["data"], as_of=panel.get("asOf"), note=panel.get("note")))
+        setattr(dashboard, name, MarketPanel(status=panel["status"], data=panel["data"], as_of=panel.get("asOf"), note=panel.get("note"), calibration=panel.get("calibration")))
     return dashboard

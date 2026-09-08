@@ -84,3 +84,22 @@ def test_structure_blank_on_thin_history():
     assert fs.long_trend == "n/a"
     assert fs.compression is False
     assert fs.r_3y is None
+
+
+def test_soft_bottoming_tests_name_which_components_passed() -> None:
+    """The score is a ratio of named tests, so the UI can say which part of the base formed."""
+    from copenet.core.market.features import SB_TESTS, soft_bottoming_tests
+
+    # Advance, deep decline, then a stabilising bounce — a base forming, not a V.
+    closes = [100 + 2 * i for i in range(40)]
+    closes += [closes[-1] - 4 * i for i in range(1, 21)]
+    closes += [closes[-1] + 1.5 * i for i in range(1, 13)]
+    features = compute_features(_frame(closes), symbol="TEST")
+    passed, total = soft_bottoming_tests(features)
+
+    assert set(passed) <= set(SB_TESTS)
+    assert all(getattr(features, key) for key in passed)
+    # No benchmark supplied, so relative strength is not one of the tests that was evaluated.
+    assert "sb_rs_improving" not in passed
+    assert total == len(SB_TESTS) - 1
+    assert abs(features.soft_bottoming_score - len(passed) / total) < 0.002

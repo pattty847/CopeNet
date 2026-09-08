@@ -9,6 +9,34 @@ import pandas as pd
 
 from .models import PriceSignals, RrgSector
 
+# The four accumulation conditions, named. They were already computed individually and then
+# summed into an anonymous 0..4 count, which is what left every Accumulation row rendering the
+# same trend sentence as its "why". Ids are canonical and the UI labels off them.
+CONFLUENCE_FACTORS: dict[str, str] = {
+    "extended_below_ma": "extended below 40W",
+    "deep_drawdown": "deep drawdown",
+    "rsi_oversold": "RSI oversold",
+    "reclaimed_10w": "reclaimed 10W",
+}
+
+
+def _weeks_in_trend(close: pd.Series, anchor: pd.Series) -> int:
+    """Weekly bars the price has held its current side of the trend anchor.
+
+    Counts back from the last bar while ``close`` stays on the same side of ``anchor``, so a
+    row can say "8w" instead of repeating the dashboard's own refresh timestamp.
+    """
+    above = close > anchor
+    if above.empty:
+        return 0
+    current = bool(above.iloc[-1])
+    weeks = 0
+    for value in reversed(above.tolist()):
+        if bool(value) != current:
+            break
+        weeks += 1
+    return weeks
+
 
 def compute_price_signals(
     frame: pd.DataFrame,
@@ -47,6 +75,8 @@ def compute_price_signals(
             drawdown=_fmt_pct(drawdown_pct),
             rsi=_fmt_number(float(rsi.iloc[-1])) if not rsi.dropna().empty else "n/a",
             confluence=1 if drawdown_pct <= -20 else 0,
+            confluence_factors=["deep_drawdown"] if drawdown_pct <= -20 else [],
+            weeks_in_trend=0,
             trend_direction=direction,  # type: ignore[arg-type]
             trend_note="short history; trend math limited",
             confirmed=direction == "up",
@@ -65,17 +95,24 @@ def compute_price_signals(
     if below_stack:
         direction = "down"
     rsi_last = float(rsi.iloc[-1]) if not rsi.dropna().empty else 50.0
-    confluence = 0
-    confluence += 1 if below_ma <= -3 else 0
-    confluence += 1 if drawdown_pct <= -20 else 0
-    confluence += 1 if rsi_last <= 40 else 0
-    confluence += 1 if last > float(ma10.iloc[-1]) and close.iloc[-2] <= ma10.iloc[-2] else 0
+    factors: list[str] = []
+    if below_ma <= -3:
+        factors.append("extended_below_ma")
+    if drawdown_pct <= -20:
+        factors.append("deep_drawdown")
+    if rsi_last <= 40:
+        factors.append("rsi_oversold")
+    if last > float(ma10.iloc[-1]) and close.iloc[-2] <= ma10.iloc[-2]:
+        factors.append("reclaimed_10w")
+    confluence = len(factors)
     note = "above weekly moving-average stack" if direction == "up" else "below weekly trend stack"
     return PriceSignals(
         below_ma=_fmt_pct(below_ma),
         drawdown=_fmt_pct(drawdown_pct),
         rsi=_fmt_number(rsi_last),
-        confluence=max(0, min(4, confluence)),
+        confluence=confluence,
+        confluence_factors=factors,
+        weeks_in_trend=_weeks_in_trend(close, ma40),
         trend_direction=direction,  # type: ignore[arg-type]
         trend_note=note,
         confirmed=direction == "up" and last >= float(ma10.iloc[-1]),
