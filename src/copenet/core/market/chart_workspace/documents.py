@@ -137,9 +137,14 @@ class DocumentStore:
             receipt["batchId"], document_id, operation_id, fingerprint, encode(body), encode(receipt)))
         return receipt
 
+    # One basis point. The model reads these prices out of the captured resource itself,
+    # so an honest anchor round-trips exactly; this only absorbs float formatting.
+    _ANCHOR_TOLERANCE = 1e-4
+
     def _validate_evidence(self, db, document, obj, context):
         if context is not None and not obj["evidence"]:
             raise ValueError("Agent drawings require evidence references from this observation")
+        cited_candles: dict[int, dict] = {}
         for evidence in obj["evidence"]:
             if context is not None and (evidence["observationId"] != context.observation_id
                                        or evidence["resourceKey"] not in context.resource_keys):
@@ -152,6 +157,12 @@ class DocumentStore:
                 raise ValueError("Drawing evidence does not resolve to this document")
             resource = json.loads(row["body"])
             times = {r["t"] for r in resource["rows"] if "t" in r}
+            # Only candles on this drawing's own timeframe can substantiate a price anchor.
+            # An RSI or VWAP row is a legitimate reason to draw something and not a source
+            # for the level itself, so citing one leaves the anchor unchecked rather than
+            # failing it against an incomparable number.
+            if resource["kind"] == "candles" and resource["metadata"].get("timeframe") == obj["timeframe"]:
+                cited_candles.update({r["t"]: r for r in resource["rows"] if "t" in r})
             for bound in (evidence.get("from"), evidence.get("to")):
                 if bound is not None and bound not in times:
                     raise ValueError("Evidence bounds must refer to exact captured timestamps")
@@ -169,6 +180,46 @@ class DocumentStore:
                             for r in resource["rows"] if "t" in r}
             if any(anchor["t"] not in candle_times for anchor in obj["anchors"]):
                 raise ValueError("Drawing anchors must use captured candle timestamps")
+        self._verify_anchors(obj, cited_candles)
+
+    @classmethod
+    def _verify_anchors(cls, obj, cited_candles: dict[int, dict]) -> None:
+        """Stamp each anchor with whether its cited candle actually supports it.
+
+        Evidence that is never checked is decoration. Before this, a drawing could anchor a
+        level at 38.4, cite the candle that traded 41.0-43.0, and nothing objected — the
+        citation looked rigorous and said nothing. The stamp is written here, never read
+        from the caller, for the same reason `owner` is: a drawing does not get to certify
+        itself.
+
+        A declared `evidenceField` is a precise claim and is enforced. An undeclared anchor
+        is only required to sit inside its cited candle, and even that is recorded rather
+        than rejected — a projected target citing the base it was measured from is a
+        legitimate annotation whose value is deliberately outside the cited bar.
+        """
+        for anchor in obj["anchors"]:
+            row = cited_candles.get(anchor["t"])
+            if row is None:
+                anchor["verified"] = "unchecked"
+                continue
+            value = float(anchor["value"])
+            field = anchor.get("evidenceField")
+            if field is not None:
+                expected = row.get(field)
+                if expected is None:
+                    raise ValueError(f"Cited candle has no {field!r} to verify the anchor against")
+                if abs(value - float(expected)) > max(cls._ANCHOR_TOLERANCE, cls._ANCHOR_TOLERANCE * abs(float(expected))):
+                    raise ValueError(
+                        f"Anchor {value} does not match the cited candle's {field} of {expected}"
+                    )
+                anchor["verified"] = "exact"
+                continue
+            low, high = row.get("l"), row.get("h")
+            if low is None or high is None:
+                anchor["verified"] = "unchecked"
+                continue
+            span = max(cls._ANCHOR_TOLERANCE, cls._ANCHOR_TOLERANCE * abs(float(high)))
+            anchor["verified"] = "in-range" if float(low) - span <= value <= float(high) + span else "out-of-range"
 
     def rendered(self, raw: dict) -> dict:
         from .requests import RenderRequest

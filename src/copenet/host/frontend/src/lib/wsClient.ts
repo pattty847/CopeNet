@@ -1,3 +1,4 @@
+import { createMarketForecastApi } from './wsMarketForecasts';
 import { useAppStore } from '../store/useAppStore';
 import {
   ChatEventPayload,
@@ -319,6 +320,7 @@ class WsClient {
   }
 
   private async handleEventFrame(frame: EventFrame) {
+    if (frame.event === 'market.forecast.updated') { this.marketForecast.receive(); return; }
     if (frame.event === 'market.chart.document') {
       this.marketChart.receive(frame.payload as Record<string, unknown>);
       return;
@@ -738,6 +740,7 @@ class WsClient {
   }
 
   readonly marketMonitoring = createMarketMonitoringApi(this.request.bind(this));
+  readonly marketForecast = createMarketForecastApi(this.request.bind(this));
   readonly marketChart = createMarketChartApi(this.request.bind(this));
   readonly marketQuote = createMarketQuoteApi(this.request.bind(this), () => useAppStore.getState().wsStatus === 'connected');
 

@@ -1,7 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Bell } from 'lucide-react';
 import type { ComputedIndicator } from '../indicators/compute';
-import { ALERT_INDICATOR_IDS } from '../indicators/alertEvaluator';
 import { AlertEditor } from './AlertEditor';
 import { MonitoringSheet } from './MonitoringSheet';
 import { newAlert } from './model';
@@ -45,7 +44,7 @@ function TickerAlertEditor({ indicator, onClose }: { indicator: ComputedIndicato
 export function IndicatorAlertButton({ indicator }: { indicator: ComputedIndicator }) {
   const context = useContext(TickerAlertContext);
   const [open, setOpen] = useState(false);
-  if (!context || !(ALERT_INDICATOR_IDS as readonly string[]).includes(indicator.indicatorId)) return null;
+  if (!context) return null;
   return (
     <>
       <button

@@ -390,6 +390,7 @@ class TickerDetailPayload:
     # {market_cap, year_high, year_low, avg_volume_3m} from data_sources.fetch_key_stats;
     # None when yfinance can't resolve them (indexes, some ETFs).
     stats: dict[str, Any] | None = None
+    price_provenance: dict[str, Any] | None = None
 
     def to_wire(self) -> dict[str, Any]:
         return _to_wire(self)

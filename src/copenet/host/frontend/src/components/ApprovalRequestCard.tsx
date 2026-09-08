@@ -19,6 +19,7 @@ const ACTION_CLASS_LABELS: Record<string, { label: string; icon: typeof ShieldAl
   external_communication: { label: 'External Communication', icon: Send, tone: 'text-operator-accent' },
   filesystem_write: { label: 'File System Write', icon: Pencil, tone: 'text-amber-400' },
   process_execution: { label: 'Process Execution', icon: ShieldAlert, tone: 'text-operator-error' },
+  chart_forecast: { label: 'Chart Forecast', icon: Pencil, tone: 'text-operator-accent' },
   chart_annotation: { label: 'Chart Annotation', icon: Pencil, tone: 'text-operator-accent' },
   network_side_effect: { label: 'Network Side Effect', icon: ShieldAlert, tone: 'text-amber-400' },
   credential_or_sensitive_target: { label: 'Sensitive Target', icon: ShieldAlert, tone: 'text-operator-error' },
@@ -189,9 +190,9 @@ export function ApprovalRequestCard({ approval }: ApprovalRequestCardProps) {
         </div>
       )}
 
-      {approval.actionClass === 'chart_annotation' && (
-        <div className="border-t border-operator-border/60 px-3 py-2" aria-label="Chart annotation batch">
-          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-operator-muted">Proposed drawing changes</div>
+      {(approval.actionClass === 'chart_annotation' || approval.actionClass === 'chart_forecast') && (
+        <div className="border-t border-operator-border/60 px-3 py-2" aria-label={approval.actionClass === 'chart_forecast' ? 'Chart forecast submission' : 'Chart annotation batch'}>
+          <div className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-operator-muted">{approval.actionClass === 'chart_forecast' ? 'Proposed forecast · simulated trade' : 'Proposed drawing changes'}</div>
           <pre tabIndex={0} className="max-h-48 overflow-auto whitespace-pre-wrap break-words rounded-lg border border-operator-border bg-operator-bg p-2 text-[11px] text-operator-text">
             {JSON.stringify(approval.proposedAction.payload, null, 2)}
           </pre>

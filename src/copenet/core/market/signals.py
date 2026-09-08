@@ -10,7 +10,19 @@ import pandas as pd
 from .models import PriceSignals, RrgSector
 
 
-def compute_price_signals(frame: pd.DataFrame, benchmark: pd.DataFrame | None = None) -> PriceSignals:
+def compute_price_signals(
+    frame: pd.DataFrame,
+    benchmark: pd.DataFrame | None = None,
+    *,
+    mama_regime: str = "n/a",
+) -> PriceSignals:
+    """Weekly signal math for one symbol.
+
+    ``mama_regime`` is supplied by the caller rather than computed here: the only correct
+    MAMA in CopeNet is the chart registry's, reached through a Node subprocess
+    (`mama_regime.mama_regime`). Keeping that call outside this module keeps the math here
+    pure and lets a caller sweeping the whole universe decide when to spend the subprocess.
+    """
     prices = _normalized_frame(frame)
     if prices.empty:
         return PriceSignals("n/a", "n/a", "n/a", 0, "down", "no price history", False, thin_history=True)
@@ -26,7 +38,7 @@ def compute_price_signals(frame: pd.DataFrame, benchmark: pd.DataFrame | None = 
     atr_move = _atr_move(prices)
     volume_vs_avg = _volume_vs_average(prices)
     rs = _relative_strength(close, benchmark)
-    mama = _mama_regime(close)
+    mama = mama_regime
 
     if thin:
         direction: str = "up" if last >= float(close.iloc[0]) else "down"
@@ -204,14 +216,6 @@ def _relative_strength(close: pd.Series, benchmark: pd.DataFrame | None) -> str:
     asset_return = close.iloc[-1] / close.iloc[-periods] - 1
     bench_return = bench.iloc[-1] / bench.iloc[-periods] - 1
     return _fmt_pct((asset_return - bench_return) * 100)
-
-
-def _mama_regime(close: pd.Series) -> str:
-    if len(close) < 10:
-        return "n/a"
-    fast = close.ewm(span=10, adjust=False).mean().iloc[-1]
-    slow = close.ewm(span=21, adjust=False).mean().iloc[-1]
-    return "MAMA above FAMA" if fast >= slow else "MAMA below FAMA"
 
 
 def _zscore(series: pd.Series, window: int = 10, min_periods: int = 4) -> pd.Series:

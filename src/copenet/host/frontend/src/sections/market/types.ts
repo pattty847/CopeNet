@@ -642,6 +642,7 @@ export interface LedgerBaseline {
   accuracyPct: number | null;
 }
 export interface LedgerReport {
+  forecasts?: import('./forecasts/types').ForecastReport;
   rulesVersion: string;
   totalClaims: number;
   pendingHorizons: number;
@@ -717,6 +718,9 @@ export interface TickerInsight {
 }
 
 export interface TickerDetailPayload {
+  priceProvenance?: { symbol: string; basis: 'split_adjusted'; calendar: string | null; splits: [string, number][];
+    splitFingerprint: string; updatedAt: string; candleHash: string; completionStatus: string;
+    completedThrough: number | null; completedCloseAt: string | null };
   symbol: string;
   name: string;
   asOf: string;

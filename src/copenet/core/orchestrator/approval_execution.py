@@ -29,7 +29,7 @@ def make_approval_gated_executor(base_executor, *, orchestrator, emit_event, ses
             approval_id=approval_id,
             request_payload={
                 "toolId": result.tool_id,
-                "actionClass": "chart_annotation" if request.tool_id in {"market.chart.apply", "market.chart.undo"} else "process_execution",
+                "actionClass": "chart_forecast" if request.tool_id == "market.forecast.submit" else "chart_annotation" if request.tool_id in {"market.chart.apply", "market.chart.undo"} else "process_execution",
                 "description": f"Run shell command: {command}" if command else f"Run {result.tool_id}",
                 "target": target,
                 "payload": deepcopy(request.arguments),

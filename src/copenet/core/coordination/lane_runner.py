@@ -32,6 +32,8 @@ class LaneTurnSpec:
     task_prompt_id: str = "none"
     persona_privacy_tier: str = "private"
     idempotency_key: str | None = None
+    market_context: Any | None = None
+    emit_event: Any | None = None
 
 
 def select_lane_updates(
@@ -100,7 +102,7 @@ def create_lane_sessions(
                 system_prompt_id="default",
                 task_prompt_id="none",
                 persona_id="default",
-                persona_privacy_tier="private",
+                persona_privacy_tier=spec.get("personaPrivacyTier", "private"),
                 workspace_root=workspace_root,
                 session_type=session_type,
                 parent_session_key=parent_key,
@@ -175,8 +177,10 @@ async def run_lane_turn(orchestrator: Any, spec: LaneTurnSpec) -> dict[str, Any]
             persona_privacy_tier=spec.persona_privacy_tier,
             workspace_root=lane.workspace_root if lane is not None else None,
             idempotency_key=spec.idempotency_key,
+            market_context=spec.market_context,
         ),
         emit=capture,
+        **({"emit_event": spec.emit_event} if spec.emit_event is not None else {}),
     )
     if error_message:
         raise RuntimeError(f"lane {spec.session_key} failed: {error_message}")

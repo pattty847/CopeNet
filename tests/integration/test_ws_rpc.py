@@ -545,6 +545,8 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
                 "market.chart.document",
                 "market.chart.apply",
                 "market.chart.undo",
+                "market.forecast.read",
+                "market.forecast.submit",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
 
