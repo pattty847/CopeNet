@@ -286,7 +286,9 @@ For current behavior, assume:
   owns immutable observations and revision-checked drawing documents; `orchestrator/market_context.py`
   binds them to ordinary sessions. The ticker's `viewState/` contributions and `useTickerViewModel`
   share committed data with capture; `chartAgent/` owns the companion and `drawings/` the canvas
-  primitive. Preserve explicit-session routing, chart-only tool scope, manual object ownership,
+  primitive. Ordinary chart turns also expose `web.search`/`web.fetch` for sourced event
+  research; these supplement frozen chart evidence. Forecast lanes cannot browse. Preserve
+  explicit-session routing, the chart/web tool allowlist, manual object ownership,
   account-panel exclusion, and saved-versus-rendered receipts. Verification/limits and the
   deferred crypto adapter are documented in `docs/initiatives/chart-agent/DEMO.md`.
 - **Chart forecasts are manual, frozen experiments.** `core/market/forecasts/` owns typed

@@ -20,7 +20,12 @@ verify the vendor candles or treat a model's description of its own calls as a t
 4. `market.chart.read` supports time ranges, fields, offsets and metadata paths. It
    reads the immutable source rather than a lossy summary. Loaded source rows and rows
    delivered to the model are different quantities, visible through inspection.
-5. Ordinary harness sessions execute five registered chart tools. Drawing writes are
+5. Ordinary harness sessions execute five registered chart tools plus the existing
+   `web.search` and `web.fetch` tools (added 2026-09-08). Web research supplements the
+   capture; it never replaces captured candles or grants broader Market/account access.
+   Company-event annotations use existing labels, with event dates and source URLs in
+   their labels/rationales; captured evidence references continue to identify chart rows.
+   Drawing writes are
    revision checked and scoped to the agent's layer; saved and rendered are separate.
    The next send captures a new observation; in-flight evidence remains fixed.
 6. Manual chart forecasts (2026-09-05) contribute `panel:forecasts` from the committed

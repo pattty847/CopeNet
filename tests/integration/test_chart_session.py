@@ -100,7 +100,10 @@ async def test_chart_context_survives_normal_run_replay_and_retry(tmp_path):
     assert result["status"] == "ok"
     sent = json.dumps(provider.messages)
     assert "11.125" in sent and request.market_context.observation_id in sent
-    assert provider.tool_names[0] and all(name.startswith("market.chart.") for name in provider.tool_names[0])
+    assert set(provider.tool_names[0]) == {
+        "market.chart.context", "market.chart.read", "market.chart.document",
+        "market.chart.apply", "market.chart.undo", "web.search", "web.fetch",
+    }
     history = orch.history(session_key=request.session_key)
     assert history[0]["content"] == request.message
     assert history[0]["marketContext"]["observationId"] == request.market_context.observation_id
@@ -218,7 +221,8 @@ async def test_external_prose_requires_exact_batch_approval_and_preserves_scope(
 
 @pytest.mark.asyncio
 async def test_chart_direct_execution_cannot_escape_even_with_full_access(tmp_path):
-    from copenet.core.orchestrator.market_context import chart_policy, chart_tool_ids
+    from copenet.core.market.chart_workspace.authorization import chart_tool_ids
+    from copenet.core.orchestrator.market_context import chart_policy
     from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, policy_for_task_mode
     orch, provider, store, request = setup_chart(tmp_path)
     bound = resolve_market_context(orch, request, request.idempotency_key)
