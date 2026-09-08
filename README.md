@@ -1,13 +1,8 @@
+![CopeNet Market Intelligence — a retro 1990s book-fair cover with a kid at a computer, planets, and a brighter tomorrow](docs/imgs/copenet-book-fair-banner.jpg)
+
 # CopeNet
 
-<img src="docs/imgs/copenet-custodian-mascot.png" align="right" width="240" alt="CopeNet Custodian — ACCESS EVERYWHERE, DON'T WRITE, DELETE" />
-
 CopeNet is a *continuity engine* agent operator for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
-
-> **Meet the Custodian** — badge says `ACCESS EVERYWHERE`, patch says `DON'T WRITE. DELETE.` He's got the keys to every session, a rubber duck for the hard bugs, and a mop that's seen things. He keeps the transcripts append-only and the worktrees swept. The harness is the building; he's the night shift.
-
-<br clear="right" />
-
 
 ## Product Tour
 
@@ -533,3 +528,11 @@ Setup:
 
 In the UI, the Market → Portfolio card shows its data source and a `↻ Webull` re-sync button.
 `uv run copenet webull status` shows auth/token state, the selected account, and last sync.
+
+## Meet the Custodian
+
+<img src="docs/imgs/copenet-custodian-mascot.png" align="right" width="240" alt="CopeNet Custodian — ACCESS EVERYWHERE, DON'T WRITE, DELETE" />
+
+Badge says `ACCESS EVERYWHERE`, patch says `DON'T WRITE. DELETE.` He's got the keys to every session, a rubber duck for the hard bugs, and a mop that's seen things. He keeps the transcripts append-only and the worktrees swept. The harness is the building; he's the night shift.
+
+<br clear="right" />
