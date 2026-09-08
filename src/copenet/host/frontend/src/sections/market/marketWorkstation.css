@@ -842,7 +842,7 @@
   .mw-matter { grid-template-columns: minmax(0, 1fr) 18px; grid-template-rows: auto auto; row-gap: 2px; padding: 6px 6px; }
   .mw-matter__signal { grid-column: 1; grid-row: 1; }
   .mw-matter__text { grid-column: 1; grid-row: 2; white-space: normal; }
-  .mw-matter__link, .mw-matter > span:last-child { grid-column: 2; grid-row: 1 / span 2; }
+  .mw-matter > .mw-matter__link, .mw-matter > span:last-child { grid-column: 2; grid-row: 1 / span 2; }
   .mw-bar { height: auto; flex-wrap: wrap; gap: var(--mkt-s2); padding: var(--mkt-s2) var(--mkt-s3); }
   .mw-bar__sub, .mw-density { display: none; }
   .mw-headline { font-size: 19px; }

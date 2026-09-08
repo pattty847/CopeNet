@@ -111,6 +111,15 @@ opt-in touch-pan mode.
 
 </details>
 
+<details>
+<summary>Mobile Evidence table (synthetic demonstration data)</summary>
+
+Evidence headlines wrap between the ticker and source link on narrow screens.
+
+![Market mobile Evidence table with synthetic data](docs/imgs/market-mobile-evidence.png)
+
+</details>
+
 **Asset workspace** — every ticker opens as a reloadable `/market/{symbol}` research
 surface with the price chart in command. Identity, quote provenance, watchlist state,
 asset switching, interval and visible-range controls, split-adjusted price history,
