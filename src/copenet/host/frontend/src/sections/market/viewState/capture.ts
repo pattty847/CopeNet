@@ -26,13 +26,28 @@ export function captureTickerView(options: {
   const detail = view.detail;
   if (!detail || detail.symbol !== document.instrument.symbol) throw new Error('Wait for this ticker’s chart document to load.');
   if (viewport.from == null || viewport.to == null) throw new Error('Wait for the chart to establish its visible range.');
+  // REPLAY TRUNCATES THE CAPTURE TOO.
+  //
+  // Every other resource here is derived from the view's already-cut series, so it stops at
+  // the cursor for free. The D/W/M candle resources are the exception: they are read straight
+  // off the payload, which still holds the whole history. Handing those over unchanged would
+  // give the model the one thing the operator deliberately hid — a replay whose whole point
+  // is reasoning without hindsight, answered with hindsight.
+  const replayAsOf = view.replay.active ? view.replayTime : null;
+  const replay = view.replay.active
+    ? { active: true, asOf: replayAsOf, barsShown: view.bars.length, barsInRange: view.fullBars.length,
+        playing: view.replay.playing, speed: view.replay.speed,
+        note: 'Chart series are truncated at asOf. Research panels and the displayed quote below the chart remain live.' }
+    : { active: false };
   const resources: ViewResource[] = [];
   for (const [seriesKey, timeframe] of [['daily', 'D'], ['weekly', 'W'], ['monthly', 'M']] as const) {
-    const rows = detail.series[seriesKey];
+    const history = detail.series[seriesKey];
+    const rows = replayAsOf == null ? history : history.filter((bar) => bar.t <= replayAsOf);
     resources.push({ key: `candles:${timeframe}`, kind: 'candles', label: `${detail.symbol} ${timeframe} candles`,
       status: view.ticker.stale ? 'stale' : rows.length ? 'loaded' : 'empty', observedAt: detail.asOf,
       rows: rows.map((bar) => ({ ...bar })), metadata: { timeframe, timestampUnit: 'seconds', priceBasis: detail.quote.priceBasis, source: 'yahoo', priceProvenance: detail.priceProvenance,
         completion: detail.priceProvenance?.timeframeCompletion?.[timeframe],
+        replay: replayAsOf == null ? null : { truncatedAt: replayAsOf, hiddenBars: history.length - rows.length },
         completeness: 'Latest daily/weekly/monthly candle may be forming; do not infer completion from capture time.' } });
   }
   for (const indicator of view.computedIndicators) {
@@ -80,7 +95,7 @@ export function captureTickerView(options: {
   return JSON.parse(JSON.stringify({ schemaVersion: 1, viewId: options.viewId, viewRevision: options.revision,
     instrument: document.instrument, timeframe: view.timeframe, range: view.range, viewport,
     selection: options.selection, settings: { logScale: view.logScale, comparisonMode: view.comparing, showVolume: view.showVolume,
-      researchTab: view.tab, researchOpen: view.snap !== 'collapsed', includeAccountContext: options.includeAccountContext,
+      researchTab: view.tab, researchOpen: view.snap !== 'collapsed', includeAccountContext: options.includeAccountContext, replay,
       requestedSymbol: view.normalized, displayedSymbol: detail.symbol, indicators: view.indicators },
     resources: scopedResources, documentId: document.documentId, documentRevision: document.revision }, (_key, value) => {
     if (typeof value === 'number' && !Number.isFinite(value)) throw new Error('Chart data contains a nonfinite value. Refresh the affected resource before sending.');

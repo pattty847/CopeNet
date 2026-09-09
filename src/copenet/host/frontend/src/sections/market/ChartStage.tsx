@@ -43,6 +43,8 @@ export function ChartStage({
   symbol,
   timeframe,
   bars,
+  trailingTimes,
+  replayActive,
   events,
   evidence,
   plots,
@@ -74,6 +76,11 @@ export function ChartStage({
   symbol: string;
   timeframe: ChartTimeframe;
   bars: Ohlcv[];
+  /** Hidden replay bars, kept on the time axis as whitespace so stepping does not re-zoom. */
+  trailingTimes: number[];
+  /** Replay truncates every series on this chart. The legend says so out loud, because a
+   *  screenshot of a mid-replay chart is otherwise indistinguishable from one of today. */
+  replayActive: boolean;
   events: ChartEvent[];
   evidence: EvidenceItem[];
   plots: StagePlot[];
@@ -153,6 +160,7 @@ export function ChartStage({
               <span className="tw-legend__symbol">{symbol}</span>
               <span style={{ color: MM.dimmer, fontSize: 10 }}>{timeframeLabel(timeframe)}</span>
               {barDate && <span style={{ color: MM.dimmer, fontSize: 10 }}>{barDate}</span>}
+              {replayActive && <span className="tw-legend__replay">REPLAY</span>}
             </div>
             {shown && !comparisonMode && (
               <div className="tw-legend__row tw-legend__ohlc">
@@ -218,6 +226,7 @@ export function ChartStage({
           <CandleChart
             chartWorkspace={chartWorkspace}
             bars={bars}
+            trailingTimes={trailingTimes}
             events={events}
             evidence={evidence}
             height={height}

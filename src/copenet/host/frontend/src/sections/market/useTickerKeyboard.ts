@@ -9,6 +9,10 @@ export function useTickerKeyboard(view: ReturnType<typeof useTickerViewModel>, o
   // ------------------------------------------------------------------ keyboard
   const jumpOpenRef = useRef(jumpOpen);
   jumpOpenRef.current = jumpOpen;
+  // The transport is rebuilt whenever the cursor moves, so it is read through a ref rather
+  // than resubscribing the listener on every replay step.
+  const replayRef = useRef(view.replay);
+  replayRef.current = view.replay;
 
   useEffect(() => {
     const handler = (event: KeyboardEvent) => {
@@ -31,6 +35,16 @@ export function useTickerKeyboard(view: ReturnType<typeof useTickerViewModel>, o
 
       const key = event.key;
       if (key === 'Escape') return;
+
+      // Replay's transport, on the keys a transport has. Only bound while it is armed, so
+      // the arrows stay free for whatever the chart wants them for otherwise.
+      const replay = replayRef.current;
+      if (key === 'r') { replay.toggle(); event.preventDefault(); return; }
+      if (replay.active) {
+        if (key === 'ArrowRight') { replay.step(1); event.preventDefault(); return; }
+        if (key === 'ArrowLeft') { replay.step(-1); event.preventDefault(); return; }
+        if (key === ' ') { replay.togglePlay(); event.preventDefault(); return; }
+      }
 
       // Interval and range are pure client-side filters over bars already in memory, so
       // there is no excuse for them being pointer-only.

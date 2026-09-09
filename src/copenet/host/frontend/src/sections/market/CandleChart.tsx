@@ -47,11 +47,13 @@ import {
 } from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { ChartClusterBoxes } from './ChartClusterBoxes';
+import { NO_HIDDEN_BARS } from './replay/chartReplay';
 
 import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
 
 export function CandleChart({
   bars,
+  trailingTimes = NO_HIDDEN_BARS,
   events = [],
   evidence = [],
   height = 380,
@@ -78,6 +80,10 @@ export function CandleChart({
 }: {
   chartWorkspace?: ChartWorkspaceBridge;
   bars: Ohlcv[];
+  /** Bar timestamps the chart must reserve axis space for without drawing — replay's hidden
+   *  future. Without them the time scale would refit to the revealed prefix and the whole
+   *  chart would re-zoom on every single step. */
+  trailingTimes?: number[];
   events?: ChartEvent[];
   /** Full evidence rows backing the markers — clicking a marker day pops their details. */
   evidence?: EvidenceItem[];
@@ -483,10 +489,16 @@ export function CandleChart({
     const future = futureDecorations(sourceEvidence, rows);
     futureMarkersRef.current = future.markers;
     // Whitespace points extend the time scale past the last candle so future-dated
-    // planned-sale markers have a coordinate to land on.
+    // planned-sale markers have a coordinate to land on — and so replay's hidden bars keep
+    // holding their place on the axis. Both sources are merged, deduped and sorted because
+    // Lightweight Charts requires one strictly ascending series.
+    const lastRow = rows.length ? rows[rows.length - 1].t : Number.NEGATIVE_INFINITY;
+    const whitespace = [...new Set([...trailingTimes, ...future.times])]
+      .filter((t) => t > lastRow)
+      .sort((a, b) => a - b);
     candle.setData([
       ...rows.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })),
-      ...future.times.map((t) => ({ time: t as UTCTimestamp })),
+      ...whitespace.map((t) => ({ time: t as UTCTimestamp })),
     ]);
     volume.setData(
       rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
@@ -496,7 +508,7 @@ export function CandleChart({
     // chartGeneration: a height change tears the chart down and builds a new one, so the
     // data has to be written again. Without this the chart comes back blank — latent while
     // height was effectively constant, immediate once the layout can resize it.
-  }, [bars, events, evidence, chartGeneration]);
+  }, [bars, trailingTimes, events, evidence, chartGeneration]);
 
   useEffect(() => {
     const chart = chartRef.current;

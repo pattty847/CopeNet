@@ -30,7 +30,8 @@ function fixture(): CaptureOptions {
         dataQuality: { historyWeeks: 100, hasVolume: true, thinHistory: false }, portfolio: { shares: 777000123, avgCost: 456.789, source: 'synthetic-account' } },
       stats: { yearLow: 7 }, verdict: [], signals: [], insight: { softBottoming: true, score: 0.1234567 }, kill: 'Below the selected low',
     },
-    ticker: { stale: false }, normalized: 'SYN', timeframe: 'D', range: '1Y', bars: daily, rawBars: daily,
+    ticker: { stale: false }, normalized: 'SYN', timeframe: 'D', range: '1Y', bars: daily, rawBars: daily, fullBars: daily,
+    replay: { active: false, playing: false, speed: 1, index: 2, cursorTime: null, total: 3 }, replayTime: null,
     computedIndicators: [indicator], indicators: [indicator.instance], tab: 'overview', snap: 'half',
     sec: { payload: null }, chartEvidence: [], chartEventRows: [], showInsider: false, insiderLookback: 'chart', insiderDisplay: 'clusters',
     overlayMetric: null, overlaySeries: { data: null, error: null }, overlayPoints: undefined,
@@ -192,4 +193,26 @@ test('SEC contribution preserves the selected day, history depth and exact displ
   assert.equal(result.metadata.timestampUnit, 'seconds');
   assert.equal(result.metadata.showMethod, true);
   assert.equal(evidencePanelResource({ ...input, visibleEvidence: [], loading: true }).status, 'not-loaded');
+});
+
+
+test('a replay capture stops the model at the cursor instead of handing it the future', () => {
+  const options = fixture();
+  const daily = options.view.detail!.series.daily;
+  options.view.bars = daily.slice(0, 2);
+  options.view.replay = { active: true, playing: false, speed: 2, index: 1, cursorTime: 200, total: 3 } as never;
+  options.view.replayTime = 200 as never;
+
+  const capture = captureTickerView(options);
+  assert.deepEqual(resource(capture, 'candles:D').rows.map((row) => row.t), [100, 200]);
+  assert.deepEqual(resource(capture, 'candles:D').metadata.replay, { truncatedAt: 200, hiddenBars: 1 });
+  assert.deepEqual(capture.settings.replay, {
+    active: true, asOf: 200, barsShown: 2, barsInRange: 3, playing: false, speed: 2,
+    note: 'Chart series are truncated at asOf. Research panels and the displayed quote below the chart remain live.',
+  });
+
+  // Off, the capture is untouched and says so rather than omitting the field.
+  const live = captureTickerView(fixture());
+  assert.deepEqual(live.settings.replay, { active: false });
+  assert.equal(resource(live, 'candles:D').metadata.replay, null);
 });

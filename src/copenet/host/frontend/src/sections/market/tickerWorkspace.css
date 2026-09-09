@@ -1236,3 +1236,85 @@
  * reach the form. Without this the gear fades out from under an open settings panel. */
 .tw-ind-controls:focus-within,
 .tw-ind-controls:has([data-active='true']) { opacity: 1; }
+
+/* ------------------------------------------------------------------- replay */
+
+/* The transport strip. It exists only while replay is armed and takes its height from the
+ * chart, which is why the stage re-measures on the replay flag. */
+.tw-replay {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 10px;
+  border-top: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.tw-replay__transport { display: inline-flex; align-items: center; gap: 1px; }
+
+/* Play is the one control you reach for without looking, so it is the one that is bigger. */
+.tw-replay__play { width: 26px; height: 26px; }
+
+.tw-replay__speed {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  color: var(--mkt-soft);
+  font: 600 10px var(--mkt-mono);
+}
+
+.tw-replay__speed > span { min-width: 30px; text-align: center; }
+
+.tw-replay__scrub {
+  flex: 1 1 auto;
+  min-width: 80px;
+  height: 4px;
+  appearance: none;
+  border-radius: 999px;
+  background: var(--mkt-seam);
+  cursor: pointer;
+}
+
+.tw-replay__scrub::-webkit-slider-thumb {
+  appearance: none;
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mkt-accent);
+}
+
+.tw-replay__scrub::-moz-range-thumb {
+  width: 11px;
+  height: 11px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--mkt-accent);
+}
+
+.tw-replay__scrub:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 3px; }
+
+.tw-replay__stamp {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  color: var(--mkt-dim);
+  font: 500 10px var(--mkt-mono);
+  white-space: nowrap;
+}
+
+.tw-replay__stamp > b { color: var(--mkt-text); font-weight: 600; }
+
+/* A mid-replay chart is otherwise pixel-identical to a live one, and screenshots of this
+ * page get pasted into arguments about what happened. */
+.tw-legend__replay {
+  padding: 0 4px;
+  border: 1px solid var(--mkt-accent-line);
+  border-radius: 3px;
+  background: var(--mkt-accent-soft);
+  color: var(--mkt-accent);
+  font: 700 9px var(--mkt-sans);
+  letter-spacing: 0.06em;
+}
