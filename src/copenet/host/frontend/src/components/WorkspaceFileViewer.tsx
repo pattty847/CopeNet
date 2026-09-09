@@ -144,7 +144,7 @@ export function WorkspaceFileViewer() {
 
   if (!activeSessionKey) {
     return (
-      <div className="rounded-[20px] border border-dashed border-shell-border bg-shell-panel px-6 py-10 text-center text-sm text-shell-muted">
+      <div className="rounded-xl border border-dashed border-shell-border bg-shell-panel px-6 py-10 text-center text-sm text-shell-muted">
         Open a session in <span className="font-semibold text-shell-text">Agents</span> first — the viewer reads that
         session's workspace.
       </div>
@@ -152,7 +152,7 @@ export function WorkspaceFileViewer() {
   }
 
   return (
-    <section className="rounded-[20px] border border-shell-border bg-shell-panel p-4">
+    <section className="rounded-xl border border-shell-border bg-shell-panel p-4">
       <header className="mb-3 flex items-center gap-2">
         <Folder className="h-4 w-4 shrink-0 text-shell-accent" />
         <h3 className="shrink-0 text-sm font-semibold text-shell-text">Workspace Files</h3>

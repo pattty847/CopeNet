@@ -6,14 +6,14 @@ import { MobileSheet } from './MobileSheet';
 
 const PRIMARY_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'market', label: 'Market', icon: CandlestickChart },
-  { id: 'workflows', label: 'Workflows', icon: Layers3 },
+  { id: 'agents', label: 'Agents', icon: Bot },
+  { id: 'observability', label: 'Runs', icon: Activity },
 ];
 
 const MORE_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Activity }> = [
-  { id: 'data-tools', label: 'Media', icon: Wrench },
-  { id: 'observability', label: 'Observability', icon: Activity },
+  { id: 'data-tools', label: 'Data & Tools', icon: Wrench },
+  { id: 'workflows', label: 'Workflows', icon: Layers3 },
   { id: 'experiments', label: 'Experiments', icon: FlaskConical },
 ];
 
@@ -115,7 +115,7 @@ export function MobileBottomNav() {
             aria-label="More"
             title="More"
             className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 ${
-              currentSection === 'observability' || currentSection === 'experiments' ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-muted'
+              currentSection === 'data-tools' || currentSection === 'workflows' || currentSection === 'experiments' ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-muted'
             }`}
           >
             <MoreHorizontal className="h-4 w-4" />

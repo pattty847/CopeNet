@@ -111,7 +111,7 @@ export function MemorySurface() {
   }
 
   return (
-    <div className="shell-home-panel rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+    <div className="shell-home-panel rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
       <div className="mb-3 flex items-start justify-between gap-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Memory</div>
@@ -130,12 +130,12 @@ export function MemorySurface() {
       </div>
 
       {composerOpen && (
-        <div className="mb-3 space-y-2 rounded-[18px] border border-shell-border bg-shell-panel-strong px-3 py-3">
+        <div className="mb-3 space-y-2 rounded-xl border border-shell-border bg-shell-panel-strong px-3 py-3">
           <div className="grid gap-2 sm:grid-cols-[120px_minmax(0,1fr)]">
             <select
               value={form.category}
               onChange={(event) => setForm((current) => ({ ...current, category: event.target.value as MemoryItem['category'] }))}
-              className="rounded-[12px] border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none"
+              className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none"
             >
               {CATEGORY_OPTIONS.map((category) => (
                 <option key={category} value={category}>{CATEGORY_LABELS[category]}</option>
@@ -145,28 +145,28 @@ export function MemorySurface() {
               value={form.title}
               onChange={(event) => setForm((current) => ({ ...current, title: event.target.value }))}
               placeholder="Memory title"
-              className="rounded-[12px] border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none placeholder:text-shell-muted"
+              className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none placeholder:text-shell-muted"
             />
           </div>
           <input
             value={form.summary}
             onChange={(event) => setForm((current) => ({ ...current, summary: event.target.value }))}
             placeholder="What should CopeNet remember?"
-            className="w-full rounded-[12px] border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none placeholder:text-shell-muted"
+            className="w-full rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none placeholder:text-shell-muted"
           />
           <textarea
             value={form.detail}
             onChange={(event) => setForm((current) => ({ ...current, detail: event.target.value }))}
             placeholder="Optional detail"
             rows={3}
-            className="w-full resize-none rounded-[12px] border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none placeholder:text-shell-muted"
+            className="w-full resize-none rounded-xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] text-shell-text outline-none placeholder:text-shell-muted"
           />
           <div className="flex justify-end">
             <button
               type="button"
               onClick={() => void save()}
               disabled={saving || !form.title.trim() || !form.summary.trim()}
-              className="inline-flex items-center gap-1.5 rounded-[10px] border border-shell-accent/35 bg-shell-accent px-3 py-1.5 text-[11px] font-semibold text-[#1a1209] disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center gap-1.5 rounded-xl border border-shell-accent/35 bg-shell-accent px-3 py-1.5 text-[11px] font-semibold text-[#1a1209] disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Save className="h-3 w-3" />
               {approvingDraftId ? 'Approve memory' : editingId ? 'Update memory' : 'Save memory'}
@@ -176,13 +176,13 @@ export function MemorySurface() {
       )}
 
       {drafts.length > 0 && (
-        <div className="mb-3 space-y-1.5 rounded-[18px] border border-shell-accent/30 bg-shell-accent-soft/40 px-3 py-3">
+        <div className="mb-3 space-y-1.5 rounded-xl border border-shell-accent/30 bg-shell-accent-soft/40 px-3 py-3">
           <div className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-shell-accent">
             <Sparkles className="h-3 w-3" />
             Proposed by CopeNet · awaiting your approval ({drafts.length})
           </div>
           {drafts.map((item) => (
-            <div key={item.id} className="rounded-[14px] border border-shell-border bg-shell-panel px-3 py-2.5">
+            <div key={item.id} className="rounded-xl border border-shell-border bg-shell-panel px-3 py-2.5">
               <div className="flex items-center gap-2">
                 <span className="rounded-full border border-shell-border bg-shell-panel-strong px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-shell-accent">
                   {CATEGORY_LABELS[item.category]}
@@ -195,21 +195,21 @@ export function MemorySurface() {
                 <button
                   type="button"
                   onClick={() => void approveDraft(item)}
-                  className="inline-flex items-center gap-1 rounded-[9px] border border-shell-accent/35 bg-shell-accent px-2.5 py-1 text-[10.5px] font-semibold text-[#1a1209] transition-colors hover:bg-shell-accent/90"
+                  className="inline-flex items-center gap-1 rounded-sm border border-shell-accent/35 bg-shell-accent px-2.5 py-1 text-[10.5px] font-semibold text-[#1a1209] transition-colors hover:bg-shell-accent/90"
                 >
                   <Check className="h-3 w-3" /> Approve
                 </button>
                 <button
                   type="button"
                   onClick={() => beginApproveEdit(item)}
-                  className="inline-flex items-center gap-1 rounded-[9px] border border-shell-border px-2.5 py-1 text-[10.5px] font-semibold text-shell-muted transition-colors hover:border-shell-accent/30 hover:text-shell-accent"
+                  className="inline-flex items-center gap-1 rounded-sm border border-shell-border px-2.5 py-1 text-[10.5px] font-semibold text-shell-muted transition-colors hover:border-shell-accent/30 hover:text-shell-accent"
                 >
                   <Pencil className="h-3 w-3" /> Edit
                 </button>
                 <button
                   type="button"
                   onClick={() => void discardDraft(item)}
-                  className="ml-auto inline-flex items-center gap-1 rounded-[9px] border border-shell-border px-2.5 py-1 text-[10.5px] font-semibold text-shell-muted transition-colors hover:border-shell-error/40 hover:text-shell-error"
+                  className="ml-auto inline-flex items-center gap-1 rounded-sm border border-shell-border px-2.5 py-1 text-[10.5px] font-semibold text-shell-muted transition-colors hover:border-shell-error/40 hover:text-shell-error"
                 >
                   <X className="h-3 w-3" /> Discard
                 </button>
@@ -221,7 +221,7 @@ export function MemorySurface() {
 
       <div className="space-y-1.5">
         {visibleItems.length > 0 ? visibleItems.map((item) => (
-          <div key={item.id} className="rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5">
+          <div key={item.id} className="rounded-xl border border-shell-border bg-shell-panel-strong px-3 py-2.5">
             <div className="flex items-start gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -246,7 +246,7 @@ export function MemorySurface() {
             </div>
           </div>
         )) : (
-          <div className="rounded-[16px] border border-dashed border-shell-border bg-shell-bg px-3 py-4 text-[12px] leading-5 text-shell-muted">
+          <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-3 py-4 text-[12px] leading-5 text-shell-muted">
             No memory items yet. Save preferences, conventions, or active priorities here so CopeNet remembers them on purpose.
           </div>
         )}

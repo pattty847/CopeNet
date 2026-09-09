@@ -43,7 +43,7 @@ export function MemeGallery({
 
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-[18px] border border-shell-border bg-shell-panel px-4 py-2.5 shadow-shell">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-shell-border bg-shell-panel px-4 py-2.5 shadow-shell">
         <div className="flex items-center gap-2 font-mono text-[11px] uppercase tracking-[0.22em] text-shell-muted">
           <Filter className="h-3 w-3" />
           <span>{candidates.length}</span>
@@ -71,7 +71,7 @@ export function MemeGallery({
       </div>
 
       {candidates.length === 0 ? (
-        <div className="flex flex-1 items-center justify-center rounded-[18px] border border-dashed border-shell-border bg-shell-panel-strong/30 px-6 py-20 text-center">
+        <div className="flex flex-1 items-center justify-center rounded-xl border border-dashed border-shell-border bg-shell-panel-strong/30 px-6 py-20 text-center">
           <div>
             <div className="mb-2 font-display text-xl text-shell-text">No survivors in view</div>
             <div className="font-mono text-[11px] text-shell-muted">

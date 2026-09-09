@@ -19,6 +19,18 @@ import { useIsMobile } from '../lib/responsive';
 import { shouldShowMobileSectionHeader } from '../lib/mobileCopy';
 import { appSectionFromPathname } from '../lib/appSectionRouting';
 
+// Sections that own their full frame edge-to-edge: the market workstation and the ticker
+// have their own chrome, Agents is a resizable stage, and Home is a single non-scrolling
+// cockpit. Everything else is a document and gets a real gutter — previously nothing did,
+// which is why utility cards sat flush against the sidebar on one side and the scrollbar
+// on the other.
+const FULL_BLEED_SECTIONS = new Set(['home', 'agents', 'market']);
+
+// The command row is redundant wherever the section already carries its own search: the
+// market workstation and ticker both have a symbol jump in their market bar, and Agents
+// has the session drawer. ⌘K still reaches the palette from all of them.
+const COMMAND_BAR_SECTIONS = new Set(['home', 'data-tools', 'observability', 'workflows', 'experiments']);
+
 function AppSectionContent() {
   const currentSection = useAppStore((state) => state.currentSection);
 
@@ -87,12 +99,16 @@ export function AppShell() {
         >
           {showMobileTopBar && <MobileTopBar />}
           <ConnectionBanner />
-          {!isMobile && currentSection !== 'agents' && (
+          {!isMobile && COMMAND_BAR_SECTIONS.has(currentSection) && (
             <div className="flex shrink-0 items-center gap-2 border-b border-shell-border px-3 py-2">
               <TopCommandBar />
             </div>
           )}
-          <div className={`min-h-0 flex-1 overflow-x-hidden overflow-y-auto ${isMobile && !showMobileTopBar ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : ''}`}>
+          <div
+            className={`min-h-0 flex-1 overflow-x-hidden ${
+              FULL_BLEED_SECTIONS.has(currentSection) ? 'overflow-y-hidden' : 'overflow-y-auto shell-section-gutter'
+            } ${isMobile && !showMobileTopBar ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : ''}`}
+          >
             <SectionErrorBoundary sectionName={currentSection}>
               <AppSectionContent />
             </SectionErrorBoundary>

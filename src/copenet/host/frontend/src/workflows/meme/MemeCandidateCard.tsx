@@ -57,7 +57,7 @@ export function MemeCandidateCard({
 
   return (
     <article
-      className={`group relative overflow-hidden rounded-[18px] border border-shell-border bg-shell-panel shadow-shell transition-all duration-200 ${sizing} ${
+      className={`group relative overflow-hidden rounded-xl border border-shell-border bg-shell-panel shadow-shell transition-all duration-200 ${sizing} ${
         pinned ? 'ring-1 ring-shell-accent/40' : ''
       } ${verdict === 'winner' ? 'ring-2 ring-shell-success/50' : ''} ${
         verdict === 'loser' ? 'opacity-70' : ''

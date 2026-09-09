@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Activity, Bug, RefreshCw, Trash2 } from 'lucide-react';
+import { SectionHead } from './SectionHead';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import type { ObservabilityRunDetail, ObservabilitySettings, SessionRunRecord } from '../types/backend';
@@ -151,18 +152,12 @@ export function ObservabilityPage() {
 
   return (
     <div className="animate-fade-in-up space-y-3">
-      <header className="flex flex-col gap-3 border-b border-shell-border pb-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <Activity className="h-4 w-4 text-shell-accent" />
-            <h1 className="text-[16px] font-semibold text-shell-text">Run inspector</h1>
-          </div>
-          <p className="mt-1 text-[11px] text-shell-muted">
-            {stats.runs} runs · {stats.tools} tool calls · {stats.errors} errors in the last 24 hours
-          </p>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
+      <SectionHead
+        icon={Activity}
+        title="Run inspector"
+        context={`${stats.runs} runs · ${stats.tools} tool calls · ${stats.errors} errors / 24h`}
+      >
+        <div className="flex flex-wrap items-center gap-2 self-center">
           {settings && (
             <span
               className="rounded-md bg-shell-bg px-2 py-1 font-mono text-[9px] uppercase tracking-[0.14em] text-shell-muted"
@@ -212,7 +207,7 @@ export function ObservabilityPage() {
             Refresh
           </button>
         </div>
-      </header>
+      </SectionHead>
 
       {error && !loadingDetail && (
         <div role="alert" className="rounded-lg border border-shell-error/30 bg-shell-error/5 px-3 py-2 text-[11px] text-shell-error">

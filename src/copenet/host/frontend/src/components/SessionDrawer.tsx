@@ -327,7 +327,7 @@ export function SessionDrawer() {
     <>
       <div className="absolute inset-0 z-30 bg-shell-bg/20 backdrop-blur-[1px]" aria-hidden="true" />
       <aside className="pointer-events-none absolute inset-y-3 left-3 z-40 flex w-[380px] max-w-[calc(100%-1.5rem)]">
-        <div ref={drawerRef} className="pointer-events-auto flex h-full w-full flex-col overflow-hidden rounded-[24px] border border-shell-border bg-shell-sidebar shadow-shell-xl">
+        <div ref={drawerRef} className="pointer-events-auto flex h-full w-full flex-col overflow-hidden rounded-xl border border-shell-border bg-shell-sidebar shadow-shell-xl">
           <div className="border-b border-shell-border px-4 pb-3 pt-4">
             <div className="flex items-start justify-between gap-3">
               <div>

@@ -67,7 +67,7 @@ export function MemeArena({
   return (
     <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Arena head — score board */}
-      <div className="flex items-center justify-between gap-4 rounded-[18px] border border-shell-border bg-shell-panel px-5 py-3 shadow-shell">
+      <div className="flex items-center justify-between gap-4 rounded-xl border border-shell-border bg-shell-panel px-5 py-3 shadow-shell">
         <div className="flex items-center gap-3">
           <div className="flex h-8 w-8 items-center justify-center rounded-lg border border-shell-accent/30 bg-shell-accent-soft text-shell-accent">
             <Trophy className="h-4 w-4" />
@@ -219,7 +219,7 @@ function PairSelect({
 
 function ArenaEmpty({ label }: { label: string }) {
   return (
-    <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-[18px] border border-dashed border-shell-border bg-shell-panel-strong/30 font-mono text-[11px] uppercase tracking-wider text-shell-muted">
+    <div className="flex min-h-[420px] flex-1 items-center justify-center rounded-xl border border-dashed border-shell-border bg-shell-panel-strong/30 font-mono text-[11px] uppercase tracking-wider text-shell-muted">
       {label}
     </div>
   );
@@ -247,7 +247,7 @@ function VerdictButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className={`focus-ring flex items-center justify-center gap-2 rounded-[14px] border px-4 py-3 font-mono text-[12px] uppercase tracking-[0.22em] transition-all disabled:cursor-not-allowed disabled:opacity-40 ${toneClass}`}
+      className={`focus-ring flex items-center justify-center gap-2 rounded-xl border px-4 py-3 font-mono text-[12px] uppercase tracking-[0.22em] transition-all disabled:cursor-not-allowed disabled:opacity-40 ${toneClass}`}
     >
       <Icon className="h-4 w-4" />
       {label}

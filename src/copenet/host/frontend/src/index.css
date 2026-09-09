@@ -1,11 +1,27 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Cormorant+Garamond:wght@500;600;700&family=JetBrains+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+@import './sections/market/marketTokens.css';
 @import "tailwindcss";
 @import "katex/dist/katex.min.css";
 
 @theme {
-  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
-  --font-display: "Cormorant Garamond", Georgia, serif;
-  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+  /* One family in two cuts, matching the Market workstation: the sans carries labels and
+   * prose, the mono carries every number. `font-display` is kept as a name so the ~28 call
+   * sites need not change, but it is no longer a serif — a terminal has no display face. */
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-display: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, SFMono-Regular, monospace;
+
+  /* Market grammar: 0 for regions, 4px for controls, 6px for cards, and never more.
+   * Redefining the scale here retunes every `rounded-*` utility in the app at once,
+   * rather than editing 600 call sites into agreement. `rounded-full` is untouched —
+   * dots, avatars and pills are genuinely circular. */
+  --radius-xs: 2px;
+  --radius-sm: 4px;
+  --radius-md: 4px;
+  --radius-lg: 4px;
+  --radius-xl: 6px;
+  --radius-2xl: 6px;
+  --radius-3xl: 6px;
 
   /* ── Light mode tokens (default) ── */
   --color-shell-bg: #f3f4f6;
@@ -28,9 +44,9 @@
 
   /* ── Elevation shadows ── */
   --shadow-shell-0: none;
-  --shadow-shell: 0 1px 3px rgba(15, 23, 42, 0.04), 0 6px 16px rgba(15, 23, 42, 0.04);
-  --shadow-shell-hover: 0 2px 8px rgba(15, 23, 42, 0.06), 0 12px 28px rgba(15, 23, 42, 0.07);
-  --shadow-shell-xl: 0 8px 24px rgba(15, 23, 42, 0.06), 0 24px 56px rgba(15, 23, 42, 0.08);
+  --shadow-shell: none;
+  --shadow-shell-hover: none;
+  --shadow-shell-xl: 0 8px 24px rgba(15, 23, 42, 0.08), 0 24px 56px rgba(15, 23, 42, 0.10);
 
   /* ── Operator (chat) tokens ── */
   --color-operator-bg: #f6f7f8;
@@ -71,10 +87,11 @@ html[data-theme='dark'] {
   --color-shell-ink: #010204;
   --color-shell-operator-frame: #010204;
 
+  /* Only the overlay keeps a shadow: a portalled drawer has no seam to sit against. */
   --shadow-shell-0: none;
-  --shadow-shell: 0 1px 2px rgba(0, 0, 0, 0.18), 0 6px 18px rgba(0, 0, 0, 0.12);
-  --shadow-shell-hover: 0 2px 8px rgba(0, 0, 0, 0.18), 0 14px 32px rgba(0, 0, 0, 0.16);
-  --shadow-shell-xl: 0 8px 20px rgba(0, 0, 0, 0.18), 0 28px 56px rgba(0, 0, 0, 0.24);
+  --shadow-shell: none;
+  --shadow-shell-hover: none;
+  --shadow-shell-xl: 0 8px 20px rgba(0, 0, 0, 0.30), 0 28px 56px rgba(0, 0, 0, 0.40);
 
   --color-operator-bg: #010204;
   --color-operator-panel: #080809;
@@ -125,6 +142,51 @@ textarea,
 select {
   font: inherit;
 }
+
+/* Every document section gets the same gutter. Nothing had one before: utility pages
+ * rendered edge-to-edge, so a card sat flush against the sidebar on the left and under the
+ * scrollbar on the right, which is what made those pages look broken at the margins.
+ * Full-bleed sections (Home, Agents, Market) opt out in AppShell rather than here. */
+.shell-section-gutter {
+  padding: 14px;
+  scrollbar-gutter: stable;
+}
+
+@media (max-width: 640px) {
+  .shell-section-gutter { padding: 10px; }
+}
+
+/* The utility pages' section header: the same caps-and-hairline language as the market
+ * bar, replacing the full-width marketing hero each one used to open with. */
+.shell-section-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: -14px -14px 14px;
+  padding: 0 14px;
+  height: 42px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.shell-section-head h1 {
+  margin: 0;
+  font: 600 17px var(--mkt-sans);
+  letter-spacing: 0.01em;
+  color: var(--mkt-text);
+}
+
+.shell-section-head p {
+  margin: 0;
+  overflow: hidden;
+  color: var(--mkt-dim);
+  font: 500 9px var(--mkt-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.shell-section-head__spacer { flex: 1 1 auto; }
 
 .shell-top-command-bar {
   box-sizing: border-box;

@@ -42,7 +42,7 @@ export function RunPulseStrip({ runs, loading = false, cellCount = 72 }: RunPuls
   const hoveredRun = hoverIndex !== null ? cells[hoverIndex] : null;
 
   return (
-    <section className="rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
+    <section className="rounded-xl border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
       <header className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="relative flex h-1.5 w-1.5">
@@ -79,7 +79,7 @@ export function RunPulseStrip({ runs, loading = false, cellCount = 72 }: RunPuls
             <button
               key={i}
               type="button"
-              className={`h-8 rounded-[3px] transition-all duration-150 ${TONE_CLASS[tone]} ${
+              className={`h-8 rounded-xs transition-all duration-150 ${TONE_CLASS[tone]} ${
                 hoverIndex === i ? 'ring-2 ring-shell-accent/50 scale-y-110' : ''
               } ${loading && !run ? 'shimmer' : ''}`}
               onMouseEnter={() => setHoverIndex(i)}

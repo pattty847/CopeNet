@@ -4,23 +4,23 @@ import {
   Bot,
   CandlestickChart,
   ChevronLeft,
-  FlaskConical,
   Home,
-  Layers3,
   PanelLeft,
   Wrench,
 } from 'lucide-react';
 import { AppSection, useAppStore } from '../store/useAppStore';
 import { ThemeToggle } from './ThemeToggle';
 
+// Market sits directly under Home because it is what this workspace is for. Workflows and
+// Experiments are reachable at their routes and linked from Data & Tools, but neither has
+// earned permanent nav real estate: Workflows issues no RPC at all, and Experiments is one
+// matrix better read from the run inspector.
 const NAV_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
-  { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'market', label: 'Market', icon: CandlestickChart },
-  { id: 'workflows', label: 'Workflows', icon: Layers3 },
-  { id: 'data-tools', label: 'Data & Tools', icon: Wrench },
+  { id: 'agents', label: 'Agents', icon: Bot },
   { id: 'observability', label: 'Observability', icon: Activity },
-  { id: 'experiments', label: 'Experiments', icon: FlaskConical },
+  { id: 'data-tools', label: 'Data & Tools', icon: Wrench },
 ];
 
 export function SidebarNav() {
@@ -61,7 +61,7 @@ export function SidebarNav() {
           {!primaryNavCollapsed && (
             <div>
               <div className="text-[15px] font-semibold tracking-tight text-shell-text">CopeNet</div>
-              <div className="text-[11px] text-shell-muted">Agentic workspace</div>
+              <div className="text-[11px] text-shell-muted">Market terminal</div>
             </div>
           )}
         </div>

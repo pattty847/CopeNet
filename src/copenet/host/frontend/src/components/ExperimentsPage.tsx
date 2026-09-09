@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { wsClient } from '../lib/wsClient';
 import type { SessionRunRecord } from '../types/backend';
+import { SectionHead } from './SectionHead';
 import { useAppStore } from '../store/useAppStore';
 
 interface MatrixCell {
@@ -162,38 +163,17 @@ export function ExperimentsPage() {
 
   return (
     <div className="flex min-h-0 flex-col gap-5">
-      {/* Hero */}
-      <div className="shell-page-utility-hero relative overflow-hidden rounded-[24px] border border-shell-border bg-shell-panel px-6 py-5 shadow-shell">
-        <div className="pointer-events-none absolute -right-16 -top-16 h-64 w-64 rounded-full bg-shell-accent/15 blur-3xl" />
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="mb-2 inline-flex items-center gap-2 font-mono text-[10px] uppercase tracking-[0.24em] text-shell-accent">
-              <FlaskConical className="h-3 w-3" />
-              experiments · matrix
-            </div>
-            <h1 className="font-display text-4xl leading-tight text-shell-text">
-              Run the same job across models. Watch what changes.
-            </h1>
-            <p className="mt-2 text-[13px] leading-relaxed text-shell-muted">
-              A live provider × model matrix of every run touching CopeNet. Hover a cell to see the
-              actual call — the data is already in sessions, this surface just makes it legible.
-            </p>
-          </div>
-          <button
-            type="button"
-            onClick={() => void loadAll()}
-            disabled={loading}
-            className="focus-ring inline-flex items-center gap-2 rounded-xl border border-shell-accent/30 bg-shell-accent-soft px-3 py-2 font-mono text-[11px] uppercase tracking-[0.22em] text-shell-accent transition-all hover:bg-shell-accent/20 disabled:opacity-50"
-          >
-            {loading ? (
-              <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
-            ) : (
-              <Plus className="h-3.5 w-3.5" />
-            )}
-            refresh
-          </button>
-        </div>
-      </div>
+      <SectionHead icon={FlaskConical} title="Experiments" context="provider × model matrix">
+        <button
+          type="button"
+          onClick={() => void loadAll()}
+          disabled={loading}
+          className="focus-ring inline-flex h-7 items-center gap-2 self-center rounded-sm border border-shell-accent/30 bg-shell-accent-soft px-3 font-mono text-[10px] uppercase tracking-[0.18em] text-shell-accent transition-all hover:bg-shell-accent/20 disabled:opacity-50"
+        >
+          {loading ? <LoaderCircle className="h-3 w-3 animate-spin" /> : <Plus className="h-3 w-3" />}
+          refresh
+        </button>
+      </SectionHead>
 
       {/* KPI tiles */}
       <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
@@ -226,7 +206,7 @@ export function ExperimentsPage() {
       </div>
 
       {/* Matrix */}
-      <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel shadow-shell">
+      <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel shadow-shell">
         <div className="flex items-center justify-between border-b border-shell-border px-4 py-3">
           <div>
             <div className="font-display text-lg tracking-tight text-shell-text">
@@ -376,7 +356,7 @@ function Kpi({
   mono?: boolean;
 }) {
   return (
-    <div className="shell-page-utility-tile lift-sm rounded-[18px] border border-shell-border bg-shell-panel px-4 py-3 shadow-shell">
+    <div className="shell-page-utility-tile lift-sm rounded-xl border border-shell-border bg-shell-panel px-4 py-3 shadow-shell">
       <div className="mb-1.5 flex items-center justify-between">
         <span className="font-mono text-[10px] uppercase tracking-[0.22em] text-shell-muted">
           {label}
@@ -422,7 +402,7 @@ function FutureCard({
   body: string;
 }) {
   return (
-    <div className="rounded-[18px] border border-dashed border-shell-border bg-shell-panel-strong/30 px-4 py-4 shadow-shell">
+    <div className="rounded-xl border border-dashed border-shell-border bg-shell-panel-strong/30 px-4 py-4 shadow-shell">
       <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg border border-shell-accent/30 bg-shell-accent-soft text-shell-accent">
         <Icon className="h-4 w-4" />
       </div>

@@ -33,7 +33,7 @@ export function TraceList({ runs, limit = 12, onSelect }: TraceListProps) {
   );
 
   return (
-    <section className="rounded-[20px] border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
+    <section className="rounded-xl border border-shell-border bg-shell-panel px-5 py-4 shadow-shell">
       <header className="mb-3 flex items-center justify-between">
         <div className="flex items-center gap-2">
           <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Recent traces</span>

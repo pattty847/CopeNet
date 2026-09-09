@@ -115,7 +115,7 @@ function SectionHeader({ icon: Icon, label, count }: { icon: typeof Bell; label:
 function AttentionSection({ items }: { items: ReturnBriefingPayload['attentionItems'] }) {
   if (items.length === 0) {
     return (
-      <div className="rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
+      <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
         Nothing needs your attention right now.
       </div>
     );
@@ -127,7 +127,7 @@ function AttentionSection({ items }: { items: ReturnBriefingPayload['attentionIt
         return (
           <div
             key={item.id}
-            className="flex items-start gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5"
+            className="flex items-start gap-2.5 rounded-xl border border-shell-border bg-shell-panel-strong px-3 py-2.5"
           >
             <AlertCircle className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${style.text}`} />
             <div className="min-w-0 flex-1">
@@ -150,7 +150,7 @@ function AttentionSection({ items }: { items: ReturnBriefingPayload['attentionIt
 function ActivitySection({ items }: { items: ReturnBriefingPayload['activityItems'] }) {
   if (items.length === 0) {
     return (
-      <div className="rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
+      <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
         No recorded activity while you were away.
       </div>
     );
@@ -160,7 +160,7 @@ function ActivitySection({ items }: { items: ReturnBriefingPayload['activityItem
       {items.map((item) => (
         <div
           key={item.id}
-          className="flex items-start gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5"
+          className="flex items-start gap-2.5 rounded-xl border border-shell-border bg-shell-panel-strong px-3 py-2.5"
         >
           <Zap className="mt-0.5 h-3 w-3 shrink-0 text-shell-accent/60" />
           <div className="min-w-0 flex-1">
@@ -184,7 +184,7 @@ function ActivitySection({ items }: { items: ReturnBriefingPayload['activityItem
 function WatchSection({ items }: { items: ReturnBriefingPayload['watchItems'] }) {
   if (items.length === 0) {
     return (
-      <div className="rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
+      <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
         Nothing developing right now.
       </div>
     );
@@ -194,7 +194,7 @@ function WatchSection({ items }: { items: ReturnBriefingPayload['watchItems'] })
       {items.map((item) => (
         <div
           key={item.id}
-          className="flex items-start gap-2.5 rounded-[14px] border border-shell-border bg-shell-panel-strong px-3 py-2.5"
+          className="flex items-start gap-2.5 rounded-xl border border-shell-border bg-shell-panel-strong px-3 py-2.5"
         >
           <Eye className="mt-0.5 h-3 w-3 shrink-0 text-shell-muted/60" />
           <div className="min-w-0 flex-1">
@@ -213,13 +213,13 @@ function WatchSection({ items }: { items: ReturnBriefingPayload['watchItems'] })
 function NoticeSection({ text, source }: { text: string | null; source?: string | null }) {
   if (!text) {
     return (
-      <div className="rounded-[12px] border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
+      <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-3 py-2.5 text-[12px] text-shell-muted">
         Nothing particular to surface right now.
       </div>
     );
   }
   return (
-    <div className="rounded-[16px] border border-shell-accent/20 bg-shell-accent-soft px-4 py-3">
+    <div className="rounded-xl border border-shell-accent/20 bg-shell-accent-soft px-4 py-3">
       <div className="text-[13px] leading-6 text-shell-text">"{text}"</div>
       {source && (
         <div className="mt-1.5 text-[10px] text-shell-muted/70">
@@ -262,7 +262,7 @@ export function ReturnBriefing({ devMode = false }: ReturnBriefingProps) {
   };
 
   return (
-    <div className="animate-fade-in-up rounded-[24px] border border-shell-accent/25 bg-shell-panel px-4 py-5 shadow-shell sm:px-6">
+    <div className="animate-fade-in-up rounded-xl border border-shell-accent/25 bg-shell-panel px-4 py-5 shadow-shell sm:px-6">
       {/* Header */}
       <div className="mb-4 flex items-start justify-between gap-3">
         <div>

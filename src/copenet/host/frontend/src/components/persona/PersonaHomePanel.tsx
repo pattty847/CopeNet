@@ -3,6 +3,9 @@ import { useEffect, useMemo, useState } from 'react';
 
 import { wsClient } from '../../lib/wsClient';
 import { resolvePersonaRuntime } from '../../lib/personaCommands';
+import { SectionHead } from '../SectionHead';
+import { MemorySurface } from '../profile/MemorySurface';
+import { UserNotesSurface } from '../profile/UserNotesSurface';
 import { useAppStore } from '../../store/useAppStore';
 import { FileEditor } from '../FileEditor';
 import type { PersonaListItem, PersonaPrivacyTier, Session } from '../../types/backend';
@@ -235,18 +238,9 @@ export function PersonaHomePanel() {
 
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-          <Sparkles className="h-3.5 w-3.5 text-shell-accent" />
-          Persona Home
-        </div>
-        <h1 className="max-w-4xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-          Give CopeNet a stable self, then let each model earn its own flavor.
-        </h1>
-        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-          Persona Home is where identity, privacy, and model-specific nuance become explicit. It stays inspectable so continuity feels grounded instead of spooky.
-        </p>
-        <div className="mt-6 flex flex-wrap gap-2">
+      <SectionHead icon={Sparkles} title="Persona Home" context="identity, privacy, and model flavors" />
+      <section className="shell-page-utility-hero rounded-xl border border-shell-border bg-shell-panel px-4 py-4 sm:px-6 sm:py-5">
+        <div className="flex flex-wrap gap-2">
           <button
             type="button"
             onClick={() => void handleOnboard()}
@@ -269,7 +263,7 @@ export function PersonaHomePanel() {
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.1fr)_360px]">
         <div className="space-y-3">
-          <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
             <div className="mb-3 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-shell-accent" />
@@ -326,7 +320,7 @@ export function PersonaHomePanel() {
             </div>
           </div>
 
-          <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
             <div className="mb-4 flex flex-wrap items-center gap-2">
               <span className="rounded-full border border-shell-border bg-shell-bg px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">
                 Active persona
@@ -339,21 +333,21 @@ export function PersonaHomePanel() {
               </span>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <div className="rounded-[20px] border border-shell-border bg-shell-bg px-4 py-4">
+              <div className="rounded-xl border border-shell-border bg-shell-bg px-4 py-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Effective flavor</div>
                 <div className="mt-2 text-lg font-semibold text-shell-text">{personaHome?.personaFlavorId || runtime.personaFlavorId || 'No saved flavor yet'}</div>
                 <p className="mt-2 text-sm leading-6 text-shell-muted">
                   {personaHome?.active ? 'Persona Home is active for this runtime.' : 'Persona Home is currently inactive for this runtime.'}
                 </p>
               </div>
-              <div className="rounded-[20px] border border-shell-border bg-shell-bg px-4 py-4">
+              <div className="rounded-xl border border-shell-border bg-shell-bg px-4 py-4">
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Root path</div>
                 <div className="mt-2 break-all text-sm leading-6 text-shell-text">{personaHome?.rootDir || 'Unavailable'}</div>
               </div>
             </div>
           </div>
 
-          <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
             <div className="mb-4 flex items-center gap-2">
               <Shield className="h-4 w-4 text-shell-accent" />
               <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">
@@ -381,7 +375,7 @@ export function PersonaHomePanel() {
                   <FileGroup title="Model flavor" paths={loadedGroups.modelFlavor} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
                   <FileGroup title="Other" paths={loadedGroups.other} rootDir={personaHome?.rootDir} onEdit={openPersonaFile} />
                 </div>
-                <details className="mt-5 rounded-[20px] border border-shell-border bg-shell-bg px-4 py-3">
+                <details className="mt-5 rounded-xl border border-shell-border bg-shell-bg px-4 py-3">
                   <summary className="cursor-pointer text-sm font-medium text-shell-text">Prompt preview</summary>
                   <pre className="mt-3 max-h-72 overflow-y-auto whitespace-pre-wrap text-xs leading-6 text-shell-muted">
                     {personaContext?.prompt || 'No prompt payload loaded yet.'}
@@ -393,7 +387,7 @@ export function PersonaHomePanel() {
         </div>
 
         <div className="space-y-3">
-          <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Privacy</div>
             <div className="space-y-2">
               {(['private', 'safe', 'off'] as PersonaPrivacyTier[]).map((tier) => (
@@ -418,7 +412,7 @@ export function PersonaHomePanel() {
             </p>
           </div>
 
-          <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Model overrides</div>
             <div className="space-y-2">
               {personaSettings && Object.keys(personaSettings.modelOverrides).length > 0 ? (
@@ -438,6 +432,11 @@ export function PersonaHomePanel() {
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="grid gap-2.5 xl:grid-cols-2">
+        <MemorySurface />
+        <UserNotesSurface />
       </section>
     </div>
   );

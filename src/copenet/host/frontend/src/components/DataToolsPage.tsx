@@ -27,6 +27,7 @@ import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobile
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { DataToolsRoute, MediaAsset, MediaAssetDetail, WebExtractDocument } from '../types/backend';
+import { SectionHead } from './SectionHead';
 import { MessagingSettingsPanel } from './MessagingSettingsPanel';
 import { PermissionsSettingsPanel } from './PermissionsSettingsPanel';
 import { MobileSheet } from './mobile/MobileSheet';
@@ -85,7 +86,7 @@ function HubCard({
     <button
       type="button"
       onClick={onClick}
-      className="shell-page-utility-tile lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
+      className="shell-page-utility-tile lift-sm group rounded-xl border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
     >
       <div className="mb-3 text-[10px] font-semibold uppercase tracking-[0.2em] text-shell-accent">{eyebrow}</div>
       <div className="flex items-start justify-between gap-3">
@@ -103,21 +104,24 @@ function HubCard({
   );
 }
 
-function DataToolsHub({ openSources, openMessaging, openPersona, openPermissions }: { openSources: () => void; openMessaging: () => void; openPersona: () => void; openPermissions: () => void }) {
+function DataToolsHub({
+  openSources,
+  openMessaging,
+  openPersona,
+  openPermissions,
+  openWorkflows,
+  openExperiments,
+}: {
+  openSources: () => void;
+  openMessaging: () => void;
+  openPersona: () => void;
+  openPermissions: () => void;
+  openWorkflows: () => void;
+  openExperiments: () => void;
+}) {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-          <Wrench className="h-3.5 w-3.5 text-shell-accent" />
-          Data &amp; Tools
-        </div>
-        <h1 className="max-w-4xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-          Connect knowledge, feeds, and tools into one living context.
-        </h1>
-        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-          This is where files, datasets, knowledge bases, and operator tools become part of the workspace. The point is not just to store them. It is to make them useful.
-        </p>
-      </section>
+      <SectionHead icon={Wrench} title="Data &amp; Tools" context="what the workspace is grounded in" />
 
       <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
         <HubCard eyebrow="Ground" title="Knowledge Bases" body="Curated context that can refresh, evolve, and stay anchored to the workspace." accent="text-shell-accent" />
@@ -128,13 +132,23 @@ function DataToolsHub({ openSources, openMessaging, openPersona, openPermissions
         <HubCard eyebrow="Guard" title="Permissions" body="Manage the global shell allowlist — the commands you've told CopeNet it can always run." accent="text-shell-accent" onClick={openPermissions} />
       </section>
 
-      <section className="shell-page-utility-tile rounded-[24px] border border-dashed border-shell-border bg-shell-panel px-6 py-8 text-center">
-        <div className="mx-auto max-w-3xl">
-          <h2 className="font-display text-2xl tracking-tight text-shell-text">Ground the workspace in real sources, not floating context.</h2>
-          <p className="mt-4 text-sm leading-7 text-shell-muted">
-            Start with media imports today, then layer in web pages, documents, feeds, and knowledge destinations as CopeNet grows into a proper ingestion workspace.
-          </p>
-        </div>
+      {/* Workflows and Experiments left the sidebar because neither has earned permanent
+          nav space — but they are still real routes, and this is where they live now. */}
+      <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
+        <HubCard
+          eyebrow="Bench"
+          title="Workflows"
+          body="Meme Lab and the recurring-run bench. Direction-setting — none of it issues a run yet."
+          accent="text-shell-muted"
+          onClick={openWorkflows}
+        />
+        <HubCard
+          eyebrow="Compare"
+          title="Experiments"
+          body="The provider × model matrix over every run CopeNet has recorded."
+          accent="text-shell-muted"
+          onClick={openExperiments}
+        />
       </section>
     </div>
   );
@@ -159,7 +173,7 @@ function SourceTypeCard({
     <button
       type="button"
       onClick={onClick}
-      className="shell-page-utility-tile lift-sm group rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
+      className="shell-page-utility-tile lift-sm group rounded-xl border border-shell-border bg-shell-panel px-4 py-4 text-left shadow-shell"
     >
       <div className="mb-3 inline-flex h-9 w-9 items-center justify-center rounded-xl bg-shell-accent-soft text-shell-accent">
         <Icon className="h-4 w-4" />
@@ -178,18 +192,7 @@ function SourceTypeCard({
 function DataSourcesPage({ openMedia, openWeb }: { openMedia: () => void; openWeb: () => void }) {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-          <Database className="h-3.5 w-3.5 text-shell-accent" />
-          Data Sources
-        </div>
-        <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-          Bring raw outside material into CopeNet as working context.
-        </h1>
-        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-          Source types become workspace assets first. Then agents, workflows, and knowledge features can actually build on something real.
-        </p>
-      </section>
+      <SectionHead icon={Database} title="Data Sources" context="raw material into working context" />
 
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.25fr)_minmax(320px,0.75fr)]">
         <div className="grid gap-4 md:grid-cols-2">
@@ -226,14 +229,14 @@ function DataSourcesPage({ openMedia, openWeb }: { openMedia: () => void; openWe
         </div>
 
         <div className="space-y-2.5">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Why this matters</div>
             <h2 className="text-xl font-semibold text-shell-text">CopeNet gets stronger when source material becomes reusable.</h2>
             <p className="mt-4 text-sm leading-6 text-shell-muted">
               Imported sources are the bridge between one-off chat and real work. Once something is ingested, it can be queried, summarized, filed into knowledge, or turned into a workflow.
             </p>
           </div>
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Quick starts</div>
             <div className="space-y-3">
               {[
@@ -257,25 +260,14 @@ function DataSourcesPage({ openMedia, openWeb }: { openMedia: () => void; openWe
 function MessagingSettingsPage() {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-          <RadioTower className="h-3.5 w-3.5 text-shell-accent" />
-          Messaging
-        </div>
-        <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-          Wire Telegram into CopeNet without losing session truth.
-        </h1>
-        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-          Set the runtime defaults, configure real destinations, and map Telegram chats or threads to specific CopeNet sessions before inbound routing goes fully live.
-        </p>
-      </section>
+      <SectionHead icon={RadioTower} title="Messaging" context="reachability and chat-to-session routes" />
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-        <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+        <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
           <MessagingSettingsPanel />
         </div>
         <div className="space-y-3">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">How it works</div>
             <div className="space-y-2 text-sm leading-6 text-shell-muted">
               <p>One Telegram chat or thread can map to one CopeNet session.</p>
@@ -283,7 +275,7 @@ function MessagingSettingsPage() {
               <p>Destinations stay honest so approval-backed sends have a real local address book.</p>
             </div>
           </div>
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next</div>
             <div className="space-y-2 text-sm leading-6 text-shell-muted">
               <p>Inbound Telegram messages can use these routes to continue the right session automatically.</p>
@@ -299,27 +291,18 @@ function MessagingSettingsPage() {
 function PermissionsSettingsPage() {
   return (
     <div className="animate-fade-in-up space-y-3">
-      <section className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-        <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-          <ShieldCheck className="h-3.5 w-3.5 text-shell-accent" />
-          Permissions
-        </div>
-        <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-          Decide once which commands CopeNet can always run.
-        </h1>
-        <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-          The global shell allowlist is your standing trust. A listed command runs in any Access
-          mode without asking — the rest still prompt (Ask) or block (Read-only). Curate it here, or
-          grow it one approval at a time.
-        </p>
-      </section>
+      <SectionHead icon={ShieldCheck} title="Permissions" context="the standing shell allowlist" />
+      <p className="max-w-3xl text-[13px] leading-6 text-shell-muted">
+        A listed command runs in any Access mode without asking — the rest still prompt (Ask) or
+        block (Read-only). Curate it here, or grow it one approval at a time.
+      </p>
 
       <section className="grid gap-3 xl:grid-cols-[minmax(0,1.2fr)_320px]">
-        <div className="shell-page-utility-tile rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
+        <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-5 sm:py-5">
           <PermissionsSettingsPanel />
         </div>
         <div className="space-y-3">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">How it works</div>
             <div className="space-y-2 text-sm leading-6 text-shell-muted">
               <p>Read-only and Ask sessions consult this list before blocking or prompting.</p>
@@ -327,7 +310,7 @@ function PermissionsSettingsPage() {
               <p>Stored exactly as approved (whitespace-normalized), so it's the precise command you blessed.</p>
             </div>
           </div>
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Tip</div>
             <div className="space-y-2 text-sm leading-6 text-shell-muted">
               <p>The fastest way to add an entry is the “Always allow” button on an approval prompt.</p>
@@ -377,21 +360,11 @@ function WebPageImportsPage() {
 
   return (
     <div className="animate-fade-in-up space-y-3">
+      <SectionHead icon={Globe} title="Web Pages" context="extracted documents" />
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-        <div className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-            <Globe className="h-3.5 w-3.5 text-shell-accent" />
-            Web Pages
-          </div>
-          <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-            Paste a URL and pull clean readable text into CopeNet.
-          </h1>
-          <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-            Jina-style ingest for articles, docs, and web pages. CopeNet fetches the page, strips noise, and returns reusable text plus markdown-like output.
-          </p>
-
-          <form onSubmit={handleExtract} className="mt-6 space-y-4 sm:mt-8">
-            <div className="rounded-[28px] border border-shell-border bg-shell-bg p-3 shadow-shell">
+        <div className="shell-page-utility-hero rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+          <form onSubmit={handleExtract} className="space-y-4">
+            <div className="rounded-xl border border-shell-border bg-shell-bg p-3 shadow-shell">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
                 <input
                   value={url}
@@ -413,7 +386,7 @@ function WebPageImportsPage() {
         </div>
 
         <div className="space-y-2.5">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What you get</div>
             <div className="space-y-3">
               {[
@@ -428,7 +401,7 @@ function WebPageImportsPage() {
               ))}
             </div>
           </div>
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Status</div>
             <p className="text-sm leading-6 text-shell-muted">
               {error
@@ -444,7 +417,7 @@ function WebPageImportsPage() {
       </section>
 
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.55fr)_320px]">
-        <div className="rounded-[34px] border border-shell-border bg-shell-panel px-4 py-5 shadow-shell sm:px-6 sm:py-6">
+        <div className="rounded-xl border border-shell-border bg-shell-panel px-4 py-5 shadow-shell sm:px-6 sm:py-6">
           <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Extracted preview</div>
@@ -467,12 +440,12 @@ function WebPageImportsPage() {
                 <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">Readable text</div>
                 <div className="rounded-full border border-shell-border bg-shell-bg px-3 py-1">Markdown output</div>
               </div>
-              <div className="rounded-[24px] border border-shell-border bg-shell-bg px-4 py-4 text-sm leading-6 text-shell-text whitespace-pre-wrap">
+              <div className="rounded-xl border border-shell-border bg-shell-bg px-4 py-4 text-sm leading-6 text-shell-text whitespace-pre-wrap">
                 {document.excerpt || document.text}
               </div>
             </div>
           ) : (
-            <div className="rounded-[24px] border border-dashed border-shell-border bg-shell-bg px-6 py-10 text-center">
+            <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-6 py-10 text-center">
               <h3 className="text-lg font-semibold text-shell-text">No extracted page yet</h3>
               <p className="mt-3 text-sm leading-6 text-shell-muted">
                 Start with an article or docs page and CopeNet will return a clean readable preview.
@@ -482,7 +455,7 @@ function WebPageImportsPage() {
         </div>
 
         <div className="space-y-2.5">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Export</div>
             <div className="space-y-2">
               <button
@@ -506,7 +479,7 @@ function WebPageImportsPage() {
             </div>
             {copied ? <p className="mt-3 text-xs font-medium uppercase tracking-[0.18em] text-shell-accent">Copied {copied}.</p> : null}
           </div>
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next</div>
             <p className="text-sm leading-6 text-shell-muted">
               The natural follow-up is saving extracted pages as workspace assets so agents can attach, summarize, file, and compare them later.
@@ -526,7 +499,7 @@ function MediaAssetRow({ asset, onOpen }: { asset: MediaAsset; onOpen: (asset: M
     <button
       type="button"
       onClick={() => onOpen(asset)}
-      className="w-full rounded-[24px] border border-shell-border bg-shell-bg px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-shell-border-strong sm:px-5"
+      className="w-full rounded-xl border border-shell-border bg-shell-bg px-4 py-4 text-left transition hover:-translate-y-0.5 hover:border-shell-border-strong sm:px-5"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="min-w-0 flex-1">
@@ -672,14 +645,14 @@ function MediaAssetDrawer({
 
       <div className={`min-h-0 flex-1 overflow-auto ${mobile ? 'px-4 py-4' : 'px-6 py-5'}`}>
         {loading ? (
-          <div className="flex items-center gap-3 rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-shell-muted">
+          <div className="flex items-center gap-3 rounded-xl border border-shell-border bg-shell-bg px-5 py-5 text-shell-muted">
             <LoaderCircle className="h-5 w-5 animate-spin text-shell-accent" />
             Loading transcript…
           </div>
         ) : error ? (
-          <div className="rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 text-sm leading-6 text-shell-muted">{error}</div>
+          <div className="rounded-xl border border-shell-border bg-shell-bg px-5 py-5 text-sm leading-6 text-shell-muted">{error}</div>
         ) : (
-          <pre className="whitespace-pre-wrap rounded-[24px] border border-shell-border bg-shell-bg px-5 py-5 font-sans text-sm leading-7 text-shell-text">
+          <pre className="whitespace-pre-wrap rounded-xl border border-shell-border bg-shell-bg px-5 py-5 font-sans text-sm leading-7 text-shell-text">
             {detail?.transcriptContent || 'No transcript text was saved for this asset.'}
           </pre>
         )}
@@ -696,7 +669,7 @@ function MediaAssetDrawer({
   }
 
   return (
-    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel shadow-shell-xl">
+    <div className="animate-slide-in-right fixed inset-y-4 right-4 z-40 w-[min(520px,calc(100vw-2rem))] shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel shadow-shell-xl">
       {body}
     </div>
   );
@@ -898,21 +871,11 @@ function MediaImportsPage() {
 
   return (
     <div className="animate-fade-in-up space-y-3">
+      <SectionHead icon={PlayCircle} title="Media Imports" context="transcript-backed assets" />
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.45fr)_360px]">
-        <div className="shell-page-utility-hero rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
-          <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-bg px-4 py-2 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">
-            <PlayCircle className="h-3.5 w-3.5 text-shell-accent" />
-            Media Imports
-          </div>
-          <h1 className="max-w-3xl font-display text-[2rem] leading-[1.02] tracking-tight text-shell-text sm:text-[2.6rem]">
-            Paste a video link to transcribe it into CopeNet or download it straight to your device.
-          </h1>
-          <p className="mt-4 max-w-3xl text-[14px] leading-6 text-shell-muted sm:mt-5 sm:text-base sm:leading-7">
-            Transcribe keeps a reusable transcript-backed asset inside CopeNet. Download skips the workspace asset and hands the video straight back to Safari or your desktop browser.
-          </p>
-
-          <form onSubmit={handleTranscribe} className="mt-6 space-y-4 sm:mt-8">
-            <div className="rounded-[28px] border border-shell-border bg-shell-bg p-3 shadow-shell">
+        <div className="shell-page-utility-hero rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell sm:px-6 sm:py-5">
+          <form onSubmit={handleTranscribe} className="space-y-4">
+            <div className="rounded-xl border border-shell-border bg-shell-bg p-3 shadow-shell">
               <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
                 <input
                   value={url}
@@ -980,7 +943,7 @@ function MediaImportsPage() {
         </div>
 
         <div className="space-y-2.5">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Import status</div>
             <div className="flex items-start gap-3">
               <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-shell-accent-soft text-shell-accent">
@@ -1011,7 +974,7 @@ function MediaImportsPage() {
             </div>
           </div>
 
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">What this unlocks</div>
             <div className="space-y-3">
               {[
@@ -1031,7 +994,7 @@ function MediaImportsPage() {
       </section>
 
       <section className="grid gap-2.5 xl:grid-cols-[minmax(0,1.55fr)_320px]">
-        <div className="rounded-[34px] border border-shell-border bg-shell-panel px-4 py-5 shadow-shell sm:px-6 sm:py-6">
+        <div className="rounded-xl border border-shell-border bg-shell-panel px-4 py-5 shadow-shell sm:px-6 sm:py-6">
           <div className={`mb-5 flex gap-4 ${isMobile ? 'flex-col items-start' : 'items-center justify-between'}`}>
             <div>
               <div className="text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Imported Assets</div>
@@ -1046,7 +1009,7 @@ function MediaImportsPage() {
             {mediaAssets.length > 0 ? (
               mediaAssets.map((asset) => <MediaAssetRow key={asset.assetId} asset={asset} onOpen={openAsset} />)
             ) : (
-              <div className="rounded-[24px] border border-dashed border-shell-border bg-shell-bg px-6 py-10 text-center">
+              <div className="rounded-xl border border-dashed border-shell-border bg-shell-bg px-6 py-10 text-center">
                 <h3 className="text-lg font-semibold text-shell-text">No media assets yet</h3>
                 <p className="mt-3 text-sm leading-6 text-shell-muted">
                   Paste a video link above and CopeNet will turn it into the first reusable transcript source in this workspace.
@@ -1057,7 +1020,7 @@ function MediaImportsPage() {
         </div>
 
         <div className="space-y-2.5">
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Incoming transcript</div>
             {capturedChunks.length > 0 ? (
               <div className="space-y-3">
@@ -1074,7 +1037,7 @@ function MediaImportsPage() {
             )}
           </div>
 
-          <div className="shell-page-utility-tile rounded-[20px] border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
+          <div className="shell-page-utility-tile rounded-xl border border-shell-border bg-shell-panel px-4 py-4 shadow-shell">
             <div className="mb-3 text-xs font-semibold uppercase tracking-[0.22em] text-shell-muted">Next source</div>
             <h3 className="text-lg font-semibold text-shell-text">Web page ingest</h3>
             <p className="mt-3 text-sm leading-6 text-shell-muted">
@@ -1105,6 +1068,7 @@ function MediaImportsPage() {
 export function DataToolsPage() {
   const route = useAppStore((state) => state.dataToolsRoute);
   const setRoute = useAppStore((state) => state.setDataToolsRoute);
+  const setCurrentSection = useAppStore((state) => state.setCurrentSection);
 
   function handleBack() {
     if (route === 'media' || route === 'web') {
@@ -1116,10 +1080,17 @@ export function DataToolsPage() {
 
   return (
     <div className="space-y-3">
-      <SectionBreadcrumb route={route} onBack={handleBack} />
+      {route !== 'hub' && <SectionBreadcrumb route={route} onBack={handleBack} />}
       {route === 'hub' && (
         <>
-          <DataToolsHub openSources={() => setRoute('sources')} openMessaging={() => setRoute('messaging')} openPersona={() => setRoute('persona')} openPermissions={() => setRoute('permissions')} />
+          <DataToolsHub
+            openSources={() => setRoute('sources')}
+            openMessaging={() => setRoute('messaging')}
+            openPersona={() => setRoute('persona')}
+            openPermissions={() => setRoute('permissions')}
+            openWorkflows={() => setCurrentSection('workflows')}
+            openExperiments={() => setCurrentSection('experiments')}
+          />
           <WorkspaceFileViewer />
         </>
       )}

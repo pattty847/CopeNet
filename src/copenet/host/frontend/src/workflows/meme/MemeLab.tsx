@@ -103,7 +103,7 @@ export function MemeLab({ onExit }: MemeLabProps) {
   if (isMobile) {
     return (
       <div className="relative flex h-full min-h-0 animate-fade-in-up flex-col gap-3">
-        <section className="overflow-hidden rounded-[22px] border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-4 py-3 shadow-shell">
+        <section className="overflow-hidden rounded-xl border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-4 py-3 shadow-shell">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <button
@@ -236,7 +236,7 @@ export function MemeLab({ onExit }: MemeLabProps) {
   return (
     <div className="relative flex h-full min-h-0 animate-fade-in-up flex-col gap-3">
       {/* Top banner */}
-      <section className="flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-[22px] border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-5 py-3.5 shadow-shell">
+      <section className="flex flex-wrap items-center justify-between gap-3 overflow-hidden rounded-xl border border-shell-border bg-gradient-to-br from-shell-panel via-shell-panel to-shell-panel-strong px-5 py-3.5 shadow-shell">
         <div className="flex items-center gap-3">
           <button
             type="button"
@@ -395,7 +395,7 @@ function ModeTabs({
     { id: 'arena', label: 'Arena', icon: Swords, key: 'A' },
   ];
   return (
-    <div className="flex flex-wrap items-center justify-between gap-2 rounded-[16px] border border-shell-border bg-shell-panel px-3 py-2 shadow-shell">
+    <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-shell-border bg-shell-panel px-3 py-2 shadow-shell">
       <div className="flex w-full gap-1 sm:w-auto">
         {tabs.map((t) => {
           const Icon = t.icon;
@@ -496,7 +496,7 @@ function SourceAssetCard({
   onOpenInAgents: () => void;
 }) {
   return (
-    <section className="rounded-[18px] border border-shell-border bg-shell-panel shadow-shell">
+    <section className="rounded-xl border border-shell-border bg-shell-panel shadow-shell">
       <div className="flex items-start justify-between gap-3 border-b border-shell-border px-4 py-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Source Asset</div>
@@ -576,7 +576,7 @@ function RefinementPanel({
 }) {
   const canSubmit = Boolean(input.trim()) && hasGeneration;
   return (
-    <section className="flex min-h-[220px] flex-col overflow-hidden rounded-[18px] border border-shell-border bg-shell-panel shadow-shell">
+    <section className="flex min-h-[220px] flex-col overflow-hidden rounded-xl border border-shell-border bg-shell-panel shadow-shell">
       <header className="flex items-center justify-between gap-3 border-b border-shell-border px-4 py-3">
         <div>
           <div className="text-[10px] font-semibold uppercase tracking-[0.22em] text-shell-accent">Refine</div>
@@ -651,7 +651,7 @@ function RefinementPanel({
 
 function EmptyCenter({ isGenerating }: { isGenerating: boolean }) {
   return (
-    <div className="flex h-full items-center justify-center rounded-[22px] border border-dashed border-shell-border bg-shell-panel/40 px-8 py-12 text-center">
+    <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-shell-border bg-shell-panel/40 px-8 py-12 text-center">
       <div className="max-w-md">
         <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-2xl border border-shell-accent/30 bg-shell-accent-soft text-shell-accent">
           {isGenerating ? <Spinner variant="flip" /> : <Zap className="h-5 w-5" />}
@@ -685,7 +685,7 @@ function HistoryPanel({
   onClear: () => void;
 }) {
   return (
-    <section className="flex min-h-0 flex-col overflow-hidden rounded-[18px] border border-shell-border bg-shell-panel shadow-shell">
+    <section className="flex min-h-0 flex-col overflow-hidden rounded-xl border border-shell-border bg-shell-panel shadow-shell">
       <header className="flex items-center justify-between gap-2 border-b border-shell-border px-3 py-2">
         <div className="flex items-center gap-1.5">
           <History className="h-3.5 w-3.5 text-shell-accent" />
@@ -796,7 +796,7 @@ function KeeperRail({
   }, [rankings, generations]);
 
   return (
-    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-[18px] border border-shell-border bg-shell-panel shadow-shell">
+    <section className="flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl border border-shell-border bg-shell-panel shadow-shell">
       <header className="flex items-center justify-between gap-2 border-b border-shell-border px-3 py-2">
         <div className="flex items-center gap-1.5">
           <Pin className="h-3.5 w-3.5 text-shell-accent" />

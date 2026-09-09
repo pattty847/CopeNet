@@ -28,7 +28,7 @@ function EditorSection({
       <textarea
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        className="min-h-[150px] w-full rounded-[20px] border border-shell-border bg-shell-bg px-4 py-3 text-sm leading-6 text-shell-text outline-none transition focus:border-shell-border-strong"
+        className="min-h-[150px] w-full rounded-xl border border-shell-border bg-shell-bg px-4 py-3 text-sm leading-6 text-shell-text outline-none transition focus:border-shell-border-strong"
       />
     </div>
   );
@@ -118,7 +118,7 @@ export function PersonaFlavorReviewModal() {
 
   return (
     <div className="fixed inset-0 z-[80] flex items-end justify-center bg-black/45 p-3 sm:items-center sm:p-6" role="dialog" aria-modal="true">
-      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-[28px] border border-shell-border bg-shell-canvas shadow-shell-xl">
+      <div className="flex max-h-[92vh] w-full max-w-6xl flex-col overflow-hidden rounded-xl border border-shell-border bg-shell-canvas shadow-shell-xl">
         <div className="flex items-start justify-between gap-4 border-b border-shell-border px-5 py-4 sm:px-6">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full border border-shell-border bg-shell-panel px-3 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">
@@ -165,7 +165,7 @@ export function PersonaFlavorReviewModal() {
                 <div className="text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Preview</div>
                 <h3 className="mt-2 text-xl font-semibold text-shell-text">{localDraft.displayName || 'Model Flavor'}</h3>
               </div>
-              <div className="space-y-4 rounded-[24px] border border-shell-border bg-shell-panel px-4 py-4">
+              <div className="space-y-4 rounded-xl border border-shell-border bg-shell-panel px-4 py-4">
                 <section>
                   <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.18em] text-shell-muted">Identity</div>
                   <ChatMarkdown content={localDraft.identityMarkdown || '_No identity drafted yet._'} />

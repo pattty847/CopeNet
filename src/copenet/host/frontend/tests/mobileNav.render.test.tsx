@@ -8,19 +8,27 @@ import { useAppStore } from '../src/store/useAppStore';
 
 test('mobile bottom nav renders the primary phone sections', () => {
   useAppStore.setState({
-    currentSection: 'workflows',
+    currentSection: 'market',
     mobileOverflowOpen: false,
   });
 
   const html = renderToStaticMarkup(<MobileBottomNav />);
 
-  assert.match(html, /aria-label=\"Home\"/);
-  assert.match(html, /aria-label=\"Agents\"/);
-  assert.match(html, /aria-label=\"Workflows\"/);
-  assert.match(html, /aria-label=\"Market\"/);
-  assert.match(html, /aria-label=\"More\"/);
+  assert.match(html, /aria-label="Home"/);
+  assert.match(html, /aria-label="Market"/);
+  assert.match(html, /aria-label="Agents"/);
+  assert.match(html, /aria-label="Runs"/);
+  assert.match(html, /aria-label="More"/);
   assert.match(html, />Home</);
-  assert.match(html, />Agents</);
-  assert.match(html, />Workflows</);
   assert.match(html, />Market</);
+  assert.match(html, />Agents</);
+});
+
+test('workflows and experiments are reachable from the overflow sheet, not the bar', () => {
+  useAppStore.setState({ currentSection: 'home', mobileOverflowOpen: false });
+
+  const html = renderToStaticMarkup(<MobileBottomNav />);
+
+  assert.doesNotMatch(html, /aria-label="Workflows"/);
+  assert.doesNotMatch(html, /aria-label="Experiments"/);
 });
