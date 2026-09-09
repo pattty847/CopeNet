@@ -67,6 +67,20 @@ test('a multi-output band creates one series per edge on the price pane', () => 
   assert.ok(chart.series.every((series) => series.createdInPane === 0));
 });
 
+test('MAMA draws one directional cloud behind its two lines and can hide it', () => {
+  const instances = build('mama');
+  const { chart, render } = layerFor(instances);
+  assert.equal(chart.series.length, 2);
+  assert.equal(chart.series[0].primitives.length, 1, 'the cloud belongs to the primary MAMA series');
+  assert.equal(chart.series[1].primitives.length, 0);
+
+  const hidden = configureIndicator(instances, 'mama#1', { cloud: false });
+  render(hidden);
+  assert.equal(chart.series[0].primitives.length, 0, 'turning off the cloud detaches its renderer');
+  render(configureIndicator(hidden, 'mama#1', { cloud: true }));
+  assert.equal(chart.series[0].primitives.length, 1, 'the cloud returns without rebuilding either line');
+});
+
 test('two instances of the same indicator are independent series', () => {
   let instances = build('ema');
   instances = addIndicator(instances, 'ema');

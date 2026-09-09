@@ -31,6 +31,7 @@ import {
   type UTCTimestamp,
 } from 'lightweight-charts';
 import type { ComputedIndicator, ComputedOutput } from './compute';
+import { IndicatorCloudPrimitive } from './cloudPrimitive';
 import { DEFAULT_PRICE_STRETCH } from './state';
 
 type AnySeries = ISeriesApi<SeriesType, Time>;
@@ -44,6 +45,8 @@ interface RenderedEntry {
   priceLines: IPriceLine[];
   /** The series carrying this pane's reference lines and fixed scale, if any. */
   anchor: AnySeries | null;
+  cloud: IndicatorCloudPrimitive | null;
+  cloudAttached: boolean;
 }
 
 const LINE_STYLES: Record<ComputedOutput['lineStyle'], LineStyle> = {
@@ -143,6 +146,8 @@ export class IndicatorChartLayer {
       series: new Map(),
       priceLines: [],
       anchor: null,
+      cloud: null,
+      cloudAttached: false,
     };
     const paneIndex = pane ? pane.paneIndex() : 0;
 
@@ -167,6 +172,9 @@ export class IndicatorChartLayer {
       if (!entry.anchor) entry.anchor = series;
     }
 
+    const cloud = indicator.definition.cloud;
+    if (cloud) entry.cloud = new IndicatorCloudPrimitive(cloud.bullishColor, cloud.bearishColor);
+
     this.entries.set(indicator.instanceId, entry);
     this.update(entry, indicator);
   }
@@ -186,7 +194,25 @@ export class IndicatorChartLayer {
       );
       isAnchor = false;
     }
+    this.updateCloud(entry, indicator);
     this.applyReferences(entry, indicator);
+  }
+
+  private updateCloud(entry: RenderedEntry, indicator: ComputedIndicator): void {
+    const cloud = indicator.definition.cloud;
+    if (!cloud || !entry.cloud || !entry.anchor) return;
+    const visible = indicator.instance.config[cloud.visibleConfigKey] === true;
+    if (visible && !entry.cloudAttached) {
+      entry.anchor.attachPrimitive(entry.cloud);
+      entry.cloudAttached = true;
+    } else if (!visible && entry.cloudAttached) {
+      entry.anchor.detachPrimitive(entry.cloud);
+      entry.cloudAttached = false;
+    }
+    if (!visible) return;
+    const primary = indicator.outputs.find((output) => output.key === cloud.primaryKey);
+    const signal = indicator.outputs.find((output) => output.key === cloud.signalKey);
+    entry.cloud.setData(primary?.points ?? [], signal?.points ?? []);
   }
 
   /** Reference lines are recreated rather than diffed. There are at most three of them, they
@@ -314,6 +340,13 @@ export class IndicatorChartLayer {
    *  removing a different indicator's. Verified in a real browser: removing the first of
    *  three pane indicators leaves the other two intact and reclaims the space. */
   private teardown(instanceId: string, entry: RenderedEntry): void {
+    if (entry.cloud && entry.cloudAttached) {
+      try {
+        entry.anchor?.detachPrimitive(entry.cloud);
+      } catch {
+        /* already detached */
+      }
+    }
     for (const line of entry.priceLines) {
       try {
         entry.anchor?.removePriceLine(line);

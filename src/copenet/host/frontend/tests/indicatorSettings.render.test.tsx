@@ -33,3 +33,21 @@ test('parallel indicator settings bind labels to unique controls', () => {
   assert.equal(new Set(ids).size, 2);
   assert.deepEqual(labels, ids);
 });
+
+test('MAMA exposes its bull and bear cloud as a labelled toggle', () => {
+  const definition = indicatorById('mama')!;
+  const instance = addIndicator([], 'mama')[0];
+  const html = renderToStaticMarkup(
+    <IndicatorSettings
+      definition={definition}
+      instance={instance}
+      onConfigure={() => {}}
+      onStyle={() => {}}
+      onDuplicate={() => {}}
+      onReset={() => {}}
+      onRemove={() => {}}
+    />,
+  );
+  assert.match(html, /Bull \/ bear cloud/);
+  assert.match(html, /type="checkbox"[^>]*checked=""/);
+});

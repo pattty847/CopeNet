@@ -3,7 +3,7 @@
 
 import { instantaneousTrendline, mesaAdaptiveMovingAverage, superSmoother } from '../calc/ehlers';
 import { readNumber, readPeriod, readSource } from '../config';
-import { SERIES_COLORS } from '../palette';
+import { CLOUD_DOWN, CLOUD_UP, SERIES_COLORS } from '../palette';
 import type { IndicatorDefinition, IndicatorInput } from '../types';
 
 const SOURCE_INPUT: IndicatorInput = { kind: 'source', key: 'source', label: 'Source', default: 'close', advanced: true };
@@ -37,6 +37,7 @@ export const EHLERS_INDICATORS: IndicatorDefinition[] = [
     inputs: [
       { kind: 'number', key: 'fastLimit', label: 'Fast limit', default: 0.5, min: 0.01, max: 0.99, step: 0.01 },
       { kind: 'number', key: 'slowLimit', label: 'Slow limit', default: 0.05, min: 0.001, max: 0.99, step: 0.005 },
+      { kind: 'boolean', key: 'cloud', label: 'Bull / bear cloud', default: true },
       {
         kind: 'number',
         key: 'warmup',
@@ -53,6 +54,13 @@ export const EHLERS_INDICATORS: IndicatorDefinition[] = [
       { key: 'mama', label: 'MAMA', plot: 'line', color: SERIES_COLORS.blue, lineWidth: 2 },
       { key: 'fama', label: 'FAMA', plot: 'line', color: SERIES_COLORS.gold, lineWidth: 1 },
     ],
+    cloud: {
+      primaryKey: 'mama',
+      signalKey: 'fama',
+      visibleConfigKey: 'cloud',
+      bullishColor: CLOUD_UP,
+      bearishColor: CLOUD_DOWN,
+    },
     warmup: (config) => readPeriod(config, 'warmup', 32),
     compute: (bars, config) => {
       const result = mesaAdaptiveMovingAverage(
