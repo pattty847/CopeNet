@@ -24,7 +24,7 @@ test('clampResponsiveText preserves short strings', () => {
 });
 
 test('getMobileSectionSummary gives short mobile context copy', () => {
-  assert.equal(getMobileSectionSummary('home'), 'Workspace pulse and quick starts.');
+  assert.equal(getMobileSectionSummary('home'), 'The market, your tape, and what your agents did.');
   assert.equal(getMobileSectionSummary('agents'), 'Sessions, composer, and runtime controls.');
   assert.equal(getMobileSectionSummary('data-tools'), 'Imports, source assets, and utility flows.');
 });

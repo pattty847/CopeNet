@@ -148,23 +148,34 @@ select {
  * scrollbar on the right, which is what made those pages look broken at the margins.
  * Full-bleed sections (Home, Agents, Market) opt out in AppShell rather than here. */
 .shell-section-gutter {
-  padding: 14px;
+  /* The gutter is a token because the section header cancels it with a negative margin to
+   * run full-bleed. Two hard-coded numbers drifted apart the moment the mobile gutter got
+   * its own value, and the header hung 4px off both edges. */
+  --shell-gutter: 14px;
+  padding: var(--shell-gutter);
   scrollbar-gutter: stable;
 }
 
 @media (max-width: 640px) {
-  .shell-section-gutter { padding: 10px; }
+  .shell-section-gutter { --shell-gutter: 10px; }
 }
 
 /* The utility pages' section header: the same caps-and-hairline language as the market
  * bar, replacing the full-width marketing hero each one used to open with. */
 .shell-section-head {
   display: flex;
-  align-items: baseline;
-  gap: 10px;
-  margin: -14px -14px 14px;
-  padding: 0 14px;
-  height: 42px;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 10px;
+  /* Cancels the page gutter so the band runs edge to edge, then restores it below. */
+  margin: calc(var(--shell-gutter, 14px) * -1);
+  margin-bottom: var(--shell-gutter, 14px);
+  padding: 8px var(--shell-gutter, 14px);
+  /* min-height, never height: Observability's header carries four controls, and on a phone
+   * the title wraps and the controls need a second row. A fixed height did not clip them —
+   * it let them overflow and paint on top of the list below, which read as a popup with no
+   * way to close it. */
+  min-height: 42px;
   border-bottom: 1px solid var(--mkt-seam);
   background: var(--mkt-canvas);
 }
@@ -174,6 +185,7 @@ select {
   font: 600 17px var(--mkt-sans);
   letter-spacing: 0.01em;
   color: var(--mkt-text);
+  white-space: nowrap;
 }
 
 .shell-section-head p {
@@ -187,6 +199,13 @@ select {
 }
 
 .shell-section-head__spacer { flex: 1 1 auto; }
+
+/* On a phone the controls take their own full-width row under the title rather than
+   competing with it for a 375px line. */
+@media (max-width: 720px) {
+  .shell-section-head__spacer { flex-basis: 100%; height: 0; }
+  .shell-section-head p { flex: 1 1 auto; text-overflow: ellipsis; }
+}
 
 .shell-top-command-bar {
   box-sizing: border-box;
