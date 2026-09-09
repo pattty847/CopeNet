@@ -282,8 +282,12 @@ export function CandleChart({
       candle.coordinateToPrice(0) ?? '',
       candle.coordinateToPrice(PRICE_PROBE_PX) ?? '',
       // Showing or hiding the left financial axis moves the pane sideways without
-      // touching either range, so it has to be part of the transform identity.
-      leftAxisWidth(chart),
+      // touching either range, so it has to be part of the transform identity. But the
+      // overlay's axis autoscales to whatever is visible, so its measured width wobbles by
+      // a pixel or two on nearly every panned frame as tick labels gain or lose a digit —
+      // rounding to the nearest 4px collapses that wobble to a no-op while still catching
+      // the show/hide transition and any layout shift big enough to actually move a box.
+      Math.round(leftAxisWidth(chart) / 4) * 4,
       // Adding or removing an indicator pane resizes the price pane vertically. The price
       // probes above catch that in most cases, but not a rescale that happens to preserve
       // both sample coordinates, so measure the pane itself too.
@@ -572,6 +576,12 @@ export function CandleChart({
       );
       financialSegmentRefs.current.push(series);
     }
+    // A vertical drag on the left axis (easy to trigger by accident, dragging the chart
+    // near the edge) locks Lightweight Charts' autoscale to whatever range was visible at
+    // the time. That lock survives a metric switch, so a $100B-scale revenue range stays
+    // pinned while a sub-$1 EPS series plots invisibly beneath it. Re-arm autoscale on every
+    // overlay write so a new metric always fits its own range regardless of a stale lock.
+    chart.priceScale('left').applyOptions({ autoScale: true });
     recomputeRef.current();
   }, [financialOverlay, financialOverlayKind, chartGeneration]);
 
