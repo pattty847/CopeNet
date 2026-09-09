@@ -46,19 +46,20 @@ CopeNet will continue to:
 
 Do not use `--bare`; it disables the normal OAuth/keychain subscription path.
 
-### Use a 100K provider-input target
+### Use a model-aware 60% provider-input ceiling
 
 Replace the fixed 48K text-only assumption with a model-aware budget:
 
 ```text
 effective input budget =
-    min(100K target, provider/model safe input capacity)
-    minus reserved output/reasoning headroom
+    min(168K product ceiling, selected model context window × 60%)
 ```
 
-The exact reserve must come from model metadata where available and a
-conservative provider fallback otherwise. Never assume every provider or local
-model has a 200K window.
+The selected model's declared window is used when available and a conservative
+provider fallback applies otherwise. The remaining 40% or more belongs to output,
+reasoning and provider-envelope variance. The initial request additionally reserves
+up to 25K for same-turn tool growth. Never assume every provider or local model has
+a frontier-sized window.
 
 Do not raise the limit until the estimator can see images, reasoning,
 instructions, tool schemas, and tool results. A larger inaccurate budget only
@@ -257,7 +258,8 @@ Changes:
 6. Reserve output/reasoning headroom.
 7. Re-apply the budget during every tool-loop step, after stale-output
    compaction.
-8. Set the normal target to 100K after these measurements are enforced.
+8. Cap input at 60% of the selected model window and 168K absolutely after these
+   measurements are enforced.
 
 Acceptance:
 
@@ -270,8 +272,10 @@ Acceptance:
 Tests:
 
 - Text-only, image, reasoning, unknown-item, and long-tool-loop fixtures.
-- Model metadata below 100K lowers the effective budget.
-- Large-context models use the 100K target with explicit headroom.
+- Model metadata lowers the effective budget for smaller local models.
+- A 280K model reaches the 168K ceiling and retains 112K of headroom.
+- Instructions and tool schemas are charged before message history is retained.
+- An oversized live user item is rejected before provider dispatch.
 
 ### Phase 5 — Resolve Claude resume behavior
 
@@ -370,7 +374,7 @@ After real measurements exist, decide:
 
 - whether purpose bundles have reduced the tool manifest enough;
 - whether deferred schema disclosure saves more than its extra round trip costs;
-- whether any conversation class regularly approaches the 100K target;
+- whether any conversation class regularly approaches its 60% input ceiling;
 - whether provenance-linked summaries are necessary.
 
 Do not add automatic conversation summaries simply because the context window is

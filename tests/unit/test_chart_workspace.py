@@ -181,7 +181,7 @@ def test_capacity_orphan_cleanup_and_run_references_survive_restart(scene):
 def test_detail_projection_keeps_exact_selected_candle_and_account_scope(scene):
     store, document, capture, observation, context = scene
     from dataclasses import replace
-    for detail in ("quick", "balanced", "deep"):
+    for detail in ("quick", "balanced", "deep", "exhaustive"):
         result = store.context_payload(replace(context, detail=detail))
         assert result["samples"][0]["rows"] == [{"t": 100, "c": 7.123456789}]
         assert result["estimatedTokens"] < result["budget"]["initialTokens"]
@@ -322,7 +322,7 @@ async def test_evidence_rpc_checks_session_ownership_and_account_consent(scene):
     assert frames[-1]["payload"]["rows"] == [{"example": 1}]
 
 
-def test_default_projection_samples_recent_view_rows_and_discloses_offsets(scene):
+def test_default_projection_delivers_every_visible_active_candle_when_it_fits(scene):
     store, document, capture, observation, context = scene
     from dataclasses import replace
     capture["selection"] = None
@@ -332,11 +332,11 @@ def test_default_projection_samples_recent_view_rows_and_discloses_offsets(scene
     current = replace(context, observation_id=observation["observationId"])
     projected = store.context_payload(current)
     sample = projected["samples"][0]
-    assert sample["rows"][0]["t"] == 260
+    assert sample["rows"][0]["t"] == 100
     assert sample["rows"][-1]["t"] == 299
-    assert sample["offset"] == 160
-    assert sample["nextOffset"] is None
+    assert sample["delivery"]["algorithm"] == "exhaustive"
     assert sample["matchedCount"] == 200
+    assert projected["coverage"][0]["exhaustive"] is True
 
 
 def test_maximum_resource_inventory_respects_estimated_detail_budget(scene):
@@ -350,7 +350,7 @@ def test_maximum_resource_inventory_respects_estimated_detail_budget(scene):
     current = store.resolve_context("session-test", "inventory-run", {
         "observationId": observation["observationId"], "documentId": document["documentId"], "viewId": "view-test", "detail": "quick"})
     result = store.context_payload(current)
-    assert result["estimatedTokens"] <= 2000
+    assert result["estimatedTokens"] <= 8000
     assert len(result["resources"]) == 32
     assert result["manifestOmissions"]
 

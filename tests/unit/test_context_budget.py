@@ -1,25 +1,27 @@
 """The provider-input budget must be able to see everything it is bounding.
 
-Phase 4 of docs/plans/CONTEXT_CONVEYOR_NEXT_STEPS.md. The previous estimator
-summed only `part["text"]`, so a 3 MB image conversation estimated as 7 tokens and
-the 48K budget omitted nothing. Measurement is fixed here first; the target only
-moves to 100K because the numbers are now honest.
+The estimator covers message bodies, images, instructions and tool schemas; the
+allocator then caps accumulated input at 60% of the selected model window.
 """
 
 from __future__ import annotations
 
 import json
+import pytest
 
 from copenet.core.harness.context_window import (
     estimate_input_tokens,
+    estimate_request_tokens,
     group_by_user_turn,
+    trim_messages_to_request_budget,
     trim_messages_to_token_budget,
 )
 from copenet.core.orchestrator.context_budget import (
     CONTEXT_INPUT_TARGET_TOKENS,
-    MIN_INPUT_BUDGET_TOKENS,
+    discover_model_context_tokens,
     resolve_context_budget,
 )
+from copenet.providers import ProviderModel
 
 
 def _text_turn(text: str) -> dict:
@@ -43,10 +45,10 @@ def test_image_parts_are_not_invisible_to_the_estimator() -> None:
     assert estimate_input_tokens(with_image) > 1_000
 
 
-def test_image_heavy_conversation_is_actually_trimmed_at_the_100k_target() -> None:
-    """The exact regression: 3 MB of images used to estimate as 7 tokens and trim nothing.
+def test_image_heavy_conversation_is_actually_trimmed_at_the_product_target() -> None:
+    """The exact regression: image payload used to estimate as 7 tokens and trim nothing.
 
-    Two images legitimately fit in a 100K budget, so this uses a long vision thread
+    Two images legitimately fit in the product budget, so this uses a long vision thread
     — the realistic way a session accumulates enough image payload to overflow.
     """
     messages: list[dict] = []
@@ -120,10 +122,25 @@ def test_tool_call_and_result_are_never_split() -> None:
     assert call_ids in ([], ["c1", "c1"]), "a call must never appear without its result"
 
 
-def test_oversized_current_turn_is_always_kept() -> None:
+def test_oversized_current_user_item_is_rejected_before_provider_dispatch() -> None:
     messages = [_text_turn("old"), _text_turn("X" * 100_000)]
 
-    assert trim_messages_to_token_budget(messages, max_context_tokens=10) == [messages[-1]]
+    with pytest.raises(ValueError, match="Current user turn"):
+        trim_messages_to_token_budget(messages, max_context_tokens=10)
+
+
+def test_live_tool_exchange_is_trimmed_as_a_complete_call_result_pair() -> None:
+    messages = [
+        _text_turn("current"),
+        {"type": "function_call", "call_id": "old", "name": "read", "arguments": "{}"},
+        {"type": "function_call_output", "call_id": "old", "output": "A" * 800},
+        {"type": "function_call", "call_id": "new", "name": "read", "arguments": "{}"},
+        {"type": "function_call_output", "call_id": "new", "output": "B" * 80},
+    ]
+
+    trimmed = trim_messages_to_token_budget(messages, max_context_tokens=40)
+
+    assert [item.get("call_id") for item in trimmed[1:]] == ["new", "new"]
 
 
 def test_grouping_attaches_tool_items_to_the_turn_that_caused_them() -> None:
@@ -152,17 +169,24 @@ def test_trimming_never_mutates_the_input_list() -> None:
 # -- budget resolution -----------------------------------------------------------
 
 
-def test_large_context_models_use_the_100k_target() -> None:
+def test_provider_fallback_uses_sixty_percent_of_its_conservative_window() -> None:
     budget = resolve_context_budget(provider="openai-codex")
 
-    assert budget.input_tokens == CONTEXT_INPUT_TARGET_TOKENS
-    assert budget.reserved_output_tokens > 0
+    assert budget.input_tokens == 120_000
+    assert budget.reserved_output_tokens == 80_000
+
+
+def test_280k_model_reaches_the_168k_absolute_product_ceiling() -> None:
+    budget = resolve_context_budget(provider="openai-codex", model_context_tokens=280_000)
+
+    assert budget.input_tokens == CONTEXT_INPUT_TARGET_TOKENS == 168_000
+    assert budget.reserved_output_tokens == 112_000
 
 
 def test_model_metadata_below_the_target_lowers_the_effective_budget() -> None:
     budget = resolve_context_budget(provider="lm-studio", model_context_tokens=16_000)
 
-    assert budget.input_tokens == 12_000  # 16K minus 25% output headroom
+    assert budget.input_tokens == 9_600
     assert budget.input_tokens < CONTEXT_INPUT_TARGET_TOKENS
     assert budget.source == "model_metadata"
 
@@ -174,8 +198,43 @@ def test_unknown_providers_do_not_get_an_optimistic_window() -> None:
     assert budget.source == "provider_fallback"
 
 
-def test_a_tiny_reported_window_is_floored_rather_than_trusted() -> None:
+def test_a_tiny_reported_window_is_never_overridden_by_a_dangerous_floor() -> None:
     budget = resolve_context_budget(provider="ollama", model_context_tokens=2_000)
 
-    assert budget.input_tokens == MIN_INPUT_BUDGET_TOKENS
-    assert budget.source.endswith("_floored")
+    assert budget.input_tokens == 1_200
+    assert budget.source == "model_metadata"
+
+
+def test_complete_request_estimate_counts_instructions_and_tool_schemas() -> None:
+    messages = [_text_turn("A" * 400)]
+    tools = [{"type": "function", "name": "read", "description": "B" * 400, "parameters": {}}]
+
+    message_tokens = estimate_input_tokens(messages)
+    total_tokens = estimate_request_tokens(messages, instructions="C" * 400, tools=tools)
+
+    assert total_tokens > message_tokens + 200
+
+
+def test_request_budget_charges_fixed_overhead_before_retaining_history() -> None:
+    messages = [_text_turn("old" * 400), _text_turn("current")]
+
+    bounded = trim_messages_to_request_budget(
+        messages,
+        max_input_tokens=300,
+        instructions="I" * 400,
+        tools=[{"description": "T" * 400}],
+    )
+
+    assert bounded == [messages[-1]]
+    assert estimate_request_tokens(bounded, instructions="I" * 400, tools=[{"description": "T" * 400}]) <= 300
+
+
+@pytest.mark.asyncio
+async def test_selected_model_declared_context_window_is_discovered() -> None:
+    class Provider:
+        async def list_models(self):
+            return [ProviderModel(id="small", display_name="Small", provider="local", metadata={"maxContextLength": 32_000}),
+                    ProviderModel(id="large", display_name="Large", provider="local", metadata={"maxContextLength": "280000"})]
+
+    assert await discover_model_context_tokens(Provider(), "large") == 280_000
+    assert await discover_model_context_tokens(Provider(), "missing") is None

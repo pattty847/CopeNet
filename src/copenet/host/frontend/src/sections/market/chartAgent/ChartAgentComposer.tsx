@@ -6,7 +6,7 @@ import type { useChartConversation } from './useChartConversation';
 import type { ChartWorkspaceController } from './useChartWorkspace';
 import type { ChartDetail } from './types';
 
-const DETAIL_COPY = { quick: 'Compact context · precise reads on demand', balanced: 'Recent candles, indicators and focused inspection', deep: 'Wider history and a larger evidence budget' };
+const DETAIL_COPY = { quick: 'Compact orientation and focused evidence', balanced: 'Whole-view digest with broad exact evidence', deep: 'Large whole-view evidence budget', exhaustive: 'Maximum frozen evidence · up to 100k chart tokens' };
 function date(value: number) { return new Date(value * 1000).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: '2-digit', timeZone: 'UTC' }); }
 
 export function ChartAgentComposer({ conversation, workspace, onSend, onForecast }: {
@@ -39,7 +39,7 @@ export function ChartAgentComposer({ conversation, workspace, onSend, onForecast
       </select>
       <select className="ca-detail-select" aria-label="Chart context detail" title={DETAIL_COPY[conversation.detail]} value={conversation.detail}
         onChange={(event) => conversation.setDetail(event.target.value as ChartDetail)}>
-        <option value="quick">Quick</option><option value="balanced">Balanced</option><option value="deep">Deep</option>
+        <option value="quick">Quick</option><option value="balanced">Balanced</option><option value="deep">Deep</option><option value="exhaustive">Exhaustive</option>
       </select>
       <button type="button" className="ca-annotation-toggle" aria-label="Allow chart annotations" aria-pressed={conversation.access === 'annotate'}
         title={conversation.access === 'annotate' ? 'Chart annotations on' : 'Read only · chart annotations off'}

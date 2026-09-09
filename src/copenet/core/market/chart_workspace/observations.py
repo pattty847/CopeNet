@@ -9,7 +9,7 @@ from .models import Capture, MarketTurnContext
 from .projection import project_context
 
 MAX_CAPTURE_BYTES = 8 * 1024 * 1024
-DETAIL_READ_LIMITS = {"quick": 100, "balanced": 500, "deep": 2000}
+DETAIL_READ_LIMITS = {"quick": 100, "balanced": 500, "deep": 2000, "exhaustive": 5000}
 
 
 class ObservationStore:
@@ -111,7 +111,7 @@ class ObservationStore:
         detail = market_context.get("detail", "balanced")
         access = market_context.get("access", "read")
         if detail not in DETAIL_READ_LIMITS or access not in ("read", "annotate"):
-            raise ValueError("Choose quick/balanced/deep detail and read/annotate chart access")
+            raise ValueError("Choose quick/balanced/deep/exhaustive detail and read/annotate chart access")
         return MarketTurnContext(
             observation_id=observation["observationId"], document_id=observation["documentId"],
             view_id=observation["viewId"], session_key=session_key, run_id=run_id,
@@ -120,30 +120,23 @@ class ObservationStore:
             resource_keys=tuple(r["key"] for r in observation["resources"] if not r["metadata"].get("accountContext") or observation["settings"].get("includeAccountContext", False)),
         )
 
-    def context_payload(self, context: MarketTurnContext) -> dict:
+    def context_payload(self, context: MarketTurnContext, *, token_limit: int | None = None) -> dict:
         observation = self.observation(context.observation_id, context.session_key)
-        return project_context(self, context, observation)
+        return project_context(self, context, observation, token_limit=token_limit)
+
+    def projection_resource(self, context: MarketTurnContext, resource_key: str) -> dict:
+        """Return one exact frozen resource for the trusted projection builder."""
+        return self._resource_for_context(context, resource_key, context.observation_id)
 
     def read_resource(self, context: MarketTurnContext, resource_key: str, offset: int = 0,
                       limit: int = 100, from_time: int | None = None, to_time: int | None = None,
                       observation_id: str | None = None, fields: list[str] | None = None,
                       metadata_path: list[str | int] | None = None) -> dict:
-        if resource_key not in context.resource_keys:
-            raise ValueError("Resource is outside this turn's captured scope")
         if type(offset) is not int or offset < 0 or type(limit) is not int or not 1 <= limit <= DETAIL_READ_LIMITS[context.detail]:
             raise ValueError(f"Use offset >= 0 and limit 1–{DETAIL_READ_LIMITS[context.detail]} for {context.detail}")
         observation_id = observation_id or context.observation_id
         observation = self.observation(observation_id, context.session_key)
-        if observation["documentId"] != context.document_id:
-            raise ValueError("Historical observation belongs to another chart document")
-        with self.connect() as db:
-            row = db.execute("SELECT r.body FROM resources r JOIN observation_resources o ON r.id=o.resource_id "
-                             "WHERE o.observation_id=? AND o.resource_key=?", (observation_id, resource_key)).fetchone()
-            if row is None:
-                raise ValueError("Captured resource unavailable")
-            resource = json.loads(row["body"])
-        if resource["metadata"].get("accountContext") and not context.include_account_context:
-            raise ValueError("Account-derived evidence is excluded")
+        resource = self._resource_for_context(context, resource_key, observation_id)
         rows = resource.pop("rows")
         if metadata_path is not None:
             value = resource["metadata"]
@@ -172,7 +165,7 @@ class ObservationStore:
             if set(fields) - available:
                 raise ValueError("Requested fields do not exist in captured resource")
             selected = [{key: row[key] for key in fields if key in row} for row in selected]
-        max_chars = {"quick": 12000, "balanced": 30000, "deep": 60000}[context.detail]
+        max_chars = {"quick": 12000, "balanced": 30000, "deep": 60000, "exhaustive": 120000}[context.detail]
         if len(encode(resource)) > max_chars // 2:
             resource["metadata"] = {"omitted": "Resource metadata exceeds this query budget"}
         while selected and len(encode(selected)) > max_chars:
@@ -184,3 +177,19 @@ class ObservationStore:
                 "totalCount": total, "matchedCount": matched, "returnedCount": len(selected),
                 "offset": offset, "nextOffset": offset + len(selected) if offset + len(selected) < matched else None,
                 "rows": selected}
+
+    def _resource_for_context(self, context: MarketTurnContext, resource_key: str, observation_id: str) -> dict:
+        if resource_key not in context.resource_keys:
+            raise ValueError("Resource is outside this turn's captured scope")
+        observation = self.observation(observation_id, context.session_key)
+        if observation["documentId"] != context.document_id:
+            raise ValueError("Historical observation belongs to another chart document")
+        with self.connect() as db:
+            row = db.execute("SELECT r.body FROM resources r JOIN observation_resources o ON r.id=o.resource_id "
+                             "WHERE o.observation_id=? AND o.resource_key=?", (observation_id, resource_key)).fetchone()
+        if row is None:
+            raise ValueError("Captured resource unavailable")
+        resource = json.loads(row["body"])
+        if resource["metadata"].get("accountContext") and not context.include_account_context:
+            raise ValueError("Account-derived evidence is excluded")
+        return resource

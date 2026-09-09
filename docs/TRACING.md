@@ -188,14 +188,16 @@ always a bug.
 `chat_messages_built` records the bounded and unbounded input estimates, how many
 oldest provider-view message items were omitted, and the resolved budget:
 `inputTokenBudget`, `modelContextTokens`, `reservedOutputTokens`, and
-`budgetSource` (`model_metadata` | `provider_fallback`, optionally `_floored`).
-The estimator charges text, images, reasoning, and unmodelled item shapes, so a
-vision-heavy conversation reports a real size. Stored transcript entries are
-never removed — the budget bounds only the provider view.
+`budgetSource` (`model_metadata` | `provider_fallback`). It also records the
+pre-plan instruction/schema estimate, initial-request budget and tool-loop reserve.
+The message estimator charges text, images, reasoning, and unmodelled item shapes;
+the request estimator additionally charges instructions and tool schemas. Stored
+transcript entries are never removed — the budget bounds only the provider view.
 
-`tool_loop_input_trimmed` fires when a growing tool loop crosses the budget
-mid-turn, after stale-tool-output compaction. Its absence means the turn stayed
-within budget on its own.
+`tool_loop_input_prepared` records the complete provider-input estimate before every
+Responses request. `tool_loop_input_trimmed` additionally fires when a growing loop
+crosses the budget after stale-output compaction. Its absence means no items were
+removed, not that the request went unmeasured.
 
 `prompt_context_assembled` records the request purpose plus character counts for
 the base system prompt, persona/context overlay, structured message payload, and

@@ -10,7 +10,7 @@ from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, build
 from copenet.providers import RESOLVED_MODEL_META_KEY, ProviderEvent
 
 from . import responses_items
-from .context_window import estimate_input_tokens, trim_messages_to_token_budget
+from .context_window import estimate_request_tokens, trim_messages_to_request_budget
 from .planning import HarnessTurnPlan
 from .tool_loop_common import (
     MAX_TOOL_STEPS,
@@ -95,19 +95,29 @@ async def run_with_responses_tools(
         # not enough: a long agentic turn grows the array on every step.
         outbound_messages = compact_stale_responses_items(working_messages)
         if input_token_budget:
-            bounded = trim_messages_to_token_budget(
-                outbound_messages, max_context_tokens=input_token_budget
+            bounded = trim_messages_to_request_budget(
+                outbound_messages,
+                max_input_tokens=input_token_budget,
+                instructions=instructions,
+                tools=tool_schemas,
             )
-            if trace is not None and len(bounded) != len(outbound_messages):
-                trace(
-                    "tool_loop_input_trimmed",
-                    {
+            if trace is not None:
+                request_estimate = estimate_request_tokens(
+                    bounded, instructions=instructions, tools=tool_schemas,
+                )
+                trace("tool_loop_input_prepared", {
+                    "step": step_index + 1,
+                    "omittedItemCount": len(outbound_messages) - len(bounded),
+                    "inputTokenBudget": input_token_budget,
+                    "providerInputTokenEstimate": request_estimate,
+                })
+                if len(bounded) != len(outbound_messages):
+                    trace("tool_loop_input_trimmed", {
                         "step": step_index + 1,
                         "omittedItemCount": len(outbound_messages) - len(bounded),
                         "inputTokenBudget": input_token_budget,
-                        "inputTokenEstimate": estimate_input_tokens(bounded),
-                    },
-                )
+                        "providerInputTokenEstimate": request_estimate,
+                    })
             outbound_messages = bounded
         async for event in provider.stream_responses(
             messages=outbound_messages,

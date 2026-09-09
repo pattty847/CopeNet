@@ -26,7 +26,7 @@ class Start(Contract):
     documentId: Identifier
     provider: Identifier
     model: Identifier
-    detail: Literal['quick', 'balanced', 'deep'] = 'balanced'
+    detail: Literal['quick', 'balanced', 'deep', 'exhaustive'] = 'balanced'
     paired: bool = False
     entryExpirySessions: int = Field(default=10, ge=1, le=40)
     trackingScanId: Identifier | None = None

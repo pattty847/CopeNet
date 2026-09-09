@@ -1,6 +1,7 @@
 """Transport and model-tool request boundaries."""
+from datetime import datetime
 from typing import Any, Literal
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 from .models import Contract
 
 
@@ -43,6 +44,21 @@ class ReadRequest(Contract):
     fields: list[str] | None = Field(default=None, max_length=30)
     metadataPath: list[str | int] | None = Field(default=None, max_length=12)
 
+    @field_validator("from_", "to", mode="before")
+    @classmethod
+    def timestamp(cls, value):
+        if value is None or type(value) is int:
+            return value
+        if not isinstance(value, str):
+            raise ValueError("Chart time bounds must be epoch seconds or ISO-8601 timestamps")
+        try:
+            parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+        except ValueError as exc:
+            raise ValueError("Chart ISO time bounds must be valid ISO-8601 timestamps") from exc
+        if parsed.tzinfo is None:
+            raise ValueError("Chart ISO time bounds must include a timezone")
+        return int(parsed.timestamp())
+
 
 class DocumentToolRequest(Contract):
     offset: int = Field(default=0, ge=0)
@@ -53,7 +69,7 @@ class ObservationReadRequest(ReadRequest):
     sessionKey: str | None = Field(default=None, min_length=1, max_length=160)
     documentId: str | None = Field(default=None, min_length=1, max_length=160)
     observationId: str = Field(min_length=1, max_length=160)
-    detail: Literal["quick", "balanced", "deep"] = "balanced"
+    detail: Literal["quick", "balanced", "deep", "exhaustive"] = "balanced"
     includeAccountContext: bool = False
 
     @model_validator(mode="after")

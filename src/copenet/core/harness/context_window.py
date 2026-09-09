@@ -26,6 +26,21 @@ def estimate_input_tokens(messages: list[dict[str, Any]]) -> int:
     return max(sum(item_estimated_chars(item) for item in messages) // 4, 0)
 
 
+def estimate_request_tokens(
+    messages: list[dict[str, Any]],
+    *,
+    instructions: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> int:
+    """Estimate the complete provider request, not only its message bodies."""
+    structural_chars = 64 * len(messages)
+    if instructions:
+        structural_chars += len(instructions)
+    if tools:
+        structural_chars += len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")))
+    return estimate_input_tokens(messages) + ((structural_chars + 3) // 4)
+
+
 def item_estimated_chars(item: dict[str, Any]) -> int:
     """Charge every item shape, including the ones we do not model yet."""
     item_type = item.get("type")
@@ -75,9 +90,9 @@ def trim_messages_to_token_budget(
 ) -> list[dict[str, Any]]:
     """Keep the newest complete user turns within an approximate token budget.
 
-    Tool calls and results stay together because selection happens at user-turn
-    boundaries. The live/current turn is always retained even if it alone exceeds
-    the budget — a request the model cannot see is worse than one that is too big.
+    Tool calls and results stay together. Old turns are removed first; if the live
+    turn grew through tools, its newest complete exchanges are retained. The live
+    user item itself is never truncated and is rejected if it cannot fit.
     """
     if max_context_tokens <= 0 or estimate_input_tokens(messages) <= max_context_tokens:
         return list(messages)
@@ -85,8 +100,9 @@ def trim_messages_to_token_budget(
     if not groups:
         return list(messages)
 
-    selected = [groups[-1]]
-    remaining = max_context_tokens - estimate_input_tokens(groups[-1])
+    live = _trim_live_turn(groups[-1], max_context_tokens)
+    selected = [live]
+    remaining = max_context_tokens - estimate_input_tokens(live)
     for group in reversed(groups[:-1]):
         group_tokens = estimate_input_tokens(group)
         if group_tokens > remaining:
@@ -95,6 +111,65 @@ def trim_messages_to_token_budget(
         remaining -= group_tokens
     selected.reverse()
     return [item for group in selected for item in group]
+
+
+def trim_messages_to_request_budget(
+    messages: list[dict[str, Any]],
+    *,
+    max_input_tokens: int,
+    instructions: str | None = None,
+    tools: list[dict[str, Any]] | None = None,
+) -> list[dict[str, Any]]:
+    """Bound messages after charging fixed instructions and tool schemas."""
+    fixed = estimate_request_tokens([], instructions=instructions, tools=tools)
+    message_budget = max_input_tokens - fixed
+    if message_budget <= 0:
+        raise ValueError("Provider instructions and tool schemas exceed the input budget")
+    bounded = trim_messages_to_token_budget(messages, max_context_tokens=message_budget)
+    if estimate_request_tokens(bounded, instructions=instructions, tools=tools) > max_input_tokens:
+        raise ValueError("Current turn exceeds the provider input budget")
+    return bounded
+
+
+def _trim_live_turn(group: list[dict[str, Any]], budget: int) -> list[dict[str, Any]]:
+    if not group:
+        return []
+    user = group[0]
+    user_cost = estimate_input_tokens([user])
+    if user_cost > budget:
+        raise ValueError("Current user turn exceeds the provider input budget")
+    if estimate_input_tokens(group) <= budget:
+        return list(group)
+
+    outputs = {
+        str(item.get("call_id")): index
+        for index, item in enumerate(group)
+        if item.get("type") == "function_call_output" and item.get("call_id")
+    }
+    consumed = {0}
+    chunks: list[list[tuple[int, dict[str, Any]]]] = []
+    for index, item in enumerate(group[1:], start=1):
+        if index in consumed or item.get("type") == "function_call_output":
+            continue
+        if item.get("type") == "function_call" and item.get("call_id"):
+            output_index = outputs.get(str(item["call_id"]))
+            if output_index is not None:
+                consumed.add(output_index)
+                chunks.append([(index, item), (output_index, group[output_index])])
+                continue
+        chunks.append([(index, item)])
+
+    selected: list[list[tuple[int, dict[str, Any]]]] = []
+    remaining = budget - user_cost
+    for chunk in reversed(chunks):
+        chunk_items = [item for _, item in chunk]
+        cost = estimate_input_tokens(chunk_items)
+        if cost > remaining:
+            break
+        selected.append(chunk)
+        remaining -= cost
+    flattened = [pair for chunk in reversed(selected) for pair in chunk]
+    return [user, *(item for _, item in sorted(flattened, key=lambda pair: pair[0]))]
 
 
 def group_by_user_turn(messages: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:

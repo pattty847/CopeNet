@@ -16,7 +16,7 @@ class MarketContextRequest:
     observation_id: str
     document_id: str
     view_id: str
-    detail: Literal["quick", "balanced", "deep"] = "balanced"
+    detail: Literal["quick", "balanced", "deep", "exhaustive"] = "balanced"
     access: Literal["read", "annotate"] = "read"
 
     @classmethod
@@ -27,7 +27,7 @@ class MarketContextRequest:
             if not isinstance(raw.get(key), str) or not raw[key].strip() or len(raw[key]) > 200:
                 raise ValueError(f"marketContext.{key} must be a nonempty identifier")
         detail, access = raw.get("detail", "balanced"), raw.get("access", "read")
-        if detail not in ("quick", "balanced", "deep") or access not in ("read", "annotate"):
+        if detail not in ("quick", "balanced", "deep", "exhaustive") or access not in ("read", "annotate"):
             raise ValueError("marketContext detail or access is invalid")
         return cls(raw["observationId"], raw["documentId"], raw["viewId"], detail, access)
 

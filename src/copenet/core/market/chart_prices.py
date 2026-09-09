@@ -32,11 +32,24 @@ def chart_price_snapshot(runtime, symbol: str, *, now: datetime | None = None) -
     if history is None:
         return {frame: runtime.store.load_bars(symbol, frame) for frame in ('daily', 'weekly', 'monthly')}, None
     series = {frame: chart_history_window(history.derive(timeframe=frame), frame) for frame in ('daily', 'weekly', 'monthly')}
-    completion = completed_candles(history, 'daily', now) if supported_symbol(symbol) else None
-    provenance = {'symbol': symbol, 'basis': 'split_adjusted', 'calendar': 'XNYS' if completion else None,
+    completions = ({name: completed_candles(history, frame, now) for name, frame in
+                    (('D', 'daily'), ('W', 'weekly'), ('M', 'monthly'))}
+                   if supported_symbol(symbol) else {})
+    daily_completion = completions.get('D')
+    timeframe_completion = {
+        name: {
+            'status': completion.status,
+            'completedThrough': completion.bars[-1].t if completion.bars else None,
+            'completedCloseAt': completion.close_times.get(completion.bars[-1].t) if completion.bars else None,
+            'error': completion.error,
+        }
+        for name, completion in completions.items()
+    }
+    provenance = {'symbol': symbol, 'basis': 'split_adjusted', 'calendar': 'XNYS' if daily_completion else None,
                   'splits': history.splits, 'splitFingerprint': split_fingerprint(history.splits),
                   'updatedAt': history.updated_at, 'candleHash': candle_hash([asdict(bar) for bar in series['daily']]),
-                  'completionStatus': completion.status if completion else 'unsupported',
-                  'completedThrough': completion.bars[-1].t if completion and completion.bars else None,
-                  'completedCloseAt': completion.close_times[completion.bars[-1].t] if completion and completion.bars else None}
+                  'completionStatus': daily_completion.status if daily_completion else 'unsupported',
+                  'completedThrough': daily_completion.bars[-1].t if daily_completion and daily_completion.bars else None,
+                  'completedCloseAt': daily_completion.close_times[daily_completion.bars[-1].t] if daily_completion and daily_completion.bars else None,
+                  'timeframeCompletion': timeframe_completion}
     return series, provenance

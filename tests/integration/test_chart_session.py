@@ -297,6 +297,6 @@ async def test_historical_chart_tool_results_replay_as_refs_without_rewriting_tr
     await collect(orch, replace(request, idempotency_key="replay-run", message="Continue"))
     replay = str(provider.messages[-1])
     assert "Historical chart result" in replay
-    assert replay.count("11.125") == 1  # Current observation only; historical raw rows are not replayed.
+    assert original not in replay
     persisted = orch.history(session_key=request.session_key)[1]
     assert next(part["toolExecution"]["replayOutput"] for part in persisted["parts"] if part["kind"] == "tool_result") == original

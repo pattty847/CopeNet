@@ -63,7 +63,7 @@ export interface MarketCapture {
   documentId: string;
   documentRevision: number;
 }
-export type ChartDetail = 'quick' | 'balanced' | 'deep';
+export type ChartDetail = 'quick' | 'balanced' | 'deep' | 'exhaustive';
 export interface MarketContext {
   observationId: string;
   documentId: string;

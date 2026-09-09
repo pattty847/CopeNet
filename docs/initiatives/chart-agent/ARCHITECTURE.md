@@ -316,17 +316,18 @@ and save an A drawing, but must never render it on B. Render errors never roll b
 
 ## Context detail and cost
 
-Implement Quick/Balanced/Deep as an evidence policy, independent of provider reasoning
-settings, output length, and invocation frequency. Begin with measured, configurable caps:
-2K/5K/10K estimated tokens for the initial view projection and 4/8/12 chart read calls. These
-are engineering starting points, not promised usage; intersect them with the harness's
-remaining context/tool budget and reserve room for the answer.
+Implement Quick/Balanced/Deep/Exhaustive as an evidence policy, independent of provider
+reasoning settings, output length, and invocation frequency. The measured caps are
+8K/25K/60K/100K estimated tokens for the initial view projection and 4/8/12/16 chart read
+calls. They are maximums, not padding targets; intersect them with the harness's remaining
+input allocation after instructions, schemas, the live request and same-turn tool reserve.
 
-Identity, units, freshness, coverage, selected objects, and an exact selected candle get
-priority at every detail. Balanced includes recent exact bars and active indicator values;
-Deep adds wider windows/multiple supported timeframes. Whole stored resources remain queryable
-within budget at every setting. Paginate tool results before generic harness clipping and
-record any subsequent clipping. Measure actual provider-reported usage when available.
+Identity, units, freshness, completion, coverage, latest state and a whole-period digest get
+priority at every detail. The active visible candle table is exhaustive whenever it fits;
+otherwise the declared adaptive policy retains structural events and chronological coverage.
+Whole stored resources remain queryable within budget at every setting. Paginate tool results
+before generic harness clipping and record any subsequent clipping. Measure actual
+provider-reported usage when available.
 
 ## Crypto and order-book extension
 
