@@ -31,6 +31,7 @@ test('cluster summary owns the average label while the box keeps its dashed line
   assert.match(html, /data-cluster-average-label/);
   assert.match(html, /avg buy \$18\.06/);
   assert.equal((html.match(/avg buy \$18\.06/g) ?? []).length, 2); // visible label + button aria-label
+  assert.equal((html.match(/border-top:/g) ?? []).length, 1); // the in-box line, without a label swatch
 });
 
 test('cluster without a priced average keeps a compact one-line summary', () => {

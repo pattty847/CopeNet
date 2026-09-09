@@ -72,16 +72,12 @@ export function ChartClusterBoxes({
             <span
               data-cluster-average-label
               style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 4,
+                display: 'block',
                 marginTop: 1,
                 fontSize: 8.5,
                 color: toneColor(box.tone),
               }}
             >
-              <span aria-hidden="true" style={{ width: 12, borderTop: `1.5px dashed ${toneColor(box.tone)}` }} />
               {averageLabel}
             </span>
           )}
