@@ -1,0 +1,572 @@
+/* CopeNet Home — the desk.
+ *
+ * The same instrument as the Market workstation: marketTokens.css supplies every colour,
+ * face and space, and this file adds only Home's own regions. Where Market is SEAMED (docked
+ * regions divided by hairlines), Home is CARDED — each panel here is a discrete object about
+ * a different subject, which is exactly the case the grammar reserves a card for. The card
+ * is still a 6px radius and a hairline, never a shadow.
+ *
+ * Home scrolls. The previous iteration refused to, on the grounds that a page you scroll is
+ * a page you did not design — but that was aimed at 3,600px of marketing. Two and a half
+ * screens of counted numbers is a different thing, and the top screen is complete on its own:
+ * the market read and the tape are above the fold, and everything below is reference.
+ */
+
+.hd {
+  display: grid;
+  gap: var(--mkt-s3);
+  padding: var(--mkt-s3);
+  background: var(--mkt-ground);
+  color: var(--mkt-text);
+  font-family: var(--mkt-sans);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  align-content: start;
+  /* Rows are as tall as their tallest card and every card fills that height, so the row
+   * reads as one band. What must never happen is one panel with unbounded content — the
+   * picture of the day, a long watchlist — setting that height for everything beside it,
+   * so each such panel boxes its own scroll rather than growing. */
+  grid-auto-rows: min-content;
+}
+
+.hd *:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+
+/* --------------------------------------------------------------------------- the card */
+
+.hd-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-canvas);
+}
+
+.hd-card__head {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--mkt-seam);
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hd-card__head b { color: var(--mkt-soft); font-weight: 600; }
+.hd-card__spacer { flex: 1 1 auto; }
+
+/* The head's own link out. Quiet until pointed at: it is a way on, not a call to action. */
+.hd-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.hd-link:hover { color: var(--mkt-accent); }
+
+.hd-card__body { flex: 1 1 auto; min-height: 0; }
+.hd-empty { padding: 14px 12px; color: var(--mkt-dim); font: 400 var(--mkt-t-value) var(--mkt-sans); }
+
+/* ------------------------------------------------------------------------ span helpers */
+
+.hd-span-3 { grid-column: span 3; }
+.hd-span-4 { grid-column: span 4; }
+.hd-span-5 { grid-column: span 5; }
+.hd-span-6 { grid-column: span 6; }
+.hd-span-7 { grid-column: span 7; }
+.hd-span-8 { grid-column: span 8; }
+.hd-span-12 { grid-column: span 12; }
+
+/* -------------------------------------------------------------------------- the briefing */
+
+.hd-brief { padding: 14px 16px 12px; }
+
+.hd-brief__greet { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.hd-brief__hello { margin: 0; font: 600 24px var(--mkt-sans); letter-spacing: -0.01em; color: var(--mkt-text); }
+.hd-brief__sub { margin: 3px 0 0; color: var(--mkt-muted); font: 400 var(--mkt-t-body) var(--mkt-sans); }
+
+.hd-brief__stamp { flex: 0 0 auto; text-align: right; }
+.hd-brief__stamp b { display: block; font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-soft); }
+.hd-brief__stamp span { display: block; color: var(--mkt-dim); font: 400 var(--mkt-t-value) var(--mkt-mono); }
+
+/* The macro strip: regime, then whatever the dashboard's macro panel is carrying. Divided
+ * by hairlines rather than gaps — these are readings off one instrument, not five cards. */
+.hd-strip {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(0, 1fr);
+  margin-top: 14px;
+  border-top: 1px solid var(--mkt-seam);
+  border-bottom: 1px solid var(--mkt-seam);
+}
+
+.hd-strip__cell {
+  min-width: 0;
+  padding: 9px 12px 8px;
+  border-right: 1px solid var(--mkt-seam-soft);
+}
+.hd-strip__cell:first-child { padding-left: 0; }
+.hd-strip__cell:last-child { border-right: 0; padding-right: 0; }
+
+.hd-strip__label {
+  color: var(--mkt-dimmer);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hd-strip__value {
+  margin-top: 4px;
+  font: 500 var(--mkt-t-hero) var(--mkt-mono);
+  color: var(--mkt-text);
+  font-variant-numeric: tabular-nums;
+}
+.hd-strip__change { font: 500 var(--mkt-t-value) var(--mkt-mono); font-variant-numeric: tabular-nums; }
+.hd-strip__spark { display: block; height: 26px; margin-top: 3px; }
+.hd-strip__spark .tw-spark { display: block; width: 100%; height: 26px; }
+
+/* Regime is a state, not a number, so it is set in the sans and coloured by the state. */
+.hd-regime { display: flex; align-items: center; gap: 7px; margin-top: 4px; }
+.hd-regime__dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+.hd-regime__label { font: 600 var(--mkt-t-hero) var(--mkt-sans); letter-spacing: -0.01em; }
+.hd-regime__note { margin-top: 3px; color: var(--mkt-dim); font: 400 var(--mkt-t-label) var(--mkt-sans); line-height: 1.45; }
+
+/* Matters + quote share the row below the strip. */
+.hd-brief__foot {
+  display: grid;
+  grid-template-columns: minmax(0, 1.6fr) minmax(0, 1fr);
+  gap: 20px;
+  padding-top: 12px;
+}
+
+.hd-matters { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.hd-matters__title {
+  color: var(--mkt-dimmer);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+
+.hd-matter {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 2px 0;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hd-matter:hover .hd-matter__text { color: var(--mkt-text); }
+.hd-matter__dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; transform: translateY(-1px); }
+.hd-matter__sym { flex: 0 0 auto; font: 500 var(--mkt-t-value) var(--mkt-mono); color: var(--mkt-soft); }
+.hd-matter__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mkt-muted);
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hd-quote {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 7px;
+  min-width: 0;
+  padding-left: 20px;
+  border-left: 1px solid var(--mkt-seam);
+}
+.hd-quote__text { color: var(--mkt-soft); font: 400 italic var(--mkt-t-body)/1.55 var(--mkt-sans); }
+.hd-quote__by { color: var(--mkt-dimmer); font: 500 var(--mkt-t-micro) var(--mkt-sans); letter-spacing: 0.1em; }
+
+/* ------------------------------------------------------------------------ quick launch */
+
+.hd-launch-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; background: var(--mkt-seam-soft); }
+
+.hd-launch {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 12px;
+  border: 0;
+  background: var(--mkt-canvas);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hd-launch:hover { background: var(--mkt-raise); }
+.hd-launch__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  color: var(--mkt-accent);
+}
+.hd-launch__text { min-width: 0; flex: 1 1 auto; }
+.hd-launch__text { display: block; }
+.hd-launch__label { display: block; color: var(--mkt-dim); font: 400 var(--mkt-t-label) var(--mkt-sans); }
+.hd-launch__detail {
+  display: block;
+  overflow: hidden;
+  color: var(--mkt-text);
+  font: 500 var(--mkt-t-body) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hd-launch__go { flex: 0 0 auto; color: var(--mkt-dimmer); }
+.hd-launch:hover .hd-launch__go { color: var(--mkt-accent); }
+
+/* ------------------------------------------------------------------------- market pulse */
+
+.hd-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 10px;
+  border-bottom: 1px solid var(--mkt-seam);
+  overflow-x: auto;
+  scrollbar-width: thin;
+}
+.hd-tabs::-webkit-scrollbar { height: 4px; }
+.hd-tabs::-webkit-scrollbar-thumb { background: var(--mkt-seam); border-radius: 2px; }
+.hd-tab {
+  flex: 0 0 auto;
+  height: 22px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-dim);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hd-tab:hover { color: var(--mkt-soft); }
+.hd-tab[aria-selected='true'] { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+
+/* Seams are drawn on the cells, not as a gap over a coloured container: a list with three
+ * names in a six-column grid would otherwise paint the three empty cells as a lighter
+ * rectangle, which reads as a loading state that never resolves. */
+.hd-pulse-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+
+.hd-pulse {
+  display: block;
+  min-width: 0;
+  padding: 10px 11px 8px;
+  border: 0;
+  border-right: 1px solid var(--mkt-seam-soft);
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: var(--mkt-canvas);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hd-pulse[data-navigable='false'] { cursor: default; }
+.hd-pulse[data-navigable='true']:hover { background: var(--mkt-raise); }
+
+.hd-pulse__sym {
+  overflow: hidden;
+  color: var(--mkt-muted);
+  font: 500 var(--mkt-t-label) var(--mkt-mono);
+  letter-spacing: 0.04em;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hd-pulse__value {
+  margin-top: 3px;
+  font: 500 var(--mkt-t-hero) var(--mkt-mono);
+  color: var(--mkt-text);
+  font-variant-numeric: tabular-nums;
+}
+.hd-pulse__change { font: 500 var(--mkt-t-value) var(--mkt-mono); font-variant-numeric: tabular-nums; }
+.hd-pulse__spark { display: block; height: 30px; margin-top: 5px; }
+.hd-pulse__spark .tw-spark { display: block; width: 100%; height: 30px; }
+
+/* ---------------------------------------------------------------------- recent activity */
+
+.hd-run {
+  display: grid;
+  grid-template-columns: 26px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hd-run:last-child { border-bottom: 0; }
+.hd-run:hover { background: var(--mkt-raise); }
+
+.hd-run__icon { grid-row: span 2; align-self: center; display: grid; place-items: center; color: var(--mkt-dim); }
+.hd-run__title {
+  overflow: hidden;
+  color: var(--mkt-text);
+  font: 500 var(--mkt-t-value) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hd-run__summary {
+  grid-column: 2;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--mkt-dim);
+  font: 400 var(--mkt-t-label) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hd-run__meta { grid-row: 1; grid-column: 3; color: var(--mkt-dimmer); font: 400 var(--mkt-t-micro) var(--mkt-mono); white-space: nowrap; }
+.hd-run__status { grid-row: 2; grid-column: 3; font: 500 var(--mkt-t-micro) var(--mkt-sans); letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap; }
+
+/* ------------------------------------------------------------------------ system health */
+
+/* Two metrics per row at the desk's normal width; one when the column is narrow, because a
+ * 6-character mono number and a caps label do not both survive a 150px cell. */
+.hd-health-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--mkt-seam-soft); }
+@media (max-width: 1500px) {
+  .hd-health-grid, .hd-tool-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+.hd-metric { padding: 10px 12px 9px; background: var(--mkt-canvas); }
+.hd-metric__label { color: var(--mkt-dimmer); font: 600 var(--mkt-t-micro) var(--mkt-sans); letter-spacing: 0.14em; text-transform: uppercase; }
+.hd-metric__value {
+  margin-top: 3px;
+  font: 500 var(--mkt-t-hero) var(--mkt-mono);
+  color: var(--mkt-text);
+  font-variant-numeric: tabular-nums;
+}
+.hd-metric__note { color: var(--mkt-dim); font: 400 var(--mkt-t-micro) var(--mkt-sans); }
+
+/* One bar per five-minute bucket of the last hour. An idle desk is a row of floor ticks
+ * rather than an empty box, so "quiet" and "not loaded" never look the same. */
+.hd-bars { display: flex; align-items: flex-end; gap: 2px; height: 20px; margin-top: 6px; }
+.hd-bars__bar { flex: 1 1 0; min-height: 2px; background: var(--mkt-raise-hi); border-radius: 1px; }
+.hd-bars__bar[data-filled='true'] { background: var(--mkt-accent); opacity: 0.75; }
+
+.hd-health-foot {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--mkt-seam);
+  color: var(--mkt-dim);
+  font: 400 var(--mkt-t-micro) var(--mkt-sans);
+}
+.hd-health-foot__dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+.hd-health-foot b { margin-left: auto; font: 400 var(--mkt-t-micro) var(--mkt-mono); color: var(--mkt-dimmer); }
+
+/* ----------------------------------------------------------------------------- my focus */
+
+.hd-focus { display: flex; flex-direction: column; min-height: 0; }
+
+.hd-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+}
+.hd-check:hover .hd-check__remove { opacity: 1; }
+
+.hd-check__box {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 14px;
+  height: 14px;
+  margin-top: 1px;
+  border: 1px solid var(--mkt-dim);
+  border-radius: 3px;
+  background: transparent;
+  color: var(--mkt-ground);
+  cursor: pointer;
+}
+.hd-check__box[aria-checked='true'] { border-color: var(--mkt-accent); background: var(--mkt-accent); }
+
+.hd-check__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--mkt-soft);
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.hd-check__text[data-done='true'] { color: var(--mkt-dimmer); text-decoration: line-through; }
+
+.hd-check__remove {
+  flex: 0 0 auto;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dimmer);
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.hd-check__remove:hover { color: var(--mkt-down); }
+.hd-check__remove:focus-visible { opacity: 1; }
+
+.hd-focus__add {
+  width: 100%;
+  padding: 7px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: var(--mkt-text);
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+}
+.hd-focus__add::placeholder { color: var(--mkt-dimmer); }
+.hd-focus__add:focus { outline: none; background: var(--mkt-raise); }
+
+.hd-notes-label {
+  padding: 9px 12px 4px;
+  color: var(--mkt-dimmer);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.hd-notes {
+  flex: 1 1 auto;
+  min-height: 84px;
+  padding: 0 12px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-soft);
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+  line-height: 1.6;
+  resize: none;
+}
+.hd-notes::placeholder { color: var(--mkt-dimmer); }
+.hd-notes:focus { outline: none; }
+
+.hd-saved { color: var(--mkt-dimmer); font: 400 var(--mkt-t-micro) var(--mkt-mono); letter-spacing: 0.04em; }
+
+/* -------------------------------------------------------------------------- data & tools */
+
+.hd-tool-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1px; background: var(--mkt-seam-soft); }
+
+.hd-tool {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 11px;
+  border: 0;
+  background: var(--mkt-canvas);
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hd-tool:hover { background: var(--mkt-raise); }
+.hd-tool__icon {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  color: var(--mkt-accent);
+}
+.hd-tool__text { display: block; min-width: 0; }
+.hd-tool__label { display: block; overflow: hidden; color: var(--mkt-text); font: 500 var(--mkt-t-value) var(--mkt-sans); text-overflow: ellipsis; white-space: nowrap; }
+.hd-tool__detail { display: block; overflow: hidden; color: var(--mkt-dim); font: 400 var(--mkt-t-micro) var(--mkt-sans); text-overflow: ellipsis; white-space: nowrap; }
+
+/* -------------------------------------------------------------------------------- narrow */
+
+@media (max-width: 1400px) {
+  .hd-pulse-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+
+@media (max-width: 1200px) {
+  .hd-span-3, .hd-span-4, .hd-span-5, .hd-span-7, .hd-span-8 { grid-column: span 6; }
+  .hd-launch-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 820px) {
+  .hd { padding: var(--mkt-s2); gap: var(--mkt-s2); }
+  .hd-span-3, .hd-span-4, .hd-span-5, .hd-span-6, .hd-span-7, .hd-span-8 { grid-column: span 12; }
+  .hd-strip { grid-auto-flow: row; grid-auto-columns: auto; }
+  .hd-strip__cell { border-right: 0; border-bottom: 1px solid var(--mkt-seam-soft); padding-left: 0; padding-right: 0; }
+  .hd-strip__cell:last-child { border-bottom: 0; }
+  .hd-brief__foot { grid-template-columns: minmax(0, 1fr); gap: 12px; }
+  .hd-quote { padding-left: 0; padding-top: 12px; border-left: 0; border-top: 1px solid var(--mkt-seam); }
+  .hd-pulse-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .hd-launch-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* -------------------------------------------------------------------------------- apod */
+
+/* The picture is the one panel whose content length is out of CopeNet's hands: some days
+ * it is a two-line caption, some days six paragraphs, and some days a video with no image
+ * at all. It is boxed so that none of those can set the height of the whole top row. */
+.hd-apod { display: flex; flex-direction: column; min-height: 0; height: 100%; max-height: 400px; }
+
+.hd-apod__media {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  aspect-ratio: 16 / 9;
+  overflow: hidden;
+  background: #000;
+}
+.hd-apod__media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.hd-apod__media:hover img { opacity: 0.9; }
+.hd-apod__placeholder { color: var(--mkt-dim); font: 400 var(--mkt-t-label) var(--mkt-sans); }
+
+.hd-apod__text { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 10px 12px 4px; }
+.hd-apod__title {
+  margin: 0 0 5px;
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  font: 600 var(--mkt-t-body) var(--mkt-sans);
+  color: var(--mkt-text);
+}
+.hd-apod__badge {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 3px;
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hd-apod__blurb { margin: 0; color: var(--mkt-muted); font: 400 var(--mkt-t-label)/1.6 var(--mkt-sans); }
+
+.hd-apod__link {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 8px 12px;
+  border-top: 1px solid var(--mkt-seam);
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.12em;
+  text-decoration: none;
+  text-transform: uppercase;
+}
+.hd-apod__link:hover { color: var(--mkt-accent); }

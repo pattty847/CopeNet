@@ -1,9 +1,11 @@
+import { useEffect, useState } from 'react';
 import { Bell, BookOpen, Command, Search, Sparkles, UserCircle2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { marketClock } from './home/deskModel';
 import { ThemeToggle } from './ThemeToggle';
 
 const SECTION_HINTS = {
-  home: 'Ask CopeNet to surface a workspace, run a playbook, or jump back into a session…',
+  home: 'Jump to a ticker, sector, or ask CopeNet…',
   agents: 'Search sessions, pinned agents, or a run you want to resume…',
   market: 'Jump to a ticker, sector, or the daily market read…',
   workflows: 'Find a workflow, runbook, or recurring operation…',
@@ -14,6 +16,36 @@ const SECTION_HINTS = {
 
 const iconBtn =
   'shell-icon-btn inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell';
+
+/** The exchange clock belongs in the chrome, not on one page: whether the market is open
+ *  changes how every number in the app should be read, and it is the first thing the
+ *  operator checks. It ticks on its own — a clock rendered once and left is a wrong clock. */
+function MarketStatus() {
+  const [clock, setClock] = useState(() => marketClock());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClock(marketClock()), 15_000);
+    return () => window.clearInterval(timer);
+  }, []);
+
+  const open = clock.phase === 'open';
+  const tone = open ? 'text-shell-success' : clock.phase === 'closed' ? 'text-shell-muted' : 'text-shell-accent';
+
+  return (
+    <div className="flex shrink-0 items-center gap-3">
+      <div className="text-right leading-tight">
+        <div className="text-[11px] text-shell-muted">
+          {new Date().toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })}
+        </div>
+        <div className="font-mono text-[12px] font-medium tabular-nums text-shell-text">{clock.time}</div>
+      </div>
+      <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap text-[11px] font-medium ${tone}`}>
+        <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" />
+        {clock.label}
+      </span>
+    </div>
+  );
+}
 
 export function TopCommandBar() {
   const currentSection = useAppStore((state) => state.currentSection);
@@ -52,6 +84,8 @@ export function TopCommandBar() {
         <button type="button" className={iconBtn} title="Profile">
           <UserCircle2 className="h-5 w-5" />
         </button>
+        <span className="mx-1 h-6 w-px bg-shell-border" />
+        <MarketStatus />
       </div>
     </div>
   );

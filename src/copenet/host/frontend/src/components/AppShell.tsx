@@ -20,11 +20,15 @@ import { shouldShowMobileSectionHeader } from '../lib/mobileCopy';
 import { appSectionFromPathname } from '../lib/appSectionRouting';
 
 // Sections that own their full frame edge-to-edge: the market workstation and the ticker
-// have their own chrome, Agents is a resizable stage, and Home is a single non-scrolling
-// cockpit. Everything else is a document and gets a real gutter — previously nothing did,
-// which is why utility cards sat flush against the sidebar on one side and the scrollbar
-// on the other.
+// have their own chrome, Agents is a resizable stage, and Home lays out its own grid with
+// its own padding. Everything else is a document and gets a real gutter — previously
+// nothing did, which is why utility cards sat flush against the sidebar on one side and
+// the scrollbar on the other.
 const FULL_BLEED_SECTIONS = new Set(['home', 'agents', 'market']);
+
+// …but only Market and Agents fill the frame exactly. Home is a grid of panels taller than
+// one screen, so it scrolls without taking the shell gutter on top of its own.
+const FIXED_HEIGHT_SECTIONS = new Set(['agents', 'market']);
 
 // The command row is redundant wherever the section already carries its own search: the
 // market workstation and ticker both have a symbol jump in their market bar, and Agents
@@ -106,7 +110,9 @@ export function AppShell() {
           )}
           <div
             className={`min-h-0 flex-1 overflow-x-hidden ${
-              FULL_BLEED_SECTIONS.has(currentSection) ? 'overflow-y-hidden' : 'overflow-y-auto shell-section-gutter'
+              FIXED_HEIGHT_SECTIONS.has(currentSection)
+                ? 'overflow-y-hidden'
+                : `overflow-y-auto ${FULL_BLEED_SECTIONS.has(currentSection) ? '' : 'shell-section-gutter'}`
             } ${isMobile && !showMobileTopBar ? 'pt-[calc(env(safe-area-inset-top)+0.5rem)]' : ''}`}
           >
             <SectionErrorBoundary sectionName={currentSection}>
