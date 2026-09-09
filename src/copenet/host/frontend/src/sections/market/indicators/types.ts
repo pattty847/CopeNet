@@ -84,6 +84,17 @@ export interface IndicatorReference {
   lineStyle?: 'solid' | 'dashed' | 'dotted';
 }
 
+/** A directional fill between two outputs. The generic renderer projects both series onto
+ *  the live chart scale and changes colour exactly where they cross. `primaryKey` above
+ *  `signalKey` is the bullish regime. */
+export interface IndicatorCloud {
+  primaryKey: string;
+  signalKey: string;
+  visibleConfigKey: string;
+  bullishColor: string;
+  bearishColor: string;
+}
+
 /** Everything compute needs that is not a bar. `barsPerYear` lets Historical Volatility
  *  annualise honestly against the chart's actual interval instead of assuming daily. */
 export interface IndicatorContext {
@@ -113,6 +124,8 @@ export interface IndicatorDefinition {
   requires: IndicatorField[];
   inputs: IndicatorInput[];
   outputs: IndicatorOutput[];
+  /** Optional low-emphasis regime fill behind a related pair of output lines. */
+  cloud?: IndicatorCloud;
   references?: IndicatorReference[];
   /** Fixed pane bounds for a bounded oscillator, so RSI does not autoscale to its own noise. */
   paneRange?: { min?: number; max?: number };

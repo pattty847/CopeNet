@@ -294,3 +294,14 @@ test('every declared input has usable bounds and a default inside them', () => {
     }
   }
 });
+
+test('every directional cloud binds two real outputs to a boolean setting', () => {
+  for (const definition of INDICATORS) {
+    if (!definition.cloud) continue;
+    const outputs = new Set(definition.outputs.map((output) => output.key));
+    assert.ok(outputs.has(definition.cloud.primaryKey), `${definition.id} cloud primary output is missing`);
+    assert.ok(outputs.has(definition.cloud.signalKey), `${definition.id} cloud signal output is missing`);
+    const toggle = definition.inputs.find((input) => input.key === definition.cloud?.visibleConfigKey);
+    assert.equal(toggle?.kind, 'boolean', `${definition.id} cloud toggle must be boolean`);
+  }
+});

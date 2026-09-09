@@ -13,19 +13,20 @@ from copenet.core._config import (
 )
 from copenet.core.harness import PromptOverlay
 from copenet.core.harness.responses_items import image_content_part
+from copenet.core.market.chart_workspace.authorization import chart_tool_ids
 from copenet.core.orchestrator.market_context import (
     resolve_market_context, admit_chart_turn, update_chart_admission, chart_retry_status,
-    chart_tool_ids, chart_policy, chart_store, chart_reference_with_trust, chart_prompt_policy,
+    chart_policy, chart_store, chart_reference_with_trust, chart_prompt_policy,
     current_chart_message, chart_system_overlay, prepare_chart_tool_context, create_chart_manifest,
 )
 from copenet.core.orchestrator.approval_execution import make_approval_gated_executor
-from copenet.core.orchestrator.context_budget import resolve_context_budget
+from copenet.core.orchestrator.context_budget import discover_model_context_tokens, resolve_context_budget
 from copenet.core.orchestrator.messages import (
     build_chat_messages,
     estimate_input_tokens,
     flatten_messages_to_prompt,
-    trim_messages_to_token_budget,
 )
+from copenet.core.harness.context_window import estimate_request_tokens, trim_messages_to_request_budget
 from copenet.core.orchestrator.tool_requests import (
     append_system_overlay,
     normalize_requested_tool_ids,
@@ -37,6 +38,7 @@ from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import (
     ToolExecutionContext,
+    build_responses_tool_schemas,
     describe_available_tools,
     disclose_policy_in_descriptions,
     policy_for_task_mode,
@@ -51,6 +53,13 @@ from copenet.prompts import (
 # Providers that maintain their own conversation thread and resume it via
 # provider_session_id — they must NOT be re-fed the flattened transcript.
 _RESUME_CLI_PROVIDERS = {"claude-cli"}
+_MAX_TOOL_LOOP_RESERVE_TOKENS = 25_000
+
+
+def _tool_loop_reserve(input_tokens: int, has_tools: bool) -> int:
+    if not has_tools:
+        return 0
+    return min(_MAX_TOOL_LOOP_RESERVE_TOKENS, max(4_000, input_tokens // 5))
 
 if TYPE_CHECKING:
     from . import Orchestrator
@@ -338,7 +347,33 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         # and a clean flattened prompt for prompt-only providers (CLI / LM Studio).
         full_history = orchestrator.history(session_key=session_key, limit=400)
         history_for_replay = _history_excluding_current(full_history, run_id=run_id)
-        current_message = current_chart_message(orchestrator, message, market_context)
+        provider = orchestrator._providers[provider_name]
+        declared_context_tokens = await discover_model_context_tokens(provider, request.model)
+        context_budget = resolve_context_budget(
+            provider=provider_name,
+            model_context_tokens=declared_context_tokens,
+        )
+        tool_schemas = build_responses_tool_schemas(available_tools)
+        fixed_input_tokens = estimate_request_tokens(
+            [], instructions=effective_system_prompt, tools=tool_schemas,
+        )
+        loop_reserve_tokens = _tool_loop_reserve(context_budget.input_tokens, bool(available_tools))
+        initial_input_budget = context_budget.input_tokens - loop_reserve_tokens
+        live_without_chart = build_chat_messages(
+            transcript_messages=[],
+            current_user_message=message,
+            current_user_image_parts=current_image_parts or None,
+        )
+        chart_token_limit = max(
+            initial_input_budget - fixed_input_tokens - estimate_input_tokens(live_without_chart),
+            1,
+        )
+        current_message = current_chart_message(
+            orchestrator,
+            message,
+            market_context,
+            token_limit=chart_token_limit,
+        )
         unbounded_chat_messages = build_chat_messages(
             transcript_messages=history_for_replay,
             current_user_message=current_message,
@@ -346,10 +381,11 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             attachment_resolver=_resolve_attachment_images,
         )
         unbounded_token_estimate = estimate_input_tokens(unbounded_chat_messages)
-        context_budget = resolve_context_budget(provider=provider_name)
-        chat_messages = trim_messages_to_token_budget(
+        chat_messages = trim_messages_to_request_budget(
             unbounded_chat_messages,
-            max_context_tokens=context_budget.input_tokens,
+            max_input_tokens=initial_input_budget,
+            instructions=effective_system_prompt,
+            tools=tool_schemas,
         )
         # CLI providers (claude-cli / openai-codex) keep their OWN conversation thread
         # server-side and resume it via provider_session_id. Re-sending the full
@@ -360,13 +396,21 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
         cli_resume = provider_name in _RESUME_CLI_PROVIDERS and bool(entry.provider_session_id)
         chat_prompt = current_message if cli_resume else flatten_messages_to_prompt(chat_messages)
         input_token_estimate = estimate_input_tokens(chat_messages)
+        preplan_input_token_estimate = estimate_request_tokens(
+            chat_messages, instructions=effective_system_prompt, tools=tool_schemas,
+        )
         message_count = len(chat_messages)
         trace.record(
             "chat_messages_built",
             {
                 "messageCount": message_count,
                 "inputTokenEstimate": input_token_estimate,
+                "prePlanInputTokenEstimate": preplan_input_token_estimate,
                 "unboundedInputTokenEstimate": unbounded_token_estimate,
+                "fixedInputTokenEstimate": fixed_input_tokens,
+                "initialInputTokenBudget": initial_input_budget,
+                "toolLoopReserveTokens": loop_reserve_tokens,
+                "chartInitialTokenLimit": chart_token_limit if market_context is not None else None,
                 "omittedMessageItemCount": len(unbounded_chat_messages) - len(chat_messages),
                 "historyTurns": len(history_for_replay),
                 "cliResume": cli_resume,
@@ -374,7 +418,6 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
             },
         )
 
-        provider = orchestrator._providers[provider_name]
         seq = 0
         assistant_parts: list[str] = []
         assistant_message_parts: list[dict] = []
@@ -474,7 +517,10 @@ async def send_chat(orchestrator: "Orchestrator", request: "ChatSendRequest", em
                     "contextWindow": {
                         "messageCount": message_count,
                         "inputTokenEstimate": input_token_estimate,
+                        "prePlanInputTokenEstimate": preplan_input_token_estimate,
                         "unboundedInputTokenEstimate": unbounded_token_estimate,
+                        "initialInputTokenBudget": initial_input_budget,
+                        "toolLoopReserveTokens": loop_reserve_tokens,
                     },
                 },
             )

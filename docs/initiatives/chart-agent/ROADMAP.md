@@ -22,7 +22,7 @@ market data. The complete demo is:
 6. Undo a batch; reload and verify the remaining drawings/conversation/evidence survive.
 7. Change symbol and timeframe, send again, and verify automatic current-state capture.
    An old in-flight result never draws on the new symbol.
-8. Switch Quick/Balanced/Deep and inspect the differences in context/range coverage and
+8. Switch Quick/Balanced/Deep/Exhaustive and inspect the differences in context/range coverage and
    tool budget. Each mode can answer a question about one selected exact candle.
 
 The demo includes current quote awareness on user invocation. It excludes proactive live
@@ -145,7 +145,7 @@ Commit boundary: `feat(agents): support scoped chart context and actions`.
 
 - Add the resizable right companion beside the chart, retaining the research dock below it.
   Use existing market typography/tokens and conversation components; avoid another app shell.
-- Include context header, Quick/Balanced/Deep slider, chart read/annotate control, account
+- Include context header, Quick/Balanced/Deep/Exhaustive selector, chart read/annotate control, account
   inclusion state, model selector, message/stop controls, and context-used disclosure.
   Account inclusion describes new context; a reused session retains its earlier knowledge.
 - Implement selection chips and links between messages, drawings, and evidence inspector.

@@ -15,6 +15,15 @@ ordinary CopeNet sessions, immutable observations and a durable drawing document
    recover the conversation and document. **New chat** starts a separate session while
    keeping the chart's drawings.
 
+For company-event research, try: “Find significant Starbucks dates in this visible
+period and mark them on the chart. Cite the sources and explain nearby price moves.”
+The companion uses `web.search` and `web.fetch` to research sources, then existing label
+objects to annotate captured candles. Enable chart annotations to save labels. Event dates
+belong in labels; source URLs and explanations belong in their rationales and the answer.
+Non-trading dates and weekly/monthly bars need an explicit candle-mapping explanation.
+Dates outside the captured history cannot be given invented candles, and a coinciding
+move does not prove an event caused it.
+
 The companion captures current state on every send. An in-flight turn keeps its original
 observation even if prices, interval, ticker or research settings change. The context
 disclosure lists **captured** sources; it does not imply every stored row entered the model.
@@ -62,13 +71,22 @@ still paginates. Different values, decimal precision and tokenizers change the r
 | Delivery | Saved and rendered are separate states; comparison/interval/hidden-view states produce honest paint receipts |
 | Sessions | Explicit Market target, stable first-send keys, safe retry/history hydration, stop, model selection, durable workspace linkage; Agents selection stays independent |
 | Inspection | Existing tool/artifact inspector plus paginated exact drawing evidence, including after a new conversation or manual takeover |
+| Web research | Search and read public pages through the existing web tools; results remain inspectable in the conversation and sourced labels retain URLs in their rationale |
 | Account scope | New account panel resources excluded by default. Existing conversation, drawing labels/rationales and profile knowledge are retained; this switch is not historical erasure |
 
-The model receives exactly five tool capabilities for a chart turn:
+Ordinary chart turns receive these chart capabilities:
 `market.chart.context`, `market.chart.read`, `market.chart.document`,
-`market.chart.apply`, and `market.chart.undo`. Read-only mode excludes the two mutations.
+`market.chart.apply`, and `market.chart.undo`, plus `web.search` and `web.fetch`.
+Read-only mode keeps web research and excludes the two drawing mutations.
 Chart annotation permission does not grant shell or filesystem writes. Existing Barricade
 rules still gate writes after untrusted external prose, and approvals show the exact batch.
+Fetching a public site outside the trusted destination list requires approval of the exact
+call; private-address and secret-egress checks still run on approved retries. This reuses
+the existing readable-page tools, not the separate interactive browser-control prototype;
+HTML/plain text are supported, while PDF and interactive page workflows remain unsupported.
+Web results supplement the immutable observation without replacing captured price data or
+becoming captured-resource evidence references. Manual forecast lanes retain their original
+context/read/submit tool scope and cannot browse.
 
 The UI contributes browser-captured evidence. Hashes prove the identity of those inputs;
 they do not independently verify a vendor's data. Source, split-price basis, availability
@@ -112,6 +130,16 @@ Frontend paths above are relative to `src/copenet/host`; core/host paths are rel
 `src/copenet`. Storage sits under the session root at `market/chart-workspace.sqlite3`.
 
 ## Verification record
+
+- Web research (2026-09-08): synthetic orchestrator tests cover search → approved page
+  fetch → exact candle read → sourced label, read-only research, rejection, persisted
+  web previews/transcripts, unchanged candles and forecast isolation. Exact fetch approval
+  tests retain hard egress checks and reject approval reuse for changed arguments or runs.
+  These tests do not establish live search-provider availability or model event selection.
+  The 136 targeted backend regressions, frontend production build and existing offline
+  chart browser verifier pass; browser checks include drawing approval, paint receipts,
+  undo, reload and desktop/mobile layouts. Screenshots were kept temporary because this
+  changes tool exposure rather than the UI layout.
 
 - Compact composer: type checking, production build and 27 chart frontend tests pass.
   Offline browser checks cover 320/390px phones and desktop, detail changes, annotation

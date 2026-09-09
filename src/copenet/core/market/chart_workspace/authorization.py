@@ -2,6 +2,16 @@
 from .models import CHART_TOOL_IDS, MarketTurnContext
 
 CHART_WRITE_TOOL_IDS = ("market.chart.apply", "market.chart.undo")
+CHART_WEB_TOOL_IDS = ("web.search", "web.fetch")
+
+
+def chart_tool_ids(context: MarketTurnContext) -> frozenset[str]:
+    """One authority set for model discovery, execution and approved retries."""
+    if context.forecast_id:
+        return frozenset({"market.chart.context", "market.chart.read", "market.forecast.submit", "market.forecast.read"})
+    return frozenset((*CHART_TOOL_IDS, *CHART_WEB_TOOL_IDS)) - (
+        frozenset(CHART_WRITE_TOOL_IDS) if context.access != "annotate" else frozenset()
+    )
 
 
 def actor_for(context: MarketTurnContext | None) -> dict:

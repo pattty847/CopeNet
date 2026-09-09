@@ -57,6 +57,7 @@ export class FakeSeries {
   data: { time: number; value: number; color?: string }[] = [];
   options: Record<string, unknown>;
   priceLines: FakePriceLine[] = [];
+  primitives: unknown[] = [];
 
   constructor(
     public readonly definitionName: string,
@@ -88,6 +89,16 @@ export class FakeSeries {
     // as a failing test rather than as silently duplicated furniture on the chart.
     if (index < 0) throw new Error('price line is not attached to this series');
     this.priceLines.splice(index, 1);
+  }
+
+  attachPrimitive(primitive: unknown): void {
+    if (!this.primitives.includes(primitive)) this.primitives.push(primitive);
+  }
+
+  detachPrimitive(primitive: unknown): void {
+    const index = this.primitives.indexOf(primitive);
+    if (index < 0) throw new Error('primitive is not attached to this series');
+    this.primitives.splice(index, 1);
   }
 }
 

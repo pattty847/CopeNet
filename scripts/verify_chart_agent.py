@@ -285,7 +285,9 @@ async def verify(browser, directory):
         assert captures[-1]["capture"]["selection"]["from"] < captures[-1]["capture"]["selection"]["to"]
         captured_candles = next(resource for resource in captures[-1]["capture"]["resources"] if resource["key"] == "candles:W")
         assert captured_candles["rows"] == ticker_detail("TEST")["series"]["weekly"], "Capture must preserve every exact loaded candle value"
-        assert all(all(name.startswith("market.chart.") for name in names) for names in provider.tool_names)
+        assert all(set(names) == {"market.chart.context", "market.chart.read", "market.chart.document",
+                                  "market.chart.apply", "market.chart.undo", "web.search", "web.fetch"}
+                   for names in provider.tool_names)
         assert not {"market.refresh", "market.brief.run", "market.scans.run", "market.interpret"}.intersection(requests)
         await page.get_by_role("tab", name=re.compile(r"^Drawings")).click()
         await page.get_by_role("button", name=re.compile(r"^Captured close")).click()

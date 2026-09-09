@@ -29,6 +29,11 @@ export const BAND_MID = SERIES_COLORS.sand;
 export const REFERENCE_LINE = 'rgba(254,252,244,.20)';
 export const REFERENCE_ZERO = 'rgba(254,252,244,.32)';
 
+/** Directional clouds stay behind their lines and candles, so the regime reads at a glance
+ *  without turning the price pane into a solid block of colour. */
+export const CLOUD_UP = 'rgba(105,197,137,.13)';
+export const CLOUD_DOWN = 'rgba(217,109,95,.13)';
+
 /** Cycle through the palette so two instances of the same indicator are never the same
  *  colour by default. Deterministic in the instance's ordinal, not random. */
 const ROTATION = [

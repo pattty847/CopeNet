@@ -19,6 +19,12 @@ function fixture(): CaptureOptions {
   };
   const view = {
     detail: { symbol: 'SYN', asOf: '2026-01-01T00:00:00Z', series: { daily, weekly, monthly },
+      priceProvenance: { symbol: 'SYN', basis: 'split_adjusted', calendar: 'XNYS', splits: [], splitFingerprint: 'none', updatedAt: '2026-01-01T00:00:00Z', candleHash: 'hash',
+        completionStatus: 'ready', completedThrough: 200, completedCloseAt: '2026-01-01T21:00:00Z', timeframeCompletion: {
+          D: { status: 'ready', completedThrough: 200, completedCloseAt: '2026-01-01T21:00:00Z', error: null },
+          W: { status: 'waiting_close', completedThrough: null, completedCloseAt: null, error: 'Waiting' },
+          M: { status: 'waiting_close', completedThrough: null, completedCloseAt: null, error: 'Waiting' },
+        } },
       quote: { price: 11.123456789, changePct: null, priceBasis: 'split_adjusted', comparison: 'previous_daily_bar' },
       intelligence: { asOf: '2026-01-01T00:00:00Z', assetRole: 'equity', trend: { longTrend: 'rising' }, returns: { r1wPct: 1.234567 },
         dataQuality: { historyWeeks: 100, hasVolume: true, thinHistory: false }, portfolio: { shares: 777000123, avgCost: 456.789, source: 'synthetic-account' } },
@@ -54,6 +60,7 @@ test('capture uses canonical D/W/M identities and the exact rendered candle and 
     assert.equal(resource(capture, `candles:${timeframe}`).metadata.timeframe, timeframe);
     assert.equal(resource(capture, `candles:${timeframe}`).metadata.priceBasis, 'split_adjusted');
     assert.equal(resource(capture, `candles:${timeframe}`).metadata.timestampUnit, 'seconds');
+    assert.deepEqual(resource(capture, `candles:${timeframe}`).metadata.completion, options.view.detail!.priceProvenance!.timeframeCompletion![timeframe]);
   }
   assert.deepEqual(resource(capture, 'indicator:rsi-one').rows, [
     { t: 100, rsi: null }, { t: 200, rsi: 64.23456789 }, { t: 300, rsi: null },

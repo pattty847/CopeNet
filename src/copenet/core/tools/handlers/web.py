@@ -20,8 +20,8 @@ there without needing its own monkeypatch.
 
 ``web.fetch``'s destination policy (which hosts are auto-allowed vs. need an
 operator approval prompt vs. are hard-blocked as private/loopback/metadata)
-lives in the Barricade — see core/tools/barricade.py:fetch_allowlist and
-:_egress_guard. Set ``COPNET_WEB_FETCH_ALLOWLIST`` (comma-separated apex
+lives in the Barricade — see core/tools/web_destinations.py:fetch_allowlist and
+core/tools/barricade.py:_egress_guard. Set ``COPNET_WEB_FETCH_ALLOWLIST`` (comma-separated apex
 domains) to add operator-trusted destinations on top of the built-in defaults.
 
 ``web.search`` has a separate, narrower, OPT-IN result filter: if
@@ -60,7 +60,7 @@ SEARCH_SNIPPET_CHARS = 300
 FETCH_MAX_CHARS = 12000
 
 # search_web's OPTIONAL result-narrowing only — web.fetch's own destination policy
-# lives in barricade.py (fetch_allowlist/_egress_guard), which always runs first and
+# lives in web_destinations.py + barricade.py:_egress_guard, which always runs first and
 # has built-in defaults. This one has no defaults and only applies when the operator
 # explicitly sets it, since a search result is just a link shown to the model (not
 # fetched) and narrowing it isn't needed for safety. Comma-separated apex domains;

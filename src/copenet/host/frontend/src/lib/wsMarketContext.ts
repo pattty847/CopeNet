@@ -5,7 +5,7 @@ export function normalizeMarketContext(raw: unknown): Message['marketContext'] {
   if (!raw || typeof raw !== 'object') return null;
   const item = raw as Record<string, unknown>;
   if (typeof item.observationId !== 'string' || typeof item.documentId !== 'string' || typeof item.viewId !== 'string') return null;
-  if (item.detail !== 'quick' && item.detail !== 'balanced' && item.detail !== 'deep') return null;
+  if (item.detail !== 'quick' && item.detail !== 'balanced' && item.detail !== 'deep' && item.detail !== 'exhaustive') return null;
   if (item.access !== 'read' && item.access !== 'annotate') return null;
   return {
     observationId: item.observationId, documentId: item.documentId, viewId: item.viewId,

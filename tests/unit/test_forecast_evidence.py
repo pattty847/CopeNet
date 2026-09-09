@@ -48,6 +48,9 @@ def test_all_chart_timeframes_share_one_cache_revision():
     assert len(series['daily']) == 4 and len(series['weekly']) == 1
     assert provenance['completionStatus'] == 'ready'
     assert provenance['completedCloseAt'] == '2024-01-05T21:00:00+00:00'
+    assert provenance['timeframeCompletion']['D']['status'] == 'ready'
+    assert provenance['timeframeCompletion']['W']['status'] == 'ready'
+    assert provenance['timeframeCompletion']['M']['status'] == 'waiting_close'
 
 
 def test_fallback_bars_never_claim_cache_provenance():

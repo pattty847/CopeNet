@@ -12,15 +12,22 @@ verify the vendor candles or treat a model's description of its own calls as a t
 2. Each send serializes an immutable observation: loaded D/W/M candles, viewport,
    selection, plotted indicators, financial/comparison data, displayed quote, drawings,
    settings and contributed panels. Capture does not fetch newer data behind the UI.
-3. `chart_workspace/projection.py` introduces the instrument, resource inventory,
-   settings, coverage counts and bounded exact samples, presented as numeric CSV tables
-   with source metadata (implemented 2026-09-05). It prioritizes the active
-   candle interval, then indicators. Unselected samples favor the recent visible tail;
-   a selected region starts at its beginning. These samples are not a whole-chart summary.
+3. `chart_workspace/projection.py` introduces the instrument and visual orientation,
+   then a deterministic digest over every completed visible active-timeframe bar,
+   latest candle/indicator/quote state, the resource inventory, explicit coverage and
+   bounded exact CSV samples. It sends every visible active candle when that fits;
+   otherwise `adaptive-viewport-v1` preserves edges, extrema, drawdown endpoints,
+   volume/gap events and chronological coverage. Omitted rows are declared and remain
+   addressable through exact reads (implemented 2026-09-09).
 4. `market.chart.read` supports time ranges, fields, offsets and metadata paths. It
    reads the immutable source rather than a lossy summary. Loaded source rows and rows
    delivered to the model are different quantities, visible through inspection.
-5. Ordinary harness sessions execute five registered chart tools. Drawing writes are
+5. Ordinary harness sessions execute five registered chart tools plus the existing
+   `web.search` and `web.fetch` tools (added 2026-09-08). Web research supplements the
+   capture; it never replaces captured candles or grants broader Market/account access.
+   Company-event annotations use existing labels, with event dates and source URLs in
+   their labels/rationales; captured evidence references continue to identify chart rows.
+   Drawing writes are
    revision checked and scoped to the agent's layer; saved and rendered are separate.
    The next send captures a new observation; in-flight evidence remains fixed.
 6. Manual chart forecasts (2026-09-05) contribute `panel:forecasts` from the committed
@@ -98,12 +105,13 @@ for today's five tools; introduce on-demand schemas only when the catalog warran
 
 ## Spend tokens on evidence that changes the answer
 
-Current Quick/Balanced/Deep targets are approximately 2k/5k/10k tokens for the initial
-chart payload, with 4/8/12 explicit reads and 100/500/2,000 rows per read. Initial sample
-ceilings are 12/40/100 rows per eligible resource, subject to the shared character budget.
-These are character-derived estimates, not tokenizer measurements or total-turn limits.
-Instructions, conversation history, tool definitions, subsequent tool responses and
-model output add cost; growing inputs may be sent again across tool-loop requests.
+Quick/Balanced/Deep/Exhaustive target at most 8k/25k/60k/100k tokens for the initial
+chart payload, with 4/8/12/16 explicit reads and 100/500/2,000/5,000 requested rows per
+read. The active timeframe is exhaustive whenever the complete visible table fits; there
+is no fixed tail-row quota. These are character-derived chart estimates intersected with
+the harness's remaining initial input allocation, not tokenizer or billed-usage claims.
+The harness caps accumulated input at 60% of selected-model context (168K absolute),
+charges instructions/tool schemas, and reserves up to 25K for same-turn tool growth.
 
 A local measurement of compact JSON containing only each current tool's name,
 description and argument schema totals **5,115 characters** (roughly 1,279 tokens using
@@ -118,10 +126,10 @@ Recommended sequence:
   provider semantics, calls, latency, rows inspected and repeated reads. Never double-count
   reasoning tokens included in a provider's output total. Missing usage stays unknown.
 - **Reserve orientation.** Source/basis, quote freshness, forming-candle caveats, selected
-  region and coverage should survive sample allocation. Today resource metadata generally
-  requires an exact read for inventory-only resources; sampled tables now carry their
-  metadata. The allocator skips non-fitting samples, but does not reserve a guaranteed
-  share for quotes or individual indicators. Test this explicitly.
+  region and coverage survive exact-row allocation. Sampled tables carry their metadata;
+  the allocator prioritizes the displayed quote, active candles and visible active-timeframe
+  indicators, then declares every sample it cannot fit. Constrained-budget tests pin the
+  latest quote and MAMA/FAMA values alongside whole-period candle coverage.
 - **Summarize deterministically, retain exact source.** Offer bounded range extrema,
   returns, gaps and indicator values computed by shared chart/market math. Each result
   should name the observation, time window, method and supporting rows. A broad market
@@ -159,7 +167,7 @@ Use a small question suite across D/W/M, with indicators, financial panels and n
 - Unsupported action recognition, scope exclusions and manual drawing ownership.
 - Drawing anchors, evidence links and saved/rendered status after hide, switch or reload.
 
-Run the same tasks at all three detail settings and across representative providers.
+Run the same tasks at all four detail settings and across representative providers.
 Score numeric correctness, cited-row correctness, coverage, unsupported claims, successful
 operations, actual usage where available and latency. A valid drawing is an annotation;
 an inferred trendline or continuation scenario needs an explanation of its method and
@@ -193,16 +201,15 @@ is a sampling/read focus, not a restriction on the captured resource inventory.
 Forecast inspectors show the immutable setup as a proportional price ladder with exact
 prices, direction-aware returns and planned-risk multiples; it draws no invented path.
 
-Current delivery remains inventory plus bounded samples, followed by model-directed
-exact reads. Quick/Balanced/Deep cap samples at 12/40/100 rows per resource and target
-roughly 2k/5k/10k initial chart tokens. These are character-based estimates for the chart
-projection, not total provider input, conversation history, schemas or output. The local
-observation retains the exact loaded rows. More detail does not establish greater accuracy.
+The period evidence packet shipped on 2026-09-09. Current delivery is orientation →
+whole-completed-period digest → explicit coverage → bounded exact rows, followed by
+model-directed reads. Quick/Balanced/Deep/Exhaustive target 8k/25k/60k/100k chart tokens,
+intersected with the provider envelope. The local observation retains every exact loaded
+row. More detail increases evidence capacity; it does not establish greater accuracy.
 
-Recommended next slice: a deterministic **period evidence packet**, with raw CSV still
-available for audit and drill-down. Build from existing committed resources and causal
-indicator math, not a separate acquisition path. Evaluate this proposal before expanding
-model-facing tools:
+The shipped deterministic **period evidence packet** keeps raw CSV available for audit
+and drill-down and builds from existing committed resources rather than a new acquisition
+path. Remaining follow-on proposals are:
 
 1. Price structure: period return/drawdown, trend and volatility, close location, candle
    body/wicks, gaps in ATR units, relative volume and distance to named levels. Include

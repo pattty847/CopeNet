@@ -286,7 +286,9 @@ For current behavior, assume:
   owns immutable observations and revision-checked drawing documents; `orchestrator/market_context.py`
   binds them to ordinary sessions. The ticker's `viewState/` contributions and `useTickerViewModel`
   share committed data with capture; `chartAgent/` owns the companion and `drawings/` the canvas
-  primitive. Preserve explicit-session routing, chart-only tool scope, manual object ownership,
+  primitive. Ordinary chart turns also expose `web.search`/`web.fetch` for sourced event
+  research; these supplement frozen chart evidence. Forecast lanes cannot browse. Preserve
+  explicit-session routing, the chart/web tool allowlist, manual object ownership,
   account-panel exclusion, and saved-versus-rendered receipts. Verification/limits and the
   deferred crypto adapter are documented in `docs/initiatives/chart-agent/DEMO.md`.
 - **Chart forecasts are manual, frozen experiments.** `core/market/forecasts/` owns typed
@@ -326,7 +328,7 @@ Common checks:
 - `npm run lint` in `src/copenet/host/frontend`
 - `npm run build` in `src/copenet/host/frontend`
 - `uv run copenet`
-- **Restart the host after changing `copetech_sec`.** The running process holds the module in memory, so accounting changes do not appear on a page reload — only a server restart picks them up. A frontend-only change needs `npm run build` plus a reload; a CopeTech change needs both.
+- **Restart the running server after backend changes, including tool exposure and `copetech_sec`.** The host usually already runs on port **17123** bound to **Tailscale**, but check first with `lsof -nP -iTCP:17123 -sTCP:LISTEN`; confirm the listener is this CopeNet checkout before stopping it. Check for active runs and let them finish before a graceful restart. Preserve the existing bind and configuration; use `copenet-tail` for the usual Tailscale setup described below. Verify `/health` on the actual bind address after restart. Treat this as part of finishing backend work: a page reload cannot replace Python modules already loaded in the server. A frontend-only change needs `npm run build` plus a reload; a docs-only change needs no restart.
 - Browser Use validation in the Codex/Claude in-app browser for the affected session/runtime flow when available
 - browser validation of the affected session/runtime flow
 

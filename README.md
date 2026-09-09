@@ -1,4 +1,4 @@
-![CopeNet Market Intelligence — a retro 1990s book-fair cover with a kid at a computer, planets, and a brighter tomorrow](docs/imgs/copenet-book-fair-banner.jpg)
+![CopeNet Market Intelligence — a retro 1990s book-fair cover with a kid at a computer, planets, and a brighter tomorrow](docs/imgs/copenet-book-fair-banner.png)
 
 # CopeNet
 

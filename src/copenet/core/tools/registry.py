@@ -72,19 +72,18 @@ class ToolRegistry:
                     "policySummary": "Unknown tools are blocked.",
                 },
             )
-        # A chart turn cannot use broader tools to escape its captured data scope.
+        # Chart research adds explicit web reads, never broader market/account tools.
         # Enforce independently of the model manifest, including approved retries.
+        from copenet.core.market.chart_workspace.authorization import chart_tool_ids
         from copenet.core.market.chart_workspace.models import CHART_TOOL_IDS
         from copenet.core.market.forecasts.models import FORECAST_TOOL_IDS
         forecast_tool = request.tool_id in FORECAST_TOOL_IDS
         chart_tool = request.tool_id in CHART_TOOL_IDS or forecast_tool
         forbidden = context.allowed_tool_ids is not None and request.tool_id not in context.allowed_tool_ids
         if context.market_context is not None:
-            forbidden = forbidden or not chart_tool
+            forbidden = forbidden or request.tool_id not in chart_tool_ids(context.market_context)
             if forecast_tool:
                 forbidden = forbidden or not (context.market_context.forecast_id and context.market_context.forecast_lane)
-            if request.tool_id in {"market.chart.apply", "market.chart.undo"}:
-                forbidden = forbidden or context.market_context.access != "annotate"
         elif chart_tool:
             forbidden = True
         if forbidden:

@@ -32,7 +32,6 @@ Every decision is recorded on the run's :class:`RunSecurityState` so the operato
 from __future__ import annotations
 
 import hashlib
-import ipaddress
 import json
 import logging
 import os
@@ -41,6 +40,7 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import urlparse
 
+from . import web_destinations
 from .contracts import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
 _LOG = logging.getLogger(__name__)
@@ -71,20 +71,6 @@ _READONLY_EXTERNAL_CATEGORIES = {"web"}
 # restart, so this is the cheap-but-correct first layer.)
 _SESSION_SECURITY: dict[str, dict[str, Any]] = {}
 
-# Query-parameter names that suggest secret material is being smuggled in a URL.
-_SECRET_HINTS = (
-    "token",
-    "secret",
-    "password",
-    "passwd",
-    "api_key",
-    "apikey",
-    "authorization",
-    "bearer",
-    "session",
-    "cookie",
-)
-
 # Paths whose contents are treated as sensitive — values read from them become
 # canaries the egress guard watches for in outbound URLs. Filename-pattern match
 # (".env", "token", ...) catches the common naming case; directory-pattern match
@@ -96,35 +82,6 @@ _SENSITIVE_VALUE_RE = re.compile(r"[A-Za-z0-9_\-]{6,}")
 
 _BARRICADE_DISABLE_VALUES = {"0", "false", "no", "off"}
 _disabled_warning_logged = False
-
-# Destinations web.fetch/web.search may reach WITHOUT an operator approval prompt.
-# Curated from what CopeNet's own subsystems already talk to (its configured
-# search backends) plus common, low-risk reference sources. Anything else public
-# still works — it just pauses for a one-time operator approval instead of being
-# silently allowed, per the "read broadly, but ask about places you haven't
-# vetted" model. Extend via COPNET_WEB_FETCH_ALLOWLIST (comma-separated apex
-# domains, additive) rather than editing this constant.
-DEFAULT_ALLOWED_FETCH_DOMAINS: frozenset[str] = frozenset(
-    {
-        # search backends CopeNet is already configured to call
-        "api.exa.ai",
-        "api.search.brave.com",
-        "html.duckduckgo.com",
-        # general reference / docs
-        "en.wikipedia.org",
-        "wikipedia.org",
-        "github.com",
-        "raw.githubusercontent.com",
-        "developer.mozilla.org",
-        # finance/market reference (aligned with Market Monitor's own data sources)
-        "www.sec.gov",
-        "data.sec.gov",
-        "home.treasury.gov",
-        "finance.yahoo.com",
-    }
-)
-
-_FETCH_ALLOWLIST_ENV = "COPNET_WEB_FETCH_ALLOWLIST"
 
 
 def barricade_enabled() -> bool:
@@ -144,26 +101,6 @@ def barricade_enabled() -> bool:
             raw,
         )
     return enabled
-
-
-def fetch_allowlist() -> set[str]:
-    """Destinations web.fetch/web.search may reach without an approval prompt.
-
-    Built-in defaults, unioned with operator-configured entries from
-    COPNET_WEB_FETCH_ALLOWLIST. Additive: operators extend the safe defaults,
-    they don't need to restate them.
-    """
-    operator_raw = os.environ.get(_FETCH_ALLOWLIST_ENV, "")
-    operator_entries = {host.strip().lower() for host in operator_raw.split(",") if host.strip()}
-    return DEFAULT_ALLOWED_FETCH_DOMAINS | operator_entries
-
-
-def host_matches_allowlist(hostname: str | None, allowlist: set[str]) -> bool:
-    """True when `hostname` equals or is a subdomain of an entry in `allowlist`."""
-    host = (hostname or "").lower().strip(".")
-    if not host:
-        return False
-    return any(host == domain or host.endswith(f".{domain}") for domain in allowlist)
 
 
 @dataclass
@@ -379,18 +316,18 @@ def _egress_guard(
     # An operator-configured allowlist entry means "trusted" for both purposes:
     # it exempts a private host from the loopback/metadata block below, AND it
     # skips the approval prompt for an otherwise-unknown public destination.
-    allowlisted = host_matches_allowlist(parsed.hostname, fetch_allowlist())
+    allowlisted = web_destinations.host_matches_allowlist(parsed.hostname, web_destinations.fetch_allowlist())
     reason: str | None = None
     if parsed.scheme not in {"http", "https"}:
         reason = f"non-web scheme '{parsed.scheme or '?'}' is blocked"
-    elif _is_private_host(parsed.hostname) and not allowlisted:
+    elif web_destinations.is_private_host(parsed.hostname) and not allowlisted:
         reason = f"refusing fetch to private/loopback/metadata host '{parsed.hostname}'"
     else:
         leaked = _leaked_secret(candidate, state)
         if leaked:
             reason = f"URL appears to carry a previously-read secret value ('{leaked[:8]}…')"
         else:
-            hint = _secret_hint_in_query(parsed.query)
+            hint = web_destinations.secret_hint_in_query(parsed.query)
             if hint:
                 reason = f"URL query carries secret-like parameter '{hint}=' — possible exfiltration"
 
@@ -399,6 +336,12 @@ def _egress_guard(
         return _egress_blocked_result("web.fetch", raw_url, reason, state)
 
     if not allowlisted:
+        # Only the unknown-public-destination prompt is approvable. Always run
+        # the private-host and secret checks above, including on approved retries.
+        approved = context.ephemeral.get("barricade_approved")
+        if isinstance(approved, set) and approval_key(request) in approved:
+            state.record(SecurityEvent("egress_allowed", request.tool_id, f"operator-approved: {raw_url}"))
+            return None
         # Not private, no leaked secret, no secret-shaped query param — but not a
         # destination the operator has vetted either. Ask instead of silently
         # fetching an unknown host (this is the "approval-escapable" tier, not a
@@ -416,7 +359,7 @@ def _egress_guard(
                 "policyDecision": "approval_required",
                 "policySummary": (
                     f"Barricade: '{approval_id_target}' is not on the fetch allowlist "
-                    f"(extend it via {_FETCH_ALLOWLIST_ENV})."
+                    f"(extend it via {web_destinations.FETCH_ALLOWLIST_ENV})."
                 ),
                 "barricade": {"reason": "fetch_not_allowlisted", "hostname": approval_id_target},
             },
@@ -463,27 +406,6 @@ def _egress_blocked_result(tool_id: str, target: str, reason: str, state: RunSec
             "barricade": {"reason": "egress", "detail": reason},
         },
     )
-
-
-def _is_private_host(hostname: str | None) -> bool:
-    if not hostname:
-        return False
-    host = hostname.lower().strip("[]")
-    if host in {"localhost", "metadata", "metadata.google.internal"}:
-        return True
-    try:
-        ip = ipaddress.ip_address(host)
-    except ValueError:
-        return False
-    return ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved
-
-
-def _secret_hint_in_query(query: str) -> str | None:
-    lowered = (query or "").lower()
-    for hint in _SECRET_HINTS:
-        if f"{hint}=" in lowered:
-            return hint
-    return None
 
 
 def _leaked_secret(url: str, state: RunSecurityState) -> str | None:
