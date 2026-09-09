@@ -11,6 +11,8 @@ import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinanci
 import { useChartComparisons } from './useChartComparisons';
 import { useFinancialSeries } from './useFinancialSeries';
 import { usePriceAlerts } from './usePriceAlerts';
+import { replayCursorIndex } from './replay/chartReplay';
+import { useChartReplay, useReplayTrailingTimes } from './replay/useChartReplay';
 import { useTickerDrawerLayout } from './useTickerDrawerLayout';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import { isValuationPayload, type FinancialFrequency } from './types';
@@ -133,15 +135,46 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   const comparisonData = useChartComparisons(comparisons, timeframe);
 
   const rawBars = detail ? (timeframe === 'D' ? detail.series.daily : timeframe === 'M' ? detail.series.monthly : detail.series.weekly) : [];
-  const bars = useMemo(() => visibleBars(rawBars, range), [rawBars, range]);
+  const fullBars = useMemo(() => visibleBars(rawBars, range), [rawBars, range]);
+
+  // REPLAY IS A TRUNCATION, AND IT HAPPENS ONCE, HERE.
+  //
+  // Every series the chart draws is derived below from `bars` — indicators, the financial
+  // overlay, comparisons, filing markers. Cutting the bars at the cursor therefore cuts all
+  // of them, and there is no second place where a future value could survive the cut. Doing
+  // it per-consumer instead is how a replay leaks: one overlooked derivation draws tomorrow's
+  // earnings marker on a chart the operator believes stops at last Tuesday.
+  const replay = useChartReplay(fullBars);
+  const bars = useMemo(
+    () => (replay.active ? fullBars.slice(0, replay.index + 1) : fullBars),
+    [fullBars, replay.active, replay.index],
+  );
+  const replayTime = replay.active ? bars[bars.length - 1]?.t ?? null : null;
+  const replayTrailingTimes = useReplayTrailingTimes(fullBars, replay);
+
+  // A replay is an argument about ONE asset's history. Carrying the cursor across a symbol
+  // switch would land it on an unrelated date and keep the transport armed over a chart the
+  // operator never put into replay.
+  const exitReplay = replay.exit;
+  useEffect(() => { exitReplay(); }, [normalized, exitReplay]);
 
   // Indicators compute over the FULL history and are sliced to the visible range afterwards,
   // so changing 6M/1Y/5Y re-cuts one calculation instead of restarting every warm-up. The
   // computer memoises per configuration, so an unrelated re-render costs nothing.
+  //
+  // Under replay the history itself is cut at the cursor rather than the outputs being
+  // filtered afterwards: the visible window has to stay a SUFFIX of what was computed, which
+  // is the alignment rule `compute` relies on. Because every calculation is causal, the
+  // retained values are bit-identical to the untruncated ones — the cut costs a recompute
+  // per step and buys an indicator that genuinely never saw the future.
+  const indicatorHistory = useMemo(
+    () => (replayTime == null ? rawBars : rawBars.slice(0, replayCursorIndex(rawBars, replayTime) + 1)),
+    [rawBars, replayTime],
+  );
   const indicatorComputer = useRef(createIndicatorComputer());
   const computedIndicators = useMemo(
-    () => indicatorComputer.current.compute(rawBars, bars.length, indicators, { barsPerYear: barsPerYear(timeframe) }),
-    [rawBars, bars.length, indicators, timeframe],
+    () => indicatorComputer.current.compute(indicatorHistory, bars.length, indicators, { barsPerYear: barsPerYear(timeframe) }),
+    [indicatorHistory, bars.length, indicators, timeframe],
   );
 
   const comparisonLines = useMemo(
@@ -178,18 +211,22 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   // Viewport publication rerenders this owner. Preserve these inputs so a pan/zoom
   // does not trigger CandleChart data replacement and fitContent again.
   const chartEvidence = useMemo(() => evidence.filter((item) => {
+    // Undated evidence cannot be shown to be in the past, so replay drops it rather than
+    // drawing something that might belong to a day the operator has not reached yet.
+    if (replayTime != null && (item.t == null || item.t > replayTime)) return false;
     if (item.type !== 'Insider') return true;
     if (!showInsider) return false;
     if (insiderLookback === 'chart') return item.t == null || bars.length === 0 || item.t >= bars[0].t;
     if (lookbackDays == null || latestBarTime == null || item.t == null) return true;
     return item.t >= latestBarTime - lookbackDays * 86400;
-  }), [evidence, showInsider, insiderLookback, bars, lookbackDays, latestBarTime]);
+  }), [evidence, showInsider, insiderLookback, bars, lookbackDays, latestBarTime, replayTime]);
   const chartEventRows = useMemo(() => chartEvents.filter((event) => {
+    if (replayTime != null && event.t > replayTime) return false;
     if (event.kind !== 'insider') return true;
     if (!showInsider) return false;
     if (insiderLookback === 'chart') return bars.length === 0 || event.t >= bars[0].t;
     return lookbackDays == null || latestBarTime == null || event.t >= latestBarTime - lookbackDays * 86400;
-  }), [chartEvents, showInsider, insiderLookback, bars, lookbackDays, latestBarTime]);
+  }), [chartEvents, showInsider, insiderLookback, bars, lookbackDays, latestBarTime, replayTime]);
 
   const openTab = useCallback((next: ResearchTab) => {
     setTab(next);
@@ -228,7 +265,8 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, bars, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, replay, replayTime, replayTrailingTimes,
+    computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   };

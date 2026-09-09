@@ -7,7 +7,7 @@
 // what is drawn on it, how is it drawn — and the groups are separated by seams, not by gaps.
 
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
-import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomOpen, Settings2 } from 'lucide-react';
+import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomOpen, Rewind, Settings2 } from 'lucide-react';
 import { MarketFloatingPopover } from './MarketFloatingPopover';
 import type { ChartRange, ChartTimeframe } from './chartRanges';
 import { CHART_RANGES, CHART_TIMEFRAMES } from './chartRanges';
@@ -19,6 +19,9 @@ export function ChartToolbar({
   onRange,
   logScale,
   onLogScale,
+  replayActive,
+  replayAvailable,
+  onToggleReplay,
   comparisonActive,
   comparisonCount,
   plotCount,
@@ -37,6 +40,10 @@ export function ChartToolbar({
   onRange: (value: ChartRange) => void;
   logScale: boolean;
   onLogScale: (value: boolean) => void;
+  replayActive: boolean;
+  /** False when there is nothing to walk through — a single bar is not a replay. */
+  replayAvailable: boolean;
+  onToggleReplay: () => void;
   comparisonActive: boolean;
   comparisonCount: number;
   plotCount: number;
@@ -66,6 +73,21 @@ export function ChartToolbar({
           </button>
         ))}
       </div>
+
+      {/* Replay belongs to the period group: it is another answer to "what stretch of time
+          am I looking at", not another thing drawn on the chart. */}
+      <button
+        type="button"
+        className="tw-iconbtn"
+        data-active={replayActive}
+        aria-pressed={replayActive}
+        disabled={!replayAvailable}
+        onClick={onToggleReplay}
+        title={replayActive ? 'Exit replay  (r)' : 'Replay this range bar by bar  (r)'}
+        aria-label={replayActive ? 'Exit replay' : 'Replay this range bar by bar'}
+      >
+        <Rewind size={14} />
+      </button>
 
       <span className="tw-sep" />
 

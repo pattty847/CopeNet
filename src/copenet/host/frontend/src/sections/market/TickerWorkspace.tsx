@@ -6,6 +6,7 @@
 // inside this rectangle — which is the difference between an instrument and an article.
 
 import { ChartStage, type StagePlot } from './ChartStage';
+import { ReplayBar } from './replay/ReplayBar';
 import { ChartToolbar } from './ChartToolbar';
 import { CompareMenu, EventsMenu, SettingsMenu } from './chartMenus';
 import { PlotsMenu } from './PlotsMenu';
@@ -54,7 +55,8 @@ export function TickerWorkspace({
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, bars, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, replay, replayTime, replayTrailingTimes,
+    computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   } = view;
@@ -134,6 +136,9 @@ export function TickerWorkspace({
             onRange={setRange}
             logScale={logScale}
             onLogScale={setLogScale}
+            replayActive={replay.active}
+            replayAvailable={fullBars.length > 1}
+            onToggleReplay={replay.toggle}
             comparisonActive={comparing}
             comparisonCount={comparisons.length}
             plotCount={plots.length + indicators.length}
@@ -234,6 +239,8 @@ export function TickerWorkspace({
             symbol={detail.symbol}
             timeframe={timeframe}
             bars={bars}
+            trailingTimes={replayTrailingTimes}
+            replayActive={replay.active}
             events={chartEventRows}
             evidence={chartEvidence}
             plots={plots}
@@ -262,7 +269,7 @@ export function TickerWorkspace({
             indicatorActions={indicatorActions}
             indicatorPriceStretch={indicatorLayout.priceStretch}
             onIndicatorPaneStretch={handlePaneStretch}
-            layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}:${chartWorkspace.open}`}
+            layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}:${chartWorkspace.open}:${replay.active}`}
             overlay={
               jumpOpen ? (
                 <SymbolJump
@@ -273,6 +280,8 @@ export function TickerWorkspace({
               ) : null
             }
           />
+
+          <ReplayBar replay={replay} />
 
           <ResearchDrawer
             tab={tab}
