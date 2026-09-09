@@ -50,6 +50,8 @@ from copenet.core.orchestrator.facade_runtime_workspace import RuntimeWorkspaceF
 from copenet.core.orchestrator.facade_identity import IdentityFacadeMixin
 from copenet.core.orchestrator.facade_messaging import MessagingFacadeMixin
 from copenet.core.orchestrator.facade_provider_auth import ProviderAuthFacadeMixin
+from copenet.core.home.focus import FocusStore
+from copenet.core.orchestrator.facade_home import HomeFacadeMixin
 from copenet.core.orchestrator.facade_observability import ObservabilityFacadeMixin
 from copenet.core.observability import ObservabilityStore
 from copenet.core.briefing import ReturnBriefingService
@@ -83,7 +85,7 @@ class SessionInFlightError(RuntimeError):
         self.run_id = run_id
 
 
-class Orchestrator(ObservabilityFacadeMixin, IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacadeMixin, RuntimeWorkspaceFacadeMixin, ApprovalPermissionFacadeMixin, AppFacadeMixin):
+class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixin, MessagingFacadeMixin, ProviderAuthFacadeMixin, RuntimeWorkspaceFacadeMixin, ApprovalPermissionFacadeMixin, AppFacadeMixin):
     """Coordinates providers, session store, transcript store, and run lifecycle."""
 
     def __init__(
@@ -107,6 +109,7 @@ class Orchestrator(ObservabilityFacadeMixin, IdentityFacadeMixin, MessagingFacad
         self._messaging_store = MessagingConfigStore(path=base / "messaging.json")
         self._route_store = TelegramSessionRouteStore(path=base / "telegram-routes.json")
         self._memory_store = MemoryStore(path=base / "memory.json")
+        self._focus_store = FocusStore(path=base / "focus.json")
         self._memory_service = MemoryService(self._memory_store)
         # Global operator shell allowlist (Access & Permissions — Brick E). One list
         # per data dir; consulted by the shell handler as a standing approval.

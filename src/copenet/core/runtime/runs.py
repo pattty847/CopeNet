@@ -184,9 +184,35 @@ class RunStore:
 
     def list_for_session(self, session_key: str, limit: int = 50) -> list[RunRecord]:
         """Return recent run records for one session."""
-        path = self.runs_path_for(session_key)
         if limit <= 0:
             return []
+        return self._read_tail(self.runs_path_for(session_key), limit)
+
+    def list_recent_across_sessions(self, *, limit: int = 40, per_session: int = 12) -> list[RunRecord]:
+        """Return the newest run records across every session, newest first.
+
+        The desk view needs "what ran lately" without caring whose session it was. Asking
+        the client to fan out one `sessions.runs` call per session does not scale — this
+        workspace already has hundreds — so the walk happens here, and file mtime does the
+        pruning: a session whose log has not been appended to recently cannot contain a
+        recent run, so only the newest logs are opened at all.
+        """
+        if limit <= 0:
+            return []
+        paths = sorted(
+            (path for path in self._root_dir.glob("*.jsonl") if path.is_file()),
+            key=lambda path: path.stat().st_mtime,
+            reverse=True,
+        )
+        rows: list[RunRecord] = []
+        # Reading a few more logs than the row budget covers the case where the newest logs
+        # are short; beyond that the mtime ordering guarantees the rest are older.
+        for path in paths[: max(limit, 1)]:
+            rows.extend(self._read_tail(path, per_session))
+        rows.sort(key=lambda record: record.started_at, reverse=True)
+        return rows[:limit]
+
+    def _read_tail(self, path: Path, limit: int) -> list[RunRecord]:
         with _path_lock(path):
             if not path.exists():
                 return []
