@@ -126,10 +126,10 @@ Recommended sequence:
   provider semantics, calls, latency, rows inspected and repeated reads. Never double-count
   reasoning tokens included in a provider's output total. Missing usage stays unknown.
 - **Reserve orientation.** Source/basis, quote freshness, forming-candle caveats, selected
-  region and coverage should survive sample allocation. Today resource metadata generally
-  requires an exact read for inventory-only resources; sampled tables now carry their
-  metadata. The allocator skips non-fitting samples, but does not reserve a guaranteed
-  share for quotes or individual indicators. Test this explicitly.
+  region and coverage survive exact-row allocation. Sampled tables carry their metadata;
+  the allocator prioritizes the displayed quote, active candles and visible active-timeframe
+  indicators, then declares every sample it cannot fit. Constrained-budget tests pin the
+  latest quote and MAMA/FAMA values alongside whole-period candle coverage.
 - **Summarize deterministically, retain exact source.** Offer bounded range extrema,
   returns, gaps and indicator values computed by shared chart/market math. Each result
   should name the observation, time window, method and supporting rows. A broad market
@@ -167,7 +167,7 @@ Use a small question suite across D/W/M, with indicators, financial panels and n
 - Unsupported action recognition, scope exclusions and manual drawing ownership.
 - Drawing anchors, evidence links and saved/rendered status after hide, switch or reload.
 
-Run the same tasks at all three detail settings and across representative providers.
+Run the same tasks at all four detail settings and across representative providers.
 Score numeric correctness, cited-row correctness, coverage, unsupported claims, successful
 operations, actual usage where available and latency. A valid drawing is an annotation;
 an inferred trendline or continuation scenario needs an explanation of its method and
