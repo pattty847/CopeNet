@@ -47,13 +47,13 @@ import {
 } from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
 import { ChartClusterBoxes } from './ChartClusterBoxes';
-import { NO_HIDDEN_BARS } from './replay/chartReplay';
+import { replayDateLabel, replayEntryRange, type ChartReplayBinding } from './replay/chartReplay';
 
 import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
 
 export function CandleChart({
   bars,
-  trailingTimes = NO_HIDDEN_BARS,
+  replay,
   events = [],
   evidence = [],
   height = 380,
@@ -80,10 +80,9 @@ export function CandleChart({
 }: {
   chartWorkspace?: ChartWorkspaceBridge;
   bars: Ohlcv[];
-  /** Bar timestamps the chart must reserve axis space for without drawing — replay's hidden
-   *  future. Without them the time scale would refit to the revealed prefix and the whole
-   *  chart would re-zoom on every single step. */
-  trailingTimes?: number[];
+  /** Present only on a chart that can be replayed. Drives the start-point picker and, once
+   *  active, suspends auto-fitting so the framing stays the operator's. */
+  replay?: ChartReplayBinding;
   events?: ChartEvent[];
   /** Full evidence rows backing the markers — clicking a marker day pops their details. */
   evidence?: EvidenceItem[];
@@ -132,6 +131,9 @@ export function CandleChart({
   const comparisonRefs = useRef<ISeriesApi<'Line'>[]>([]);
   const markersRef = useRef<ISeriesMarkersPluginApi<Time> | null>(null);
   const [dayPopup, setDayPopup] = useState<DayPopupState | null>(null);
+  /** Where the arming cut sits, in wrapper pixels, plus the bar it would start on. Null
+   *  whenever the pointer is off the chart. */
+  const [armCut, setArmCut] = useState<{ x: number; paneRight: number; time: number } | null>(null);
   const [clusterBoxes, setClusterBoxes] = useState<RenderedBox[]>([]);
   const [chartGeneration, setChartGeneration] = useState(0);
   // Refs so the (once-subscribed) chart handlers always see current data.
@@ -145,6 +147,11 @@ export function CandleChart({
   const workspaceRef = useRef(chartWorkspace);
   workspaceRef.current = chartWorkspace;
   const insiderDisplayModeRef = useRef(insiderDisplayMode);
+  const replayRef = useRef(replay);
+  replayRef.current = replay;
+  /** What the last data write drew, so the next one can tell how many bars were revealed —
+   *  and therefore how far to slide the operator's range to hold the newest candle still. */
+  const replayFrameRef = useRef({ active: false, bars: 0, generation: -1 });
   const rafRef = useRef<number | null>(null);
   evidenceRef.current = evidence;
   eventsRef.current = events;
@@ -347,6 +354,11 @@ export function CandleChart({
     // chart-rebuild dependency list — the chart is torn down and recreated on height and
     // theme changes, and re-subscribing per render would leak handlers.
     chart.subscribeCrosshairMove((param) => {
+      if (replayRef.current?.arming) {
+        setArmCut(param.point && param.time != null
+          ? { x: param.point.x + leftAxisWidth(chart), paneRight: leftAxisWidth(chart) + chart.timeScale().width(), time: param.time as number }
+          : null);
+      }
       if (param.time == null) {
         onHoverBarRef.current?.(null);
         return;
@@ -357,6 +369,14 @@ export function CandleChart({
 
     // Click a marker day → popup with everything that hit that day (who, $, filing link).
     chart.subscribeClick((param) => {
+      // Arming is a modal state the operator entered deliberately, so it takes the click
+      // ahead of drawings, alert placement and the day popup.
+      if (replayRef.current?.arming) {
+        if (param.time != null) replayRef.current.onPick(param.time as number);
+        setArmCut(null);
+        setDayPopup(null);
+        return;
+      }
       const workspace = workspaceRef.current;
       if (workspace?.enabled && (workspace.mode !== 'select' || workspace.objects.some((object) => object.id === param.hoveredObjectId))) {
         setDayPopup(null);
@@ -445,6 +465,12 @@ export function CandleChart({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Leaving the picker must take its scrim with it. The cut is only ever updated by crosshair
+  // movement, so without this it would sit frozen on screen after a cancel.
+  useEffect(() => {
+    if (!replay?.arming) setArmCut(null);
+  }, [replay?.arming]);
+
   // Height is an option, not a reason to rebuild. The SEC cluster boxes are absolutely
   // positioned at priceToCoordinate pixels, so they have to be recomputed against the new
   // pane geometry — and only after the chart has actually repainted at the new size.
@@ -488,27 +514,50 @@ export function CandleChart({
     const sourceEvidence = evidence.length ? evidence : eventsAsEvidence(events);
     const future = futureDecorations(sourceEvidence, rows);
     futureMarkersRef.current = future.markers;
+    const timeScale = chart.timeScale();
+    // Read BEFORE the write. Lightweight Charts is free to adjust the range itself when data
+    // is replaced, so a replay step computes its slide from the range it actually had rather
+    // than from whatever setData left behind.
+    const priorRange = timeScale.getVisibleLogicalRange();
     // Whitespace points extend the time scale past the last candle so future-dated
-    // planned-sale markers have a coordinate to land on — and so replay's hidden bars keep
-    // holding their place on the axis. Both sources are merged, deduped and sorted because
-    // Lightweight Charts requires one strictly ascending series.
-    const lastRow = rows.length ? rows[rows.length - 1].t : Number.NEGATIVE_INFINITY;
-    const whitespace = [...new Set([...trailingTimes, ...future.times])]
-      .filter((t) => t > lastRow)
-      .sort((a, b) => a - b);
+    // planned-sale markers have a coordinate to land on.
     candle.setData([
       ...rows.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })),
-      ...whitespace.map((t) => ({ time: t as UTCTimestamp })),
+      ...future.times.map((t) => ({ time: t as UTCTimestamp })),
     ]);
     volume.setData(
       rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
     );
-    chart.timeScale().fitContent();
+
+    // THE FRAMING RULE.
+    //
+    // Off replay, every data write refits — that is what you want when the payload changes
+    // underneath you. Under replay it is exactly wrong: refitting on every step re-zooms the
+    // whole chart as bars arrive, and it throws away any pan or zoom the operator set.
+    //
+    // So replay fits ONCE, on the step that opens it, and after that only SLIDES: the range
+    // moves by the number of bars revealed, which holds the newest candle still and pulls the
+    // history left underneath it. The slide is relative, so the operator's own framing rides
+    // along untouched.
+    const frame = replayFrameRef.current;
+    const replaying = replay?.active ?? false;
+    const rebuilt = frame.generation !== chartGeneration;
+    if (!replaying) {
+      timeScale.fitContent();
+    } else if (!frame.active || rebuilt) {
+      timeScale.setVisibleLogicalRange(replayEntryRange(rows.length));
+    } else {
+      const revealed = rows.length - frame.bars;
+      if (revealed !== 0 && priorRange) {
+        timeScale.setVisibleLogicalRange({ from: priorRange.from + revealed, to: priorRange.to + revealed });
+      }
+    }
+    replayFrameRef.current = { active: replaying, bars: rows.length, generation: chartGeneration };
     recomputeRef.current();
     // chartGeneration: a height change tears the chart down and builds a new one, so the
     // data has to be written again. Without this the chart comes back blank — latent while
     // height was effectively constant, immediate once the layout can resize it.
-  }, [bars, trailingTimes, events, evidence, chartGeneration]);
+  }, [bars, replay?.active, events, evidence, chartGeneration]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -531,8 +580,10 @@ export function CandleChart({
       comparisonRefs.current,
       comparisonMode ? comparisonLines : [],
     );
-    chart.timeScale().fitContent();
-  }, [comparisonMode, comparisonLines, showVolume, chartGeneration]);
+    // Comparison lines are rebuilt from the truncated bars, so this effect fires on every
+    // replay step. Refitting here would undo the slide above one frame later.
+    if (!replay?.active) chart.timeScale().fitContent();
+  }, [comparisonMode, comparisonLines, showVolume, replay?.active, chartGeneration]);
 
   // Overlay changes must not reset the operator's zoom. Underlying observations
   // stay periodic; the step is explicitly an availability-date visualization.
@@ -632,7 +683,7 @@ export function CandleChart({
     : null;
 
   return (
-    <div style={{ position: 'relative', cursor: alertPlacementActive ? 'crosshair' : undefined }}>
+    <div style={{ position: 'relative', cursor: alertPlacementActive || replay?.arming ? 'crosshair' : undefined }}>
       <div ref={containerRef} style={{ width: '100%' }} />
       {!comparisonMode && (
         <ChartClusterBoxes
@@ -706,6 +757,31 @@ export function CandleChart({
         indicators={indicators}
         actions={indicatorActions}
       />
+      {/* START-POINT PICKER. Everything to the right of the candidate is dimmed rather than
+          removed, so the operator is choosing against the history they can still see —
+          committing is what actually cuts the chart. */}
+      {replay?.arming && armCut && (
+        <>
+          <div
+            aria-hidden="true"
+            style={{ position: 'absolute', top: 0, bottom: 0, left: armCut.x, width: Math.max(0, armCut.paneRight - armCut.x), zIndex: 6, background: 'rgba(4,4,6,.62)', pointerEvents: 'none' }}
+          />
+          <div
+            aria-hidden="true"
+            style={{ position: 'absolute', top: 0, bottom: 0, left: armCut.x, width: 1, zIndex: 7, background: MM.accent, pointerEvents: 'none' }}
+          />
+          <span
+            style={{ position: 'absolute', top: 6, left: armCut.x + 6, zIndex: 8, border: `1px solid rgba(251,148,35,.35)`, borderRadius: 5, background: '#0b0b0d', color: MM.accent, padding: '2px 6px', font: `600 9px ${mono}`, whiteSpace: 'nowrap', pointerEvents: 'none' }}
+          >
+            {replayDateLabel(armCut.time)}
+          </span>
+        </>
+      )}
+      {replay?.arming && (
+        <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px var(--mkt-sans)', letterSpacing: '.04em', pointerEvents: 'none' }}>
+          Click a candle to start the replay there · Esc to cancel
+        </span>
+      )}
       {alertPlacementActive && (
         <span style={{ position: 'absolute', top: 8, left: '50%', zIndex: 12, transform: 'translateX(-50%)', border: `1px solid rgba(251,148,35,.35)`, borderRadius: 7, background: '#0b0b0d', color: MM.accent, padding: '5px 9px', font: '700 9px var(--mkt-sans)', letterSpacing: '.04em', pointerEvents: 'none' }}>
           Click the chart to place a daily-close alert

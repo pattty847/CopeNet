@@ -11,8 +11,8 @@ import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinanci
 import { useChartComparisons } from './useChartComparisons';
 import { useFinancialSeries } from './useFinancialSeries';
 import { usePriceAlerts } from './usePriceAlerts';
-import { replayCursorIndex } from './replay/chartReplay';
-import { useChartReplay, useReplayTrailingTimes } from './replay/useChartReplay';
+import { replayCursorIndex, type ChartReplayBinding } from './replay/chartReplay';
+import { useChartReplay } from './replay/useChartReplay';
 import { useTickerDrawerLayout } from './useTickerDrawerLayout';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import { isValuationPayload, type FinancialFrequency } from './types';
@@ -150,7 +150,11 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
     [fullBars, replay.active, replay.index],
   );
   const replayTime = replay.active ? bars[bars.length - 1]?.t ?? null : null;
-  const replayTrailingTimes = useReplayTrailingTimes(fullBars, replay);
+  // The narrow contract the chart itself needs — the transport stays with the toolbar.
+  const chartReplayBinding = useMemo<ChartReplayBinding>(
+    () => ({ active: replay.active, arming: replay.arming, onPick: replay.pick }),
+    [replay.active, replay.arming, replay.pick],
+  );
 
   // A replay is an argument about ONE asset's history. Carrying the cursor across a symbol
   // switch would land it on an unrelated date and keep the transport armed over a chart the
@@ -265,8 +269,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, fullBars, bars, replay, replayTime, replayTrailingTimes,
-    computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   };

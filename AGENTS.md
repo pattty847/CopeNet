@@ -300,8 +300,10 @@ For current behavior, assume:
 - **Chart replay truncates in exactly one place.** `sections/market/replay/` owns the cursor
   (a bar TIME, never an index) and the transport; `useTickerViewModel` does the cut, so every
   series derived from `bars` is replay-correct for free. Indicator history is cut rather than
-  filtered because `compute` aligns on a suffix; hidden bars ride the axis as whitespace or
-  the chart re-zooms every step; a mid-replay agent capture is truncated too and says so.
+  filtered because `compute` aligns on a suffix; the chart fits ONCE on entry and thereafter
+  only slides its logical range by the bars revealed — never refit mid-replay, or every step
+  re-zooms and the operator's framing is thrown away; a mid-replay capture is truncated too
+  and says so.
   Add a chart series by deriving it from `bars`. See `docs/plans/CHART_REPLAY.md`.
 - **New Market features should declare their chart-agent exposure.** Read
   `docs/initiatives/chart-agent/CONTEXT_AND_TOOLS.md` when adding a panel, chart data,

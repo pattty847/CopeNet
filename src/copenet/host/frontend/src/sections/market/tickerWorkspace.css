@@ -1318,3 +1318,40 @@
   font: 700 9px var(--mkt-sans);
   letter-spacing: 0.06em;
 }
+
+/* Play is where the eye should land the moment a start point is committed, so the button
+ * carries a green ring and a soft halo until the replay is actually running. The pulse
+ * stops on play: a control that keeps shouting after you have used it is just noise. */
+.tw-replay__play[data-active='false'] {
+  border-color: rgba(105, 197, 137, 0.55);
+  color: var(--mkt-up);
+  box-shadow: 0 0 0 1px rgba(105, 197, 137, 0.2), 0 0 12px 2px rgba(105, 197, 137, 0.28);
+  animation: tw-replay-pulse 2.1s ease-in-out infinite;
+}
+
+.tw-replay__play[data-active='false']:hover {
+  background: rgba(105, 197, 137, 0.14);
+  color: var(--mkt-up);
+}
+
+.tw-replay__play[data-active='true'] {
+  border-color: rgba(105, 197, 137, 0.4);
+  background: rgba(105, 197, 137, 0.12);
+  color: var(--mkt-up);
+}
+
+@keyframes tw-replay-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(105, 197, 137, 0.18), 0 0 9px 1px rgba(105, 197, 137, 0.2); }
+  50% { box-shadow: 0 0 0 1px rgba(105, 197, 137, 0.34), 0 0 16px 4px rgba(105, 197, 137, 0.42); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tw-replay__play[data-active='false'] { animation: none; }
+}
+
+/* Nothing left to play. A glow around a dead control is a lie about what it will do. */
+.tw-replay__play[disabled] {
+  animation: none;
+  border-color: transparent;
+  box-shadow: none;
+}

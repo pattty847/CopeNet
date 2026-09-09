@@ -34,11 +34,15 @@ export function useTickerKeyboard(view: ReturnType<typeof useTickerViewModel>, o
       if (owned || jumpOpenRef.current) return;
 
       const key = event.key;
-      if (key === 'Escape') return;
-
       // Replay's transport, on the keys a transport has. Only bound while it is armed, so
       // the arrows stay free for whatever the chart wants them for otherwise.
       const replay = replayRef.current;
+      // Escape backs out of choosing a start point — that is the state where a operator
+      // most expects it, and it is claimed before the blanket Escape passthrough below.
+      if (key === 'Escape') {
+        if (replay.arming) { replay.exit(); event.preventDefault(); }
+        return;
+      }
       if (key === 'r') { replay.toggle(); event.preventDefault(); return; }
       if (replay.active) {
         if (key === 'ArrowRight') { replay.step(1); event.preventDefault(); return; }

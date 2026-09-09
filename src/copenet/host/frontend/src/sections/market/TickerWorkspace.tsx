@@ -55,8 +55,7 @@ export function TickerWorkspace({
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, fullBars, bars, replay, replayTime, replayTrailingTimes,
-    computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   } = view;
@@ -136,7 +135,7 @@ export function TickerWorkspace({
             onRange={setRange}
             logScale={logScale}
             onLogScale={setLogScale}
-            replayActive={replay.active}
+            replayPhase={replay.phase}
             replayAvailable={fullBars.length > 1}
             onToggleReplay={replay.toggle}
             comparisonActive={comparing}
@@ -239,8 +238,7 @@ export function TickerWorkspace({
             symbol={detail.symbol}
             timeframe={timeframe}
             bars={bars}
-            trailingTimes={replayTrailingTimes}
-            replayActive={replay.active}
+            replay={chartReplayBinding}
             events={chartEventRows}
             evidence={chartEvidence}
             plots={plots}
@@ -269,7 +267,7 @@ export function TickerWorkspace({
             indicatorActions={indicatorActions}
             indicatorPriceStretch={indicatorLayout.priceStretch}
             onIndicatorPaneStretch={handlePaneStretch}
-            layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}:${chartWorkspace.open}:${replay.active}`}
+            layoutKey={`${snap}:${Math.round(drawerSize ?? 0)}:${railCollapsed}:${chartWorkspace.open}:${replay.phase}`}
             overlay={
               jumpOpen ? (
                 <SymbolJump

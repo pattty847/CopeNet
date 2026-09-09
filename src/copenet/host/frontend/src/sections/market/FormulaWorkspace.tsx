@@ -1,7 +1,6 @@
 import { ArrowLeft, FunctionSquare } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { ChartStage } from './ChartStage';
-import { NO_HIDDEN_BARS } from './replay/chartReplay';
 import type { ChartComparisonLine } from './chartComparison';
 import { CHART_RANGES, CHART_TIMEFRAMES, visibleBars, type ChartRange, type ChartTimeframe } from './chartRanges';
 import type { IndicatorRowActions } from './indicators/IndicatorRows';
@@ -147,8 +146,6 @@ export function FormulaWorkspace({
               symbol={canonical}
               timeframe={timeframe}
               bars={bars}
-              trailingTimes={NO_HIDDEN_BARS}
-              replayActive={false}
               events={[]}
               evidence={[]}
               plots={[]}

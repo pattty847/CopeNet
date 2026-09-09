@@ -3,10 +3,9 @@
 // The truncation itself happens in the ticker view model, where every derived series
 // already lives. This hook only answers "which bar is now".
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   REPLAY_DEFAULT_SPEED,
-  hiddenBarTimes,
   replayCursorIndex,
   replayTickMs,
   stepCursorTime,
@@ -15,7 +14,15 @@ import {
   type ReplaySpeed,
 } from './chartReplay';
 
+/** Off → arming → active. Arming is its own state rather than a flag on `active` because
+ *  nothing is hidden yet while the operator is choosing where to start: the chart still
+ *  shows everything, dimmed to the right of the candidate. */
+export type ReplayPhase = 'off' | 'arming' | 'active';
+
 export interface ChartReplay {
+  phase: ReplayPhase;
+  /** Choosing a start point. The chart is NOT truncated yet. */
+  arming: boolean;
   active: boolean;
   playing: boolean;
   speed: ReplaySpeed;
@@ -26,7 +33,10 @@ export interface ChartReplay {
   total: number;
   atStart: boolean;
   atEnd: boolean;
-  enter: () => void;
+  /** Begin choosing a start point. */
+  arm: () => void;
+  /** Commit the clicked bar as the start point and begin replaying from it. */
+  pick: (time: number) => void;
   exit: () => void;
   toggle: () => void;
   play: () => void;
@@ -41,10 +51,11 @@ export interface ChartReplay {
 }
 
 export function useChartReplay(bars: readonly ReplayBar[]): ChartReplay {
-  const [active, setActive] = useState(false);
+  const [phase, setPhase] = useState<ReplayPhase>('off');
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState<ReplaySpeed>(REPLAY_DEFAULT_SPEED);
   const [cursorTime, setCursorTime] = useState<number | null>(null);
+  const active = phase === 'active';
 
   const index = active ? replayCursorIndex(bars, cursorTime) : bars.length - 1;
   const atEnd = index >= bars.length - 1;
@@ -60,17 +71,24 @@ export function useChartReplay(bars: readonly ReplayBar[]): ChartReplay {
     if (next != null) setCursorTime(next);
   }, [bars, index]);
 
-  const enter = useCallback(() => {
+  const arm = useCallback(() => {
     if (bars.length === 0) return;
-    setActive(true);
+    setPhase('arming');
     setPlaying(false);
-    // From the left edge of the visible range: replay walks the window you chose. Indicators
-    // are still warm here, because they compute over the full loaded history behind it.
-    setCursorTime(bars[0].t);
+    setCursorTime(null);
+  }, [bars.length]);
+
+  /** The clicked time, not the clicked index: the chart hands back a bar timestamp and the
+   *  cursor is a timestamp, so nothing has to agree about positions. */
+  const pick = useCallback((time: number) => {
+    if (bars.length === 0) return;
+    setPhase('active');
+    setPlaying(false);
+    setCursorTime(bars[replayCursorIndex(bars, time)].t);
   }, [bars]);
 
   const exit = useCallback(() => {
-    setActive(false);
+    setPhase('off');
     setPlaying(false);
     setCursorTime(null);
   }, []);
@@ -94,10 +112,12 @@ export function useChartReplay(bars: readonly ReplayBar[]): ChartReplay {
 
   // Nothing left to replay — an emptied series must not leave the transport armed over it.
   useEffect(() => {
-    if (active && bars.length === 0) exit();
-  }, [active, bars.length, exit]);
+    if (phase !== 'off' && bars.length === 0) exit();
+  }, [phase, bars.length, exit]);
 
   return useMemo<ChartReplay>(() => ({
+    phase,
+    arming: phase === 'arming',
     active,
     playing,
     speed,
@@ -106,9 +126,10 @@ export function useChartReplay(bars: readonly ReplayBar[]): ChartReplay {
     total: bars.length,
     atStart,
     atEnd,
-    enter,
+    arm,
+    pick,
     exit,
-    toggle: () => (active ? exit() : enter()),
+    toggle: () => (phase === 'off' ? arm() : exit()),
     play: () => setPlaying(true),
     pause: () => setPlaying(false),
     togglePlay: () => setPlaying((value) => !value),
@@ -118,12 +139,5 @@ export function useChartReplay(bars: readonly ReplayBar[]): ChartReplay {
     toEnd: () => seek(bars.length - 1),
     setSpeed,
     nudgeSpeed: (delta: number) => setSpeed((current) => stepSpeed(current, delta)),
-  }), [active, playing, speed, index, bars, atStart, atEnd, enter, exit, step, seek]);
-}
-
-/** Timestamps the replay is holding back, for the chart's whitespace padding. */
-export function useReplayTrailingTimes(bars: readonly ReplayBar[], replay: ChartReplay): number[] {
-  const { active, index } = replay;
-  const empty = useRef<number[]>([]).current;
-  return useMemo(() => (active ? hiddenBarTimes(bars, index) : empty), [active, bars, index, empty]);
+  }), [phase, active, playing, speed, index, bars, atStart, atEnd, arm, pick, exit, step, seek]);
 }

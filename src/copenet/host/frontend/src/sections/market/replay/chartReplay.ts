@@ -17,9 +17,22 @@ export const REPLAY_BASE_INTERVAL_MS = 700;
 /** Below this the browser cannot keep up with a full re-slice per tick anyway. */
 export const REPLAY_MIN_INTERVAL_MS = 40;
 
-/** The shared empty list. Referentially stable, because a fresh `[]` per render would re-run
- *  the chart's data effect — and refit the time scale — on every unrelated re-render. */
-export const NO_HIDDEN_BARS: number[] = [];
+/** Bars of headroom kept to the right of the newest revealed candle, so the next one arrives
+ *  into visible space instead of appearing under the price axis. */
+export const REPLAY_RIGHT_PAD_BARS = 4;
+
+/** Floor on the entry framing. Starting three bars in would otherwise fit three candles
+ *  across the whole chart. */
+export const REPLAY_MIN_SPAN_BARS = 24;
+
+/** What the chart needs to know about replay. Charts with no replay omit it entirely. */
+export interface ChartReplayBinding {
+  /** Bars are truncated at the cursor and the chart must stop auto-fitting. */
+  active: boolean;
+  /** Picking a start point: the chart dims the future and takes the next click. */
+  arming: boolean;
+  onPick: (time: number) => void;
+}
 
 export interface ReplayBar {
   t: number;
@@ -71,10 +84,16 @@ export function stepCursorTime(bars: readonly ReplayBar[], index: number, delta:
   return bars[next].t;
 }
 
-/** Bars a replay hides. Their timestamps still go on the chart as whitespace, so the time
- *  axis does not shrink to the revealed prefix and re-zoom on every single step. */
-export function hiddenBarTimes(bars: readonly ReplayBar[], index: number): number[] {
-  return bars.slice(index + 1).map((bar) => bar.t);
+/** The logical range that frames a replay as it opens: every revealed bar, plus headroom.
+ *
+ *  This is computed ONCE, when replay starts. From then on the chart's framing belongs to
+ *  the operator — every step shifts their range by the bars revealed rather than refitting,
+ *  so the newest candle holds its position, history slides left underneath it, and whatever
+ *  zoom they set survives. */
+export function replayEntryRange(revealedBars: number): { from: number; to: number } {
+  const to = revealedBars - 1 + REPLAY_RIGHT_PAD_BARS;
+  const span = Math.max(revealedBars + REPLAY_RIGHT_PAD_BARS, REPLAY_MIN_SPAN_BARS);
+  return { from: to - span, to };
 }
 
 const CURSOR_DATE = new Intl.DateTimeFormat(undefined, {

@@ -4,8 +4,10 @@ import test from 'node:test';
 import {
   REPLAY_MIN_INTERVAL_MS,
   REPLAY_SPEEDS,
-  hiddenBarTimes,
+  REPLAY_MIN_SPAN_BARS,
+  REPLAY_RIGHT_PAD_BARS,
   replayCursorIndex,
+  replayEntryRange,
   replayDateLabel,
   replayTickMs,
   speedLabel,
@@ -40,9 +42,17 @@ test('stepping clamps at both ends and reports when there is nowhere to go', () 
   assert.equal(stepCursorTime([], 0, 1), null);
 });
 
-test('hidden bars are handed to the chart as whitespace so the axis does not re-fit per step', () => {
-  assert.deepEqual(hiddenBarTimes(bars, 1), [300, 400, 500]);
-  assert.deepEqual(hiddenBarTimes(bars, 4), []);
+test('replay opens framed on the revealed history with headroom on the right', () => {
+  const range = replayEntryRange(104);
+  assert.equal(range.to, 103 + REPLAY_RIGHT_PAD_BARS, 'the newest bar sits a few bars off the right edge');
+  assert.equal(range.from, -1, 'and the whole revealed prefix is in frame');
+});
+
+test('a start point only a few bars in still opens at a readable width', () => {
+  // Fitting three candles across the chart is technically a fit and useless to look at.
+  const range = replayEntryRange(3);
+  assert.equal(range.to - range.from, REPLAY_MIN_SPAN_BARS);
+  assert.equal(range.to, 2 + REPLAY_RIGHT_PAD_BARS);
 });
 
 test('speed steps through the presets and clamps at both ends', () => {

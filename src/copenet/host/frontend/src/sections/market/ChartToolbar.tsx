@@ -11,6 +11,7 @@ import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomO
 import { MarketFloatingPopover } from './MarketFloatingPopover';
 import type { ChartRange, ChartTimeframe } from './chartRanges';
 import { CHART_RANGES, CHART_TIMEFRAMES } from './chartRanges';
+import type { ReplayPhase } from './replay/useChartReplay';
 
 export function ChartToolbar({
   timeframe,
@@ -19,7 +20,7 @@ export function ChartToolbar({
   onRange,
   logScale,
   onLogScale,
-  replayActive,
+  replayPhase,
   replayAvailable,
   onToggleReplay,
   comparisonActive,
@@ -40,7 +41,7 @@ export function ChartToolbar({
   onRange: (value: ChartRange) => void;
   logScale: boolean;
   onLogScale: (value: boolean) => void;
-  replayActive: boolean;
+  replayPhase: ReplayPhase;
   /** False when there is nothing to walk through — a single bar is not a replay. */
   replayAvailable: boolean;
   onToggleReplay: () => void;
@@ -79,12 +80,12 @@ export function ChartToolbar({
       <button
         type="button"
         className="tw-iconbtn"
-        data-active={replayActive}
-        aria-pressed={replayActive}
+        data-active={replayPhase !== 'off'}
+        aria-pressed={replayPhase !== 'off'}
         disabled={!replayAvailable}
         onClick={onToggleReplay}
-        title={replayActive ? 'Exit replay  (r)' : 'Replay this range bar by bar  (r)'}
-        aria-label={replayActive ? 'Exit replay' : 'Replay this range bar by bar'}
+        title={replayPhase === 'arming' ? 'Cancel — pick a start bar on the chart  (esc)' : replayPhase === 'active' ? 'Exit replay  (r)' : 'Replay this range bar by bar  (r)'}
+        aria-label={replayPhase === 'off' ? 'Replay this range bar by bar' : 'Exit replay'}
       >
         <Rewind size={14} />
       </button>

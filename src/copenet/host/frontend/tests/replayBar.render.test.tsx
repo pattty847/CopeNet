@@ -8,9 +8,9 @@ import type { ChartReplay } from '../src/sections/market/replay/useChartReplay';
 function replay(overrides: Partial<ChartReplay> = {}): ChartReplay {
   const noop = () => {};
   return {
-    active: true, playing: false, speed: 1, index: 41, cursorTime: Date.UTC(2024, 6, 14) / 1000,
-    total: 260, atStart: false, atEnd: false,
-    enter: noop, exit: noop, toggle: noop, play: noop, pause: noop, togglePlay: noop,
+    phase: 'active', arming: false, active: true, playing: false, speed: 1, index: 41,
+    cursorTime: Date.UTC(2024, 6, 14) / 1000, total: 260, atStart: false, atEnd: false,
+    arm: noop, pick: () => {}, exit: noop, toggle: noop, play: noop, pause: noop, togglePlay: noop,
     step: noop, seek: noop, toStart: noop, toEnd: noop, setSpeed: noop, nudgeSpeed: noop,
     ...overrides,
   };
@@ -42,7 +42,9 @@ test('speed nudges stop at the ends of the preset ladder', () => {
 });
 
 test('the strip is absent when replay is off or there is nothing to walk', () => {
-  assert.equal(renderToStaticMarkup(<ReplayBar replay={replay({ active: false })} />), '');
+  assert.equal(renderToStaticMarkup(<ReplayBar replay={replay({ phase: 'off', active: false })} />), '');
+  assert.equal(renderToStaticMarkup(<ReplayBar replay={replay({ phase: 'arming', active: false })} />), '',
+    'while a start point is being chosen the chart is still whole — there is nothing to transport');
   assert.equal(renderToStaticMarkup(<ReplayBar replay={replay({ total: 0 })} />), '');
 });
 

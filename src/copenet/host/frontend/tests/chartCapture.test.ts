@@ -31,7 +31,7 @@ function fixture(): CaptureOptions {
       stats: { yearLow: 7 }, verdict: [], signals: [], insight: { softBottoming: true, score: 0.1234567 }, kill: 'Below the selected low',
     },
     ticker: { stale: false }, normalized: 'SYN', timeframe: 'D', range: '1Y', bars: daily, rawBars: daily, fullBars: daily,
-    replay: { active: false, playing: false, speed: 1, index: 2, cursorTime: null, total: 3 }, replayTime: null,
+    replay: { phase: 'off', arming: false, active: false, playing: false, speed: 1, index: 2, cursorTime: null, total: 3 }, replayTime: null,
     computedIndicators: [indicator], indicators: [indicator.instance], tab: 'overview', snap: 'half',
     sec: { payload: null }, chartEvidence: [], chartEventRows: [], showInsider: false, insiderLookback: 'chart', insiderDisplay: 'clusters',
     overlayMetric: null, overlaySeries: { data: null, error: null }, overlayPoints: undefined,
@@ -200,7 +200,7 @@ test('a replay capture stops the model at the cursor instead of handing it the f
   const options = fixture();
   const daily = options.view.detail!.series.daily;
   options.view.bars = daily.slice(0, 2);
-  options.view.replay = { active: true, playing: false, speed: 2, index: 1, cursorTime: 200, total: 3 } as never;
+  options.view.replay = { phase: 'active', arming: false, active: true, playing: false, speed: 2, index: 1, cursorTime: 200, total: 3 } as never;
   options.view.replayTime = 200 as never;
 
   const capture = captureTickerView(options);

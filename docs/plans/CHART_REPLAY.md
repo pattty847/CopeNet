@@ -4,8 +4,10 @@ Walk the ticker chart forward one bar at a time — candles, indicators, filing 
 the financial overlay all stopping at the same instant — so a setup can be read the way it
 was actually seen, without the rest of the chart already answering the question.
 
-Toolbar: the ⏪ button in the period group, or `r`. While armed: `space` play/pause,
-`←`/`→` step, and the scrubber for anything further away than a few bars.
+Toolbar: the ⏪ button in the period group, or `r`. That **arms** the picker — a vertical
+cut follows the pointer with everything to its right dimmed, and the click commits that bar
+as the start. `Esc` backs out. Once running: `space` play/pause, `←`/`→` step, and the
+scrubber for anything further away than a few bars.
 
 ## The one rule
 
@@ -51,13 +53,32 @@ costs one recompute per step (a few ms over full history) and buys an indicator 
 genuinely never saw the future, including the memoised path: the computer keys on bar-array
 identity, so each step is a real recompute rather than a stale hit.
 
-## Hidden bars stay on the axis
+## Off → arming → active
 
-The bars ahead of the cursor are passed to `CandleChart` as `trailingTimes` and written as
-**whitespace** points. Without them `setData` + `fitContent` would refit the time scale to
-the revealed prefix, and the entire chart would re-zoom on every single step — bar spacing
-growing as the replay ran. The price scale still autoscales to revealed candles only, which
-is what you want.
+Arming is its own phase, not a flag on `active`, because **nothing is hidden yet** while the
+operator is choosing. The chart still holds the whole range; the future is dimmed, not
+removed, so the choice is made against history that is still visible. Committing is what
+cuts. That also means a capture taken while arming needs no special handling — there is
+nothing to disclose.
+
+## Fit once, then only slide
+
+Off replay, every data write refits, which is right when the payload changes underneath you.
+Under replay it is exactly wrong twice over: refitting on every step re-zooms the chart as
+bars arrive, and it throws away whatever pan or zoom the operator set.
+
+So replay **fits once**, on the step that opens it (`replayEntryRange`), and after that only
+**slides**: the visible logical range moves by the number of bars revealed. That holds the
+newest candle still and pulls history left underneath it, and because the slide is relative,
+the operator's own framing rides along untouched.
+
+Two details that will bite:
+
+- The prior range is read **before** `setData`, never after, so the slide is computed from
+  the range the chart actually had rather than from whatever the write left behind.
+- The comparison/volume effect also called `fitContent`, and its dependency
+  `comparisonLines` is rebuilt from the truncated bars — so it fires on *every* replay step
+  and would have undone the slide a frame later. It is guarded on the same flag.
 
 ## What the agent sees
 
@@ -84,9 +105,6 @@ in `tests/chartCapture.test.ts`.
 
 ## Not built
 
-- **Pick the start bar by clicking a candle.** Replay enters at the left edge of the visible
-  range. The chart's click handler already arbitrates drawings, alert placement and the day
-  popup; adding a fourth mode wants its own pass.
 - **Replaying the research panels.** Fundamentals, evidence and the quote stay live, and the
   capture says so rather than pretending otherwise.
 - **Bar-by-bar paper trading.** Replay renders history; it records no decisions against it.
