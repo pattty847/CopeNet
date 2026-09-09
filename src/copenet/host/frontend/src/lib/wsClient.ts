@@ -41,6 +41,8 @@ import {
   WorkspaceFileContent,
   ShellAllowlistEntry,
   ObservabilityRunDetail,
+  DeskSnapshot,
+  FocusState,
   ObservabilitySettings,
 } from '../types/backend';
 import {
@@ -132,6 +134,7 @@ import {
   updateObservabilitySettingsRpc,
   purgeObservabilityTracesRpc,
 } from './wsObservabilityRpc';
+import { homeFocusGetRpc, homeFocusUpdateRpc, homeSnapshotRpc, type FocusUpdate } from './wsHomeRpc';
 import { bootstrapAction } from './wsBootstrapAction';
 import { loadModelsAction } from './wsCatalogActions';
 import { abortActiveRunAction, decideApprovalAction, sendMessageAction } from './wsChatActions';
@@ -1024,6 +1027,18 @@ class WsClient {
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     return resolveSessionRunRpc(this.request.bind(this), key, runId);
+  }
+
+  async homeSnapshot(activityLimit = 8): Promise<DeskSnapshot> {
+    return homeSnapshotRpc(this.request.bind(this), activityLimit);
+  }
+
+  async getFocus(): Promise<FocusState> {
+    return homeFocusGetRpc(this.request.bind(this));
+  }
+
+  async updateFocus(update: FocusUpdate): Promise<FocusState> {
+    return homeFocusUpdateRpc(this.request.bind(this), update);
   }
 
   async getObservabilitySettings(): Promise<ObservabilitySettings> {

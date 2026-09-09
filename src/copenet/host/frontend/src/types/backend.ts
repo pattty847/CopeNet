@@ -1116,3 +1116,63 @@ export interface TurnStateSnapshot {
   terminalReason: string | null;
   transitionReason: string;
 }
+
+// ---------- home desk ----------
+
+/** One recent run, as the desk reads it. Assembled server-side across every session:
+ *  asking per session is what Observability does, and this workspace has hundreds. */
+export interface DeskActivityEntry {
+  runId: string;
+  sessionKey: string;
+  sessionTitle: string;
+  provider: string;
+  model: string | null;
+  status: string;
+  summary: string;
+  toolCount: number;
+  startedAt: string;
+  completedAt: string | null;
+  durationMs: number | null;
+  errored: boolean;
+}
+
+/** Runtime health over the last hour, counted from durable run records — never sampled.
+ *  `avgLatencyMs` is null when nothing completed: an average over nothing is not zero. */
+export interface DeskHealth {
+  /** Sessions that ran something in the last 24h, not the count of un-archived sessions. */
+  activeSessions: number;
+  totalSessions: number;
+  inFlight: number;
+  toolCalls: number;
+  errorRate: number;
+  avgLatencyMs: number | null;
+  runs: number;
+  toolCallSeries: number[];
+  runSeries: number[];
+  errorSeries: number[];
+  windowMinutes: number;
+}
+
+export interface DeskSnapshot {
+  generatedAt: string;
+  activity: DeskActivityEntry[];
+  health: DeskHealth;
+  quote: { text: string; attribution: string } | null;
+}
+
+export interface FocusItem {
+  itemId: string;
+  text: string;
+  done: boolean;
+  createdAt: string;
+}
+
+/** Operator-authored, never model-authored: this is what the operator wrote down, as
+ *  distinct from memory, which is what CopeNet learned. It never enters a prompt. */
+export interface FocusState {
+  items: FocusItem[];
+  notes: string;
+  /** Quick Launch tile ids in the operator's order. Empty means "the default set". */
+  quickLaunch: string[];
+  updatedAt: string;
+}

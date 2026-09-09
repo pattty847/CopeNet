@@ -27,6 +27,7 @@ from .rpc_persona import (
     handle_persona_flavor_draft,
     handle_persona_flavor_save,
 )
+from .rpc_home import handle_focus_get, handle_focus_update, handle_home_snapshot
 from .rpc_memory import (
     handle_memory_list,
     handle_memory_upsert,
@@ -233,6 +234,12 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_persona_write_file(req.id, req.params, send_json, orchestrator)
     elif req.method == "briefing.get":
         await handle_briefing_get(req.id, send_json, orchestrator)
+    elif req.method == "home.snapshot":
+        await handle_home_snapshot(req.id, req.params, send_json, orchestrator)
+    elif req.method == "home.focus.get":
+        await handle_focus_get(req.id, req.params, send_json, orchestrator)
+    elif req.method == "home.focus.update":
+        await handle_focus_update(req.id, req.params, send_json, orchestrator)
     elif req.method == "memory.list":
         await handle_memory_list(req.id, req.params, send_json, orchestrator)
     elif req.method == "memory.upsert":
