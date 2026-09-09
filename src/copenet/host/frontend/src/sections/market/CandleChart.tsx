@@ -46,8 +46,9 @@ import {
   splitFinancialOverlaySegments,
 } from './financialOverlay';
 import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } from './marketUi';
+import { ChartClusterBoxes } from './ChartClusterBoxes';
 
-import { BOX_BG, BOX_BORDER, LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
+import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
 
 export function CandleChart({
   bars,
@@ -621,38 +622,10 @@ export function CandleChart({
   return (
     <div style={{ position: 'relative', cursor: alertPlacementActive ? 'crosshair' : undefined }}>
       <div ref={containerRef} style={{ width: '100%' }} />
-      {!comparisonMode && clusterBoxes.map((box) => (
-        <div
-          key={box.key}
-          style={{
-            position: 'absolute',
-            left: box.left,
-            top: box.top,
-            width: box.width,
-            height: box.height,
-            zIndex: 4,
-            pointerEvents: 'none',
-            border: `1px solid ${BOX_BORDER[box.tone]}`,
-            background: BOX_BG[box.tone],
-            borderRadius: 6,
-          }}
-        >
-          {box.avgY != null && (
-            <>
-              <div style={{ position: 'absolute', left: 0, right: 0, top: box.avgY - box.top, borderTop: `1px dashed ${toneColor(box.tone)}`, opacity: 0.75 }} />
-              {box.height > 34 && box.avgPrice != null && (
-                <span style={{ position: 'absolute', right: 3, top: Math.max(1, box.avgY - box.top - 12), fontFamily: mono, fontSize: 8.5, color: toneColor(box.tone), whiteSpace: 'nowrap' }}>
-                  avg {box.avgSide} ${box.avgPrice.toFixed(2)}
-                </span>
-              )}
-            </>
-          )}
-        </div>
-      ))}
-      {!comparisonMode && clusterBoxes.map((box) => (
-        <button
-          key={`chip-${box.key}`}
-          onClick={() =>
+      {!comparisonMode && (
+        <ChartClusterBoxes
+          boxes={clusterBoxes}
+          onOpen={(box) =>
             setDayPopup({
               x: box.left + box.width / 2,
               y: box.top + 10,
@@ -661,27 +634,8 @@ export function CandleChart({
               rangeLabel: box.rangeLabel,
             })
           }
-          style={{
-            position: 'absolute',
-            left: box.left + box.width / 2,
-            top: Math.max(2, box.top - 21),
-            transform: 'translateX(-50%)',
-            zIndex: 6,
-            cursor: 'pointer',
-            border: `1px solid ${BOX_BORDER[box.tone]}`,
-            background: '#0b0b0d',
-            color: box.tone === 'flat' ? MM.muted : toneColor(box.tone),
-            borderRadius: 7,
-            padding: '2px 7px',
-            fontFamily: mono,
-            fontSize: 9.5,
-            whiteSpace: 'nowrap',
-            lineHeight: 1.5,
-          }}
-        >
-          {box.chip}
-        </button>
-      ))}
+        />
+      )}
       {!comparisonMode && dayPopup && (
         <div
           style={{
