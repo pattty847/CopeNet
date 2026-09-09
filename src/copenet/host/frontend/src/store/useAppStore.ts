@@ -2,11 +2,16 @@ import { create } from 'zustand';
 import { DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
-import { DEFAULT_HOME_LAYOUT, normalizeHomeLayout, type HomeCardLayoutItem } from '../components/home/homeLayout';
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
 import { createFleetSlice, type FleetSlice } from './fleetSlice';
 import { createComposerSlice, type ComposerSlice } from './composerSlice';
-import { appSectionFromPathname, pushAppSectionPath } from '../lib/appSectionRouting';
+import {
+  appSectionFromPathname,
+  marketSectionPath,
+  marketTickerPath,
+  pushAppSectionPath,
+  type MarketSection,
+} from '../lib/appSectionRouting';
 
 export type AppSection = 'home' | 'agents' | 'market' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
@@ -16,7 +21,6 @@ export type WorkflowsRoute = 'hub' | 'meme-lab';
 const THEME_STORAGE_KEY = 'copenet.themeMode';
 const PINNED_SESSIONS_STORAGE_KEY = 'copenet.pinnedSessionKeys';
 const DRAFT_RUNTIME_STORAGE_KEY = 'copenet.draftRuntime';
-const HOME_LAYOUT_STORAGE_KEY = 'copenet.homeLayout';
 
 function readStoredThemeMode(): ThemeMode {
   if (typeof window === 'undefined') return 'dark';
@@ -75,24 +79,6 @@ function persistDraftRuntime(settings: Pick<DraftSettings, 'provider' | 'model' 
   );
 }
 
-function readStoredHomeLayout(): HomeCardLayoutItem[] {
-  if (typeof window === 'undefined') {
-    return DEFAULT_HOME_LAYOUT;
-  }
-  try {
-    const raw = window.localStorage.getItem(HOME_LAYOUT_STORAGE_KEY);
-    if (!raw) return DEFAULT_HOME_LAYOUT;
-    return normalizeHomeLayout(JSON.parse(raw));
-  } catch {
-    return DEFAULT_HOME_LAYOUT;
-  }
-}
-
-function persistHomeLayout(layout: HomeCardLayoutItem[]) {
-  if (typeof window === 'undefined') return;
-  window.localStorage.setItem(HOME_LAYOUT_STORAGE_KEY, JSON.stringify(layout));
-}
-
 export interface MergeDraft {
   sourceSessionKeys: string[];
 }
@@ -110,6 +96,12 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   setAppError: (message: string | null) => void;
   clearAppError: () => void;
   currentSection: AppSection;
+  /** Open one symbol's ticker workspace from outside Market. `setCurrentSection` would push
+   *  the bare `/market` path and clobber the ticker URL, and MarketMonitor reads its symbol
+   *  from `window.location` on mount — so the path has to be in place before the switch. */
+  openMarketTicker: (symbol: string) => void;
+  /** Open one section of the market workstation from outside Market. */
+  openMarketSection: (section: MarketSection) => void;
   setCurrentSection: (section: AppSection) => void;
   themeMode: ThemeMode;
   setThemeMode: (mode: ThemeMode) => void;
@@ -240,10 +232,6 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   setComposerMessage: (message: string) => void;
   resetComposer: () => void;
 
-  homeLayout: HomeCardLayoutItem[];
-  setHomeLayout: (layout: HomeCardLayoutItem[]) => void;
-  resetHomeLayout: () => void;
-
   // Provider auth statuses (keyed by provider id, e.g. "openai-codex")
   providerAuthStatuses: Record<string, ProviderAuthStatus>;
   setProviderAuthStatus: (providerId: string, status: ProviderAuthStatus) => void;
@@ -283,7 +271,6 @@ function sortSessions(sessions: Session[]) {
 }
 
 const storedDraftRuntime = readStoredDraftRuntime();
-const storedHomeLayout = readStoredHomeLayout();
 
 const DEFAULT_DRAFT: DraftSettings = {
   provider: storedDraftRuntime.provider,
@@ -315,6 +302,18 @@ export const useAppStore = create<AppState>((set) => ({
       });
     }
     set({ currentSection: section });
+  },
+  openMarketTicker: (symbol) => {
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', marketTickerPath(symbol));
+    }
+    set({ currentSection: 'market' });
+  },
+  openMarketSection: (section) => {
+    if (typeof window !== 'undefined') {
+      window.history.pushState(null, '', marketSectionPath(section));
+    }
+    set({ currentSection: 'market' });
   },
   themeMode: readStoredThemeMode(),
   setThemeMode: (mode) => {
@@ -578,17 +577,6 @@ export const useAppStore = create<AppState>((set) => ({
   setComposerTarget: (target) => set({ composerTarget: target }),
   setComposerMessage: (message) => set({ composerMessage: message }),
   resetComposer: () => set({ composerOpen: false, composerTarget: null, composerMessage: '' }),
-
-  homeLayout: storedHomeLayout,
-  setHomeLayout: (layout) => {
-    const next = normalizeHomeLayout(layout);
-    persistHomeLayout(next);
-    set({ homeLayout: next });
-  },
-  resetHomeLayout: () => {
-    persistHomeLayout(DEFAULT_HOME_LAYOUT);
-    set({ homeLayout: DEFAULT_HOME_LAYOUT });
-  },
 
   providerAuthStatuses: {},
   setProviderAuthStatus: (providerId, status) =>

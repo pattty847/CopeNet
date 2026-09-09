@@ -1,0 +1,374 @@
+/* CopeNet Home — the cockpit cold-open.
+ *
+ * One screen, no scroll. The page itself never scrolls: the frame is a grid of four fixed
+ * rows, and only the column bodies scroll internally. Home used to be 3,600px of stacked
+ * rounded cards in a different visual language from the product; this is the same
+ * instrument as the Market workstation, which is why it borrows marketTokens.css wholesale
+ * and adds only its own regions. SEAMED, NOT CARDED: columns are divided by 1px hairlines,
+ * never wrapped in bordered boxes.
+ *
+ * Reading order is deliberate — market state, then the one sentence that says what changed,
+ * then the tape and the desk's ask side by side, then the ways out. */
+
+.hc {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr) auto;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--mkt-ground);
+  color: var(--mkt-text);
+  font-family: var(--mkt-sans);
+}
+
+.hc *:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+
+/* ------------------------------------------------------------------------ status bar */
+
+.hc-bar {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  height: 50px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.hc-bar__identity { display: flex; align-items: baseline; gap: 9px; min-width: 0; }
+.hc-bar__title { margin: 0; font: 600 var(--mkt-t-quote) var(--mkt-sans); letter-spacing: 0.02em; }
+.hc-bar__sub {
+  color: var(--mkt-dim);
+  font: 500 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hc-bar__spacer { flex: 1 1 auto; }
+
+.hc-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  font: 600 var(--mkt-t-label) var(--mkt-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.hc-chip__dot { width: 6px; height: 6px; border-radius: 50%; background: currentColor; flex: 0 0 auto; }
+
+.hc-clock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--mkt-dim);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+
+.hc-stat { display: flex; flex-direction: column; align-items: flex-end; gap: 1px; }
+.hc-stat b {
+  font: 500 14px var(--mkt-mono);
+  color: var(--mkt-text);
+  font-variant-numeric: tabular-nums;
+}
+.hc-stat span {
+  color: var(--mkt-dimmer);
+  font: 600 8px var(--mkt-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.hc-sep { width: 1px; height: 20px; background: var(--mkt-seam); flex: 0 0 auto; }
+
+/* ------------------------------------------------------------------------- headline */
+
+/* The one sentence the market read produced. It is a button because reading it should be
+ * indistinguishable from going to the page that explains it. */
+.hc-headline {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 13px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hc-headline:hover { background: var(--mkt-raise); }
+.hc-headline__text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font: 500 var(--mkt-t-body) var(--mkt-sans);
+  color: var(--mkt-soft);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hc-headline__text em { font-style: normal; color: var(--mkt-text); font-weight: 600; }
+.hc-headline__go {
+  flex: 0 0 auto;
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.hc-headline:hover .hc-headline__go { color: var(--mkt-accent); }
+
+/* ----------------------------------------------------------------------------- body */
+
+.hc-body {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.15fr) minmax(0, 0.8fr);
+  min-height: 0;
+}
+
+.hc-col {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  border-right: 1px solid var(--mkt-seam);
+}
+.hc-col:last-child { border-right: 0; }
+
+.hc-col__head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  height: 28px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  color: var(--mkt-dim);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.hc-col__count { margin-left: auto; color: var(--mkt-dimmer); font-family: var(--mkt-mono); letter-spacing: 0; }
+
+.hc-col__body { flex: 1 1 auto; min-height: 0; overflow-y: auto; overflow-x: hidden; }
+
+/* A column carrying two regions splits the height between them so neither can push the
+ * other off-screen, and each scrolls on its own. */
+.hc-col__body--half { flex: 1 1 50%; }
+.hc-col__head--stacked { border-top: 1px solid var(--mkt-seam); }
+
+.hc-empty { padding: 16px 14px; color: var(--mkt-dim); font: 400 var(--mkt-t-value) var(--mkt-sans); }
+
+/* ------------------------------------------------------------------------ tape rows */
+
+.hc-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 6px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hc-row:hover { background: var(--mkt-raise); }
+
+.hc-row__sym {
+  flex: 0 0 auto;
+  min-width: 52px;
+  font: 500 var(--mkt-t-value) var(--mkt-mono);
+  color: var(--mkt-text);
+  letter-spacing: 0.02em;
+}
+/* A held name is marked by a hairline in the gutter, not by a badge — the operator knows
+ * their own book, they just need to spot it in a list. */
+.hc-row__sym[data-held='true'] { box-shadow: -8px 0 0 -6px var(--mkt-accent); }
+
+.hc-row__spark { flex: 1 1 auto; min-width: 0; height: 18px; opacity: 0.42; }
+.hc-row__spark .tw-spark { display: block; width: 100%; height: 18px; }
+.hc-row:hover .hc-row__spark { opacity: 1; }
+
+.hc-row__last {
+  flex: 0 0 auto;
+  color: var(--mkt-muted);
+  font: 400 var(--mkt-t-value) var(--mkt-mono);
+  font-variant-numeric: tabular-nums;
+}
+.hc-row__chg {
+  flex: 0 0 auto;
+  min-width: 58px;
+  text-align: right;
+  font: 500 var(--mkt-t-value) var(--mkt-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---------------------------------------------------------------------- change rows */
+
+.hc-change {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hc-change:hover { background: var(--mkt-raise); }
+
+.hc-change__sym {
+  flex: 0 0 auto;
+  min-width: 46px;
+  font: 500 var(--mkt-t-value) var(--mkt-mono);
+}
+.hc-change__kind {
+  flex: 0 0 auto;
+  color: var(--mkt-dimmer);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.hc-change__detail {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--mkt-muted);
+  font: 400 var(--mkt-t-label) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* -------------------------------------------------------------------- attention rows */
+
+.hc-task {
+  display: grid;
+  grid-template-columns: 6px minmax(0, 1fr) auto;
+  align-items: baseline;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 14px;
+  border: 0;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.hc-task:hover { background: var(--mkt-raise); }
+
+.hc-task__dot { width: 6px; height: 6px; border-radius: 50%; transform: translateY(-1px); }
+.hc-task__dot[data-severity='blocking'] { background: var(--mkt-down); }
+.hc-task__dot[data-severity='open'] { background: var(--mkt-accent); }
+.hc-task__dot[data-severity='idle'] { background: var(--mkt-dimmer); }
+
+.hc-task__label {
+  overflow: hidden;
+  font: 500 var(--mkt-t-value) var(--mkt-sans);
+  color: var(--mkt-text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hc-task__detail {
+  grid-column: 2;
+  overflow: hidden;
+  margin-top: 2px;
+  color: var(--mkt-dim);
+  font: 400 var(--mkt-t-label) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.hc-task__meta {
+  grid-row: 1;
+  grid-column: 3;
+  color: var(--mkt-dimmer);
+  font: 400 var(--mkt-t-micro) var(--mkt-mono);
+  white-space: nowrap;
+}
+
+/* ---------------------------------------------------------------------- desk column */
+
+.hc-fact {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  font: 400 var(--mkt-t-value) var(--mkt-sans);
+  color: var(--mkt-muted);
+}
+.hc-fact b {
+  margin-left: auto;
+  font: 500 var(--mkt-t-value) var(--mkt-mono);
+  color: var(--mkt-text);
+  font-variant-numeric: tabular-nums;
+}
+.hc-fact__dot { width: 6px; height: 6px; border-radius: 50%; flex: 0 0 auto; }
+
+/* ------------------------------------------------------------------------ launch bar */
+
+.hc-launch {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 42px;
+  padding: 0 14px;
+  border-top: 1px solid var(--mkt-seam);
+  background: var(--mkt-canvas);
+}
+
+.hc-launch__btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: var(--mkt-control);
+  padding: 0 10px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-muted);
+  cursor: pointer;
+  font: 500 var(--mkt-t-label) var(--mkt-sans);
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+.hc-launch__btn:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
+.hc-launch__btn[data-primary='true'] {
+  border-color: var(--mkt-accent-line);
+  color: var(--mkt-accent);
+}
+.hc-launch__btn[data-primary='true']:hover { background: var(--mkt-accent-soft); }
+
+.hc-launch__spacer { flex: 1 1 auto; }
+.hc-launch__hint {
+  color: var(--mkt-dimmer);
+  font: 400 var(--mkt-t-micro) var(--mkt-mono);
+  letter-spacing: 0.06em;
+}
+
+/* --------------------------------------------------------------------------- narrow */
+
+/* Below three columns the cockpit stops being a cockpit and becomes a queue: the tape and
+ * the desk's ask stack, and the body is the only thing that scrolls. */
+@media (max-width: 1100px) {
+  .hc-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .hc-col--desk { display: none; }
+}
+
+@media (max-width: 720px) {
+  .hc { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+  .hc-body { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto auto; overflow-y: auto; }
+  .hc-col { border-right: 0; border-bottom: 1px solid var(--mkt-seam); }
+  .hc-col__body { overflow-y: visible; }
+  .hc-bar { gap: 10px; padding: 0 10px; }
+  .hc-bar__sub { display: none; }
+}
