@@ -97,11 +97,28 @@ timestamp, session, adjustment basis.**
 - **Reuse the daily cache's split fingerprint to invalidate.** A split inside the window
   corrupts an append-only intraday cache exactly as it corrupts a daily one, and the
   detection already exists — do not write a second mechanism.
-- **Store regular session only, to begin with.** The probe found extended-hours *prices* are
-  supplied but extended-hours *volume* is not: AAPL reported nonzero extended volume on 4 of
-  2,815 one-minute bars. Storing bars whose volume is structurally zero invites a volume
-  profile or a VWAP built on them. If extended hours is wanted later, it is a separate
-  `session` value in the key — which is why the key has one.
+- **Store both sessions; tag every bar with its own.** An earlier draft of this plan said
+  regular-session only, on the grounds that zero-volume bars invite a VWAP built on nothing.
+  That was wrong, and wrong in an interesting way: zero volume is *mathematically neutral*
+  for every volume-weighted calculation. A zero-volume bar contributes nothing to either side
+  of a VWAP, adds no row to a volume profile, and moves OBV not at all. Those indicators do
+  not break on extended bars — they ignore them, correctly.
+
+  The real hazard is elsewhere. Session mode changes **what every price indicator means**,
+  because it changes the bar count: 390 minutes a session regular, ~960 with extended. An
+  RSI(14) on extended-inclusive 5m data is simply a different indicator from the same RSI on
+  regular-session data, and nothing in the output says so. Relative volume is worse — it
+  divides by a baseline that is structurally zero overnight.
+
+  So session is a **display and query mode**, defaulting to regular, stored on the bar and
+  present in the cache key (which is why `MARKET_SENTINEL_ALERTS.md` rule 3 put it there).
+  Premarket gaps are worth plotting — earnings reactions happen in them. What must not
+  happen is an indicator silently changing meaning when the toggle moves, so the mode belongs
+  in the chart's own chrome and in the agent capture, not buried in a settings menu.
+
+  Extended-hours *volume* remains unusable regardless: the 2026-07-29 probe found nonzero
+  extended volume on 4 of 2,815 one-minute AAPL bars. Relative volume and any
+  volume-normalised statistic stay regular-session-only until a probe says otherwise.
 - **Bars are revised.** The vendor rewrites recent bars. Refresh with an overlap and let
   later values replace earlier ones; never blind-append.
 
@@ -164,14 +181,30 @@ UI should say so rather than offering a button that cannot do anything.
 - **Cache size.** 1m × 30 days × one symbol ≈ 8k bars ≈ 500 KB as JSON. A 60-symbol
   watchlist at full depth is ~30 MB. Fine, but it wants a prune policy before it is 600.
 
-## 7. Phasing
+## 7. What this is NOT a foundation for
+
+The windows are short, and that bounds the ambition honestly:
+
+- `1m` reaches 30 days. `5m` reaches 60. `1h` reaches 2.9 years.
+- So intraday is a **recent-context** substrate, not a research one. Base rates, backtests,
+  point-in-time replay and the financial overlays stay daily, and should — repointing any of
+  them at a 60-day window would quietly shrink the sample that makes them mean anything.
+- Yahoo intraday is also the least official thing CopeNet consumes. The daily lane is robust;
+  this one should be assumed to break someday, which is another reason the store is keyed by
+  vendor.
+
+## 8. Phasing
 
 1. **Store + fetch + resample**, tested offline against fixtures. No UI.
 2. **RPC + one hardcoded interval** on the chart, to prove the transport and the forming-bar
    line.
-3. **Timeframe selector** — pinned, dropdown, `1m` paging.
-4. **Session VWAP**, which is the smallest real consumer and validates the session anchoring.
+3. **Timeframe selector** — pinned, dropdown, session toggle, `1m` paging.
+
+Then **stop and use it**. Whether 60 days of 5m is enough depends entirely on how the chart
+actually gets read, and neither the plan nor the vendor can answer that. Only after that:
+
+4. **Session VWAP**, the smallest real consumer, which validates the session anchoring.
 5. **Volume profile**, which is what prompted this.
 
-Stop after 1 if the vendor limits turn out to be worse than measured. The store is the
-valuable part; the chart is a reader.
+Stop after 1 if the vendor limits turn out worse than measured. The store is the valuable
+part; the chart is a reader.
