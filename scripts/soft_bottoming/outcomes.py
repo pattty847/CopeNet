@@ -19,6 +19,8 @@ def measure_outcome(daily: pd.DataFrame, benchmark: pd.DataFrame,
     end = entry_date + pd.Timedelta(weeks=weeks)
     if end > cutoff:
         return {"status": "pending"}
+    if benchmark.date.max() < end:
+        return {"status": "missing_followup"}
     bench = future[future.date < end]
     path = daily[(daily.date >= entry_date) & (daily.date < end)]
     if path.date.tolist() != bench.date.tolist() or len(path) < 2:

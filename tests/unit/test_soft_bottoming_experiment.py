@@ -113,3 +113,8 @@ def test_nonoverlapping_sensitivity_keeps_only_one_open_episode_per_symbol():
     s = summarize(rows)
     assert s['common_cohort']['26']['n'] == 2
     assert s['nonoverlapping_26w']['n'] == 1
+
+
+def test_stale_benchmark_cannot_make_truncated_followup_look_complete():
+    f = daily_frame().query("date < '2024-01-20'")
+    assert measure_outcome(f,f,pd.Timestamp('2024-01-01'),4,pd.Timestamp('2024-09-01')) == {'status':'missing_followup'}
