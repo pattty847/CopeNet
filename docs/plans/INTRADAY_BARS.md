@@ -1,6 +1,6 @@
 # Intraday Bars — Plan
 
-**Status:** proposed, nothing built
+**Status:** Phase 1 built (store, fetch, resample, offline tests). Phases 2-3 not started.
 **Written:** 2026-09-09
 **Supersedes nothing.** Implements the store that `MARKET_SENTINEL_ALERTS.md` Phase 1 has
 been blocked on since 2026-07-29 ("Dedicated intraday store with explicit vendor and
@@ -205,7 +205,12 @@ The windows are short, and that bounds the ambition honestly:
 
 ## 8. Phasing
 
-1. **Store + fetch + resample**, tested offline against fixtures. No UI.
+1. ~~**Store + fetch + resample**, tested offline against fixtures. No UI.~~ **Done.**
+   `core/market/intraday/` — `intervals.py` (the grain algebra), `resample.py` (session
+   anchoring), `store.py` (cache + session derivation), `fetch.py` (paged vendor lane).
+   `fetch_pace.py` moved the shared yfinance budget out of `runtime.py`, because the intraday
+   lane spends from the same one. Verified live: 15m resolves to the 5m grain, 384 bars in one
+   request, 55 KB cached, re-merge idempotent, 128 derived 15m bars on :00/:15/:30/:45.
 2. **RPC + one hardcoded interval** on the chart, to prove the transport and the forming-bar
    line.
 3. **Timeframe selector** — pinned, dropdown, session toggle, `1m` paging.

@@ -46,6 +46,7 @@ from .base_rates import load_base_rate
 from .fact_packets import market_fact_packet, market_history_section, ticker_fact_packet
 from .ledger import record_market_read_claims, record_ticker_read_claim
 from .ledger_report import track_record_line
+from .fetch_pace import market_fetch_pace
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
 from .market_tape import build_market_tape
@@ -538,10 +539,9 @@ def resolve_market_runtime(orchestrator) -> MarketRuntime:
 
 
 def _fetch_pace_seconds() -> float:
-    try:
-        return max(float(os.environ.get("COPNET_MARKET_FETCH_PACE", "0.2")), 0.0)
-    except ValueError:
-        return 0.2
+    """The shared yfinance budget. Lives in `fetch_pace` because the intraday lane spends
+    from the same one — Yahoo counts requests per caller, not per feature."""
+    return market_fetch_pace()
 
 
 def _speculative_panel(
