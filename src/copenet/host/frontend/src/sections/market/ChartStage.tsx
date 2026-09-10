@@ -44,6 +44,7 @@ export function ChartStage({
   symbol,
   timeframe,
   bars,
+  displayBars,
   replay,
   events,
   evidence,
@@ -76,6 +77,7 @@ export function ChartStage({
   symbol: string;
   timeframe: ChartTimeframe;
   bars: Ohlcv[];
+  displayBars?: Ohlcv[];
   /** Omitted on charts that cannot be replayed. While it is active the legend says REPLAY out
    *  loud, because a screenshot of a mid-replay chart is otherwise indistinguishable from one
    *  taken today. */
@@ -225,6 +227,7 @@ export function ChartStage({
           <CandleChart
             chartWorkspace={chartWorkspace}
             bars={bars}
+            displayBars={displayBars}
             replay={replay}
             events={events}
             evidence={evidence}

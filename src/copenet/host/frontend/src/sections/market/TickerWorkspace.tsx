@@ -47,7 +47,7 @@ export function TickerWorkspace({
   const view = useTickerViewModel(symbol, watchlist);
   const {
     ticker, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
-    setTimeframe, range, setRange, logScale, setLogScale, showVolume,
+    setTimeframe, range, setRange, logScale, setLogScale, candleStyle, setCandleStyle, showVolume,
     setShowVolume, tab, indicators, indicatorLayout, handlePaneStretch, railCollapsed,
     setRailCollapsed, overlayMetric, setOverlayMetric, effectiveFrequency, setOverlayFrequency, comparisons,
     setComparisons, showInsider, setShowInsider, insiderLookback, setInsiderLookback, insiderDisplay,
@@ -55,7 +55,7 @@ export function TickerWorkspace({
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, fullBars, bars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, displayBars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   } = view;
@@ -135,6 +135,8 @@ export function TickerWorkspace({
             onRange={setRange}
             logScale={logScale}
             onLogScale={setLogScale}
+            candleStyle={candleStyle}
+            onCandleStyle={setCandleStyle}
             replayPhase={replay.phase}
             replayAvailable={fullBars.length > 1}
             onToggleReplay={replay.toggle}
@@ -238,6 +240,7 @@ export function TickerWorkspace({
             symbol={detail.symbol}
             timeframe={timeframe}
             bars={bars}
+            displayBars={displayBars}
             replay={chartReplayBinding}
             events={chartEventRows}
             evidence={chartEvidence}

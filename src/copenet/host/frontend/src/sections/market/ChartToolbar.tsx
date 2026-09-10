@@ -10,6 +10,7 @@ import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomOpen, Rewind, Settings2 } from 'lucide-react';
 import { MarketFloatingPopover } from './MarketFloatingPopover';
 import type { ChartRange, ChartTimeframe } from './chartRanges';
+import type { CandleStyle } from './heikinAshi';
 import { CHART_RANGES, CHART_TIMEFRAMES } from './chartRanges';
 import type { ReplayPhase } from './replay/useChartReplay';
 
@@ -19,6 +20,8 @@ export function ChartToolbar({
   range,
   onRange,
   logScale,
+  candleStyle,
+  onCandleStyle,
   onLogScale,
   replayPhase,
   replayAvailable,
@@ -40,6 +43,8 @@ export function ChartToolbar({
   range: ChartRange;
   onRange: (value: ChartRange) => void;
   logScale: boolean;
+  candleStyle: CandleStyle;
+  onCandleStyle: (style: CandleStyle) => void;
   onLogScale: (value: boolean) => void;
   replayPhase: ReplayPhase;
   /** False when there is nothing to walk through — a single bar is not a replay. */
@@ -115,6 +120,23 @@ export function ChartToolbar({
       {alertControl}
 
       <span className="tw-toolbar__spacer" />
+
+      {/* Heikin Ashi is a way of DRAWING the same bars, so it sits with the axis toggle
+          rather than in the indicator picker: it adds no series and computes no signal. */}
+      <button
+        type="button"
+        className="tw-axis-toggle"
+        aria-pressed={candleStyle === 'heikin-ashi'}
+        onClick={() => onCandleStyle(candleStyle === 'heikin-ashi' ? 'candles' : 'heikin-ashi')}
+        aria-label={`Candles: ${candleStyle === 'heikin-ashi' ? 'Heikin Ashi' : 'standard'}. Switch to ${candleStyle === 'heikin-ashi' ? 'standard' : 'Heikin Ashi'}`}
+        title={
+          candleStyle === 'heikin-ashi'
+            ? 'Heikin Ashi — smoothed bars, not traded prices. Click for standard candles'
+            : 'Standard candles · click for Heikin Ashi'
+        }
+      >
+        {candleStyle === 'heikin-ashi' ? 'HA' : 'Std'}
+      </button>
 
       <button
         type="button"

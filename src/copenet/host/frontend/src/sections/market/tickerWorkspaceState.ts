@@ -6,6 +6,7 @@
 // — and must reset on switch. The baseline carried a comparison into the next ticker and
 // rewrote the URL as if the operator had asked for it, which is the bug this split prevents.
 
+import type { CandleStyle } from './heikinAshi';
 import { loadRailPreference, railCollapsed, saveRailPreference } from './marketWorkstationState';
 
 export type ResearchTab = 'overview' | 'fundamentals' | 'evidence' | 'synthesis';
@@ -47,6 +48,7 @@ function write(key: string, value: string): void {
 const TAB_KEY = 'mm-tw-tab';
 const SNAP_KEY = 'mm-tw-snap';
 const LOG_KEY = 'mm-log-scale';
+const CANDLE_STYLE_KEY = 'mm-candle-style';
 const DRAWER_SIZE_KEY = 'mm-tw-drawer-size';
 
 function isTab(value: string | null): value is ResearchTab {
@@ -126,6 +128,16 @@ export function saveRailCollapsed(collapsed: boolean): void {
 
 export function loadLogScale(): boolean {
   return read(LOG_KEY) === '1';
+}
+
+export function saveCandleStyle(style: CandleStyle): void {
+  write(CANDLE_STYLE_KEY, style);
+}
+
+/** Workspace-sticky, like the interval and the log scale: an operator picks how they read a
+ *  chart once and looks at every asset through it. */
+export function loadCandleStyle(): CandleStyle {
+  return read(CANDLE_STYLE_KEY) === 'heikin-ashi' ? 'heikin-ashi' : 'candles';
 }
 
 export function saveLogScale(enabled: boolean): void {

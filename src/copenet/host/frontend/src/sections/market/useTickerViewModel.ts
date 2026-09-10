@@ -6,6 +6,7 @@ import type { IndicatorRowActions } from './indicators/IndicatorRows';
 import { addIndicator, applyPaneStretch, configureIndicator, duplicateIndicator, loadIndicatorLayout, moveIndicator, removeIndicator, resetIndicator, saveIndicatorLayout, setIndicatorVisibility, styleIndicator, type IndicatorInstance } from './indicators/state';
 import { buildComparisonLines } from './chartComparison';
 import { visibleBars, type ChartRange, type ChartTimeframe, type InsiderDisplayMode, type InsiderLookback } from './chartRanges';
+import { candleRows, type CandleStyle } from './heikinAshi';
 import { observationTime, snapOverlayToCandles } from './financialOverlay';
 import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinancialMetrics';
 import { useChartComparisons } from './useChartComparisons';
@@ -16,7 +17,7 @@ import { useChartReplay } from './replay/useChartReplay';
 import { useTickerDrawerLayout } from './useTickerDrawerLayout';
 import { useTickerDetail, useTickerEvidence, type MarketWatchlistState } from './useMarketMonitorData';
 import { isValuationPayload, type FinancialFrequency } from './types';
-import { loadLogScale, loadRailCollapsed, loadTab, pushRecent, saveLogScale, saveRailCollapsed, saveTab, type ResearchTab } from './tickerWorkspaceState';
+import { loadCandleStyle, loadLogScale, loadRailCollapsed, loadTab, pushRecent, saveCandleStyle, saveLogScale, saveRailCollapsed, saveTab, type ResearchTab } from './tickerWorkspaceState';
 
 /** One owner for the values rendered by the ticker and captured for agent turns. */
 export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistState) {
@@ -35,6 +36,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   const [timeframe, setTimeframe] = useState<ChartTimeframe>('W');
   const [range, setRange] = useState<ChartRange>('5Y');
   const [logScale, setLogScale] = useState(loadLogScale);
+  const [candleStyle, setCandleStyle] = useState<CandleStyle>(loadCandleStyle);
   const [showVolume, setShowVolume] = useState(true);
   const [tab, setTab] = useState<ResearchTab>(loadTab);
   // Workspace-sticky, like the interval and the pane set: an analyst configures their
@@ -162,6 +164,8 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   const exitReplay = replay.exit;
   useEffect(() => { exitReplay(); }, [normalized, exitReplay]);
 
+  useEffect(() => { saveCandleStyle(candleStyle); }, [candleStyle]);
+
   // Indicators compute over the FULL history and are sliced to the visible range afterwards,
   // so changing 6M/1Y/5Y re-cuts one calculation instead of restarting every warm-up. The
   // computer memoises per configuration, so an unrelated re-render costs nothing.
@@ -179,6 +183,21 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   const computedIndicators = useMemo(
     () => indicatorComputer.current.compute(indicatorHistory, bars.length, indicators, { barsPerYear: barsPerYear(timeframe) }),
     [indicatorHistory, bars.length, indicators, timeframe],
+  );
+
+  // HEIKIN ASHI IS A DISPLAY TRANSFORM, AND IT NEVER TOUCHES `bars`.
+  //
+  // Everything below and beside this line — indicators, price alerts, comparisons, the
+  // financial overlay, the filing markers, the agent capture — reads `bars`, which stays the
+  // prices that actually traded. Transforming `bars` instead would silently recompute every
+  // indicator on synthetic values and let a market tool report a price that never existed.
+  //
+  // It warms up over `indicatorHistory` and is sliced to `bars.length` for the reason the
+  // comment above gives: the transform is recursive, so seeding it at the range start would
+  // change the shape of the candles when the operator switches 6M to 1Y.
+  const displayBars = useMemo(
+    () => candleRows(indicatorHistory, bars.length, candleStyle),
+    [indicatorHistory, bars.length, candleStyle],
   );
 
   const comparisonLines = useMemo(
@@ -261,7 +280,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
 
   return {
     ticker, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
-    setTimeframe, range, setRange, logScale, setLogScale, showVolume,
+    setTimeframe, range, setRange, logScale, setLogScale, candleStyle, setCandleStyle, showVolume,
     setShowVolume, tab, indicators, indicatorLayout, handlePaneStretch, railCollapsed,
     setRailCollapsed, overlayMetric, setOverlayMetric, effectiveFrequency, setOverlayFrequency, comparisons,
     setComparisons, showInsider, setShowInsider, insiderLookback, setInsiderLookback, insiderDisplay,
@@ -269,7 +288,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, fullBars, bars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, displayBars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   };

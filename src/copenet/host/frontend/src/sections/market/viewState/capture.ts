@@ -94,7 +94,12 @@ export function captureTickerView(options: {
   // Serialization is the snapshot boundary: subsequent UI edits cannot mutate this turn.
   return JSON.parse(JSON.stringify({ schemaVersion: 1, viewId: options.viewId, viewRevision: options.revision,
     instrument: document.instrument, timeframe: view.timeframe, range: view.range, viewport,
-    selection: options.selection, settings: { logScale: view.logScale, comparisonMode: view.comparing, showVolume: view.showVolume,
+    // `candleStyle` is part of the capture because the model is told what the operator is
+    // LOOKING AT, and Heikin Ashi bodies are not traded prices. The `candles` resource still
+    // carries the real OHLC either way — without this flag a model reading "eight green bars
+    // in a row" off the operator's description would attribute it to price action that did
+    // not happen.
+    selection: options.selection, settings: { logScale: view.logScale, candleStyle: view.candleStyle, comparisonMode: view.comparing, showVolume: view.showVolume,
       researchTab: view.tab, researchOpen: view.snap !== 'collapsed', includeAccountContext: options.includeAccountContext, replay,
       requestedSymbol: view.normalized, displayedSymbol: detail.symbol, indicators: view.indicators },
     resources: scopedResources, documentId: document.documentId, documentRevision: document.revision }, (_key, value) => {

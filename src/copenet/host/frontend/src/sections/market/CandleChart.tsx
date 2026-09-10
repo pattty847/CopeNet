@@ -53,6 +53,7 @@ import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBucket
 
 export function CandleChart({
   bars,
+  displayBars,
   replay,
   events = [],
   evidence = [],
@@ -80,6 +81,10 @@ export function CandleChart({
 }: {
   chartWorkspace?: ChartWorkspaceBridge;
   bars: Ohlcv[];
+  /** What the candle series draws, aligned index-for-index with `bars`. Defaults to `bars`.
+   *  A style like Heikin Ashi substitutes here and nowhere else: every other consumer —
+   *  volume, markers, decorations, alert lines — keeps reading prices that actually traded. */
+  displayBars?: Ohlcv[];
   /** Present only on a chart that can be replayed. Drives the start-point picker and, once
    *  active, suspends auto-fitting so the framing stays the operator's. */
   replay?: ChartReplayBinding;
@@ -511,6 +516,9 @@ export function CandleChart({
     const chart = chartRef.current;
     if (!candle || !volume || !chart) return;
     const rows = normalize(bars);
+    // The drawn candles. Index-aligned with `rows` by construction; the guard keeps a
+    // mismatched length from silently drawing one bar's body at another bar's time.
+    const drawn = displayBars && displayBars.length === rows.length ? normalize(displayBars) : rows;
     const sourceEvidence = evidence.length ? evidence : eventsAsEvidence(events);
     const future = futureDecorations(sourceEvidence, rows);
     futureMarkersRef.current = future.markers;
@@ -522,9 +530,13 @@ export function CandleChart({
     // Whitespace points extend the time scale past the last candle so future-dated
     // planned-sale markers have a coordinate to land on.
     candle.setData([
-      ...rows.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })),
+      ...drawn.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })),
       ...future.times.map((t) => ({ time: t as UTCTimestamp })),
     ]);
+    // Volume colour follows the REAL bar, not the drawn one. Heikin Ashi prints green
+    // through a day that genuinely closed down — that is the whole point of it — and
+    // colouring the day's actual volume green to match would assert something false about
+    // a measured quantity. The two can disagree; only one of them is a fact.
     volume.setData(
       rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
     );
@@ -557,7 +569,7 @@ export function CandleChart({
     // chartGeneration: a height change tears the chart down and builds a new one, so the
     // data has to be written again. Without this the chart comes back blank — latent while
     // height was effectively constant, immediate once the layout can resize it.
-  }, [bars, replay?.active, events, evidence, chartGeneration]);
+  }, [bars, displayBars, replay?.active, events, evidence, chartGeneration]);
 
   useEffect(() => {
     const chart = chartRef.current;
