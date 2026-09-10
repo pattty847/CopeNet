@@ -2,6 +2,7 @@ import { ArrowLeft, RefreshCw, Star } from 'lucide-react';
 import type { AssetProfile } from './assetProfile';
 import { signedPct, toneHex, toneOf } from './workspaceViz';
 import type { TickerDetailPayload } from './types';
+import { MarketSearchField } from './MarketSearchField';
 import { TickerLiveQuote } from './TickerLiveQuote';
 
 export function TickerAssetBar({
@@ -58,6 +59,10 @@ export function TickerAssetBar({
       >
         {watchBusy ? <RefreshCw size={13} className="tw-spin" /> : <Star size={13} fill={watched ? 'currentColor' : 'none'} />}
       </button>
+
+      <div className="tw-assetbar__spacer" />
+
+      <MarketSearchField />
 
       <div className="tw-assetbar__spacer" />
 

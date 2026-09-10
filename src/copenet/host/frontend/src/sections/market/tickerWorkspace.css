@@ -1424,3 +1424,55 @@
 }
 .tw-tfrow__pin[aria-pressed='true'] { color: var(--mkt-accent); }
 .tw-tfrow__pin:hover { color: var(--mkt-soft); }
+
+/* ---------------------------------------------------------------------- command field */
+
+/* Lives inside the 50px bar the page already has, between two spacers so it centres in the
+ * free space and cannot overlap the identity on its left or the quote on its right — which
+ * an absolutely-centred field would do the moment a long instrument name appeared. */
+.tw-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 1 420px;
+  min-width: 0;
+  height: var(--mkt-control);
+  padding: 0 8px 0 9px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: var(--mkt-ground);
+  color: var(--mkt-dim);
+  cursor: pointer;
+  text-align: left;
+}
+
+.tw-search:hover { border-color: var(--mkt-accent-line); color: var(--mkt-muted); }
+
+.tw-search__glass { flex: 0 0 auto; }
+
+.tw-search__hint {
+  flex: 1 1 auto;
+  overflow: hidden;
+  font: 400 var(--mkt-t-label) var(--mkt-sans);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tw-search__key {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+  padding: 1px 4px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 3px;
+  color: var(--mkt-dimmer);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+}
+
+/* Below the point where the identity and the quote need the whole row, the field is the
+ * thing that gives way — the price is why the page exists. */
+@media (max-width: 1100px) {
+  .tw-search__hint, .tw-search__key { display: none; }
+  .tw-search { flex: 0 0 auto; padding: 0 7px; }
+}

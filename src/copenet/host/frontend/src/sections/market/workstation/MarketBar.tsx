@@ -5,6 +5,7 @@
 // density); anything that acts on one section lives in that section.
 
 import { Search } from 'lucide-react';
+import { MarketSearchField } from '../MarketSearchField';
 import { NextScanControl } from '../monitoring/NextScanControl';
 import type { Density } from '../marketWorkstationState';
 import { formatBreadth, formatVix, regimeLabel } from '../marketBriefModel';
@@ -55,6 +56,10 @@ export function MarketBar({
         <span className="mw-freshness__dot" style={{ background: loaded ? 'var(--mkt-muted)' : 'var(--mkt-dim)' }} />
         {asOf}
       </span>
+
+      <div className="mw-bar__spacer" />
+
+      <MarketSearchField />
 
       <div className="mw-bar__spacer" />
 
