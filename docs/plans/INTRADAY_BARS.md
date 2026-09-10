@@ -1,0 +1,177 @@
+# Intraday Bars — Plan
+
+**Status:** proposed, nothing built
+**Written:** 2026-09-09
+**Supersedes nothing.** Implements the store that `MARKET_SENTINEL_ALERTS.md` Phase 1 has
+been blocked on since 2026-07-29 ("Dedicated intraday store with explicit vendor and
+adjustment basis").
+
+## 1. What this is for
+
+Sub-day candles on the ticker chart, fetched on demand and cached locally. The chart is the
+first consumer, not the only one — the store is the missing foundation under four features
+that are already specified and blocked:
+
+| Blocked on intraday | Where it is written down |
+|---|---|
+| Real session VWAP | `CHART_INDICATORS.md` — "the finest bar here is daily, where a session VWAP is identical to the bar's own typical price and measures nothing" |
+| Shadow sentinel (Phase 1) | `MARKET_SENTINEL_ALERTS.md` §2 |
+| Volume profile with a real POC | measured 2026-09-09; daily bars can only produce Volume-by-Price |
+| Relative volume, opening range, gap statistics | `MARKET_SENTINEL_ALERTS.md` Phase 3 |
+
+Design for the store, not for the chart. The chart is one reader.
+
+## 2. Measured vendor limits
+
+AAPL, 2026-09-09, yfinance, regular session only. Every number below was measured, not
+quoted — re-measure with `scripts/market_data_probe.py` before trusting it later.
+
+| Interval | Bars / session | Window Yahoo allows | Max rows | Per-request cap |
+|---|---:|---|---:|---|
+| `1m` | 390 | **30 days** | ~8,190 | **7 days** (~1,950 rows) |
+| `5m` | 78 | 60 days | 3,276 | whole window |
+| `15m` | 26 | 60 days | 1,092 | whole window |
+| `30m` | 13 | 60 days | 546 | whole window |
+| `1h` | 7 | **730 trading days** (~2.9 calendar years) | 5,073 | whole window |
+| `1d` | 1 | unbounded | — | whole window |
+
+Beyond each window Yahoo refuses explicitly — *"1m data not available … must be within the
+last 30 days"* — rather than silently truncating. That is a usable signal: the error text
+carries the real limit, so the ceiling can be discovered rather than hardcoded and left to
+rot.
+
+### Two findings that decide the architecture
+
+**`1m` is the only interval that needs paging.** It is capped at 7 days per request but
+allows 30 days total, so full depth is 4–5 paced requests. Everything else returns its
+entire available window in a single call. So "get more history" is a `1m` affordance, not a
+general mechanism — do not build a general one.
+
+**`15m` and `30m` are strictly worse than `5m` on this vendor.** Same 60-day ceiling, fewer
+bars. Fetching them buys nothing that resampling `5m` does not already give, at the cost of
+another request and another cache entry.
+
+## 3. Architecture
+
+### Native grains, derived intervals
+
+Fetch three grains and derive the rest, exactly as the daily cache stores D and derives W/M:
+
+```
+fetched:   1m ──► 2m 3m 5m* 10m 15m 20m 30m      (*5m also fetched: deeper window than 1m)
+           5m ──► 10m 15m 30m
+           1h ──► 2h 4h
+```
+
+Rules:
+
+- **A derived interval must divide its grain exactly.** 5m→15m is legal; 5m→7m is not.
+- **Prefer the deepest grain that satisfies the request.** 15m over the last week can come
+  from `1m` or `5m`; use `5m`, because the answer is identical and `5m` reaches further back.
+- **Never derive across a session boundary.** A 4h bucket does not span two days.
+
+This is the same shape as `resample_bars`, which groups dailies by `_period_start`. That
+function is date-keyed and cannot be reused as-is; generalise it to take a bucket function
+so one roll-up serves both lanes rather than two drifting copies.
+
+### Bucket anchoring
+
+Anchor intraday buckets to the **session open**, not the wall clock. Yahoo already does:
+its hourly bars run 09:30, 10:30 … 15:30 — seven per session, the last a 30-minute stub.
+Matching the vendor keeps derived bars aligned with fetched ones.
+
+This matters for the reason `resample_bars` documents for weeklies: financial overlays and
+markers snap to candle timestamps, and a bar on an unexpected boundary injects a new slot
+into the chart's index-based time axis instead of landing on an existing candle.
+
+### Storage
+
+A store of its own. `MARKET_SENTINEL_ALERTS.md` §3 rule 2 already forbids intraday entering
+the `(symbol, timeframe)` MarketStore, and rule 3 fixes the key: **vendor, symbol, interval,
+timestamp, session, adjustment basis.**
+
+- **Split-only, like the daily cache.** `auto_adjust=True` hides two adjustments behind one
+  flag, and dividend-adjusting retroactively shifts every prior price — which drifts an
+  append-only cache invisibly at the seam. Over a 30-day `1m` window that is at most one
+  ex-date; over a 730-day `1h` window it is several. One canonical basis across the system.
+- **Reuse the daily cache's split fingerprint to invalidate.** A split inside the window
+  corrupts an append-only intraday cache exactly as it corrupts a daily one, and the
+  detection already exists — do not write a second mechanism.
+- **Store regular session only, to begin with.** The probe found extended-hours *prices* are
+  supplied but extended-hours *volume* is not: AAPL reported nonzero extended volume on 4 of
+  2,815 one-minute bars. Storing bars whose volume is structurally zero invites a volume
+  profile or a VWAP built on them. If extended hours is wanted later, it is a separate
+  `session` value in the key — which is why the key has one.
+- **Bars are revised.** The vendor rewrites recent bars. Refresh with an overlap and let
+  later values replace earlier ones; never blind-append.
+
+### Fetching
+
+- **Lazily, never on page load.** The daily/weekly/monthly series ship inside `ticker.detail`
+  because they all derive from one cached daily history. Intraday cannot: it is a separate
+  fetch per interval, so it gets its own RPC and is requested when an intraday timeframe is
+  actually selected.
+- **On CopeNet's existing fetch pace.** `COPNET_MARKET_FETCH_PACE` already paces yfinance.
+  Intraday adds volume to that lane, not a second policy.
+- **A forming bar is not a closed bar.** The current session's last bar is still moving.
+  Mark it, and never let a completed-candle consumer (alerts, base rates) read it. The daily
+  lane already draws this line in `completed_candles`.
+
+## 4. How much to fetch
+
+Lightweight Charts' default `minBarSpacing` is 0.5px, so a ~1,300px chart shows about
+**2,600 bars** fully zoomed out. `CHART_BAR_LIMITS[DAILY]` is `2_600` — the daily transport
+limit already *is* one viewport. Intraday inherits the convention.
+
+| Interval | First pull | ≈ viewports | More available? |
+|---|---:|---:|---|
+| `1m` | 7 days ≈ 1,950 | 0.75 | yes — page to 30 days (~8,190) |
+| `5m` | 60 days = 3,276 | 1.26 | no, that is the ceiling |
+| `15m` | derived from 5m = 1,092 | 0.42 | no |
+| `30m` | derived from 5m = 546 | 0.21 | no |
+| `1h` | 730 sessions = 5,073 | 1.95 | no, that is the ceiling |
+
+So only `1m` gets a **Load earlier** control. Every other interval arrives complete, and the
+UI should say so rather than offering a button that cannot do anything.
+
+## 5. Timeframe selector
+
+- **Pinned in the toolbar:** the operator's chosen few, reorderable, persisted like the
+  indicator layout and the candle style.
+- **Dropdown** for everything else, grouped intraday / daily / weekly-monthly, each row
+  carrying its real depth ("5m · 60 days") so the ceiling is visible at the point of choice
+  rather than discovered as an empty chart.
+- **Custom intervals** are allowed only where they divide a native grain (§3). Offering `7m`
+  and then silently rounding it would be worse than not offering it.
+- **Unavailable is a state, not an empty chart.** `^VIX` supplied no volume at all in the
+  probe; an index has no intraday volume to profile. Say `data_unavailable` with the reason,
+  per `MARKET_SENTINEL_ALERTS.md` §3 rule 5.
+
+## 6. Consequences worth foreseeing
+
+- **Replay gets an intraday cursor for free** — it truncates `bars`, and it does not care
+  what a bar is.
+- **Indicators keep working, but `barsPerYear` must be extended.** It is a hardcoded
+  `'D' | 'W' | 'M'` union returning 252/52/12. A 5m chart has 78 × 252 = 19,656 bars a year,
+  and annualisation scales by the square root — so historical volatility would read
+  **√78 ≈ 8.8× too low** until intraday entries are added. Every other indicator is
+  interval-agnostic; this one is not, and the type will not catch it because `ChartTimeframe`
+  has to widen anyway.
+- **Chart agent capture** must carry the interval and its adjustment basis, or a model reads
+  5m bars believing they are daily.
+- **The daily cache stays canonical for anything long-horizon.** Base rates, backtests and
+  financial overlays are daily and should not be quietly re-pointed at a 60-day window.
+- **Cache size.** 1m × 30 days × one symbol ≈ 8k bars ≈ 500 KB as JSON. A 60-symbol
+  watchlist at full depth is ~30 MB. Fine, but it wants a prune policy before it is 600.
+
+## 7. Phasing
+
+1. **Store + fetch + resample**, tested offline against fixtures. No UI.
+2. **RPC + one hardcoded interval** on the chart, to prove the transport and the forming-bar
+   line.
+3. **Timeframe selector** — pinned, dropdown, `1m` paging.
+4. **Session VWAP**, which is the smallest real consumer and validates the session anchoring.
+5. **Volume profile**, which is what prompted this.
+
+Stop after 1 if the vendor limits turn out to be worse than measured. The store is the
+valuable part; the chart is a reader.

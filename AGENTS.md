@@ -312,6 +312,12 @@ For current behavior, assume:
   exact-read resource inventory before adding tools. Distinct actions need registered
   contracts, existing domain validation/policy, and inspectable results. Record unavailable
   capabilities honestly; do not imply every Market feature is already model-accessible.
+- **Intraday bars are proposed, not built.** `docs/plans/INTRADAY_BARS.md` carries the measured
+  vendor ceilings (1m: 30 days, 7 per request; 5m/15m/30m: 60 days; 1h: 730 trading days) and the
+  architecture: native grains fetched, everything else resampled; its own store keyed by vendor,
+  symbol, interval, timestamp, session and basis; split-only like the daily cache. Read it before
+  adding anything that wants sub-day data — real session VWAP, a true volume profile, the shadow
+  sentinel and relative volume are all blocked on it.
 - Full history: `docs/plans/MARKET_MONITOR.md`, `docs/plans/MARKET_INSIGHT_ENGINE.md`.
 
 ## Version Control & Commit Discipline
