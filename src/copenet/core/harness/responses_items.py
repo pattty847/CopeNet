@@ -129,52 +129,24 @@ def function_call_output_item(*, call_id: str, output: str | dict[str, Any]) -> 
 
 
 def parts_to_response_items(parts: list[dict[str, Any]], *, run_id: str) -> list[dict[str, Any]]:
-    """Convert one assistant transcript message's parts list into Responses items.
+    """Replay only complete exchanges paired by the canonical callId.
 
-    A single assistant turn can contain interleaved text, tool_call, and tool_result
-    parts. Each becomes its own item in order. Synthetic message ids are stable
-    per (run_id, part_index) so a re-walk produces identical input[].
-
-    function_call and function_call_output items must share a call_id. The
-    runtime stamps a matching callId on both the tool_call and tool_result parts,
-    but to stay robust against older transcripts (where only the tool_result
-    carried a callId), we pair tool_call -> tool_result positionally: the k-th
-    valid tool_call binds to the k-th tool_result, and they share whichever
-    callId is present (preferring the tool_result's, then the tool_call's, then
-    a synthesized id). A tool_call with no toolId/name is dropped (no valid
-    function to emit), and its paired tool_result is dropped with it.
+    Interrupted turns retain attempted calls in the transcript, but an unpaired
+    call/result is not a valid provider input. Never infer identity by position.
     """
-    # First pass: positionally pair tool_call <-> tool_result and resolve a
-    # shared call_id per pair.
-    call_indices = [i for i, p in enumerate(parts) if p.get("kind") == "tool_call"]
-    result_indices = [i for i, p in enumerate(parts) if p.get("kind") == "tool_result"]
-    shared_call_id: dict[int, str] = {}
-    dropped: set[int] = set()
-    for pair_num, call_index in enumerate(call_indices):
-        tc = parts[call_index].get("toolCall") or {}
-        name = str(tc.get("toolId") or "").strip()
-        result_index = result_indices[pair_num] if pair_num < len(result_indices) else None
-        if not name:
-            # No function name -> cannot emit a function_call; drop the call and
-            # its paired result.
-            dropped.add(call_index)
-            if result_index is not None:
-                dropped.add(result_index)
-            continue
-        te = parts[result_index].get("toolExecution") or {} if result_index is not None else {}
-        call_id = (
-            str(te.get("callId") or "").strip()
-            or str(tc.get("callId") or "").strip()
-            or f"call_{run_id}_{pair_num}"
-        )
-        shared_call_id[call_index] = call_id
-        if result_index is not None:
-            shared_call_id[result_index] = call_id
-
+    calls = {
+        part["toolCall"]["callId"]
+        for part in parts if part.get("kind") == "tool_call"
+        and part.get("toolCall", {}).get("callId") and part["toolCall"].get("toolId")
+    }
+    results = {
+        part["toolExecution"]["callId"]
+        for part in parts if part.get("kind") == "tool_result"
+        and part.get("toolExecution", {}).get("callId")
+    }
+    paired = calls & results
     items: list[dict[str, Any]] = []
     for index, part in enumerate(parts):
-        if index in dropped:
-            continue
         kind = part.get("kind")
         if kind == "text":
             text = str(part.get("text") or part.get("content") or "").strip()
@@ -184,8 +156,8 @@ def parts_to_response_items(parts: list[dict[str, Any]], *, run_id: str) -> list
         elif kind == "tool_call":
             tc = part.get("toolCall") or {}
             name = str(tc.get("toolId") or "").strip()
-            call_id = shared_call_id.get(index)
-            if not name or not call_id:
+            call_id = tc.get("callId")
+            if not name or call_id not in paired:
                 continue
             items.append(
                 function_call_item(
@@ -197,8 +169,8 @@ def parts_to_response_items(parts: list[dict[str, Any]], *, run_id: str) -> list
             )
         elif kind == "tool_result":
             te = part.get("toolExecution") or {}
-            call_id = shared_call_id.get(index) or str(te.get("callId") or "").strip()
-            if not call_id:
+            call_id = te.get("callId")
+            if call_id not in paired:
                 continue
             items.append(
                 function_call_output_item(

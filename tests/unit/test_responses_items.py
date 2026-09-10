@@ -167,6 +167,7 @@ def test_transcript_to_input_array_falls_back_to_content_when_no_parts() -> None
 def test_tool_output_for_replay_prefers_body_string() -> None:
     """Tool output serialization: body string > body dict > summary > output."""
     parts = [
+        {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {}}},
         {
             "kind": "tool_result",
             "toolExecution": {
@@ -178,11 +179,12 @@ def test_tool_output_for_replay_prefers_body_string() -> None:
         }
     ]
     items = parts_to_response_items(parts, run_id="run_test")
-    assert items[0]["output"] == "raw string body"
+    assert items[1]["output"] == "raw string body"
 
 
 def test_tool_output_for_replay_serializes_dict_body() -> None:
     parts = [
+        {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {}}},
         {
             "kind": "tool_result",
             "toolExecution": {
@@ -192,12 +194,13 @@ def test_tool_output_for_replay_serializes_dict_body() -> None:
         }
     ]
     items = parts_to_response_items(parts, run_id="run_test")
-    parsed = json.loads(items[0]["output"])
+    parsed = json.loads(items[1]["output"])
     assert parsed == {"matches": [{"path": "foo.txt"}]}
 
 
 def test_tool_output_for_replay_falls_back_to_summary() -> None:
     parts = [
+        {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {}}},
         {
             "kind": "tool_result",
             "toolExecution": {
@@ -207,4 +210,16 @@ def test_tool_output_for_replay_falls_back_to_summary() -> None:
         }
     ]
     items = parts_to_response_items(parts, run_id="run_test")
-    assert items[0]["output"] == "Listed 3 entries."
+    assert items[1]["output"] == "Listed 3 entries."
+
+
+def test_replay_pairs_by_identity_and_omits_interrupted_calls():
+    parts = [
+        {"kind": "tool_call", "toolCall": {"callId": "unfinished", "toolId": "shell.exec"}},
+        {"kind": "tool_call", "toolCall": {"callId": "done", "toolId": "files.read"}},
+        {"kind": "tool_result", "toolExecution": {"callId": "done", "body": "read output"}},
+        {"kind": "tool_result", "toolExecution": {"callId": "orphan", "body": "unknown"}},
+    ]
+    items = parts_to_response_items(parts, run_id="interrupted")
+    assert [item["call_id"] for item in items] == ["done", "done"]
+    assert items[0]["name"] == "files.read"
