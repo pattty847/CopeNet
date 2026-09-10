@@ -290,8 +290,8 @@ async def test_abort_sets_abort_event_and_run_terminates(tmp_path) -> None:
     result = await asyncio.wait_for(task, timeout=1.0)
 
     assert abort_result["aborted"] is True
-    assert result["status"] == "ok"
-    assert events[-1]["state"] == "final"
+    assert result["status"] == "interrupted"
+    assert events[-1]["state"] == "error"
 
 
 @pytest.mark.asyncio
