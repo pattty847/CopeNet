@@ -55,7 +55,7 @@ export function TickerWorkspace({
     setRailCursor, jumpOpen, setJumpOpen, jumpSeed, setJumpSeed, watchBusy,
     setWatchBusy, normalized, detail, profile, snap, drawerSize,
     setSnap, resizeDrawer, cycleDrawerSnap, comparing, overlaySeries, overlayIsValuation,
-    rawBars, fullBars, bars, displayBars, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
+    rawBars, fullBars, bars, displayBars, intraday, replay, replayTime, chartReplayBinding, computedIndicators, comparisonLines, comparisonWarning, overlayPoints,
     railEntries, chartEvidence, chartEventRows, openTab, plotMetric, indicatorActions,
     addIndicatorToLayout, addComparison,
   } = view;
@@ -137,6 +137,8 @@ export function TickerWorkspace({
             onLogScale={setLogScale}
             candleStyle={candleStyle}
             onCandleStyle={setCandleStyle}
+            onLoadEarlier={intraday.canLoadEarlier ? intraday.loadEarlier : undefined}
+            loadingEarlier={intraday.loading}
             replayPhase={replay.phase}
             replayAvailable={fullBars.length > 1}
             onToggleReplay={replay.toggle}

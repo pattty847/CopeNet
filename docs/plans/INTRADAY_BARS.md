@@ -1,6 +1,6 @@
 # Intraday Bars — Plan
 
-**Status:** Phase 1 built (store, fetch, resample, offline tests). Phases 2-3 not started.
+**Status:** Phases 1-3 built. Session toggle, VWAP and volume profile not started.
 **Written:** 2026-09-09
 **Supersedes nothing.** Implements the store that `MARKET_SENTINEL_ALERTS.md` Phase 1 has
 been blocked on since 2026-07-29 ("Dedicated intraday store with explicit vendor and
@@ -188,8 +188,12 @@ UI should say so rather than offering a button that cannot do anything.
   5m bars believing they are daily.
 - **The daily cache stays canonical for anything long-horizon.** Base rates, backtests and
   financial overlays are daily and should not be quietly re-pointed at a 60-day window.
-- **Cache size.** 1m × 30 days × one symbol ≈ 8k bars ≈ 500 KB as JSON. A 60-symbol
-  watchlist at full depth is ~30 MB. Fine, but it wants a prune policy before it is 600.
+- **Cache size, measured rather than estimated.** The estimate here was 500 KB for a
+  symbol's 1m history; the real figure is **2.8 MB**, because it forgot that extended hours
+  is 2.4x the rows and that JSON at full float precision costs ~145 bytes a bar. AAPL at
+  full depth across all three grains is **5.2 MB** (1m 19,136 bars, 5m 8,064, 1h 8,272). A
+  60-symbol watchlist would be ~300 MB, not 30. Still workable on a laptop, but the prune
+  policy is nearer than it looked, and rounding stored prices would be the cheap first cut.
 
 ## 7. What this is NOT a foundation for
 
@@ -211,9 +215,13 @@ The windows are short, and that bounds the ambition honestly:
    `fetch_pace.py` moved the shared yfinance budget out of `runtime.py`, because the intraday
    lane spends from the same one. Verified live: 15m resolves to the 5m grain, 384 bars in one
    request, 55 KB cached, re-merge idempotent, 128 derived 15m bars on :00/:15/:30/:45.
-2. **RPC + one hardcoded interval** on the chart, to prove the transport and the forming-bar
-   line.
-3. **Timeframe selector** — pinned, dropdown, session toggle, `1m` paging.
+2. ~~**RPC + one hardcoded interval** on the chart.~~ **Done.** `IntradayService` plus
+   `market.intraday.get` / `market.intraday.intervals`.
+3. ~~**Timeframe selector** — pinned, dropdown, `1m` paging.~~ **Done.** Pinned strip with a
+   dropdown carrying each interval's real depth; ranges follow the lane (`1D/5D/1M/MAX`
+   intraday); `Load earlier` appears only on `1m`. The session toggle is NOT built — the
+   store and the RPC take a session and default to `all`, but nothing in the UI switches it
+   yet.
 
 Then **stop and use it**. Whether 60 days of 5m is enough depends entirely on how the chart
 actually gets read, and neither the plan nor the vendor can answer that. Only after that:

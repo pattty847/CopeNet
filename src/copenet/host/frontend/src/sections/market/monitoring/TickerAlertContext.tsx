@@ -1,3 +1,4 @@
+import { isIntradayTimeframe, type ChartTimeframe } from '../chartRanges';
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { Bell } from 'lucide-react';
 import type { ComputedIndicator } from '../indicators/compute';
@@ -61,6 +62,11 @@ export function IndicatorAlertButton({ indicator }: { indicator: ComputedIndicat
   );
 }
 
-export function TickerAlertProvider({ symbol, timeframe, children }: { symbol: string; timeframe: 'D' | 'W' | 'M'; children: ReactNode }) {
-  return <TickerAlertContext.Provider value={{ symbol, timeframe }}>{children}</TickerAlertContext.Provider>;
+export function TickerAlertProvider({ symbol, timeframe, children }: { symbol: string; timeframe: ChartTimeframe; children: ReactNode }) {
+  // The alert engine evaluates COMPLETED DAILY CLOSES — there is no intraday evaluation lane
+  // yet (that is Sentinel Phase 1, which the intraday store unblocks but does not deliver).
+  // So an alert placed while reading a 5m chart is still a daily alert, and saying `daily`
+  // here is the truth about what will be evaluated rather than a guess at what was on screen.
+  const evaluated = isIntradayTimeframe(timeframe) ? 'D' : timeframe;
+  return <TickerAlertContext.Provider value={{ symbol, timeframe: evaluated }}>{children}</TickerAlertContext.Provider>;
 }

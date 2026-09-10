@@ -5,7 +5,8 @@ import { barsPerYear, createIndicatorComputer } from './indicators/compute';
 import type { IndicatorRowActions } from './indicators/IndicatorRows';
 import { addIndicator, applyPaneStretch, configureIndicator, duplicateIndicator, loadIndicatorLayout, moveIndicator, removeIndicator, resetIndicator, saveIndicatorLayout, setIndicatorVisibility, styleIndicator, type IndicatorInstance } from './indicators/state';
 import { buildComparisonLines } from './chartComparison';
-import { visibleBars, type ChartRange, type ChartTimeframe, type InsiderDisplayMode, type InsiderLookback } from './chartRanges';
+import { isIntradayTimeframe, rangeForTimeframe, visibleBars, type ChartRange, type ChartTimeframe, type InsiderDisplayMode, type InsiderLookback } from './chartRanges';
+import { useIntradayBars } from './useIntradayBars';
 import { candleRows, type CandleStyle } from './heikinAshi';
 import { observationTime, snapOverlayToCandles } from './financialOverlay';
 import { isValuationMetric, metricInfo, useFinancialMetrics } from './useFinancialMetrics';
@@ -35,6 +36,10 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   // --- workspace-sticky: how this operator likes to look at any asset -------------------
   const [timeframe, setTimeframe] = useState<ChartTimeframe>('W');
   const [range, setRange] = useState<ChartRange>('5Y');
+  // Switching D to 5m with '5Y' selected would filter every bar away, because 5Y is not a
+  // range an intraday chart has. Keep the operator's choice where it still applies and fall
+  // back to that lane's widest where it does not.
+  const effectiveRange = rangeForTimeframe(range, timeframe);
   const [logScale, setLogScale] = useState(loadLogScale);
   const [candleStyle, setCandleStyle] = useState<CandleStyle>(loadCandleStyle);
   const [showVolume, setShowVolume] = useState(true);
@@ -136,8 +141,14 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   const overlaySeries = useFinancialSeries(viewSymbol, overlayMetric ?? 'revenue', effectiveFrequency, overlayMetric != null);
   const comparisonData = useChartComparisons(comparisons, timeframe);
 
-  const rawBars = detail ? (timeframe === 'D' ? detail.series.daily : timeframe === 'M' ? detail.series.monthly : detail.series.weekly) : [];
-  const fullBars = useMemo(() => visibleBars(rawBars, range), [rawBars, range]);
+  // TWO LANES, ONE `rawBars`. Daily/weekly/monthly are already in memory inside
+  // `ticker.detail`; an intraday interval is a separate request that only happens when one
+  // is selected. Everything downstream — range slicing, replay, indicators, the chart —
+  // reads `rawBars` and does not care which lane filled it.
+  const intraday = useIntradayBars(viewSymbol, timeframe);
+  const dailyBars = detail ? (timeframe === 'M' ? detail.series.monthly : timeframe === 'W' ? detail.series.weekly : detail.series.daily) : [];
+  const rawBars = isIntradayTimeframe(timeframe) ? (intraday.series?.bars ?? []) : dailyBars;
+  const fullBars = useMemo(() => visibleBars(rawBars, effectiveRange), [rawBars, effectiveRange]);
 
   // REPLAY IS A TRUNCATION, AND IT HAPPENS ONCE, HERE.
   //
@@ -280,7 +291,8 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
 
   return {
     ticker, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
-    setTimeframe, range, setRange, logScale, setLogScale, candleStyle, setCandleStyle, showVolume,
+    setTimeframe, range: effectiveRange, setRange, logScale, setLogScale, candleStyle, setCandleStyle, showVolume,
+    intraday,
     setShowVolume, tab, indicators, indicatorLayout, handlePaneStretch, railCollapsed,
     setRailCollapsed, overlayMetric, setOverlayMetric, effectiveFrequency, setOverlayFrequency, comparisons,
     setComparisons, showInsider, setShowInsider, insiderLookback, setInsiderLookback, insiderDisplay,

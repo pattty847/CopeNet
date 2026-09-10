@@ -1,3 +1,5 @@
+import type { ChartTimeframe } from '../sections/market/chartRanges';
+import type { Ohlcv } from '../sections/market/types';
 import type { MarketContext } from '../sections/market/chartAgent/types';
 
 export type WsStatus = 'connecting' | 'connected' | 'disconnected' | 'auth_failed';
@@ -149,7 +151,9 @@ export interface Message {
   content: string;
   attachments?: ChatAttachment[] | null;
   requestedToolIds?: string[] | null;
-  marketContext?: (MarketContext & { hasExternalProse?: boolean; symbol?: string; timeframe?: 'D' | 'W' | 'M' }) | null;
+  /** `timeframe` is what the operator is LOOKING AT, so it carries intraday intervals too —
+   *  a model told 'D' while the chart shows 5m candles is reasoning about the wrong series. */
+  marketContext?: (MarketContext & { hasExternalProse?: boolean; symbol?: string; timeframe?: ChartTimeframe }) | null;
   timestamp: string;
   provider: string | null;
   model: string | null;
@@ -1175,4 +1179,43 @@ export interface FocusState {
   /** Quick Launch tile ids in the operator's order. Empty means "the default set". */
   quickLaunch: string[];
   updatedAt: string;
+}
+
+// ---------- intraday bars ----------
+
+/** Which sessions a series covers. `all` is the default: extended-hours candles are drawn,
+ *  and their volume is simply zero, which is what the instrument actually did. */
+export type IntradaySession = 'all' | 'regular' | 'extended';
+
+export interface IntradaySeries {
+  symbol: string;
+  interval: ChartTimeframe;
+  session: IntradaySession;
+  /** The native grain that served this interval. Not an implementation detail to the
+   *  operator: it is why 15m reaches 60 days and 3m reaches 30. */
+  grain: string;
+  windowDays: number;
+  bars: Ohlcv[];
+  coveredFrom: number | null;
+  coveredThrough: number | null;
+  fetched: boolean;
+  requests: number;
+  warnings: string[];
+  /** Set when the vendor refuses the grain outright — its message carries the real ceiling. */
+  unavailable: string | null;
+  updatedAt: string;
+}
+
+export interface IntradayIntervalInfo {
+  interval: ChartTimeframe;
+  grain: string;
+  derived: boolean;
+  windowDays: number;
+  /** True only for 1m, the one grain capped per request below its total window. */
+  paged: boolean;
+}
+
+export interface IntradayCatalog {
+  intervals: IntradayIntervalInfo[];
+  sessions: string[];
 }

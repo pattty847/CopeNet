@@ -43,6 +43,8 @@ import {
   ObservabilityRunDetail,
   DeskSnapshot,
   FocusState,
+  IntradayCatalog,
+  IntradaySeries,
   ObservabilitySettings,
 } from '../types/backend';
 import {
@@ -135,6 +137,7 @@ import {
   purgeObservabilityTracesRpc,
 } from './wsObservabilityRpc';
 import { homeFocusGetRpc, homeFocusUpdateRpc, homeSnapshotRpc, type FocusUpdate } from './wsHomeRpc';
+import { marketIntradayGetRpc, marketIntradayIntervalsRpc } from './wsMarketIntraday';
 import { bootstrapAction } from './wsBootstrapAction';
 import { loadModelsAction } from './wsCatalogActions';
 import { abortActiveRunAction, decideApprovalAction, sendMessageAction } from './wsChatActions';
@@ -1027,6 +1030,16 @@ class WsClient {
 
   async resolveSessionRun(key: string, runId: string): Promise<SessionRunRecord | null> {
     return resolveSessionRunRpc(this.request.bind(this), key, runId);
+  }
+
+  async marketIntraday(options: {
+    symbol: string; interval: string; session?: string; days?: number; refresh?: boolean;
+  }): Promise<IntradaySeries> {
+    return marketIntradayGetRpc(this.request.bind(this), options);
+  }
+
+  async marketIntradayIntervals(): Promise<IntradayCatalog> {
+    return marketIntradayIntervalsRpc(this.request.bind(this));
   }
 
   async homeSnapshot(activityLimit = 8): Promise<DeskSnapshot> {

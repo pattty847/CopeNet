@@ -1,3 +1,4 @@
+import type { ChartTimeframe } from '../sections/market/chartRanges';
 import { useAppStore } from '../store/useAppStore';
 import type { ChatAttachment, Message, Session } from '../types/backend';
 import type { MarketContext } from '../sections/market/chartAgent/types';
@@ -35,7 +36,7 @@ export interface SendMessageToSessionOptions {
   attachments?: ChatAttachment[];
   requestedToolIds?: string[];
   marketContext?: MarketContext;
-  displayContext?: { symbol: string; timeframe: 'D' | 'W' | 'M' };
+  displayContext?: { symbol: string; timeframe: ChartTimeframe };
   idempotencyKey?: string;
   runtimeOverride?: { model?: string; taskPromptId?: string };
 }

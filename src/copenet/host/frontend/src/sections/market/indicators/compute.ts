@@ -1,3 +1,4 @@
+import { isIntradayTimeframe, type ChartTimeframe } from '../chartRanges';
 // Turning configured instances into drawable series.
 //
 // Two things happen here and nowhere else.
@@ -189,7 +190,22 @@ function defaultFormat(value: number): string {
   return value.toFixed(4);
 }
 
-/** Bars per year for the chart's interval, so annualising indicators do not assume daily. */
-export function barsPerYear(timeframe: 'D' | 'W' | 'M'): number {
-  return timeframe === 'D' ? 252 : timeframe === 'W' ? 52 : 12;
+/** Bars per year for the chart's interval, so annualising indicators do not assume daily.
+ *
+ *  Intraday counts assume the REGULAR session — 390 minutes, 252 days — even when extended
+ *  hours are on screen. Overnight bars are thin and mostly flat, so counting them would
+ *  inflate the year and understate volatility for the sessions that carry the trade.
+ *
+ *  Getting this wrong is quiet: annualisation scales by the square root, so serving a 5m
+ *  chart the daily 252 would print a historical volatility SQRT(78) — about 8.8x — too low,
+ *  with nothing on screen to say so. */
+const REGULAR_SESSION_MINUTES = 390;
+const TRADING_DAYS_PER_YEAR = 252;
+
+export function barsPerYear(timeframe: ChartTimeframe): number {
+  if (isIntradayTimeframe(timeframe)) {
+    const minutes = timeframe.endsWith('h') ? Number.parseInt(timeframe, 10) * 60 : Number.parseInt(timeframe, 10);
+    return Math.round((REGULAR_SESSION_MINUTES / minutes) * TRADING_DAYS_PER_YEAR);
+  }
+  return timeframe === 'D' ? TRADING_DAYS_PER_YEAR : timeframe === 'W' ? 52 : 12;
 }

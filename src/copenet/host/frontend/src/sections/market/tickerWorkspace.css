@@ -1355,3 +1355,72 @@
   border-color: transparent;
   box-shadow: none;
 }
+
+/* ------------------------------------------------------------------ interval selector */
+
+/* The dropdown exists because depth is the surprising part: 15m reaches 60 days and 3m
+ * reaches 30, and nothing about the labels says so. Each row carries its own ceiling. */
+.tw-tfmenu { display: flex; flex-direction: column; padding: 4px 0; }
+
+.tw-tfmenu__head {
+  padding: 6px 10px 4px;
+  color: var(--mkt-dimmer);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.tw-tfmenu__empty { padding: 6px 10px; color: var(--mkt-dim); font: 400 var(--mkt-t-label) var(--mkt-sans); }
+
+.tw-tfmenu__foot {
+  margin-top: 4px;
+  padding: 7px 10px 3px;
+  border-top: 1px solid var(--mkt-seam);
+  color: var(--mkt-dimmer);
+  font: 400 var(--mkt-t-micro) var(--mkt-sans);
+  line-height: 1.5;
+}
+
+.tw-tfrow { display: flex; align-items: stretch; }
+.tw-tfrow:hover { background: var(--mkt-raise); }
+.tw-tfrow[data-selected='true'] { background: var(--mkt-accent-soft); }
+
+.tw-tfrow__pick {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 5px 4px 5px 10px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+
+.tw-tfrow__label {
+  flex: 0 0 auto;
+  min-width: 30px;
+  color: var(--mkt-text);
+  font: 500 var(--mkt-t-value) var(--mkt-mono);
+}
+.tw-tfrow__note { flex: 1 1 auto; color: var(--mkt-dim); font: 400 var(--mkt-t-micro) var(--mkt-sans); }
+.tw-tfrow__depth {
+  flex: 0 0 auto;
+  color: var(--mkt-muted);
+  font: 400 var(--mkt-t-micro) var(--mkt-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+.tw-tfrow__pin {
+  flex: 0 0 auto;
+  padding: 0 9px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-dimmer);
+  cursor: pointer;
+  font-size: 11px;
+}
+.tw-tfrow__pin[aria-pressed='true'] { color: var(--mkt-accent); }
+.tw-tfrow__pin:hover { color: var(--mkt-soft); }

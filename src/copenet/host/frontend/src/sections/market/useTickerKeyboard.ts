@@ -53,7 +53,9 @@ export function useTickerKeyboard(view: ReturnType<typeof useTickerViewModel>, o
       // Interval and range are pure client-side filters over bars already in memory, so
       // there is no excuse for them being pointer-only.
       if (key === 'd' || key === 'w' || key === 'm') {
-        const value = key.toUpperCase() as ChartTimeframe;
+        // d/w/m remain the daily-lane shortcuts. Intraday intervals are picked in the
+        // selector — there is no single keystroke that means '15m'.
+        const value = key.toUpperCase() as (typeof CHART_TIMEFRAMES)[number];
         if (CHART_TIMEFRAMES.includes(value)) { setTimeframe(value); event.preventDefault(); }
         return;
       }

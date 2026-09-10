@@ -7,6 +7,7 @@
 // rewrote the URL as if the operator had asked for it, which is the bug this split prevents.
 
 import type { CandleStyle } from './heikinAshi';
+import { INTRADAY_TIMEFRAMES, type ChartTimeframe } from './chartRanges';
 import { loadRailPreference, railCollapsed, saveRailPreference } from './marketWorkstationState';
 
 export type ResearchTab = 'overview' | 'fundamentals' | 'evidence' | 'synthesis';
@@ -49,6 +50,7 @@ const TAB_KEY = 'mm-tw-tab';
 const SNAP_KEY = 'mm-tw-snap';
 const LOG_KEY = 'mm-log-scale';
 const CANDLE_STYLE_KEY = 'mm-candle-style';
+const PINNED_TIMEFRAMES_KEY = 'mm-tw-pinned-timeframes';
 const DRAWER_SIZE_KEY = 'mm-tw-drawer-size';
 
 function isTab(value: string | null): value is ResearchTab {
@@ -128,6 +130,32 @@ export function saveRailCollapsed(collapsed: boolean): void {
 
 export function loadLogScale(): boolean {
   return read(LOG_KEY) === '1';
+}
+
+/** Which intervals sit in the toolbar. Workspace-sticky like the interval itself: an
+ *  operator picks the handful they actually switch between and keeps them everywhere. */
+const DEFAULT_PINNED: ChartTimeframe[] = ['5m', '1h', 'D', 'W', 'M'];
+
+export function loadPinnedTimeframes(): ChartTimeframe[] {
+  const raw = read(PINNED_TIMEFRAMES_KEY);
+  if (!raw) return DEFAULT_PINNED;
+  try {
+    const parsed = JSON.parse(raw);
+    const valid = Array.isArray(parsed) ? parsed.filter((value): value is ChartTimeframe => isKnownTimeframe(value)) : [];
+    // An empty or unreadable list means the defaults, not an empty toolbar.
+    return valid.length ? valid : DEFAULT_PINNED;
+  } catch {
+    return DEFAULT_PINNED;
+  }
+}
+
+export function savePinnedTimeframes(values: ChartTimeframe[]): void {
+  write(PINNED_TIMEFRAMES_KEY, JSON.stringify(values));
+}
+
+function isKnownTimeframe(value: unknown): boolean {
+  return typeof value === 'string'
+    && (['D', 'W', 'M'] as string[]).includes(value) || (INTRADAY_TIMEFRAMES as readonly string[]).includes(value as string);
 }
 
 export function saveCandleStyle(style: CandleStyle): void {

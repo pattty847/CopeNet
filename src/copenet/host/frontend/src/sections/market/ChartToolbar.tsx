@@ -9,9 +9,9 @@
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomOpen, Rewind, Settings2 } from 'lucide-react';
 import { MarketFloatingPopover } from './MarketFloatingPopover';
-import type { ChartRange, ChartTimeframe } from './chartRanges';
+import { rangesFor, type ChartRange, type ChartTimeframe } from './chartRanges';
+import { TimeframeSelector } from './TimeframeSelector';
 import type { CandleStyle } from './heikinAshi';
-import { CHART_RANGES, CHART_TIMEFRAMES } from './chartRanges';
 import type { ReplayPhase } from './replay/useChartReplay';
 
 export function ChartToolbar({
@@ -22,6 +22,8 @@ export function ChartToolbar({
   logScale,
   candleStyle,
   onCandleStyle,
+  onLoadEarlier,
+  loadingEarlier,
   onLogScale,
   replayPhase,
   replayAvailable,
@@ -45,6 +47,9 @@ export function ChartToolbar({
   logScale: boolean;
   candleStyle: CandleStyle;
   onCandleStyle: (style: CandleStyle) => void;
+  /** Present only on a 1m chart, the one grain the vendor caps below its own window. */
+  onLoadEarlier?: () => void;
+  loadingEarlier?: boolean;
   onLogScale: (value: boolean) => void;
   replayPhase: ReplayPhase;
   /** False when there is nothing to walk through — a single bar is not a replay. */
@@ -64,21 +69,24 @@ export function ChartToolbar({
 }) {
   return (
     <div className="tw-toolbar" role="toolbar" aria-label="Chart controls">
-      <div className="tw-segment" role="group" aria-label="Bar interval">
-        {CHART_TIMEFRAMES.map((value) => (
-          <button key={value} type="button" aria-pressed={timeframe === value} onClick={() => onTimeframe(value)} title={`${value === 'D' ? 'Daily' : value === 'W' ? 'Weekly' : 'Monthly'} bars`}>
-            {value}
-          </button>
-        ))}
-      </div>
+      <TimeframeSelector timeframe={timeframe} onTimeframe={onTimeframe} />
 
+      {/* The ranges follow the lane. 5Y on a 5m chart would return the same 60 days as MAX
+          and look broken doing it. */}
       <div className="tw-segment" role="group" aria-label="Visible range">
-        {CHART_RANGES.map((value) => (
+        {rangesFor(timeframe).map((value) => (
           <button key={value} type="button" aria-pressed={range === value} onClick={() => onRange(value)}>
             {value === 'MAX' ? 'MAX' : value}
           </button>
         ))}
       </div>
+
+      {onLoadEarlier && (
+        <button type="button" className="tw-btn" onClick={onLoadEarlier} disabled={loadingEarlier}
+          title="Fetch another week of 1-minute history — the only interval the vendor caps per request">
+          {loadingEarlier ? 'Loading…' : 'Load earlier'}
+        </button>
+      )}
 
       {/* Replay belongs to the period group: it is another answer to "what stretch of time
           am I looking at", not another thing drawn on the chart. */}
