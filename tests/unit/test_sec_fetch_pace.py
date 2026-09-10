@@ -58,33 +58,33 @@ def build(**kwargs) -> RecordingFetcher:
 
 
 def test_the_default_leaves_headroom_under_secs_ceiling(monkeypatch):
-    reload_with(monkeypatch, COPNET_SEC_REQUEST_INTERVAL=None)
+    reload_with(monkeypatch, COPNET_SEC_FETCH_PACE=None)
 
-    assert sec_fetcher.SEC_REQUEST_INTERVAL > sec_fetcher.SEC_CEILING_INTERVAL, (
+    assert sec_fetcher.SEC_FETCH_PACE > sec_fetcher.SEC_CEILING_PACE, (
         "defaulting to SEC's exact 10 req/s ceiling leaves no room for a retry burst, "
         "and the penalty for crossing it is a 403 that never retries"
     )
 
 
 def test_a_slower_interval_is_honoured_for_bulk_pulls(monkeypatch):
-    module = reload_with(monkeypatch, COPNET_SEC_REQUEST_INTERVAL="0.25")
+    module = reload_with(monkeypatch, COPNET_SEC_FETCH_PACE="0.25")
 
-    assert module.SEC_REQUEST_INTERVAL == 0.25
+    assert module.SEC_FETCH_PACE == 0.25
 
 
 def test_a_faster_interval_than_sec_allows_is_clamped_not_obeyed(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
-        module = reload_with(monkeypatch, COPNET_SEC_REQUEST_INTERVAL="0.02")
+        module = reload_with(monkeypatch, COPNET_SEC_FETCH_PACE="0.02")
 
-    assert module.SEC_REQUEST_INTERVAL == module.SEC_CEILING_INTERVAL
+    assert module.SEC_FETCH_PACE == module.SEC_CEILING_PACE
     assert "ceiling" in caplog.text
 
 
 def test_a_junk_interval_falls_back_to_the_default_rather_than_crashing_startup(monkeypatch, caplog):
     with caplog.at_level(logging.WARNING):
-        module = reload_with(monkeypatch, COPNET_SEC_REQUEST_INTERVAL="banana")
+        module = reload_with(monkeypatch, COPNET_SEC_FETCH_PACE="banana")
 
-    assert module.SEC_REQUEST_INTERVAL == module.DEFAULT_SEC_REQUEST_INTERVAL
+    assert module.SEC_FETCH_PACE == module.DEFAULT_SEC_FETCH_PACE
     assert "not a number" in caplog.text
 
 
@@ -94,7 +94,7 @@ def test_a_junk_interval_falls_back_to_the_default_rather_than_crashing_startup(
 def test_every_fetcher_inherits_the_budget_without_the_call_site_asking(monkeypatch):
     """The five construction sites in edgar.py and financials.py pass no interval. If the
     boundary stopped defaulting it, they would all silently revert to SEC's ceiling."""
-    module = reload_with(monkeypatch, COPNET_SEC_REQUEST_INTERVAL="0.3")
+    module = reload_with(monkeypatch, COPNET_SEC_FETCH_PACE="0.3")
 
     async def run():
         async with module.managed_sec_fetcher(RecordingFetcher) as fetcher:
@@ -112,7 +112,7 @@ def test_unrelated_fetcher_kwargs_still_pass_through():
     fetcher = build(cache_dir="/tmp/edgar")
 
     assert fetcher.cache_dir == "/tmp/edgar"
-    assert fetcher.rate_limit_sleep == sec_fetcher.SEC_REQUEST_INTERVAL
+    assert fetcher.rate_limit_sleep == sec_fetcher.SEC_FETCH_PACE
 
 
 def test_the_fetcher_is_closed_even_when_the_body_raises():

@@ -21,37 +21,38 @@ logger = logging.getLogger(__name__)
 # a second CopeNet process sharing the IP puts the host over the line, and the penalty is a
 # non-retryable 403 rather than a throttle. A multi-hour backfill finishes at 6.7/s about as
 # soon as it does at 10/s, so the default gives the margin back.
-SEC_CEILING_INTERVAL = 0.1
-DEFAULT_SEC_REQUEST_INTERVAL = 0.15
+SEC_CEILING_PACE = 0.1
+DEFAULT_SEC_FETCH_PACE = 0.15
 
 
-def _resolve_interval() -> float:
-    """Seconds between SEC requests. Never below SEC's own ceiling, whatever is configured.
+def _resolve_pace() -> float:
+    """Seconds between SEC requests — the SEC counterpart to COPNET_MARKET_FETCH_PACE,
+    which paces yfinance. Never below SEC's own ceiling, whatever is configured.
 
-    Raise `COPNET_SEC_REQUEST_INTERVAL` for a bulk pull — a five-year backfill across a
+    Raise `COPNET_SEC_FETCH_PACE` for a bulk pull — a five-year backfill across a
     wide universe is tens of thousands of requests, and there is no hurry.
     """
-    raw = os.environ.get("COPNET_SEC_REQUEST_INTERVAL", "").strip()
+    raw = os.environ.get("COPNET_SEC_FETCH_PACE", "").strip()
     if not raw:
-        return DEFAULT_SEC_REQUEST_INTERVAL
+        return DEFAULT_SEC_FETCH_PACE
     try:
         requested = float(raw)
     except ValueError:
         logger.warning(
-            "COPNET_SEC_REQUEST_INTERVAL=%r is not a number — using the default %.2fs.",
-            raw, DEFAULT_SEC_REQUEST_INTERVAL,
+            "COPNET_SEC_FETCH_PACE=%r is not a number — using the default %.2fs.",
+            raw, DEFAULT_SEC_FETCH_PACE,
         )
-        return DEFAULT_SEC_REQUEST_INTERVAL
-    if requested < SEC_CEILING_INTERVAL:
+        return DEFAULT_SEC_FETCH_PACE
+    if requested < SEC_CEILING_PACE:
         logger.warning(
-            "COPNET_SEC_REQUEST_INTERVAL=%.3fs is faster than SEC's 10 req/s ceiling — clamping to %.2fs.",
-            requested, SEC_CEILING_INTERVAL,
+            "COPNET_SEC_FETCH_PACE=%.3fs is faster than SEC's 10 req/s ceiling — clamping to %.2fs.",
+            requested, SEC_CEILING_PACE,
         )
-        return SEC_CEILING_INTERVAL
+        return SEC_CEILING_PACE
     return requested
 
 
-SEC_REQUEST_INTERVAL = _resolve_interval()
+SEC_FETCH_PACE = _resolve_pace()
 
 # SEC requires a declared contact on every request and blocks callers who do not send one.
 # The placeholder is deliberately kept obviously fake rather than plausible: CopeTech-Edgar
@@ -91,7 +92,7 @@ async def managed_sec_fetcher(
     slower still can; nothing in the tree currently has one.
     """
     _warn_once_about_contact()
-    fetcher_kwargs.setdefault("rate_limit_sleep", SEC_REQUEST_INTERVAL)
+    fetcher_kwargs.setdefault("rate_limit_sleep", SEC_FETCH_PACE)
     fetcher = fetcher_class(user_agent=user_agent or SEC_API_USER_AGENT, **fetcher_kwargs)
     try:
         yield fetcher
