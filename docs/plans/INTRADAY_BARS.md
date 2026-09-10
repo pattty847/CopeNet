@@ -110,11 +110,21 @@ timestamp, session, adjustment basis.**
   regular-session data, and nothing in the output says so. Relative volume is worse — it
   divides by a baseline that is structurally zero overnight.
 
-  So session is a **display and query mode**, defaulting to regular, stored on the bar and
-  present in the cache key (which is why `MARKET_SENTINEL_ALERTS.md` rule 3 put it there).
-  Premarket gaps are worth plotting — earnings reactions happen in them. What must not
-  happen is an indicator silently changing meaning when the toggle moves, so the mode belongs
-  in the chart's own chrome and in the agent capture, not buried in a settings menu.
+  **Operator decision, 2026-09-09: draw every candle, and let volume simply be absent
+  overnight.** That resolves the concern above rather than dodging it — the meaning change is
+  only dangerous when it is *silent*, and an extended-hours candle is visibly on the chart.
+  Volume gaps to zero overnight and picks up the next session, which is what the instrument
+  actually did.
+
+  So session is a **query mode** stored on the bar and present in the cache key (which is why
+  `MARKET_SENTINEL_ALERTS.md` rule 3 put it there), defaulting to *all sessions*. The toggle
+  restricts to regular hours for anyone who wants indicators free of thin overnight bars. The
+  mode belongs in the chart chrome and in the agent capture, not in a settings menu.
+
+  Note the fetch consequence: Yahoo defaults to regular session only, so extended coverage
+  needs `prepost=True`. That is about 2.4x the rows (the July probe measured 4,761 extended
+  vs 1,949 regular one-minute bars over 5 days), which multiplies both the cache size and
+  every bars-per-viewport figure in the table above.
 
   Extended-hours *volume* remains unusable regardless: the 2026-07-29 probe found nonzero
   extended volume on 4 of 2,815 one-minute AAPL bars. Relative volume and any
