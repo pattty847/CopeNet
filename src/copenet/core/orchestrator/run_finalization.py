@@ -141,13 +141,13 @@ def successful_record(
             "toolVisibility": _build_tool_visibility_summary(events.plan.tools),
             "harnessDecision": dict(events.plan.harness_decision),
             "policySummary": {
-                "allowedCategories": sorted(prepared.effective_tool_policy.allowed_categories),
-                "shellAllowlist": list(prepared.effective_tool_policy.shell_allowlist),
+                "allowedCategories": sorted(prepared.tools.effective_tool_policy.allowed_categories),
+                "shellAllowlist": list(prepared.tools.effective_tool_policy.shell_allowlist),
             },
             "workspaceRoot": str(admission.session_workspace_root),
-            "requestedToolIds": list(prepared.requested_tool_ids),
-            "activeRequestedToolIds": list(prepared.active_requested_tool_ids),
-            "rejectedRequestedToolIds": list(prepared.rejected_requested_tool_ids),
+            "requestedToolIds": list(prepared.tools.requested_tool_ids),
+            "activeRequestedToolIds": list(prepared.tools.active_requested_tool_ids),
+            "rejectedRequestedToolIds": list(prepared.tools.rejected_requested_tool_ids),
             "turnState": dict(events.latest_turn_state),
             "identityContext": dict(prepared.identity_context_payload),
         },
@@ -248,9 +248,9 @@ def finish_failure(
     if prepared is not None:
         metadata.update(
             {
-                "requestedToolIds": list(prepared.requested_tool_ids),
-                "activeRequestedToolIds": list(prepared.active_requested_tool_ids),
-                "rejectedRequestedToolIds": list(prepared.rejected_requested_tool_ids),
+                "requestedToolIds": list(prepared.tools.requested_tool_ids),
+                "activeRequestedToolIds": list(prepared.tools.active_requested_tool_ids),
+                "rejectedRequestedToolIds": list(prepared.tools.rejected_requested_tool_ids),
                 **prepared.agent_runtime_payload,
             }
         )

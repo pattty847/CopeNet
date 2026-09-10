@@ -8,9 +8,7 @@ if TYPE_CHECKING:
 
 
 from copenet.core.harness.responses_items import image_content_part
-from copenet.core.market.chart_workspace.authorization import chart_tool_ids
 from copenet.core.orchestrator.market_context import (
-    chart_policy,
     chart_prompt_policy,
     current_chart_message,
     chart_system_overlay,
@@ -24,21 +22,19 @@ from copenet.core.orchestrator.messages import (
 from copenet.core.harness.context_window import estimate_request_tokens, trim_messages_to_request_budget
 from copenet.core.orchestrator.tool_requests import (
     append_system_overlay,
-    normalize_requested_tool_ids,
     requested_tool_overlay,
 )
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import (
     build_responses_tool_schemas,
-    disclose_policy_in_descriptions,
-    policy_for_task_mode,
 )
 from copenet.prompts import (
     compose_prompt,
 )
 
 from .run_types import RunAdmission, RunInput
+from .run_tools import select_run_tools
 from .run_state import _build_agent_runtime_payload
 
 # Providers that maintain their own conversation thread and resume it via
@@ -83,41 +79,7 @@ def _history_excluding_current(history: list[dict], *, run_id: str) -> list[dict
 
 
 async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmission):
-    registered_tools = orchestrator._tool_registry.list_tools()
-    requested_tool_ids = normalize_requested_tool_ids(
-        admission.request.requested_tool_ids, registered_tool_ids=(tool.id for tool in registered_tools)
-    )
-    effective_tool_policy = policy_for_task_mode(
-        admission.entry.task_prompt_id or admission.request.task_prompt_id, provider=admission.provider_name
-    )
-    effective_tool_policy = chart_policy(effective_tool_policy, admission.market_context)
-    scoped_tool_ids = (
-        chart_tool_ids(admission.market_context) if admission.market_context is not None else None
-    )
-    available_tools = (
-        disclose_policy_in_descriptions(
-            [
-                tool
-                for tool in registered_tools
-                if tool.category in effective_tool_policy.allowed_categories
-                and (
-                    tool.id in scoped_tool_ids
-                    if scoped_tool_ids is not None
-                    else not tool.id.startswith(("market.chart.", "market.forecast."))
-                )
-            ],
-            effective_tool_policy,
-        )
-        if admission.request.allow_tools
-        else []
-    )
-    available_tool_ids = {tool.id for tool in available_tools}
-    active_requested_tool_ids = tuple(
-        (tool_id for tool_id in requested_tool_ids if tool_id in available_tool_ids)
-    )
-    rejected_requested_tool_ids = tuple(
-        (tool_id for tool_id in requested_tool_ids if tool_id not in available_tool_ids)
-    )
+    tools = select_run_tools(orchestrator, admission)
     orchestrator._transcript_store.append_message(
         admission.entry.session_id,
         TranscriptMessage(
@@ -129,7 +91,7 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
             provider_session_id=admission.entry.provider_session_id,
             timestamp=transcript_now(),
             attachments=admission.attachment_refs or None,
-            requested_tool_ids=list(requested_tool_ids) or None,
+            requested_tool_ids=list(tools.requested_tool_ids) or None,
             market_context=admission.market_reference,
         ),
     )
@@ -148,7 +110,7 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
     composed_system_prompt = compose_prompt(resolved_system_prompt_id, resolved_task_prompt_id)
     effective_system_prompt = append_system_overlay(
         admission.request.system_prompt or composed_system_prompt,
-        requested_tool_overlay(active_requested_tool_ids),
+        requested_tool_overlay(tools.active_requested_tool_ids),
     )
     effective_system_prompt = append_system_overlay(
         effective_system_prompt, chart_system_overlay(admission.market_context)
@@ -162,9 +124,9 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
             "taskPromptId": resolved_task_prompt_id,
             "systemPromptSource": "request_override" if admission.request.system_prompt else "composed",
             "baseSystemPromptChars": len(effective_system_prompt or ""),
-            "requestedToolIds": list(requested_tool_ids),
-            "activeRequestedToolIds": list(active_requested_tool_ids),
-            "rejectedRequestedToolIds": list(rejected_requested_tool_ids),
+            "requestedToolIds": list(tools.requested_tool_ids),
+            "activeRequestedToolIds": list(tools.active_requested_tool_ids),
+            "rejectedRequestedToolIds": list(tools.rejected_requested_tool_ids),
             "includePersonaContext": prompt_policy.include_persona_context,
             "includePersonaAgentInstructions": prompt_policy.include_persona_agent_instructions,
             "includeRelevantMemory": prompt_policy.include_relevant_memory,
@@ -177,9 +139,9 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
     context_budget = resolve_context_budget(
         provider=admission.provider_name, model_context_tokens=declared_context_tokens
     )
-    tool_schemas = build_responses_tool_schemas(available_tools)
+    tool_schemas = build_responses_tool_schemas(tools.available_tools)
     fixed_input_tokens = estimate_request_tokens([], instructions=effective_system_prompt, tools=tool_schemas)
-    loop_reserve_tokens = _tool_loop_reserve(context_budget.input_tokens, bool(available_tools))
+    loop_reserve_tokens = _tool_loop_reserve(context_budget.input_tokens, bool(tools.available_tools))
     initial_input_budget = context_budget.input_tokens - loop_reserve_tokens
     live_without_chart = build_chat_messages(
         transcript_messages=[],
@@ -245,12 +207,6 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
         session_state=session_state,
     )
     return RunInput(
-        available_tools=available_tools,
-        effective_tool_policy=effective_tool_policy,
-        scoped_tool_ids=scoped_tool_ids,
-        requested_tool_ids=requested_tool_ids,
-        active_requested_tool_ids=active_requested_tool_ids,
-        rejected_requested_tool_ids=rejected_requested_tool_ids,
         session_state=session_state,
         effective_system_prompt=effective_system_prompt,
         resolved_system_prompt_id=resolved_system_prompt_id,
@@ -268,4 +224,5 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
         loop_reserve_tokens=loop_reserve_tokens,
         agent_runtime_payload=agent_runtime_payload,
         identity_context_payload=identity_context_payload,
+        tools=tools,
     )

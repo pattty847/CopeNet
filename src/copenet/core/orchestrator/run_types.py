@@ -37,13 +37,18 @@ class RunAdmission:
 
 
 @dataclass
-class RunInput:
+class ToolSelection:
     available_tools: list[ToolDescriptor]
     effective_tool_policy: ToolPolicy
     scoped_tool_ids: frozenset[str] | None
     requested_tool_ids: tuple[str, ...]
     active_requested_tool_ids: tuple[str, ...]
     rejected_requested_tool_ids: tuple[str, ...]
+
+
+@dataclass
+class RunInput:
+    tools: ToolSelection
     session_state: SessionStateRecord
     effective_system_prompt: str | None
     resolved_system_prompt_id: str | None

@@ -30,18 +30,9 @@ async def admit_run(orchestrator: "Orchestrator", request: "ChatSendRequest"):
     message = request.message.strip()
     if not session_key:
         raise ValueError("session_key is required")
-    attachment_store = orchestrator._chat_attachment_store
-    current_image_parts: list[dict] = []
-    attachment_refs: list[dict] = []
-    for attachment_id in request.attachment_ids:
-        attachment = attachment_store.get(attachment_id)
-        if attachment is None:
-            continue
-        data_url = attachment_store.data_url(attachment_id)
-        if not data_url:
-            continue
-        current_image_parts.append(image_content_part(data_url))
-        attachment_refs.append(attachment.to_transcript_ref())
+    current_image_parts, attachment_refs = resolve_current_attachments(
+        orchestrator._chat_attachment_store, request.attachment_ids
+    )
     if not message and (not current_image_parts):
         raise ValueError("message is required")
     idempotency_key = request.idempotency_key.strip() if request.idempotency_key else ""
@@ -92,43 +83,8 @@ async def admit_run(orchestrator: "Orchestrator", request: "ChatSendRequest"):
 
             raise SessionInFlightError(active_run)
         try:
-            persona_context = orchestrator._persona_service.build_prompt_context(
-                provider=provider_name,
-                model=request.model,
-                privacy_tier=request.persona_privacy_tier,
-                query=message,
-            )
-            resolved_persona_id = request.persona_id or persona_context.persona_id
-            resolved_persona_flavor_id = request.persona_flavor_id or persona_context.flavor_id
-            resolved_persona_privacy_tier = request.persona_privacy_tier or persona_context.privacy_tier
-            entry = orchestrator._session_store.resolve_or_create(
-                session_key=session_key,
-                provider=provider_name,
-                model=request.model,
-                system_prompt_id=request.system_prompt_id,
-                task_prompt_id=request.task_prompt_id,
-                persona_id=resolved_persona_id,
-                persona_flavor_id=resolved_persona_flavor_id,
-                persona_privacy_tier=resolved_persona_privacy_tier,
-                workspace_root=orchestrator.validate_workspace_root(request.workspace_root)
-                if request.workspace_root
-                else None,
-            )
-            entry = orchestrator._session_store.assert_session_binding(
-                session_key=session_key,
-                provider=provider_name,
-                model=request.model,
-                system_prompt_id=request.system_prompt_id,
-                task_prompt_id=request.task_prompt_id,
-                persona_id=resolved_persona_id,
-                persona_flavor_id=resolved_persona_flavor_id,
-                persona_privacy_tier=resolved_persona_privacy_tier,
-                workspace_root=entry.workspace_root or request.workspace_root,
-            )
-            session_workspace_root = (
-                Path(orchestrator.validate_workspace_root(entry.workspace_root))
-                if entry.workspace_root
-                else orchestrator._workdir
+            entry, session_workspace_root = bind_session(
+                orchestrator, request, provider_name, session_key, message
             )
             orchestrator._session_store.mark_run_started(session_key=session_key, run_id=run_id)
         except Exception:
@@ -156,3 +112,62 @@ async def admit_run(orchestrator: "Orchestrator", request: "ChatSendRequest"):
         attachment_refs=attachment_refs,
         current_image_parts=current_image_parts,
     )
+
+
+def resolve_current_attachments(
+    attachment_store, attachment_ids: tuple[str, ...]
+) -> tuple[list[dict], list[dict]]:
+    current_image_parts: list[dict] = []
+    attachment_refs: list[dict] = []
+    for attachment_id in attachment_ids:
+        attachment = attachment_store.get(attachment_id)
+        if attachment is None:
+            continue
+        data_url = attachment_store.data_url(attachment_id)
+        if not data_url:
+            continue
+        current_image_parts.append(image_content_part(data_url))
+        attachment_refs.append(attachment.to_transcript_ref())
+    return current_image_parts, attachment_refs
+
+
+def bind_session(orchestrator, request: ChatSendRequest, provider_name: str, session_key: str, message: str):
+    persona_context = orchestrator._persona_service.build_prompt_context(
+        provider=provider_name,
+        model=request.model,
+        privacy_tier=request.persona_privacy_tier,
+        query=message,
+    )
+    resolved_persona_id = request.persona_id or persona_context.persona_id
+    resolved_persona_flavor_id = request.persona_flavor_id or persona_context.flavor_id
+    resolved_persona_privacy_tier = request.persona_privacy_tier or persona_context.privacy_tier
+    entry = orchestrator._session_store.resolve_or_create(
+        session_key=session_key,
+        provider=provider_name,
+        model=request.model,
+        system_prompt_id=request.system_prompt_id,
+        task_prompt_id=request.task_prompt_id,
+        persona_id=resolved_persona_id,
+        persona_flavor_id=resolved_persona_flavor_id,
+        persona_privacy_tier=resolved_persona_privacy_tier,
+        workspace_root=orchestrator.validate_workspace_root(request.workspace_root)
+        if request.workspace_root
+        else None,
+    )
+    entry = orchestrator._session_store.assert_session_binding(
+        session_key=session_key,
+        provider=provider_name,
+        model=request.model,
+        system_prompt_id=request.system_prompt_id,
+        task_prompt_id=request.task_prompt_id,
+        persona_id=resolved_persona_id,
+        persona_flavor_id=resolved_persona_flavor_id,
+        persona_privacy_tier=resolved_persona_privacy_tier,
+        workspace_root=entry.workspace_root or request.workspace_root,
+    )
+    session_workspace_root = (
+        Path(orchestrator.validate_workspace_root(entry.workspace_root))
+        if entry.workspace_root
+        else orchestrator._workdir
+    )
+    return entry, session_workspace_root

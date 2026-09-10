@@ -43,7 +43,7 @@ async def start_harness(
         purpose=prepared.prompt_policy.purpose.value,
         input_token_budget=prepared.context_budget.input_tokens,
         debug_snapshot=model_input_snapshot,
-        available_tools=prepared.available_tools,
+        available_tools=prepared.tools.available_tools,
         tool_executor=make_approval_gated_executor(
             orchestrator._tool_registry.execute,
             orchestrator=orchestrator,
@@ -62,8 +62,8 @@ async def start_harness(
                 session_store=orchestrator._session_store,
                 transcript_store=orchestrator._transcript_store,
                 providers=orchestrator._providers,
-                policy=prepared.effective_tool_policy,
-                available_tools=prepared.available_tools,
+                policy=prepared.tools.effective_tool_policy,
+                available_tools=prepared.tools.available_tools,
                 memory_service=orchestrator._memory_service,
                 workspace_intel_service=orchestrator._workspace_intel_service,
                 persona_service=orchestrator._persona_service,
@@ -76,7 +76,7 @@ async def start_harness(
                 trace=admission.trace.record,
                 market_context=admission.market_context,
                 chart_store=chart_store(orchestrator) if admission.market_context is not None else None,
-                allowed_tool_ids=prepared.scoped_tool_ids if admission.request.allow_tools else frozenset(),
+                allowed_tool_ids=prepared.tools.scoped_tool_ids if admission.request.allow_tools else frozenset(),
                 ephemeral={"chart_event_emit": emit_event}
                 if admission.market_context is not None and emit_event is not None
                 else {},

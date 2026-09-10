@@ -159,6 +159,8 @@ class _ResponsesProvider:
         if turn.text:
             yield ProviderEvent(kind="delta", text=turn.text)
 
+        yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
+
 
 def _call(index: int = 0) -> dict[str, Any]:
     return {
