@@ -173,7 +173,7 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
     # The evidence lane never asks for a rate: it inherits CopeNet's SEC request budget from
     # managed_sec_fetcher. Bypassing that boundary would silently revert to SEC's own 10
     # req/s ceiling, where the penalty for overshooting is a non-retryable 403.
-    assert FakeFetcher.rate_limits == [sec_fetcher.SEC_FETCH_PACE]
+    assert FakeFetcher.rate_limits == [sec_fetcher.sec_fetch_pace()]
 
 
 def test_insider_net_tone_follows_dollars_when_shares_and_value_diverge() -> None:
