@@ -46,6 +46,7 @@ from .base_rates import load_base_rate
 from .fact_packets import market_fact_packet, market_history_section, ticker_fact_packet
 from .ledger import record_market_read_claims, record_ticker_read_claim
 from .ledger_report import track_record_line
+from .company_profile import CompanyProfileStore
 from .fetch_pace import market_fetch_pace
 from .intraday import IntradayService, IntradayStore
 from .features import FeatureSet, compute_features
@@ -104,6 +105,9 @@ class MarketRuntime(DashboardRuntime):
         # Its own cache, beside the daily one rather than inside it — see
         # docs/plans/INTRADAY_BARS.md. It borrows the daily lane's split detection instead of
         # running a second one, which is why it is handed a reader rather than a fetcher.
+        # The most static data in the lane — a business description changes on the order of
+        # years — so it caches hard and is looked up lazily by the Overview tab.
+        self.profiles = CompanyProfileStore(self.store.root_dir / "profiles")
         self.intraday = IntradayService(
             IntradayStore(self.store.root_dir / "intraday"),
             splits_for=self._splits_for_symbol,

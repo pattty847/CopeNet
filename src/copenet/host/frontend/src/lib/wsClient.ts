@@ -41,6 +41,7 @@ import {
   WorkspaceFileContent,
   ShellAllowlistEntry,
   ObservabilityRunDetail,
+  CompanyProfile,
   DeskSnapshot,
   FocusState,
   IntradayCatalog,
@@ -137,7 +138,7 @@ import {
   purgeObservabilityTracesRpc,
 } from './wsObservabilityRpc';
 import { homeFocusGetRpc, homeFocusUpdateRpc, homeSnapshotRpc, type FocusUpdate } from './wsHomeRpc';
-import { marketIntradayGetRpc, marketIntradayIntervalsRpc } from './wsMarketIntraday';
+import { marketIntradayGetRpc, marketIntradayIntervalsRpc, marketTickerProfileRpc } from './wsMarketIntraday';
 import { bootstrapAction } from './wsBootstrapAction';
 import { loadModelsAction } from './wsCatalogActions';
 import { abortActiveRunAction, decideApprovalAction, sendMessageAction } from './wsChatActions';
@@ -1036,6 +1037,10 @@ class WsClient {
     symbol: string; interval: string; session?: string; days?: number; refresh?: boolean;
   }): Promise<IntradaySeries> {
     return marketIntradayGetRpc(this.request.bind(this), options);
+  }
+
+  async marketTickerProfile(symbol: string, refresh = false): Promise<CompanyProfile> {
+    return marketTickerProfileRpc(this.request.bind(this), symbol, refresh);
   }
 
   async marketIntradayIntervals(): Promise<IntradayCatalog> {

@@ -77,3 +77,21 @@ async def handle_market_intraday_intervals(
         ],
         "sessions": list(SESSIONS),
     })))
+
+
+async def handle_market_ticker_profile_get(
+    request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator
+) -> None:
+    """What this ticker IS — business, sector, website.
+
+    Lazy, like the fundamentals overlay: the Overview tab asks when it renders, so opening a
+    chart never waits on it. Cached for a month, because the answer does not change faster
+    than that.
+    """
+    raw = params or {}
+    symbol = str(raw.get("symbol") or "").strip().upper()
+    if not symbol:
+        raise RpcError("symbol is required")
+    runtime = resolve_market_runtime(orchestrator)
+    profile = await asyncio.to_thread(runtime.profiles.resolve, symbol, refresh=bool(raw.get("refresh")))
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload=profile.to_wire())))

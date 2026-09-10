@@ -27,7 +27,7 @@ from .rpc_persona import (
     handle_persona_flavor_draft,
     handle_persona_flavor_save,
 )
-from .rpc_market_intraday import handle_market_intraday_get, handle_market_intraday_intervals
+from .rpc_market_intraday import handle_market_intraday_get, handle_market_intraday_intervals, handle_market_ticker_profile_get
 from .rpc_home import handle_focus_get, handle_focus_update, handle_home_snapshot
 from .rpc_memory import (
     handle_memory_list,
@@ -239,6 +239,8 @@ async def _route_rpc(req, send_json: SendJson, orchestrator, tasks: set, broadca
         await handle_market_intraday_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "market.intraday.intervals":
         await handle_market_intraday_intervals(req.id, req.params, send_json, orchestrator)
+    elif req.method == "market.ticker.profile.get":
+        await handle_market_ticker_profile_get(req.id, req.params, send_json, orchestrator)
     elif req.method == "home.snapshot":
         await handle_home_snapshot(req.id, req.params, send_json, orchestrator)
     elif req.method == "home.focus.get":

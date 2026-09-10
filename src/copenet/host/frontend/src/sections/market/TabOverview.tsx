@@ -8,6 +8,7 @@
 
 import { MM, mono, toneColor } from './marketUi';
 import { Card, EmptyNote, KeyValue, Meter, RangeBand, ReturnsStrip, signedPct, toneHex, toneOf } from './workspaceViz';
+import { CompanyProfileCard } from './CompanyProfileCard';
 import type { AssetProfile } from './assetProfile';
 import type { EvidenceItem, TickerDetailPayload, Tone } from './types';
 
@@ -35,6 +36,10 @@ export function TabOverview({ detail, profile }: { detail: TickerDetailPayload; 
 
   return (
     <div className="ticker-overview-panel" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      {/* "What is this" comes before "how has it done" — especially for a name the scanner
+          surfaced and the operator has never seen. */}
+      <CompanyProfileCard symbol={detail.symbol} />
+
       <ReturnsStrip
         cells={[
           { k: '1W', v: returns.r1wPct },

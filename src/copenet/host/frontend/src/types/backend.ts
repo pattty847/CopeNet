@@ -1219,3 +1219,26 @@ export interface IntradayCatalog {
   intervals: IntradayIntervalInfo[];
   sessions: string[];
 }
+
+// ---------- company profile ----------
+
+/** What a ticker IS. Coverage varies by asset type and the payload is explicit about it:
+ *  an equity has sector/industry/employees, a fund has category/family, a crypto pair has a
+ *  website, and an index has none of it — `isEmpty` says so rather than leaving the caller
+ *  to infer absence from a row of blank strings. */
+export interface CompanyProfile {
+  symbol: string;
+  quoteType: string;
+  name: string;
+  summary: string;
+  sector: string;
+  industry: string;
+  website: string;
+  country: string;
+  employees: number | null;
+  category: string;
+  fundFamily: string;
+  fetchedAt: string;
+  isEmpty: boolean;
+  warnings: string[];
+}

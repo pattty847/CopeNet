@@ -1,4 +1,4 @@
-import type { IntradayCatalog, IntradaySeries } from '../types/backend';
+import type { CompanyProfile, IntradayCatalog, IntradaySeries } from '../types/backend';
 import type { ChartTimeframe } from '../sections/market/chartRanges';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
@@ -76,5 +76,29 @@ export async function marketIntradayIntervalsRpc(request: WsRpcRequest): Promise
       };
     }),
     sessions: Array.isArray(payload.sessions) ? payload.sessions.map(String) : ['all', 'regular', 'extended'],
+  };
+}
+
+
+export async function marketTickerProfileRpc(
+  request: WsRpcRequest, symbol: string, refresh = false,
+): Promise<CompanyProfile> {
+  const raw = await request<Record<string, unknown>>('market.ticker.profile.get', { symbol, ...(refresh ? { refresh: true } : {}) });
+  const value = asRecord(raw);
+  return {
+    symbol: String(value.symbol || symbol),
+    quoteType: String(value.quoteType || ''),
+    name: String(value.name || ''),
+    summary: String(value.summary || ''),
+    sector: String(value.sector || ''),
+    industry: String(value.industry || ''),
+    website: String(value.website || ''),
+    country: String(value.country || ''),
+    employees: value.employees == null ? null : Number(value.employees),
+    category: String(value.category || ''),
+    fundFamily: String(value.fundFamily || ''),
+    fetchedAt: String(value.fetchedAt || ''),
+    isEmpty: Boolean(value.isEmpty),
+    warnings: Array.isArray(value.warnings) ? value.warnings.map(String) : [],
   };
 }

@@ -1476,3 +1476,62 @@
   .tw-search__hint, .tw-search__key { display: none; }
   .tw-search { flex: 0 0 auto; padding: 0 7px; }
 }
+
+/* -------------------------------------------------------------------- company profile */
+
+/* Sits at the top of Overview because "what is this" is the first question a scanned name
+ * raises. Absent entirely for an index, which has no business behind it. */
+.tw-profile {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 11px 13px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-canvas);
+}
+
+.tw-profile__loading { color: var(--mkt-dim); font: 400 var(--mkt-t-label) var(--mkt-sans); }
+
+.tw-profile__head { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+
+.tw-profile__name { font: 600 var(--mkt-t-body) var(--mkt-sans); color: var(--mkt-text); }
+
+.tw-profile__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--mkt-dim);
+  font: 400 var(--mkt-t-label) var(--mkt-mono);
+  text-decoration: none;
+}
+.tw-profile__link:hover { color: var(--mkt-accent); }
+
+.tw-profile__facts { display: flex; flex-wrap: wrap; gap: 4px 14px; }
+
+.tw-profile__fact { color: var(--mkt-soft); font: 400 var(--mkt-t-label) var(--mkt-sans); }
+.tw-profile__fact b {
+  margin-right: 6px;
+  color: var(--mkt-dimmer);
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+
+.tw-profile__summary {
+  margin: 0;
+  color: var(--mkt-muted);
+  font: 400 var(--mkt-t-label)/1.6 var(--mkt-sans);
+}
+
+.tw-profile__more {
+  margin-left: 6px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-accent);
+  cursor: pointer;
+  font: 500 var(--mkt-t-label) var(--mkt-sans);
+}
+
+.tw-profile__warning { color: var(--mkt-down); font: 400 var(--mkt-t-micro) var(--mkt-sans); }
