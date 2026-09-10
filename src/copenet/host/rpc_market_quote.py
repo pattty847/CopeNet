@@ -5,7 +5,6 @@ import re
 from copenet.core.market.live_quote import LiveQuoteSubscription
 from .rpc_schema import ResponseFrame, make_response_frame
 
-MARKET_QUOTE_METHODS = {"market.quote.subscribe", "market.quote.unsubscribe"}
 
 
 async def handle_market_quote(req, send_json, subscription: LiveQuoteSubscription | None):

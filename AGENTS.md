@@ -195,7 +195,7 @@ For current behavior, assume:
 
 ### WebSocket / RPC
 
-- `ws_server.py` owns the WS connection/frame lifecycle; actual method routing is an `elif req.method == "..."` chain in `rpc_dispatch.py` — add new RPC methods there, not in `ws_server.py` directly.
+- `ws_server.py` owns the WS connection/frame lifecycle; actual method routing uses the literal catalog in `rpc_routes.py` and the shared error boundary in `rpc_dispatch.py` — add new RPC methods to the catalog, not to `ws_server.py` directly. `rpc_route_context.py` declares each current handler call convention and connection resource explicitly.
 - Keep streaming events and request/response frames clearly separated.
 - Prefer extending response payloads over changing existing field meaning.
 - Be careful with client compatibility because the browser UI and `GatewayClient` both depend on this layer.

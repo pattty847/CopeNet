@@ -93,15 +93,3 @@ async def handle_chart_undo(request_id, params, send_json, orchestrator, *, broa
 async def handle_chart_rendered(request_id, params, send_json, orchestrator, *, broadcast=None):
     payload = await asyncio.to_thread(get_chart_store(orchestrator).rendered, params or {})
     await _reply(request_id, send_json, payload)
-
-
-MARKET_CHART_HANDLERS = {
-    "market.chart.workspace.get": handle_chart_workspace_get,
-    "market.chart.workspace.update": handle_chart_workspace_update,
-    "market.chart.capture": handle_chart_capture,
-    "market.chart.read": handle_chart_read,
-    "market.chart.document.get": handle_chart_document_get,
-    "market.chart.apply": handle_chart_apply,
-    "market.chart.undo": handle_chart_undo,
-    "market.chart.rendered": handle_chart_rendered,
-}

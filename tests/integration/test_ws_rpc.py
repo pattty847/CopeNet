@@ -926,7 +926,7 @@ def test_chat_run_survives_websocket_disconnect_after_started_response(rpc_clien
         assert messages[-1]["content"] == "slow response persisted"
 
 
-def test_chat_abort_returns_run_id_and_final_event(rpc_client: TestClient) -> None:
+def test_chat_abort_returns_run_id_and_terminal_error_event(rpc_client: TestClient) -> None:
     with _open_rpc(rpc_client) as socket:
         send_id = socket.request(
             "chat.send",
@@ -944,7 +944,7 @@ def test_chat_abort_returns_run_id_and_final_event(rpc_client: TestClient) -> No
         assert abort_response["payload"] == {"ok": True, "aborted": True, "runIds": [run_id]}
 
         events = socket.recv_chat_until_terminal(session_key="abort-me", run_id=run_id)
-        assert events[-1]["payload"]["state"] == "final"
+        assert events[-1]["payload"]["state"] == "error"
         assert events[-1]["payload"]["message"] is None
 
 

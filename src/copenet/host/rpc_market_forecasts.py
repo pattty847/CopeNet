@@ -136,11 +136,3 @@ async def rendered_forecast(identifier, params, send, orchestrator):
     args = Rendered.model_validate(params or {})
     record = resolve_forecast_service(orchestrator).store.rendered(args.forecastId, args.model_dump(exclude={'forecastId'}, exclude_none=True))
     await _reply(identifier, send, {'forecast': record})
-
-
-MARKET_FORECAST_HANDLERS = {
-    'market.forecast.request': request_forecast, 'market.forecast.get': get_forecast,
-    'market.forecast.list': list_forecasts, 'market.forecast.cancel': cancel_forecast,
-    'market.forecast.amend': amend_forecast, 'market.forecast.tracking.update': update_tracking,
-    'market.forecast.rendered': rendered_forecast,
-}

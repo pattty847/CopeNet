@@ -13,7 +13,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.market.live_quote import LiveQuoteSubscription
 from copenet.host.rpc_dispatch import dispatch_rpc
-from copenet.host.rpc_market_chart import MARKET_CHART_HANDLERS
+from copenet.host.rpc_routes import CHART_RPC_METHODS
 from copenet.host.ws_frames import RpcFrameTooLarge, decode_rpc_frame
 from copenet.host.rpc_schema import (
     EventFrame,
@@ -233,7 +233,7 @@ class CopeNetWsServer:
                                 "messaging.routes.resolve",
                                 "market.dashboard.get",
                                 "market.ticker.get",
-                                *MARKET_CHART_HANDLERS,
+                                *CHART_RPC_METHODS,
                                 "market.quote.subscribe",
                                 "market.quote.unsubscribe",
                                 "market.ticker.evidence.get",

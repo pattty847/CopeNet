@@ -199,24 +199,24 @@ def test_detail_projection_keeps_exact_selected_candle_and_account_scope(scene):
 @pytest.mark.asyncio
 async def test_chart_rpc_session_checks_exact_capture_and_document_events(scene):
     from types import SimpleNamespace
-    from copenet.host.rpc_market_chart import MARKET_CHART_HANDLERS
+    from copenet.host.rpc_market_chart import handle_chart_capture, handle_chart_apply
     store, document, capture, observation, context = scene
     sessions = {"session-test": SimpleNamespace(archived=False), "archived": SimpleNamespace(archived=True)}
     orchestrator = SimpleNamespace(_chart_store=store, _session_store=SimpleNamespace(get=sessions.get))
     frames = []
     async def send(frame):
         frames.append(frame)
-    await MARKET_CHART_HANDLERS["market.chart.capture"]("rpc-1", {
+    await handle_chart_capture("rpc-1", {
         "sessionKey": "session-test", "captureId": "rpc-capture", "capture": capture,
     }, send, orchestrator)
     assert frames[0]["ok"] is True
     assert frames[0]["payload"]["provenance"] == "browser_capture"
     with pytest.raises(ValueError, match="archived"):
-        await MARKET_CHART_HANDLERS["market.chart.capture"]("rpc-2", {
+        await handle_chart_capture("rpc-2", {
             "sessionKey": "archived", "captureId": "rpc-archived", "capture": capture,
         }, send, orchestrator)
     frames.clear()
-    await MARKET_CHART_HANDLERS["market.chart.apply"]("rpc-3", drawing_request(document, observation), send, orchestrator)
+    await handle_chart_apply("rpc-3", drawing_request(document, observation), send, orchestrator)
     assert frames[0]["payload"]["document"]["objects"][0]["owner"]["kind"] == "operator"
     assert frames[1]["event"] == "market.chart.document"
     assert frames[1]["payload"]["documentId"] == document["documentId"]
