@@ -1,6 +1,6 @@
 import { Check, ChevronDown, Search } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
-import { MarketFloatingPopover } from './MarketFloatingPopover';
+import { FloatingPopover } from '../../components/FloatingPopover';
 import type { FinancialMetricInfo } from './types';
 
 export function FinancialMetricPicker({
@@ -46,7 +46,7 @@ export function FinancialMetricPicker({
       >
         <span>{loading && selectedMetric ? 'Loading…' : selectedLabel ?? 'More…'}</span><ChevronDown size={11} aria-hidden="true" />
       </button>
-      <MarketFloatingPopover anchorRef={triggerRef} open={open} onClose={() => close(true)} className="financial-metric-popover" width={330}>
+      <FloatingPopover anchorRef={triggerRef} open={open} onClose={() => close(true)} className="financial-metric-popover" width={330}>
         <div role="dialog" aria-label="Choose a financial chart overlay">
           <header><strong>Financial overlays</strong><span>Point-in-time SEC and valuation series</span></header>
           <label className="financial-metric-search"><Search size={13} aria-hidden="true" /><span className="sr-only">Search financial overlays</span><input ref={searchRef} type="search" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search metrics" /></label>
@@ -62,7 +62,7 @@ export function FinancialMetricPicker({
             }) : <p>No matching metrics.</p>}
           </div>
         </div>
-      </MarketFloatingPopover>
+      </FloatingPopover>
     </div>
   );
 }

@@ -8,7 +8,7 @@
 
 import { useRef, useState, type ReactNode, type RefObject } from 'react';
 import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomOpen, Rewind, Settings2 } from 'lucide-react';
-import { MarketFloatingPopover } from './MarketFloatingPopover';
+import { FloatingPopover } from '../../components/FloatingPopover';
 import { rangesFor, type ChartRange, type ChartTimeframe } from './chartRanges';
 import { TimeframeSelector } from './TimeframeSelector';
 import type { CandleStyle } from './heikinAshi';

@@ -1,7 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 
-export function MarketFloatingPopover({
+/** Portalled to `document.body` and positioned with `fixed`, on purpose: an anchor that
+ *  lives in the persistent app chrome (a toolbar, the header) sits in a flex sibling of the
+ *  scrollable content area, and that sibling relationship put popovers rendered in place
+ *  behind the content — a real z-index had no effect because the two were never in the same
+ *  paint layer. Escaping to body sidesteps it instead of chasing the exact stacking cause. */
+export function FloatingPopover({
   anchorRef,
   open,
   onClose,

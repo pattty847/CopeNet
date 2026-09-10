@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Crosshair, X } from 'lucide-react';
-import { MarketFloatingPopover } from './MarketFloatingPopover';
+import { FloatingPopover } from '../../components/FloatingPopover';
 import { MM, mono } from './marketUi';
 import type { PriceAlert } from './types';
 
@@ -79,7 +79,7 @@ export function PriceAlertControl({
           <span aria-hidden="true" className="tw-iconbtn__count">{alerts.length}</span>
         )}
       </button>
-      <MarketFloatingPopover anchorRef={triggerRef} open={open} onClose={close} className="market-price-alert-popover" width={320} dismissOnOutside={false}>
+      <FloatingPopover anchorRef={triggerRef} open={open} onClose={close} className="market-price-alert-popover" width={320} dismissOnOutside={false}>
         <div className="tw-pop">
           <div className="tw-pop__head">
             <div>
@@ -130,7 +130,7 @@ export function PriceAlertControl({
           )}
           </div>
         </div>
-      </MarketFloatingPopover>
+      </FloatingPopover>
     </div>
   );
 }

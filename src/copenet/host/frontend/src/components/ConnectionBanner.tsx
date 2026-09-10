@@ -1,6 +1,7 @@
 import { FormEvent, useState } from 'react';
 import { AlertCircle, KeyRound, WifiOff } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
+import { TOKEN_STORAGE_KEY } from '../lib/wsConnectionConfig';
 import { Spinner } from './Spinner';
 
 export function ConnectionBanner() {
@@ -43,7 +44,7 @@ export function GatewayTokenForm({ authError }: { authError: string | null }) {
       setTokenError('Enter the private token from your CopeNet .copenet.env file.');
       return;
     }
-    window.localStorage.setItem('copnet.token', normalized);
+    window.localStorage.setItem(TOKEN_STORAGE_KEY, normalized);
     window.location.reload();
   };
 

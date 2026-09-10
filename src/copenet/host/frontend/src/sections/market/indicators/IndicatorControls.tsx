@@ -6,7 +6,7 @@
 
 import { useRef, useState } from 'react';
 import { Settings2, X } from 'lucide-react';
-import { MarketFloatingPopover } from '../MarketFloatingPopover';
+import { FloatingPopover } from '../../../components/FloatingPopover';
 import { IndicatorSettings } from './IndicatorSettings';
 import type { ComputedIndicator } from './compute';
 import type { IndicatorRowActions } from './IndicatorRows';
@@ -48,7 +48,7 @@ export function IndicatorControls({
         <X size={11} />
       </button>
 
-      <MarketFloatingPopover anchorRef={anchor} open={open} onClose={() => setOpen(false)} width={280}>
+      <FloatingPopover anchorRef={anchor} open={open} onClose={() => setOpen(false)} width={280}>
         <div className="tw-pop">
           <div className="tw-pop__head">
             <div className="tw-pop__title">{indicator.label}</div>
@@ -68,7 +68,7 @@ export function IndicatorControls({
             />
           </div>
         </div>
-      </MarketFloatingPopover>
+      </FloatingPopover>
     </span>
   );
 }

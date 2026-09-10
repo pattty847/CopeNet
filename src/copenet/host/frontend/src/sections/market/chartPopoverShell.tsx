@@ -5,7 +5,7 @@
 
 import type { ReactNode, RefObject } from 'react';
 import { X } from 'lucide-react';
-import { MarketFloatingPopover } from './MarketFloatingPopover';
+import { FloatingPopover } from '../../components/FloatingPopover';
 
 export function ChartPopoverShell({
   anchor,
@@ -23,7 +23,7 @@ export function ChartPopoverShell({
   children: ReactNode;
 }) {
   return (
-    <MarketFloatingPopover anchorRef={anchor} open={open} onClose={onClose} width={width}>
+    <FloatingPopover anchorRef={anchor} open={open} onClose={onClose} width={width}>
       <div className="tw-pop">
         <div className="tw-pop__head">
           <div className="tw-pop__title">{title}</div>
@@ -31,6 +31,6 @@ export function ChartPopoverShell({
         </div>
         <div className="tw-pop__body">{children}</div>
       </div>
-    </MarketFloatingPopover>
+    </FloatingPopover>
   );
 }

@@ -1,8 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Bell, BookOpen, Command, Search, Sparkles, UserCircle2 } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { marketClock } from './home/deskModel';
 import { ThemeToggle } from './ThemeToggle';
+import { AccountMenu } from './AccountMenu';
 
 const SECTION_HINTS = {
   home: 'Jump to a ticker, sector, or ask CopeNet…',
@@ -51,6 +52,9 @@ export function TopCommandBar() {
   const currentSection = useAppStore((state) => state.currentSection);
   const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
 
+  const [accountOpen, setAccountOpen] = useState(false);
+  const accountButtonRef = useRef<HTMLButtonElement | null>(null);
+
   return (
     <div className="shell-top-command-bar relative flex w-full items-center justify-center">
       <button
@@ -81,9 +85,17 @@ export function TopCommandBar() {
           <Sparkles className="h-3.5 w-3.5 text-shell-accent" />
         </button>
         <ThemeToggle />
-        <button type="button" className={iconBtn} title="Profile">
+        <button
+          ref={accountButtonRef}
+          type="button"
+          className={iconBtn}
+          title="Account & gateway token"
+          aria-expanded={accountOpen}
+          onClick={() => setAccountOpen((value) => !value)}
+        >
           <UserCircle2 className="h-5 w-5" />
         </button>
+        <AccountMenu anchorRef={accountButtonRef} open={accountOpen} onClose={() => setAccountOpen(false)} />
         <span className="mx-1 h-6 w-px bg-shell-border" />
         <MarketStatus />
       </div>
