@@ -46,3 +46,19 @@ Verification:
 ```sh
 uv run --extra dev pytest -q tests/unit/test_soft_bottoming_experiment.py
 ```
+
+## Exploratory model comparison
+
+```sh
+uv run python -m scripts.soft_bottoming.models --from-run ~/.copenet/research/soft-bottoming/my-run --output ~/.copenet/research/soft-bottoming/my-model-run
+```
+
+Requires installed frontend dependencies (`tsx`) and scikit-learn. Reuses the frozen episode scope and inputs; no new acquisition. Model outcomes are 12/26/52 weeks with 26 primary. The original 4/12/26 baseline remains a separate descriptive experiment.
+
+`mama.ts` invokes the exact chart calculation with its default close/0.5/0.05/32 settings. The bridge validates the native `IndicatorBar` contract. Weekly slopes use 1/4 bars and daily slopes use 5/20 sessions. Slopes and gaps are normalized by current price; one gap is divided by ATR. Crossover age is in bars of the respective timeframe, and is missing until a crossover has been observed.
+
+Four fixed feature sets isolate weekly MAMA/FAMA, daily context and daily MAMA/FAMA additions. Regularized logistic regression and a constrained random forest fit expanding quarterly folds; training labels must finish before each test quarter. Training-only imputation/scaling, minimum sample/class counts and fixed training-score selection thresholds are recorded with the run. Each signal week has equal total training weight. Pending outcomes are excluded from evaluation, not classified as failures.
+
+Reports include AUC, probability-error comparisons against the training-only class prior, selection counts, VOO-relative returns, drawdown, volatility, per-quarter results and one-open-selected-episode-per-symbol sensitivity. Feature missingness is explicit in `feature-quality.json`. Predictions and thresholds are inspectable in `predictions.jsonl`; source and input hashes are recorded in `config.json` and `coverage.json`.
+
+This is an exploratory ablation study, with no tuned hyperparameters, deployed models, significance claims or pristine holdout. Predictions are out of their training periods, but the baseline already exposed the period to researcher inspection. Compare models on the same horizon/folds, inspect quarter stability and avoid declaring the best historical combination a discovered edge.
