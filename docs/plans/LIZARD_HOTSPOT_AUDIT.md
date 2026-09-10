@@ -1,6 +1,6 @@
 # Lizard hotspot audit and resolution plan
 
-Date: 2026-09-10. Source baseline: `5bf202b`. Status: audit complete; implementation not started.
+Date: 2026-09-10. Source baseline: `5bf202b`. Status: implementation complete and verified.
 
 ## Verdict
 
@@ -111,4 +111,31 @@ Implementation gates:
 - Run the targeted suites above plus lifecycle tracing, multi-turn Responses replay, chart session, prompt ownership, permissions/approval, and relevant financial tests. Run the full deterministic suite after integration; compile Python and run frontend lint/build when shared event/preview contracts change. Verify affected session/inspector flows in the browser, and restart the actual host after backend implementation per AGENTS.md.
 - Re-run pinned Lizard on all changed modules, including extracted files. Aim for `send_chat` under roughly 150 NLOC / CCN 15–20, dispatch/projector entrypoints under CCN 10, and focused helpers generally under CCN 15–20. These are review targets, not a reason to invent abstractions. Explain residual protocol/availability branching rather than spreading it among trivial helpers. Keep Python modules around the 400-line soft threshold.
 
-This commit is documentation only. It does not repair the findings, alter runtime behavior, or require a server restart.
+## Implementation results
+
+All six stages are complete. Superseded implementations and import paths were removed without compatibility aliases. Replay now retains only tool exchanges paired by explicit call identity. Terminal persistence has one owner, delivery failures cannot overwrite execution outcomes, cancellation persists an interrupted outcome, and finalized assistant outputs use the resolved model. Incomplete Responses output cannot authorize tools or successful completion.
+
+Reasoning deduplication now uses item identity and summary/content index. A streamed summary from one item no longer suppresses a completed summary from another. This preserves reasoning summaries that the provider exposes; it does not cause the provider to expose additional internal reasoning.
+
+Pinned Lizard 1.24.0 results:
+
+| Current function | NLOC | CCN | Original CCN |
+| --- | ---: | ---: | ---: |
+| `runtime.py:send_chat` | 94 | 17 | 155 |
+| `rpc_dispatch.py:_route_rpc` | 16 | 2 | 130 |
+| `projection.py:_preview_payload` | 12 | 6 | 74 |
+| `ticker_fact_packet.py:ticker_fact_packet` | 25 | 1 | 58 |
+| `codex_responses.py:parse_responses_sse` | 18 | 8 | 57 |
+
+The scan includes extracted modules: their maximum CCN is 20 (`admit_run`). Remaining branches represent admission decisions, lifecycle handling, and optional post-run work.
+
+RPC implementation adjustment: the single literal catalog declares eight explicit calling conventions through a typed context. This retains legitimate current handler signatures without reflection, legacy dispatch, or widespread unrelated signature edits. Tests cover all 155 methods and special argument ownership. The former parallel routing maps were deleted.
+
+Verification:
+
+- Full backend suite: **1,399 passed**. After the final admission extraction, its targeted lifecycle/session suites passed again (**42 passed**).
+- Python compilation and changed-module Ruff F checks passed; frontend lint and production build passed. Build retains the existing bundle-size advisory.
+- Synthetic browser flow used the real host, orchestrator, Responses parser, tool executor, and built frontend. Two distinct reasoning summaries rendered, a file tool result opened in the inspector, and both summaries remained visible after reload. No live provider quota or operator data was used.
+- The production host had zero active persisted runs before restart. Restart preserved its existing bind and port; `/health` returned HTTP 200 with `{"ok":true}`.
+
+No transcript migration is required. Existing historical transcripts are untouched.
