@@ -5,17 +5,11 @@ from __future__ import annotations
 import asyncio
 from datetime import datetime, timedelta, timezone
 import logging
-import os
 from typing import Any
 
 from .data_sources import fetch_split_history
 from .models import ChartEvent, EvidenceItem, TickerEvidencePayload, Tone
 from .sec_fetcher import managed_sec_fetcher
-
-SEC_API_USER_AGENT = os.environ.get(
-    "SEC_API_USER_AGENT",
-    "CopeNet/0.1 contact@example.com",
-).strip()
 TICKER_CLUSTER_LIMIT = 2
 TICKER_SEC_DAYS_BACK = 180  # default depth; the ticker page can ask deeper
 MAX_SEC_DAYS_BACK = 3650  # ~10y — beyond that SEC submissions "recent" coverage runs out anyway
@@ -41,7 +35,7 @@ async def fetch_evidence(symbols: list[str], *, limit_per_symbol: int = 2) -> li
     if fetcher_cls is None:
         return []
     evidence: list[EvidenceItem] = []
-    async with managed_sec_fetcher(fetcher_cls, user_agent=SEC_API_USER_AGENT) as fetcher:
+    async with managed_sec_fetcher(fetcher_cls) as fetcher:
         for symbol in symbols:
             evidence.extend(await _evidence_for_symbol(fetcher, symbol, limit=limit_per_symbol))
     return evidence
@@ -56,7 +50,7 @@ async def fetch_ticker_evidence(symbol: str, *, refresh: bool = False, days_back
         return TickerEvidencePayload(symbol=normalized, evidence=[], events=[], as_of=_now_iso(), refreshed=refresh)
     evidence: list[EvidenceItem] = []
     warnings: list[str] = []
-    async with managed_sec_fetcher(fetcher_cls, user_agent=SEC_API_USER_AGENT) as fetcher:
+    async with managed_sec_fetcher(fetcher_cls) as fetcher:
         insider_payload = await _fetch_insider_payload(
             fetcher, normalized, refresh=refresh, days_back=days_back,
             filing_limit=limits["form4_filings"], warnings=warnings,
@@ -98,7 +92,7 @@ async def fetch_fundamentals(symbol: str, *, periods: int = 8, refresh: bool = F
         fetch_split_history,
         symbol,
     )
-    async with managed_sec_fetcher(EdgarClient, user_agent=SEC_API_USER_AGENT) as client:
+    async with managed_sec_fetcher(EdgarClient) as client:
         revenue_quarterly_payload = await client.financials.series(
             symbol,
             metric="revenue",

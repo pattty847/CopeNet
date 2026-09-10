@@ -12,7 +12,6 @@ import pandas as pd
 from copenet._paths import default_sessions_dir
 
 from .data_sources import fetch_split_history
-from .edgar import SEC_API_USER_AGENT
 from .price_cache import PriceCache
 from .price_history import SPLIT_ADJUSTED, WEEKLY, bar_date
 from .sec_fetcher import managed_sec_fetcher
@@ -75,11 +74,7 @@ async def get_financial_series(
     if metric == "diluted_eps" and frequency == "ttm":
         splits, verified = await asyncio.to_thread(fetch_split_history, normalized)
         split_events = splits if verified else None
-    async with managed_sec_fetcher(
-        EdgarClient,
-        user_agent=SEC_API_USER_AGENT,
-        cache_dir=_edgar_cache_dir(),
-    ) as client:
+    async with managed_sec_fetcher(EdgarClient, cache_dir=_edgar_cache_dir()) as client:
         payload = await client.financials.series(
             normalized,
             metric=metric,
@@ -124,11 +119,7 @@ async def get_valuation_series(
     )
     if not prices:
         return None
-    async with managed_sec_fetcher(
-        EdgarClient,
-        user_agent=SEC_API_USER_AGENT,
-        cache_dir=_edgar_cache_dir(),
-    ) as client:
+    async with managed_sec_fetcher(EdgarClient, cache_dir=_edgar_cache_dir()) as client:
         payload = await client.financials.valuation(
             normalized,
             price_observations=prices,

@@ -5,16 +5,23 @@ from typing import Any
 
 import pytest
 
-from copenet.core.market import edgar
+from copenet.core.market import edgar, sec_fetcher
 from copenet.core.market.store import MarketStore
 from copenet.host.rpc_market import handle_market_ticker_evidence_get
 
 
 class FakeFetcher:
     calls: list[str] = []
+    # Mirrors the real CopeTech-Edgar constructors (SECDataFetcher, EdgarClient), which both
+    # take `rate_limit_sleep`. A fake that omits it would not just fail to exercise the
+    # request budget — it would make the boundary look broken when the budget is what
+    # changed, which is exactly what happened when this argument was introduced.
+    rate_limits: list[float] = []
 
-    def __init__(self, user_agent: str) -> None:
+    def __init__(self, user_agent: str, rate_limit_sleep: float = 0.1) -> None:
         self.user_agent = user_agent
+        self.rate_limit_sleep = rate_limit_sleep
+        FakeFetcher.rate_limits.append(rate_limit_sleep)
 
     async def get_insider_signal_payload(self, symbol: str, *, days_back: int = 180, filing_limit: int = 40):
         self.calls.append(f"cached-insider:{symbol}:{days_back}:{filing_limit}")
@@ -132,6 +139,7 @@ async def _capture(params: dict[str, Any], root: Path) -> dict[str, Any]:
 @pytest.mark.asyncio
 async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pytest.MonkeyPatch) -> None:
     FakeFetcher.calls = []
+    FakeFetcher.rate_limits = []
     monkeypatch.setattr(edgar, "_sec_fetcher_class", lambda: FakeFetcher)
 
     payload = await edgar.fetch_ticker_evidence("AAPL")
@@ -162,6 +170,10 @@ async def test_fetch_ticker_evidence_uses_cached_copetech_paths(monkeypatch: pyt
         "144:AAPL:180:25:cached",
         "cached-8k:AAPL:180:6",
     ]
+    # The evidence lane never asks for a rate: it inherits CopeNet's SEC request budget from
+    # managed_sec_fetcher. Bypassing that boundary would silently revert to SEC's own 10
+    # req/s ceiling, where the penalty for overshooting is a non-retryable 403.
+    assert FakeFetcher.rate_limits == [sec_fetcher.SEC_REQUEST_INTERVAL]
 
 
 def test_insider_net_tone_follows_dollars_when_shares_and_value_diverge() -> None:
