@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 
-from copenet.providers.openai_codex import _build_responses_payload, _parse_responses_sse
+from copenet.providers.openai_codex import _build_responses_payload
+from copenet.providers.codex_responses import parse_responses_sse
 
 
 def _sse(events: list[dict]) -> list[bytes]:
@@ -93,7 +94,7 @@ def test_build_responses_payload_omits_tools_when_none() -> None:
     assert payload["input"]
 
 
-def test_parse_responses_sse_matches_reasoning_delta_name_variants() -> None:
+def testparse_responses_sse_matches_reasoning_delta_name_variants() -> None:
     """Reasoning summary deltas are matched name-agnostically (live event name
     for summaries is not pinned down)."""
     for ev_type in (
@@ -103,14 +104,14 @@ def test_parse_responses_sse_matches_reasoning_delta_name_variants() -> None:
         "response.reasoning.delta",
     ):
         events = _sse([{"type": ev_type, "delta": "mid-thought"}, {"type": "response.completed", "response": {}}])
-        out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+        out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
         assert any(e.kind == "reasoning_delta" and e.text == "mid-thought" for e in out), ev_type
         reasoning = next(e for e in out if e.kind == "reasoning_delta")
         expected_source = "raw" if ev_type == "response.reasoning_text.delta" else "summary"
         assert reasoning.metadata == {"reasoningSource": expected_source, "providerEventType": ev_type}
 
 
-def test_parse_responses_sse_emits_text_reasoning_and_function_call() -> None:
+def testparse_responses_sse_emits_text_reasoning_and_function_call() -> None:
     events = _sse(
         [
             {"type": "response.reasoning_summary.delta", "delta": "let me think"},
@@ -129,7 +130,7 @@ def test_parse_responses_sse_emits_text_reasoning_and_function_call() -> None:
             {"type": "response.completed", "response": {"id": "resp_0"}},
         ]
     )
-    out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
     kinds = [e.kind for e in out]
     assert "reasoning_delta" in kinds
     text = "".join(e.text or "" for e in out if e.kind == "delta")
@@ -142,7 +143,7 @@ def test_parse_responses_sse_emits_text_reasoning_and_function_call() -> None:
     assert out[-1].metadata.get("responsesCompleted") is True
 
 
-def test_parse_responses_sse_flushes_function_call_without_done() -> None:
+def testparse_responses_sse_flushes_function_call_without_done() -> None:
     """A function_call that streamed added+deltas but no explicit done still flushes."""
     events = _sse(
         [
@@ -151,17 +152,17 @@ def test_parse_responses_sse_flushes_function_call_without_done() -> None:
                 "item": {"type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "shell.exec", "arguments": ""},
             },
             {"type": "response.function_call_arguments.delta", "item_id": "fc_1", "delta": '{"command":"ls"}'},
-            {"type": "response.completed", "response": {}},
+            {"type": "response.completed", "response": {"output": [{"type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "shell.exec", "arguments": '{"command":"ls"}'}]}},
         ]
     )
-    out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
     fcs = [e.metadata["responsesFunctionCall"] for e in out if e.kind == "meta" and e.metadata and e.metadata.get("responsesFunctionCall")]
     assert len(fcs) == 1
     assert fcs[0]["name"] == "shell.exec"
     assert json.loads(fcs[0]["arguments"]) == {"command": "ls"}
 
 
-def test_parse_responses_sse_surfaces_reasoning_output_item() -> None:
+def testparse_responses_sse_surfaces_reasoning_output_item() -> None:
     """The live endpoint delivers reasoning as an output item (not *.delta events),
     so output_item.done with type=reasoning must surface its summary as thinking."""
     events = _sse(
@@ -181,12 +182,12 @@ def test_parse_responses_sse_surfaces_reasoning_output_item() -> None:
             {"type": "response.completed", "response": {}},
         ]
     )
-    out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
     assert any(e.kind == "reasoning_delta" and "read the file" in (e.text or "") for e in out)
     assert any(e.kind == "meta" and e.metadata and e.metadata.get("responsesFunctionCall") for e in out)
 
 
-def test_parse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:
+def testparse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:
     """gpt-5.5 streams the summary as reasoning_summary_text.delta AND repeats
     the same text in a terminal output_item.done (type=reasoning). The parser
     must emit it once — the output-item path is a fallback only for turns that
@@ -194,8 +195,8 @@ def test_parse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:
     the chat UI."""
     events = _sse(
         [
-            {"type": "response.reasoning_summary_text.delta", "delta": "First I'll "},
-            {"type": "response.reasoning_summary_text.delta", "delta": "read the file."},
+            {"type": "response.reasoning_summary_text.delta", "item_id": "rs_0", "delta": "First I'll "},
+            {"type": "response.reasoning_summary_text.delta", "item_id": "rs_0", "delta": "read the file."},
             {
                 "type": "response.output_item.done",
                 "item": {
@@ -207,29 +208,30 @@ def test_parse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:
             {"type": "response.completed", "response": {}},
         ]
     )
-    out = list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
     reasoning = [e for e in out if e.kind == "reasoning_delta"]
     # Two streamed deltas, and the redundant output_item must be suppressed.
     assert len(reasoning) == 2
     assert "".join(e.text or "" for e in reasoning) == "First I'll read the file."
 
 
-def test_parse_responses_sse_raises_on_failure_event() -> None:
+def testparse_responses_sse_raises_on_failure_event() -> None:
     events = _sse([{"type": "response.failed", "error": {"message": "boom"}}])
     import pytest
 
     with pytest.raises(RuntimeError, match="boom"):
-        list(_parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+        list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
 
 
-def test_classify_responses_body_sniffs_sse_when_header_missing() -> None:
+def testclassify_responses_body_sniffs_sse_when_header_missing() -> None:
     """Live codex backend sometimes returns SSE bodies with an empty
     Content-Type header. The classifier must sniff the first non-blank line
     and dispatch to the SSE parser so function_call events aren't dropped.
     Regression for the "openai-codex returned no assistant text" failure mode.
     """
     from io import BytesIO
-    from copenet.providers.openai_codex import _classify_responses_body, _parse_responses_sse
+    from copenet.providers.codex_transport import classify_responses_body
+    from copenet.providers.codex_responses import parse_responses_sse
 
     body = (
         b"\n"
@@ -259,9 +261,9 @@ def test_classify_responses_body_sniffs_sse_when_header_missing() -> None:
             for line in self._buf:
                 yield line
 
-    kind, payload = _classify_responses_body(_LineStream(body), content_type="")
+    kind, payload = classify_responses_body(_LineStream(body), content_type="")
     assert kind == "sse"
-    events = list(_parse_responses_sse(response=payload, abort_event=asyncio.Event()))
+    events = list(parse_responses_sse(response=payload, abort_event=asyncio.Event()))
     assert any(
         e.kind == "meta" and e.metadata and isinstance(e.metadata.get("responsesFunctionCall"), dict)
         and e.metadata["responsesFunctionCall"].get("name") == "files_read"
@@ -269,9 +271,9 @@ def test_classify_responses_body_sniffs_sse_when_header_missing() -> None:
     )
 
 
-def test_classify_responses_body_returns_json_for_non_sse() -> None:
+def testclassify_responses_body_returns_json_for_non_sse() -> None:
     from io import BytesIO
-    from copenet.providers.openai_codex import _classify_responses_body
+    from copenet.providers.codex_transport import classify_responses_body
 
     class _LineStream:
         def __init__(self, raw: bytes) -> None:
@@ -285,6 +287,6 @@ def test_classify_responses_body_returns_json_for_non_sse() -> None:
                 yield line
 
     body = b'{"output_text":"hi"}'
-    kind, payload = _classify_responses_body(_LineStream(body), content_type="application/json")
+    kind, payload = classify_responses_body(_LineStream(body), content_type="application/json")
     assert kind == "json"
     assert "output_text" in payload

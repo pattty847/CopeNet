@@ -3,11 +3,10 @@ from __future__ import annotations
 import asyncio
 import json
 from http.client import IncompleteRead
-from pathlib import Path
 
 import pytest
 
-from copenet.core.provider_auth.store import ProviderAuthProfile, ProviderAuthStore
+from copenet.core.provider_auth.store import ProviderAuthProfile
 from copenet.providers.openai_codex import OpenAICodexProvider
 
 
@@ -110,7 +109,7 @@ async def test_openai_codex_run_posts_prompt_and_system_prompt(monkeypatch: pyte
         })
         return FakeOpenAICodexSseResponse(lines)
 
-    monkeypatch.setattr("copenet.providers.openai_codex.request.urlopen", fake_urlopen)
+    monkeypatch.setattr("copenet.providers.codex_transport.request.urlopen", fake_urlopen)
 
     events = []
     async for event in provider.run(
@@ -148,7 +147,7 @@ async def test_openai_codex_run_streams_sse_deltas(monkeypatch: pytest.MonkeyPat
     ]
 
     monkeypatch.setattr(
-        "copenet.providers.openai_codex.request.urlopen",
+        "copenet.providers.codex_transport.request.urlopen",
         lambda req, timeout: FakeOpenAICodexSseResponse(lines),
     )
 
@@ -172,7 +171,7 @@ async def test_openai_codex_run_preserves_partial_text_after_incomplete_read(mon
     lines = [b'data: {"type":"response.output_text.delta","delta":"partial answer"}\n\n']
 
     monkeypatch.setattr(
-        "copenet.providers.openai_codex.request.urlopen",
+        "copenet.providers.codex_transport.request.urlopen",
         lambda req, timeout: FakeOpenAICodexSseResponse(
             lines,
             read_exception=IncompleteRead(partial=b"".join(lines), expected=1_095_113),
@@ -180,17 +179,14 @@ async def test_openai_codex_run_preserves_partial_text_after_incomplete_read(mon
     )
 
     events = []
-    async for event in provider.run(
-        prompt="Say something.",
-        provider_session_id=None,
-        abort_event=asyncio.Event(),
-        model="gpt-5.5",
-        system_prompt=None,
-    ):
-        events.append(event)
-
+    with pytest.raises(RuntimeError, match="incomplete"):
+        async for event in provider.run(
+            prompt="Say something.", provider_session_id=None, abort_event=asyncio.Event(),
+            model="gpt-5.5", system_prompt=None,
+        ):
+            events.append(event)
     assert [event.text for event in events if event.kind == "delta"] == ["partial answer"]
-    assert events[-1].kind == "final"
+    assert not any(event.kind == "final" for event in events)
 
 
 @pytest.mark.asyncio
@@ -225,43 +221,13 @@ def test_openai_codex_payload_passes_caller_instructions_through() -> None:
     assert payload["instructions"] == "PROFILE_SENTINEL"
 
 
-def test_openai_codex_sse_completed_response_uses_deltas() -> None:
-    from copenet.providers.openai_codex import _decode_openai_codex_response_body
-
-    payload = _decode_openai_codex_response_body(
-        raw_body=(
-            'data: {"type":"response.output_text.delta","delta":"hello "}\n\n'
-            'data: {"type":"response.output_text.delta","delta":"world"}\n\n'
-            'data: {"type":"response.completed","response":{"id":"resp_123","output":[]}}\n\n'
-            "data: [DONE]\n\n"
-        ),
-        content_type="text/event-stream",
-    )
-
-    assert payload["output_text"] == "hello world"
-
-
-def test_openai_codex_sse_without_content_type_still_parses() -> None:
-    from copenet.providers.openai_codex import _decode_openai_codex_response_body
-
-    payload = _decode_openai_codex_response_body(
-        raw_body=(
-            'event: response.created\n'
-            'data: {"type":"response.output_text.delta","delta":"hello"}\n\n'
-            'event: response.completed\n'
-            'data: {"type":"response.completed","response":{"id":"resp_123","output":[]}}\n\n'
-        ),
-        content_type="",
-    )
-
-    assert payload["output_text"] == "hello"
-
-
-def test_openai_codex_sse_failure_raises() -> None:
-    from copenet.providers.openai_codex import _decode_openai_codex_response_body
-
-    with pytest.raises(RuntimeError, match="bad request"):
-        _decode_openai_codex_response_body(
-            raw_body='data: {"type":"response.failed","error":{"message":"bad request"}}\n\n',
-            content_type="text/event-stream",
-        )
+@pytest.mark.parametrize("content_type", ["text/event-stream", ""])
+def test_completed_body_uses_streamed_deltas_with_or_without_header(content_type):
+    from io import BytesIO
+    from copenet.providers.codex_transport import classify_responses_body
+    from copenet.providers.codex_responses import parse_responses_sse
+    raw = b'data: {"type":"response.output_text.delta","delta":"hello"}\n\ndata: {"type":"response.completed","response":{"output":[]}}\n\n'
+    kind, body = classify_responses_body(BytesIO(raw), content_type)
+    assert kind == "sse"
+    events = list(parse_responses_sse(response=body, abort_event=asyncio.Event()))
+    assert [e.text for e in events if e.kind == "delta"] == ["hello"]

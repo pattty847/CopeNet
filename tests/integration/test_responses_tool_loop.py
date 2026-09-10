@@ -482,3 +482,20 @@ async def test_harness_enables_reasoning_on_responses_path(tmp_path: Path) -> No
     _ = [event async for event in stream]
     assert provider.seen_reasoning[0] == DEFAULT_RESPONSES_REASONING
     assert provider.seen_reasoning[0]["summary"] == "auto"
+
+
+@pytest.mark.parametrize("terminal", [[], [ProviderEvent(kind="meta", metadata={"responsesCompleted": False})]])
+async def test_incomplete_response_cannot_execute_tools(tmp_path, terminal):
+    provider = ScriptedResponsesProvider([[_fc("call", "files.read", {"path": "README.md"}), *terminal]])
+    calls = []
+    async def execute(request, context):
+        calls.append(request)
+        raise AssertionError("An incomplete response authorized a tool")
+    with pytest.raises(RuntimeError, match="incomplete"):
+        async for _ in run_with_responses_tools(
+            provider=provider, messages=[], abort_event=asyncio.Event(), model="gpt-5.5",
+            instructions=None, plan=_make_plan(), tool_executor=execute,
+            tool_context=_make_context(tmp_path), session_id="incomplete",
+        ):
+            pass
+    assert calls == []

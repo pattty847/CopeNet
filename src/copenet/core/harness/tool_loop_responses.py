@@ -90,6 +90,7 @@ async def run_with_responses_tools(
             return
         function_calls: list[dict[str, Any]] = []
         assistant_text_chunks: list[str] = []
+        response_completed = False
         # Compact stale tool output first (cheap, lossy only for old observations),
         # then enforce the budget on what remains. Trimming once before the loop is
         # not enough: a long agentic turn grows the array on every step.
@@ -136,6 +137,8 @@ async def run_with_responses_tools(
             elif event.kind == "reasoning_delta":
                 yield event
             elif event.kind == "meta" and isinstance(event.metadata, dict):
+                if "responsesCompleted" in event.metadata:
+                    response_completed = event.metadata["responsesCompleted"] is True
                 fc = event.metadata.get("responsesFunctionCall")
                 if isinstance(fc, dict) and str(fc.get("name") or "").strip():
                     function_calls.append(fc)
@@ -144,6 +147,14 @@ async def run_with_responses_tools(
                     # orchestrator sees, so a dropped announcement is a run stamped
                     # with the requested model instead of the answering one.
                     yield event
+        if abort_event.is_set():
+            turn_state.terminal_reason = "aborted"
+            if trace is not None:
+                trace("turn_completed", turn_state.to_public_dict())
+            yield ProviderEvent(kind="final")
+            return
+        if not response_completed:
+            raise RuntimeError("Responses provider stream ended incomplete")
         assistant_text = "".join(assistant_text_chunks).strip()
         if trace is not None:
             trace(
