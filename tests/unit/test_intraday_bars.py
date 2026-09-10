@@ -265,3 +265,151 @@ def test_dropping_a_symbol_is_idempotent(tmp_path):
     assert store.drop("AAPL", "5m") is True
     assert store.drop("AAPL", "5m") is False
     assert store.load("AAPL", "5m") is None
+
+
+# ------------------------------------------------------------------------- the service
+
+from copenet.core.market.intraday.fetch import FetchResult
+from copenet.core.market.intraday.service import IntradayService
+
+
+class RecordingFetcher:
+    """Stands in for the vendor. Records every call so a test can assert on what was NOT
+    requested, which is most of what this service exists to control."""
+
+    def __init__(self, bars=None, unavailable=None):
+        self.bars = bars if bars is not None else [bar(9, 30), bar(9, 35), bar(9, 40)]
+        self.unavailable = unavailable
+        self.calls: list[tuple[str, str, int | None]] = []
+
+    def __call__(self, symbol, grain, *, days=None):
+        self.calls.append((symbol, grain.key, days))
+        if self.unavailable:
+            return FetchResult(bars=[], unavailable=self.unavailable)
+        return FetchResult(bars=list(self.bars), requests=1)
+
+
+def service(tmp_path, fetcher, *, splits=()):
+    return IntradayService(
+        IntradayStore(tmp_path / "intraday"),
+        splits_for=lambda symbol: list(splits),
+        fetcher=fetcher,
+    )
+
+
+NOW = datetime(2026, 9, 9, 20, 0, tzinfo=ET)
+
+
+def test_a_fresh_cache_is_served_without_calling_the_vendor(tmp_path):
+    fetcher = RecordingFetcher()
+    svc = service(tmp_path, fetcher)
+
+    svc.series("AAPL", "5m", now=NOW)
+    svc.series("AAPL", "5m", now=NOW)
+
+    assert len(fetcher.calls) == 1, "the second read should hit the cache"
+
+
+def test_a_derived_interval_reuses_the_grain_already_cached(tmp_path):
+    """The payoff of fetching grains rather than intervals: 30m costs nothing once 5m is
+    cached, because they are the same stored bars rolled up differently."""
+    fetcher = RecordingFetcher()
+    svc = service(tmp_path, fetcher)
+
+    svc.series("AAPL", "5m", now=NOW)
+    svc.series("AAPL", "15m", now=NOW)
+    svc.series("AAPL", "30m", now=NOW)
+
+    assert len(fetcher.calls) == 1
+    assert fetcher.calls[0][1] == "5m"
+
+
+def test_a_stale_cache_is_refreshed(tmp_path):
+    fetcher = RecordingFetcher()
+    svc = service(tmp_path, fetcher)
+
+    svc.series("AAPL", "5m", now=NOW)
+    svc.series("AAPL", "5m", now=NOW + timedelta(hours=2))
+
+    assert len(fetcher.calls) == 2
+
+
+def test_a_split_rebuilds_the_cache_however_fresh_it_is(tmp_path):
+    """A split rewrites the vendor's own history, so recency is irrelevant — every stored
+    bar is on a basis that no longer exists."""
+    fetcher = RecordingFetcher()
+    store = IntradayStore(tmp_path / "intraday")
+    before = IntradayService(store, splits_for=lambda s: [], fetcher=fetcher)
+    before.series("AAPL", "5m", now=NOW)
+
+    after = IntradayService(store, splits_for=lambda s: [("2026-09-09", 4.0)], fetcher=fetcher)
+    after.series("AAPL", "5m", now=NOW)
+
+    assert len(fetcher.calls) == 2
+
+
+def test_a_refused_grain_with_no_cache_reports_unavailable(tmp_path):
+    """`MARKET_SENTINEL_ALERTS.md` rule 5: unsupported data is an explicit state, never an
+    empty chart the operator has to interpret."""
+    svc = service(tmp_path, RecordingFetcher(unavailable="1m data not available"))
+
+    result = svc.series("AAPL", "1m", now=NOW)
+
+    assert result.bars == []
+    assert "not available" in result.unavailable
+
+
+def test_a_refused_refresh_still_serves_the_cached_bars(tmp_path):
+    """Blanking a chart the operator was already reading, because a refresh failed, is worse
+    than showing bars that are a few minutes old and saying so."""
+    fetcher = RecordingFetcher()
+    svc = service(tmp_path, fetcher)
+    svc.series("AAPL", "5m", now=NOW)
+
+    fetcher.unavailable = "vendor refused"
+    result = svc.series("AAPL", "5m", now=NOW + timedelta(hours=2))
+
+    assert len(result.bars) == 3
+    assert result.unavailable is None
+    assert any("cached" in warning for warning in result.warnings)
+
+
+def test_a_regular_session_bucket_never_absorbs_after_hours_trade(tmp_path):
+    """Order matters where a bucket spans the close. A 2h bucket anchored at 15:30 runs to
+    17:30, so rolling up before filtering would fold after-hours trade into a candle stamped
+    15:30 — and the session filter would then KEEP it, because its timestamp is regular. The
+    operator asked for regular hours and would be shown a high the session never reached."""
+    spanning = [
+        MarketBar(t=at(15, 30), o=10, h=10, l=10, c=10, v=100),   # regular
+        MarketBar(t=at(16, 30), o=10, h=99, l=10, c=98, v=0),     # after hours, wild print
+    ]
+    svc = service(tmp_path, RecordingFetcher(bars=spanning))
+
+    regular = svc.series("AAPL", "2h", session=REGULAR, now=NOW)
+    everything = svc.series("AAPL", "2h", session=ALL_SESSIONS, now=NOW)
+
+    assert [row.h for row in regular.bars] == [10], "after-hours trade leaked into a regular candle"
+    # With every session in scope the same bucket legitimately spans the close.
+    assert max(row.h for row in everything.bars) == 99
+
+
+def test_the_series_reports_the_grain_that_served_it(tmp_path):
+    """Not an implementation detail to the operator: the grain is WHY 15m reaches 60 days."""
+    svc = service(tmp_path, RecordingFetcher())
+
+    result = svc.series("AAPL", "15m", now=NOW)
+
+    assert result.grain == "5m"
+    assert result.window_days == 60
+
+
+def test_asking_for_more_days_refetches_only_a_paged_grain(tmp_path):
+    """Every grain but 1m already holds its whole window, so a deeper request for one of
+    them would be a round trip that cannot return anything new."""
+    fetcher = RecordingFetcher()
+    svc = service(tmp_path, fetcher)
+    svc.series("AAPL", "5m", now=NOW)
+
+    svc.series("AAPL", "5m", days=60, now=NOW)
+
+    assert len(fetcher.calls) == 1

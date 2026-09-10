@@ -47,6 +47,7 @@ from .fact_packets import market_fact_packet, market_history_section, ticker_fac
 from .ledger import record_market_read_claims, record_ticker_read_claim
 from .ledger_report import track_record_line
 from .fetch_pace import market_fetch_pace
+from .intraday import IntradayService, IntradayStore
 from .features import FeatureSet, compute_features
 from .interpretation import generate_market_read, generate_ticker_read
 from .market_tape import build_market_tape
@@ -100,6 +101,24 @@ class MarketRuntime(DashboardRuntime):
         # scan and the watchlist UI read one file and a symbol added in the UI is scanned
         # on the next sweep.
         self.watchlists = watchlists or WatchlistStore(self.store.root_dir / "watchlist.json")
+        # Its own cache, beside the daily one rather than inside it — see
+        # docs/plans/INTRADAY_BARS.md. It borrows the daily lane's split detection instead of
+        # running a second one, which is why it is handed a reader rather than a fetcher.
+        self.intraday = IntradayService(
+            IntradayStore(self.store.root_dir / "intraday"),
+            splits_for=self._splits_for_symbol,
+        )
+
+    def _splits_for_symbol(self, symbol: str) -> list[tuple[str, float]]:
+        """The symbol's split history as the daily cache knows it. A symbol with no cached
+        history yet has no known splits, which is a valid answer — the intraday cache then
+        pins to the empty fingerprint and rebuilds once the daily lane learns otherwise."""
+        try:
+            history = self.prices.load(symbol)
+        except Exception:
+            logging.warning("market: %s split history unreadable for intraday", symbol, exc_info=True)
+            return []
+        return list(history.splits) if history else []
 
     def scan_universe(self) -> tuple[UniverseAsset, ...]:
         """The public UNIVERSE plus the operator's watchlist symbols, resolved per call.

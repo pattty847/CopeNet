@@ -132,11 +132,11 @@ class IntradayStore:
             updated_at=str(raw.get("updatedAt") or ""),
         )
 
-    def save(self, history: IntradayHistory) -> IntradayHistory:
+    def save(self, history: IntradayHistory, *, now: datetime | None = None) -> IntradayHistory:
         stamped = IntradayHistory(
             symbol=history.symbol, grain=history.grain, bars=history.bars,
             split_fingerprint=history.split_fingerprint,
-            updated_at=datetime.now(timezone.utc).isoformat(),
+            updated_at=(now or datetime.now(timezone.utc)).isoformat(),
         )
         with self._lock:
             write_json_atomic(self.path_for(stamped.symbol, stamped.grain), {
@@ -152,14 +152,17 @@ class IntradayStore:
             })
         return stamped
 
-    def merge(self, symbol: str, grain: str, incoming: list[MarketBar], *, split_fingerprint: str) -> IntradayHistory:
+    def merge(
+        self, symbol: str, grain: str, incoming: list[MarketBar], *,
+        split_fingerprint: str, now: datetime | None = None,
+    ) -> IntradayHistory:
         """Fold a fetch into the cache, rebuilding from scratch when a split has landed."""
         existing = self.load(symbol, grain)
         stale_basis = existing is not None and existing.split_fingerprint != split_fingerprint
         bars = list(incoming) if (existing is None or stale_basis) else merge_bars(existing.bars, incoming)
         return self.save(IntradayHistory(
             symbol=symbol.upper(), grain=grain, bars=bars, split_fingerprint=split_fingerprint,
-        ))
+        ), now=now)
 
     def drop(self, symbol: str, grain: str) -> bool:
         path = self.path_for(symbol, grain)
