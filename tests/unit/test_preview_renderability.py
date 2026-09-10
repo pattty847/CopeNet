@@ -21,13 +21,21 @@ from copenet.core.tools.projection import _generic_preview, _preview_payload
 CONTRACTS = Path(__file__).resolve().parents[2] / "src" / "copenet" / "core" / "tools" / "projection.py"
 FRONTEND_TYPES = (
     Path(__file__).resolve().parents[2]
-    / "src" / "copenet" / "host" / "frontend" / "src" / "types" / "backend.ts"
+    / "src"
+    / "copenet"
+    / "host"
+    / "frontend"
+    / "src"
+    / "types"
+    / "backend.ts"
 )
 
 
 def _emitted_preview_types() -> set[str]:
     """Preview `type` literals produced by projection.py."""
-    source = CONTRACTS.read_text(encoding="utf-8")
+    source = "\n".join(
+        path.read_text(encoding="utf-8") for path in (CONTRACTS, CONTRACTS.with_name("preview_builders.py"))
+    )
     # Only the preview builders use this exact key shape; JSON-schema "type": "object"
     # and "function" are tool schemas, not previews.
     found = set(re.findall(r'"type": "([a-z_]+)"', source))
@@ -83,3 +91,45 @@ def test_an_oversized_body_is_clipped_honestly_rather_than_dropped() -> None:
     assert preview["type"] == "raw"
     assert preview["truncated"] is True
     assert preview["fullChars"] > len(preview["text"])
+
+
+def test_artifact_preview_declares_a_renderable_type():
+    preview = _preview_payload(
+        "artifact.create", {"artifactId": "synthetic", "preview": "body", "title": "Audit"}
+    )
+    assert preview["type"] in _rendered_preview_types()
+
+
+def test_command_only_shell_result_declares_a_renderable_type():
+    preview = _preview_payload("shell.exec", {"command": "pwd"})
+    assert preview["type"] in _rendered_preview_types()
+
+
+def test_every_registered_projector_returns_a_supported_shape():
+    from copenet.core.tools.preview_builders import PREVIEW_BUILDERS
+
+    bodies = {
+        "plan.write": {"items": [{"content": "Inspect", "status": "pending"}]},
+        "web.search": {
+            "query": "test",
+            "results": [{"url": "https://example.com", "title": "Test", "snippet": "Found"}],
+        },
+        "web.fetch": {"text": "Document", "url": "https://example.com", "wordCount": 1},
+        "files.read": {"path": "README.md", "content": "one\ntwo", "startLine": 4},
+        "files.rg": {
+            "pattern": "needle",
+            "matches": [{"path": "a.py", "line": 2, "text": "needle"}],
+            "totalMatches": 1,
+        },
+        "shell.exec": {"command": "pwd", "stdout": "workspace", "stderr": ""},
+        "files.write": {"path": "a.py", "diff": "+content", "digest": "synthetic"},
+        "files.edit": {"path": "a.py", "diff": "+content", "digest": "synthetic"},
+    }
+    assert bodies.keys() == PREVIEW_BUILDERS.keys()
+    for tool_id, body in bodies.items():
+        assert _preview_payload(tool_id, body)["type"] in _rendered_preview_types()
+        assert _preview_payload(tool_id, {"error": "synthetic failure"})["type"] == "raw"
+        assert _preview_payload(tool_id, {"policyDecision": "write_blocked"}) is None
+    assert _preview_payload("files.rg", bodies["files.rg"])["matches"][0]["snippet"] == "needle"
+    shell = _preview_payload("shell.exec", bodies["shell.exec"])
+    assert shell["fullChars"] == len(shell["text"])

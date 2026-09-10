@@ -1,7 +1,9 @@
 """Tool inspector previews and effect projections."""
+
 from __future__ import annotations
 import json
 from typing import Any, TYPE_CHECKING
+from .preview_builders import PREVIEW_BUILDERS
 
 if TYPE_CHECKING:
     from .contracts import ToolExecutionResult, ToolDescriptor, ToolEvidenceRole, ToolEffectKind
@@ -67,157 +69,16 @@ def _is_policy_only_body(body: dict[str, Any]) -> bool:
 def _preview_payload(tool_id: str, body: Any) -> dict[str, Any] | None:
     if body is None:
         return None
-    if not isinstance(body, dict):
-        return _generic_preview(body)
-    if _is_policy_only_body(body):
-        return None
-    if tool_id == "plan.write":
-        items = body.get("items")
-        if isinstance(items, list):
-            clean = [
-                {"content": str(i.get("content") or ""), "status": str(i.get("status") or "pending")}
-                for i in items
-                if isinstance(i, dict) and i.get("content")
-            ]
-            if clean:
-                return {"type": "plan", "items": clean}
-    if tool_id == "web.search":
-        results = body.get("results")
-        if isinstance(results, list):
-            clean = [
-                {
-                    "title": str(r.get("title") or ""),
-                    "url": str(r.get("url") or ""),
-                    "snippet": str(r.get("snippet") or ""),
-                }
-                for r in results
-                if isinstance(r, dict) and r.get("url")
-            ]
-            return {"type": "web_search", "query": str(body.get("query") or ""), "results": clean[:8]}
-    if tool_id == "web.fetch":
-        text = body.get("text")
-        if isinstance(text, str):
-            return {
-                "type": "web_doc",
-                "url": str(body.get("url") or ""),
-                "title": str(body.get("title") or ""),
-                "wordCount": int(body.get("wordCount") or 0),
-                "text": text.rstrip()[:600],
-            }
-    # No market.* branch on purpose. Each of these once returned a hand-written
-    # projection — market.compare emitted only the symbol list, discarding the rows
-    # that were the entire point of the call — and the frontend has never had a
-    # renderer for any of the five `market_*` preview types, so every market tool
-    # call rendered blank in the inspector. That is precisely the failure
-    # `_generic_preview` was written to prevent (see its docstring). Falling through
-    # to it yields `{"type": "raw"}`, which the UI does render, bounded by
-    # INSPECTOR_INLINE_BODY_CHARS with the whole body still in the tool_output
-    # artifact. Do not add a projection here without shipping its renderer.
-    if tool_id == "files.read":
-        path = body.get("path")
-        content = body.get("content")
-        if isinstance(path, str) and isinstance(content, str):
-            # Carry what the MODEL actually read (bounded by file_output_limit) so
-            # the Inspect drawer can show the full read; the inline transcript caps
-            # the DISPLAY to a 200-line teaser. Not a 240-char receipt anymore.
-            preview_content = content.rstrip()[:24000]
-            lines = preview_content.split("\n")
-            return {
-                "type": "file_read",
-                "path": path,
-                # `lines`, not `content`: the frontend's FileReadPreview reads an
-                # array. It used to infer this shape from the presence of
-                # path+content, which worked until someone renamed a field.
-                "lines": lines,
-                "startLine": body.get("startLine", 1),
-                # Number of lines actually carried in this preview, not the
-                # whole file. Inline "more lines" must never promise content
-                # the Inspect drawer does not have.
-                "totalLines": len(lines),
-            }
-    if tool_id in {"files.rg", "files.search", "files.list", "git.status", "git.diff"}:
-        matches = body.get("matches")
-        if isinstance(matches, list):
-            return {
-                "type": "repo_search",
-                "query": str(body.get("pattern") or body.get("query") or ""),
-                "matches": [
-                    {
-                        "path": str(row.get("path") or ""),
-                        "line": int(row.get("line") or 0),
-                        # The handler calls it `text`; the renderer calls it
-                        # `snippet`. Normalize here rather than making the client
-                        # accept both.
-                        "snippet": str(row.get("text") or row.get("snippet") or ""),
-                    }
-                    for row in matches
-                    if isinstance(row, dict)
-                ],
-                "totalMatches": body.get("totalMatches"),
-            }
-    if tool_id == "shell.exec":
-        stdout = body.get("stdout")
-        stderr = body.get("stderr")
-        if isinstance(stdout, str) or isinstance(stderr, str):
-            command = str(body.get("command") or "")
-            streams = [str(stdout or "").rstrip(), str(stderr or "").rstrip()]
-            text = "\n".join(part for part in streams if part)
-            return {
-                "type": "raw",
-                "text": f"$ {command}\n{text}" if command else text,
-                "fullChars": len(text),
-            }
-    if tool_id in {"files.write", "files.edit"}:
-        diff = body.get("diff")
-        if isinstance(diff, str) and diff.strip():
-            return {
-                "type": "diff",
-                "path": str(body.get("path") or body.get("target") or ""),
-                "diff": diff,
-                "linesAdded": int(body.get("linesAdded") or 0),
-                "linesRemoved": int(body.get("linesRemoved") or 0),
-                "truncated": bool(body.get("diffTruncated")),
-                "created": bool(body.get("created")),
-                # Digest the edit left the file at — the revert key (operator can
-                # undo this exact edit while the file is still in this state).
-                "afterDigest": str(body.get("digest") or ""),
-            }
-    if tool_id in {"files.search", "files.rg"}:
-        matches = body.get("matches")
-        if isinstance(matches, list):
-            preview_matches: list[dict[str, Any]] = []
-            for item in matches[:5]:
-                if not isinstance(item, dict):
-                    continue
-                preview_item = {
-                    "path": item.get("path"),
-                    "line": item.get("line"),
-                    "text": item.get("text"),
-                }
-                if item.get("column") is not None:
-                    preview_item["column"] = item.get("column")
-                preview_matches.append(preview_item)
-            return {"matches": preview_matches}
-    if "artifactId" in body and "preview" in body:
-        return {"artifactId": body.get("artifactId"), "preview": body.get("preview")}
-    if tool_id == "shell.exec":
-        stdout = body.get("stdout")
-        stderr = body.get("stderr")
-        command = body.get("command")
-        parts: list[str] = []
-        if isinstance(command, str) and command.strip():
-            parts.append(f"$ {command.strip()}")
-        if isinstance(stdout, str) and stdout.strip():
-            parts.append(stdout.strip())
-        if isinstance(stderr, str) and stderr.strip():
-            parts.append(stderr.strip())
-        if parts:
-            return {"preview": "\n".join(parts)[:1000]}
-    if tool_id == "artifact.create" and isinstance(body.get("title"), str):
-        return {
-            "artifactId": body.get("artifactId"),
-            "preview": body.get("preview") or body.get("title"),
-        }
+    if isinstance(body, dict):
+        if _is_policy_only_body(body):
+            return None
+        builder = PREVIEW_BUILDERS.get(tool_id)
+        if builder is not None:
+            preview = builder(body)
+            if preview is not None:
+                return preview
+    # Raw is the declared, bounded representation for every unspecialized tool,
+    # including Market and artifact results. Never return an untyped shape.
     return _generic_preview(body)
 
 
@@ -267,7 +128,14 @@ def _batch_member_payloads(body: Any) -> list[dict[str, Any]]:
         }
         output = item.get("output")
         if isinstance(output, dict):
-            for key in ("target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"):
+            for key in (
+                "target",
+                "workspaceRoot",
+                "scope",
+                "accessAction",
+                "policyDecision",
+                "policySummary",
+            ):
                 value = output.get(key)
                 if value is not None:
                     payload[key] = value
@@ -307,7 +175,7 @@ def build_tool_effect_payload(
 def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
     if tool_id == "files.read":
         return "file_read"
-    if tool_id in {"files.search", "files.rg", "files.list", "git.status", "git.diff", "repo.map", "test.discover"}:
+    if tool_id in {"files.rg", "git.status", "git.diff", "repo.map", "test.discover"}:
         return "repo_search"
     if tool_id == "shell.exec":
         return "shell_command"
@@ -321,7 +189,15 @@ def _tool_effect_kind(tool_id: str) -> ToolEffectKind:
         return "web_search"
     if tool_id == "web.fetch":
         return "web_fetch"
-    if tool_id in {"context.prepare", "memory.read", "memory.write", "market.dashboard", "market.ticker", "market.compare", "market.evidence", "market.financials"}:
+    if tool_id in {
+        "memory.read",
+        "memory.write",
+        "market.dashboard",
+        "market.ticker",
+        "market.compare",
+        "market.evidence",
+        "market.financials",
+    }:
         return "context"
     return "raw"
 
