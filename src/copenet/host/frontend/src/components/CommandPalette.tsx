@@ -28,6 +28,12 @@ interface PaletteItem {
   icon: typeof Home;
   action: () => void;
   group: string;
+  /** An alternate accept, bound to ⌘↵. Only market symbols have one — it adds the symbol to
+   *  the active watchlist without leaving the palette, so a scan result can be triaged in a
+   *  run rather than one round trip per name. A bare letter cannot be the binding here: the
+   *  query input holds focus, so `w` would type a `w`. */
+  secondaryAction?: () => Promise<string>;
+  secondaryLabel?: string;
 }
 
 export function CommandPalette() {
@@ -43,6 +49,7 @@ export function CommandPalette() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [interaction, setInteraction] = useState<CommandPaletteInteraction>('idle');
   const [marketResults, setMarketResults] = useState<SymbolSearchResult[]>([]);
+  const [notice, setNotice] = useState<string | null>(null);
   const [marketSearchLoading, setMarketSearchLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
@@ -154,6 +161,14 @@ export function CommandPalette() {
       setOpen(false);
     },
     group: result.type === 'formula' ? 'Formula symbols' : 'Market symbols',
+    // A formula is an expression, not an asset — there is nothing to watch.
+    ...(result.type === 'formula' ? {} : {
+      secondaryLabel: 'Watch',
+      secondaryAction: async () => {
+        const state = await wsClient.marketWatchlistAdd(result.symbol, result.name);
+        return `${result.symbol} added to ${state.active}`;
+      },
+    }),
   })), [marketResults, setOpen]);
 
   const allItems = useMemo(() => [...marketItems, ...actionItems, ...navItems, ...sessionItems], [marketItems, actionItems, navItems, sessionItems]);
@@ -180,7 +195,17 @@ export function CommandPalette() {
       setSelectedIndex((i) => Math.max(i - 1, 0));
     } else if (e.key === 'Enter' && filtered[selectedIndex]) {
       e.preventDefault();
-      filtered[selectedIndex].action();
+      const item = filtered[selectedIndex];
+      // ⌘↵ takes the alternate accept where one exists and does NOT close the palette, so a
+      // list of scan results can be worked through in one pass.
+      if ((e.metaKey || e.ctrlKey) && item.secondaryAction) {
+        setNotice(`Adding ${item.label}…`);
+        void item.secondaryAction()
+          .then(setNotice)
+          .catch((cause) => setNotice(cause instanceof Error ? cause.message : 'Could not add to the watchlist.'));
+        return;
+      }
+      item.action();
     }
   }, [filtered, selectedIndex]);
 
@@ -188,6 +213,12 @@ export function CommandPalette() {
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
+
+  // A confirmation from the last session would otherwise greet the next open as though it
+  // had just happened.
+  useEffect(() => {
+    if (!open) setNotice(null);
+  }, [open]);
 
   useEffect(() => {
     if (!shouldAutoScrollCommandPalette({ query, interaction })) {
@@ -275,6 +306,11 @@ export function CommandPalette() {
                           <span className="ml-2 text-[11px] text-shell-muted">{item.hint}</span>
                         )}
                       </div>
+                      {isSelected && item.secondaryAction && (
+                        <kbd className="rounded-md border border-shell-border bg-shell-panel-strong px-1.5 py-0.5 text-[10px] font-semibold text-shell-accent">
+                          ⌘↵ {item.secondaryLabel}
+                        </kbd>
+                      )}
                       {isSelected && (
                         <kbd className="rounded-md border border-shell-border bg-shell-panel-strong px-1.5 py-0.5 text-[10px] font-semibold text-shell-muted">
                           ↵
@@ -299,9 +335,16 @@ export function CommandPalette() {
             Select
           </span>
           <span className="flex items-center gap-1">
+            <kbd className="rounded border border-shell-border bg-shell-panel-strong px-1 py-px font-semibold">⌘↵</kbd>
+            Watch
+          </span>
+          <span className="flex items-center gap-1">
             <kbd className="rounded border border-shell-border bg-shell-panel-strong px-1 py-px font-semibold">esc</kbd>
             Close
           </span>
+          {/* The palette stays open after ⌘↵, so this is the only confirmation that the add
+              landed — and the only place a failure can be reported. */}
+          {notice && <span className="ml-auto truncate text-shell-accent">{notice}</span>}
         </div>
       </div>
     </div>
