@@ -5,7 +5,7 @@
 // seven horizon returns are one row of cells, not seven table rows. The baseline printed
 // all of them as `key: value` and threw the shape away.
 
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { MM } from './marketUi';
 import type { Tone } from './types';
 
@@ -116,6 +116,71 @@ export function ReturnsStrip({ cells }: { cells: { k: string; v?: number | null 
           <span className="tw-returns__v" style={{ color: toneHex(toneOf(cell.v)) }}>{signedPct(cell.v)}</span>
         </div>
       ))}
+    </div>
+  );
+}
+
+/** A signed magnitude next to its label is a bar growing from a shared zero, not a number
+ *  in a column. Every row shares one scale, so a 3Y return next to a 1W return honestly
+ *  shows one dwarfing the other rather than each pretending to fill its own track. */
+export function DivergingBars({ rows }: { rows: { label: string; value?: number | null; digits?: number }[] }) {
+  const finite = rows.map((row) => row.value).filter((value): value is number => value != null && Number.isFinite(value));
+  const maxAbs = Math.max(...finite.map((value) => Math.abs(value)), 0.01);
+  return (
+    <div className="tw-divbars">
+      {rows.map((row) => {
+        const tone = toneOf(row.value);
+        const pct = row.value == null ? 0 : (Math.min(maxAbs, Math.abs(row.value)) / maxAbs) * 100;
+        const fillStyle: CSSProperties = { width: `${pct / 2}%`, background: toneHex(tone) };
+        if ((row.value ?? 0) >= 0) fillStyle.left = '50%';
+        else fillStyle.right = '50%';
+        return (
+          <div key={row.label} className="tw-divbars__row">
+            <span className="tw-divbars__label">{row.label}</span>
+            <div className="tw-divbars__track">
+              <span className="tw-divbars__zero" />
+              {row.value != null && <span className="tw-divbars__fill" style={fillStyle} />}
+            </div>
+            <span className="tw-divbars__value" style={{ color: toneHex(tone) }}>{signedPct(row.value, row.digits ?? 1)}</span>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+/** Returns across horizons read as a calendar, not a list: one column per horizon, left to
+ *  right, rising green above the zero line and falling red below it — an actual histogram,
+ *  not seven horizontal bars stacked in a column with whitespace past every short one. */
+export function ReturnsHistogram({ cells }: { cells: { k: string; v?: number | null }[] }) {
+  const finite = cells.map((cell) => cell.v).filter((value): value is number => value != null && Number.isFinite(value));
+  const maxAbs = Math.max(...finite.map((value) => Math.abs(value)), 0.01);
+  return (
+    <div className="tw-hist">
+      {cells.map((cell) => {
+        const tone = toneOf(cell.v);
+        const pct = cell.v == null ? 0 : (Math.min(maxAbs, Math.abs(cell.v)) / maxAbs) * 100;
+        const isUp = (cell.v ?? 0) >= 0;
+        const barStyle: CSSProperties = { height: `${pct / 2}%`, background: toneHex(tone) };
+        const valueStyle: CSSProperties = { color: toneHex(tone) };
+        if (isUp) {
+          barStyle.bottom = '50%';
+          valueStyle.bottom = `calc(50% + ${pct / 2}% + 3px)`;
+        } else {
+          barStyle.top = '50%';
+          valueStyle.top = `calc(50% + ${pct / 2}% + 3px)`;
+        }
+        return (
+          <div key={cell.k} className="tw-hist__col">
+            <div className="tw-hist__bararea">
+              <span className="tw-hist__value" style={valueStyle}>{signedPct(cell.v)}</span>
+              <span className="tw-hist__zero" />
+              {cell.v != null && <span className="tw-hist__bar" style={barStyle} />}
+            </div>
+            <span className="tw-hist__label">{cell.k}</span>
+          </div>
+        );
+      })}
     </div>
   );
 }

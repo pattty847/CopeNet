@@ -6,8 +6,9 @@
 // a compact table, not four more charts. Visual first, precise second, and each in the form
 // that suits it.
 
+import { useState } from 'react';
 import { MM, mono, toneColor } from './marketUi';
-import { Card, EmptyNote, KeyValue, Meter, RangeBand, ReturnsStrip, signedPct, toneHex, toneOf } from './workspaceViz';
+import { Card, DivergingBars, EmptyNote, KeyValue, Meter, RangeBand, ReturnsHistogram, ReturnsStrip, signedPct, toneHex, toneOf } from './workspaceViz';
 import { CompanyProfileCard } from './CompanyProfileCard';
 import type { AssetProfile } from './assetProfile';
 import type { EvidenceItem, TickerDetailPayload, Tone } from './types';
@@ -27,6 +28,8 @@ export function latestMaterialEvidence(items: EvidenceItem[]): EvidenceItem | nu
 }
 
 export function TabOverview({ detail, profile }: { detail: TickerDetailPayload; profile: AssetProfile }) {
+  const [returnsView, setReturnsView] = useState<'cells' | 'bars'>('cells');
+
   const intel = detail.intelligence;
   if (!intel) return <EmptyNote>No deterministic readout is available for this asset.</EmptyNote>;
 
@@ -34,23 +37,41 @@ export function TabOverview({ detail, profile }: { detail: TickerDetailPayload; 
   const stats = detail.stats;
   const exposure = intel.exposure;
 
+  const returnCells = [
+    { k: '1W', v: returns.r1wPct },
+    { k: '4W', v: returns.r4wPct },
+    { k: '13W', v: returns.r13wPct },
+    { k: '26W', v: returns.r26wPct },
+    { k: 'YTD', v: returns.rYtdPct },
+    { k: '52W', v: returns.r52wPct },
+    { k: '3Y', v: returns.r3yPct },
+  ];
+
   return (
     <div className="ticker-overview-panel" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       {/* "What is this" comes before "how has it done" — especially for a name the scanner
           surfaced and the operator has never seen. */}
       <CompanyProfileCard symbol={detail.symbol} />
 
-      <ReturnsStrip
-        cells={[
-          { k: '1W', v: returns.r1wPct },
-          { k: '4W', v: returns.r4wPct },
-          { k: '13W', v: returns.r13wPct },
-          { k: '26W', v: returns.r26wPct },
-          { k: 'YTD', v: returns.rYtdPct },
-          { k: '52W', v: returns.r52wPct },
-          { k: '3Y', v: returns.r3yPct },
-        ]}
-      />
+      <div style={{ display: 'flex', alignItems: returnsView === 'bars' ? 'flex-end' : 'center', gap: 8 }}>
+        {returnsView === 'cells' ? (
+          <ReturnsStrip cells={returnCells} />
+        ) : (
+          <div style={{ width: '100%', maxWidth: 460 }}>
+            <ReturnsHistogram cells={returnCells} />
+          </div>
+        )}
+        <button
+          type="button"
+          className="tw-axis-toggle"
+          aria-pressed={returnsView === 'bars'}
+          onClick={() => setReturnsView(returnsView === 'bars' ? 'cells' : 'bars')}
+          aria-label={`Returns view: ${returnsView === 'bars' ? 'bars' : 'cells'}. Switch to ${returnsView === 'bars' ? 'cells' : 'bars'}`}
+          title={`${returnsView === 'bars' ? 'Bar' : 'Cell'} view · click for ${returnsView === 'bars' ? 'cells' : 'bars'}`}
+        >
+          {returnsView === 'bars' ? 'Bars' : 'Cells'}
+        </button>
+      </div>
 
       <div className="tw-grid">
         <Card title="52-week range">
@@ -128,6 +149,19 @@ export function TabOverview({ detail, profile }: { detail: TickerDetailPayload; 
               <div className="ticker-setup-components">
                 {detail.insight.components.map((component) => <span key={component.label} data-met={component.met}>{component.met ? 'Pass' : 'Watch'} · {component.label}</span>)}
               </div>
+            </div>
+          )}
+          {detail.verdict.some((row) => row.betaAdjustedExcessPct != null) && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 4 }}>
+              <span style={{ color: MM.dim, font: '600 9px var(--mkt-sans)', letterSpacing: '.08em', textTransform: 'uppercase' }}>
+                Beta-adjusted excess return · 52w
+              </span>
+              <DivergingBars
+                rows={detail.verdict.map((row) => ({
+                  label: row.bench,
+                  value: row.betaAdjustedExcessPct,
+                }))}
+              />
             </div>
           )}
           <div className="ticker-metric-table">
