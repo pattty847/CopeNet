@@ -43,7 +43,8 @@ from .models import (
     UniverseAsset,
 )
 from .base_rates import load_base_rate
-from .fact_packets import market_fact_packet, market_history_section, ticker_fact_packet
+from .fact_packets import market_fact_packet, market_history_section
+from .ticker_fact_packet import ticker_fact_packet
 from .ledger import record_market_read_claims, record_ticker_read_claim
 from .ledger_report import track_record_line
 from .company_profile import CompanyProfileStore

@@ -6,7 +6,8 @@ import numpy as np
 import pandas as pd
 
 from copenet.core.market.base_rates import build_base_rate
-from copenet.core.market.fact_packets import market_fact_packet, ticker_fact_packet
+from copenet.core.market.fact_packets import market_fact_packet
+from copenet.core.market.ticker_fact_packet import ticker_fact_packet
 from copenet.core.market.features import compute_features
 from copenet.core.market.interpretation import (
     extract_json,
