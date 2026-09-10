@@ -1360,7 +1360,9 @@
 
 /* The dropdown exists because depth is the surprising part: 15m reaches 60 days and 3m
  * reaches 30, and nothing about the labels says so. Each row carries its own ceiling. */
-.tw-tfmenu { display: flex; flex-direction: column; padding: 4px 0; }
+/* Inside `tw-pop__body`, which supplies the frame's own padding. The rows bleed past it so
+ * a hovered row highlights edge to edge instead of floating inside a second inset. */
+.tw-tfmenu { display: flex; flex-direction: column; margin: -7px -8px -9px; }
 
 .tw-tfmenu__head {
   padding: 6px 10px 4px;

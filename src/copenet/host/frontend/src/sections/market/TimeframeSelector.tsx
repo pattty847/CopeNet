@@ -8,7 +8,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { ChevronDown } from 'lucide-react';
 import { wsClient } from '../../lib/wsClient';
-import { MarketFloatingPopover } from './MarketFloatingPopover';
+import { ChartPopoverShell } from './chartPopoverShell';
 import type { IntradayIntervalInfo } from '../../types/backend';
 import { CHART_TIMEFRAMES, isIntradayTimeframe, timeframeLabel, type ChartTimeframe } from './chartRanges';
 import { loadPinnedTimeframes, savePinnedTimeframes } from './tickerWorkspaceState';
@@ -83,8 +83,12 @@ export function TimeframeSelector({
         </button>
       </div>
 
+      {/* The shared frame, not a hand-rolled one — its own comment says two popovers
+          re-declaring the same padding is how two popovers start looking different. Rolling
+          my own is exactly how this one shipped transparent, with the rows reading straight
+          through onto the chart behind them. */}
       {open && (
-        <MarketFloatingPopover anchorRef={anchor} open={open} onClose={() => setOpen(false)} width={260}>
+        <ChartPopoverShell anchor={anchor} open={open} onClose={() => setOpen(false)} title="Intervals" width={280}>
           <div className="tw-tfmenu">
             <div className="tw-tfmenu__head">Intraday</div>
             {catalog.length === 0 && <div className="tw-tfmenu__empty">Loading…</div>}
@@ -120,7 +124,7 @@ export function TimeframeSelector({
               Depth is what the vendor serves. Pin an interval to keep it in the toolbar.
             </div>
           </div>
-        </MarketFloatingPopover>
+        </ChartPopoverShell>
       )}
     </>
   );
