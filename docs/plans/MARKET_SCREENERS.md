@@ -16,9 +16,19 @@ interface, with no availability or real-time-data guarantee.
    the same observation to every setup. Page loads, broker sync and schedules do
    not acquire screener data. Scope changes invalidate the preview; admission
    tokens expire after ten minutes and cannot be reused.
-3. Select a setup, inspect the matching rules and values, and sort or search the
-   table. Open a name in the ordinary ticker workspace for chart/filing/model
-   research. Selection survives a same-tab ticker round trip.
+3. Select a setup. Each tile carries the match count, hit rate against the eligible
+   universe, a distribution of the ranking metric across its rule window, the leading
+   sector, and churn (`+N new · −N gone`) against the previous complete observation.
+   The definition band lists every rule beside the matched population's median. In
+   the table the right-hand columns are the rules themselves: each value is drawn as
+   a tick inside its rule window (`ruleWindows.ts`), so "why it matched" is visible
+   per row. Names that were not in the previous observation carry a `NEW` tag.
+   Clicking a row focuses it in the setup dock, which draws six months of daily
+   closes with the setup's indicators and the rule window as a price zone — from the
+   local price cache only (`market.screeners.setup.get`). An uncached name gets
+   prose and an "Open ticker" link; the screener never fetches history. Sort or
+   search the table; click the symbol to open the ordinary ticker workspace.
+   Selection survives a same-tab ticker round trip.
 4. Copy selected symbols, export the full evidence JSON, or create a new research
    watchlist. Creation is atomic and refuses existing list names. Lists start with
    role `context`; no existing schedule expands to include them automatically.
@@ -47,8 +57,9 @@ and financing costs are outside this feature.
 Business logic lives in `core/market/scans/screeners/`: `models.py` owns strict
 configuration and versioned presets, `source.py` owns the vendor boundary,
 `evaluate.py` owns pure eligibility, and `service.py` owns admission, observations
-and handoff receipts. `rpc_market_screeners.py` validates transport input; five
-literal `market.screeners.*` routes are registered in `rpc_routes.py`.
+and handoff receipts. `rpc_market_screeners.py` validates transport input; six
+literal `market.screeners.*` routes are registered in `rpc_routes.py`
+(`setup.get` is the cache-only daily-bar read behind the setup dock).
 The frontend has a typed API and a dedicated `sections/market/screeners/` directory.
 
 The query filters type=stock, subtype=common, NASDAQ/NYSE/AMEX, market cap and
@@ -94,7 +105,18 @@ publication-clock semantics instead of silently refetching candidates for a mode
 - Frontend `npm run lint`, `npm run build`, and the screener/routing/workstation tests.
 - `uv run python scripts/verify_market_screeners.py`: built UI → real RPC handlers →
   temporary stores, with a synthetic source. Covers preview invalidation, manual run,
+  cache-only setup visual (one seeded symbol draws, an unseeded one gets prose),
   create-only watchlist handoff, export, empty/error states, retained last success,
-  reload, ticker navigation and 390px geometry. Screenshot uses synthetic names only.
+  reload, tile overflow at 900px, ticker navigation and 390px geometry. Screenshot
+  uses synthetic names only.
+
+## Next: custom screeners
+
+The five presets were a kick-start. The next phase is a screener library with
+editable, pinnable definitions over a curated slice of tvscreener's 3,526
+`StockField` members (derived fields such as "% from SMA50" stay computed locally
+as in `evaluate.py`). The pinned strip keeps its hot-five behaviour; built-ins
+remain versioned and save as copies. Rule windows for custom definitions must be
+declared with the definition so the table can keep drawing ticks.
 - A live adapter smoke check confirmed the vendor field schema and outgoing filters.
   Live vendor results are not committed fixtures or evidence of predictive accuracy.

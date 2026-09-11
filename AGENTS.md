@@ -245,7 +245,10 @@ For current behavior, assume:
   immutable observations. Research-list handoff is create-only with `context` role; an
   operator must select it explicitly in Scans & alerts. Never write screener snapshots
   into the canonical candle cache or claim the rankings are probabilities. Screeners
-  are not yet chart-agent resources. See `docs/plans/MARKET_SCREENERS.md`.
+  are not yet chart-agent resources. The UI draws each rule as a window with a tick
+  (`ruleWindows.ts` declares the bounds; `evaluate.py` is the authority) and the setup
+  dock reads the price cache only through `market.screeners.setup.get` — never add a
+  fetch there. See `docs/plans/MARKET_SCREENERS.md`.
 
 - **Live quotes belong to a visible ticker view, not the scan engine.** `live_quote.py`
   owns one Yahoo connection per authenticated browser connection, with explicit cleanup

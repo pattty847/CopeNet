@@ -173,7 +173,7 @@ from .rpc_market_alerts import (
 )
 from .rpc_market_screeners import (
     handle_market_screeners_get, handle_market_screeners_preview, handle_market_screeners_run,
-    handle_market_screeners_run_get, handle_market_screeners_handoff,
+    handle_market_screeners_run_get, handle_market_screeners_handoff, handle_market_screeners_setup_get,
 )
 from .rpc_market_scans import (
     handle_market_scans_get,
@@ -335,6 +335,7 @@ RPC_ROUTES = build_routes(
         ("market.screeners.run", RpcRoute(handle_market_screeners_run, "standard")),
         ("market.screeners.run.get", RpcRoute(handle_market_screeners_run_get, "standard")),
         ("market.screeners.handoff", RpcRoute(handle_market_screeners_handoff, "standard")),
+        ("market.screeners.setup.get", RpcRoute(handle_market_screeners_setup_get, "standard")),
         ("market.scans.get", RpcRoute(handle_market_scans_get, "standard")),
         ("market.scans.save", RpcRoute(handle_market_scans_save, "standard")),
         ("market.scans.archive", RpcRoute(handle_market_scans_archive, "standard")),

@@ -121,3 +121,29 @@ async def test_concurrent_run_is_rejected(tmp_path):
         service.start(config, service.preview(config)["scopeToken"])
     release.set()
     await service.task
+
+
+async def test_setup_visual_reads_the_price_cache_and_never_fetches(tmp_path):
+    from types import SimpleNamespace
+    from copenet.core.market.models import MarketBar
+    from copenet.core.market.price_cache import PriceCache, PriceHistory
+    from copenet.host.rpc_market_screeners import SETUP_BARS, handle_market_screeners_setup_get
+
+    def fetch(symbol, *, period):
+        raise AssertionError(f"setup visual must not fetch {symbol} ({period})")
+    cache = PriceCache(tmp_path / "prices", fetch=fetch)
+    bars = [MarketBar(t=1_700_000_000 + i * 86_400, o=1., h=2., l=0.5, c=1.5, v=10) for i in range(SETUP_BARS + 25)]
+    cache._write(PriceHistory(symbol="TEST", bars=bars, splits=[], dividends=[], updated_at="2026-09-10T00:00:00+00:00"))
+    orchestrator = SimpleNamespace(_market_price_cache=cache)
+    replies = []
+
+    async def send(frame):
+        replies.append(frame)
+    await handle_market_screeners_setup_get("1", {"symbol": "TEST"}, send, orchestrator)
+    payload = replies[-1]["payload"]
+    assert payload["symbol"] == "TEST" and payload["updatedAt"] == "2026-09-10T00:00:00+00:00"
+    assert len(payload["bars"]) == SETUP_BARS and payload["bars"][-1] == bars[-1].__dict__
+    await handle_market_screeners_setup_get("2", {"symbol": "MISSING"}, send, orchestrator)
+    assert replies[-1]["payload"] == {"symbol": "MISSING", "bars": None, "updatedAt": None}
+    with pytest.raises(ValidationError):
+        await handle_market_screeners_setup_get("3", {"symbol": "bad symbol"}, send, orchestrator)

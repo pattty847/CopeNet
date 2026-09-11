@@ -65,6 +65,7 @@ market.screeners.handoff
 market.screeners.preview
 market.screeners.run
 market.screeners.run.get
+market.screeners.setup.get
 market.symbols.search
 market.ticker.evidence.get
 market.ticker.fundamentals.get

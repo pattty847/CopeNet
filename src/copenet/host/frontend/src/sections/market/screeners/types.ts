@@ -68,3 +68,9 @@ export type ScreenerPreview = {
   notes: string[];
   maxRows: number;
 };
+/** Cached daily bars for the setup visual; `bars` is null when the symbol is not cached. */
+export type SetupBars = {
+  symbol: string;
+  bars: { t: number; o: number; h: number; l: number; c: number; v: number }[] | null;
+  updatedAt: string | null;
+};

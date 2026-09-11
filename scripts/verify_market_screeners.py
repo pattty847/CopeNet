@@ -11,7 +11,8 @@ from types import SimpleNamespace
 from urllib.parse import urlparse
 from playwright.async_api import async_playwright, expect
 
-from copenet.core.market.models import DashboardPayload
+from copenet.core.market.models import DashboardPayload, MarketBar
+from copenet.core.market.price_cache import PriceCache, PriceHistory
 from copenet.core.market.scans.screeners.service import ScreenerService
 from copenet.core.market.watchlist_store import WatchlistStore
 from copenet.host.rpc_routes import RPC_ROUTES
@@ -47,7 +48,12 @@ async def verify(browser, root):
             raise ValueError('Synthetic vendor failure; previous snapshot retained')
         return fixture()
     service = ScreenerService(root, watchlists, fetch=fetch)
-    orchestrator = SimpleNamespace(_market_screeners=service)
+    # The setup dock reads the price cache only. Seed one synthetic history so the drawn
+    # path and the uncached prose are both exercised without any vendor request.
+    prices = PriceCache(root / 'prices')
+    prices._write(PriceHistory(symbol='DEMO', bars=[MarketBar(t=1_700_000_000 + i * 86_400, o=100., h=101., l=99., c=100. + (i % 9), v=1_000_000) for i in range(260)],
+                               splits=[], dividends=[], updated_at='2026-09-10T00:00:00+00:00'))
+    orchestrator = SimpleNamespace(_market_screeners=service, _market_price_cache=prices)
     context = await browser.new_context(viewport={'width': 1440, 'height': 1080})
     async def serve(route):
         url = urlparse(route.request.url)
@@ -107,9 +113,11 @@ async def verify(browser, root):
         await page.get_by_role('button', name='Run screeners', exact=True).click()
         await page.get_by_role('button', name='DEMO ↗', exact=True).wait_for()
         assert len(calls) == 1 and calls[0].minCap == 12e9
-        await page.locator('.scr-table summary').first.click()
-        await expect(page.locator('.scr-table details').first).to_have_attribute('open', '')
-        await page.locator('.scr-table summary').first.click()
+        await page.get_by_text('Demonstration Systems', exact=True).click()
+        await page.get_by_role('img', name='Six months of daily closes with the setup\'s indicators and rule zone').wait_for()
+        assert 'market.screeners.setup.get' in methods
+        await page.get_by_text('Synthetic Industries', exact=True).click()
+        await page.get_by_text('is not in the local price cache', exact=False).wait_for()
         await page.get_by_label('Select DEMO', exact=True).check()
         await page.get_by_label('New research list').fill('Synthetic research')
         await page.get_by_role('button', name='Create watchlist', exact=True).click()
@@ -128,25 +136,27 @@ async def verify(browser, root):
         await page.get_by_label('Find in results').fill('no such name')
         await page.get_by_text('No results match this search.').wait_for()
         await page.get_by_label('Find in results').fill('')
-        await page.get_by_role('button', name='03 Oversold large caps Bullish 0').click()
+        await page.get_by_role('button', name='Oversold large caps Bullish 0').click()
         await page.get_by_text('No companies match this setup', exact=False).wait_for()
         await page.reload(wait_until='networkidle')
         await page.get_by_text('No companies match this setup', exact=False).wait_for()
         assert len(calls) == 1
-        await page.get_by_role('button', name='01 Compression Either 3').click()
+        await page.get_by_role('button', name='Compression Either 3').click()
         failure = True
         await page.get_by_role('button', name='Review & run all five').click()
         await page.get_by_role('button', name='Run screeners', exact=True).click()
         await page.get_by_role('alert').filter(has_text='Synthetic vendor failure').wait_for()
         await page.get_by_role('button', name='DEMO ↗', exact=True).wait_for()
         assert len(calls) == 2
+        await page.set_viewport_size({'width': 900, 'height': 844})
+        await page.get_by_label('More screener setups').wait_for()
         await page.set_viewport_size({'width': 390, 'height': 844})
         assert await page.evaluate('document.documentElement.scrollWidth <= innerWidth'), 'Mobile overflow'
         await page.get_by_role('button', name='DEMO ↗', exact=True).click()
         assert '/market/DEMO' in page.url
         assert not errors, errors
         assert not {'market.refresh', 'market.brief.run', 'market.interpret', 'market.scans.run'}.intersection(methods)
-        print('PASS: real RPC preview/run, changed-scope invalidation, persisted evidence, create-only handoff, JSON export, search/empty/error, reload, ticker navigation, mobile geometry; no external requests')
+        print('PASS: real RPC preview/run, changed-scope invalidation, cache-only setup visual, persisted evidence, create-only handoff, JSON export, search/empty/error, reload, tile overflow, ticker navigation, mobile geometry; no external requests')
     except Exception:
         await page.screenshot(path=str(root / 'failure.png'))
         print((await page.locator('.scr').inner_text())[:5000] if await page.locator('.scr').count() else await page.locator('body').inner_text())
