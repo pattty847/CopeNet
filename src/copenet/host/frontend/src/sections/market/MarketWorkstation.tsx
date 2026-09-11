@@ -1,3 +1,4 @@
+import { ScreenersSection } from './screeners/ScreenersSection';
 // The market workstation — the broad-market mode of the same instrument as the ticker
 // workspace.
 //
@@ -286,6 +287,7 @@ export function MarketWorkstation({
                 {active === 'evidence' && dashboard && <EvidenceSection dashboard={dashboard} watched={watchlist.symbols} onOpen={open} />}
                 {active === 'ledger' && <LedgerSection report={forwardLedger.report} loading={forwardLedger.loading} onOpen={open} />}
                 {active === 'backtest' && <BacktestSection />}
+                {active === 'screeners' && <ScreenersSection onOpen={open} onHandoff={() => watchlist.selectList(watchlist.active)} />}
                 {active === 'scans' && <MonitoringSection />}
                 {active === 'watchlist' && (
                   <WatchRail

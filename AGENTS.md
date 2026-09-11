@@ -239,6 +239,14 @@ For current behavior, assume:
 
 ### Market Monitor
 
+- **Screeners discover names; scans acquire their research data.** Manual TradingView discovery
+  lives in `core/market/scans/screeners/` and `sections/market/screeners/`. Preserve scope
+  preview, typed instrument filters, bounded coverage, nulls, delayed-data labels and
+  immutable observations. Research-list handoff is create-only with `context` role; an
+  operator must select it explicitly in Scans & alerts. Never write screener snapshots
+  into the canonical candle cache or claim the rankings are probabilities. Screeners
+  are not yet chart-agent resources. See `docs/plans/MARKET_SCREENERS.md`.
+
 - **Live quotes belong to a visible ticker view, not the scan engine.** `live_quote.py`
   owns one Yahoo connection per authenticated browser connection, with explicit cleanup
   and a renewable 75-second lease. `yahoo_stream.py` shares yfinance's protobuf decoder

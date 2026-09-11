@@ -375,6 +375,7 @@ dependencies = [
     { name = "playwright" },
     { name = "python-multipart" },
     { name = "scikit-learn" },
+    { name = "tvscreener" },
     { name = "uvicorn" },
     { name = "websockets" },
     { name = "webull-openapi-python-sdk" },
@@ -407,6 +408,7 @@ requires-dist = [
     { name = "python-multipart" },
     { name = "python-multipart", marker = "extra == 'media'" },
     { name = "scikit-learn", specifier = ">=1.9.0" },
+    { name = "tvscreener", specifier = "==0.4.1" },
     { name = "uvicorn", specifier = ">=0.27.0" },
     { name = "websockets", specifier = ">=12.0" },
     { name = "webull-openapi-python-sdk", specifier = ">=2.0.12" },
@@ -2207,6 +2209,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/df/3d/9e7eee57b37c80cec63322c0231bb6da3cfe535a91d7a4d64896fcb89357/triton-3.6.0-cp314-cp314-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:a17a5d5985f0ac494ed8a8e54568f092f7057ef60e1b0fa09d3fd1512064e803", size = 188273063, upload-time = "2026-01-20T16:01:07.278Z" },
     { url = "https://files.pythonhosted.org/packages/48/db/56ee649cab5eaff4757541325aca81f52d02d4a7cd3506776cad2451e060/triton-3.6.0-cp314-cp314t-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl", hash = "sha256:0b3a97e8ed304dfa9bd23bb41ca04cdf6b2e617d5e782a8653d616037a5d537d", size = 176274804, upload-time = "2026-01-20T16:16:31.528Z" },
     { url = "https://files.pythonhosted.org/packages/f6/56/6113c23ff46c00aae423333eb58b3e60bdfe9179d542781955a5e1514cb3/triton-3.6.0-cp314-cp314t-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl", hash = "sha256:46bd1c1af4b6704e554cad2eeb3b0a6513a980d470ccfa63189737340c7746a7", size = 188397994, upload-time = "2026-01-20T16:01:14.236Z" },
+]
+
+[[package]]
+name = "tvscreener"
+version = "0.4.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pandas" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/3c/5e/680de3578c907f806ab6871a42544180c4201559ec87657f94dd588ef528/tvscreener-0.4.1.tar.gz", hash = "sha256:f0fc8ef841fa1e31e878d3be071f1f1c8e4809006de45fef2734801c987a6458", size = 200924, upload-time = "2026-09-08T08:08:49.845Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/9f/81/829c61fdf19568cab55a6766fe69d5eedaf3e1a62c77337b604df4789ded/tvscreener-0.4.1-py3-none-any.whl", hash = "sha256:e6f7abfb4a5052f769563469d51f13cb7c4f411d45e64d8af55cba388f23ed6b", size = 207730, upload-time = "2026-09-08T08:08:48.334Z" },
 ]
 
 [[package]]

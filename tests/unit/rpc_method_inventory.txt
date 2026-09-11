@@ -60,6 +60,11 @@ market.scans.preview
 market.scans.run
 market.scans.run.get
 market.scans.save
+market.screeners.get
+market.screeners.handoff
+market.screeners.preview
+market.screeners.run
+market.screeners.run.get
 market.symbols.search
 market.ticker.evidence.get
 market.ticker.fundamentals.get

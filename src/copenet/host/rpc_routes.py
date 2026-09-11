@@ -171,6 +171,10 @@ from .rpc_market_alerts import (
     handle_market_alerts_state,
     handle_market_alerts_catalogue,
 )
+from .rpc_market_screeners import (
+    handle_market_screeners_get, handle_market_screeners_preview, handle_market_screeners_run,
+    handle_market_screeners_run_get, handle_market_screeners_handoff,
+)
 from .rpc_market_scans import (
     handle_market_scans_get,
     handle_market_scans_save,
@@ -326,6 +330,11 @@ RPC_ROUTES = build_routes(
         ("market.forecast.amend", RpcRoute(amend_forecast, "standard")),
         ("market.forecast.tracking.update", RpcRoute(update_tracking, "standard")),
         ("market.forecast.rendered", RpcRoute(rendered_forecast, "standard")),
+        ("market.screeners.get", RpcRoute(handle_market_screeners_get, "standard")),
+        ("market.screeners.preview", RpcRoute(handle_market_screeners_preview, "standard")),
+        ("market.screeners.run", RpcRoute(handle_market_screeners_run, "standard")),
+        ("market.screeners.run.get", RpcRoute(handle_market_screeners_run_get, "standard")),
+        ("market.screeners.handoff", RpcRoute(handle_market_screeners_handoff, "standard")),
         ("market.scans.get", RpcRoute(handle_market_scans_get, "standard")),
         ("market.scans.save", RpcRoute(handle_market_scans_save, "standard")),
         ("market.scans.archive", RpcRoute(handle_market_scans_archive, "standard")),

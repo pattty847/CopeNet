@@ -75,6 +75,15 @@ have distinct states; background refresh failures retain the last real snapshot.
 
 </details>
 
+**Screeners** — five TradingView discovery setups for liquid US-listed common shares:
+Compression, Leader pullback, Oversold large caps, Breakdown watch, and Volume expansion
+in either direction. Set market-cap and liquidity limits, review the scope, then run all
+five against one saved observation. Inspect each match, open its chart, export evidence,
+or turn selected names into a research watchlist. These are research filters, not validated
+forecasts; data may be delayed. [Workflow and contracts](docs/plans/MARKET_SCREENERS.md).
+
+![Market screeners — synthetic demonstration data](docs/imgs/market-screeners.png)
+
 **Scans & alerts** — named asset baskets, linked watchlists, exclusions, source selection,
 and multiple timezone-aware schedules live in one Market workspace. The morning default
 is **09:45**; missed times are skipped, never caught up at startup. Preview exact inclusion

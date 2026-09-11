@@ -17,6 +17,7 @@ export const MARKET_SECTION_TABS: { id: MarketSection; label: string; hint: stri
   { id: 'evidence', label: 'Evidence', hint: 'Filings and news' },
   { id: 'ledger', label: 'Ledger', hint: 'Forward ledger and calibration' },
   { id: 'backtest', label: 'Backtest', hint: 'Portfolio backtests and stress scenarios' },
+  { id: 'screeners', label: 'Screeners', hint: 'TradingView discovery, liquid candidates and research lists' },
   { id: 'scans', label: 'Scans & alerts', hint: 'Asset scope, schedules, technical alerts and delivery' },
 ];
 

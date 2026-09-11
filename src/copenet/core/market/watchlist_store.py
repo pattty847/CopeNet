@@ -98,7 +98,11 @@ class WatchlistStore:
 
     # ---------- lists ----------
 
-    def create_list(self, name: str, role: str = DEFAULT_WATCHLIST_ROLE) -> dict[str, Any]:
+    def create_list(
+        self, name: str, role: str = DEFAULT_WATCHLIST_ROLE, *,
+        entries: list[dict[str, str]] | None = None, select: bool = True,
+    ) -> dict[str, Any]:
+        """Create atomically, optionally populated without changing the active list."""
         cleaned = self._valid_name(name)
         cleaned_role = str(role or "").strip().lower()
         if cleaned_role not in LIST_ROLES:
@@ -109,8 +113,9 @@ class WatchlistStore:
                 raise ValueError(f"a watchlist named '{cleaned}' already exists")
             if len(payload["lists"]) >= _MAX_LISTS:
                 raise ValueError(f"watchlist limit reached ({_MAX_LISTS})")
-            payload["lists"].append({"name": cleaned, "role": cleaned_role, "entries": []})
-            payload["active"] = cleaned
+            payload["lists"].append({"name": cleaned, "role": cleaned_role, "entries": list(entries or [])})
+            if select:
+                payload["active"] = cleaned
             self._save(payload)
         return self.state()
 

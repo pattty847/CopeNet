@@ -1,3 +1,4 @@
+import { createMarketScreenerApi } from './wsMarketScreeners';
 import { createMarketForecastApi } from './wsMarketForecasts';
 import { useAppStore } from '../store/useAppStore';
 import {
@@ -746,6 +747,7 @@ class WsClient {
     return marketWatchlistGetRpc(this.request.bind(this));
   }
 
+  readonly marketScreeners = createMarketScreenerApi(this.request.bind(this));
   readonly marketMonitoring = createMarketMonitoringApi(this.request.bind(this));
   readonly marketForecast = createMarketForecastApi(this.request.bind(this));
   readonly marketChart = createMarketChartApi(this.request.bind(this));
