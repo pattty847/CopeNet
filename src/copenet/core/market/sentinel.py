@@ -14,8 +14,21 @@ _LOG = logging.getLogger(__name__)
 _SCHEDULE_GRACE_SECONDS = 60
 
 
+_LOOPBACK_HOSTS = {"", "127.0.0.1", "localhost", "::1"}
+
+
 def sentinel_enabled() -> bool:
-    return os.environ.get("COPNET_MARKET_SENTINEL", "1").strip() != "0"
+    """Whether this host schedules market scans.
+
+    COPNET_MARKET_SENTINEL=0/1 always wins. Without it, the bind host decides: a loopback
+    host is a testing host and never schedules, so a localhost checkout left running
+    beside the tailnet host cannot compete for the 09:45 occurrence. Delivery processing
+    runs regardless; only scheduling is gated here.
+    """
+    explicit = os.environ.get("COPNET_MARKET_SENTINEL", "").strip()
+    if explicit:
+        return explicit != "0"
+    return os.environ.get("COPNET_HOST", "").strip().lower() not in _LOOPBACK_HOSTS
 
 
 class MarketSentinel:

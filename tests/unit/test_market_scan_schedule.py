@@ -107,3 +107,17 @@ async def test_slow_delivery_does_not_block_scan_admission_or_spawn_overlapping_
     scheduler.stop()
     with pytest.raises(asyncio.CancelledError):
         await scheduler._delivery_task
+
+
+@pytest.mark.parametrize(("host", "flag", "expected"), [
+    (None, None, False), ("127.0.0.1", None, False), ("localhost", None, False), ("::1", None, False),
+    ("tailscale", None, True), ("0.0.0.0", None, True), ("100.64.0.7", None, True),
+    ("127.0.0.1", "1", True), ("tailscale", "0", False), ("tailscale", "", True),
+])
+def test_loopback_hosts_never_schedule_unless_forced(monkeypatch, host, flag, expected):
+    for name, value in (("COPNET_HOST", host), ("COPNET_MARKET_SENTINEL", flag)):
+        if value is None:
+            monkeypatch.delenv(name, raising=False)
+        else:
+            monkeypatch.setenv(name, value)
+    assert sentinel.sentinel_enabled() is expected

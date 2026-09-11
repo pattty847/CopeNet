@@ -73,6 +73,7 @@ _ENV_VARS: list[tuple[str, str]] = [
     ("COPNET_WORKDIR", "workspace root for tools (default: current directory)"),
     ("COPNET_TOKEN", "gateway auth token (default: dev-token)"),
     ("COPNET_TRACE", "set to 1 to write per-run JSONL traces"),
+    ("COPNET_MARKET_SENTINEL", "0/1 to force scheduled market scans off/on (default: on unless bound to loopback)"),
     ("COPNET_WEB_FETCH_ALLOWLIST", "comma-separated domains web.fetch/web.search may reach (default: unrestricted)"),
     ("SEC_API_USER_AGENT", "contact SEC requires, e.g. 'Your Name you@email.com' — a placeholder risks a 403"),
     ("COPNET_SEC_FETCH_PACE", "seconds between SEC requests (default 0.15 = ~6.7/s; raise for bulk pulls)"),

@@ -38,8 +38,8 @@ def create_app(
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
-        # Scheduled market sweep; no startup catch-up. Tests that span a scheduled
-        # slot must disable the sentinel with COPNET_MARKET_SENTINEL=0.
+        # Scheduled market sweep; no startup catch-up. Loopback binds never schedule
+        # unless COPNET_MARKET_SENTINEL=1; tests that span a scheduled slot set it to 0.
         sentinel.start()  # Delivery processing remains available when scans are paused.
         try:
             yield
