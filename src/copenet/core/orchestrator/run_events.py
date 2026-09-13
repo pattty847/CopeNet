@@ -140,6 +140,17 @@ async def consume_metadata(
 async def consume_text(
     orchestrator, admission: RunAdmission, prepared: RunInput, events: RunEvents, event, emit
 ):
+    # Narration before a tool step and the text after it are separate model
+    # responses. Joined with nothing, the flattened `content` reads
+    # "...prove it.Crash reproduced: ..." everywhere the parts are not rendered
+    # (CLI, answer artifact, title, exports).
+    if (
+        events.assistant_parts
+        and events.assistant_message_parts
+        and events.assistant_message_parts[-1].get("kind") == "tool_result"
+        and not event.text.startswith("\n")
+    ):
+        events.assistant_parts.append("\n\n")
     events.assistant_parts.append(event.text)
     _append_text_part(events.assistant_message_parts, event.text)
     events.seq += 1
