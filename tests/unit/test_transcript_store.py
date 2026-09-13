@@ -58,6 +58,16 @@ def test_read_history_respects_limit(transcript_store: TranscriptStore) -> None:
     assert [item["content"] for item in history] == ["two", "three"]
 
 
+def test_read_history_without_limit_returns_every_message(transcript_store: TranscriptStore) -> None:
+    transcript_store.append_message("session-all", _message("run-1", "one"))
+    transcript_store.append_message("session-all", _message("run-2", "two"))
+    transcript_store.append_message("session-all", _message("run-3", "three"))
+
+    history = transcript_store.read_history("session-all", limit=None)
+
+    assert [item["content"] for item in history] == ["one", "two", "three"]
+
+
 def test_read_history_returns_empty_for_missing_session(transcript_store: TranscriptStore) -> None:
     assert transcript_store.read_history("missing") == []
 

@@ -225,6 +225,7 @@ class ChatHarness:
                 tool_executor=tool_executor,
                 tool_context=tool_context,
                 trace=trace,
+                input_token_budget=input_token_budget,
             )
             return plan, stream
 
@@ -274,6 +275,7 @@ class ChatHarness:
             tool_executor=tool_executor,
             tool_context=tool_context,
             trace=trace,
+            input_token_budget=input_token_budget,
         )
         return plan, stream
 

@@ -127,10 +127,6 @@ def _render_history_item(item: dict[str, Any]) -> str:
         return f"assistant called {name}({args})"
     if item_type == "function_call_output":
         output = str(item.get("output") or "").strip()
-        # Keep tool outputs bounded in the flattened prompt; the structured
-        # messages[] path (Phase 2) sends the full thing.
-        if len(output) > 2000:
-            output = output[:2000] + " …[truncated]"
         return f"tool result: {output}" if output else ""
     return ""
 

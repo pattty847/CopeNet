@@ -355,6 +355,32 @@ async def test_tool_loops_replay_actionable_failure_envelope(
         assert replay["error"] == "permission denied"
 
 
+@pytest.mark.asyncio
+async def test_stateless_prompted_loop_keeps_earlier_tool_exchanges(tmp_path: Path) -> None:
+    async def execute(request, _context):
+        return ToolExecutionResult(
+            tool_id=request.tool_id,
+            ok=True,
+            summary="read complete",
+            body={"content": f"contents of {request.arguments['path']}"},
+        )
+
+    provider, _, _ = await _run_contract(
+        loop_kind="prompted",
+        turns=[
+            _ScriptedTurn(calls=[_call(0)]),
+            _ScriptedTurn(calls=[_call(1)]),
+            _ScriptedTurn(text="done"),
+        ],
+        executor=execute,
+        tmp_path=tmp_path,
+    )
+
+    final_prompt = provider.seen_prompts[-1]
+    assert "contents of file-0.txt" in final_prompt
+    assert "contents of file-1.txt" in final_prompt
+
+
 @pytest.mark.parametrize("loop_kind", _LOOP_KINDS)
 @pytest.mark.asyncio
 async def test_tool_loops_stop_before_the_next_side_effect_after_abort(

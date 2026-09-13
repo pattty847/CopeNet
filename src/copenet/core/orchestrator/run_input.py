@@ -132,7 +132,9 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
             "includeRelevantMemory": prompt_policy.include_relevant_memory,
         },
     )
-    full_history = orchestrator.history(session_key=admission.session_key, limit=400)
+    # Load the durable transcript before applying the token budget. A row-count
+    # shortcut can discard hundreds of short, still-fitting messages invisibly.
+    full_history = orchestrator.history(session_key=admission.session_key, limit=None)
     history_for_replay = _history_excluding_current(full_history, run_id=admission.run_id)
     provider = orchestrator._providers[admission.provider_name]
     declared_context_tokens = await discover_model_context_tokens(provider, admission.request.model)

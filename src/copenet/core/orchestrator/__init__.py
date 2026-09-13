@@ -239,7 +239,7 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
         abort_event.set()
         return {"ok": True, "aborted": True, "runIds": [target_run]}
 
-    def history(self, session_key: str, limit: int = 200) -> list[dict]:
+    def history(self, session_key: str, limit: int | None = 200) -> list[dict]:
         """Read transcript history for a session key."""
         entry = self._session_store.get(session_key.strip())
         if entry is None:

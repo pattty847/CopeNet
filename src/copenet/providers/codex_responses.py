@@ -44,6 +44,7 @@ class ResponseState:
     completed_calls: set[str] = field(default_factory=set)
     reasoning_text: dict[tuple[str, str, int], str] = field(default_factory=dict)
     text_items: set[str] = field(default_factory=set)
+    replay_items: set[str] = field(default_factory=set)
     saw_text_delta: bool = False
     announced_model: bool = False
 
@@ -101,12 +102,18 @@ class ResponseState:
 
     def output_item(self, item: dict) -> Iterator[ProviderEvent]:
         kind = item.get("type")
+        item_id = str(item.get("id") or "")
+        if kind in {"reasoning", "message"} and item_id and item_id not in self.replay_items:
+            self.replay_items.add(item_id)
+            yield ProviderEvent(
+                kind="meta",
+                metadata={"responsesOutputItem": dict(item)},
+            )
         if kind == "function_call":
             self.add_call(item, complete=True)
         elif kind == "reasoning":
             yield from self.reasoning_item(item)
         elif kind == "message":
-            item_id = item.get("id", "")
             if not self.saw_text_delta and item_id not in self.text_items:
                 for block in item.get("content", []):
                     text = block.get("text") if block.get("type") == "output_text" else block.get("refusal")

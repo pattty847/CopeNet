@@ -9,6 +9,7 @@ from copenet.core.runtime import TurnState
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, build_openai_tool_schemas
 from copenet.providers import ProviderEvent, resolved_model_event
 
+from .context_window import estimate_request_tokens
 from .planning import HarnessTurnPlan
 from .tool_loop_common import (
     MAX_TOOL_STEPS,
@@ -26,7 +27,6 @@ from .tool_loop_common import (
     _tool_call_event_payload,
     _tool_result_event_payload,
     trace_tool_requested,
-    compact_stale_chat_messages,
     compose_native_tool_system_prompt,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
@@ -58,6 +58,7 @@ async def run_with_native_tools(
     tool_executor: ToolExecutor,
     tool_context: ToolExecutionContext,
     trace: TraceRecorder | None,
+    input_token_budget: int | None = None,
 ) -> AsyncIterator[ProviderEvent]:
     """Run an OpenAI-compatible native tool loop without parsing final text."""
     turn_state = TurnState(turn_id=plan.turn_id, decision_id=plan.decision_id)
@@ -82,8 +83,12 @@ async def run_with_native_tools(
                 trace("turn_completed", turn_state.to_public_dict())
             yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
             return
+        if input_token_budget:
+            request_estimate = estimate_request_tokens(messages, tools=tool_schemas)
+            if request_estimate > input_token_budget:
+                raise ValueError("Current turn exceeds the provider input budget")
         response = await provider.chat_completion(
-            messages=compact_stale_chat_messages(messages),
+            messages=messages,
             model=model,
             tools=tool_schemas or None,
         )

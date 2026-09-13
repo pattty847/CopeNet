@@ -26,6 +26,7 @@ def test_build_responses_payload_includes_tools_cache_key_and_reasoning() -> Non
     assert payload["model"] == "gpt-5.5"
     assert payload["stream"] is True
     assert payload["store"] is False
+    assert "truncation" not in payload
     assert payload["instructions"] == "be terse"
     # Provider sanitizes dotted tool names at the API boundary.
     assert payload["tools"][0]["name"] == "files_read"
@@ -184,7 +185,31 @@ def testparse_responses_sse_surfaces_reasoning_output_item() -> None:
     )
     out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
     assert any(e.kind == "reasoning_delta" and "read the file" in (e.text or "") for e in out)
+    replay = next(e.metadata["responsesOutputItem"] for e in out if e.metadata and e.metadata.get("responsesOutputItem"))
+    assert replay["id"] == "rs_0"
     assert any(e.kind == "meta" and e.metadata and e.metadata.get("responsesFunctionCall") for e in out)
+
+
+def testparse_responses_sse_preserves_assistant_phase_for_replay() -> None:
+    message = {
+        "type": "message",
+        "id": "msg_0",
+        "role": "assistant",
+        "phase": "commentary",
+        "status": "completed",
+        "content": [{"type": "output_text", "text": "Checking now.", "annotations": []}],
+    }
+    events = _sse(
+        [
+            {"type": "response.output_item.done", "item": message},
+            {"type": "response.completed", "response": {"output": [message]}},
+        ]
+    )
+
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+
+    replay_items = [e.metadata["responsesOutputItem"] for e in out if e.metadata and e.metadata.get("responsesOutputItem")]
+    assert replay_items == [message]
 
 
 def testparse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:

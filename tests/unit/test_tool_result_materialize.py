@@ -70,13 +70,13 @@ def test_large_result_gives_model_real_content_not_a_receipt(tmp_path: Path) -> 
 
 
 def test_huge_result_is_clipped_to_budget_with_continuation(tmp_path: Path) -> None:
-    content = "Y" * 40000  # well over the 16000 default model budget
+    content = "Y" * 100000  # well over the exceptional-payload backstop
     persisted, _ = _materialize_tool_result_artifact(
         tool_result=_read_result(content), tool_context=_ctx(tmp_path), trace=None
     )
     body = persisted.body
     assert body["truncatedForModel"] is True
-    assert body["fullChars"] == len(_read_result(content).to_prompt_payload()) or body["fullChars"] > 16000
+    assert body["fullChars"] == len(_read_result(content).to_prompt_payload()) or body["fullChars"] > 80000
     assert len(body["content"]) <= model_facing_result_char_limit()
     assert "higher offset" in body["continuationHint"] and "start_line" in body["continuationHint"]
     assert body.get("artifactId")

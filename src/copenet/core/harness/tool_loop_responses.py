@@ -25,7 +25,6 @@ from .tool_loop_common import (
     _tool_call_event_payload,
     _tool_result_event_payload,
     trace_tool_requested,
-    compact_stale_responses_items,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
 
@@ -89,12 +88,13 @@ async def run_with_responses_tools(
             yield ProviderEvent(kind="final")
             return
         function_calls: list[dict[str, Any]] = []
+        response_output_items: list[dict[str, Any]] = []
         assistant_text_chunks: list[str] = []
         response_completed = False
-        # Compact stale tool output first (cheap, lossy only for old observations),
-        # then enforce the budget on what remains. Trimming once before the loop is
-        # not enough: a long agentic turn grows the array on every step.
-        outbound_messages = compact_stale_responses_items(working_messages)
+        # Re-check the budget on every step because a tool-heavy turn grows the
+        # array after each result. Never abbreviate an observation because it got
+        # older: file digests, compiler errors, and other control data remain live.
+        outbound_messages = list(working_messages)
         if input_token_budget:
             bounded = trim_messages_to_request_budget(
                 outbound_messages,
@@ -142,6 +142,10 @@ async def run_with_responses_tools(
                 fc = event.metadata.get("responsesFunctionCall")
                 if isinstance(fc, dict) and str(fc.get("name") or "").strip():
                     function_calls.append(fc)
+                replay_item = event.metadata.get("responsesOutputItem")
+                if isinstance(replay_item, dict):
+                    response_output_items.append(dict(replay_item))
+                    yield event
                 elif event.metadata.get(RESOLVED_MODEL_META_KEY):
                     # Forward, don't swallow: this loop owns the stream the
                     # orchestrator sees, so a dropped announcement is a run stamped
@@ -177,9 +181,10 @@ async def run_with_responses_tools(
             function_calls,
             completed_count=turn_state.tool_call_count,
         )
-        # Append assistant text item (if any) so the model sees its own narration
-        # on the next replay, then each function_call item.
-        if assistant_text:
+        # Replay provider output items unchanged. They carry opaque reasoning and
+        # assistant `phase`, both of which are part of the Responses state contract.
+        working_messages.extend(response_output_items)
+        if assistant_text and not any(item.get("type") == "message" for item in response_output_items):
             working_messages.append(
                 responses_items.assistant_message_item(
                     message_id=f"msg_{plan.turn_id}_{step_index}", text=assistant_text

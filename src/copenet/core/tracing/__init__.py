@@ -49,8 +49,8 @@ DEBUG_TIER_EVENTS = frozenset(
 )
 
 # One pathological run (a tool loop echoing large bodies under Debug capture)
-# must not be able to fill the disk. Past the cap the writer emits a single
-# `trace_truncated` row and goes quiet for the rest of the run.
+# must not be able to fill the disk. Past the cap the writer stops debug rows,
+# but lifecycle rows continue so the trace retains its outcome and terminal reason.
 DEFAULT_MAX_BYTES_PER_RUN = 8 * 1024 * 1024
 
 
@@ -74,7 +74,7 @@ class RunTraceWriter:
     _lock: threading.RLock = field(default_factory=threading.RLock, init=False, repr=False)
     _path: Path | None = field(default=None, init=False, repr=False)
     _written_bytes: int = field(default=0, init=False, repr=False)
-    _truncated: bool = field(default=False, init=False, repr=False)
+    _debug_truncated: bool = field(default=False, init=False, repr=False)
 
     @property
     def path(self) -> Path:
@@ -97,12 +97,12 @@ class RunTraceWriter:
 
     def record_debug(self, event: str, payload: dict[str, Any] | None = None) -> None:
         """Append a sanitized high-detail event only while Debug capture is active."""
-        if not self.debug:
+        if not self.debug or self._debug_truncated:
             return
         self._write(event, _sanitize(payload or {}), tier=TIER_DEBUG)
 
     def _write(self, event: str, payload: dict[str, Any] | None, *, tier: str) -> None:
-        if not self.enabled or self._truncated:
+        if not self.enabled:
             return
         try:
             path = self.path
@@ -121,8 +121,12 @@ class RunTraceWriter:
             line = json.dumps(row, ensure_ascii=False) + "\n"
             encoded = line.encode("utf-8")
             with self._lock:
-                if self.max_bytes > 0 and self._written_bytes + len(encoded) > self.max_bytes:
-                    self._truncated = True
+                if (
+                    tier == TIER_DEBUG
+                    and self.max_bytes > 0
+                    and self._written_bytes + len(encoded) > self.max_bytes
+                ):
+                    self._debug_truncated = True
                     encoded = (
                         json.dumps(
                             {
@@ -133,7 +137,11 @@ class RunTraceWriter:
                                 "sessionKey": self.session_key,
                                 "provider": self.provider,
                                 "model": self.model,
-                                "payload": {"maxBytes": self.max_bytes, "droppedAtEvent": event},
+                                "payload": {
+                                    "maxBytes": self.max_bytes,
+                                    "droppedAtEvent": event,
+                                    "scope": "debug",
+                                },
                             },
                             ensure_ascii=False,
                         )

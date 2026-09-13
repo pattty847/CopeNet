@@ -118,6 +118,33 @@ def test_parts_to_response_items_skips_invalid_parts() -> None:
     assert items[0]["content"][0]["text"] == "real text"
 
 
+def test_parts_to_response_items_replays_provider_items_with_phase_unchanged() -> None:
+    message = {
+        "type": "message",
+        "id": "msg_exact",
+        "role": "assistant",
+        "phase": "commentary",
+        "status": "completed",
+        "content": [{"type": "output_text", "text": "I checked the file.", "annotations": []}],
+    }
+    reasoning = {
+        "type": "reasoning",
+        "id": "rs_exact",
+        "encrypted_content": "opaque",
+        "summary": [],
+    }
+    parts = [
+        {"kind": "text", "text": "I checked the file."},
+        {"kind": "responses_item", "item": reasoning},
+        {"kind": "responses_item", "item": message},
+    ]
+
+    items = parts_to_response_items(parts, run_id="run_test")
+
+    assert items == [reasoning, message]
+    assert items[1]["phase"] == "commentary"
+
+
 def test_transcript_to_input_array_replays_full_conversation() -> None:
     # Transcript contains PAST turns only. The new user message is passed separately
     # and appended at the end — matches how runtime.py would call this.

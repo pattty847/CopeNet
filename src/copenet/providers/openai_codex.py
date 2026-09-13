@@ -265,6 +265,8 @@ def _build_responses_payload(
         "input": safe_input,
         "store": False,
         "stream": True,
+        # Never let the provider silently drop the oldest input items. CopeNet
+        # applies its visible whole-turn budget before dispatch.
     }
     resolved_instructions = _resolve_instructions(instructions)
     if resolved_instructions:
@@ -288,11 +290,8 @@ def _build_responses_payload(
         # Strip our internal control key before sending to the API.
         reasoning_payload = {k: v for k, v in reasoning.items() if k != "include_encrypted"}
         payload["reasoning"] = reasoning_payload
-        # Only request encrypted reasoning content when explicitly opted in. With
-        # store=false + a multi-step tool loop, requesting it creates an
-        # obligation to replay reasoning items on each re-POST (which the loop
-        # does not do). Default off: we still get reasoning_summary deltas for the
-        # thinking UX, and the model simply re-reasons per step.
+        # Stateless multi-step calls must replay encrypted reasoning items. The
+        # Responses loop and transcript replay preserve those items unchanged.
         if reasoning.get("include_encrypted"):
             payload["include"] = ["reasoning.encrypted_content"]
     return payload

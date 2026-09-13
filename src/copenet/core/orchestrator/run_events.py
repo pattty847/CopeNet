@@ -10,6 +10,26 @@ from .run_message_parts import _append_text_part, _append_thinking_part, _replay
 from copenet.core.tools.receipts import normalize_tool_step
 
 
+def _streaming_message_parts(parts: list[dict]) -> list[dict]:
+    """Project durable parts into the lightweight shape needed by live clients.
+
+    Exact Responses items and full replay outputs belong in the final transcript.
+    Repeating either payload on every text delta makes event capture grow
+    quadratically during a long tool loop.
+    """
+    projected: list[dict] = []
+    for part in parts:
+        if part.get("kind") == "responses_item":
+            continue
+        item = dict(part)
+        if item.get("kind") == "tool_result" and isinstance(item.get("toolExecution"), dict):
+            tool_execution = dict(item["toolExecution"])
+            tool_execution.pop("replayOutput", None)
+            item["toolExecution"] = tool_execution
+        projected.append(item)
+    return projected
+
+
 async def consume_reasoning(
     orchestrator, admission: RunAdmission, prepared: RunInput, events: RunEvents, event, emit
 ):
@@ -51,6 +71,11 @@ async def consume_metadata(
             {"requestedModel": admission.request.model, "resolvedModel": events.resolved_model},
         )
     tool_call_payload = event.metadata.get("toolCall")
+    responses_output_item = event.metadata.get("responsesOutputItem")
+    if isinstance(responses_output_item, dict):
+        events.assistant_message_parts.append(
+            {"kind": "responses_item", "item": dict(responses_output_item)}
+        )
     if isinstance(tool_call_payload, dict):
         events.assistant_message_parts.append({"kind": "tool_call", "toolCall": dict(tool_call_payload)})
         events.seq += 1
@@ -122,7 +147,7 @@ async def consume_text(
             "message": {
                 "role": "assistant",
                 "content": event.text,
-                "parts": [dict(part) for part in events.assistant_message_parts],
+                "parts": _streaming_message_parts(events.assistant_message_parts),
                 "provider": admission.provider_name,
                 "model": admission.request.model,
             },

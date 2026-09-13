@@ -12,15 +12,17 @@ from copenet.core.tools.contracts import ToolBlockedError, ToolExecutionContext
 
 
 def _clip_with_marker(text: str, limit: int, stream: str) -> str:
-    """Clip a stream to `limit` chars, appending a visible marker when truncated.
+    """Keep both ends of a stream and mark the omitted middle.
 
-    Silent truncation makes a model treat a clipped `git log`/test run as
-    complete. The marker rides the existing stdout/stderr fields to every loop
-    path (native, Responses, prompted), so the model knows there is more.
+    Compiler and test summaries often occur at the end, while command context is
+    at the start. Keeping only the prefix can hide the actual failure.
     """
     if len(text) <= limit:
         return text
-    return text[:limit] + f"\n[{stream} truncated at {limit} chars; {len(text)} total]"
+    marker = f"\n[{stream} omitted {len(text) - limit} middle chars; {len(text)} total]\n"
+    head = max(limit // 2, 1)
+    tail = max(limit - head, 1)
+    return text[:head] + marker + text[-tail:]
 
 
 async def run_command(

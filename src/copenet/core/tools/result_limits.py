@@ -12,4 +12,6 @@ def model_facing_result_char_limit() -> int:
             value = 0
         if value > 0:
             return value
-    return 30000
+    # Standard shell results can contain 30K of stdout and 30K of stderr. Keep
+    # both streams intact; this backstop is for genuinely exceptional payloads.
+    return 80000

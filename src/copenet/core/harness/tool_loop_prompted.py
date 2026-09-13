@@ -9,6 +9,7 @@ from copenet.core.runtime import TurnState
 from copenet.core.tools import ToolExecutionContext
 from copenet.providers import Provider, ProviderEvent
 
+from .context_window import estimate_request_tokens
 from .planning import HarnessTurnPlan
 from .tool_loop_common import (
     MAX_TOOL_STEPS,
@@ -26,12 +27,14 @@ from .tool_loop_common import (
     forwarded_resolved_model,
     compose_prompted_tool_correction,
     compose_prompted_tool_system_prompt,
+    neutralize_prompted_tool_delimiters,
     parse_prompted_tool_turn,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
 
 # Bound on consecutive corrective follow-ups for unusable tool syntax.
 MAX_PROMPTED_TOOL_CORRECTIONS = 2
+_RESUMABLE_PROMPTED_PROVIDERS = frozenset({"claude-cli"})
 
 
 async def run_with_prompted_tools(
@@ -46,6 +49,7 @@ async def run_with_prompted_tools(
     tool_executor: ToolExecutor,
     tool_context: ToolExecutionContext,
     trace: TraceRecorder | None,
+    input_token_budget: int | None = None,
 ) -> AsyncIterator[ProviderEvent]:
     """Run a bounded text-protocol tool loop for providers without native tools."""
     discovered_session = provider_session_id
@@ -61,6 +65,7 @@ async def run_with_prompted_tools(
     # A model that cannot produce valid tool syntax should not burn the whole step
     # budget being corrected. After this many consecutive failures, let the turn end.
     consecutive_corrections = 0
+    prior_tool_exchanges: list[str] = []
     if trace is not None:
         trace("turn_started", turn_state.to_public_dict())
 
@@ -71,6 +76,12 @@ async def run_with_prompted_tools(
                 trace("turn_completed", turn_state.to_public_dict())
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
             return
+        if input_token_budget:
+            request_items = [{"role": "user", "content": current_prompt}]
+            if current_system_prompt:
+                request_items.insert(0, {"role": "system", "content": current_system_prompt})
+            if estimate_request_tokens(request_items) > input_token_budget:
+                raise ValueError("Current turn exceeds the provider input budget")
         events, discovered_session = await collect_provider_turn(
             provider=provider,
             prompt=current_prompt,
@@ -204,11 +215,24 @@ async def run_with_prompted_tools(
             )
             yield ProviderEvent(kind="final", provider_session_id=discovered_session)
             return
+        safe_assistant_text = neutralize_prompted_tool_delimiters(assistant_text)
+        safe_payloads = [neutralize_prompted_tool_delimiters(payload) for payload in tool_payloads]
+        exchange = (
+            f"Assistant tool request text:\n{safe_assistant_text}\n\n"
+            "Tool results:\n" + "\n\n".join(safe_payloads)
+        )
+        replay_prior = (
+            []
+            if provider.name in _RESUMABLE_PROMPTED_PROVIDERS
+            else list(prior_tool_exchanges)
+        )
         current_prompt = _compose_prompted_tool_followup(
             user_prompt=prompt,
             assistant_text=assistant_text,
             tool_payloads=tool_payloads,
+            prior_tool_exchanges=replay_prior,
         )
+        prior_tool_exchanges.append(exchange)
 
     turn_state.terminal_reason = "max_turns"
     if trace is not None:

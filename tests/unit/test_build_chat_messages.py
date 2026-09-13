@@ -129,6 +129,21 @@ def test_flatten_messages_renders_tool_exchange_readably() -> None:
     assert "tool result: contents" in prompt
 
 
+def test_flatten_messages_keeps_complete_tool_output() -> None:
+    output = "lint detail\n" * 1000
+    messages = [
+        {"role": "user", "content": [{"type": "input_text", "text": "run lint"}]},
+        {"type": "function_call", "call_id": "c1", "name": "shell_exec", "arguments": "{}"},
+        {"type": "function_call_output", "call_id": "c1", "output": output},
+        {"role": "user", "content": [{"type": "input_text", "text": "fix it"}]},
+    ]
+
+    prompt = flatten_messages_to_prompt(messages)
+
+    assert output.strip() in prompt
+    assert "[truncated]" not in prompt
+
+
 def test_token_budget_drops_oldest_complete_turns_and_keeps_tool_pairs() -> None:
     messages = [
         {"role": "user", "content": [{"type": "input_text", "text": "A" * 80}]},

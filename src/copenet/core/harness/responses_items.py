@@ -21,9 +21,6 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, TypedDict
 
-from .tool_loop_common import compact_stale_responses_items
-
-
 # Resolves a transcript message's stored attachment refs (list of dicts carrying
 # `attachmentId`) into Responses `input_image` content parts. Injected by the
 # orchestrator so this module stays free of storage dependencies.
@@ -145,14 +142,26 @@ def parts_to_response_items(parts: list[dict[str, Any]], *, run_id: str) -> list
         and part.get("toolExecution", {}).get("callId")
     }
     paired = calls & results
+    has_provider_message = any(
+        part.get("kind") == "responses_item"
+        and isinstance(part.get("item"), dict)
+        and part["item"].get("type") == "message"
+        for part in parts
+    )
     items: list[dict[str, Any]] = []
     for index, part in enumerate(parts):
         kind = part.get("kind")
         if kind == "text":
+            if has_provider_message:
+                continue
             text = str(part.get("text") or part.get("content") or "").strip()
             if not text:
                 continue
             items.append(assistant_message_item(message_id=f"msg_{run_id}_{index}", text=text))
+        elif kind == "responses_item":
+            item = part.get("item")
+            if isinstance(item, dict) and item.get("type") in {"message", "reasoning"}:
+                items.append(dict(item))
         elif kind == "tool_call":
             tc = part.get("toolCall") or {}
             name = str(tc.get("toolId") or "").strip()
@@ -221,7 +230,7 @@ def transcript_to_input_array(
                 if content:
                     items.append(assistant_message_item(message_id=f"msg_{run_id}", text=content))
     items.append(user_input_item(current_user_message, current_user_image_parts))
-    return compact_stale_responses_items(items)
+    return items
 
 
 # -- Helpers --------------------------------------------------------------------

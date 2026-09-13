@@ -165,6 +165,17 @@ async def test_responses_loop_executes_tool_then_finalizes(tmp_path: Path) -> No
             # Turn 1: a reasoning blip, then a function_call, then completion.
             [
                 ProviderEvent(kind="reasoning_delta", text="thinking about the file"),
+                ProviderEvent(
+                    kind="meta",
+                    metadata={
+                        "responsesOutputItem": {
+                            "type": "reasoning",
+                            "id": "rs_1",
+                            "encrypted_content": "opaque-state",
+                            "summary": [],
+                        }
+                    },
+                ),
                 _fc("call_1", "files.read", {"path": "foo.txt"}),
                 _COMPLETED,
             ],
@@ -210,6 +221,7 @@ async def test_responses_loop_executes_tool_then_finalizes(tmp_path: Path) -> No
     types = [item.get("type") for item in second_input]
     assert "function_call" in types
     assert "function_call_output" in types
+    assert any(item.get("type") == "reasoning" and item.get("encrypted_content") == "opaque-state" for item in second_input)
     fc_item = next(i for i in second_input if i.get("type") == "function_call")
     fco_item = next(i for i in second_input if i.get("type") == "function_call_output")
     assert fc_item["call_id"] == "call_1"
@@ -229,14 +241,8 @@ async def test_responses_loop_executes_tool_then_finalizes(tmp_path: Path) -> No
 
 
 @pytest.mark.asyncio
-async def test_responses_loop_compacts_stale_tool_outputs(tmp_path: Path) -> None:
-    """A long tool-heavy turn must not resend every prior tool result at full size.
-
-    8 files.read calls, each returning a large body. By the time the model is
-    asked for its 9th response, the first 2 (8 - KEEP_RECENT_TOOL_RESULTS=6)
-    function_call_output items in the outbound message list must be compacted;
-    the most recent 6 must remain untouched, full-size.
-    """
+async def test_responses_loop_keeps_every_tool_output_intact(tmp_path: Path) -> None:
+    """Tool-output age must never change the evidence sent to the model."""
     big_body = "x" * 5000
 
     async def tool_executor(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
@@ -266,16 +272,7 @@ async def test_responses_loop_compacts_stale_tool_outputs(tmp_path: Path) -> Non
     final_input = provider.seen_messages[-1]
     fco_items = [item for item in final_input if item.get("type") == "function_call_output"]
     assert len(fco_items) == 8
-    sizes = [len(item["output"]) for item in fco_items]
-    # First 2 (stale) are compacted well below the full 5000-char body.
-    assert all(size < 1000 for size in sizes[:2]), sizes
-    # Most recent 6 stay full-size, byte-identical to what the tool actually returned.
-    assert all(json.loads(item["output"])["body"] == big_body for item in fco_items[2:])
-    # Compaction keeps the actionable envelope fields on the stale ones too.
-    for item in fco_items[:2]:
-        stale = json.loads(item["output"])
-        assert stale["ok"] is True
-        assert stale["summary"] == "Read file"
+    assert all(json.loads(item["output"])["body"] == big_body for item in fco_items)
 
 
 @pytest.mark.asyncio
@@ -481,7 +478,8 @@ async def test_harness_enables_reasoning_on_responses_path(tmp_path: Path) -> No
     assert plan.tool_execution_mode == "responses"
     _ = [event async for event in stream]
     assert provider.seen_reasoning[0] == DEFAULT_RESPONSES_REASONING
-    assert provider.seen_reasoning[0]["summary"] == "auto"
+    assert provider.seen_reasoning[0]["summary"] == "detailed"
+    assert provider.seen_reasoning[0]["include_encrypted"] is True
 
 
 @pytest.mark.parametrize("terminal", [[], [ProviderEvent(kind="meta", metadata={"responsesCompleted": False})]])

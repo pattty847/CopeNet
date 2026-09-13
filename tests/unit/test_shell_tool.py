@@ -204,9 +204,10 @@ def test_clip_with_marker_flags_truncation() -> None:
     from copenet.core.tools.handlers._shared import _clip_with_marker
 
     assert _clip_with_marker("short", 100, "stdout") == "short"
-    clipped = _clip_with_marker("x" * 50, 10, "stdout")
-    assert clipped.startswith("x" * 10)
-    assert "[stdout truncated at 10 chars; 50 total]" in clipped
+    clipped = _clip_with_marker("start" + ("x" * 50) + "finish", 20, "stdout")
+    assert clipped.startswith("s")
+    assert clipped.endswith("h")
+    assert "[stdout omitted" in clipped and "61 total]" in clipped
 
 
 @pytest.mark.asyncio

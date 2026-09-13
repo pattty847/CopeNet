@@ -299,7 +299,7 @@ async def test_delegate_subagent_task_runs_through_orchestrator_selection() -> N
 
 
 @pytest.mark.asyncio
-async def test_delegate_subagent_task_falls_back_and_trims_response() -> None:
+async def test_delegate_subagent_task_falls_back_without_cutting_response() -> None:
     providers = {"openai-codex": object(), "claude-cli": object()}
     orch = MultiAgentOrchestrator(providers=providers)
     task = SubAgentTask(objective="Investigate", route="call_tool", max_response_chars=220)
@@ -318,6 +318,5 @@ async def test_delegate_subagent_task_falls_back_and_trims_response() -> None:
     assert result.ok
     assert result.provider_id == "claude-cli"
     assert result.response is not None
-    assert len(result.response) <= 220
-    assert "truncated by CopeNet sub-agent boundary" in result.response
+    assert result.response == "x" * 500
     assert result.turn.outcome.used_fallback

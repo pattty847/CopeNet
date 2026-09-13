@@ -125,11 +125,11 @@ def test_tool_call_and_result_are_never_split() -> None:
 def test_oversized_current_user_item_is_rejected_before_provider_dispatch() -> None:
     messages = [_text_turn("old"), _text_turn("X" * 100_000)]
 
-    with pytest.raises(ValueError, match="Current user turn"):
+    with pytest.raises(ValueError, match="Current turn"):
         trim_messages_to_token_budget(messages, max_context_tokens=10)
 
 
-def test_live_tool_exchange_is_trimmed_as_a_complete_call_result_pair() -> None:
+def test_live_tool_exchange_is_never_silently_trimmed() -> None:
     messages = [
         _text_turn("current"),
         {"type": "function_call", "call_id": "old", "name": "read", "arguments": "{}"},
@@ -138,9 +138,8 @@ def test_live_tool_exchange_is_trimmed_as_a_complete_call_result_pair() -> None:
         {"type": "function_call_output", "call_id": "new", "output": "B" * 80},
     ]
 
-    trimmed = trim_messages_to_token_budget(messages, max_context_tokens=40)
-
-    assert [item.get("call_id") for item in trimmed[1:]] == ["new", "new"]
+    with pytest.raises(ValueError, match="Current turn"):
+        trim_messages_to_token_budget(messages, max_context_tokens=40)
 
 
 def test_grouping_attaches_tool_items_to_the_turn_that_caused_them() -> None:

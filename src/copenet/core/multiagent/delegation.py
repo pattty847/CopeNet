@@ -110,8 +110,7 @@ async def delegate_subagent_task(
     prompt = build_subagent_prompt(task)
 
     async def run_on_provider(provider: Any, provider_id: str) -> str:
-        response = await run_subagent(provider, provider_id, prompt)
-        return _trim_response(response, task.max_response_chars)
+        return await run_subagent(provider, provider_id, prompt)
 
     turn = await orchestrator.run_turn(
         route=task.route,
@@ -128,10 +127,3 @@ def _clean_items(items: Sequence[str]) -> tuple[str, ...]:
 
 def _format_bullets(items: Sequence[str]) -> str:
     return "\n".join(f"- {item}" for item in items)
-
-
-def _trim_response(response: str, max_chars: int) -> str:
-    if len(response) <= max_chars:
-        return response
-    marker = "\n\n[truncated by CopeNet sub-agent boundary]"
-    return response[: max_chars - len(marker)].rstrip() + marker

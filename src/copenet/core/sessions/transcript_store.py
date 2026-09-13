@@ -111,10 +111,10 @@ class TranscriptStore:
         path = self.transcript_path_for(session_id)
         append_jsonl(path, message.to_json())
 
-    def read_history(self, session_id: str, limit: int = 200) -> list[dict[str, Any]]:
-        """Read bounded transcript history for a session."""
+    def read_history(self, session_id: str, limit: int | None = 200) -> list[dict[str, Any]]:
+        """Read transcript history for a session, optionally without a row cap."""
         path = self.transcript_path_for(session_id)
-        if limit <= 0:
+        if limit is not None and limit <= 0:
             return []
 
         with _path_lock(path):
@@ -123,7 +123,8 @@ class TranscriptStore:
             lines = path.read_text(encoding="utf-8").splitlines()
 
         records: list[dict[str, Any]] = []
-        for line in lines[-limit:]:
+        selected_lines = lines if limit is None else lines[-limit:]
+        for line in selected_lines:
             line = line.strip()
             if not line:
                 continue
@@ -137,7 +138,7 @@ class TranscriptStore:
 
     def copy_history(self, source_session_id: str, target_session_id: str) -> int:
         """Copy all transcript records from one session id to another."""
-        records = self.read_history(source_session_id, limit=100000)
+        records = self.read_history(source_session_id, limit=None)
         count = 0
         for record in records:
             self.append_message(
