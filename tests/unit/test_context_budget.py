@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import pytest
 
+from copenet.core.harness.token_count import count_text_tokens
 from copenet.core.harness.context_window import (
     estimate_input_tokens,
     estimate_request_tokens,
@@ -98,8 +99,14 @@ def test_unknown_item_types_cannot_cost_zero() -> None:
     assert estimate_input_tokens([future_item]) > 1_000
 
 
-def test_text_estimate_is_still_roughly_char_quarter() -> None:
-    assert estimate_input_tokens([_text_turn("a" * 400)]) == 100
+def test_text_is_counted_by_the_tokenizer_not_by_character_quotient() -> None:
+    """Numeric CSV runs near 2.2 chars/token; chars/4 under-counted a chart packet by 1.8x."""
+    csv_rows = "\n".join(f"{1741132800 + i * 86400},{26 + i / 100:.2f},{27 + i / 100:.2f},{25 + i / 100:.2f},{26.5 + i / 100:.2f},{13258700 + i}"
+                         for i in range(200))
+    counted = estimate_input_tokens([_text_turn(csv_rows)])
+
+    assert counted == count_text_tokens(csv_rows)
+    assert counted > len(csv_rows) // 3
 
 
 # -- trimming invariants ---------------------------------------------------------
@@ -215,17 +222,21 @@ def test_complete_request_estimate_counts_instructions_and_tool_schemas() -> Non
 
 
 def test_request_budget_charges_fixed_overhead_before_retaining_history() -> None:
-    messages = [_text_turn("old" * 400), _text_turn("current")]
+    messages = [_text_turn("old turn " * 400), _text_turn("current")]
+    instructions = "system instruction " * 200
+    tools = [{"description": "tool schema " * 200}]
+    fixed = estimate_request_tokens([], instructions=instructions, tools=tools)
+    max_input_tokens = fixed + estimate_request_tokens([messages[-1]]) + 50
 
     bounded = trim_messages_to_request_budget(
         messages,
-        max_input_tokens=300,
-        instructions="I" * 400,
-        tools=[{"description": "T" * 400}],
+        max_input_tokens=max_input_tokens,
+        instructions=instructions,
+        tools=tools,
     )
 
     assert bounded == [messages[-1]]
-    assert estimate_request_tokens(bounded, instructions="I" * 400, tools=[{"description": "T" * 400}]) <= 300
+    assert estimate_request_tokens(bounded, instructions=instructions, tools=tools) <= max_input_tokens
 
 
 @pytest.mark.asyncio

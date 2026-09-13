@@ -1,6 +1,7 @@
-"""Estimating and bounding the provider-bound input view.
+"""Counting and bounding the provider-bound input view.
 
-One owner for "how big is this request" and "what do we drop". Both the
+One owner for "how big is this request" and "what do we drop". Sizes are
+tokenizer counts (`token_count.py`), not character quotients. Both the
 orchestrator (before a turn starts) and the tool loops (as a turn grows) use
 these, so a long agentic turn cannot walk off the context window after the
 initial trim said it was fine.
@@ -14,16 +15,23 @@ from __future__ import annotations
 import json
 from typing import Any
 
+from .token_count import count_text_tokens
+
 # A base64 image costs the model far fewer tokens than its encoded length, but it
 # is emphatically not free. Charging encoded_len/IMAGE_CHARS_PER_TOKEN_DIVISOR keeps
 # images visible to the budget without pretending we know the tiling cost. It is a
 # deliberate over-estimate: overflow is expensive, over-trimming is merely lossy.
-IMAGE_CHARS_PER_TOKEN_DIVISOR = 40
+# (A 1.5 MB payload charges about 9K tokens; a frontier model bills 1-2K.)
+IMAGE_CHARS_PER_TOKEN_DIVISOR = 160
+
+# Every message carries role and framing tokens beyond its text. OpenAI documents
+# about four per message; charging them keeps a long history from reading as free.
+MESSAGE_OVERHEAD_TOKENS = 4
 
 
 def estimate_input_tokens(messages: list[dict[str, Any]]) -> int:
-    """Rough char/4 token estimate over the input array."""
-    return max(sum(item_estimated_chars(item) for item in messages) // 4, 0)
+    """Tokenizer-counted total over the input array (text exact, images heuristic)."""
+    return max(sum(item_token_count(item) for item in messages), 0)
 
 
 def estimate_request_tokens(
@@ -32,40 +40,41 @@ def estimate_request_tokens(
     instructions: str | None = None,
     tools: list[dict[str, Any]] | None = None,
 ) -> int:
-    """Estimate the complete provider request, not only its message bodies."""
-    structural_chars = 64 * len(messages)
+    """Count the complete provider request, not only its message bodies."""
+    total = estimate_input_tokens(messages) + MESSAGE_OVERHEAD_TOKENS * len(messages)
     if instructions:
-        structural_chars += len(instructions)
+        total += count_text_tokens(instructions)
     if tools:
-        structural_chars += len(json.dumps(tools, ensure_ascii=False, separators=(",", ":")))
-    return estimate_input_tokens(messages) + ((structural_chars + 3) // 4)
+        total += count_text_tokens(json.dumps(tools, ensure_ascii=False, separators=(",", ":")))
+    return total
 
 
-def item_estimated_chars(item: dict[str, Any]) -> int:
+def item_token_count(item: dict[str, Any]) -> int:
     """Charge every item shape, including the ones we do not model yet."""
     item_type = item.get("type")
     if item_type == "function_call":
-        return len(str(item.get("name") or "")) + len(str(item.get("arguments") or ""))
+        return count_text_tokens(str(item.get("name") or "")) + count_text_tokens(str(item.get("arguments") or ""))
     if item_type == "function_call_output":
-        return len(str(item.get("output") or ""))
+        return count_text_tokens(str(item.get("output") or ""))
     if item_type == "reasoning":
-        # Encrypted reasoning is opaque but still occupies the window.
-        return len(str(item.get("encrypted_content") or "")) + sum(
-            len(str(entry.get("text") or ""))
+        # Encrypted reasoning is opaque but still occupies the window; the
+        # ciphertext length is the only size signal the provider gives us.
+        return len(str(item.get("encrypted_content") or "")) // 4 + sum(
+            count_text_tokens(str(entry.get("text") or ""))
             for entry in (item.get("summary") or [])
             if isinstance(entry, dict)
         )
     content = item.get("content")
     if isinstance(content, list):
-        return sum(_content_part_chars(part) for part in content if isinstance(part, dict))
+        return sum(_content_part_tokens(part) for part in content if isinstance(part, dict))
     if content is not None:
-        return len(str(content))
+        return count_text_tokens(str(content))
     # An unmodelled shape (compaction, phase, a future output type) must cost
     # something, or the budget silently under-counts as the provider API evolves.
-    return len(json.dumps(item, ensure_ascii=False))
+    return count_text_tokens(json.dumps(item, ensure_ascii=False))
 
 
-def _content_part_chars(part: dict[str, Any]) -> int:
+def _content_part_tokens(part: dict[str, Any]) -> int:
     """Charge every content part, not just the ones carrying `text`.
 
     `input_image` parts hold their base64 payload under `image_url`. Counting only
@@ -74,13 +83,13 @@ def _content_part_chars(part: dict[str, Any]) -> int:
     """
     text = part.get("text")
     if isinstance(text, str):
-        return len(text)
+        return count_text_tokens(text)
     image_url = part.get("image_url")
     if isinstance(image_url, str):
         return max(len(image_url) // IMAGE_CHARS_PER_TOKEN_DIVISOR, 1)
     if isinstance(image_url, dict):  # Chat-Completions-style {"url": ...}
         return max(len(str(image_url.get("url") or "")) // IMAGE_CHARS_PER_TOKEN_DIVISOR, 1)
-    return len(json.dumps(part, ensure_ascii=False))
+    return count_text_tokens(json.dumps(part, ensure_ascii=False))
 
 
 def trim_messages_to_token_budget(
