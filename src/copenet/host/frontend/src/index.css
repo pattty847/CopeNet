@@ -160,6 +160,18 @@ select {
   .shell-section-gutter { --shell-gutter: 10px; }
 }
 
+/* iOS zooms the viewport when a focused form control renders below 16px. Keep mobile
+ * controls at the native threshold while preserving pinch zoom for accessibility. */
+@media (max-width: 1023px) {
+  body :is(
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='color']),
+    textarea,
+    select
+  ) {
+    font-size: 16px;
+  }
+}
+
 /* The utility pages' section header: the same caps-and-hairline language as the market
  * bar, replacing the full-width marketing hero each one used to open with. */
 .shell-section-head {

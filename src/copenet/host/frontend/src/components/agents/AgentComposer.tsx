@@ -9,6 +9,7 @@ import { uploadChatAttachment } from '../../lib/appApi';
 import type { ChatAttachment, DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 import type { UniverseAsset } from '../../sections/market/types';
 import { ComposerToolPickerButton, ComposerToolTray } from './ComposerToolControls';
+import { shouldSubmitComposerOnEnter } from './composerKeyboard';
 
 /** A composer-local image attachment in flight: object-URL preview + upload status. */
 interface PendingAttachment {
@@ -395,8 +396,8 @@ export function AgentComposer({
   composerKey,
   value,
   onChange,
-  onKeyDown,
   onSend,
+  isMobile,
   optimizationProviderId,
   optimizationModelId,
   disabled,
@@ -408,12 +409,12 @@ export function AgentComposer({
   composerKey: string;
   value: string;
   onChange: (value: string) => void;
-  onKeyDown: (event: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   onSend: (
     messageOverride?: string,
     attachments?: ChatAttachment[],
     requestedToolIds?: string[],
   ) => Promise<boolean>;
+  isMobile: boolean;
   optimizationProviderId: string;
   optimizationModelId?: string | null;
   disabled: boolean;
@@ -618,12 +619,15 @@ export function AgentComposer({
         return;
       }
     }
-    if (event.key === 'Enter' && !event.shiftKey) {
+    if (shouldSubmitComposerOnEnter({
+      key: event.key,
+      shiftKey: event.shiftKey,
+      isComposing: event.nativeEvent.isComposing,
+      isMobile,
+    })) {
       event.preventDefault();
       void submitMessage(value);
-      return;
     }
-    onKeyDown(event);
   };
 
   const handleStop = async () => {
@@ -980,6 +984,7 @@ export function AgentComposer({
               onPaste={handlePaste}
               disabled={disabled}
               placeholder={placeholder}
+              enterKeyHint={isMobile ? 'enter' : 'send'}
               className="max-h-[160px] min-h-[28px] flex-1 resize-none overflow-y-auto bg-transparent px-0.5 py-1 text-[13.5px] leading-[1.5] text-operator-text outline-none placeholder:text-operator-muted/55 disabled:opacity-40"
               rows={1}
             />

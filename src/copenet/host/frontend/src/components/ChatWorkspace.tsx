@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState, KeyboardEvent } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import type { ChatAttachment } from '../types/backend';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
@@ -10,6 +10,7 @@ import { ConversationDebugActions } from './ConversationDebugActions';
 import { SessionActionsMenu } from './SessionActionsMenu';
 import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
+import { TranscriptScroll } from './agents/TranscriptScroll';
 import { AgentComposer } from './agents/AgentComposer';
 import { buildPersonaCommandHelpText, DRAFT_TRANSCRIPT_SESSION_KEY, parsePersonaSlashCommand, resolvePersonaRuntime } from '../lib/personaCommands';
 import { formatConversationMarkdown, formatConversationWithToolActivityMarkdown } from '../lib/chatExport';
@@ -75,7 +76,6 @@ export function ChatWorkspace() {
   const [editTitleValue, setEditTitleValue] = useState('');
   const [actionsOpen, setActionsOpen] = useState(false);
   const [copiedAction, setCopiedAction] = useState<'chat' | 'chat_activity' | null>(null);
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   const actionsMenuRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -101,10 +101,6 @@ export function ChatWorkspace() {
       cancelled = true;
     };
   }, [activeSessionKey, setMergeState, upsertSessionState]);
-
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
 
   useEffect(() => {
     if (!draftComposerSeed) return;
@@ -254,13 +250,6 @@ export function ChatWorkspace() {
     } catch (error) {
       setAppError(error instanceof Error ? error.message : 'Unable to send message.');
       return false;
-    }
-  };
-
-  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      void handleSend();
     }
   };
 
@@ -617,7 +606,7 @@ export function ChatWorkspace() {
           context now. The component file + dead adapter hooks are swept in
           Phase 5. */}
 
-      <div className={`flex-1 overflow-y-auto ${isMobile ? 'px-3 py-3' : 'px-4 py-4'}`}>
+      <TranscriptScroll sessionKey={composerKey} className={isMobile ? 'px-3 py-3' : 'px-4 py-4'}>
         {messages.length === 0 ? (
           mergeDraft ? (
             <div className={`mx-auto w-full max-w-2xl ${isMobile ? 'mt-4' : 'mt-10'}`}>
@@ -784,18 +773,17 @@ export function ChatWorkspace() {
             {messages.map((message) => (
               <MessageBubble key={message.localId} message={message} />
             ))}
-            <div ref={messagesEndRef} />
           </div>
         )}
-      </div>
+      </TranscriptScroll>
 
       {/* Composer */}
       <AgentComposer
         composerKey={composerKey}
         value={input}
         onChange={setInput}
-        onKeyDown={handleKeyDown}
         onSend={handleSend}
+        isMobile={isMobile}
         optimizationProviderId={isDraft ? draftSettings.provider : activeSession?.provider || draftSettings.provider}
         optimizationModelId={isDraft ? draftSettings.model : activeSession?.model || draftSettings.model}
         disabled={composerDisabled}

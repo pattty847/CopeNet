@@ -21,6 +21,12 @@ The Agents view keeps the live conversation and runtime inspector together so a 
 ![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
 ![CopeNet Agents Console with structured tool attachments](docs/imgs/agent-tool-attachments.png)
 
+Close the browser while a run continues, then reopen the session to recover the answer so far and resume streaming. Scroll up to read at your own pace; new output appends beneath you. **Jump to latest** resumes automatic following. Runs require the host to remain running.
+
+![Agents streaming with the reader paused at the beginning](docs/imgs/agents-streaming-1440.png)
+
+Mobile touch scrolling and recovery use the same behavior. [Mobile streaming preview](docs/imgs/agents-streaming-390.png).
+
 ### Fleet Rooms — ChatGPT and Claude collaborate without agreement theater
 Fleet is a durable multi-model room inside Agents. An `@everyone` prompt runs ChatGPT and Claude from the same room snapshot behind an independent-first reveal barrier, then commits both answers with attributed tool receipts. Follow up with `@chatgpt` or `@claude` to challenge a claim directly; each provider keeps its own resumable lane while the room remains the product-visible source of truth.
 
