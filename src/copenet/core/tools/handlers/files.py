@@ -46,8 +46,8 @@ DESCRIPTORS = [
         name="Ripgrep Search",
         description=(
             "Search text inside files under the current workdir with a ripgrep regex pattern. "
-            "Supports offset/limit paging and context_lines (lines of context around each match); "
-            "returns a continuation hint when matches are truncated. "
+            "Returns at most 200 matches per call (default 80); use offset to page, or narrow the "
+            "pattern/path when the total is large. context_lines adds lines of context around each match. "
             "Note: searches file contents only, not filenames or directory paths. "
             "To locate files or directories by name, use shell.exec with find."
         ),
@@ -77,7 +77,7 @@ DESCRIPTORS = [
         name="Write File",
         description=(
             "Create or overwrite a text file inside the current workdir. "
-            "Pass expected_digest from a prior files.read to guard against stale overwrites."
+            "Overwriting a file you read earlier in this run fails if the file changed on disk since that read."
         ),
         category="repo-write",
         input_schema={
@@ -85,7 +85,6 @@ DESCRIPTORS = [
             "properties": {
                 "path": {"type": "string"},
                 "content": {"type": "string"},
-                "expected_digest": {"type": "string"},
             },
             "required": ["path", "content"],
         },
@@ -98,7 +97,8 @@ DESCRIPTORS = [
         name="Edit File",
         description=(
             "Replace an exact text span in an existing file inside the current workdir. "
-            "Set replace_all to change every occurrence; pass expected_digest from files.read for stale-write protection."
+            "Set replace_all to change every occurrence. The edit fails if the file changed on disk "
+            "since you last read or edited it in this run; re-read it and retry."
         ),
         category="repo-write",
         input_schema={
@@ -108,7 +108,6 @@ DESCRIPTORS = [
                 "old_text": {"type": "string"},
                 "new_text": {"type": "string"},
                 "replace_all": {"type": "boolean"},
-                "expected_digest": {"type": "string"},
             },
             "required": ["path", "old_text", "new_text"],
         },
@@ -120,6 +119,11 @@ DESCRIPTORS = [
 
 
 FILE_READ_ABSOLUTE_MAX = 500_000  # ~500KB safety guard; honors explicit limit up to here.
+# Hard ceiling on matches returned by one files.rg call, whatever `limit` says.
+# Models pass limit=20000 on a broad first search; two such calls put 8,974 and
+# 1,153 matches into context on real runs (~50K tokens before a file was read).
+# Paging and a narrower pattern are always available; a dump never is useful.
+SEARCH_RESULT_HARD_CAP = 200
 
 
 async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
@@ -284,7 +288,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         raise ValueError("pattern is required")
     offset = max(int(request.arguments.get("offset") or 0), 0)
     requested_limit = int(request.arguments.get("limit") or 0)
-    effective_limit = requested_limit if requested_limit > 0 else context.policy.search_result_limit
+    effective_limit = min(requested_limit if requested_limit > 0 else context.policy.search_result_limit, SEARCH_RESULT_HARD_CAP)
     context_lines = max(int(request.arguments.get("context_lines") or 0), 0)
     root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
     if not root.exists():
@@ -355,6 +359,8 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     summary = f"Found {total_matches} matches for pattern via ripgrep; returning {len(hits)}."
     if truncated:
         summary += f" [Showing matches {offset + 1}-{next_offset}. Total found: {total_matches}. Use offset={next_offset} to continue.]"
+        if total_matches > SEARCH_RESULT_HARD_CAP * 2:
+            summary += " This pattern matches too broadly to read through; narrow the pattern or the path instead of paging."
     if warning_message:
         summary += f" Warning: {warning_message}"
     return ToolExecutionResult(
@@ -377,13 +383,12 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
 async def write_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     path = resolve_relative_path(str(request.arguments.get("path") or ""), context)
     content = request.arguments.get("content")
-    expected_digest = str(request.arguments.get("expected_digest") or "").strip() or None
     if not path.name:
         raise ValueError("path is required")
     if not isinstance(content, str):
         raise ValueError("content is required")
     ensure_write_allowed(path, context)
-    _ensure_expected_digest(path, expected_digest=expected_digest, context=context)
+    _ensure_fresh(path, context=context)
     existed = path.is_file()
     before = path.read_text(encoding="utf-8", errors="replace") if existed else ""
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -416,7 +421,6 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     old_text = request.arguments.get("old_text")
     new_text = request.arguments.get("new_text")
     replace_all = bool(request.arguments.get("replace_all"))
-    expected_digest = str(request.arguments.get("expected_digest") or "").strip() or None
     if not path.name:
         raise ValueError("path is required")
     if not isinstance(old_text, str) or not old_text:
@@ -426,7 +430,7 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     ensure_write_allowed(path, context)
     if not path.is_file():
         raise RuntimeError(f"file not found: {path}")
-    _ensure_expected_digest(path, expected_digest=expected_digest, context=context)
+    _ensure_fresh(path, context=context)
     text = path.read_text(encoding="utf-8", errors="replace")
     occurrence_count = text.count(old_text)
     if occurrence_count == 0:
@@ -569,18 +573,25 @@ def _remember_file_digest(context: ToolExecutionContext, *, target: str, digest:
     state[target] = digest
 
 
-def _ensure_expected_digest(
-    path: Path,
-    *,
-    expected_digest: str | None,
-    context: ToolExecutionContext,
-) -> None:
-    if not expected_digest or not path.exists() or not path.is_file():
+def _ensure_fresh(path: Path, *, context: ToolExecutionContext) -> None:
+    """Refuse to write over a file that changed since this run last read or wrote it.
+
+    The harness already records the digest of every file this run has read or
+    written (`file_read_state`), so freshness is enforced from that record. The
+    earlier protocol asked the model to copy an `expected_digest` back by hand;
+    on a real run the model sent digests that appeared in no tool output at all
+    (invented hex), and each miss cost two extra round trips. A file this run has
+    not touched is not checked: the record is per run, and a file read in an
+    earlier turn is legitimately edited in the next one.
+    """
+    if not path.exists() or not path.is_file():
         return
-    current_text = path.read_text(encoding="utf-8", errors="replace")
-    current_digest = _content_digest(current_text)
-    if current_digest != expected_digest:
-        display = display_path(path, context)
+    known = context.ephemeral.get("file_read_state", {}).get(display_path(path, context))
+    if not known:
+        return
+    current_digest = _content_digest(path.read_text(encoding="utf-8", errors="replace"))
+    if current_digest != known:
         raise RuntimeError(
-            f"stale read detected for {display}; expected digest {expected_digest}, current digest {current_digest}"
+            f"{display_path(path, context)} changed on disk since you last read it in this run "
+            f"(digest {known} then, {current_digest} now); read it again before editing"
         )

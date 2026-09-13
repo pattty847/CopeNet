@@ -27,7 +27,9 @@ async def test_all_tool_loops_deliver_csv_and_preserve_result_identity(tmp_path,
             message["output"] for message in messages if message.get("type") == "function_call_output")
         envelope = json.loads(raw)
         assert envelope["body"] == model_body
-        assert envelope["callId"] and envelope["ok"] is True and envelope["summary"] == "Exact table"
+        # The provider pairs the result to its call itself; the model-facing
+        # envelope carries no call id.
+        assert "callId" not in envelope and envelope["ok"] is True and envelope["summary"] == "Exact table"
     runtime = next(event.metadata["toolResult"] for event in events if event.metadata and "toolResult" in event.metadata)
     assert runtime["body"] == model_body
 

@@ -156,17 +156,16 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         "Available tools:\n"
         '- files.read: Read one fixture. Schema: {"properties": {"path": {"type": "string"}}, "type": "object"}'
     )
+    # The model-facing envelope: no call id or channel (the loop pairs results
+    # itself), no indentation, no access-policy bookkeeping on an allowed call.
     tool_result = json.dumps(
         {
-            "callId": "call-fixed",
             "toolId": "files.read",
-            "channel": "tool",
             "ok": True,
             "summary": "Read fixture.txt",
             "body": "HELLO_SENTINEL",
         },
         ensure_ascii=False,
-        indent=2,
     )
     # Tool delimiters are neutralized on the way back in so replayed text can never
     # present the model with a ready-made call to echo.

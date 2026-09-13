@@ -195,7 +195,7 @@ async def test_files_read_returns_digest_and_bounded_window(tmp_path: Path) -> N
 
 
 @pytest.mark.asyncio
-async def test_files_edit_rejects_stale_expected_digest(tmp_path: Path) -> None:
+async def test_files_edit_rejects_a_file_changed_since_this_run_read_it(tmp_path: Path) -> None:
     sample = tmp_path / 'README.md'
     sample.write_text('hello world\n', encoding='utf-8')
     registry = ToolRegistry()
@@ -218,11 +218,13 @@ async def test_files_edit_rejects_stale_expected_digest(tmp_path: Path) -> None:
                 'path': 'README.md',
                 'old_text': 'changed',
                 'new_text': 'updated',
-                'expected_digest': read_result.output['digest'],
             },
         ),
         context,
     )
 
+    assert read_result.ok is True
     assert edit_result.ok is False
-    assert 'stale read detected' in str(edit_result.error)
+    assert 'changed on disk since you last read it' in str(edit_result.error)
+    # The model is never asked to carry a digest; the harness compares against its own record.
+    assert 'expected_digest' not in json.dumps([tool.input_schema for tool in registry.list_tools()])

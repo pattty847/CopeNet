@@ -24,6 +24,9 @@ ToolAccessAction = Literal["read", "write", "unknown"]
 ToolPolicyDecision = Literal["allowed", "read_roam", "write_blocked", "approval_required", "egress_blocked", "unsafe_unknown"]
 ToolEvidenceRole = Literal["none", "discovery", "grounding", "mutation", "verification", "context", "artifact"]
 ToolSideEffect = Literal["none", "read", "write", "external"]
+# Access-policy bookkeeping every handler stamps on its output. The UI and the
+# run record need it; the model needs it only when a call was blocked or roamed.
+MODEL_HIDDEN_POLICY_FIELDS = frozenset({"target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"})
 ToolEffectKind = Literal["file_read", "repo_search", "shell_command", "file_write", "file_edit", "artifact", "context", "web_search", "web_fetch", "raw"]
 
 
@@ -149,14 +152,19 @@ class ToolExecutionResult:
         existed the native paths sent only `body`, so a policy-blocked call with an
         explicit reason reached the model as `{}` and it simply retried. `ok`,
         `summary`, and `error` are what make a failure actionable.
+
+        The model does not get the call id or channel (the provider pairs results
+        by call id itself) and, on an allowed call, does not get the access-policy
+        bookkeeping (`workspaceRoot`, `policySummary`, ...). Measured on a real
+        run, that bookkeeping plus indentation was about 40% of every tool result's
+        tokens, repeated on every later model call. A blocked or roaming call keeps
+        those fields because there they are the reason.
         """
         payload: dict[str, Any] = {
-            "callId": self.call_id,
             "toolId": self.tool_id,
-            "channel": self.channel,
             "ok": self.ok,
             "summary": self.summary,
-            "body": self.model_body if self.model_body is not None else self.body if self.body is not None else self.output,
+            "body": self._model_body(),
         }
         if self.error:
             payload["error"] = self.error
@@ -164,9 +172,19 @@ class ToolExecutionResult:
             payload["artifactId"] = self.artifact_id
         return payload
 
+    def _model_body(self) -> Any:
+        if self.model_body is not None:
+            return self.model_body
+        body = self.body if self.body is not None else self.output
+        if not isinstance(body, dict) or not self.ok:
+            return body
+        if body.get("policyDecision") not in (None, "allowed"):
+            return body
+        return {key: value for key, value in body.items() if key not in MODEL_HIDDEN_POLICY_FIELDS}
+
     def to_prompt_payload(self) -> str:
-        """Return a compact JSON payload suitable for feeding back to a model."""
-        return json.dumps(self.to_model_payload(), ensure_ascii=False, indent=2)
+        """Return the model-facing envelope as JSON text (one line per key, no nesting indent)."""
+        return json.dumps(self.to_model_payload(), ensure_ascii=False)
 
     def to_event_payload(
         self,

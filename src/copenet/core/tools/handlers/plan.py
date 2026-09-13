@@ -44,6 +44,9 @@ async def write_plan(request: ToolExecutionRequest, context: ToolExecutionContex
         ok=True,
         summary=summary,
         output={"items": items, "total": len(items), "completed": completed},
+        # The model just wrote this plan; echoing it back costs ~90 tokens per
+        # update for nothing. The checklist UI reads `output`, which keeps it.
+        model_body=summary,
     )
 
 

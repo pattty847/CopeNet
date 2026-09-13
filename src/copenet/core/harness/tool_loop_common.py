@@ -303,7 +303,7 @@ def _parse_native_tool_arguments(value: Any) -> dict[str, Any]:
 
 def _native_tool_message_content(tool_result: ToolExecutionResult) -> str:
     """Same envelope the prompted loop sends — see ToolExecutionResult.to_model_payload."""
-    return json.dumps(tool_result.to_model_payload(), ensure_ascii=False, indent=2)
+    return tool_result.to_prompt_payload()
 
 
 def compose_prompted_tool_system_prompt(
