@@ -110,3 +110,42 @@ def test_iso_time_bounds_require_a_timezone():
         assert "timezone" in str(exc)
     else:
         raise AssertionError("timezone-free chart bound was accepted")
+
+
+def test_packet_delivers_one_matrix_with_indicator_columns_on_candle_rows(tmp_path):
+    store, context, rows = _scene(tmp_path, count=40)
+
+    payload = store.context_payload(context)
+    samples = {sample["key"]: sample for sample in payload["samples"]}
+
+    assert set(samples) == {"quote:displayed", "candles:D"}, "indicators ride the candle table, not their own"
+    matrix = samples["candles:D"]
+    assert matrix["rows"][5] == {**rows[5], "mama": rows[5]["c"] - 2, "fama": rows[5]["c"] - 4}
+    assert matrix["metadata"]["columns"] == {
+        "mama": {"resource": "indicator:mama", "field": "mama"},
+        "fama": {"resource": "indicator:mama", "field": "fama"},
+    }
+    indicator_coverage = next(item for item in payload["coverage"] if item["key"] == "indicator:mama")
+    assert indicator_coverage["alignedTo"] == "candles:D"
+    assert indicator_coverage["delivery"] == "exhaustive" and indicator_coverage["deliveredCount"] == 40
+
+
+def test_packet_token_estimate_is_the_tokenizer_count_of_what_the_model_reads(tmp_path):
+    from copenet.core.harness.token_count import count_text_tokens
+    from copenet.core.market.chart_workspace.model_tables import format_context
+    store, context, _ = _scene(tmp_path, count=40)
+
+    payload = store.context_payload(context)
+
+    assert payload["estimatedTokens"] == count_text_tokens(format_context(payload))
+
+
+def test_context_tool_never_repeats_delivered_rows(tmp_path):
+    store, context, _ = _scene(tmp_path, count=40)
+
+    payload = store.context_payload(context, include_samples=False)
+
+    assert payload["samples"] == [] and payload["coverage"] == []
+    assert "never repeated" in payload["samplesNote"]
+    assert payload["drawings"] == {"count": 0, "listed": 0, "objects": [], "readTool": "market.chart.document"}
+    assert payload["digest"]["visibleBarCount"] == 40

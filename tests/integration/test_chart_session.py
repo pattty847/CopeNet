@@ -72,7 +72,7 @@ def setup_chart(tmp_path, provider=None, *, external_prose=False):
     instrument = {"instrumentId": "yahoo:TEST", "symbol": "TEST", "assetClass": "equity", "source": "yahoo", "currency": "USD"}
     doc = store.workspace("test-market", instrument)["document"]
     resources = [{"key": "candles:D", "kind": "candles", "label": "Daily", "status": "loaded", "metadata": {"basis": "split-only", "timeframe": "D"},
-                  "rows": [{"t": 1720000000, "o": 10.0, "h": 12.0, "l": 9.0, "c": 11.125, "v": 1000.0}]}]
+                  "rows": [{"t": 1720000000, "o": 10.0, "h": 12.0, "l": 9.0, "c": 11.375, "v": 1000.0}]}]
     if external_prose:
         resources.append({"key": "panel", "kind": "panel", "label": "Research", "status": "loaded", "metadata": {}, "rows": [{"text": "Synthetic external filing excerpt"}]})
     capture = {"schemaVersion": 1, "viewId": "view-test", "viewRevision": 1, "instrument": instrument,
@@ -99,7 +99,7 @@ async def test_chart_context_survives_normal_run_replay_and_retry(tmp_path):
     result, _ = await collect(orch, request)
     assert result["status"] == "ok"
     sent = json.dumps(provider.messages)
-    assert "11.125" in sent and request.market_context.observation_id in sent
+    assert "11.38" in sent and request.market_context.observation_id in sent
     assert set(provider.tool_names[0]) == {
         "market.chart.context", "market.chart.read", "market.chart.document",
         "market.chart.apply", "market.chart.undo", "web.search", "web.fetch",
@@ -150,7 +150,7 @@ async def test_resumed_claude_receives_current_observation(tmp_path):
     await collect(orch, request)
     await collect(orch, replace(request, idempotency_key="next-run", message="Inspect again"))
     assert len(provider.prompts) == 2
-    assert "11.125" in provider.prompts[1] and request.market_context.observation_id in provider.prompts[1]
+    assert "11.38" in provider.prompts[1] and request.market_context.observation_id in provider.prompts[1]
     assert "Conversation so far" not in provider.prompts[1]
 
 
@@ -293,7 +293,7 @@ async def test_historical_chart_tool_results_replay_as_refs_without_rewriting_tr
     await collect(orch, request)
     historical = orch.history(session_key=request.session_key)[1]
     original = next(part["toolExecution"]["replayOutput"] for part in historical["parts"] if part["kind"] == "tool_result")
-    assert "11.125" in original
+    assert "11.38" in original
     await collect(orch, replace(request, idempotency_key="replay-run", message="Continue"))
     replay = str(provider.messages[-1])
     assert "Historical chart result" in replay

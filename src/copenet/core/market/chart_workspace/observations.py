@@ -120,9 +120,10 @@ class ObservationStore:
             resource_keys=tuple(r["key"] for r in observation["resources"] if not r["metadata"].get("accountContext") or observation["settings"].get("includeAccountContext", False)),
         )
 
-    def context_payload(self, context: MarketTurnContext, *, token_limit: int | None = None) -> dict:
+    def context_payload(self, context: MarketTurnContext, *, token_limit: int | None = None,
+                        include_samples: bool = True) -> dict:
         observation = self.observation(context.observation_id, context.session_key)
-        return project_context(self, context, observation, token_limit=token_limit)
+        return project_context(self, context, observation, token_limit=token_limit, include_samples=include_samples)
 
     def projection_resource(self, context: MarketTurnContext, resource_key: str) -> dict:
         """Return one exact frozen resource for the trusted projection builder."""

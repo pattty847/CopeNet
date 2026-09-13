@@ -1,6 +1,8 @@
 """Bounded chart orientation, whole-period digest and exact evidence delivery."""
 from __future__ import annotations
 
+from copenet.core.harness.token_count import count_text_tokens
+
 from .model_tables import format_context
 from .range_digest import (
     adaptive_row_selection,
@@ -10,19 +12,32 @@ from .range_digest import (
     utc_timestamp,
 )
 
+# Real tokenizer counts (`token_count.py`), not character quotients.
 DETAIL_BUDGETS = {
     "quick": {"initialTokens": 8_000, "readCalls": 4, "evidenceRows": 100},
     "balanced": {"initialTokens": 25_000, "readCalls": 8, "evidenceRows": 500},
     "deep": {"initialTokens": 60_000, "readCalls": 12, "evidenceRows": 2_000},
     "exhaustive": {"initialTokens": 100_000, "readCalls": 16, "evidenceRows": 5_000},
 }
+MATRIX_ALGORITHM_EXHAUSTIVE = "exhaustive"
+MATRIX_ALGORITHM_ADAPTIVE = "adaptive-viewport-v1"
+DRAWINGS_IN_PACKET = 40
+SAMPLES_NOTE = ("Exact rows were delivered once in the turn message and are never repeated by "
+                "market.chart.context; use market.chart.read for rows outside delivered coverage.")
 
 
 def _size(value):
-    return len(format_context(value))
+    return count_text_tokens(format_context(value))
 
 
-def project_context(store, context, observation, *, token_limit: int | None = None):
+def _stamp_estimate(payload: dict) -> None:
+    """Record the packet's own token count, including the digits of that count."""
+    payload["estimatedTokens"] = 0
+    for _ in range(2):
+        payload["estimatedTokens"] = _size(payload)
+
+
+def project_context(store, context, observation, *, token_limit: int | None = None, include_samples: bool = True):
     configured = DETAIL_BUDGETS[context.detail]
     allocated_tokens = min(
         configured["initialTokens"],
@@ -59,6 +74,7 @@ def project_context(store, context, observation, *, token_limit: int | None = No
         includeAccountContext=context.include_account_context,
         resources=[{key: resource[key] for key in ("key", "kind", "label", "unit", "status", "rowCount", "observedAt")
                    if key in resource} for resource in scoped],
+        drawings=_drawings_summary(store, context),
         coverage=[],
         samples=[],
         manifestOmissions=[],
@@ -69,80 +85,169 @@ def project_context(store, context, observation, *, token_limit: int | None = No
     )
     # Reserve accounting/omission fields and prevent a dynamic allocation from
     # pretending it can hold even the mandatory orientation.
-    max_chars = allocated_tokens * 4 - max(512, len(scoped) * 192)
-    _fit_manifest(payload, max_chars)
+    max_tokens = allocated_tokens - max(128, len(scoped) * 48)
+    _fit_manifest(payload, max_tokens)
+    if not include_samples:
+        payload["samplesNote"] = SAMPLES_NOTE
+        _stamp_estimate(payload)
+        return payload
 
-    candidates = []
-    for descriptor in scoped:
-        if descriptor["kind"] not in {"candles", "indicator", "quote"}:
-            continue
-        if descriptor["kind"] == "candles" and descriptor is not active_descriptor:
-            continue
-        if descriptor["kind"] == "indicator" and (
-            descriptor["metadata"].get("visible") is False
-            or descriptor["metadata"].get("timeframe") not in (None, observation["timeframe"])
-        ):
-            continue
-        resource = active if descriptor is active_descriptor else store.projection_resource(context, descriptor["key"])
-        rows = list(resource["rows"]) if descriptor["kind"] == "quote" else rows_in_window(resource["rows"], window)
-        priority = 0 if descriptor["kind"] == "quote" else 1 if descriptor is active_descriptor else 2
-        candidates.append((priority, descriptor, resource, rows))
-    candidates.sort(key=lambda item: item[0])
-
-    for _, descriptor, resource, rows in candidates:
-        coverage = {
-            "key": descriptor["key"], "loadedCount": descriptor["rowCount"],
-            "focusMatchedCount": len(rows), "deliveredCount": 0,
-            "delivery": "omitted", "exhaustive": False, "contiguousRanges": [],
-        }
+    quote_descriptor = next((resource for resource in scoped if resource["kind"] == "quote"), None)
+    if quote_descriptor is not None:
+        resource = store.projection_resource(context, quote_descriptor["key"])
+        rows = list(resource["rows"])
+        coverage = _coverage_shell(quote_descriptor, rows)
         payload["coverage"].append(coverage)
-        projected = _sample_shell(resource, descriptor)
-        all_indexes = list(range(len(rows)))
-        if _try_rows(payload, coverage, projected, rows, rows, all_indexes, "exhaustive", max_chars):
-            continue
-
-        high = min(len(rows), configured["evidenceRows"])
-        selected_rows, selected_indexes = [], []
-        low = 1 if rows else 0
-        while low <= high:
-            middle = (low + high) // 2
-            candidate_rows, candidate_indexes = adaptive_row_selection(rows, middle)
-            if _fits_rows(payload, coverage, projected, rows, candidate_rows, candidate_indexes, "adaptive-viewport-v1", max_chars):
-                selected_rows, selected_indexes = candidate_rows, candidate_indexes
-                low = middle + 1
-            else:
-                high = middle - 1
-        if selected_rows and _try_rows(payload, coverage, projected, rows, selected_rows, selected_indexes, "adaptive-viewport-v1", max_chars):
+        if not _try_rows(payload, [coverage], _sample_shell(resource, quote_descriptor), rows, rows,
+                         list(range(len(rows))), MATRIX_ALGORITHM_EXHAUSTIVE, max_tokens):
             payload["sampleOmissions"].append({
-                "key": descriptor["key"], "reason": "initial context budget",
-                "delivered": len(selected_rows), "matched": len(rows), "readTool": "market.chart.read",
-            })
-        elif rows:
-            payload["sampleOmissions"].append({
-                "key": descriptor["key"], "reason": "no exact rows fit after reserved orientation",
+                "key": quote_descriptor["key"], "reason": "no exact rows fit after reserved orientation",
                 "delivered": 0, "matched": len(rows), "readTool": "market.chart.read",
             })
-        else:
+        elif not rows:
             coverage.update(delivery="empty", exhaustive=True)
 
-    payload["estimatedTokens"] = (_size(payload) + 3) // 4
+    # One time-series matrix per turn: the active candles carry every visible
+    # same-timeframe indicator as extra columns, keyed on the candle timestamp.
+    # Three separate indicator tables used to repeat the timestamp column, the
+    # header and the legend each — 19% of the packet for no information.
+    indicators = []
+    for descriptor in scoped:
+        if descriptor["kind"] != "indicator" or descriptor["metadata"].get("visible") is False:
+            continue
+        if descriptor["metadata"].get("timeframe") not in (None, observation["timeframe"]):
+            continue
+        resource = store.projection_resource(context, descriptor["key"])
+        indicators.append((descriptor, resource, rows_in_window(resource["rows"], window)))
+    if active_descriptor is None:
+        for descriptor, _, rows in indicators:
+            payload["coverage"].append(_coverage_shell(descriptor, rows))
+            payload["sampleOmissions"].append({
+                "key": descriptor["key"], "reason": "no active-timeframe candles to align indicator rows to",
+                "delivered": 0, "matched": len(rows), "readTool": "market.chart.read",
+            })
+        _stamp_estimate(payload)
+        return payload
+
+    matrix_rows, columns, unaligned = _matrix_rows(active_rows, indicators)
+    projected = _sample_shell(active, active_descriptor)
+    projected["metadata"] = {
+        **projected["metadata"],
+        "columns": columns,
+        "indicators": {descriptor["key"]: resource["metadata"] for descriptor, resource, _ in indicators},
+    }
+    if unaligned:
+        projected["metadata"]["unalignedIndicatorRows"] = unaligned
+    members = [(active_descriptor, active_rows), *((descriptor, rows) for descriptor, _, rows in indicators)]
+    coverages = [_coverage_shell(descriptor, rows) for descriptor, rows in members]
+    for coverage in coverages[1:]:
+        coverage["alignedTo"] = active_descriptor["key"]
+    payload["coverage"].extend(coverages)
+    all_indexes = list(range(len(matrix_rows)))
+    if _try_rows(payload, coverages, projected, matrix_rows, matrix_rows, all_indexes,
+                 MATRIX_ALGORITHM_EXHAUSTIVE, max_tokens):
+        if not matrix_rows:
+            for coverage in coverages:
+                coverage.update(delivery="empty", exhaustive=True)
+        _stamp_estimate(payload)
+        return payload
+
+    high = min(len(matrix_rows), configured["evidenceRows"])
+    selected_rows, selected_indexes = [], []
+    low = 1 if matrix_rows else 0
+    while low <= high:
+        middle = (low + high) // 2
+        candidate_rows, candidate_indexes = adaptive_row_selection(matrix_rows, middle)
+        if _fits_rows(payload, coverages, projected, matrix_rows, candidate_rows, candidate_indexes,
+                      MATRIX_ALGORITHM_ADAPTIVE, max_tokens):
+            selected_rows, selected_indexes = candidate_rows, candidate_indexes
+            low = middle + 1
+        else:
+            high = middle - 1
+    delivered = bool(selected_rows) and _try_rows(payload, coverages, projected, matrix_rows, selected_rows,
+                                                  selected_indexes, MATRIX_ALGORITHM_ADAPTIVE, max_tokens)
+    for descriptor, rows in members:
+        payload["sampleOmissions"].append({
+            "key": descriptor["key"],
+            "reason": "initial context budget" if delivered else "no exact rows fit after reserved orientation",
+            "delivered": len(selected_rows) if delivered else 0, "matched": len(rows),
+            "readTool": "market.chart.read",
+        })
+
+    _stamp_estimate(payload)
     if payload["estimatedTokens"] > allocated_tokens:
         raise ValueError("Chart context exceeded its allocated input budget")
     return payload
 
 
-def _fit_manifest(payload: dict, max_chars: int) -> None:
-    if _size(payload) > max_chars:
+def _matrix_rows(active_rows: list[dict], indicators: list[tuple]) -> tuple[list[dict], dict, dict]:
+    """Join indicator outputs onto candle rows by timestamp.
+
+    Column names are the indicator's output field (`rsi`, `mama`, `fama`), or the
+    indicator id when the field is the generic `value` (`vwap`). A second instance
+    of the same output gets the resource suffix (`rsi@rsi#2`) so nothing collides.
+    """
+    merged = [dict(row) for row in active_rows]
+    by_time = {row["t"]: row for row in merged if type(row.get("t")) in (int, float)}
+    columns: dict[str, dict] = {}
+    unaligned: dict[str, int] = {}
+    for descriptor, _, rows in indicators:
+        key = descriptor["key"]
+        ident = key.split(":", 1)[1] if ":" in key else key
+        base = ident.split("#", 1)[0]
+        fields = list(dict.fromkeys(field for row in rows for field in row if field != "t"))
+        mapping = {}
+        for field in fields:
+            column = base if field == "value" else field
+            if column in columns or column in ("t", "o", "h", "l", "c", "v"):
+                column = f"{column}@{ident}"
+            columns[column] = {"resource": key, "field": field}
+            mapping[field] = column
+        for row in rows:
+            target = by_time.get(row.get("t"))
+            if target is None:
+                unaligned[key] = unaligned.get(key, 0) + 1
+                continue
+            for field, value in row.items():
+                if field != "t":
+                    target[mapping[field]] = value
+    return merged, columns, unaligned
+
+
+def _drawings_summary(store, context) -> dict:
+    """Enough of the drawing document to know what is already on the chart.
+
+    The model asked for exactly this after paying two tool calls to learn it;
+    full objects (anchors, evidence, rationale) stay behind market.chart.document.
+    """
+    objects = store.document(context.document_id, context)["document"]["objects"]
+    rows = []
+    for item in objects[:DRAWINGS_IN_PACKET]:
+        owner = item.get("owner") or {}
+        rows.append({
+            "id": item.get("id"), "kind": item.get("kind"), "timeframe": item.get("timeframe"),
+            "label": item.get("label"), "owner": owner.get("kind"),
+            "thisSession": owner.get("sessionKey") == context.session_key,
+        })
+    return {"count": len(objects), "listed": len(rows), "objects": rows,
+            "readTool": "market.chart.document"}
+
+
+def _fit_manifest(payload: dict, max_tokens: int) -> None:
+    if _size(payload) > max_tokens:
         payload["orientation"].pop("settings", None)
         payload["manifestOmissions"].append("settings")
+    if _size(payload) > max_tokens:
+        payload["drawings"] = {**payload["drawings"], "listed": 0, "objects": []}
+        payload["manifestOmissions"].append("drawings")
     for fields, reason in ((("label",), "resource labels"), (("unit", "observedAt"), "resource units and source timestamps")):
-        if _size(payload) <= max_chars:
+        if _size(payload) <= max_tokens:
             break
         for resource in payload["resources"]:
             for name in fields:
                 resource.pop(name, None)
         payload["manifestOmissions"].append(reason)
-    if _size(payload) > max_chars:
+    if _size(payload) > max_tokens:
         raise ValueError("Chart orientation and resource inventory exceed the allocated input budget")
 
 
@@ -181,21 +286,35 @@ def _sample_shell(resource: dict, descriptor: dict) -> dict:
     }
 
 
-def _fits_rows(payload, coverage, projected, source_rows, rows, indexes, algorithm, max_chars):
-    candidate = _with_rows(projected, source_rows, rows, indexes, algorithm)
-    candidate_coverage = _with_coverage(coverage, source_rows, indexes, algorithm)
-    return _size({**payload, "coverage": [*payload["coverage"][:-1], candidate_coverage],
-                  "samples": [*payload["samples"], candidate]}) <= max_chars
+def _coverage_shell(descriptor: dict, rows: list[dict]) -> dict:
+    return {
+        "key": descriptor["key"], "loadedCount": descriptor["rowCount"],
+        "focusMatchedCount": len(rows), "deliveredCount": 0,
+        "delivery": "omitted", "exhaustive": False, "contiguousRanges": [],
+    }
 
 
-def _try_rows(payload, coverage, projected, source_rows, rows, indexes, algorithm, max_chars):
-    candidate = _with_rows(projected, source_rows, rows, indexes, algorithm)
-    candidate_coverage = _with_coverage(coverage, source_rows, indexes, algorithm)
-    if _size({**payload, "coverage": [*payload["coverage"][:-1], candidate_coverage],
-              "samples": [*payload["samples"], candidate]}) > max_chars:
+def _candidate_payload(payload, coverages, projected, source_rows, rows, indexes, algorithm):
+    updated = {coverage["key"]: _with_coverage(coverage, source_rows, indexes, algorithm) for coverage in coverages}
+    return {**payload,
+            "coverage": [updated.get(item["key"], item) for item in payload["coverage"]],
+            "samples": [*payload["samples"], _with_rows(projected, source_rows, rows, indexes, algorithm)]}, updated
+
+
+def _fits_rows(payload, coverages, projected, source_rows, rows, indexes, algorithm, max_tokens):
+    candidate, _ = _candidate_payload(payload, coverages, projected, source_rows, rows, indexes, algorithm)
+    return _size(candidate) <= max_tokens
+
+
+def _try_rows(payload, coverages, projected, source_rows, rows, indexes, algorithm, max_tokens):
+    candidate, updated = _candidate_payload(payload, coverages, projected, source_rows, rows, indexes, algorithm)
+    if _size(candidate) > max_tokens:
         return False
-    payload["coverage"][-1] = candidate_coverage
-    payload["samples"].append(candidate)
+    for coverage in coverages:
+        coverage.update(updated[coverage["key"]])
+        if projected["metadata"].get("unalignedIndicatorRows", {}).get(coverage["key"]):
+            coverage["exhaustive"] = False
+    payload["samples"] = candidate["samples"]
     return True
 
 
