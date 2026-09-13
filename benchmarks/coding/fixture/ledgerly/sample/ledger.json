@@ -1,0 +1,15 @@
+{
+  "schema": 1,
+  "transactions": [
+    {"id": "a1b2c3d4e5f6", "date": "2026-07-01", "amount": "2400.00", "description": "Paycheck", "category": "income"},
+    {"id": "b2c3d4e5f6a1", "date": "2026-07-01", "amount": "-1200.00", "description": "Rent July", "category": "rent"},
+    {"id": "c3d4e5f6a1b2", "date": "2026-07-03", "amount": "-54.20", "description": "Groceries", "category": "food"},
+    {"id": "d4e5f6a1b2c3", "date": "2026-07-09", "amount": "-32.00", "description": "Metro card", "category": "transport"},
+    {"id": "e5f6a1b2c3d4", "date": "2026-07-15", "amount": "-88.75", "description": "Electric bill", "category": "utilities"},
+    {"id": "f6a1b2c3d4e5", "date": "2026-07-22", "amount": "-61.10", "description": "Groceries", "category": "food"},
+    {"id": "0a1b2c3d4e5f", "date": "2026-07-31", "amount": "-14.50", "description": "Coffee shop", "category": "food"},
+    {"id": "1b2c3d4e5f60", "date": "2026-08-01", "amount": "2400.00", "description": "Paycheck", "category": "income"},
+    {"id": "2c3d4e5f6a01", "date": "2026-08-04", "amount": "-47.30", "description": "Groceries", "category": "food"},
+    {"id": "3d4e5f6a0b12", "date": "2026-08-18", "amount": "-12.00", "description": "Coffee shop", "category": "food"}
+  ]
+}
