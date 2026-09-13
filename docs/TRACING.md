@@ -117,6 +117,7 @@ prompt_context_assembled
 harness_decision_recorded status: "parsed" | "fallback" | "unavailable" (optional)
 provider_turn_started    phase: "provider"
 provider_session_updated (optional — provider assigned or changed session id)
+provider_usage_reported  (per model call — inputTokens, outputTokens, cachedInputTokens, reasoningTokens, call)
 provider_turn_completed  phase: "provider", deltaCount: N
 assistant_finalized
 run_completed
@@ -193,6 +194,14 @@ pre-plan instruction/schema estimate, initial-request budget and tool-loop reser
 The message estimator charges text, images, reasoning, and unmodelled item shapes;
 the request estimator additionally charges instructions and tool schemas. Stored
 transcript entries are never removed — the budget bounds only the provider view.
+
+Estimates are tokenizer counts (`core/harness/token_count.py`, `o200k_base`), not
+character quotients. `provider_usage_reported` is different in kind: it is the
+usage block the provider returned for one model call (`call` numbers them within
+the run), summed into the run record's `tokenUsage` by `orchestrator/token_usage.py`.
+`inputTokens` there is the billed sum across calls; `peakInputTokens` is the largest
+single call, which is the real size of the context. When a provider reports no
+usage the record carries `null`, never an estimate.
 
 `tool_loop_input_prepared` records the complete provider-input estimate before every
 Responses request. `tool_loop_input_trimmed` additionally fires when a growing loop

@@ -293,6 +293,22 @@ For current behavior, assume:
   you add a guarded call to `render.ts`, add that method to `tests/fakeChart.ts` in the same
   commit — an incomplete fake hides the failure inside the renderer's own `try`/`catch`.
   See `docs/plans/CHART_INDICATORS.md`.
+- **Token counts are tokenizer counts; usage comes from the provider.** `core/harness/token_count.py`
+  (tiktoken `o200k_base`) is the one counter behind every input budget, the chart packet's
+  `estimatedTokens`, and the trace estimates — chars/4 under-counted numeric CSV by 1.8x and
+  every budget built on it was blind. Each provider forwards the usage block from its model
+  response as a `tokenUsage` meta event (`token_usage_event` in `providers/base.py`); the tool
+  loops must re-yield it like the resolved-model announcement, and the run record's `tokenUsage`
+  (summed in `orchestrator/token_usage.py`) is what the thread displays. Never write an estimate
+  under that key.
+- **The chart packet is one matrix, two decimals, delivered once.** `chart_workspace/projection.py`
+  joins every visible same-timeframe indicator onto the active candle rows as extra columns
+  (`metadata.columns` names the source resource and field) instead of one CSV per indicator, and
+  `model_tables.py` rounds every model-facing float to two decimals (sub-0.01 values keep four
+  significant digits). The packet also carries the drawing list (id, kind, timeframe, label, owner).
+  `market.chart.context` returns orientation, digest, inventory and drawings only — it never repeats
+  rows, because a measured turn re-fetched the identical 32K-token packet through it. Cross-turn
+  replay already stubs old chart tool bodies (`_with_chart_references`), so nothing stacks.
 - **Chart agent turns capture render inputs, never refetch them.** `core/market/chart_workspace/`
   owns immutable observations and revision-checked drawing documents; `orchestrator/market_context.py`
   binds them to ordinary sessions. The ticker's `viewState/` contributions and `useTickerViewModel`
@@ -406,7 +422,7 @@ or execute allowed tools, so prefer targeted prompts and default guarded mode un
 
 CopeNet writes one JSONL trace per run to `~/.copenet/logs/runs/<run-id>.jsonl`, **unconditionally**. Every row carries a `tier`:
 
-- **`lifecycle`** — always written. Run/session identity, provider and model, harness plan, tool requested/executed/blocked with tool id and status, token estimates, trim events, terminal reason, timings. Carries no prompt text, message history, reasoning content, or tool result bodies. Tool arguments ride along **digested** (`argument_digest` in `tool_loop_common.py`): short scalars verbatim — the `shell.exec` command and the `files.rg` pattern are the point of the trace — and anything over 400 chars replaced by `{"chars": n, "omitted": true}` so a `files.write` body never lands here.
+- **`lifecycle`** — always written. Run/session identity, provider and model, harness plan, tool requested/executed/blocked with tool id and status, token estimates, provider-reported usage per model call (`provider_usage_reported`), trim events, terminal reason, timings. Carries no prompt text, message history, reasoning content, or tool result bodies. Tool arguments ride along **digested** (`argument_digest` in `tool_loop_common.py`): short scalars verbatim — the `shell.exec` command and the `files.rg` pattern are the point of the trace — and anything over 400 chars replaced by `{"chars": n, "omitted": true}` so a `files.write` body never lands here.
 - **`debug`** — only while Debug capture is on (Observability header toggle, `COPNET_TRACE=1` sets the initial default). Adds `run_input`, `model_input_snapshot`, `tool_arguments`, `tool_result_body`, and reasoning content.
 
 The harness tool loops receive a bare `trace(event, payload)` callable, not the writer, so **`DEBUG_TIER_EVENTS` in `core/tracing/__init__.py` is what routes an event to the debug tier** — add a payload-heavy event's name there rather than assuming `record()` means lifecycle. Credential redaction applies to the debug tier as before.
