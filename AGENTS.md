@@ -405,6 +405,11 @@ For current integration coverage, also know about:
 - `uv run --extra dev pytest -q`
 - `tests/integration/test_tool_prompt_matrix.py` — deterministic fake-provider prompt/tool-loop matrix
 - `scripts/live_probe_matrix.py` — nondeterministic live provider/model probe runner for real runtimes
+- `benchmarks/coding/` — live coding-agent benchmark: nine seeded tasks on one realistic fixture repo,
+  graded independently of the model's claims, plus `trace_analysis.py`, which turns any run trace
+  into the coding questions (redundant reads, edit tracking, verification after the last edit,
+  where tokens went). `--dry-run` proves every seed starts red without spending quota. Findings and
+  the change log live in `docs/audit/coding-harness-audit-2026-09-13.md`.
 
 For real provider session probing during development, use the CopeNet CLI chat lane. It creates or continues a real
 orchestrator-backed session, uses the same transcript/session stores as the UI, and prints streamed assistant text plus
