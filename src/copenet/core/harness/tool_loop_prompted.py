@@ -25,6 +25,7 @@ from .tool_loop_common import (
     trace_tool_requested,
     collect_provider_turn,
     forwarded_resolved_model,
+    forwarded_token_usage,
     compose_prompted_tool_correction,
     compose_prompted_tool_system_prompt,
     neutralize_prompted_tool_delimiters,
@@ -95,6 +96,8 @@ async def run_with_prompted_tools(
         announcement = forwarded_resolved_model(events)
         if announcement is not None:
             yield announcement
+        for usage in forwarded_token_usage(events):
+            yield usage
         assistant_text = "".join(event.text or "" for event in events if event.kind == "delta").strip()
         parse = parse_prompted_tool_turn(assistant_text, active_tool_ids=active_tool_id_set)
         tool_requests = parse.requests

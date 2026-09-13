@@ -315,3 +315,23 @@ def testclassify_responses_body_returns_json_for_non_sse() -> None:
     kind, payload = classify_responses_body(_LineStream(body), content_type="application/json")
     assert kind == "json"
     assert "output_text" in payload
+
+
+def test_completed_response_usage_is_forwarded_as_token_usage() -> None:
+    from copenet.providers import TOKEN_USAGE_META_KEY
+    from copenet.providers.codex_responses import parse_responses_json
+
+    response = {
+        "status": "completed", "model": "gpt-5.5", "output": [
+            {"id": "msg_1", "type": "message", "content": [{"type": "output_text", "text": "hi"}]},
+        ],
+        "usage": {"input_tokens": 52079, "input_tokens_details": {"cached_tokens": 40960},
+                  "output_tokens": 1830, "output_tokens_details": {"reasoning_tokens": 512}, "total_tokens": 53909},
+    }
+
+    events = list(parse_responses_json(json.dumps(response)))
+    usage = [event.metadata[TOKEN_USAGE_META_KEY] for event in events
+             if event.kind == "meta" and event.metadata and TOKEN_USAGE_META_KEY in event.metadata]
+
+    assert usage == [{"inputTokens": 52079, "outputTokens": 1830, "cachedInputTokens": 40960, "reasoningTokens": 512}]
+    assert events[-1].metadata.get("responsesCompleted") is True, "usage precedes completion"

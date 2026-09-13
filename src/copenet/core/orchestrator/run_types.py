@@ -79,6 +79,7 @@ class RunEvents:
     normalized_tool_results: list[dict] = field(default_factory=list)
     artifact_drafts: list[dict] = field(default_factory=list)
     tool_steps: list[dict] = field(default_factory=list)
+    token_usage_steps: list[dict] = field(default_factory=list)
     persisted_tool_artifact_ids: list[str] = field(default_factory=list)
     chart_manifest_id: str | None = None
     plan: HarnessTurnPlan | None = None

@@ -6,6 +6,7 @@ from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import describe_available_tools
 from .run_types import RunAdmission, RunInput, RunEvents
+from .token_usage import summarize_token_usage
 from .run_message_parts import _normalize_final_message_parts
 from .run_state import _evolve_session_state, _build_tool_visibility_summary
 from .market_context import update_chart_admission
@@ -129,6 +130,7 @@ def successful_record(
         tool_results=events.normalized_tool_results,
         pending_input_count=int(events.latest_turn_state.get("pendingInputCount") or 0),
         oversized_tool_artifact_ids=list(events.persisted_tool_artifact_ids),
+        token_usage=summarize_token_usage(events.token_usage_steps),
         metadata={
             **admission.market_metadata,
             "capabilityProfile": {
@@ -278,6 +280,7 @@ def finish_failure(
         tool_results=events.normalized_tool_results,
         pending_input_count=events.latest_turn_state.get("pendingInputCount", 0),
         oversized_tool_artifact_ids=list(events.persisted_tool_artifact_ids),
+        token_usage=summarize_token_usage(events.token_usage_steps),
         metadata=metadata,
     )
     events.seq += 1

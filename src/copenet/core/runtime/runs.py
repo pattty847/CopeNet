@@ -67,6 +67,9 @@ class RunRecord:
     pending_input_count: int = 0
     oversized_tool_artifact_ids: list[str] = field(default_factory=list)
     metadata: dict[str, Any] = field(default_factory=dict)
+    # Provider-reported usage summed over the run's model calls; None when the
+    # provider reported nothing. Never an estimate — see summarize_token_usage.
+    token_usage: dict[str, Any] | None = None
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> "RunRecord":
@@ -95,6 +98,7 @@ class RunRecord:
             pending_input_count=int(raw.get("pending_input_count") or 0),
             oversized_tool_artifact_ids=_string_list(raw.get("oversized_tool_artifact_ids")),
             metadata=_dict_value(raw.get("metadata")),
+            token_usage=_dict_value(raw.get("token_usage")) or None,
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -127,6 +131,7 @@ class RunRecord:
             "pendingInputCount": self.pending_input_count,
             "oversizedToolArtifactIds": list(self.oversized_tool_artifact_ids),
             "metadata": dict(self.metadata),
+            "tokenUsage": dict(self.token_usage) if self.token_usage else None,
         }
 
 

@@ -28,6 +28,34 @@ class ProviderEvent:
 RESOLVED_MODEL_META_KEY = "resolvedModel"
 
 
+# Meta key carrying one model call's token usage as the provider reported it.
+# Every provider that can see usage emits one of these per model response; the
+# orchestrator sums them into the run record. Estimates never travel under this
+# key — a reader must be able to trust that the number came from the provider.
+TOKEN_USAGE_META_KEY = "tokenUsage"
+
+
+def token_usage_event(
+    *,
+    input_tokens: int | None,
+    output_tokens: int | None,
+    cached_input_tokens: int | None = None,
+    reasoning_tokens: int | None = None,
+) -> ProviderEvent | None:
+    """Return the meta event for one reported usage block, or None when nothing was reported."""
+    def _count(value) -> int | None:
+        return int(value) if isinstance(value, (int, float)) and not isinstance(value, bool) and value >= 0 else None
+    usage = {
+        "inputTokens": _count(input_tokens),
+        "outputTokens": _count(output_tokens),
+        "cachedInputTokens": _count(cached_input_tokens),
+        "reasoningTokens": _count(reasoning_tokens),
+    }
+    if usage["inputTokens"] is None and usage["outputTokens"] is None:
+        return None
+    return ProviderEvent(kind="meta", metadata={TOKEN_USAGE_META_KEY: usage})
+
+
 def resolved_model_event(model: str | None) -> ProviderEvent | None:
     """Return the meta event announcing the model that actually ran, or None."""
     normalized = str(model or "").strip()

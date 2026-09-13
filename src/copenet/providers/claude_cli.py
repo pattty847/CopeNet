@@ -7,7 +7,7 @@ import json
 import shutil
 from typing import AsyncIterator
 
-from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event
+from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event, token_usage_event
 from copenet.runner.cli_runner import CliRunner, RunnerEvent, RunnerResult
 
 SUPPORTED_CLAUDE_CLI_MODELS = (
@@ -177,6 +177,10 @@ class ClaudeCliProvider:
                     yield ProviderEvent(kind="meta", provider_session_id=discovered_session_id)
 
                 is_result = _json_line_type(event.line) == "result"
+                if is_result:
+                    usage = _result_usage_event(event.line)
+                    if usage is not None:
+                        yield usage
                 if text and (not is_result or not emitted_text):
                     emitted_text = True
                     yield ProviderEvent(kind="delta", text=text)
@@ -204,6 +208,23 @@ def _extract_message_text(content: object) -> str | None:
             parts.append(text)
     joined = "".join(parts).strip()
     return joined or None
+
+
+def _result_usage_event(line: str):
+    """Claude CLI's terminal `result` line carries the turn's Anthropic usage block."""
+    try:
+        payload = json.loads(line)
+    except json.JSONDecodeError:
+        return None
+    usage = payload.get("usage") if isinstance(payload, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    cached = usage.get("cache_read_input_tokens")
+    return token_usage_event(
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+        cached_input_tokens=cached if isinstance(cached, int) else None,
+    )
 
 
 def _json_line_type(line: str) -> str | None:

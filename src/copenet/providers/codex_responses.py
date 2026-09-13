@@ -6,7 +6,7 @@ import json
 from dataclasses import dataclass, field
 from http.client import IncompleteRead
 from typing import Any, Iterator
-from .base import ProviderEvent, resolved_model_event
+from .base import token_usage_event, ProviderEvent, resolved_model_event
 
 _REASONING_DELTAS = {
     "response.reasoning_summary.delta": "summary",
@@ -177,7 +177,24 @@ class ResponseState:
                 raise RuntimeError("openai-codex function call arguments must be an object")
         for call in self.calls.values():
             yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": dict(call)})
+        usage = responses_usage_event(response.get("usage"))
+        if usage is not None:
+            yield usage
         yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
+
+
+def responses_usage_event(usage) -> ProviderEvent | None:
+    """Map a Responses API usage block onto the shared token-usage event."""
+    if not isinstance(usage, dict):
+        return None
+    input_details = usage.get("input_tokens_details") if isinstance(usage.get("input_tokens_details"), dict) else {}
+    output_details = usage.get("output_tokens_details") if isinstance(usage.get("output_tokens_details"), dict) else {}
+    return token_usage_event(
+        input_tokens=usage.get("input_tokens"),
+        output_tokens=usage.get("output_tokens"),
+        cached_input_tokens=input_details.get("cached_tokens"),
+        reasoning_tokens=output_details.get("reasoning_tokens"),
+    )
 
 
 def parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterator[ProviderEvent]:

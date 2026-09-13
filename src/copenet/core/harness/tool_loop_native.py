@@ -7,7 +7,7 @@ from typing import Any, AsyncIterator, Protocol
 
 from copenet.core.runtime import TurnState
 from copenet.core.tools import ToolExecutionContext, ToolExecutionRequest, build_openai_tool_schemas
-from copenet.providers import ProviderEvent, resolved_model_event
+from copenet.providers import ProviderEvent, resolved_model_event, token_usage_event
 
 from .context_window import estimate_request_tokens
 from .planning import HarnessTurnPlan
@@ -97,6 +97,9 @@ async def run_with_native_tools(
             if announcement is not None:
                 announced_model = True
                 yield announcement
+        usage = _native_usage_event(response)
+        if usage is not None:
+            yield usage
         message, finish_reason = _extract_native_choice(response)
         content = _coerce_native_message_content(message.get("content"))
         if content:
@@ -243,3 +246,16 @@ async def run_with_native_tools(
             return
 
     yield ProviderEvent(kind="final", provider_session_id=provider_session_id)
+
+
+def _native_usage_event(response):
+    """Chat Completions returns `usage` on the terminal object; forward it as the shared event."""
+    usage = response.get("usage") if isinstance(response, dict) else None
+    if not isinstance(usage, dict):
+        return None
+    details = usage.get("prompt_tokens_details") if isinstance(usage.get("prompt_tokens_details"), dict) else {}
+    return token_usage_event(
+        input_tokens=usage.get("prompt_tokens"),
+        output_tokens=usage.get("completion_tokens"),
+        cached_input_tokens=details.get("cached_tokens"),
+    )

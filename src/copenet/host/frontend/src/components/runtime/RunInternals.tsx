@@ -174,8 +174,8 @@ export function RunInternalsBody({ internals, artifacts = [], palette = 'operato
   );
 }
 
-/** The collapsed one-liner: `model · 4.2s · 2 tools · 12k ctx`. Muted unless
- *  something deserves attention. */
+/** The collapsed one-liner: `model · 4.2s · 2 tools · 52k ctx · 1.8k out`. Muted
+ *  unless something deserves attention. */
 export function RunInternalsLine({
   internals,
   palette = 'operator',
@@ -197,7 +197,7 @@ export function RunInternalsLine({
       onClick={onToggle}
       aria-expanded={expanded}
       className={`focus-ring inline-flex max-w-full items-center gap-1.5 rounded px-1 py-0.5 text-[10px] transition-colors ${classes.mutedSoft} ${classes.hoverText} ${classes.hover}`}
-      title="What happened inside this turn. The token figure is the message-history estimate; the system prompt and tool schemas are sized separately inside."
+      title="What happened inside this turn. Token figures come from the provider when it reported usage (ctx = largest input, out = output); a ~ figure is the tokenizer estimate of the message history only."
     >
       {expanded ? <ChevronDown className="h-2.5 w-2.5 shrink-0" /> : <ChevronRight className="h-2.5 w-2.5 shrink-0" />}
       <span className="truncate font-mono tabular-nums">

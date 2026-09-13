@@ -16,7 +16,7 @@
  * why `events` is optional rather than required.
  */
 
-import type { ObservabilityTraceEvent, RunStep, SessionRunRecord } from '../types/backend';
+import type { ObservabilityTraceEvent, RunStep, RunTokenUsage, SessionRunRecord } from '../types/backend';
 
 export type InternalsTone = 'neutral' | 'warn' | 'error';
 
@@ -92,6 +92,21 @@ export function formatTokens(tokens: number): string {
   return `${(tokens / 1_000).toFixed(tokens < 10_000 ? 1 : 0).replace(/\.0$/, '')}k`;
 }
 
+/** The one-line token readout for a turn: provider-reported when the provider
+ *  reported it, otherwise the tokenizer estimate of the message history, and
+ *  labelled so nobody mistakes one for the other. */
+export function tokenReadout(run: Pick<SessionRunRecord, 'tokenUsage' | 'inputTokenEstimate'>, estimate?: number | null): string | null {
+  const usage = run.tokenUsage;
+  if (usage && (usage.peakInputTokens != null || usage.outputTokens != null)) {
+    const parts: string[] = [];
+    if (usage.peakInputTokens != null) parts.push(`${formatTokens(usage.peakInputTokens)} ctx`);
+    if (usage.outputTokens != null) parts.push(`${formatTokens(usage.outputTokens)} out`);
+    return parts.join(' · ');
+  }
+  const fallback = num(estimate) ?? num(run.inputTokenEstimate);
+  return fallback != null ? `~${formatTokens(fallback)} msg` : null;
+}
+
 export function formatChars(chars: number): string {
   if (chars < 1_000) return `${chars} chars`;
   return `${(chars / 1_000).toFixed(1).replace(/\.0$/, '')}k chars`;
@@ -113,7 +128,6 @@ function buildStat(run: SessionRunRecord, events: ObservabilityTraceEvent[]): In
   const failed = run.toolSteps.filter(isFailedStep).length;
   const built = payloadOf(events, 'chat_messages_built');
   const omitted = num(built?.omittedMessageItemCount) ?? 0;
-  const tokens = num(built?.inputTokenEstimate) ?? num(run.inputTokenEstimate);
 
   const badges: InternalsBadge[] = [];
   if (blocked > 0) badges.push({ label: `${blocked} blocked`, tone: 'warn' });
@@ -131,7 +145,7 @@ function buildStat(run: SessionRunRecord, events: ObservabilityTraceEvent[]): In
     model: run.model || run.provider || 'unknown model',
     durationLabel: durationLabel(run.startedAt, run.completedAt),
     toolCount: run.toolSteps.length,
-    contextLabel: tokens != null ? `${formatTokens(tokens)} msg` : null,
+    contextLabel: tokenReadout(run, num(built?.inputTokenEstimate)),
     badges,
     tone,
   };
@@ -247,6 +261,14 @@ function buildSaw(run: SessionRunRecord, events: ObservabilityTraceEvent[]): Int
       hint: turns != null ? `${turns} prior turns replayed` : null,
     });
   }
+  // Provider-reported usage first: it is the only number that is not ours.
+  // Every tool step re-sends the whole context, so the billed input is a sum and
+  // the peak is the context size — both are shown because they answer different
+  // questions ("what did this cost" vs "how big was the packet").
+  const usage = run.tokenUsage;
+  if (usage) {
+    contextWindow.push(...usageFacts(usage));
+  }
   // Named "message tokens", not "input tokens": the estimator charges the
   // messages array only. A turn can read as "5 tokens" while the model was
   // actually handed a 16k-char system prompt and 21k of tool schemas, which is
@@ -257,7 +279,7 @@ function buildSaw(run: SessionRunRecord, events: ObservabilityTraceEvent[]): Int
     contextWindow.push({
       label: 'Message tokens',
       value: budget != null ? `${formatTokens(estimate)} / ${formatTokens(budget)}` : formatTokens(estimate),
-      hint: 'history only — prompt and schemas are above',
+      hint: 'tokenizer count of history only — prompt and schemas are above',
     });
   }
   if (budget != null && typeof built?.budgetSource === 'string') {
@@ -297,6 +319,27 @@ function buildSaw(run: SessionRunRecord, events: ObservabilityTraceEvent[]): Int
     withheldNote,
     detailAvailable: promptBlocks.length > 0 || contextWindow.length > 0 || offeredToolIds.length > 0,
   };
+}
+
+function usageFacts(usage: RunTokenUsage): InternalsFact[] {
+  const facts: InternalsFact[] = [];
+  const calls = usage.modelCalls === 1 ? '1 model call' : `${usage.modelCalls} model calls`;
+  if (usage.peakInputTokens != null) {
+    facts.push({ label: 'Context size', value: formatTokens(usage.peakInputTokens), hint: `largest input the provider reported · ${calls}` });
+  }
+  if (usage.inputTokens != null) {
+    const cached = usage.cachedInputTokens != null && usage.cachedInputTokens > 0
+      ? `${formatTokens(usage.cachedInputTokens)} served from cache`
+      : 'summed over every model call';
+    facts.push({ label: 'Input billed', value: formatTokens(usage.inputTokens), hint: cached });
+  }
+  if (usage.outputTokens != null) {
+    const reasoning = usage.reasoningTokens != null && usage.reasoningTokens > 0
+      ? `${formatTokens(usage.reasoningTokens)} of it reasoning`
+      : 'reported by the provider';
+    facts.push({ label: 'Output tokens', value: formatTokens(usage.outputTokens), hint: reasoning });
+  }
+  return facts;
 }
 
 function buildStopped(run: SessionRunRecord, events: ObservabilityTraceEvent[]): { text: string; tone: InternalsTone } {

@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { buildRunInternals, formatTokens, isBlockedStep, isFailedStep } from '../src/runtime/runInternals';
+import { buildRunInternals, formatTokens, isBlockedStep, isFailedStep, tokenReadout } from '../src/runtime/runInternals';
 import type { ObservabilityTraceEvent, RunStep, SessionRunRecord } from '../src/types/backend';
 
 function makeRun(overrides: Partial<SessionRunRecord> = {}): SessionRunRecord {
@@ -74,7 +74,7 @@ test('the collapsed line carries model, duration, tools, and context', () => {
   assert.equal(internals.stat.model, 'gpt-5.5');
   assert.equal(internals.stat.durationLabel, '6.6s');
   assert.equal(internals.stat.toolCount, 1);
-  assert.equal(internals.stat.contextLabel, '707 msg');
+  assert.equal(internals.stat.contextLabel, '~707 msg');
   assert.deepEqual(internals.stat.badges, []);
   assert.equal(internals.stat.tone, 'neutral');
 });
@@ -175,4 +175,28 @@ test('why it stopped distinguishes finishing from hitting the cap', () => {
     buildRunInternals(makeRun({ error: 'provider unavailable', status: 'error' })).stopped.tone,
     'error',
   );
+});
+
+test('provider-reported usage replaces the estimate in the stat line and the saw section', () => {
+  const run = makeRun({
+    inputTokenEstimate: 17_801,
+    tokenUsage: {
+      source: 'provider', modelCalls: 3, inputTokens: 125_631, peakInputTokens: 52_079,
+      cachedInputTokens: 65_000, outputTokens: 2_530, reasoningTokens: 712, steps: [],
+    },
+  });
+  const internals = buildRunInternals(run, [traceEvent('chat_messages_built', { inputTokenEstimate: 17_801, inputTokenBudget: 120_000 })]);
+
+  assert.equal(internals.stat.contextLabel, '52k ctx · 2.5k out');
+  const labels = internals.saw.contextWindow.map((fact) => fact.label);
+  assert.deepEqual(labels.slice(0, 3), ['Context size', 'Input billed', 'Output tokens']);
+  assert.equal(internals.saw.contextWindow[1].value, '126k');
+  assert.match(internals.saw.contextWindow[1].hint ?? '', /65k served from cache/);
+  assert.ok(labels.includes('Message tokens'), 'the tokenizer estimate stays, labelled as such');
+});
+
+test('without provider usage the readout is the estimate, marked as one', () => {
+  assert.equal(tokenReadout(makeRun({ inputTokenEstimate: 17_801 })), '~18k msg');
+  assert.equal(tokenReadout(makeRun({ tokenUsage: null })), null);
+  assert.equal(tokenReadout(makeRun({ tokenUsage: { source: 'provider', modelCalls: 1, inputTokens: 900, peakInputTokens: 900, cachedInputTokens: null, outputTokens: null, reasoningTokens: null, steps: [] } })), '900 ctx');
 });

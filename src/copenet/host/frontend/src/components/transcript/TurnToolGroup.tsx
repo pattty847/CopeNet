@@ -21,6 +21,8 @@ import { useState } from 'react';
 import { ChevronDown, ChevronRight, Eye } from 'lucide-react';
 import type { MessagePart } from '../../types/backend';
 import { useAppStore } from '../../store/useAppStore';
+import { useSessionRunIndex } from '../../runtime/runIndex';
+import { tokenReadout } from '../../runtime/runInternals';
 import { operatorVerb } from './InlineToolRows';
 
 /** Group header text: "Searched 1 path, ran 1 command". Counts by verb so the
@@ -45,6 +47,27 @@ export function summarizeToolParts(parts: MessagePart[]): string {
  *  tool?" gets asked, and `promptedToolUse: false` is the most common answer.
  *  Hiding the row when there is nothing to group would hide it precisely where
  *  it matters most. */
+/** The turn's token readout, straight from the run record: provider-reported usage
+ *  when the provider gave one, the tokenizer estimate (marked ~) otherwise, and
+ *  nothing at all while the run is still in flight. Lives in the thread because
+ *  "how big was that" is asked of a message, not of a debugging panel. */
+export function TurnTokenReadout({ sessionKey, runId }: { sessionKey: string; runId: string }) {
+  const index = useSessionRunIndex(sessionKey);
+  const run = index.byRunId.get(runId);
+  const readout = run ? tokenReadout(run) : null;
+  if (!readout) return null;
+  return (
+    <span
+      className="shrink-0 font-mono text-[10px] tabular-nums text-operator-muted/55"
+      title={run?.tokenUsage
+        ? `Provider-reported: ${run.tokenUsage.modelCalls} model call${run.tokenUsage.modelCalls === 1 ? '' : 's'}, ${run.tokenUsage.inputTokens ?? '?'} input tokens billed in total`
+        : 'Tokenizer estimate of the message history; the provider reported no usage'}
+    >
+      {readout}
+    </span>
+  );
+}
+
 export function TurnContextRow({ sessionKey, runId }: { sessionKey: string; runId: string }) {
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
   return (
@@ -56,6 +79,7 @@ export function TurnContextRow({ sessionKey, runId }: { sessionKey: string; runI
     >
       <Eye className="h-2.5 w-2.5 shrink-0" />
       <span className="truncate">Context it saw</span>
+      <TurnTokenReadout sessionKey={sessionKey} runId={runId} />
     </button>
   );
 }
@@ -92,6 +116,7 @@ export function TurnToolGroup({
         <span className="min-w-0 flex-1 truncate text-[11px] text-operator-muted/85">
           {summarizeToolParts(parts)}
         </span>
+        {runId && <TurnTokenReadout sessionKey={sessionKey} runId={runId} />}
         {failed > 0 && <span className="shrink-0 text-[10px] text-operator-error">{failed} failed</span>}
       </button>
 

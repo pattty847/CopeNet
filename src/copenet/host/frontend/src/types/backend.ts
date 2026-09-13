@@ -606,6 +606,26 @@ export interface RunStep {
   preview?: ToolResultPreview | null;
 }
 
+/** Provider-reported usage summed over a run's model calls. Never an estimate:
+ *  `inputTokens` is the billed sum (every tool step re-sends the context) and
+ *  `peakInputTokens` the largest single call — the real size of the context. */
+export interface RunTokenUsage {
+  source: 'provider';
+  modelCalls: number;
+  inputTokens: number | null;
+  peakInputTokens: number | null;
+  cachedInputTokens: number | null;
+  outputTokens: number | null;
+  reasoningTokens: number | null;
+  steps: Array<{
+    call?: number;
+    inputTokens: number | null;
+    outputTokens: number | null;
+    cachedInputTokens: number | null;
+    reasoningTokens: number | null;
+  }>;
+}
+
 export interface SessionRunRecord {
   runId: string;
   sessionKey: string;
@@ -625,6 +645,7 @@ export interface SessionRunRecord {
   metadata: Record<string, unknown>;
   messageCount?: number;
   inputTokenEstimate?: number;
+  tokenUsage?: RunTokenUsage | null;
   transitionReason?: string;
   terminalReason?: string | null;
   toolResults?: Record<string, unknown>[];

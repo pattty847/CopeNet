@@ -7,7 +7,7 @@ import json
 from typing import Any, AsyncIterator
 from urllib import error, request
 
-from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event
+from copenet.providers.base import ProviderEvent, ProviderModel, resolved_model_event, token_usage_event
 
 
 def _trim_trailing_slash(value: str) -> str:
@@ -44,6 +44,18 @@ def _lmstudio_tool_support(kind: str, capabilities: dict[str, Any]) -> bool:
     if trained is None:
         return True
     return bool(trained)
+
+
+def chat_completion_usage_event(usage):
+    """Map an OpenAI-style Chat Completions usage block onto the shared token-usage event."""
+    if not isinstance(usage, dict):
+        return None
+    details = usage.get("prompt_tokens_details") if isinstance(usage.get("prompt_tokens_details"), dict) else {}
+    return token_usage_event(
+        input_tokens=usage.get("prompt_tokens"),
+        output_tokens=usage.get("completion_tokens"),
+        cached_input_tokens=details.get("cached_tokens"),
+    )
 
 
 class _StreamingHttpProvider:
@@ -349,6 +361,7 @@ class LmStudioProvider(_StreamingHttpProvider):
             "model": model_name,
             "messages": messages,
             "stream": True,
+            "stream_options": {"include_usage": True},
         }
         # ensure_model_loaded picks against whatever instance is actually loaded, so
         # model_name is the first point in the flow where the answering model is known.
@@ -375,6 +388,9 @@ class LmStudioProvider(_StreamingHttpProvider):
                         if chunk == "[DONE]":
                             break
                         payload_obj = json.loads(chunk)
+                        usage = chat_completion_usage_event(payload_obj.get("usage") if isinstance(payload_obj, dict) else None)
+                        if usage is not None:
+                            loop.call_soon_threadsafe(queue.put_nowait, usage)
                         choices = payload_obj.get("choices") if isinstance(payload_obj, dict) else None
                         if not isinstance(choices, list):
                             continue
@@ -515,6 +531,12 @@ class OllamaProvider(_StreamingHttpProvider):
                             if isinstance(text, str) and text:
                                 loop.call_soon_threadsafe(queue.put_nowait, ProviderEvent(kind="delta", text=text))
                         if payload_obj.get("done") is True:
+                            usage = token_usage_event(
+                                input_tokens=payload_obj.get("prompt_eval_count"),
+                                output_tokens=payload_obj.get("eval_count"),
+                            )
+                            if usage is not None:
+                                loop.call_soon_threadsafe(queue.put_nowait, usage)
                             break
             except Exception as exc:
                 loop.call_soon_threadsafe(queue.put_nowait, exc)

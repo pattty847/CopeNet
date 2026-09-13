@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 
-from copenet.providers import RESOLVED_MODEL_META_KEY
+from copenet.providers import RESOLVED_MODEL_META_KEY, TOKEN_USAGE_META_KEY
 
 from .run_types import RunAdmission, RunInput, RunEvents
 from .run_message_parts import _append_text_part, _append_thinking_part, _replay_output_from_runtime_input
@@ -70,6 +70,11 @@ async def consume_metadata(
             "model_resolved",
             {"requestedModel": admission.request.model, "resolvedModel": events.resolved_model},
         )
+    usage = event.metadata.get(TOKEN_USAGE_META_KEY)
+    if isinstance(usage, dict):
+        step = {**usage, "call": len(events.token_usage_steps) + 1}
+        events.token_usage_steps.append(step)
+        admission.trace.record("provider_usage_reported", step)
     tool_call_payload = event.metadata.get("toolCall")
     responses_output_item = event.metadata.get("responsesOutputItem")
     if isinstance(responses_output_item, dict):

@@ -9,7 +9,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
 from uuid import uuid4
 
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
-from copenet.providers import RESOLVED_MODEL_META_KEY, Provider, ProviderEvent
+from copenet.providers import RESOLVED_MODEL_META_KEY, TOKEN_USAGE_META_KEY, Provider, ProviderEvent
 
 from .planning import HarnessTurnPlan
 
@@ -116,6 +116,16 @@ def forwarded_resolved_model(events: list[ProviderEvent]) -> ProviderEvent | Non
                 metadata={RESOLVED_MODEL_META_KEY: event.metadata[RESOLVED_MODEL_META_KEY]},
             )
     return None
+
+
+def forwarded_token_usage(events: list[ProviderEvent]) -> list[ProviderEvent]:
+    """Return every token-usage event from a buffered turn, for the same reason as above."""
+    return [
+        ProviderEvent(kind="meta", metadata={TOKEN_USAGE_META_KEY: dict(event.metadata[TOKEN_USAGE_META_KEY])})
+        for event in events
+        if event.kind == "meta" and isinstance(event.metadata, dict)
+        and isinstance(event.metadata.get(TOKEN_USAGE_META_KEY), dict)
+    ]
 
 
 def argument_digest(arguments: dict[str, Any]) -> dict[str, Any]:
