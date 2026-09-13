@@ -73,6 +73,8 @@ from copenet._paths import (
 )
 
 
+from .live_history import LiveHistory
+
 if TYPE_CHECKING:
     from copenet.core.orchestrator.requests import ChatEmit, ChatSendRequest, SideEventEmit
 
@@ -94,6 +96,7 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
         transcript_store: TranscriptStore | None = None,
         sessions_dir: Path | None = None,
         providers: dict[str, Provider] | None = None,
+        recover_interrupted_runs: bool = False,
     ) -> None:
         base = sessions_dir if sessions_dir is not None else default_sessions_dir()
         workdir_env = os.environ.get("COPNET_WORKDIR", "").strip()
@@ -155,6 +158,7 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
         # every run. Prune oldest-first at startup rather than shipping an
         # unbounded writer.
         self._observability_store.prune_traces()
+        self.live_history = LiveHistory()
         self._active_abort_by_run: dict[str, asyncio.Event] = {}
         self._active_run_by_session: dict[str, str] = {}
         self._idempotency_cache: dict[str, dict] = {}
@@ -167,10 +171,10 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
 
         self._fleet = FleetCoordinator(self, root_dir=base / "fleet")
 
-        # Crash recovery: clear any in_flight markers stranded by a previous
-        # crash/kill so they can't brick the session forever, and record each as
-        # an interrupted run so history isn't silently missing a turn.
-        self._recover_interrupted_runs()
+        # Only the host process that already owns its listening socket can recover
+        # runs. Utility clients and losing host processes must not clear a live lock.
+        if recover_interrupted_runs:
+            self._recover_interrupted_runs()
 
     def _recover_interrupted_runs(self) -> None:
         """Sweep stale in_flight markers at startup; log + record each one.

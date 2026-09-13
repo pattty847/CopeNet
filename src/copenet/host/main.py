@@ -15,8 +15,6 @@ from pathlib import Path
 import sys
 from typing import Any
 
-import uvicorn
-
 from copenet.core.orchestrator.requests import ChatSendRequest
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.nasa.wallpaper import (
@@ -85,7 +83,7 @@ def _default_token_beyond_loopback_refusal(*, host: str, port: int, token: str, 
     )
 
 
-from copenet.host.api import create_app
+from copenet.host.server_runner import run_host_app
 
 
 SUPPORTED_AUTH_PROVIDERS = {OPENAI_CODEX_PROVIDER_ID}
@@ -564,7 +562,6 @@ def main() -> None:
         print(refusal)
         raise SystemExit(1)
 
-    app = create_app()
     if host != "127.0.0.1":
         # Reachable beyond loopback — print the URL and a security reminder, since
         # CopeNet has no auth and (in full-access) real shell power.
@@ -575,7 +572,7 @@ def main() -> None:
             print("  Prefer COPNET_HOST=tailscale to keep it private to your tailnet.\n")
         else:
             print("  (only devices on your tailnet can reach it — keep it that way)\n")
-    uvicorn.run(app, host=host, port=port, log_level="info")
+    run_host_app(host=host, port=port)
 
 
 if __name__ == "__main__":

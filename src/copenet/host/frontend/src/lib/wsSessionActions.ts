@@ -1,3 +1,4 @@
+import { recoverHistory, type ActiveHistoryRun } from './wsHistoryRecovery';
 import { useAppStore } from '../store/useAppStore';
 import type { Message, Provider, PublicMessagePayload, Session } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
@@ -54,34 +55,43 @@ export async function refreshSessionsAction(request: WsRpcRequest): Promise<void
 }
 
 export async function loadHistoryAction(request: WsRpcRequest, sessionKey: string): Promise<void> {
-  const before = useAppStore.getState().messages[sessionKey] || [];
-  const payload = await request<{ sessionKey: string; messages: PublicMessagePayload[] }>('chat.history', {
-    sessionKey,
-    limit: 200,
-  });
-  const normalized = (payload.messages || []).map((message, index) =>
-    normalizeMessage(
-      message,
+  return recoverHistory(sessionKey, async () => {
+    const before = useAppStore.getState().messages[sessionKey] || [];
+    const payload = await request<{ sessionKey: string; messages: PublicMessagePayload[]; activeRun: ActiveHistoryRun | null }>('chat.history', {
       sessionKey,
-      `history-${sessionKey}-${index}-${message.timestamp || index}`,
-      (message.role as Message['role']) || 'assistant',
-      (message.state as Message['state']) || 'final',
-    ),
-  );
-  const current = useAppStore.getState();
-  // A history response can race admission or streaming. Preserve newer local
-  // messages and the pending assistant's ID until durable completion arrives.
-  for (const local of current.messages[sessionKey] || []) {
-    const pending = local.runId ? current.pendingAssistants[local.runId]?.localId === local.localId : false;
-    const changed = before.find((item) => item.localId === local.localId) !== local;
-    if (!pending && !changed && !local.optimistic) continue;
-    const index = normalized.findIndex((item) => item.role === local.role && (
-      local.runId ? item.runId === local.runId : item.content === local.content
-    ));
-    if (index < 0) normalized.push(local);
-    else if (pending && local.state === 'delta' && normalized[index].state !== 'final') normalized[index] = local;
-  }
-  current.setMessages(sessionKey, normalized);
+      limit: 200,
+    });
+    const normalized = payload.messages.map((message, index) => {
+      const existing = before.find((local) => local.runId === message.runId && local.role === message.role);
+      return normalizeMessage(message, sessionKey,
+        existing?.localId || `history-${sessionKey}-${index}-${message.timestamp || index}`,
+        (message.role as Message['role']) || 'assistant', (message.state as Message['state']) || 'final');
+    });
+    const store = useAppStore.getState();
+    // Keep only optimistic admissions absent from the server snapshot.
+    for (const local of store.messages[sessionKey] || []) {
+      if (!local.optimistic || local.runId === payload.activeRun?.runId) continue;
+      if (!normalized.some((item) => item.runId === local.runId && item.role === local.role)) normalized.push(local);
+    }
+    for (const [runId, target] of Object.entries(store.pendingAssistants)) {
+      if (target.sessionKey !== sessionKey || runId === payload.activeRun?.runId) continue;
+      if (normalized.some((message) => message.runId === runId && message.role === 'assistant' && message.state !== 'delta')) {
+        store.clearPendingAssistant(runId);
+        store.clearActiveRun(sessionKey, runId);
+      }
+    }
+    if (payload.activeRun) {
+      const { runId, message } = payload.activeRun;
+      const localId = store.pendingAssistants[runId]?.localId
+        || before.find((item) => item.runId === runId && item.role === 'assistant')?.localId
+        || `live-${runId}`;
+      normalized.push({ ...normalizeMessage(message, sessionKey, localId, 'assistant', 'delta'), reconnecting: false });
+      store.registerPendingAssistant(runId, sessionKey, localId);
+      store.setActiveRun(sessionKey, runId);
+    }
+    store.setMessages(sessionKey, normalized);
+    return payload;
+  });
 }
 
 export function beginDraftAction(): void {

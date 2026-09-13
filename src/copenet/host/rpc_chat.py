@@ -271,7 +271,11 @@ async def handle_chat_history(request_id: str, params: dict[str, Any] | None, se
             ResponseFrame(
                 id=request_id,
                 ok=True,
-                payload={"sessionKey": session_key, "messages": messages},
+                payload={
+                    "sessionKey": session_key,
+                    "messages": messages,
+                    "activeRun": orchestrator.live_history.snapshot(session_key),
+                },
             )
         )
     )

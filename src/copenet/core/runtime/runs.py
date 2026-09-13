@@ -217,8 +217,9 @@ class RunStore:
             if not path.exists():
                 return []
             lines = path.read_text(encoding="utf-8").splitlines()
-        rows: list[RunRecord] = []
-        for line in lines[-limit:]:
+        newest_rows: list[RunRecord] = []
+        seen_run_ids: set[str] = set()
+        for line in reversed(lines):
             line = line.strip()
             if not line:
                 continue
@@ -226,9 +227,17 @@ class RunStore:
                 raw = json.loads(line)
             except json.JSONDecodeError:
                 continue
-            if isinstance(raw, dict):
-                rows.append(RunRecord.from_json(raw))
-        return rows
+            if not isinstance(raw, dict):
+                continue
+            record = RunRecord.from_json(raw)
+            if record.run_id in seen_run_ids:
+                continue
+            seen_run_ids.add(record.run_id)
+            newest_rows.append(record)
+            if len(newest_rows) >= limit:
+                break
+        newest_rows.reverse()
+        return newest_rows
 
     def get(self, session_key: str, run_id: str) -> RunRecord | None:
         """Return one run record by id."""

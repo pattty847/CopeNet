@@ -131,3 +131,8 @@ def create_app(
         return frontend_index()
 
     return app
+
+
+def create_host_app() -> FastAPI:
+    """Create the socket-owning host and recover locks left by an earlier host."""
+    return create_app(Orchestrator(recover_interrupted_runs=True))

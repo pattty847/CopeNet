@@ -532,8 +532,8 @@ class WsClient {
   /**
    * After a reconnect, reconcile pending assistant messages against server state.
    * A run that finished while we were disconnected is finalized from persisted
-   * history; one still in-flight stays marked "reconnecting" (its session's
-   * inFlightRunId still points at it) and keeps streaming once events resume.
+   * history; one still in-flight reloads the complete active answer and resumes
+   * from the snapshot sequence without duplicating queued events.
    * Per HARNESS_REBUILD_V2 Phase 4.6.
    */
   private async reconcilePendingRuns(sessions: Session[]) {
@@ -547,8 +547,8 @@ class WsClient {
     for (const runId of pendingRunIds) {
       const target = pending[runId];
       if (inFlightByRun.has(runId)) {
-        // Still running server-side — keep the reconnecting marker; events resume.
-        store.updateMessage(target.sessionKey, target.localId, { reconnecting: true });
+        // Recover the complete answer so far, including text sent while away.
+        await this.loadHistory(target.sessionKey);
         continue;
       }
       // Run is no longer in-flight: it completed (or aborted) while we were away.

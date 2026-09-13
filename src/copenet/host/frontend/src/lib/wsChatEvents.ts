@@ -1,3 +1,4 @@
+import { deferHistoryEvent } from './wsHistoryRecovery';
 import { useAppStore } from '../store/useAppStore';
 import type { ChatEventPayload, TurnStateSnapshot } from '../types/backend';
 import {
@@ -16,6 +17,7 @@ export function handleChatEventAction(
   refreshSessions: () => Promise<void>,
   refreshMemoryDrafts: () => Promise<void>,
 ): void {
+  if (deferHistoryEvent(payload, () => handleChatEventAction(payload, refreshSessions, refreshMemoryDrafts))) return;
   const store = useAppStore.getState();
   const runId = payload.runId ? String(payload.runId) : null;
   const sessionKey = payload.sessionKey;
@@ -192,6 +194,7 @@ export function handleChatEventAction(
         provider: payload.provider ? String(payload.provider) : existing?.provider || null,
         model: payload.model ? String(payload.model) : existing?.model || null,
         state: 'delta',
+        reconnecting: false,
         toolExecution: toolExecution || existing?.toolExecution || null,
         parts: normalizedParts || existing?.parts || null,
         optimistic: true,

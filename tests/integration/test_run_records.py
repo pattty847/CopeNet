@@ -163,6 +163,7 @@ def test_startup_recovery_does_not_replace_an_existing_terminal_run_record(tmp_p
         transcript_store=TranscriptStore(root_dir=tmp_path),
         sessions_dir=tmp_path,
         providers={},
+        recover_interrupted_runs=True,
     )
 
     entry = session_store.get("alpha")
@@ -170,3 +171,21 @@ def test_startup_recovery_does_not_replace_an_existing_terminal_run_record(tmp_p
     assert entry.in_flight_run_id is None
     records = run_store.list_for_session("alpha")
     assert [(record.run_id, record.status) for record in records] == [("run-terminal", "ok")]
+
+
+def test_non_host_orchestrator_does_not_recover_a_live_run(tmp_path) -> None:
+    session_store = SessionStore(path=tmp_path / "index.json")
+    session_store.create_session(session_key="alpha", provider="prompted", model="model-a")
+    session_store.mark_run_started("alpha", "run-live")
+
+    Orchestrator(
+        session_store=session_store,
+        transcript_store=TranscriptStore(root_dir=tmp_path),
+        sessions_dir=tmp_path,
+        providers={},
+    )
+
+    entry = session_store.get("alpha")
+    assert entry is not None
+    assert entry.in_flight_run_id == "run-live"
+    assert RunStore(root_dir=tmp_path / "runs").list_for_session("alpha") == []

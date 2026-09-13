@@ -29,6 +29,7 @@ async def send_chat(
     if isinstance(admission, dict):
         return admission
     events = RunEvents()
+    orchestrator.live_history.runs[admission.session_key] = (admission, events)
     prepared: RunInput | None = None
     delivery = RunDelivery(emit, emit_event, admission.trace)
     side_emit = delivery.emit_event if emit_event is not None else None
@@ -107,6 +108,7 @@ async def send_chat(
         await delivery.emit(payload)
         return {"runId": admission.run_id, "status": "error", "summary": str(exc)}
     finally:
+        orchestrator.live_history.runs.pop(admission.session_key, None)
         async with orchestrator._lock:
             orchestrator._active_abort_by_run.pop(admission.run_id, None)
             if orchestrator._active_run_by_session.get(admission.session_key) == admission.run_id:

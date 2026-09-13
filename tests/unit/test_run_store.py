@@ -68,6 +68,20 @@ def test_run_store_ignores_truncated_final_jsonl_record(tmp_dir) -> None:
     assert [record.run_id for record in records] == ["run-1"]
 
 
+def test_run_store_keeps_latest_record_when_one_run_id_was_appended_twice(tmp_dir) -> None:
+    store = RunStore(root_dir=tmp_dir / "runs")
+    interrupted = _record("run-1")
+    interrupted.status = "interrupted"
+    completed = _record("run-1")
+    completed.status = "ok"
+    store.create(interrupted)
+    store.create(completed)
+
+    records = store.list_for_session("alpha")
+
+    assert [(record.run_id, record.status) for record in records] == [("run-1", "ok")]
+
+
 def test_two_run_store_instances_append_without_loss_and_preserve_writer_order(tmp_dir) -> None:
     root = tmp_dir / "runs"
     stores = [RunStore(root_dir=root), RunStore(root_dir=root)]

@@ -89,16 +89,19 @@ def test_debug_tier_events_route_to_debug_even_through_record(tmp_path: Path) ->
     assert on_events[1]["tier"] == "debug"
 
 
-def test_a_runaway_run_stops_at_the_size_cap(tmp_path: Path) -> None:
+def test_a_runaway_debug_trace_keeps_final_lifecycle_events(tmp_path: Path) -> None:
     writer = _writer(tmp_path, debug=True, max_bytes=1_500)
     for index in range(50):
-        writer.record("tool_executed", {"toolId": "files.read", "summary": "x" * 200, "index": index})
+        writer.record_debug("tool_result_body", {"body": "x" * 200, "index": index})
+    writer.record("turn_completed", {"terminalReason": "completed"})
 
     store = ObservabilityStore(settings_path=tmp_path / "settings.json", trace_root=tmp_path)
     events = store.list_trace_events("run-1")
-    assert events[-1]["event"] == "trace_truncated"
-    assert events[-1]["payload"]["maxBytes"] == 1_500
-    assert (tmp_path / "run-1.jsonl").stat().st_size <= 1_500 + 400
+    assert events[-1]["event"] == "turn_completed"
+    marker = next(event for event in events if event["event"] == "trace_truncated")
+    assert marker["payload"]["maxBytes"] == 1_500
+    assert marker["payload"]["scope"] == "debug"
+    assert (tmp_path / "run-1.jsonl").stat().st_size <= 1_500 + 800
     assert sum(1 for event in events if event["event"] == "trace_truncated") == 1
 
 

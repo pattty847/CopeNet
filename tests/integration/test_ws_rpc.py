@@ -597,7 +597,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
 
         history_id = socket.request("chat.history", {"sessionKey": "alpha"})
         history_response = socket.recv_response(history_id)
-        assert history_response["payload"] == {"sessionKey": "alpha", "messages": []}
+        assert history_response["payload"] == {"sessionKey": "alpha", "messages": [], "activeRun": None}
 
         archive_id = socket.request("sessions.archive", {"key": "alpha", "archived": True})
         archive_response = socket.recv_response(archive_id)
