@@ -5,22 +5,30 @@
     uv run python -m benchmarks.coding.run --provider openai-codex --model gpt-5.5
     uv run python -m benchmarks.coding.run --only bugfix-local explore-locate
 
-Each task gets a fresh copy of the fixture repo (git-initialized so the grader
-can diff), a fresh `bench-*` session in the operator's real ~/.copenet store so
-the run shows up in Observability, and Debug capture switched on for the
-duration so the trace carries full tool arguments and result bodies. Results
-land under tmp/coding_bench/<timestamp>/.
+Each task gets a fresh workspace — a copy of the fixture repo for the fixture
+family, or a detached `git worktree` of this checkout (HEAD) for the large-repo
+family — git-initialized so the grader can diff, a fresh `bench-*` session in
+the operator's real ~/.copenet store so the run shows up in Observability, and
+Debug capture switched on for the duration so the trace carries full tool
+arguments and result bodies. Results land under tmp/coding_bench/<timestamp>/.
+
+Run it as `uv run --extra dev python -m benchmarks.coding.run …`: the repo
+tasks' graders (and the model, through PYTHONPATH) use this interpreter's
+pytest against the worktree's own `src`.
 
 This spends provider quota and executes real tools inside the temp workspace.
+The real checkout is never the workspace.
 """
 
 from __future__ import annotations
 
 import argparse
 import asyncio
+import contextlib
 from dataclasses import asdict
 from datetime import datetime, timezone
 import json
+import os
 from pathlib import Path
 import shutil
 import subprocess
@@ -34,7 +42,8 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from benchmarks.coding import trace_analysis  # noqa: E402
-from benchmarks.coding.tasks import FIXTURE_ROOT, TASKS, TASKS_BY_ID, Check, GradeContext, Task  # noqa: E402
+from benchmarks.coding.catalog import TASKS, TASKS_BY_ID  # noqa: E402
+from benchmarks.coding.tasks import FIXTURE_ROOT, Check, GradeContext, Task  # noqa: E402
 
 DEFAULT_OUT = REPO_ROOT / "tmp" / "coding_bench"
 
@@ -46,22 +55,55 @@ def _git(workdir: Path, *argv: str) -> subprocess.CompletedProcess:
     )
 
 
-def prepare_workspace(task: Task, *, keep_root: Path | None = None) -> Path:
+def prepare_workspace(task: Task, *, keep_root: Path | None = None, seed: bool = True) -> Path:
     base = keep_root or Path(tempfile.gettempdir())
     workdir = Path(tempfile.mkdtemp(prefix=f"copenet-bench-{task.id}-", dir=str(base)))
-    shutil.copytree(FIXTURE_ROOT, workdir, dirs_exist_ok=True)
-    for cache in workdir.rglob("__pycache__"):
-        shutil.rmtree(cache, ignore_errors=True)
-    task.seed(workdir)
-    _git(workdir, "init", "-q")
+    if task.workspace == "repo":
+        # A detached worktree of HEAD: the model can edit and run freely without
+        # touching the real tree, and `git status` in it sees only its own changes.
+        workdir.rmdir()
+        proc = _git(REPO_ROOT, "worktree", "add", "--detach", "-q", str(workdir), "HEAD")
+        if proc.returncode != 0:
+            raise RuntimeError(f"git worktree add failed: {proc.stderr.strip()}")
+    else:
+        shutil.copytree(FIXTURE_ROOT, workdir, dirs_exist_ok=True)
+        for cache in workdir.rglob("__pycache__"):
+            shutil.rmtree(cache, ignore_errors=True)
+        _git(workdir, "init", "-q")
+    if seed:
+        task.seed(workdir)
     _git(workdir, "add", "-A")
-    _git(workdir, "commit", "-q", "-m", "seeded benchmark state")
+    _git(workdir, "commit", "-q", "--allow-empty", "-m", "seeded benchmark state")
     return workdir
 
 
-def workspace_diff(workdir: Path) -> str:
-    _git(workdir, "add", "-N", ".")
-    return _git(workdir, "diff").stdout
+def cleanup_workspace(task: Task, workdir: Path) -> None:
+    if task.workspace == "repo":
+        _git(REPO_ROOT, "worktree", "remove", "--force", str(workdir))
+        _git(REPO_ROOT, "worktree", "prune")
+    shutil.rmtree(workdir, ignore_errors=True)
+
+
+@contextlib.contextmanager
+def workspace_environment(task: Task, workdir: Path):
+    """Point PYTHONPATH at the worktree's `src` for the duration of a repo task.
+
+    Tool subprocesses inherit the process environment, so this is what makes the
+    model's `python -m pytest` import the worktree's code instead of the editable
+    install of the real checkout.
+    """
+    if task.workspace != "repo":
+        yield
+        return
+    previous = os.environ.get("PYTHONPATH")
+    os.environ["PYTHONPATH"] = str(workdir / "src")
+    try:
+        yield
+    finally:
+        if previous is None:
+            os.environ.pop("PYTHONPATH", None)
+        else:
+            os.environ["PYTHONPATH"] = previous
 
 
 def _check_rows(checks: list[Check]) -> list[dict[str, Any]]:
@@ -107,22 +149,23 @@ async def run_task(orchestrator, task: Task, *, provider: str, model: str | None
 
         started = time.time()
         try:
-            result = await asyncio.wait_for(
-                orchestrator.send_chat(
-                    ChatSendRequest(
-                        session_key=session_key,
-                        message=prompt,
-                        idempotency_key=run_id,
-                        provider=provider,
-                        model=model,
-                        task_prompt_id=task.access,
-                        workspace_root=str(workdir),
-                        allow_tools=True,
+            with workspace_environment(task, workdir):
+                result = await asyncio.wait_for(
+                    orchestrator.send_chat(
+                        ChatSendRequest(
+                            session_key=session_key,
+                            message=prompt,
+                            idempotency_key=run_id,
+                            provider=provider,
+                            model=model,
+                            task_prompt_id=task.access,
+                            workspace_root=str(workdir),
+                            allow_tools=True,
+                        ),
+                        emit=emit,
                     ),
-                    emit=emit,
-                ),
-                timeout=timeout_sec,
-            )
+                    timeout=timeout_sec,
+                )
             status = str(result.get("status") or "ok")
             if status != "ok":
                 error = error or str(result.get("summary") or status)
@@ -181,24 +224,39 @@ async def run_task(orchestrator, task: Task, *, provider: str, model: str | None
         "analyses": analyses,
     }
     (task_dir / "result.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
-    if not keep:
-        shutil.rmtree(workdir, ignore_errors=True)
+    if keep:
+        if task.workspace == "repo":
+            print(f"  kept worktree {workdir} — remove with: git worktree remove --force {workdir}", flush=True)
+    else:
+        cleanup_workspace(task, workdir)
     print(f"  {'PASS' if passed else 'FAIL'} {task.id}", flush=True)
     return result
 
 
 def dry_run(tasks: list[Task]) -> int:
-    """Seed each task and confirm the grader rejects the unfixed state and accepts the pristine fixture."""
+    """Seed each task and confirm the grader rejects the unfixed state and accepts the pristine source."""
     failures = 0
     for task in tasks:
         workdir = prepare_workspace(task)
-        checks = task.grade(workdir, GradeContext(final_texts=[""], analyses=[{}]))
+        try:
+            checks = task.grade(workdir, GradeContext(final_texts=[""], analyses=[{}]))
+        finally:
+            cleanup_workspace(task, workdir)
         red = [check for check in checks if not check.ok]
         print(f"{task.id:<26} seeded state → {'RED (good)' if red else 'GREEN (seed is not failing!)'}: {[c.name for c in red][:4]}")
         if not red:
             failures += 1
-        shutil.rmtree(workdir, ignore_errors=True)
-    # pristine fixture must pass every "unchanged"/"tests pass" style check
+        # A seeded repo task must be red *because of the seed*: the same gate must be green on HEAD.
+        if task.workspace == "repo" and task.seed is not Task.seed:
+            pristine = prepare_workspace(task, seed=False)
+            try:
+                gates = [c for c in task.grade(pristine, GradeContext(final_texts=[""], analyses=[{}])) if c.name.startswith("pytest passes")]
+            finally:
+                cleanup_workspace(task, pristine)
+            green = all(c.ok for c in gates)
+            print(f"{'':<26} unseeded HEAD gate → {'GREEN (good)' if green else 'RED (gate fails without the seed!)'}: {[c.detail for c in gates if not c.ok][:1]}")
+            failures += int(not green)
+    # pristine fixture must pass its own gate script
     pristine = Path(tempfile.mkdtemp(prefix="copenet-bench-pristine-"))
     shutil.copytree(FIXTURE_ROOT, pristine, dirs_exist_ok=True)
     proc = subprocess.run([sys.executable, "scripts/check.py"], cwd=pristine, capture_output=True, text=True)
@@ -247,6 +305,8 @@ async def main_async(args: argparse.Namespace) -> int:
                 "peakInput": [(a.get("tokens") or {}).get("providerReported", {}).get("peakInputTokens") for a in r["analyses"]],
                 "totalInput": [(a.get("tokens") or {}).get("providerReported", {}).get("inputTokensTotal") for a in r["analyses"]],
                 "redundantReads": [(a.get("reads") or {}).get("redundantReadCount") for a in r["analyses"]],
+                "searchDumps": [len((a.get("reads") or {}).get("searchDumps") or []) for a in r["analyses"]],
+                "receiptedOutputs": [((a.get("header") or {}).get("replayReceipts") or {}).get("receiptedOutputs") for a in r["analyses"]],
                 "verifiedAfterLastEdit": [(a.get("verification") or {}).get("afterLastMutation") for a in r["analyses"]],
             }
             for r in results
@@ -259,7 +319,7 @@ async def main_async(args: argparse.Namespace) -> int:
     print("\n" + "=" * 72)
     print(f"SCORE {summary['score']}  →  {out_dir / 'REPORT.md'}")
     for row in summary["tasks"]:
-        print(f"  {'✓' if row['passed'] else '✗'} {row['id']:<26} tools={row['toolCalls']} calls={row['modelCalls']} peakIn={row['peakInput']} failed={row['failedChecks']}")
+        print(f"  {'✓' if row['passed'] else '✗'} {row['id']:<26} tools={row['toolCalls']} calls={row['modelCalls']} peakIn={row['peakInput']} dumps={row['searchDumps']} failed={row['failedChecks']}")
     return 0 if all(r["passed"] for r in results) else 1
 
 
@@ -277,7 +337,7 @@ def main() -> int:
     args = parser.parse_args()
     if args.list:
         for task in TASKS:
-            print(f"{task.id:<26} {task.access or 'read-only':<12} {len(task.turns)} turn(s)  {task.title}")
+            print(f"{task.id:<26} {task.workspace:<8} {task.access or 'read-only':<12} {len(task.turns)} turn(s)  {task.title}")
         return 0
     unknown = [task_id for task_id in (args.only or []) if task_id not in TASKS_BY_ID]
     if unknown:

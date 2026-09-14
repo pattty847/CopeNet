@@ -19,7 +19,8 @@ if str(REPO_ROOT / "src") not in sys.path:
 
 from benchmarks.coding import trace_analysis  # noqa: E402
 from benchmarks.coding.report import render_suite_report  # noqa: E402
-from benchmarks.coding.tasks import TASKS_BY_ID, GradeContext  # noqa: E402
+from benchmarks.coding.catalog import TASKS_BY_ID  # noqa: E402
+from benchmarks.coding.tasks import GradeContext  # noqa: E402
 from dataclasses import asdict  # noqa: E402
 
 

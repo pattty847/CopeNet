@@ -1,5 +1,8 @@
 """Coding-agent benchmark tasks over the `ledgerly` fixture repo.
 
+The large-repo family (the CopeNet checkout as the workspace) lives in
+`repo_tasks.py`; `catalog.py` joins both into `TASKS` / `TASKS_BY_ID`.
+
 Each task is the same realistic little repository with one deliberate defect or
 gap seeded into it, a prompt the operator would plausibly type, and a grader
 that checks the workspace independently of anything the model claimed. The
@@ -60,6 +63,8 @@ class Task:
     grade: Grader
     seed: Seeder = lambda _workdir: None
     access: str | None = "full-access"
+    # "fixture": a fresh copy of fixture/ledgerly. "repo": a detached git worktree of this checkout.
+    workspace: str = "fixture"
     # Files the task legitimately touches; anything else changed is flagged.
     allowed_changes: set[str] | None = None
     # Path prefixes that must be byte-identical to the seeded state.
@@ -383,7 +388,7 @@ def grade_multi_turn(workdir: Path, ctx: GradeContext) -> list[Check]:
     ]
 
 
-TASKS: list[Task] = [
+FIXTURE_TASKS: list[Task] = [
     Task(
         id="bugfix-local",
         title="Simple localized bug fix",
@@ -519,5 +524,3 @@ TASKS: list[Task] = [
         allowed_changes={"ledgerly/ledger.py", "ledgerly/reports.py", "ledgerly/cli.py", "README.md"},
     ),
 ]
-
-TASKS_BY_ID = {task.id: task for task in TASKS}

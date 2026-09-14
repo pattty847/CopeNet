@@ -13,13 +13,13 @@ def render_suite_report(summary: dict[str, Any], results: list[dict[str, Any]]) 
         "",
         f"Ran {summary['ranAt']}. Score **{summary['score']}**.",
         "",
-        "| task | pass | turns | tool calls | model calls | peak input | total input | redundant reads | verified after last edit | failed checks |",
-        "|---|---|---|---|---|---|---|---|---|---|",
+        "| task | pass | turns | tool calls | model calls | peak input | total input | redundant reads | search dumps | receipted outputs | verified after last edit | failed checks |",
+        "|---|---|---|---|---|---|---|---|---|---|---|---|",
     ]
     for row in summary["tasks"]:
         lines.append(
             f"| {row['id']} | {'✓' if row['passed'] else '✗'} | {len(row['turns'])} | {row['toolCalls']} | {row['modelCalls']} | "
-            f"{row['peakInput']} | {row['totalInput']} | {row['redundantReads']} | {row['verifiedAfterLastEdit']} | {', '.join(row['failedChecks']) or '—'} |"
+            f"{row['peakInput']} | {row['totalInput']} | {row['redundantReads']} | {row.get('searchDumps')} | {row.get('receiptedOutputs')} | {row['verifiedAfterLastEdit']} | {', '.join(row['failedChecks']) or '—'} |"
         )
     for result in results:
         lines += ["", f"## {result['id']} — {result['title']}", "", f"Capability: {result['capability']}", "", f"Session `{result['sessionKey']}`", ""]
