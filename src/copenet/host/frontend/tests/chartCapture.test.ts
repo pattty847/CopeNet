@@ -42,7 +42,7 @@ function fixture(): CaptureOptions {
     viewId: 'synthetic-view', revision: 12, viewport: { from: 100, to: 300, logicalFrom: -0.25, logicalTo: 3.5 }, selection: { from: 200, to: 200 },
     includeAccountContext: false,
     contributions: [{ key: 'quote:displayed', kind: 'quote', label: 'Displayed quote', status: 'loaded',
-      observedAt: '2026-01-01T00:00:05Z', rows: [{ price: 12.987654321, dayVolume: null }], metadata: { source: 'yahoo_stream' } }],
+      observedAt: '2026-01-01T00:00:05Z', rows: [{ price: 12.987654321, dayVolume: null }], metadata: { source: 'yahoo_stream' } }, { key: 'account:position', kind: 'panel', label: 'Your position', status: 'loaded', rows: [{ shares: 777000123, avgCost: 456.789, source: 'synthetic-account' }], metadata: { accountContext: true } }],
   };
 }
 

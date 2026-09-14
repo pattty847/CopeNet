@@ -5,6 +5,8 @@
 // operator does happens
 // inside this rectangle — which is the difference between an instrument and an article.
 
+import { PositionProvider } from './position/PositionContext';
+import { PositionPanel } from './position/PositionPanel';
 import { ChartStage, type StagePlot } from './ChartStage';
 import { ReplayBar } from './replay/ReplayBar';
 import { ChartToolbar } from './ChartToolbar';
@@ -46,7 +48,7 @@ export function TickerWorkspace({
 }) {
   const view = useTickerViewModel(symbol, watchlist);
   const {
-    ticker, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
+    ticker, position, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
     setTimeframe, range, setRange, logScale, setLogScale, candleStyle, setCandleStyle, showVolume,
     setShowVolume, tab, indicators, indicatorLayout, handlePaneStretch, railCollapsed,
     setRailCollapsed, overlayMetric, setOverlayMetric, effectiveFrequency, setOverlayFrequency, comparisons,
@@ -105,6 +107,7 @@ export function TickerWorkspace({
   return (
     <ViewResourceProvider resources={chartWorkspace.resources}>
     <TickerAlertProvider symbol={viewSymbol} timeframe={timeframe}>
+    <PositionProvider state={position} bars={bars} timeframe={timeframe} hidden={comparing || replay.active} open={() => openTab('position')}>
     <div className="tw">
       <TickerAssetBar
         detail={detail}
@@ -114,7 +117,7 @@ export function TickerWorkspace({
         pending={ticker.stale ? symbol.trim().toUpperCase() : null}
         onBack={onClose}
         onToggleWatch={() => void toggleWatch()}
-        onOpenPosition={() => openTab('overview')}
+        onOpenPosition={() => openTab(position.data?.position ? 'position' : 'overview')}
       />
 
       <div className="tw-body">
@@ -300,6 +303,7 @@ export function TickerWorkspace({
             {/* Each panel receives `active`, which is how Codex's panels gate their own
                 fetching and lazily import Recharts — the drawer's tab state drives it for
                 free, so nothing below the chart loads until you open it. */}
+            {tab === 'position' && <PositionPanel />}
             {tab === 'overview' && <TabOverview detail={detail} profile={profile} />}
             {tab === 'fundamentals' && <TickerFundamentalsPanel symbol={detail.symbol} active={tab === 'fundamentals'} />}
             {tab === 'evidence' && <TickerEvidencePanel symbol={detail.symbol} state={sec} active={tab === 'evidence'} />}
@@ -309,6 +313,7 @@ export function TickerWorkspace({
         <ChartAgentPanel workspace={chartWorkspace} symbol={detail.symbol} timeframe={timeframe} />
       </div>
     </div>
+    </PositionProvider>
     </TickerAlertProvider>
     </ViewResourceProvider>
   );

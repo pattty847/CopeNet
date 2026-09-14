@@ -8,6 +8,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { TriangleAlert, X } from 'lucide-react';
 import type { ChartWorkspaceBridge } from './drawings/types';
+import { TickerMonitorButton } from './monitoring/TickerMonitors';
+import { PositionChip } from './position/PositionPanel';
 import { CandleChart } from './CandleChart';
 import { MM, mono, toneColor } from './marketUi';
 import { timeframeLabel, type ChartTimeframe } from './chartRanges';
@@ -163,6 +165,8 @@ export function ChartStage({
               {barDate && <span style={{ color: MM.dimmer, fontSize: 10 }}>{barDate}</span>}
               {replay?.active && <span className="tw-legend__replay">REPLAY</span>}
             </div>
+            <PositionChip />
+            <TickerMonitorButton />
             {shown && !comparisonMode && (
               <div className="tw-legend__row tw-legend__ohlc">
                 <span>O <b>{money(shown.o)}</b></span>
