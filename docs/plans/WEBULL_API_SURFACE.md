@@ -1,3 +1,7 @@
+> September 14 read-only runtime validation: positions and full fill history synced
+> successfully with SDK 3.0.0, and the cached-position RPC accepted the refreshed account
+> fingerprint. No order writes or notification sends were made. Account values remain local.
+
 # Webull API Surface — Compatibility Review (2026-09-14)
 
 ## Current compatibility review

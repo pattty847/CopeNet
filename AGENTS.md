@@ -268,6 +268,17 @@ For current behavior, assume:
   dock reads the price cache only through `market.screeners.setup.get` — never add a
   fetch there. See `docs/plans/MARKET_SCREENERS.md`.
 
+- **Position context is account scoped and snapshot based.** `core/market/positions.py` reads
+  saved Webull equities and filled-order aggregates through `market.position.get`. An exact
+  account fingerprint is required; older caches need one manual positions/fills sync.
+  Post-snapshot splits suppress the position layer. `sections/market/position/` owns the
+  Position tab, cost line, optional markers/shading, and price scenarios; replay/comparison
+  hide these current-account overlays. Captured `account:position` is contributed through
+  `viewState/` and follows the existing account-context opt-in. Alert chart images render
+  frozen event evidence through `alert_chart.py`; Telegram sends one photo/caption with
+  the existing consent and uncertain-receipt behavior. Never derive account history by
+  applying today's shares to old prices.
+
 - **Live quotes belong to a visible ticker view, not the scan engine.** `live_quote.py`
   owns one Yahoo connection per authenticated browser connection, with explicit cleanup
   and a renewable 75-second lease. `yahoo_stream.py` shares yfinance's protobuf decoder
@@ -286,7 +297,10 @@ For current behavior, assume:
   Never add a full refresh to boot, page load or broker sync. Manual runs require the scope
   token from preview; stale definitions/list expansion require a new confirmation.
 - **Alerts reuse chart math.** `alert_engine.py` evaluates canonical `AlertRule` records from
-  completed cached D/W/M US-equity candles. `npm run build` also generates the headless Node
+  completed cached D/W/M US-equity candles. Interaction monitors in `alert_interaction.py`
+  observe forming cached periods against the previous completed signal; `alert_forming.py`
+  validates session provenance. They run only after linked scans, never from browser quotes.
+  Close follow-ups and rehearsal share `alert_conditions.py`; no second indicator math. `npm run build` also generates the headless Node
   registry evaluator; build it before backend alert tests. Telegram outbox delivery is independent
   of scan admission, requires explicit per-rule consent/approval and preserves uncertain sends.
 
