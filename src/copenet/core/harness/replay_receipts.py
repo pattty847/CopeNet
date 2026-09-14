@@ -142,6 +142,9 @@ def receipt_body(tool_execution: dict[str, Any], body: Any, *, turn_number: int 
             if isinstance(data.get(key), str):
                 receipt[key] = data[key]
         receipt["elided"] = f"result body from {where} is not replayed; call {tool_id} again if you need it"
+    artifact_id = tool_execution.get("artifactId")
+    if isinstance(artifact_id, str) and artifact_id and receipt is not None:
+        receipt["elided"] += f"; the full body is saved as artifact {artifact_id} (artifact.read)"
     return receipt
 
 

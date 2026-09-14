@@ -89,7 +89,8 @@ def _materialize_tool_result_artifact(
             "fullChars": len(payload_text),
             "continuationHint": (
                 f"Showing the first {model_limit} of {len(payload_text)} characters. The full output is "
-                f"saved as artifact {artifact.artifact_id}. For a file read, continue by calling files.read "
+                f"saved as artifact {artifact.artifact_id}: read the rest with artifact.read "
+                f"(artifact_id={artifact.artifact_id}, offset={model_limit}). For a file read, you can also call files.read "
                 f"again — with a higher offset, or with start_line/end_line to read a specific range."
             ),
         }

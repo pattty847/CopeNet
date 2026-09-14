@@ -430,12 +430,17 @@ def post_dispatch_record(
         return
     state = get_security_state(context)
 
-    if request.tool_id in UNTRUSTED_SOURCE_TOOLS:
+    # Reading back a persisted web result is the same untrusted content entering
+    # the run again; the artifact's source tool decides, not the reader.
+    source_tool = request.tool_id
+    if request.tool_id == "artifact.read":
+        source_tool = str((result.output or {}).get("sourceToolId") or "") or request.tool_id
+    if source_tool in UNTRUSTED_SOURCE_TOOLS:
         if not state.untrusted_context:
             state.untrusted_context = True
-        if request.tool_id not in state.untrusted_sources:
-            state.untrusted_sources.append(request.tool_id)
-        state.record(SecurityEvent("taint", request.tool_id, "run marked untrusted", source=request.tool_id))
+        if source_tool not in state.untrusted_sources:
+            state.untrusted_sources.append(source_tool)
+        state.record(SecurityEvent("taint", request.tool_id, "run marked untrusted", source=source_tool))
 
     if request.tool_id == "files.read":
         _record_sensitive_read(request, result, state)

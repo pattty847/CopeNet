@@ -32,6 +32,7 @@ from .handlers.workspace_intel import DESCRIPTORS as WORKSPACE_INTEL_DESCRIPTORS
 # handler files themselves are deleted in the Phase 5 sweep, where subtraction
 # is explicitly safe. ALL_HANDLERS therefore stays a superset of MANIFEST_TOOL_IDS.
 MANIFEST_TOOL_IDS = {
+    "artifact.read",
     "files.read",
     "files.write",
     "files.edit",

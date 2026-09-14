@@ -378,7 +378,7 @@ digests in session state so S3 also covers turn N+1. Evidence: F8, the turn-2
 starting size above. *Tradeoff:* "what did that command print two turns ago" needs
 the artifact, which brings up the next item.
 
-**P4. Give the model a way to open the artifacts the hints point at.** Every clipped
+**P4. Give the model a way to open the artifacts the hints point at.** *(Shipped 2026-09-14: `artifact.read`, session-scoped, char-paged; hints and receipts name it.)* Every clipped
 result says "the full output is saved as artifact X"; no tool reads an artifact by
 id. Either add `artifact.read` (read-only, session-scoped) or stop naming artifact
 ids to the model and say "re-read with offset". *Tradeoff:* one more tool schema
