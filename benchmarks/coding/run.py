@@ -106,19 +106,32 @@ def workspace_environment(task: Task, workdir: Path):
             os.environ["PYTHONPATH"] = previous
 
 
+def workspace_diff(workdir: Path) -> str:
+    _git(workdir, "add", "-N", ".")
+    return _git(workdir, "diff").stdout
+
+
 def _check_rows(checks: list[Check]) -> list[dict[str, Any]]:
     return [asdict(check) for check in checks]
 
 
 async def run_task(orchestrator, task: Task, *, provider: str, model: str | None, out_dir: Path, timeout_sec: float, keep: bool) -> dict[str, Any]:
-    from copenet.core.orchestrator.requests import ChatSendRequest
-
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
     session_key = f"bench-{task.id}-{stamp}"
     workdir = prepare_workspace(task)
     task_dir = out_dir / task.id
     task_dir.mkdir(parents=True, exist_ok=True)
     print(f"\n▶ {task.id} — {task.title}\n  session {session_key}\n  workspace {workdir}", flush=True)
+    try:
+        return await _run_task_in(orchestrator, task, workdir=workdir, task_dir=task_dir, session_key=session_key, provider=provider, model=model, timeout_sec=timeout_sec, keep=keep)
+    except BaseException:
+        if not keep:
+            cleanup_workspace(task, workdir)
+        raise
+
+
+async def _run_task_in(orchestrator, task: Task, *, workdir: Path, task_dir: Path, session_key: str, provider: str, model: str | None, timeout_sec: float, keep: bool) -> dict[str, Any]:
+    from copenet.core.orchestrator.requests import ChatSendRequest
 
     turns: list[dict[str, Any]] = []
     final_texts: list[str] = []
