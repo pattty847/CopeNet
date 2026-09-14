@@ -1,5 +1,6 @@
 import type {
   AlertRule,
+  AlertRehearsal,
   AlertsState,
   IndicatorOption,
   NotificationsState,
@@ -21,8 +22,10 @@ export function createMarketMonitoringApi(request: Request) {
     previewScan: (scan: ScanDefinition) => call<ScanPreview>('market.scans.preview', { scan }),
     runScan: (id: string, scopeToken: string) => call<Record<string, unknown>>('market.scans.run', { id, scopeToken }),
     scanRun: (id: string) => call<{ run: ScanRun }>('market.scans.run.get', { id }),
+    tickerAlerts: (symbol: string) => call<{ alerts: AlertRule[] }>('market.alerts.list', { symbol }),
     alerts: () => call<AlertsState>('market.alerts.state'),
     catalogue: () => call<{ indicators: IndicatorOption[]; available: boolean; error?: string }>('market.alerts.catalogue'),
+    rehearseAlert: (rule: AlertRule) => call<AlertRehearsal>('market.alerts.rehearse', { rule }),
     saveAlert: (rule: AlertRule) => call<AlertsState>('market.alerts.save', { rule }),
     cancelAlert: (alertId: string) => call<AlertsState>('market.alerts.cancel', { alertId }),
     notifications: () => call<NotificationsState>('market.notifications.get'),

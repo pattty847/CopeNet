@@ -6,6 +6,7 @@ from dataclasses import dataclass
 import json
 import os
 import re
+from uuid import uuid4
 from urllib.error import HTTPError, URLError
 from urllib.request import Request, urlopen
 
@@ -28,6 +29,29 @@ def send_telegram_message(target: str, text: str) -> TelegramReceipt:
     API contract: https://core.telegram.org/bots/api#sendmessage and
     https://core.telegram.org/bots/api#responseparameters.
     """
+    if not text or len(text.encode("utf-16-le")) // 2 > 4096:
+        return TelegramReceipt("failed", error="Telegram message exceeds the 4096-character limit.")
+    return _send(target, "sendMessage", json.dumps({
+        "chat_id": target, "text": text, "link_preview_options": {"is_disabled": True},
+    }).encode(), "application/json")
+
+
+def send_telegram_photo(target: str, caption: str, photo: bytes) -> TelegramReceipt:
+    """Upload one frozen PNG and caption as one write/receipt (Bot API sendPhoto)."""
+    if len(caption.encode("utf-16-le")) // 2 > 1024:
+        return TelegramReceipt("failed", error="Telegram photo caption exceeds the 1024-character limit.")
+    if not photo.startswith(b"\x89PNG\r\n\x1a\n") or len(photo) > 10 * 1024 * 1024:
+        return TelegramReceipt("failed", error="Chart must be a PNG of at most 10 MiB.")
+    boundary = "copenet-" + uuid4().hex
+    parts = []
+    for name, value in (("chat_id", target), ("caption", caption)):
+        parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="{name}"\r\n\r\n{value}\r\n'.encode())
+    parts.append(f'--{boundary}\r\nContent-Disposition: form-data; name="photo"; filename="chart.png"\r\nContent-Type: image/png\r\n\r\n'.encode() + photo + b"\r\n")
+    parts.append(f"--{boundary}--\r\n".encode())
+    return _send(target, "sendPhoto", b"".join(parts), f"multipart/form-data; boundary={boundary}")
+
+
+def _send(target: str, method: str, data: bytes, content_type: str) -> TelegramReceipt:
     token = os.environ.get("COPNET_TELEGRAM_BOT_TOKEN", "").strip()
     if not token:
         return TelegramReceipt("failed", error="Telegram transport is not configured on this host.")
@@ -35,12 +59,9 @@ def send_telegram_message(target: str, text: str) -> TelegramReceipt:
         return TelegramReceipt("failed", error="Telegram bot credential has an invalid format.")
     if not re.fullmatch(r"(?:-?[0-9]+|@[A-Za-z0-9_]+)", target):
         return TelegramReceipt("failed", error="Telegram destination must be a chat ID or @username.")
-    if not text or len(text.encode("utf-16-le")) // 2 > 4096:
-        return TelegramReceipt("failed", error="Telegram message exceeds the 4096-character limit.")
     request = Request(
-        f"https://api.telegram.org/bot{token}/sendMessage",
-        data=json.dumps({"chat_id": target, "text": text, "link_preview_options": {"is_disabled": True}}).encode(),
-        headers={"Content-Type": "application/json"}, method="POST",
+        f"https://api.telegram.org/bot{token}/{method}", data=data,
+        headers={"Content-Type": content_type}, method="POST",
     )
     try:
         with urlopen(request, timeout=15) as response:

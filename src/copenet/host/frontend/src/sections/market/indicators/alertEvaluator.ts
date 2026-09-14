@@ -3,7 +3,7 @@ import { INDICATORS, indicatorById } from './registry';
 import { defaultConfig, normalizeConfig } from './config';
 import type { IndicatorBar, IndicatorConfig } from './types';
 
-export type AlertOperand = { kind: 'price' } | { kind: 'constant'; value: number }
+export type AlertOperand = { kind: 'price'; field?: 'open' | 'high' | 'low' | 'close' } | { kind: 'constant'; value: number }
   | { kind: 'indicator'; indicatorId: string; config: IndicatorConfig; output: string };
 
 /** Every registry indicator is alertable. There is deliberately no second allowlist: the
@@ -21,7 +21,11 @@ export function alertCatalogue() {
 export function validateOperand(raw: unknown): AlertOperand {
   if (!raw || typeof raw !== 'object') throw new Error('An operand is required');
   const operand = raw as Record<string, unknown>;
-  if (operand.kind === 'price') return { kind: 'price' };
+  if (operand.kind === 'price') {
+    if (operand.field === undefined) return { kind: 'price' };
+    if (!['open', 'high', 'low', 'close'].includes(String(operand.field))) throw new Error('Invalid price field');
+    return { kind: 'price', field: operand.field as 'open' | 'high' | 'low' | 'close' };
+  }
   if (operand.kind === 'constant' && typeof operand.value === 'number' && Number.isFinite(operand.value)) {
     return { kind: 'constant', value: operand.value };
   }
@@ -39,7 +43,10 @@ export function validateOperand(raw: unknown): AlertOperand {
 
 export function evaluateOperand(bars: IndicatorBar[], operand: AlertOperand, barsPerYear: number): (number | null)[] {
   if (operand.kind === 'constant') return bars.map(() => operand.value);
-  if (operand.kind === 'price') return bars.map((bar) => bar.c);
+  if (operand.kind === 'price') {
+    const field = { open: 'o', high: 'h', low: 'l', close: 'c' }[operand.field ?? 'close'];
+    return bars.map((bar) => bar[field]);
+  }
   return indicatorById(operand.indicatorId)!.compute(bars, operand.config, { barsPerYear }).values[operand.output];
 }
 

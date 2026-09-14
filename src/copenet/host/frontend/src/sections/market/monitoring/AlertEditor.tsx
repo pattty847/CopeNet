@@ -1,5 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { wsClient } from '../../../lib/wsClient';
+import { AlertRehearsal } from './AlertRehearsal';
+import { AlertInteractionFields } from './AlertInteractionFields';
 import { AlertOperandEditor } from './AlertOperandEditor';
 import { MonitoringSheet } from './MonitoringSheet';
 import { conditionLabel, toggleValue } from './model';
@@ -93,8 +95,16 @@ export function AlertEditor({
             Add {rule.symbol || 'this symbol'} to {scan.name} before saving this alert.
           </p>
         )}
+        <label>Notify on
+          <select className="tw-input" value={rule.triggerMode ?? 'cross'} onChange={(event) => update(event.target.value === 'interaction'
+            ? { triggerMode: 'interaction', left: { kind: 'price', field: rule.direction === 'below' ? 'low' : 'high' }, right: rule.left.kind === 'indicator' ? rule.left : rule.right }
+            : { triggerMode: 'cross', confirmation: null })}>
+            <option value="cross">Completed candle crossing</option>
+            <option value="interaction">First interaction + close follow-up</option>
+          </select>
+        </label>
         <div className="mm-monitor-fields mm-monitor-operands">
-          <AlertOperandEditor label="Observe" operand={rule.left} catalogue={catalogue} onChange={(left) => update({ left })} />
+          <AlertOperandEditor priceOnly={rule.triggerMode === 'interaction'} label="Observe" operand={rule.left} catalogue={catalogue} onChange={(left) => update({ left })} />
           <AlertOperandEditor label="Compare with" operand={rule.right} catalogue={catalogue} onChange={(right) => update({ right })} />
         </div>
         <label>
@@ -104,25 +114,30 @@ export function AlertEditor({
             value={rule.direction}
             onChange={(event) => update({ direction: event.target.value as AlertRule['direction'] })}
           >
-            <option value="above">Crosses above</option>
-            <option value="below">Crosses below</option>
+            <option value="above">{rule.triggerMode === 'interaction' ? 'Reaches or moves above' : 'Crosses above'}</option>
+            <option value="below">{rule.triggerMode === 'interaction' ? 'Reaches or moves below' : 'Crosses below'}</option>
           </select>
         </label>
+        {rule.triggerMode === 'interaction' && <AlertInteractionFields rule={rule} catalogue={catalogue} update={update} />}
         <div className="mm-monitor-readback">
           <b>
             {rule.symbol || 'Symbol'} · {rule.timeframe}
           </b>
           <span>{conditionLabel(rule)}</span>
-          <small>Completed candles only. Arming establishes a baseline; it never reports an old crossing.</small>
+          <small>{rule.triggerMode === 'interaction'
+            ? 'Checked when the linked scan refreshes prices, not continuously. First interaction uses the previous completed signal. A follow-up reports the close result, even if it does not confirm. Arming never reports an existing touch.'
+            : 'Completed candles only. Arming establishes a baseline; it never reports an old crossing.'}</small>
         </div>
         <label className="mm-check">
           <input type="checkbox" checked={rule.oneShot} onChange={(event) => update({ oneShot: event.target.checked })} /> One-shot · stop
-          after the first crossing
+          after the first {rule.triggerMode === 'interaction' ? 'interaction and its close follow-up' : 'crossing'}
         </label>
         {!rule.oneShot && <p>Repeating alerts re-arm only after the condition resets.</p>}
         <fieldset>
           <legend>Delivery</legend>
-          <p>Every crossing is recorded here and in Pulse.</p>
+          <p>Every alert event is recorded here and in Pulse.</p>
+          <label className="mm-check"><input type="checkbox" checked={rule.includePosition ?? false} onChange={(event) => update({ includePosition: event.target.checked })} /> Include my cached position and P&amp;L</label>
+          <label className="mm-check"><input type="checkbox" checked={rule.includeChart ?? false} onChange={(event) => update({ includeChart: event.target.checked })} /> Attach a chart image</label>
           {!notifications.transportConfigured && (
             <p className="mm-monitor-error">Telegram is not configured. Configure the bot in Messaging to enable delivery.</p>
           )}
@@ -150,6 +165,7 @@ export function AlertEditor({
           )}
           {rule.destinationIds.length > 0 && !rule.telegramAuthorized && <p>Delivery waits for your approval in Activity.</p>}
         </fieldset>
+        <AlertRehearsal rule={rule} />
         {error && (
           <p className="mm-monitor-error" role="alert">
             {error}

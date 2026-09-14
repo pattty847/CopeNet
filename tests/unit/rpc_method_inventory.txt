@@ -16,6 +16,7 @@ market.alerts.cancel
 market.alerts.catalogue
 market.alerts.create
 market.alerts.list
+market.alerts.rehearse
 market.alerts.save
 market.alerts.state
 market.backtest.run
@@ -50,6 +51,7 @@ market.ledger.get
 market.notifications.action
 market.notifications.get
 market.notifications.test
+market.position.get
 market.quote.subscribe
 market.quote.unsubscribe
 market.read.get

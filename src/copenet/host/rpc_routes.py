@@ -75,6 +75,7 @@ from .rpc_market import (
     handle_market_backtest_stress_test,
 )
 from .rpc_market_formula import handle_market_chart_formulas_get
+from .rpc_market_position import handle_market_position_get
 from .rpc_market_webull import (
     handle_market_webull_account_select,
     handle_market_webull_accounts,
@@ -165,6 +166,7 @@ from .rpc_market_forecasts import (
 )
 from .rpc_market_alerts import (
     handle_market_alerts_list,
+    handle_market_alerts_rehearse,
     handle_market_alerts_create,
     handle_market_alerts_save,
     handle_market_alerts_cancel,
@@ -270,6 +272,7 @@ RPC_ROUTES = build_routes(
         ("market.calendar.get", RpcRoute(handle_market_calendar_get, "standard")),
         ("market.yield_curve.get", RpcRoute(handle_market_yield_curve_get, "standard")),
         ("market.ledger.get", RpcRoute(handle_market_ledger_get, "standard")),
+        ("market.position.get", RpcRoute(handle_market_position_get, "standard")),
         ("market.webull.status", RpcRoute(handle_market_webull_status, "standard")),
         ("market.webull.auth", RpcRoute(handle_market_webull_auth, "standard")),
         ("market.webull.accounts", RpcRoute(handle_market_webull_accounts, "standard")),
@@ -342,6 +345,7 @@ RPC_ROUTES = build_routes(
         ("market.scans.preview", RpcRoute(handle_market_scans_preview, "standard")),
         ("market.scans.run", RpcRoute(handle_market_scans_run, "standard")),
         ("market.scans.run.get", RpcRoute(handle_market_scans_run_get, "standard")),
+        ("market.alerts.rehearse", RpcRoute(handle_market_alerts_rehearse, "standard")),
         ("market.alerts.list", RpcRoute(handle_market_alerts_list, "standard")),
         ("market.alerts.create", RpcRoute(handle_market_alerts_create, "standard")),
         ("market.alerts.save", RpcRoute(handle_market_alerts_save, "standard")),

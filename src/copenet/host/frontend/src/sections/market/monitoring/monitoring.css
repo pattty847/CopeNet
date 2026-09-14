@@ -337,3 +337,6 @@
     margin-left: 0;
   }
 }
+
+.tw-monitor-chip { display: inline-flex; align-items: center; gap: 6px; align-self: flex-start; width: fit-content; border: 0; padding: 3px 0; background: transparent; color: #aaa79d; font: 10px var(--mkt-mono, monospace); cursor: pointer; pointer-events: auto; }
+.tw-monitor-chip:focus-visible { outline: 1px solid #8fb8e8; outline-offset: 3px; }
