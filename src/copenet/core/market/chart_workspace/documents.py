@@ -6,6 +6,7 @@ import time
 
 from .authorization import actor_for, assert_document_scope, assert_object_scope
 from .codec import digest, encode, new_id
+from .model_tables import round_float
 from .models import ApplyRequest, ChartObject, UndoRequest
 
 
@@ -137,8 +138,14 @@ class DocumentStore:
             receipt["batchId"], document_id, operation_id, fingerprint, encode(body), encode(receipt)))
         return receipt
 
-    # One basis point. The model reads these prices out of the captured resource itself,
-    # so an honest anchor round-trips exactly; this only absorbs float formatting.
+    # One basis point, applied to the two-decimal values BOTH sides actually see. The model
+    # reads prices out of the captured resource, and every model-facing float is rounded on
+    # the way out, so comparing its anchor against the stored float measured a difference the
+    # model could not have avoided: a close of 11.375 reaches it as 11.38, and citing that
+    # honestly missed by 0.005. Because the tolerance is relative, this passed above $50 and
+    # rejected the whole batch below it, so agent drawings failed on cheap instruments only.
+    # Round both sides through the same function and an honest anchor round-trips exactly
+    # again, at any price, while a fabricated one still misses by far more than a cent.
     _ANCHOR_TOLERANCE = 1e-4
 
     def _validate_evidence(self, db, document, obj, context):
@@ -196,21 +203,25 @@ class DocumentStore:
         is only required to sit inside its cited candle, and even that is recorded rather
         than rejected — a projected target citing the base it was measured from is a
         legitimate annotation whose value is deliberately outside the cited bar.
+
+        Every comparison here is made in the two-decimal space the model reads, never against
+        the stored float it is never shown; see `_ANCHOR_TOLERANCE`.
         """
         for anchor in obj["anchors"]:
             row = cited_candles.get(anchor["t"])
             if row is None:
                 anchor["verified"] = "unchecked"
                 continue
-            value = float(anchor["value"])
+            value = round_float(float(anchor["value"]))
             field = anchor.get("evidenceField")
             if field is not None:
                 expected = row.get(field)
                 if expected is None:
                     raise ValueError(f"Cited candle has no {field!r} to verify the anchor against")
-                if abs(value - float(expected)) > max(cls._ANCHOR_TOLERANCE, cls._ANCHOR_TOLERANCE * abs(float(expected))):
+                shown = round_float(float(expected))
+                if abs(value - shown) > max(cls._ANCHOR_TOLERANCE, cls._ANCHOR_TOLERANCE * abs(shown)):
                     raise ValueError(
-                        f"Anchor {value} does not match the cited candle's {field} of {expected}"
+                        f"Anchor {value} does not match the cited candle's {field} of {shown}"
                     )
                 anchor["verified"] = "exact"
                 continue
@@ -218,8 +229,9 @@ class DocumentStore:
             if low is None or high is None:
                 anchor["verified"] = "unchecked"
                 continue
-            span = max(cls._ANCHOR_TOLERANCE, cls._ANCHOR_TOLERANCE * abs(float(high)))
-            anchor["verified"] = "in-range" if float(low) - span <= value <= float(high) + span else "out-of-range"
+            low, high = round_float(float(low)), round_float(float(high))
+            span = max(cls._ANCHOR_TOLERANCE, cls._ANCHOR_TOLERANCE * abs(high))
+            anchor["verified"] = "in-range" if low - span <= value <= high + span else "out-of-range"
 
     def rendered(self, raw: dict) -> dict:
         from .requests import RenderRequest

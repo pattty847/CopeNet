@@ -309,6 +309,13 @@ For current behavior, assume:
   `market.chart.context` returns orientation, digest, inventory and drawings only — it never repeats
   rows, because a measured turn re-fetched the identical 32K-token packet through it. Cross-turn
   replay already stubs old chart tool bodies (`_with_chart_references`), so nothing stacks.
+- **Check the model against the rounded value it read, never the stored float.** Rounding covers
+  every model-facing path, `market.chart.read` included, so there is no full-precision view left to
+  cite from. Anchor verification kept comparing to the stored value and measured a gap the model
+  could not close: a close of 11.375 reaches it as 11.38. The tolerance is relative, so this passed
+  above $50 and rejected the whole batch below it — agent drawings failed on cheap instruments only,
+  and the unit fixtures missed it by sitting at two decimals already. `_verify_anchors` now rounds
+  both sides through `round_float`. Any new check on a model-supplied number owes the same symmetry.
 - **Chart agent turns capture render inputs, never refetch them.** `core/market/chart_workspace/`
   owns immutable observations and revision-checked drawing documents; `orchestrator/market_context.py`
   binds them to ordinary sessions. The ticker's `viewState/` contributions and `useTickerViewModel`
