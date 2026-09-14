@@ -50,7 +50,7 @@ async def test_chart_searches_reads_and_retains_sourced_date_label(tmp_path, iso
     obj = batch["operations"][0]["object"]
     obj.update(kind="label", label="2024-07-03 · Store announcement",
                rationale=f"Announcement date, not the opening date. Source: {SOURCE_URL}")
-    obj["anchors"] = [{"t": 1720000000, "value": 11.125, "evidenceField": "c"}]
+    obj["anchors"] = [{"t": 1720000000, "value": 11.375, "evidenceField": "c"}]
     provider.calls = [
         ("web.search", {"query": "TEST company significant dates July 2024"}),
         ("web.fetch", {"url": SOURCE_URL}),
@@ -98,7 +98,7 @@ async def test_chart_searches_reads_and_retains_sourced_date_label(tmp_path, iso
     assert any(event.get("toolExecution", {}).get("toolId") == "web.fetch" for event in events)
     bound = resolve_market_context(orch, request, request.idempotency_key)
     assert store.read_resource(bound, "candles:D")["rows"] == [
-        {"t": 1720000000, "o": 10.0, "h": 12.0, "l": 9.0, "c": 11.125, "v": 1000.0},
+        {"t": 1720000000, "o": 10.0, "h": 12.0, "l": 9.0, "c": 11.375, "v": 1000.0},
     ]
 
 

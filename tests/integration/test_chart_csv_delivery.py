@@ -11,11 +11,11 @@ from test_tool_loop_contract import _run_contract, _ScriptedTurn, _call
 @pytest.mark.asyncio
 @pytest.mark.parametrize("loop_kind", ["native", "responses", "prompted"])
 async def test_all_tool_loops_deliver_csv_and_preserve_result_identity(tmp_path, loop_kind):
-    model_body = 'Frozen evidence.\n```csv\nt,c\n1720000000,11.125\n```'
+    model_body = 'Frozen evidence.\n```csv\nt,c\n1720000000,11.38\n```'
 
     async def execute(request, context):
         return ToolExecutionResult(tool_id=request.tool_id, ok=True, summary="Exact table",
-                                   output={"rows": [{"t": 1720000000, "c": 11.125}]}, model_body=model_body)
+                                   output={"rows": [{"t": 1720000000, "c": 11.375}]}, model_body=model_body)
 
     provider, events, _ = await _run_contract(loop_kind=loop_kind, tmp_path=tmp_path, executor=execute,
                                             turns=[_ScriptedTurn(calls=[_call()]), _ScriptedTurn(text="Read it")])
@@ -52,4 +52,4 @@ async def test_chart_session_receives_csv_initial_context_and_exact_read(tmp_pat
     # Artifact identity is retained for inspection; canonical exact resource reads still return objects.
     assert observation_artifact.artifact_id
     bound = store.resolve_context(request.session_key, "inspect", request.market_context.to_dict())
-    assert store.read_resource(bound, "candles:D")["rows"][0]["c"] == 11.125
+    assert store.read_resource(bound, "candles:D")["rows"][0]["c"] == 11.375
