@@ -268,15 +268,23 @@ the right-drawer item, which is called out as open.
   `model · duration · 4 tools · 731 msg`. Color appears only when something deserves
   attention — a policy block, a failure, a trimmed context.
 - Clicking that line expands **in place**, not into a side panel, because the question is
-  about *this* message. Four sections, in the order a person actually debugs:
+  about *this* message. Five sections, in the order a person actually debugs:
   1. **What it saw** — prompt blocks assembled with sizes, and the tool manifest with each
      tool's visibility plus the reason any were withheld.
   2. **What it did** — calls in order, arguments, results, artifacts.
-  3. **Why it stopped** — terminal reason in plain language.
-  4. **Raw trace** — the escape hatch, collapsed.
+  3. **How it worked** (2026-09-14) — the run record's `codingMetrics`, stamped at
+     finalization by `core/harness/coding_metrics.py`: files read and redundant re-reads,
+     searches over the 200-match cap, edits and stale refusals, verification commands and
+     whether one ran after the last edit, recovery after a red run, failed and repeated
+     calls. Absent for a chat-only turn. The benchmark analyzer uses the same rules, so a
+     number here means what the same number means in `benchmarks/coding/`.
+  4. **Why it stopped** — terminal reason in plain language.
+  5. **Raw trace** — the escape hatch, collapsed.
 - A one-line **verdict** at the top when the answer is already knowable, e.g. *"No tool
   loop attempted: promptedToolUse = false"*. Per this repo's own triage order that is the
-  single most common confusion, and it should never require reading JSONL.
+  single most common confusion, and it should never require reading JSONL. The coding
+  habits get verdicts too: an edit with nothing run afterwards, a stale edit, a blind
+  retry, a search dump, a redundant read.
 Nothing here may shift layout while a run streams; expansion is user-initiated only.
 
 ### The shape it actually landed on — 2026-08-02
