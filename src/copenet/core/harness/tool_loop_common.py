@@ -234,61 +234,6 @@ def _tool_result_event_payload(
     )
 
 
-def _extract_native_choice(response: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
-    choices = response.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise RuntimeError("Native tool provider returned no choices.")
-    choice = choices[0]
-    if not isinstance(choice, dict):
-        raise RuntimeError("Native tool provider returned an invalid choice payload.")
-    message = choice.get("message")
-    if not isinstance(message, dict):
-        raise RuntimeError("Native tool provider returned no assistant message.")
-    finish_reason = choice.get("finish_reason")
-    return message, str(finish_reason).strip() if finish_reason is not None else None
-
-
-def _coerce_native_message_content(value: Any) -> str:
-    if isinstance(value, str):
-        return value.strip()
-    if isinstance(value, list):
-        parts: list[str] = []
-        for item in value:
-            if isinstance(item, dict):
-                text = item.get("text")
-                if isinstance(text, str) and text.strip():
-                    parts.append(text.strip())
-        return "\n".join(parts).strip()
-    return ""
-
-
-def _extract_native_tool_calls(value: Any) -> list[dict[str, Any]]:
-    if not isinstance(value, list):
-        return []
-    rows: list[dict[str, Any]] = []
-    for item in value:
-        if not isinstance(item, dict):
-            continue
-        function = item.get("function")
-        if not isinstance(function, dict):
-            continue
-        call_id = str(item.get("id") or "").strip() or f"call-{uuid4().hex[:10]}"
-        name = str(function.get("name") or "").strip()
-        if not name:
-            continue
-        rows.append(
-            {
-                "id": call_id,
-                "type": "function",
-                "function": {
-                    "name": name,
-                    "arguments": function.get("arguments"),
-                },
-            }
-        )
-    return rows
-
-
 def _parse_native_tool_arguments(value: Any) -> dict[str, Any]:
     if isinstance(value, dict):
         return dict(value)
@@ -505,21 +450,6 @@ def compose_system_prompt(
     if not parts:
         return None
     return "\n\n".join(parts)
-
-
-def compose_native_tool_system_prompt(
-    *,
-    provider: Provider,
-    system_prompt: str | None,
-) -> str | None:
-    return compose_system_prompt(
-        provider=provider,
-        system_prompt=system_prompt,
-        extra_instructions=(
-            "Use provider-native tools when they help. "
-            "Answer in plain text when ready."
-        ),
-    )
 
 
 def compose_responses_tool_instructions(

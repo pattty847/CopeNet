@@ -379,8 +379,8 @@ def classify_probe_bundle(
     tool_execution_mode = str((run_record or {}).get("toolExecutionMode") or "none").strip() or "none"
     tool_protocol = (
         "native_tool_calls"
-        if tool_execution_mode == "native"
-        else ("prompted_tool_use" if tool_execution_mode in {"single", "batch"} else "plain_chat")
+        if tool_execution_mode == "responses"
+        else ("prompted_tool_use" if tool_execution_mode == "prompted" else "plain_chat")
     )
     turn_state = _turn_state_metadata(run_record)
     evidence_ledger = dict(turn_state.get("evidenceLedger") or {}) if isinstance(turn_state.get("evidenceLedger"), dict) else {}

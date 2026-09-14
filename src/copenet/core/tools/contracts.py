@@ -62,18 +62,6 @@ class ToolDescriptor:
             "requiresConfirmation": self.requires_confirmation,
         }
 
-    def to_openai_tool(self) -> dict[str, Any]:
-        """Return an OpenAI-compatible (Chat Completions) function tool schema."""
-        schema = dict(self.input_schema) if isinstance(self.input_schema, dict) else {}
-        return {
-            "type": "function",
-            "function": {
-                "name": self.id,
-                "description": self.description,
-                "parameters": schema,
-            },
-        }
-
     def to_responses_tool(self) -> dict[str, Any]:
         """Return a Responses-API function tool schema (flat shape, per PASS-7).
 
@@ -385,11 +373,6 @@ def responses_safe_tool_name(name: str) -> str:
     this need not be invertible on its own.
     """
     return _RESPONSES_NAME_INVALID.sub("_", name)
-
-
-def build_openai_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:
-    """Return OpenAI-compatible function tool schemas for provider-native tool calling."""
-    return [tool.to_openai_tool() for tool in tools]
 
 
 def build_responses_tool_schemas(tools: list[ToolDescriptor]) -> list[dict[str, Any]]:

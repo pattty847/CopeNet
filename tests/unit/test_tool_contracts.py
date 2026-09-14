@@ -3,7 +3,6 @@ from copenet.core.tools import (
     ToolRegistry,
     ToolExecutionResult,
     build_tool_effect_payload,
-    build_openai_tool_schemas,
     describe_available_tools,
 )
 
@@ -41,39 +40,6 @@ def test_files_rg_description_distinguishes_content_search_from_path_lookup() ->
     assert "filenames or directory paths" in descriptor.description
     assert "shell.exec with find" in descriptor.description
     assert "file contents only" in descriptor.input_schema["properties"]["pattern"]["description"]
-
-
-def test_build_openai_tool_schemas_uses_tool_ids_as_function_names() -> None:
-    tools = [
-        ToolDescriptor(
-            id="files.read",
-            name="Read File",
-            description="Read one file.",
-            category="repo-read",
-            input_schema={
-                "type": "object",
-                "properties": {"path": {"type": "string"}},
-                "required": ["path"],
-            },
-        )
-    ]
-
-    schemas = build_openai_tool_schemas(tools)
-
-    assert schemas == [
-        {
-            "type": "function",
-            "function": {
-                "name": "files.read",
-                "description": "Read one file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                    "required": ["path"],
-                },
-            },
-        }
-    ]
 
 
 def test_build_tool_effect_payload_links_turn_decision_and_evidence_role() -> None:

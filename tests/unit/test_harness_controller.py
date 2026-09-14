@@ -36,27 +36,6 @@ class PromptedProvider:
         return []
 
 
-class NativeToolProvider:
-    name = "native"
-    display_name = "Native"
-
-    async def describe(self) -> dict:
-        return {
-            "id": self.name,
-            "displayName": self.display_name,
-            "available": True,
-            "capabilities": {
-                "chat": True,
-                "streaming": True,
-                "toolCalls": True,
-                "promptedToolUse": True,
-            },
-        }
-
-    async def list_models(self) -> list:
-        return []
-
-
 class CodexLikeProvider:
     name = "codex-cli"
     display_name = "Codex"
@@ -107,22 +86,6 @@ async def test_plan_turn_keeps_policy_visible_tools_without_prompt_classificatio
     assert not hasattr(plan, "soft_posture")
     assert not hasattr(plan, "interaction_class")
     assert not hasattr(plan, "task_contract")
-
-
-@pytest.mark.asyncio
-async def test_plan_turn_uses_native_tool_loop_only_when_provider_supports_tool_calls() -> None:
-    provider = NativeToolProvider()
-
-    plan = await plan_turn(
-        provider=provider,
-        provider_name="native",
-        model="local-model",
-        available_tools=ToolRegistry().list_tools(),
-        prompt="Please write a short haiku about fresh bread and quiet mornings.",
-    )
-
-    assert plan.will_attempt_tool_loop is True
-    assert plan.tool_execution_mode == "native"
 
 
 @pytest.mark.asyncio

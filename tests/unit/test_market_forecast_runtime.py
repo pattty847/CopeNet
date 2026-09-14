@@ -9,6 +9,8 @@ import re
 
 import pytest
 
+from responses_fake import ScriptedResponsesProvider, tool_outputs, user_text
+
 from copenet.core.market.chart_workspace import get_chart_store
 from copenet.core.market.forecasts.store import ForecastStore
 from copenet.core.market.models import MarketBar
@@ -18,35 +20,26 @@ from copenet.core.orchestrator import Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 
 
-class ForecastProvider:
+class ForecastProvider(ScriptedResponsesProvider):
     name = 'forecast-test'
     display_name = 'Synthetic forecast provider'
 
     def __init__(self):
-        self.messages = []
-        self.tool_names = []
+        super().__init__(resolved_model='resolved-synthetic', final_text='Submitted synthetic forecast.')
         self.fail_role = None
         self.block = False
         self.read_first = False
         self.started = asyncio.Event()
         self.release = asyncio.Event()
 
-    async def describe(self):
-        return {'id': self.name, 'available': True, 'capabilities': {'chat': True, 'streaming': True,
-                                                                  'toolCalls': True, 'promptedToolUse': True}}
-
-    async def list_models(self):
-        return []
-
-    async def chat_completion(self, *, messages, model, tools=None, tool_choice=None):
-        self.messages.append(messages)
-        self.tool_names.append([tool['function']['name'] for tool in tools or []])
+    async def next_step(self, messages):
         self.started.set()
         if self.block:
             await self.release.wait()
-        if any(message['role'] == 'tool' and message.get('tool_call_id') == 'submit-forecast' for message in messages):
-            return {'model': 'resolved-synthetic', 'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': 'Submitted synthetic forecast.'}}]}
-        text = '\n'.join(str(message.get('content', '')) for message in messages)
+        outputs = tool_outputs(messages)
+        if any(output.get('call_id') == 'submit-forecast' for output in outputs):
+            return None
+        text = user_text(messages)
         observation_id = re.search(r'"observationId":"([^"]+)"', text).group(1)
         plain = 'Record one directional forecast' in text
         if self.fail_role == ('directional' if plain else 'ta'):
@@ -56,13 +49,9 @@ class ForecastProvider:
             'entry': {'kind': 'limit', 'price': 100}, 'stop': 90,
             'targets': [{'price': 120, 'fraction': 1}],
             'evidence': [{'observationId': observation_id, 'resourceKey': 'candles:D'}]}
-        if self.read_first and not any(message['role'] == 'tool' for message in messages):
-            return {'model': 'resolved-synthetic', 'choices': [{'finish_reason': 'tool_calls', 'message': {'role': 'assistant',
-                'tool_calls': [{'id': 'read-exact', 'type': 'function', 'function': {'name': 'market.chart.read',
-                    'arguments': json.dumps({'resourceKey': 'candles:D', 'limit': 1})}}]}}]}
-        return {'model': 'resolved-synthetic', 'choices': [{'finish_reason': 'tool_calls', 'message': {'role': 'assistant', 'content': '',
-            'tool_calls': [{'id': 'submit-forecast', 'type': 'function', 'function': {
-                'name': 'market.forecast.submit', 'arguments': json.dumps({'result': result})}}]}}]}
+        if self.read_first and not outputs:
+            return ('tool', 'market.chart.read', {'resourceKey': 'candles:D', 'limit': 1}, 'read-exact')
+        return ('tool', 'market.forecast.submit', {'result': result}, 'submit-forecast')
 
 
 @pytest.fixture

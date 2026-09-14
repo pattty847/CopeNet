@@ -18,13 +18,11 @@ from .tool_loop import (
     DEFAULT_RESPONSES_REASONING,
     ToolExecutor,
     collect_provider_turn,
-    compose_native_tool_system_prompt,
     compose_prompted_tool_system_prompt,
     compose_provider_prompt,
     compose_responses_tool_instructions,
     provider_system_prompt,
     run_with_prompted_tools,
-    run_with_native_tools,
     run_with_responses_tools,
 )
 
@@ -229,53 +227,21 @@ class ChatHarness:
             )
             return plan, stream
 
-        if (
-            not plan.will_attempt_tool_loop
-            or plan.tool_execution_mode != "native"
-            or not hasattr(provider, "chat_completion")
-            or tool_executor is None
-            or tool_context is None
-        ):
-            if debug_snapshot is not None:
-                debug_snapshot.update(
-                    {
-                        "transport": "provider",
-                        "providerPrompt": compose_provider_prompt(provider, prompt, effective_system_prompt),
-                        "providerSystemPrompt": provider_system_prompt(provider, effective_system_prompt),
-                    }
-                )
-            stream = provider.run(
-                prompt=compose_provider_prompt(provider, prompt, effective_system_prompt),
-                provider_session_id=provider_session_id,
-                abort_event=abort_event,
-                model=model,
-                system_prompt=provider_system_prompt(provider, effective_system_prompt),
-            )
-            return plan, stream
-
+        # No tool loop applies: plain provider passthrough.
         if debug_snapshot is not None:
             debug_snapshot.update(
                 {
-                    "transport": "native",
-                    "providerPrompt": prompt,
-                    "providerSystemPrompt": compose_native_tool_system_prompt(
-                        provider=provider,
-                        system_prompt=effective_system_prompt,
-                    ),
+                    "transport": "provider",
+                    "providerPrompt": compose_provider_prompt(provider, prompt, effective_system_prompt),
+                    "providerSystemPrompt": provider_system_prompt(provider, effective_system_prompt),
                 }
             )
-        stream = run_with_native_tools(
-            provider=provider,  # type: ignore[arg-type]
-            prompt=prompt,
+        stream = provider.run(
+            prompt=compose_provider_prompt(provider, prompt, effective_system_prompt),
             provider_session_id=provider_session_id,
             abort_event=abort_event,
             model=model,
-            system_prompt=effective_system_prompt,
-            plan=plan,
-            tool_executor=tool_executor,
-            tool_context=tool_context,
-            trace=trace,
-            input_token_budget=input_token_budget,
+            system_prompt=provider_system_prompt(provider, effective_system_prompt),
         )
         return plan, stream
 

@@ -9,6 +9,7 @@ import pytest
 
 from copenet.core.market.chart_workspace import get_chart_store
 from copenet.core.orchestrator import Orchestrator
+from responses_fake import ScriptedResponsesProvider
 from copenet.core.orchestrator.market_context import admit_chart_turn, resolve_market_context
 from copenet.core.orchestrator.requests import ChatSendRequest, MarketContextRequest
 from copenet.core.sessions import SessionStore, TranscriptStore
@@ -23,44 +24,14 @@ def isolated_chart_security():
     reset_session_security("chart-session")
 
 
-class ChartProvider:
+class ChartProvider(ScriptedResponsesProvider):
+    """Chart-lane fake: scripted tool calls, then "Chart inspected". `name="claude-cli"` selects the prompted lane."""
+
     name = "chart-test"
     display_name = "Chart test"
 
     def __init__(self, calls=(), *, name=None):
-        self.calls = list(calls)
-        self.messages = []
-        self.prompts = []
-        self.tool_names = []
-        if name:
-            self.name = name
-
-    async def describe(self):
-        return {"id": self.name, "available": True, "capabilities": {
-            "chat": True, "streaming": True, "toolCalls": self.name != "claude-cli",
-            "promptedToolUse": self.name != "claude-cli",
-        }}
-
-    async def list_models(self):
-        return []
-
-    async def run(self, prompt, provider_session_id, abort_event, model=None, system_prompt=None):
-        self.prompts.append(prompt)
-        yield ProviderEvent(kind="delta", text="Chart inspected", provider_session_id="chart-provider-session")
-        yield ProviderEvent(kind="final")
-
-    async def chat_completion(self, *, messages, model, tools=None, tool_choice=None):
-        self.messages.append(messages)
-        self.tool_names.append([tool["function"]["name"] for tool in tools or []])
-        if self.calls:
-            name, args = self.calls.pop(0)
-            if callable(args):
-                args = args(messages)
-            return {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": "", "tool_calls": [{
-                "id": f"call-{len(self.messages)}", "type": "function",
-                "function": {"name": name, "arguments": json.dumps(args)},
-            }]}}]}
-        return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content": "Chart inspected"}}]}
+        super().__init__(name=name, calls=list(calls), final_text="Chart inspected", prompted=(name == "claude-cli"))
 
 
 def setup_chart(tmp_path, provider=None, *, external_prose=False):
@@ -173,7 +144,7 @@ def level_batch(request, operation_id="draw-level", revision=0):
 
 
 @pytest.mark.asyncio
-async def test_native_chart_loop_inspects_draws_revises_and_undoes(tmp_path):
+async def test_responses_chart_loop_inspects_draws_revises_and_undoes(tmp_path):
     orch, provider, store, request = setup_chart(tmp_path)
     def undo_latest(messages):
         latest = store.document(request.market_context.document_id)

@@ -2,7 +2,6 @@
 
 from .projection import build_tool_effect_payload
 from .contracts import (
-    build_openai_tool_schemas,
     build_responses_tool_schemas,
     responses_safe_tool_name,
     ContextPack,
@@ -31,7 +30,6 @@ __all__ = [
     "ToolRegistry",
     "ToolSpec",
     "build_tool_effect_payload",
-    "build_openai_tool_schemas",
     "build_responses_tool_schemas",
     "responses_safe_tool_name",
     "describe_available_tools",

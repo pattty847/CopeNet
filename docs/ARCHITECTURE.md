@@ -23,7 +23,6 @@ copenet/
 │   │   ├── capabilities.py            ← capability profiles and routing
 │   │   ├── planning.py                ← provider capability plan ahead of execution
 │   │   ├── tool_loop.py               ← public tool-loop facade
-│   │   ├── tool_loop_native.py        ← Chat Completions tool-call loop
 │   │   ├── tool_loop_responses.py     ← Responses API tool-call loop
 │   │   ├── tool_loop_prompted.py      ← prompted text-protocol tool loop
 │   │   └── tool_loop_common.py        ← shared loop execution helpers
@@ -256,9 +255,9 @@ In practice that means:
 - the model decides when repo inspection, planning, or edits are useful
 - the runtime still enforces what is actually allowed
 
-`core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects the tool-execution mode: `responses` (native Responses API, when the provider declares `responsesApi` — openai-codex), `native` (Chat Completions tool calls; no registered provider uses it since the local runtimes were removed), `prompted` (text protocol — claude-cli), or `none`.
+`core/harness/planning.py` does not read prompt text. It records provider/model capabilities and selects the tool-execution mode: `responses` (native Responses API, when the provider declares `responsesApi` — openai-codex), `prompted` (text protocol — claude-cli), or `none`.
 
-`core/harness/tool_loop.py` is the public facade for turn-level tool continuation. The concrete loops live in `tool_loop_responses.py` (`run_with_responses_tools`, streaming the native function_call lifecycle and appending `function_call`/`function_call_output` items to the input[] array), `tool_loop_native.py` (`run_with_native_tools`, Chat Completions), and `tool_loop_prompted.py` (`run_with_prompted_tools`). Shared execution helpers live in `tool_loop_common.py`, and model-facing result artifact materialization lives in `tool_result_materialization.py`. All loops stream normalized events and let the model decide when to finalize (cap: `MAX_TOOL_STEPS=100`, with an explicit stop note when hit). The harness does not classify prompt text, keyword-match intent, or force a tool sequence; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
+`core/harness/tool_loop.py` is the public facade for turn-level tool continuation. The concrete loops live in `tool_loop_responses.py` (`run_with_responses_tools`, streaming the native function_call lifecycle and appending `function_call`/`function_call_output` items to the input[] array) and `tool_loop_prompted.py` (`run_with_prompted_tools`). Shared execution helpers live in `tool_loop_common.py`, and model-facing result artifact materialization lives in `tool_result_materialization.py`. All loops stream normalized events and let the model decide when to finalize (cap: `MAX_TOOL_STEPS=100`, with an explicit stop note when hit). The harness does not classify prompt text, keyword-match intent, or force a tool sequence; routing and evidence sufficiency are the model's responsibility, with the runtime enforcing authority via `ToolPolicy`.
 
 `core/orchestrator/messages.py` builds the real multi-turn message history (Phase 1): `build_chat_messages` walks the durable transcript into a Responses-API `input[]` array (used directly by the responses loop) and `flatten_messages_to_prompt` renders it as a transcript-style string for prompt-only providers. This replaced the synthetic `working_set` blob and the keyword auto-mutation of session state.
 

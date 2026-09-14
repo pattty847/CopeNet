@@ -12,7 +12,6 @@ from copenet.core.harness.capabilities import ModelCapabilityProfile
 from copenet.core.harness.planning import HarnessTurnPlan
 from copenet.core.harness.tool_loop import (
     MAX_TOOL_STEPS,
-    run_with_native_tools,
     run_with_prompted_tools,
     run_with_responses_tools,
 )
@@ -27,8 +26,8 @@ from copenet.core.tools import (
 from copenet.providers import ProviderEvent
 
 
-LoopKind = Literal["prompted", "native", "responses"]
-_LOOP_KINDS: tuple[LoopKind, ...] = ("prompted", "native", "responses")
+LoopKind = Literal["prompted", "responses"]
+_LOOP_KINDS: tuple[LoopKind, ...] = ("prompted", "responses")
 _TOOL = ToolDescriptor(
     id="files.read",
     name="Read File",
@@ -77,49 +76,6 @@ class _PromptedProvider:
                 provider_session_id=provider_session_id or "prompted-session",
             )
         yield ProviderEvent(kind="final")
-
-
-class _NativeProvider:
-    name = "native-contract"
-
-    def __init__(self, turns: list[_ScriptedTurn]) -> None:
-        self._turns = turns
-        self.seen_messages: list[list[dict[str, Any]]] = []
-
-    async def chat_completion(
-        self,
-        *,
-        messages: list[dict[str, Any]],
-        model: str | None,
-        tools: list[dict[str, Any]] | None = None,
-        tool_choice: str | dict[str, Any] | None = None,
-    ) -> dict[str, Any]:
-        del model, tools, tool_choice
-        self.seen_messages.append([dict(message) for message in messages])
-        turn = self._turns[len(self.seen_messages) - 1]
-        tool_calls = [
-            {
-                "id": f"call-{index}",
-                "type": "function",
-                "function": {
-                    "name": call["tool_id"],
-                    "arguments": json.dumps(call["arguments"]),
-                },
-            }
-            for index, call in enumerate(turn.calls)
-        ]
-        return {
-            "choices": [
-                {
-                    "finish_reason": "tool_calls" if tool_calls else "stop",
-                    "message": {
-                        "role": "assistant",
-                        "content": turn.text,
-                        "tool_calls": tool_calls,
-                    },
-                }
-            ]
-        }
 
 
 class _ResponsesProvider:
@@ -172,8 +128,6 @@ def _call(index: int = 0) -> dict[str, Any]:
 def _provider(loop_kind: LoopKind, turns: list[_ScriptedTurn]) -> Any:
     if loop_kind == "prompted":
         return _PromptedProvider(turns)
-    if loop_kind == "native":
-        return _NativeProvider(turns)
     return _ResponsesProvider(turns)
 
 
@@ -184,7 +138,6 @@ def _plan(loop_kind: LoopKind) -> HarnessTurnPlan:
         capability_profile=ModelCapabilityProfile(
             provider=f"{loop_kind}-contract",
             model="test-model",
-            tool_calls=loop_kind == "native",
             prompted_tool_use=loop_kind == "prompted",
             responses_api=loop_kind == "responses",
         ),
@@ -239,14 +192,6 @@ async def _run_contract(
     }
     if loop_kind == "prompted":
         stream = run_with_prompted_tools(
-            provider=provider,
-            prompt="run the scripted contract",
-            provider_session_id=None,
-            system_prompt=None,
-            **common,
-        )
-    elif loop_kind == "native":
-        stream = run_with_native_tools(
             provider=provider,
             prompt="run the scripted contract",
             provider_session_id=None,
@@ -337,12 +282,6 @@ async def test_tool_loops_replay_actionable_failure_envelope(
         assert '"ok": false' in replay
         assert '"summary": "read denied by policy"' in replay
         assert '"error": "permission denied"' in replay
-    elif loop_kind == "native":
-        tool_message = next(message for message in provider.seen_messages[1] if message["role"] == "tool")
-        replay = json.loads(tool_message["content"])
-        assert replay["ok"] is False
-        assert replay["summary"] == "read denied by policy"
-        assert replay["error"] == "permission denied"
     else:
         output = next(
             item["output"]
@@ -436,7 +375,6 @@ async def test_tool_loops_enforce_the_global_tool_call_budget(
     )
     interpreted_event = {
         "prompted": "prompted_tool_response_interpreted",
-        "native": "provider_response_interpreted",
         "responses": "responses_turn_interpreted",
     }[loop_kind]
     attempted_key = "functionCallCount" if loop_kind == "responses" else "toolCallCount"

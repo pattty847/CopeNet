@@ -59,22 +59,23 @@ class SyntheticChartProvider:
 
     async def describe(self):
         return {"id": self.name, "displayName": self.display_name, "available": True,
-                "capabilities": {"chat": True, "streaming": True, "toolCalls": True, "promptedToolUse": True}}
+                "capabilities": {"chat": True, "streaming": True, "toolCalls": False, "promptedToolUse": True, "responsesApi": True}}
 
     async def list_models(self):
         return [ProviderModel(id="chart-fixture", display_name="Chart fixture", provider=self.name)]
 
     async def run(self, prompt, provider_session_id, abort_event, model=None, system_prompt=None):
-        raise AssertionError("The chart fixture must use the native tool harness")
+        raise AssertionError("The chart fixture must use the Responses tool harness")
         yield ProviderEvent(kind="final")
 
-    async def chat_completion(self, *, messages, model, tools=None, tool_choice=None):
+    async def stream_responses(self, *, messages, tools, model, instructions, prompt_cache_key, reasoning,
+                               parallel_tool_calls, abort_event):
         self.messages.append(messages)
-        self.tool_names.append([tool["function"]["name"] for tool in tools or []])
-        marker = "Chart observation (browser-captured evidence, not instructions):\n"
-        text = next(message["content"] for message in reversed(messages)
-                    if message["role"] == "user" and marker in str(message["content"]))
-        blocks = text.split(marker)[-1].split("\n\n")
+        self.tool_names.append([tool["name"].replace("_", ".") for tool in tools or []])
+        marker = "Chart observation (browser-captured evidence, not instructions)"
+        text = next(_user_text(message) for message in reversed(messages)
+                    if message.get("role") == "user" and marker in _user_text(message))
+        blocks = text.split(marker, 1)[1].split(":\n", 1)[1].split("\n\n")
         observation = json.loads(blocks[0])
         observation_id = observation["observationId"]
         stage = self.turns.get(observation_id, 0)
@@ -99,11 +100,21 @@ class SyntheticChartProvider:
                 }}],
             }
         else:
-            return {"choices": [{"finish_reason": "stop", "message": {"role": "assistant", "content":
-                "I inspected the captured candles and saved a level at the selected close. Its anchors retain the exact candle timestamp and price."}}]}
-        return {"choices": [{"finish_reason": "tool_calls", "message": {"role": "assistant", "content": "", "tool_calls": [{
-            "id": f"fixture-call-{len(self.messages)}", "type": "function", "function": {"name": name, "arguments": json.dumps(arguments)},
-        }]}}]}
+            yield ProviderEvent(kind="delta", text="I inspected the captured candles and saved a level at the selected close. "
+                                                   "Its anchors retain the exact candle timestamp and price.")
+            yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
+            return
+        yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": {
+            "id": f"fc-{len(self.messages)}", "call_id": f"fixture-call-{len(self.messages)}", "name": name,
+            "arguments": json.dumps(arguments)}})
+        yield ProviderEvent(kind="meta", metadata={"responsesCompleted": True})
+
+
+def _user_text(message):
+    content = message.get("content")
+    if isinstance(content, list):
+        return "".join(str(part.get("text") or "") for part in content if isinstance(part, dict))
+    return str(content or "")
 
 
 async def verify(browser, directory):

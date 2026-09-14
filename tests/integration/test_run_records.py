@@ -3,6 +3,7 @@ import json
 
 import pytest
 
+from responses_fake import ScriptedResponsesProvider
 from copenet.core.orchestrator.requests import ChatSendRequest
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.runtime import RunRecord, RunStore
@@ -10,90 +11,14 @@ from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.providers import ProviderEvent
 
 
-class ScriptedPromptedProvider:
+class ScriptedPromptedProvider(ScriptedResponsesProvider):
+    """One output per model call: JSON {tool_id, arguments} becomes a tool call, anything else is the answer."""
+
     name = "prompted"
     display_name = "Prompted"
 
     def __init__(self, outputs: list[str]) -> None:
-        self.outputs = outputs
-        self.prompts: list[str] = []
-        self._index = 0
-
-    async def run(
-        self,
-        prompt: str,
-        provider_session_id: str | None,
-        abort_event: asyncio.Event,
-        model: str | None = None,
-        system_prompt: str | None = None,
-    ):
-        self.prompts.append(prompt)
-        text = self.outputs[self._index]
-        self._index += 1
-        yield ProviderEvent(kind="delta", text=text, provider_session_id=provider_session_id or "provider-session")
-        yield ProviderEvent(kind="final")
-
-    async def chat_completion(
-        self,
-        *,
-        messages: list[dict],
-        model: str | None,
-        tools: list[dict] | None = None,
-        tool_choice: str | dict | None = None,
-    ) -> dict:
-        del messages, model, tools, tool_choice
-        text = self.outputs[self._index]
-        self._index += 1
-        try:
-            parsed = json.loads(text)
-        except json.JSONDecodeError:
-            parsed = None
-        if isinstance(parsed, dict) and parsed.get("tool_id"):
-            return {
-                "choices": [
-                    {
-                        "finish_reason": "tool_calls",
-                        "message": {
-                            "role": "assistant",
-                            "content": "",
-                            "tool_calls": [
-                                {
-                                    "id": f"call-{self._index}",
-                                    "type": "function",
-                                    "function": {
-                                        "name": parsed["tool_id"],
-                                        "arguments": json.dumps(parsed.get("arguments") or {}),
-                                    },
-                                }
-                            ],
-                        },
-                    }
-                ]
-            }
-        return {
-            "choices": [
-                {
-                    "finish_reason": "stop",
-                    "message": {"role": "assistant", "content": text},
-                }
-            ]
-        }
-
-    async def describe(self) -> dict:
-        return {
-            "id": self.name,
-            "displayName": self.display_name,
-            "available": True,
-            "capabilities": {
-                "chat": True,
-                "streaming": True,
-                "toolCalls": True,
-                "promptedToolUse": True,
-            },
-        }
-
-    async def list_models(self) -> list:
-        return []
+        super().__init__(outputs=outputs)
 
 
 async def _collect_events(orchestrator: Orchestrator, request: ChatSendRequest) -> tuple[dict, list[dict]]:

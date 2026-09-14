@@ -4,12 +4,13 @@ import json
 import pytest
 
 from copenet.core.tools import ToolExecutionResult
+from responses_fake import tool_outputs, user_text
 from test_chart_session import setup_chart, collect
 from test_tool_loop_contract import _run_contract, _ScriptedTurn, _call
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("loop_kind", ["native", "responses", "prompted"])
+@pytest.mark.parametrize("loop_kind", ["responses", "prompted"])
 async def test_all_tool_loops_deliver_csv_and_preserve_result_identity(tmp_path, loop_kind):
     model_body = 'Frozen evidence.\n```csv\nt,c\n1720000000,11.125\n```'
 
@@ -23,8 +24,7 @@ async def test_all_tool_loops_deliver_csv_and_preserve_result_identity(tmp_path,
         assert json.dumps(model_body) in provider.seen_prompts[1]
     else:
         messages = provider.seen_messages[1]
-        raw = next(message["content"] for message in messages if message.get("role") == "tool") if loop_kind == "native" else next(
-            message["output"] for message in messages if message.get("type") == "function_call_output")
+        raw = next(message["output"] for message in messages if message.get("type") == "function_call_output")
         envelope = json.loads(raw)
         assert envelope["body"] == model_body
         # The provider pairs the result to its call itself; the model-facing
@@ -40,11 +40,11 @@ async def test_chart_session_receives_csv_initial_context_and_exact_read(tmp_pat
     provider.calls = [("market.chart.read", {"resourceKey": "candles:D", "limit": 1})]
     result, _ = await collect(orch, request)
     assert result["status"] == "ok"
-    initial = next(message["content"] for message in provider.messages[0] if message["role"] == "user")
+    initial = user_text(provider.messages[0])
     assert request.message in initial and "```csv\nt,o,h,l,c,v\n" in initial
     assert initial.index(request.message) < initial.index("```csv")
     assert '"rows":' not in initial
-    tool = next(message["content"] for message in provider.messages[-1] if message["role"] == "tool")
+    tool = tool_outputs(provider.messages[-1])[-1]["output"]
     assert "```csv\nt,o,h,l,c,v\n" in json.loads(tool)["body"]
     assert '"rows":' not in json.loads(tool)["body"]
     replay = next(part["toolExecution"]["replayOutput"] for part in orch.history(session_key=request.session_key)[1]["parts"]

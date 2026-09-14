@@ -80,6 +80,14 @@ Chart Agent inherits it.
 
 ### The three loops are *not* one loop
 
+> Update, later the same day: the LM Studio and Ollama lanes and the Chat
+> Completions loop (`tool_loop_native.py`) were removed (`refactor(providers)` and
+> `refactor(harness)` commits on `claude/remove-local-providers`). Two loops remain,
+> Responses (openai-codex) and prompted (claude-cli), and the integration suite drives
+> tool turns through `tests/integration/responses_fake.py`. The paragraph below
+> describes the state this audit measured.
+
+
 The three `run_with_*` functions share helpers (`tool_loop_common.py`) but each owns
 its own message array, its own budget check, its own step loop, and its own event
 emission. A behavior change (compaction, a state block, verification nudges) has to be

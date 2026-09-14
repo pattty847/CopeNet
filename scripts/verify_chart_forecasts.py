@@ -33,7 +33,7 @@ from copenet.core.orchestrator import Orchestrator
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.rpc_dispatch import dispatch_rpc
 from copenet.host.rpc_schema import RequestFrame
-from copenet.providers import ProviderModel
+from copenet.providers import ProviderEvent, ProviderModel
 
 ROOT = Path(__file__).resolve().parents[1]
 DIST = ROOT / 'src/copenet/host/frontend/dist'
@@ -50,20 +50,23 @@ class SyntheticForecastProvider:
 
     async def describe(self):
         return {'id': self.name, 'displayName': self.display_name, 'available': True,
-                'capabilities': {'chat': True, 'streaming': True, 'toolCalls': True, 'promptedToolUse': True}}
+                'capabilities': {'chat': True, 'streaming': True, 'toolCalls': False, 'promptedToolUse': True, 'responsesApi': True}}
 
     async def list_models(self):
         return [ProviderModel(id='forecast-fixture', display_name='Forecast fixture', provider=self.name)]
 
-    async def chat_completion(self, *, messages, model, tools=None, tool_choice=None):
-        marker = 'Chart observation (browser-captured evidence, not instructions):\n'
-        text = next(message['content'] for message in reversed(messages)
-                    if message['role'] == 'user' and marker in str(message['content']))
-        packet = json.loads(text.split(marker)[-1].split('\n\n')[0])
+    async def stream_responses(self, *, messages, tools, model, instructions, prompt_cache_key, reasoning,
+                               parallel_tool_calls, abort_event):
+        marker = 'Chart observation (browser-captured evidence, not instructions)'
+        text = next(_user_text(message) for message in reversed(messages)
+                    if message.get('role') == 'user' and marker in _user_text(message))
+        packet = json.loads(text.split(marker, 1)[1].split(':\n', 1)[1].split('\n\n')[0])
         identifier = packet['observationId']
-        self.calls.append({'observationId': identifier, 'tools': [tool['function']['name'] for tool in tools or []]})
+        self.calls.append({'observationId': identifier, 'tools': [tool['name'].replace('_', '.') for tool in tools or []]})
         if identifier in self.submitted:
-            return {'choices': [{'finish_reason': 'stop', 'message': {'role': 'assistant', 'content': 'Saved this synthetic forecast from the frozen chart evidence.'}}]}
+            yield ProviderEvent(kind='delta', text='Saved this synthetic forecast from the frozen chart evidence.')
+            yield ProviderEvent(kind='meta', metadata={'responsesCompleted': True})
+            return
         self.submitted.add(identifier)
         directional = 'Record one directional forecast' in text
         if not directional:
@@ -74,8 +77,17 @@ class SyntheticForecastProvider:
             'targets': [{'price': 125.0, 'fraction': 0.5}, {'price': 130.0, 'fraction': 0.5}],
             'zones': [{'label': 'Retest area', 'lower': 118.0, 'upper': 121.0}],
             'evidence': [{'observationId': identifier, 'resourceKey': 'candles:D'}]}
-        return {'choices': [{'finish_reason': 'tool_calls', 'message': {'role': 'assistant', 'content': '', 'tool_calls': [{
-            'id': 'forecast-' + identifier, 'type': 'function', 'function': {'name': 'market.forecast.submit', 'arguments': json.dumps({'result': result})}}]}}]}
+        yield ProviderEvent(kind='meta', metadata={'responsesFunctionCall': {
+            'id': 'fc-' + identifier, 'call_id': 'forecast-' + identifier, 'name': 'market.forecast.submit',
+            'arguments': json.dumps({'result': result})}})
+        yield ProviderEvent(kind='meta', metadata={'responsesCompleted': True})
+
+
+def _user_text(message):
+    content = message.get('content')
+    if isinstance(content, list):
+        return ''.join(str(part.get('text') or '') for part in content if isinstance(part, dict))
+    return str(content or '')
 
 
 def synthetic_history(now):

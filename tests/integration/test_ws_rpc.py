@@ -10,6 +10,7 @@ from typing import Any
 import pytest
 from fastapi.testclient import TestClient
 
+from responses_fake import ScriptedResponsesProvider
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStore, TranscriptStore
@@ -69,96 +70,24 @@ class FakeProvider:
         ]
 
 
-class PromptedToolProvider:
+class PromptedToolProvider(ScriptedResponsesProvider):
+    """Tool-using provider: one scripted call, then the follow-up answer."""
+
     def __init__(self, *, name: str, display_name: str, tool_json: str, follow_up: str) -> None:
-        self.name = name
-        self.display_name = display_name
-        self.tool_json = tool_json
-        self.follow_up = follow_up
-        self.prompts: list[str] = []
-        self.native_calls = 0
-
-    async def run(
-        self,
-        prompt: str,
-        provider_session_id: str | None,
-        abort_event: asyncio.Event,
-        model: str | None = None,
-        system_prompt: str | None = None,
-    ):
-        self.prompts.append(prompt)
-        if len(self.prompts) == 1:
-            yield ProviderEvent(kind="delta", text=self.tool_json, provider_session_id=provider_session_id or f"{self.name}-session")
-            yield ProviderEvent(kind="final")
-            return
-        yield ProviderEvent(kind="delta", text=self.follow_up, provider_session_id=provider_session_id or f"{self.name}-session")
-        yield ProviderEvent(kind="final")
-
-    async def chat_completion(
-        self,
-        *,
-        messages: list[dict],
-        model: str | None,
-        tools: list[dict] | None = None,
-        tool_choice: str | dict | None = None,
-    ) -> dict:
-        del messages, model, tools, tool_choice
-        self.native_calls += 1
-        if self.native_calls == 1:
-            parsed = json.loads(self.tool_json)
-            return {
-                "choices": [
-                    {
-                        "finish_reason": "tool_calls",
-                        "message": {
-                            "role": "assistant",
-                            "content": "",
-                            "tool_calls": [
-                                {
-                                    "id": "call-1",
-                                    "type": "function",
-                                    "function": {
-                                        "name": parsed["tool_id"],
-                                        "arguments": json.dumps(parsed.get("arguments") or {}),
-                                    },
-                                }
-                            ],
-                        },
-                    }
-                ]
-            }
-        return {
-            "choices": [
-                {
-                    "finish_reason": "stop",
-                    "message": {"role": "assistant", "content": self.follow_up},
-                }
-            ]
-        }
-
-    async def describe(self) -> dict[str, Any]:
-        return {
-            "id": self.name,
-            "displayName": self.display_name,
-            "available": True,
-            "capabilities": {
-                "chat": True,
-                "streaming": True,
-                "toolCalls": True,
-                "promptedToolUse": True,
-            },
-        }
-
-    async def list_models(self) -> list[ProviderModel]:
-        return [
-            ProviderModel(
-                id="tool-model",
-                display_name="Tool Model",
-                provider=self.name,
-                description="Prompted tool-use test model",
-                capabilities={"chat": True},
-            )
-        ]
+        super().__init__(
+            name=name,
+            display_name=display_name,
+            outputs=[tool_json, follow_up],
+            models=[
+                ProviderModel(
+                    id="tool-model",
+                    display_name="Tool Model",
+                    provider=name,
+                    description="Scripted tool-use test model",
+                    capabilities={"chat": True},
+                )
+            ],
+        )
 
 
 class MergeSummaryProvider:

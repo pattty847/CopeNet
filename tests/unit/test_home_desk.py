@@ -34,7 +34,7 @@ def make_run(
         model="gpt-5.5",
         status=status,
         user_message=user_message,
-        tool_execution_mode="native",
+        tool_execution_mode="responses",
         will_attempt_tool_loop=True,
         started_at=started.isoformat(),
         completed_at=completed.isoformat() if completed else None,

@@ -35,7 +35,7 @@ def test_classify_probe_bundle_distinguishes_runtime_shapes(tmp_path: Path) -> N
         probe=spec,
         run_record={
             "status": "ok",
-            "toolExecutionMode": "native",
+            "toolExecutionMode": "responses",
             "toolSteps": [
                 {"toolId": "shell.exec", "status": "ok"},
                 {"toolId": "files.read", "status": "ok"},
