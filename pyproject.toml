@@ -16,7 +16,8 @@ dependencies = [
     "tvscreener==0.4.1",
     "uvicorn>=0.27.0",
     "websockets>=12.0",
-    "webull-openapi-python-sdk>=2.0.12",
+    "Pillow>=11.3,<13",
+    "webull-openapi-python-sdk>=3.0.0,<4",
     "yfinance>=1.5.1",
 ]
 

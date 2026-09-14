@@ -1,13 +1,8 @@
 """Read-only Webull fill history — every executed order back to account open.
 
-`order_v2.get_order_history` returns newest-first pages of *combo* envelopes, each holding one or
-more order legs. Verified against the live account on 2026-07-28:
-
-- the default window is the last 7 days, so an explicit `start_date` is required for history
-- `page_size` caps at 100; older pages come from the `last_client_order_id` cursor
-- passing `last_order_id` ALONGSIDE `last_client_order_id` fails with OAUTH_OPENAPI_ORDER_NOT_FOUND
-  — send the client-order-id cursor alone
-- hammering the endpoint returns 429 TOO_MANY_REQUESTS, hence the inter-page pause
+The SDK 3.0.0 cursor protocol returns {data, pagination_key}. We consume every page and
+fail closed on a malformed page or a stalled cursor so a partial sync never replaces history.
+Each record is the aggregate executed quantity/average price for an order, not an execution tape.
 
 Only whitelisted fields survive into `Fill`; everything else is dropped at this boundary, the same
 sanitization discipline `sync.py` uses for positions.
@@ -17,21 +12,21 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 import time
 from dataclasses import asdict, dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .client import mask_account_id, webull_data_dir
+from .client import account_fingerprint, mask_account_id, webull_data_dir
 
 logger = logging.getLogger(__name__)
 
 # Webull US predates any CopeNet account; a fixed floor keeps the walk deterministic.
-HISTORY_START_DATE = "2016-01-01"
-_PAGE_SIZE = 100
+HISTORY_START_DATE = "2018-05-21"
 _PAGE_PAUSE_SECONDS = 1.5
-_MAX_PAGES = 100  # 10k orders — a runaway-loop backstop, not an expected limit
+_MAX_PAGES = 1000  # Vendor controls page size; never silently truncate at this backstop.
 _MAX_RETRIES = 4
 _RETRY_BASE_SECONDS = 5.0
 OPTION_CONTRACT_MULTIPLIER = 100.0
@@ -84,7 +79,8 @@ def _num(value: Any) -> float | None:
     if value is None or value == "":
         return None
     try:
-        return float(str(value).replace(",", ""))
+        number = float(str(value).replace(",", ""))
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -104,21 +100,43 @@ def normalize_fills(combos: list[dict[str, Any]]) -> tuple[list[Fill], list[str]
     """Flatten combo envelopes into executed legs, oldest-first."""
     fills: list[Fill] = []
     warnings: list[str] = []
+    seen_orders: set[str] = set()
     for combo in combos:
         if not isinstance(combo, dict):
             continue
         for order in combo.get("orders") or []:
-            if not isinstance(order, dict) or order.get("status") != "FILLED":
+            if not isinstance(order, dict):
                 continue
+            order_id = str(order.get("order_id") or order.get("client_order_id") or "")
+            if order_id in seen_orders:
+                continue
+            if not order_id:
+                warnings.append("skipped an order with no identity")
+                continue
+            seen_orders.add(order_id)
             symbol = str(order.get("symbol") or "").upper()
             quantity = _num(order.get("filled_quantity"))
-            if not symbol or not quantity:
-                warnings.append("skipped a filled order with no symbol/quantity")
+            if quantity is None or quantity <= 0:
+                if order.get("status") in {"FILLED", "PARTIAL_FILLED"}:
+                    warnings.append("skipped an executed order with invalid quantity")
+                continue
+            if not symbol or not order.get("filled_time_at"):
+                warnings.append("skipped an executed order with no symbol/execution time")
+                continue
+            instrument_type = str(order.get("instrument_type") or "").upper()
+            if instrument_type not in {"EQUITY", "OPTION"}:
+                warnings.append("skipped an unsupported executed instrument type")
                 continue
             is_option = str(order.get("instrument_type") or "").upper() == "OPTION"
             legs = order.get("legs") or []
             leg = legs[0] if legs and isinstance(legs[0], dict) else {}
+            if is_option and len(legs) != 1:
+                warnings.append("skipped a multi-leg option order: per-leg execution prices unavailable")
+                continue
             contract_key, option_fields = _contract_identity(leg, symbol) if is_option else (symbol, {})
+            if is_option and not option_fields:
+                warnings.append("skipped an option order with incomplete contract identity")
+                continue
             # 2020-era option fills come back with no filled_price. Every one is a LIMIT order, and
             # a limit order fills at its limit or better, so the limit is a usable estimate — it can
             # only understate the result, never flatter it. Flagged so the estimate stays visible.
@@ -138,7 +156,7 @@ def normalize_fills(combos: list[dict[str, Any]]) -> tuple[list[Fill], list[str]
                     price=price,
                     price_source=price_source,
                     multiplier=OPTION_CONTRACT_MULTIPLIER if is_option else 1.0,
-                    filled_at=str(order.get("filled_time_at") or order.get("place_time_at") or ""),
+                    filled_at=str(order["filled_time_at"]),
                     order_type=str(order.get("order_type") or ""),
                     **option_fields,
                 )
@@ -153,7 +171,7 @@ def _get_page_with_backoff(trade_client, account_id: str, kwargs: dict[str, Any]
     delay = _RETRY_BASE_SECONDS
     for attempt in range(_MAX_RETRIES):
         try:
-            return trade_client.order_v2.get_order_history(account_id, **kwargs).json()
+            return trade_client.order_v3.list_order_history(account_id, **kwargs).json()
         except Exception as exc:  # noqa: BLE001 — the SDK raises a vendor ServerException
             if "TOO_MANY_REQUESTS" not in str(exc) or attempt == _MAX_RETRIES - 1:
                 raise
@@ -165,31 +183,38 @@ def _get_page_with_backoff(trade_client, account_id: str, kwargs: dict[str, Any]
 
 def fetch_order_history(trade_client, account_id: str, *, start_date: str = HISTORY_START_DATE) -> list[dict[str, Any]]:
     """Walk every history page back to `start_date`. Newest-first from the API; raw combos out."""
-    end_date = datetime.now(timezone.utc).date().isoformat()
+    start_time = datetime.strptime(start_date, "%Y-%m-%d").replace(tzinfo=timezone.utc)
+    if start_date < HISTORY_START_DATE:
+        raise ValueError(f"Webull history starts at {HISTORY_START_DATE}")
+    end_time = datetime.now(timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
     combos: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    cursors: set[str] = set()
     cursor: str | None = None
 
     for page in range(_MAX_PAGES):
         if page:
-            time.sleep(_PAGE_PAUSE_SECONDS)  # the endpoint 429s under a tight loop
-        kwargs: dict[str, Any] = {"page_size": _PAGE_SIZE, "start_date": start_date, "end_date": end_date}
+            time.sleep(_PAGE_PAUSE_SECONDS)
+        kwargs: dict[str, Any] = {
+            "start_time": start_time.isoformat(timespec="milliseconds").replace("+00:00", "Z"),
+            "end_time": end_time,
+        }
         if cursor:
-            kwargs["last_client_order_id"] = cursor
-        rows = _get_page_with_backoff(trade_client, account_id, kwargs)
-        if not isinstance(rows, list) or not rows:
+            kwargs["pagination_key"] = cursor
+        payload = _get_page_with_backoff(trade_client, account_id, kwargs)
+        if not isinstance(payload, dict) or not isinstance(payload.get("data"), list):
+            raise ValueError("Webull history returned an invalid page; previous history retained")
+        rows = payload["data"]
+        if any(not isinstance(row, dict) or not isinstance(row.get("orders"), list) for row in rows):
+            raise ValueError("Webull history returned invalid orders; previous history retained")
+        combos.extend(rows)
+        cursor = payload.get("pagination_key")
+        if cursor is None or cursor == "":
             break
-        fresh = [row for row in rows if isinstance(row, dict) and str(row.get("client_order_id")) not in seen]
-        for row in fresh:
-            seen.add(str(row.get("client_order_id")))
-        combos.extend(fresh)
-        if not fresh or len(rows) < _PAGE_SIZE:
-            break
-        cursor = str(rows[-1].get("client_order_id") or "")
-        if not cursor:
-            break
+        if not isinstance(cursor, str) or cursor in cursors:
+            raise ValueError("Webull history cursor stalled; previous history retained")
+        cursors.add(cursor)
     else:
-        logger.warning("Webull order history hit the %d-page cap; older orders may be missing", _MAX_PAGES)
+        raise ValueError("Webull history exceeded the page limit; previous history retained")
 
     logger.info("Fetched %d Webull order(s) since %s", len(combos), start_date)
     return combos
@@ -234,6 +259,7 @@ def sync_fills(trade_client, account_id: str, *, start_date: str = HISTORY_START
     splits, unavailable = fetch_split_history(equities)
     payload = {
         "account_id_masked": mask_account_id(account_id),
+        "account_fingerprint": account_fingerprint(account_id),
         "synced_at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "history_start": start_date,
         "order_count": len(combos),

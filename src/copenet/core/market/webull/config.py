@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass, field
 
-_UAT_HOST = "us-openapi-alb.uat.webullbroker.com"
+_SANDBOX_HOST = "api.sandbox.webull.com"
 
 
 @dataclass(frozen=True)
@@ -28,8 +28,8 @@ class WebullConfig:
     __str__ = __repr__
 
     @property
-    def uat_host(self) -> str | None:
-        return _UAT_HOST if self.env == "sandbox" else None
+    def sandbox_host(self) -> str | None:
+        return _SANDBOX_HOST if self.env == "sandbox" else None
 
 
 def include_portfolio_context_enabled() -> bool:

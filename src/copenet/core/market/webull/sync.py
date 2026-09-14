@@ -13,12 +13,13 @@ from __future__ import annotations
 
 import json
 import logging
+import math
 from dataclasses import asdict, dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .client import mask_account_id, webull_data_dir
+from .client import account_fingerprint, mask_account_id, webull_data_dir
 
 logger = logging.getLogger(__name__)
 
@@ -49,6 +50,7 @@ class WebullSnapshot:
     buying_power: float | None
     currency: str | None
     positions: list[WebullPosition]
+    account_fingerprint: str | None = None
     account_source: str = "webull"
     warnings: list[str] = field(default_factory=list)
 
@@ -86,7 +88,8 @@ def _num(value: Any) -> float | None:
     if value is None:
         return None
     try:
-        return float(str(value).replace(",", ""))
+        number = float(str(value).replace(",", ""))
+        return number if math.isfinite(number) else None
     except (TypeError, ValueError):
         return None
 
@@ -177,6 +180,9 @@ def enrich_with_yfinance(positions: list[WebullPosition]) -> None:
     from ..data_sources import fetch_ohlcv
 
     for position in positions:
+        if position.asset_type != "EQUITY":
+            # An underlying equity quote cannot value its option or another derivative.
+            continue
         try:
             frame = fetch_ohlcv(position.symbol, interval="1d", period="5d", auto_adjust=True)
         except Exception:
@@ -200,12 +206,14 @@ def enrich_with_yfinance(positions: list[WebullPosition]) -> None:
 def finalize(positions: list[WebullPosition], total_equity: float | None) -> None:
     """Derive market value / P&L / allocation from whatever facts exist."""
     for position in positions:
+        if position.asset_type not in {None, "EQUITY"}:
+            continue
         if position.market_value is None and position.last_price is not None:
             position.market_value = round(position.quantity * position.last_price, 2)
         if position.unrealized_pl is None and position.avg_cost and position.last_price is not None:
             position.unrealized_pl = round((position.last_price - position.avg_cost) * position.quantity, 2)
         if position.unrealized_pl_pct is None and position.avg_cost and position.last_price is not None:
-            position.unrealized_pl_pct = round((position.last_price / position.avg_cost - 1) * 100, 2)
+            position.unrealized_pl_pct = round((position.last_price / position.avg_cost - 1) * (1 if position.quantity >= 0 else -1) * 100, 2)
     market_total = sum(p.market_value for p in positions if p.market_value is not None)
     basis_total = total_equity if total_equity else market_total
     if basis_total:
@@ -218,12 +226,19 @@ def fetch_snapshot(trade_client, account_id: str) -> WebullSnapshot:
     """The read-only sync: balance + positions → normalized, enriched, sanitized snapshot."""
     balance_raw = trade_client.account_v2.get_account_balance(account_id).json()
     positions_raw = trade_client.account_v2.get_account_position(account_id).json()
+    if not isinstance(balance_raw, dict) or "total_net_liquidation_value" not in balance_raw:
+        raise ValueError("Webull returned an invalid balance; previous snapshot retained")
+    if not isinstance(positions_raw, list) or any(not isinstance(row, dict) for row in positions_raw):
+        raise ValueError("Webull returned invalid positions; previous snapshot retained")
     balance = normalize_balance(balance_raw)
     positions, warnings = normalize_positions(positions_raw)
+    if warnings:
+        raise ValueError("Webull returned incomplete positions; previous snapshot retained")
     enrich_with_yfinance(positions)
     finalize(positions, balance.get("total_equity"))
     snapshot = WebullSnapshot(
         account_id_masked=mask_account_id(account_id),
+        account_fingerprint=account_fingerprint(account_id),
         synced_at=datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         total_equity=balance.get("total_equity"),
         cash=balance.get("cash"),

@@ -35,7 +35,7 @@ def test_normalize_fills_keeps_only_executed_orders_oldest_first():
     fills, warnings = _fills(
         _combo("AAPL", "BUY", 10, 100, "2026-02-01T15:00:00Z"),
         _combo("AAPL", "BUY", 5, 90, "2026-01-01T15:00:00Z"),
-        _combo("AAPL", "BUY", 3, 80, "2026-03-01T15:00:00Z", status="CANCELLED"),
+        _combo("AAPL", "BUY", 0, None, "2026-03-01T15:00:00Z", status="CANCELLED"),
     )
     assert [f["filled_at"] for f in fills] == ["2026-01-01T15:00:00Z", "2026-02-01T15:00:00Z"]
     assert warnings == []
