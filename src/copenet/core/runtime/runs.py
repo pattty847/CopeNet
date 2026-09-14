@@ -70,6 +70,10 @@ class RunRecord:
     # Provider-reported usage summed over the run's model calls; None when the
     # provider reported nothing. Never an estimate — see summarize_token_usage.
     token_usage: dict[str, Any] | None = None
+    # Coding-behavior metrics derived from tool_steps at finalization (redundant
+    # reads, verification after the last edit, blind retries, …); None when the
+    # run called no tools. See core/harness/coding_metrics.py.
+    coding_metrics: dict[str, Any] | None = None
 
     @classmethod
     def from_json(cls, raw: dict[str, Any]) -> "RunRecord":
@@ -99,6 +103,7 @@ class RunRecord:
             oversized_tool_artifact_ids=_string_list(raw.get("oversized_tool_artifact_ids")),
             metadata=_dict_value(raw.get("metadata")),
             token_usage=_dict_value(raw.get("token_usage")) or None,
+            coding_metrics=_dict_value(raw.get("coding_metrics")) or None,
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -132,6 +137,7 @@ class RunRecord:
             "oversizedToolArtifactIds": list(self.oversized_tool_artifact_ids),
             "metadata": dict(self.metadata),
             "tokenUsage": dict(self.token_usage) if self.token_usage else None,
+            "codingMetrics": dict(self.coding_metrics) if self.coding_metrics else None,
         }
 
 

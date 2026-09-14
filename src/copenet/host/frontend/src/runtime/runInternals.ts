@@ -5,8 +5,8 @@
  * (LiveToolFeed, RunActivityPanel, ToolTraceCard, RunInspector). This module is
  * the single model they can all render: it takes a durable `SessionRunRecord`
  * and, when available, that run's lifecycle trace, and produces the collapsed
- * stat line plus the four sections a person actually debugs in order — what it
- * saw, what it did, why it stopped, raw trace.
+ * stat line plus the sections a person actually debugs in order — what it
+ * saw, what it did, how it worked, why it stopped, raw trace.
  *
  * Deliberately pure and React-free so the interesting logic (verdicts, tone,
  * withheld-tool reasoning) is testable without mounting anything.
@@ -16,7 +16,7 @@
  * why `events` is optional rather than required.
  */
 
-import type { ObservabilityTraceEvent, RunStep, RunTokenUsage, SessionRunRecord } from '../types/backend';
+import type { ObservabilityTraceEvent, RunCodingMetrics, RunStep, RunTokenUsage, SessionRunRecord } from '../types/backend';
 
 export type InternalsTone = 'neutral' | 'warn' | 'error';
 
@@ -61,6 +61,8 @@ export interface RunInternals {
   verdicts: InternalsVerdict[];
   saw: InternalsSaw;
   did: RunStep[];
+  /** Coding-behavior facts from the run record's codingMetrics; empty for chat-only turns. */
+  worked: InternalsFact[];
   stopped: { text: string; tone: InternalsTone };
   events: ObservabilityTraceEvent[];
   hasTrace: boolean;
@@ -207,11 +209,89 @@ function buildVerdicts(run: SessionRunRecord, events: ObservabilityTraceEvent[])
     verdicts.push({ id: 'max-turns', text: 'Stopped at the tool-step cap, not because it finished.', tone: 'warn' });
   }
 
+  verdicts.push(...codingVerdicts(run.codingMetrics ?? null));
+
   if (run.error) {
     verdicts.push({ id: 'run-error', text: run.error, tone: 'error' });
   }
 
   return verdicts;
+}
+
+/** The coding-behavior verdicts: each one is a habit the harness audit found
+ *  costing real turns, so each is worth a line before the operator reads anything. */
+function codingVerdicts(metrics: RunCodingMetrics | null): InternalsVerdict[] {
+  if (!metrics) return [];
+  const verdicts: InternalsVerdict[] = [];
+  if (metrics.verification.afterLastEdit === false) {
+    const files = metrics.edits.files === 1 ? '1 file' : `${metrics.edits.files} files`;
+    verdicts.push({ id: 'unverified-edit', text: `Edited ${files} and ran no test, lint or build afterwards.`, tone: 'warn' });
+  }
+  if (metrics.edits.staleErrors > 0) {
+    verdicts.push({ id: 'stale-edit', text: `${metrics.edits.staleErrors} edit${metrics.edits.staleErrors === 1 ? '' : 's'} refused as stale — the file changed since it was last read.`, tone: 'warn' });
+  }
+  if (metrics.failures.blindRetries > 0) {
+    verdicts.push({ id: 'blind-retry', text: `${metrics.failures.blindRetries} failed call${metrics.failures.blindRetries === 1 ? '' : 's'} re-issued unchanged.`, tone: 'warn' });
+  }
+  if (metrics.searches.overCap > 0) {
+    verdicts.push({ id: 'search-dump', text: `${metrics.searches.overCap} search${metrics.searches.overCap === 1 ? '' : 'es'} returned more than ${metrics.searches.cap} matches.`, tone: 'warn' });
+  }
+  if (metrics.reads.redundant > 0) {
+    verdicts.push({ id: 'redundant-read', text: `${metrics.reads.redundant} redundant read${metrics.reads.redundant === 1 ? '' : 's'} — a range already in context, nothing edited between.`, tone: 'neutral' });
+  }
+  return verdicts;
+}
+
+function buildWorked(metrics: RunCodingMetrics | null): InternalsFact[] {
+  if (!metrics) return [];
+  const facts: InternalsFact[] = [];
+  const reads = metrics.reads;
+  facts.push({
+    label: 'Reads',
+    value: `${reads.distinctFiles} file${reads.distinctFiles === 1 ? '' : 's'}`,
+    hint: [reads.redundant > 0 ? `${reads.redundant} redundant` : null, reads.afterOwnEdit > 0 ? `${reads.afterOwnEdit} re-read after own edit` : null]
+      .filter(Boolean)
+      .join(' · ') || 'no re-reads',
+  });
+  if (metrics.searches.count > 0) {
+    facts.push({
+      label: 'Searches',
+      value: String(metrics.searches.count),
+      hint: metrics.searches.overCap > 0 ? `${metrics.searches.overCap} over the ${metrics.searches.cap}-match cap` : `none over the ${metrics.searches.cap}-match cap`,
+    });
+  }
+  if (metrics.edits.count > 0) {
+    facts.push({
+      label: 'Edits',
+      value: `${metrics.edits.count} in ${metrics.edits.files} file${metrics.edits.files === 1 ? '' : 's'}`,
+      hint: metrics.edits.staleErrors > 0 ? `${metrics.edits.staleErrors} refused as stale` : null,
+    });
+  }
+  const verification = metrics.verification;
+  facts.push({
+    label: 'Verification',
+    value: verification.commands === 0 ? 'none' : `${verification.commands} command${verification.commands === 1 ? '' : 's'}`,
+    hint: verification.afterLastEdit === null
+      ? (verification.commands > 0 ? `${verification.tests} test run${verification.tests === 1 ? '' : 's'}` : 'nothing was edited')
+      : verification.afterLastEdit
+        ? 'ran after the last edit'
+        : 'nothing ran after the last edit',
+  });
+  if (metrics.recovery.failedVerificationsAfterEdit > 0) {
+    facts.push({
+      label: 'Recovery',
+      value: `${metrics.recovery.editsAfterFailedVerification} edit${metrics.recovery.editsAfterFailedVerification === 1 ? '' : 's'} after a red run`,
+      hint: `${metrics.recovery.failedVerificationsAfterEdit} verification${metrics.recovery.failedVerificationsAfterEdit === 1 ? '' : 's'} failed after an edit`,
+    });
+  }
+  if (metrics.failures.count > 0 || metrics.exactRepeats > 0) {
+    facts.push({
+      label: 'Waste',
+      value: [metrics.failures.count > 0 ? `${metrics.failures.count} failed` : null, metrics.exactRepeats > 0 ? `${metrics.exactRepeats} repeated` : null].filter(Boolean).join(' · '),
+      hint: metrics.failures.blindRetries > 0 ? `${metrics.failures.blindRetries} blind retr${metrics.failures.blindRetries === 1 ? 'y' : 'ies'}` : null,
+    });
+  }
+  return facts;
 }
 
 function buildSaw(run: SessionRunRecord, events: ObservabilityTraceEvent[]): InternalsSaw {
@@ -374,6 +454,7 @@ export function buildRunInternals(
     verdicts: buildVerdicts(run, events),
     saw: buildSaw(run, events),
     did: run.toolSteps,
+    worked: buildWorked(run.codingMetrics ?? null),
     stopped: buildStopped(run, events),
     events,
     hasTrace: events.length > 0,

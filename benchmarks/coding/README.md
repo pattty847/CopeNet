@@ -100,6 +100,13 @@ repeated calls, stale-digest errors, search dumps, failed calls and blind
 retries, verification commands and whether one ran after the last edit, and
 whether a failed verification was followed by another edit.
 
+The behavior rules are not the analyzer's own: they live in
+`src/copenet/core/harness/coding_metrics.py`, and run finalization applies the
+same rules to every real run's tool steps and stamps the compact result on the
+run record as `codingMetrics` (shown in the Observability inspector's "How it
+worked" section). The analyzer adds what only a trace can give — per-step token
+growth, result-body token attribution, timings — on top of that shared core.
+
 ## Adding a task
 
 Add a `Task` to `FIXTURE_TASKS` in `tasks.py` or `REPO_TASKS` in

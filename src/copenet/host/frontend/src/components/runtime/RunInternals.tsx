@@ -7,14 +7,14 @@
  * collapsed line per turn, expanding in place — not into a side panel, because
  * the question is about *this* message. Sections follow the order a person
  * actually debugs, which is also this repo's documented triage order: what it
- * saw, what it did, why it stopped, raw trace.
+ * saw, what it did, how it worked, why it stopped, raw trace.
  *
  * Nothing here may shift layout while a run streams; expansion is always
  * user-initiated.
  */
 
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Eye, FileCode2, Flag, Wrench } from 'lucide-react';
+import { ChevronDown, ChevronRight, Eye, FileCode2, Flag, Gauge, Wrench } from 'lucide-react';
 import type { SessionArtifactRecord } from '../../types/backend';
 import type { InternalsFact, RunInternals as RunInternalsModel } from '../../runtime/runInternals';
 import { RunStepCard } from './RunStepCard';
@@ -147,6 +147,12 @@ export function RunInternalsBody({ internals, artifacts = [], palette = 'operato
           <p className={`text-[11px] ${classes.mutedSoft}`}>No tools were called.</p>
         )}
       </Section>
+      )}
+
+      {internals.worked.length > 0 && (
+        <Section icon={Gauge} title="How it worked" palette={palette}>
+          <FactRows facts={internals.worked} palette={palette} />
+        </Section>
       )}
 
       <Section icon={Flag} title="Why it stopped" palette={palette}>

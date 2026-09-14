@@ -24,20 +24,17 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from copenet._paths import default_run_logs_dir  # noqa: E402
+from copenet.core.harness.coding_metrics import READ_TOOL, analyze_tool_calls, shell_command  # noqa: E402
+from copenet.core.harness.replay_receipts import MUTATION_TOOL_IDS  # noqa: E402
 from copenet.core.harness.token_count import count_text_tokens  # noqa: E402
 
-MUTATING_TOOLS = {"files.edit", "files.write"}
-READ_TOOL = "files.read"
-SEARCH_TOOL = "files.rg"
-SHELL_TOOL = "shell.exec"
+MUTATING_TOOLS = MUTATION_TOOL_IDS
 INTERPRETED_EVENTS = {"responses_turn_interpreted", "provider_response_interpreted", "prompted_tool_response_interpreted"}
-VERIFY_PATTERN = re.compile(
-    r"(unittest|pytest|scripts/check\.py|check\.py|npm (test|run (lint|build|test))|tsc\b|ruff|flake8|mypy|make\b|py_compile|"
-    r"python3? -m ledgerly|python3? -c )"
-)
+# Fixture-specific verification on top of the harness's generic test/lint/build rule:
+# running the ledgerly CLI or an inline python check is how the fixture tasks get verified.
+BENCH_EXTRA_VERIFY_PATTERN = re.compile(r"python3? -m ledgerly|python3? -c ")
 CHECK_SCRIPT_PATTERN = re.compile(r"check\.py")
 RUNTIME_PATTERN = re.compile(r"python3? -m ledgerly\.cli|ledgerly\.cli")
-TEST_PATTERN = re.compile(r"unittest|pytest")
 
 
 def load_rows(source: str | Path) -> list[dict[str, Any]]:
@@ -49,30 +46,6 @@ def load_rows(source: str | Path) -> list[dict[str, Any]]:
         if line.strip():
             rows.append(json.loads(line))
     return rows
-
-
-def _shell_command(args: dict[str, Any]) -> str:
-    command = args.get("command")
-    if isinstance(command, dict):  # digested away
-        return f"<{command.get('chars', '?')} chars>"
-    return str(command or "")
-
-
-def _read_range(args: dict[str, Any]) -> tuple[int, int]:
-    start = args.get("start_line")
-    end = args.get("end_line")
-    if start is None and end is None:
-        if args.get("offset") or args.get("limit"):
-            return (0, 0)  # char-paged read; treat as partial
-        return (1, 10**9)
-    return (int(start or 1), int(end or 10**9))
-
-
-def _covered(existing: list[tuple[int, int]], candidate: tuple[int, int]) -> bool:
-    start, end = candidate
-    if candidate == (0, 0):
-        return False
-    return any(s <= start and end <= e for s, e in existing)
 
 
 def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
@@ -208,79 +181,30 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
             if call["resultTokens"] is not None:
                 by_tool_tokens[call["toolId"]] += call["resultTokens"]
 
-    # --- repeats and redundant reads ----------------------------------------
-    signatures: Counter = Counter()
-    exact_repeats: list[dict[str, Any]] = []
-    coverage: dict[str, list[tuple[int, int]]] = defaultdict(list)
-    last_touch: dict[str, str] = {}
-    redundant_reads: list[dict[str, Any]] = []
-    reads_after_own_edit = 0
-    stale_digest_errors = 0
-    search_dumps: list[dict[str, Any]] = []
+    # --- the coding rules (shared with run finalization) ---------------------
     for call in calls:
-        signature = json.dumps({"t": call["toolId"], "a": call["arguments"]}, sort_keys=True, ensure_ascii=False)
         # Lifecycle-tier arguments are digested: a 1,100-char edit body becomes
         # {"chars": 1100, "omitted": true}, so two different edits can look identical.
-        # Only count a repeat when the arguments are fully known.
-        if '"omitted": true' not in signature:
-            signatures[signature] += 1
-            if signatures[signature] > 1:
-                exact_repeats.append({"step": call["step"], "toolId": call["toolId"], "arguments": call["arguments"]})
-        path = call["arguments"].get("path") if isinstance(call["arguments"].get("path"), str) else None
-        if call["toolId"] == READ_TOOL and path:
-            rng = _read_range(call["arguments"])
-            if last_touch.get(path) in MUTATING_TOOLS:
-                reads_after_own_edit += 1
-            elif _covered(coverage[path], rng):
-                redundant_reads.append({"step": call["step"], "path": path, "range": list(rng)})
-            if call["ok"]:
-                coverage[path].append(rng)
-            last_touch[path] = READ_TOOL
-        elif call["toolId"] in MUTATING_TOOLS and path:
-            if call["ok"]:
-                coverage[path] = []
-            last_touch[path] = call["toolId"]
-            if call["error"] and "stale read detected" in str(call["error"]):
-                stale_digest_errors += 1
-        elif call["toolId"] == SEARCH_TOOL:
-            match = re.search(r"Found (\d+) matches", str(call["summary"] or ""))
-            total = int(match.group(1)) if match else None
-            requested_limit = call["arguments"].get("limit")
-            if (total or 0) > 200:
-                search_dumps.append({"step": call["step"], "pattern": call["arguments"].get("pattern"), "totalMatches": total, "requestedLimit": requested_limit, "resultTokens": call["resultTokens"]})
-
-    # --- failures and recovery -----------------------------------------------
+        call["argumentsComplete"] = '"omitted": true' not in json.dumps(call["arguments"], ensure_ascii=False)
+    behavior = analyze_tool_calls(calls, extra_verification=BENCH_EXTRA_VERIFY_PATTERN)
+    tokens_by_index = {c["index"]: c["resultTokens"] for c in calls}
+    redundant_reads = [{"step": r["step"], "path": r["path"], "range": r["range"]} for r in behavior.redundant_reads]
+    reads_after_own_edit = behavior.reads_after_own_edit
+    stale_digest_errors = behavior.stale_edit_errors
+    search_dumps = [{**d, "resultTokens": tokens_by_index.get(d["index"])} for d in behavior.search_dumps]
+    exact_repeats = [{"step": r["step"], "toolId": r["toolId"], "arguments": r["arguments"]} for r in behavior.exact_repeats]
     failures = [c for c in calls if c["ok"] is False]
-    mutation_indexes = [c["index"] for c in calls if c["toolId"] in MUTATING_TOOLS and c["ok"]]
-    blind_retries = 0
-    for failed in failures:
-        later = [c for c in calls if c["index"] > failed["index"] and c["toolId"] == failed["toolId"]]
-        if not later or json.dumps(later[0]["arguments"], sort_keys=True) != json.dumps(failed["arguments"], sort_keys=True):
-            continue
-        # Re-running a failed test command after an edit is verification, not a
-        # blind retry. Only an identical re-issue with nothing changed in between counts.
-        if any(failed["index"] < index < later[0]["index"] for index in mutation_indexes):
-            continue
-        blind_retries += 1
-
-    # --- verification ----------------------------------------------------------
-    verification_calls: list[dict[str, Any]] = []
-    for call in calls:
-        if call["toolId"] != SHELL_TOOL:
-            continue
-        command = _shell_command(call["arguments"])
-        if VERIFY_PATTERN.search(command):
-            verification_calls.append({"index": call["index"], "step": call["step"], "command": command[:200], "ok": call["ok"], "isTest": bool(TEST_PATTERN.search(command)), "isCheck": bool(CHECK_SCRIPT_PATTERN.search(command)), "isRuntime": bool(RUNTIME_PATTERN.search(command))})
-    last_mutation = max(mutation_indexes) if mutation_indexes else None
-    after_last_mutation = any(v["index"] > last_mutation for v in verification_calls) if last_mutation is not None else bool(verification_calls)
+    mutation_indexes = behavior.mutation_indexes
+    blind_retries = behavior.blind_retries
+    verification_calls = [
+        {**v, "isCheck": bool(CHECK_SCRIPT_PATTERN.search(v["command"])), "isRuntime": bool(RUNTIME_PATTERN.search(v["command"]))}
+        for v in behavior.verification_calls
+    ]
+    # With no edit at all, "verified" means a verification command ran at some point.
+    after_last_mutation = behavior.verified_after_last_edit if behavior.verified_after_last_edit is not None else bool(verification_calls)
     failed_verifications = [v for v in verification_calls if v["ok"] is False]
-    # A verification that fails BEFORE any edit is diagnosis (running the suite to
-    # see the failure). Recovery means: the agent edited, verified, saw it fail,
-    # and edited again — a failed verification with a mutation on both sides.
     failed_after_edit = [v for v in failed_verifications if any(index < v["index"] for index in mutation_indexes)]
-    edits_after_failed_verification = sum(
-        1 for v in failed_after_edit if any(index > v["index"] for index in mutation_indexes)
-    )
+    edits_after_failed_verification = behavior.edits_after_failed_verification
     failed_then_edit = edits_after_failed_verification > 0
 
     # --- timing -----------------------------------------------------------------
@@ -298,7 +222,7 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
         {
             "step": c["step"],
             "toolId": c["toolId"],
-            "target": (c["arguments"].get("path") or c["arguments"].get("pattern") or _shell_command(c["arguments"]) or "")[:120] if isinstance(c["arguments"], dict) else "",
+            "target": (c["arguments"].get("path") or c["arguments"].get("pattern") or shell_command(c["arguments"]) or "")[:120] if isinstance(c["arguments"], dict) else "",
             "ok": c["ok"],
             "summary": (c["summary"] or "")[:140],
             "resultTokens": c["resultTokens"],

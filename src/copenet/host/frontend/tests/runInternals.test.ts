@@ -200,3 +200,33 @@ test('without provider usage the readout is the estimate, marked as one', () => 
   assert.equal(tokenReadout(makeRun({ tokenUsage: null })), null);
   assert.equal(tokenReadout(makeRun({ tokenUsage: { source: 'provider', modelCalls: 1, inputTokens: 900, peakInputTokens: 900, cachedInputTokens: null, outputTokens: null, reasoningTokens: null, steps: [] } })), '900 ctx');
 });
+
+test('coding metrics become a "How it worked" section and verdicts for the costly habits', () => {
+  const run = makeRun({
+    codingMetrics: {
+      toolCalls: 9,
+      reads: { distinctFiles: 4, redundant: 2, afterOwnEdit: 1 },
+      searches: { count: 3, overCap: 1, cap: 200 },
+      edits: { count: 2, files: 1, staleErrors: 0 },
+      exactRepeats: 0,
+      failures: { count: 1, blocked: 0, blindRetries: 1 },
+      verification: { commands: 0, tests: 0, afterLastEdit: false },
+      recovery: { failedVerificationsAfterEdit: 0, editsAfterFailedVerification: 0 },
+    },
+  });
+  const internals = buildRunInternals(run, []);
+  const labels = internals.worked.map((fact) => fact.label);
+  assert.deepEqual(labels, ['Reads', 'Searches', 'Edits', 'Verification', 'Waste']);
+  assert.equal(internals.worked[0].value, '4 files');
+  assert.match(internals.worked[0].hint ?? '', /2 redundant · 1 re-read after own edit/);
+  assert.equal(internals.worked[3].value, 'none');
+  assert.equal(internals.worked[3].hint, 'nothing ran after the last edit');
+  const ids = internals.verdicts.map((verdict) => verdict.id);
+  assert.deepEqual(ids, ['unverified-edit', 'blind-retry', 'search-dump', 'redundant-read']);
+});
+
+test('a chat-only turn has no coding section and no coding verdicts', () => {
+  const internals = buildRunInternals(makeRun({ codingMetrics: null }), []);
+  assert.deepEqual(internals.worked, []);
+  assert.equal(internals.verdicts.some((verdict) => verdict.id === 'unverified-edit'), false);
+});

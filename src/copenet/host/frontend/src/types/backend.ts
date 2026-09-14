@@ -626,6 +626,19 @@ export interface RunTokenUsage {
   }>;
 }
 
+/** Coding-behavior metrics derived from the run's tool steps at finalization
+ *  (core/harness/coding_metrics.py). Null when the run called no tools. */
+export interface RunCodingMetrics {
+  toolCalls: number;
+  reads: { distinctFiles: number; redundant: number; afterOwnEdit: number };
+  searches: { count: number; overCap: number; cap: number };
+  edits: { count: number; files: number; staleErrors: number };
+  exactRepeats: number;
+  failures: { count: number; blocked: number; blindRetries: number };
+  verification: { commands: number; tests: number; afterLastEdit: boolean | null };
+  recovery: { failedVerificationsAfterEdit: number; editsAfterFailedVerification: number };
+}
+
 export interface SessionRunRecord {
   runId: string;
   sessionKey: string;
@@ -646,6 +659,7 @@ export interface SessionRunRecord {
   messageCount?: number;
   inputTokenEstimate?: number;
   tokenUsage?: RunTokenUsage | null;
+  codingMetrics?: RunCodingMetrics | null;
   transitionReason?: string;
   terminalReason?: string | null;
   toolResults?: Record<string, unknown>[];

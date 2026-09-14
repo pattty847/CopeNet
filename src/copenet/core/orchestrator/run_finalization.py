@@ -5,6 +5,7 @@ from copenet.core.runtime import RunRecord
 from copenet.core.sessions import TranscriptMessage
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import describe_available_tools
+from copenet.core.harness.coding_metrics import summarize_coding_metrics
 from .run_types import RunAdmission, RunInput, RunEvents
 from .token_usage import summarize_token_usage
 from .run_message_parts import _normalize_final_message_parts
@@ -131,6 +132,7 @@ def successful_record(
         pending_input_count=int(events.latest_turn_state.get("pendingInputCount") or 0),
         oversized_tool_artifact_ids=list(events.persisted_tool_artifact_ids),
         token_usage=summarize_token_usage(events.token_usage_steps),
+        coding_metrics=summarize_coding_metrics(events.tool_steps),
         metadata={
             **admission.market_metadata,
             "capabilityProfile": {
@@ -281,6 +283,7 @@ def finish_failure(
         pending_input_count=events.latest_turn_state.get("pendingInputCount", 0),
         oversized_tool_artifact_ids=list(events.persisted_tool_artifact_ids),
         token_usage=summarize_token_usage(events.token_usage_steps),
+        coding_metrics=summarize_coding_metrics(events.tool_steps),
         metadata=metadata,
     )
     events.seq += 1
