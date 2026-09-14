@@ -210,3 +210,49 @@ async def test_artifact_create_persists_summary_artifact(tmp_path: Path) -> None
     assert records[0].title == "Proof Note"
     assert records[0].type == "summary"
     assert "artifactId" in result.output
+
+
+def _match_line(path: str, line: int) -> str:
+    return (
+        '{"type":"match","data":{"path":{"text":"%s"},"lines":{"text":"needle here\\n"},"line_number":%d,'
+        '"submatches":[{"match":{"text":"needle"},"start":0,"end":6}]}}\n' % (path, line)
+    )
+
+
+@pytest.mark.asyncio
+async def test_files_rg_overflow_returns_a_per_file_map_and_a_small_sample(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    """Past the 200-match cap a page is an arbitrary sample; the per-file map is the orientation the model needed."""
+    stdout = "".join(_match_line("src/a.py", i) for i in range(150)) + "".join(_match_line("src/b.py", i) for i in range(60)) + "".join(_match_line("docs/c.md", i) for i in range(40))
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = await ToolRegistry().execute(ToolExecutionRequest("files.rg", {"pattern": "needle", "path": ".", "limit": 120}), _tool_context(tmp_path))
+
+    assert result.ok is True
+    assert result.summary.startswith("Found 250 matches across 3 files — too broad to read through.")
+    assert "most matches: src/a.py ×150" in result.summary
+    assert result.output["totalMatches"] == 250 and result.output["fileCount"] == 3
+    assert result.output["byFile"] == [{"path": "src/a.py", "matches": 150}, {"path": "src/b.py", "matches": 60}, {"path": "docs/c.md", "matches": 40}]
+    assert len(result.output["matches"]) == 25 and result.output["truncated"] is True and result.output["nextOffset"] == 25
+
+
+@pytest.mark.asyncio
+async def test_files_rg_accepts_several_search_roots(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    (tmp_path / "src").mkdir()
+    (tmp_path / "tests").mkdir()
+    seen: dict[str, list[str]] = {}
+
+    def fake_run(argv, *args, **kwargs):
+        seen["argv"] = list(argv)
+        return subprocess.CompletedProcess(args=argv, returncode=1, stdout="", stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    registry = ToolRegistry()
+    result = await registry.execute(ToolExecutionRequest("files.rg", {"pattern": "needle", "path": "tests src"}), _tool_context(tmp_path))
+    assert result.ok is True and result.output["paths"] == ["tests", "src"]
+    assert seen["argv"][-2:] == [str(tmp_path / "tests"), str(tmp_path / "src")]
+
+    missing = await registry.execute(ToolExecutionRequest("files.rg", {"pattern": "needle", "path": "tests nowhere"}), _tool_context(tmp_path))
+    assert missing.ok is False and "nowhere" in str(missing.error) and "several separated by spaces" in str(missing.error)

@@ -181,16 +181,18 @@ def grade_repo_two_turn(workdir: Path, ctx: GradeContext) -> list[Check]:
         pytest_passes(workdir, "tests/unit/test_replay_receipts.py", "tests/integration/test_replay_receipts_turns.py"),
         paths_unchanged(workdir, ("tests/",)),
         changes_within(workdir, {REPLAY_RECEIPTS}),
-        file_matches(workdir, REPLAY_RECEIPTS, r'return tool_execution\.get\("ok"\) is False', expect=True, label="failures are verbatim again"),
+        # Any shape of "ok is False → verbatim" is a correct fix; the tests above prove the behavior.
+        file_matches(workdir, REPLAY_RECEIPTS, r'get\("ok"\) is False', expect=True, label="failures are verbatim again"),
         file_matches(workdir, REPLAY_RECEIPTS, r'receipt\["exitCode"\]', expect=True, label="shell receipt carries the exit code again"),
         answer_mentions(ctx.final_text, ["replay_receipts.py", "is_verbatim", "exitCode"], label="final answer names the file and both changes"),
         Check("turn 2 received the change ledger from turn 1", bool((turn2.get("changeLedger") or {}).get("injected")), f"ledger: {turn2.get('changeLedger')}"),
         Check("no stale-digest errors in turn 2", (turn2.get("edits") or {}).get("staleDigestErrors", 0) == 0, f"stale digest errors: {(turn2.get('edits') or {}).get('staleDigestErrors', 0)}"),
         Check(
-            "turn 2 replay was shaped by receipts (informational)",
+            "turn 2 replay receipts (informational)",
             True,
-            f"receiptTurns={receipts.get('receiptTurns')} receiptedOutputs={receipts.get('receiptedOutputs')} "
-            f"replayedChars={receipts.get('replayedChars')} verbatimChars={receipts.get('verbatimChars')}",
+            (f"receiptTurns={receipts.get('receiptTurns')} receiptedOutputs={receipts.get('receiptedOutputs')} "
+             f"replayedChars={receipts.get('replayedChars')} verbatimChars={receipts.get('verbatimChars')}")
+            if receipts else "no receipts: with one prior turn, that turn is the newest and replays verbatim by design",
         ),
         verification_after_last_edit(turn2, label="turn 2 ran a verification command after its last edit") if turn2.get("edits", {}).get("mutations") else verification_after_last_edit(_analysis(ctx, 0), label="turn 1 ran a verification command after its last edit"),
     ]

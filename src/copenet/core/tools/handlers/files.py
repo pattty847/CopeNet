@@ -46,8 +46,10 @@ DESCRIPTORS = [
         name="Ripgrep Search",
         description=(
             "Search text inside files under the current workdir with a ripgrep regex pattern. "
-            "Returns at most 200 matches per call (default 80); use offset to page, or narrow the "
-            "pattern/path when the total is large. context_lines adds lines of context around each match. "
+            "Returns at most 200 matches per call (default 80); use offset to page. When a pattern matches "
+            "more than 200 lines the result is a per-file count map (byFile) plus the first 25 matches — "
+            "narrow the pattern or the path instead of paging. path may be one file or directory, or several "
+            "separated by spaces. context_lines adds lines of context around each match. "
             "Note: searches file contents only, not filenames or directory paths. "
             "To locate files or directories by name, use shell.exec with find."
         ),
@@ -61,7 +63,7 @@ DESCRIPTORS = [
                 },
                 "path": {
                     "type": "string",
-                    "description": "File or directory subtree to search inside; not a filename search pattern.",
+                    "description": "File or directory subtree to search inside (several may be given separated by spaces); not a filename search pattern.",
                 },
                 "offset": {"type": "integer", "minimum": 0},
                 "limit": {"type": "integer", "minimum": 1},
@@ -124,6 +126,11 @@ FILE_READ_ABSOLUTE_MAX = 500_000  # ~500KB safety guard; honors explicit limit u
 # 1,153 matches into context on real runs (~50K tokens before a file was read).
 # Paging and a narrower pattern are always available; a dump never is useful.
 SEARCH_RESULT_HARD_CAP = 200
+# Past the cap a page of matches is an arbitrary sample of the whole. Live traces
+# (834, 1,153, 3,443, 8,974 matches) showed models paying ~5K tokens per such
+# page and learning nothing from it; the per-file map below is what they needed.
+SEARCH_OVERFLOW_SAMPLE = 25
+SEARCH_OVERFLOW_FILES = 30
 
 
 async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
@@ -295,15 +302,15 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     requested_limit = int(request.arguments.get("limit") or 0)
     effective_limit = min(requested_limit if requested_limit > 0 else context.policy.search_result_limit, SEARCH_RESULT_HARD_CAP)
     context_lines = max(int(request.arguments.get("context_lines") or 0), 0)
-    root = resolve_relative_path(str(request.arguments.get("path") or "."), context)
-    if not root.exists():
-        raise RuntimeError(f"path not found: {root}")
-    access = file_access_metadata(root, context)
+    roots = _search_roots(request.arguments.get("path"), context)
+    root = roots[0]
+    accesses = [file_access_metadata(candidate, context) for candidate in roots]
+    access = next((item for item in accesses if item.get("scope") == "outside_workspace"), accesses[0])
     target = access["target"]
     rg_argv = ["rg", "--json", "--line-number", "--column", "--color", "never"]
     if context_lines:
         rg_argv += ["--context", str(context_lines)]
-    rg_argv += [pattern, str(root)]
+    rg_argv += [pattern, *(str(candidate) for candidate in roots)]
     try:
         completed = subprocess.run(
             rg_argv,
@@ -358,31 +365,70 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         )
 
     total_matches = len(all_hits)
+    overflow = total_matches > SEARCH_RESULT_HARD_CAP
+    if overflow:
+        effective_limit = min(effective_limit, SEARCH_OVERFLOW_SAMPLE)
     hits = all_hits[offset : offset + effective_limit]
     next_offset = offset + len(hits)
     truncated = next_offset < total_matches
-    summary = f"Found {total_matches} matches for pattern via ripgrep; returning {len(hits)}."
-    if truncated:
-        summary += f" [Showing matches {offset + 1}-{next_offset}. Total found: {total_matches}. Use offset={next_offset} to continue.]"
-        if total_matches > SEARCH_RESULT_HARD_CAP * 2:
-            summary += " This pattern matches too broadly to read through; narrow the pattern or the path instead of paging."
+    by_file: dict[str, int] = {}
+    for hit in all_hits:
+        by_file[str(hit["path"])] = by_file.get(str(hit["path"]), 0) + 1
+    if overflow:
+        ranked = sorted(by_file.items(), key=lambda item: (-item[1], item[0]))
+        top_path, top_count = ranked[0]
+        summary = (
+            f"Found {total_matches} matches across {len(by_file)} files — too broad to read through. "
+            f"Returning per-file counts (byFile) and matches {offset + 1}-{next_offset}; narrow the pattern or the path "
+            f"(most matches: {top_path} ×{top_count})."
+        )
+    else:
+        summary = f"Found {total_matches} matches for pattern via ripgrep; returning {len(hits)}."
+        if truncated:
+            summary += f" [Showing matches {offset + 1}-{next_offset}. Total found: {total_matches}. Use offset={next_offset} to continue.]"
     if warning_message:
         summary += f" Warning: {warning_message}"
+    output: dict[str, object] = {
+        "matches": hits,
+        "totalMatches": total_matches,
+        "offset": offset,
+        "limit": effective_limit,
+        "truncated": truncated,
+        **({"nextOffset": next_offset} if truncated else {}),
+        **access,
+        **({"warning": warning_message} if warning_message else {}),
+    }
+    if len(roots) > 1:
+        output["paths"] = [display_path(candidate, context) for candidate in roots]
+    if overflow:
+        ranked = sorted(by_file.items(), key=lambda item: (-item[1], item[0]))
+        output["fileCount"] = len(by_file)
+        output["byFile"] = [{"path": path, "matches": count} for path, count in ranked[:SEARCH_OVERFLOW_FILES]]
+        if len(ranked) > SEARCH_OVERFLOW_FILES:
+            output["byFileOmitted"] = len(ranked) - SEARCH_OVERFLOW_FILES
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
         summary=summary,
-        output={
-            "matches": hits,
-            "totalMatches": total_matches,
-            "offset": offset,
-            "limit": effective_limit,
-            "truncated": truncated,
-            **({"nextOffset": next_offset} if truncated else {}),
-            **access,
-            **({"warning": warning_message} if warning_message else {}),
-        },
+        output=output,
     )
+
+
+def _search_roots(raw: object, context: ToolExecutionContext) -> list[Path]:
+    """One or several search roots. A live model sent `path: "tests src"`; rg takes several, so do we."""
+    if isinstance(raw, list):
+        candidates = [str(item).strip() for item in raw if str(item).strip()]
+    else:
+        text = str(raw or ".").strip() or "."
+        whole = resolve_relative_path(text, context)
+        candidates = [text] if whole.exists() or " " not in text else text.split()
+    roots = [resolve_relative_path(candidate, context) for candidate in candidates] or [resolve_relative_path(".", context)]
+    missing = [str(root) for root in roots if not root.exists()]
+    if missing:
+        raise RuntimeError(
+            f"path not found: {', '.join(missing)}. Pass one existing file or directory, or several separated by spaces."
+        )
+    return roots
 
 
 async def write_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
