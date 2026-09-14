@@ -192,6 +192,15 @@ For current behavior, assume:
 - Full-access shell commands run with the current OS user's permissions and may use normal shell syntax (`|`, `&&`, redirects, scripts, etc.). High-risk command patterns return `policyDecision: "approval_required"` instead of executing; wire operator confirmation before allowing those proposal records to resume.
 - Permission claims should be tested with the direct matrix before trusting a live model's self-report: `uv run python scripts/permission_probe_matrix.py`. A model that only proves `pwd` works has proven shell-read, not full-access.
 - **`artifact.create`** persists session artifacts when `artifact_store`, `session_key`, and `run_id` are present.
+- **The change ledger is the agent's durable record of its own edits.** Every `files.write`/`files.edit`
+  appends to `core/sessions/change_ledger.py` (per-session JSONL under `sessions/change-ledger/`); every
+  later turn in the session gets the rendered ledger appended to its live message (never persisted into
+  the transcript, never replayed), with each file compared to the digest the agent last left it at, so an
+  operator edit between turns reads as "CHANGED ON DISK — read it again". The same digests seed the tool
+  context's `file_read_state`, so `files.edit`/`files.write` refuse a blind cross-turn edit of a drifted
+  file. This exists because shortening the replayed transcript (the old 600-char compaction, whole-turn
+  budget drops) used to erase the agent's memory of what it changed; the ledger is what must survive any
+  future compaction. Trace event: `change_ledger_injected`.
 
 ### WebSocket / RPC
 

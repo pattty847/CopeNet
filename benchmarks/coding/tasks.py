@@ -375,6 +375,11 @@ def grade_multi_turn(workdir: Path, ctx: GradeContext) -> list[Check]:
         file_matches(workdir, "README.md", r"\.summary\(|`summary`", expect=False, label="README no longer mentions the old name"),
         answer_mentions(ctx.final_text, ["ledger.py", "reports.py", "README.md", "test_ledger.py"], label="final answer lists every file changed across both turns"),
         Check("no stale-digest errors in turn 2", turn2.get("edits", {}).get("staleDigestErrors", 0) == 0, f"stale digest errors: {turn2.get('edits', {}).get('staleDigestErrors', 0)}"),
+        Check(
+            "turn 2 received the change ledger from turn 1",
+            bool(turn2.get("changeLedger", {}).get("injected")),
+            f"ledger: {turn2.get('changeLedger')}",
+        ),
     ]
 
 

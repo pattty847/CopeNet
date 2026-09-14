@@ -66,6 +66,9 @@ class RunInput:
     loop_reserve_tokens: int
     agent_runtime_payload: dict
     identity_context_payload: dict
+    # Path -> digest the agent last left the file at in earlier turns of this
+    # session (from the change ledger); seeds the tool context's edit freshness.
+    ledger_last_digests: dict = field(default_factory=dict)
 
 
 @dataclass

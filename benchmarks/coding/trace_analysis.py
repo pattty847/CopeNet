@@ -90,6 +90,7 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
     header: dict[str, Any] = {}
     persisted = 0
     trimmed_events = 0
+    ledger: dict[str, Any] = {"injected": False}
 
     for row in rows:
         event = row.get("event")
@@ -156,6 +157,8 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
                 result_bodies[call_id] = payload
         elif event == "tool_result_persisted":
             persisted += 1
+        elif event == "change_ledger_injected":
+            ledger = {"injected": True, **payload}
         elif event == "turn_completed":
             terminal_reason = payload.get("terminalReason")
         elif event == "run_completed":
@@ -333,6 +336,7 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "distinctFilesRead": len({c["arguments"].get("path") for c in calls if c["toolId"] == READ_TOOL and isinstance(c["arguments"].get("path"), str)}),
             "searchDumps": search_dumps,
         },
+        "changeLedger": ledger,
         "edits": {
             "mutations": len(mutation_indexes),
             "filesEdited": sorted({c["arguments"].get("path") for c in calls if c["toolId"] in MUTATING_TOOLS and c["ok"] and isinstance(c["arguments"].get("path"), str)}),
@@ -375,6 +379,7 @@ def render_markdown(analysis: dict[str, Any]) -> str:
         f"- largest tool results: {tokens['largestToolResults']}",
         f"- reads: {analysis['reads']['distinctFilesRead']} files, redundant {analysis['reads']['redundantReadCount']}, after-own-edit {analysis['reads']['readsAfterOwnEdit']}, search dumps {len(analysis['reads']['searchDumps'])}",
         f"- edits: {analysis['edits']}",
+        f"- change ledger on this turn: {analysis['changeLedger']}",
         f"- exact repeats: {analysis['repeats']['exactRepeatCount']}",
         f"- failures: {len(analysis['failures']['failedToolCalls'])} (blind retries {analysis['failures']['blindRetries']})",
         f"- verification: {analysis['verification']['commandCount']} commands, after last edit: {analysis['verification']['afterLastMutation']}, test runs {analysis['verification']['testRuns']}, check runs {analysis['verification']['checkScriptRuns']}, runtime runs {analysis['verification']['runtimeCommandRuns']}",

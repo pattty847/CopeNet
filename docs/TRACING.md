@@ -111,6 +111,7 @@ tracked as open observability work in [ROADMAP.md](plans/ROADMAP.md).
 run_started
 session_resolved
 prompt_context_policy_resolved
+change_ledger_injected   (only when the session has earlier agent edits — fileCount, changedOnDisk, missing, entryCount, chars)
 chat_messages_built
 harness_planned          willAttemptToolLoop: false
 prompt_context_assembled
@@ -185,6 +186,12 @@ every transport (WebSocket, REST, SSE, CLI, Fleet, coordination lanes) reports
 `"composed"` for the same binding. A `baseSystemPromptChars` of 0 on an
 interactive run means the model received no profile or Access instructions and is
 always a bug.
+
+`change_ledger_injected` records that the session's change ledger (the agent's own
+earlier file edits, with an on-disk drift check per file) was appended to the live
+user message: how many files it lists, how many have changed on disk since the agent
+last touched them, how many are missing, and the block's size. It is absent on a
+turn with no earlier edits. See `core/sessions/change_ledger.py`.
 
 `chat_messages_built` records the bounded and unbounded input estimates, how many
 oldest provider-view message items were omitted, and the resolved budget:

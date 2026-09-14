@@ -401,6 +401,14 @@ async def write_file(request: ToolExecutionRequest, context: ToolExecutionContex
     _record_edit_backup(context, target=access["target"], after_digest=digest, before=before)
     diff_fields = _unified_diff_fields(before=before, after=content, path=access["target"])
     verb = "Wrote" if existed else "Created"
+    _record_change(
+        context,
+        target=access["target"],
+        action="wrote" if existed else "created",
+        diff_fields=diff_fields,
+        digest_before=_content_digest(before) if existed else None,
+        digest_after=digest,
+    )
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -449,6 +457,14 @@ async def edit_file(request: ToolExecutionRequest, context: ToolExecutionContext
     _remember_file_digest(context, target=access["target"], digest=digest)
     _record_edit_backup(context, target=access["target"], after_digest=digest, before=text)
     diff_fields = _unified_diff_fields(before=text, after=next_text, path=access["target"])
+    _record_change(
+        context,
+        target=access["target"],
+        action="edited",
+        diff_fields=diff_fields,
+        digest_before=_content_digest(text),
+        digest_after=digest,
+    )
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
@@ -519,6 +535,35 @@ def _record_edit_backup(context: ToolExecutionContext, *, target: str, after_dig
             after_digest=after_digest,
             before_content=before,
             run_id=getattr(context, "run_id", None),
+        )
+    except Exception:
+        pass
+
+
+def _record_change(
+    context: ToolExecutionContext,
+    *,
+    target: str,
+    action: str,
+    diff_fields: dict,
+    digest_before: str | None,
+    digest_after: str,
+) -> None:
+    """Append this write/edit to the session's change ledger. Best-effort, like the backup."""
+    store = getattr(context, "change_ledger_store", None)
+    session_key = getattr(context, "session_key", None)
+    if store is None or not session_key:
+        return
+    try:
+        store.record(
+            session_key=session_key,
+            run_id=getattr(context, "run_id", None),
+            path=target,
+            action=action,
+            lines_added=int(diff_fields.get("linesAdded") or 0),
+            lines_removed=int(diff_fields.get("linesRemoved") or 0),
+            digest_before=digest_before,
+            digest_after=digest_after,
         )
     except Exception:
         pass

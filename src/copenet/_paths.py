@@ -14,6 +14,11 @@ def default_sessions_dir() -> Path:
     return Path.home() / ".copenet" / "sessions"
 
 
+def default_change_ledger_dir() -> Path:
+    """Return the per-session change-ledger root under the sessions data tree."""
+    return default_sessions_dir() / "change-ledger"
+
+
 def default_run_logs_dir() -> Path:
     """Return default per-run trace root: COPNET_DATA_DIR/logs/runs or ~/.copenet/logs/runs."""
     base = os.environ.get("COPNET_DATA_DIR", "").strip()

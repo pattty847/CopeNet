@@ -25,6 +25,7 @@ from copenet.core.orchestrator.tool_requests import (
     requested_tool_overlay,
 )
 from copenet.core.sessions import TranscriptMessage
+from copenet.core.sessions.change_ledger import append_change_ledger, last_digests, render_change_ledger
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import (
     build_responses_tool_schemas,
@@ -153,8 +154,18 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
     chart_token_limit = max(
         initial_input_budget - fixed_input_tokens - estimate_input_tokens(live_without_chart), 1
     )
+    ledger_entries = orchestrator._change_ledger_store.entries(admission.session_key)
+    ledger_text, ledger_counts = render_change_ledger(ledger_entries, admission.session_workspace_root)
+    if ledger_text:
+        admission.trace.record(
+            "change_ledger_injected",
+            {**ledger_counts, "entryCount": len(ledger_entries), "chars": len(ledger_text)},
+        )
     current_message = current_chart_message(
-        orchestrator, admission.message, admission.market_context, token_limit=chart_token_limit
+        orchestrator,
+        append_change_ledger(admission.message, ledger_text),
+        admission.market_context,
+        token_limit=chart_token_limit,
     )
     unbounded_chat_messages = build_chat_messages(
         transcript_messages=history_for_replay,
@@ -227,4 +238,5 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
         agent_runtime_payload=agent_runtime_payload,
         identity_context_payload=identity_context_payload,
         tools=tools,
+        ledger_last_digests=last_digests(ledger_entries),
     )

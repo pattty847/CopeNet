@@ -60,6 +60,7 @@ from copenet.prompts.optimizer import optimize_prompt_variants
 from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, EditBackupStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
+from copenet.core.sessions.change_ledger import ChangeLedgerStore
 from copenet.core.tools import ToolPolicy, ToolRegistry
 from copenet.core.workspace_intel import WorkspaceIntelService, WorkspaceIntelStore
 from copenet._paths import (
@@ -107,6 +108,7 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
         self._artifact_store = ArtifactStore(root_dir=default_artifacts_dir() if sessions_dir is None else base / "artifacts")
         self._chat_attachment_store = ChatAttachmentStore(root_dir=default_chat_attachments_dir() if sessions_dir is None else base / "attachments")
         self._edit_backup_store = EditBackupStore(root_dir=None if sessions_dir is None else base / "edit-backups")
+        self._change_ledger_store = ChangeLedgerStore(root_dir=None if sessions_dir is None else base / "change-ledger")
         self._run_store = RunStore(root_dir=base / "runs")
         self._pulse_store = PulseStore(path=base / "pulses.json")
         self._messaging_store = MessagingConfigStore(path=base / "messaging.json")

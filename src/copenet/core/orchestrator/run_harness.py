@@ -70,6 +70,7 @@ async def start_harness(
                 user_notes_service=orchestrator._user_notes_service,
                 artifact_store=orchestrator._artifact_store,
                 edit_backup_store=orchestrator._edit_backup_store,
+                change_ledger_store=orchestrator._change_ledger_store,
                 permission_store=orchestrator._permission_store,
                 task_prompt_id=admission.entry.task_prompt_id or admission.request.task_prompt_id,
                 run_id=admission.run_id,
@@ -77,9 +78,17 @@ async def start_harness(
                 market_context=admission.market_context,
                 chart_store=chart_store(orchestrator) if admission.market_context is not None else None,
                 allowed_tool_ids=prepared.tools.scoped_tool_ids if admission.request.allow_tools else frozenset(),
-                ephemeral={"chart_event_emit": emit_event}
-                if admission.market_context is not None and emit_event is not None
-                else {},
+                ephemeral={
+                    # Seed edit freshness with the digest the agent last left each file
+                    # at in EARLIER turns, so an operator change between turns is caught
+                    # the same way as one within a turn.
+                    "file_read_state": dict(prepared.ledger_last_digests),
+                    **(
+                        {"chart_event_emit": emit_event}
+                        if admission.market_context is not None and emit_event is not None
+                        else {}
+                    ),
+                },
             ),
             orchestrator=orchestrator,
             market_context=admission.market_context,
