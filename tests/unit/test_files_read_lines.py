@@ -87,3 +87,20 @@ async def test_char_mode_still_works_and_reports_total_lines(tmp_path: Path) -> 
     # char-based slice unchanged; now also reports totalLines for line-aware nav
     assert res.output["content"].startswith("line1")
     assert res.output["totalLines"] == 12
+
+
+@pytest.mark.asyncio
+async def test_by_line_read_ignores_a_char_limit_smaller_than_the_default_cap(tmp_path: Path) -> None:
+    """A live model sent limit=1 beside a line range and got one line back; the range is the size control."""
+    _write(tmp_path, "f.py", 40)
+    res = await ToolRegistry().execute(
+        ToolExecutionRequest("files.read", {"path": "f.py", "start_line": 1, "end_line": 30, "offset": 0, "limit": 1}), _ctx(tmp_path)
+    )
+    assert res.ok is True
+    assert res.output["startLine"] == 1 and res.output["endLine"] == 30 and res.output["truncated"] is False
+    assert res.summary.endswith("lines 1-30.")
+    # but limit may still raise the cap above the policy default
+    _write(tmp_path, "g.py", 400)
+    small = await ToolRegistry().execute(ToolExecutionRequest("files.read", {"path": "g.py", "start_line": 1, "end_line": 400}), _ctx(tmp_path, file_output_limit=500))
+    raised = await ToolRegistry().execute(ToolExecutionRequest("files.read", {"path": "g.py", "start_line": 1, "end_line": 400, "limit": 5000}), _ctx(tmp_path, file_output_limit=500))
+    assert small.output["truncated"] is True and raised.output["truncated"] is False

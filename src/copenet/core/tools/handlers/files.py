@@ -34,7 +34,7 @@ DESCRIPTORS = [
                 "start_line": {"type": "integer", "minimum": 1, "description": "1-indexed first line to read (inclusive)."},
                 "end_line": {"type": "integer", "minimum": 1, "description": "1-indexed last line to read (inclusive)."},
                 "offset": {"type": "integer", "minimum": 0, "description": "0-based character offset (char-paging mode)."},
-                "limit": {"type": "integer", "minimum": 1, "description": "Max characters to return."},
+                "limit": {"type": "integer", "minimum": 1, "description": "Max characters to return (char-paging mode). In by-line mode the line range is the size control: limit can only raise the default cap, never shrink it."},
             },
         },
         capabilities=["filesystem", "read"],
@@ -227,7 +227,12 @@ def _read_by_lines(
     end = min(total_lines, max(start, end))
     selected = lines[start - 1 : end]  # inclusive
 
-    char_cap = min(requested_limit, FILE_READ_ABSOLUTE_MAX) if requested_limit > 0 else context.policy.file_output_limit
+    # In by-line mode the line range is the size control. A live trace showed a
+    # model sending `limit: 1` beside a 90-line range and getting one line back,
+    # then re-issuing every read — so `limit` may raise the cap here, never lower it.
+    char_cap = context.policy.file_output_limit
+    if requested_limit > 0:
+        char_cap = max(char_cap, min(requested_limit, FILE_READ_ABSOLUTE_MAX))
     text = "\n".join(selected)
     last_line = end
     truncated = False

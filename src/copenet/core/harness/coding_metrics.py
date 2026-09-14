@@ -95,6 +95,17 @@ def shell_command(arguments: dict[str, Any]) -> str:
     return str(command or "")
 
 
+READ_SUMMARY_RANGE = re.compile(r"lines (\d+)-(\d+)")
+
+
+def returned_range(summary: str | None, arguments: dict[str, Any]) -> tuple[int, int]:
+    """The range the tool actually returned: the summary says so; fall back to the request."""
+    match = READ_SUMMARY_RANGE.search(str(summary or ""))
+    if match:
+        return (int(match.group(1)), int(match.group(2)))
+    return read_range(arguments)
+
+
 def read_range(arguments: dict[str, Any]) -> tuple[int, int]:
     start = arguments.get("start_line")
     end = arguments.get("end_line")
@@ -142,7 +153,9 @@ def analyze_tool_calls(calls: list[dict[str, Any]], *, extra_verification: re.Pa
             elif _covered(coverage[path], rng):
                 behavior.redundant_reads.append({"index": call["index"], "step": call.get("step"), "path": path, "range": list(rng)})
             if call.get("ok"):
-                coverage[path].append(rng)
+                # Coverage is what came back, not what was asked: a read clipped by
+                # the char cap (or a one-line result) leaves the rest unread.
+                coverage[path].append(returned_range(call.get("summary"), arguments))
             last_touch[path] = READ_TOOL
         elif tool_id in MUTATION_TOOL_IDS and path:
             if call.get("ok"):

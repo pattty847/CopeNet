@@ -110,3 +110,13 @@ def test_run_record_round_trips_coding_metrics_and_exposes_them_publicly() -> No
     assert restored.coding_metrics == metrics
     assert restored.to_public_dict()["codingMetrics"]["reads"]["distinctFiles"] == 1
     assert RunRecord.from_json({**record.to_json(), "coding_metrics": None}).to_public_dict()["codingMetrics"] is None
+
+
+def test_coverage_is_the_returned_range_not_the_requested_one() -> None:
+    steps = [
+        _step("files.read", {"path": "a.py", "start_line": 1, "end_line": 90, "limit": 1}, summary="Read file a.py lines 1-1."),
+        _step("files.read", {"path": "a.py", "start_line": 1, "end_line": 90}, summary="Read file a.py lines 1-90."),
+        _step("files.read", {"path": "a.py", "start_line": 1, "end_line": 90}, summary="Read file a.py lines 1-90."),
+    ]
+    behavior = analyze_tool_calls(calls_from_tool_steps(steps))
+    assert [r["index"] for r in behavior.redundant_reads] == [2]
