@@ -35,6 +35,10 @@ class Check:
     name: str
     ok: bool
     detail: str
+    # Where the evidence comes from: "workspace" (files, tests, git status), "answer" (the
+    # model's final text), or "trace" (the run trace analysis). A regrade without the kept
+    # workspace can refresh answer- and trace-derived checks; workspace checks stay as run.
+    source: str = "workspace"
 
 
 @dataclass
@@ -161,7 +165,7 @@ def cli_output(workdir: Path, *argv: str) -> subprocess.CompletedProcess:
 def answer_mentions(text: str, needles: list[str], *, label: str) -> Check:
     lowered = text.lower()
     missing = [needle for needle in needles if needle.lower() not in lowered]
-    return Check(label, not missing, "missing: " + ", ".join(missing) if missing else "all present")
+    return Check(label, not missing, "missing: " + ", ".join(missing) if missing else "all present", source="answer")
 
 
 def line_of(workdir: Path, relative: str, needle: str) -> int:
@@ -176,12 +180,12 @@ def answer_cites_line(text: str, relative: str, line: int, *, tolerance: int = 3
     stem = Path(relative).name
     candidates = [int(m) for m in re.findall(rf"{re.escape(stem)}[^\d\n]{{0,24}}?(\d{{1,4}})", text)]
     hit = any(abs(number - line) <= tolerance for number in candidates)
-    return Check(label, hit, f"expected {stem}:{line}±{tolerance}; cited {sorted(set(candidates))[:12] or 'nothing'}")
+    return Check(label, hit, f"expected {stem}:{line}±{tolerance}; cited {sorted(set(candidates))[:12] or 'nothing'}", source="answer")
 
 
 def verification_after_last_edit(analysis: dict, *, label: str = "ran a verification command after the last edit") -> Check:
     ok = bool(analysis.get("verification", {}).get("afterLastMutation"))
-    return Check(label, ok, f"verification commands: {analysis.get('verification', {}).get('commandCount', 0)}")
+    return Check(label, ok, f"verification commands: {analysis.get('verification', {}).get('commandCount', 0)}", source="trace")
 
 
 # ---------------------------------------------------------------------------
@@ -285,7 +289,7 @@ def grade_iterate_terminal(workdir: Path, ctx: GradeContext) -> list[Check]:
         paths_unchanged(workdir, ("tests/", "scripts/")),
         changes_within(workdir, {"ledgerly/models.py", "ledgerly/storage.py", "ledgerly/reports.py"}),
         file_matches(workdir, "ledgerly/reports.py", r'CSV_COLUMNS = \("date", "amount", "description", "category"\)', expect=True, label="CSV header order restored (not the test weakened)"),
-        Check("ran the check script at least three times", check_runs >= 3, f"scripts/check.py runs observed: {check_runs}"),
+        Check("ran the check script at least three times", check_runs >= 3, f"scripts/check.py runs observed: {check_runs}", source="trace"),
         verification_after_last_edit(analysis),
     ]
 
@@ -333,6 +337,7 @@ def grade_recover_from_failure(workdir: Path, ctx: GradeContext) -> list[Check]:
             ("yes: " if recovery.get("failedVerificationThenEdit") else "no first-attempt failure occurred: ")
             + f"failed verifications after an edit: {recovery.get('failedVerificationAfterEditCount', 0)}, "
             + f"edits after such a failure: {recovery.get('editsAfterFailedVerification', 0)}",
+            source="trace",
         ),
         verification_after_last_edit(analysis),
     ]
@@ -363,7 +368,7 @@ def grade_verify_runtime(workdir: Path, ctx: GradeContext) -> list[Check]:
         unittest_passes(workdir),
         paths_unchanged(workdir, ("sample/", "tests/test_models.py", "tests/test_ledger.py", "tests/test_importers.py", "tests/test_cli.py")),
         changes_within(workdir, {"ledgerly/reports.py"}),
-        Check("actually ran the report command during the turn", runtime_runs >= 1, f"ledgerly.cli invocations observed: {runtime_runs}"),
+        Check("actually ran the report command during the turn", runtime_runs >= 1, f"ledgerly.cli invocations observed: {runtime_runs}", source="trace"),
         verification_after_last_edit(analysis),
     ]
 
@@ -379,11 +384,12 @@ def grade_multi_turn(workdir: Path, ctx: GradeContext) -> list[Check]:
         file_matches(workdir, "README.md", r"monthly_summary", expect=True, label="README uses the new name"),
         file_matches(workdir, "README.md", r"\.summary\(|`summary`", expect=False, label="README no longer mentions the old name"),
         answer_mentions(ctx.final_text, ["ledger.py", "reports.py", "README.md", "test_ledger.py"], label="final answer lists every file changed across both turns"),
-        Check("no stale-digest errors in turn 2", turn2.get("edits", {}).get("staleDigestErrors", 0) == 0, f"stale digest errors: {turn2.get('edits', {}).get('staleDigestErrors', 0)}"),
+        Check("no stale-digest errors in turn 2", turn2.get("edits", {}).get("staleDigestErrors", 0) == 0, f"stale digest errors: {turn2.get('edits', {}).get('staleDigestErrors', 0)}", source="trace"),
         Check(
             "turn 2 received the change ledger from turn 1",
             bool(turn2.get("changeLedger", {}).get("injected")),
             f"ledger: {turn2.get('changeLedger')}",
+            source="trace",
         ),
     ]
 

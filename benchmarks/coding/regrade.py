@@ -18,7 +18,8 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from benchmarks.coding import trace_analysis  # noqa: E402
-from benchmarks.coding.report import render_suite_report  # noqa: E402
+from benchmarks.coding.report import render_suite_report, summary_row  # noqa: E402
+from benchmarks.coding.run import cleanup_workspace, prepare_workspace  # noqa: E402
 from benchmarks.coding.catalog import TASKS_BY_ID  # noqa: E402
 from benchmarks.coding.tasks import GradeContext  # noqa: E402
 from dataclasses import asdict  # noqa: E402
@@ -45,27 +46,24 @@ def regrade(run_dir: Path) -> int:
         if workdir.exists():
             checks = task.grade(workdir, GradeContext(final_texts=final_texts, analyses=analyses))
             result["checks"] = [asdict(check) for check in checks]
+        else:
+            # Without the kept workspace, re-grade against a fresh seeded one and take only
+            # the answer- and trace-derived checks from it; workspace checks stay as run.
+            scratch = prepare_workspace(task)
+            try:
+                fresh = {check.name: asdict(check) for check in task.grade(scratch, GradeContext(final_texts=final_texts, analyses=analyses))}
+            finally:
+                cleanup_workspace(task, scratch)
+            result["checks"] = [
+                fresh[stored["name"]] if stored["name"] in fresh and fresh[stored["name"]]["source"] != "workspace" else stored
+                for stored in result["checks"]
+            ]
         result["analyses"] = analyses
         result["passed"] = all(check["ok"] for check in result["checks"]) and all(turn["status"] == "ok" for turn in result["turns"])
         result_path.write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
         results.append(result)
     summary["score"] = f"{sum(1 for r in results if r['passed'])}/{len(results)}"
-    summary["tasks"] = [
-        {
-            "id": r["id"],
-            "passed": r["passed"],
-            "sessionKey": r["sessionKey"],
-            "turns": r["turns"],
-            "failedChecks": [c["name"] for c in r["checks"] if not c["ok"]],
-            "toolCalls": [a.get("toolCalls") for a in r["analyses"]],
-            "modelCalls": [a.get("modelCalls") for a in r["analyses"]],
-            "peakInput": [(a.get("tokens") or {}).get("providerReported", {}).get("peakInputTokens") for a in r["analyses"]],
-            "totalInput": [(a.get("tokens") or {}).get("providerReported", {}).get("inputTokensTotal") for a in r["analyses"]],
-            "redundantReads": [(a.get("reads") or {}).get("redundantReadCount") for a in r["analyses"]],
-            "verifiedAfterLastEdit": [(a.get("verification") or {}).get("afterLastMutation") for a in r["analyses"]],
-        }
-        for r in results
-    ]
+    summary["tasks"] = [summary_row(r) for r in results]
     summary_path.write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
     (run_dir / "REPORT.md").write_text(render_suite_report(summary, results), encoding="utf-8")
     print(f"regraded {len(results)} task(s): score {summary['score']} → {run_dir / 'REPORT.md'}")

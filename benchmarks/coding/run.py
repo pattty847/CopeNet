@@ -43,6 +43,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 
 from benchmarks.coding import trace_analysis  # noqa: E402
 from benchmarks.coding.catalog import TASKS, TASKS_BY_ID  # noqa: E402
+from benchmarks.coding.report import render_suite_report, summary_row  # noqa: E402
 from benchmarks.coding.tasks import FIXTURE_ROOT, Check, GradeContext, Task  # noqa: E402
 
 DEFAULT_OUT = REPO_ROOT / "tmp" / "coding_bench"
@@ -306,28 +307,9 @@ async def main_async(args: argparse.Namespace) -> int:
         "provider": args.provider,
         "model": args.model,
         "score": f"{sum(1 for r in results if r['passed'])}/{len(results)}",
-        "tasks": [
-            {
-                "id": r["id"],
-                "passed": r["passed"],
-                "sessionKey": r["sessionKey"],
-                "turns": r["turns"],
-                "failedChecks": [c["name"] for c in r["checks"] if not c["ok"]],
-                "toolCalls": [a.get("toolCalls") for a in r["analyses"]],
-                "modelCalls": [a.get("modelCalls") for a in r["analyses"]],
-                "peakInput": [(a.get("tokens") or {}).get("providerReported", {}).get("peakInputTokens") for a in r["analyses"]],
-                "totalInput": [(a.get("tokens") or {}).get("providerReported", {}).get("inputTokensTotal") for a in r["analyses"]],
-                "redundantReads": [(a.get("reads") or {}).get("redundantReadCount") for a in r["analyses"]],
-                "searchDumps": [len((a.get("reads") or {}).get("searchDumps") or []) for a in r["analyses"]],
-                "receiptedOutputs": [((a.get("header") or {}).get("replayReceipts") or {}).get("receiptedOutputs") for a in r["analyses"]],
-                "verifiedAfterLastEdit": [(a.get("verification") or {}).get("afterLastMutation") for a in r["analyses"]],
-            }
-            for r in results
-        ],
+        "tasks": [summary_row(r) for r in results],
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
-    from benchmarks.coding.report import render_suite_report
-
     (out_dir / "REPORT.md").write_text(render_suite_report(summary, results), encoding="utf-8")
     print("\n" + "=" * 72)
     print(f"SCORE {summary['score']}  →  {out_dir / 'REPORT.md'}")

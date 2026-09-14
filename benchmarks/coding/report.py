@@ -7,6 +7,26 @@ from typing import Any
 from benchmarks.coding.trace_analysis import render_markdown
 
 
+def summary_row(result: dict[str, Any]) -> dict[str, Any]:
+    """The per-task row of summary.json, built the same way after a live run and after a regrade."""
+    analyses = result["analyses"]
+    return {
+        "id": result["id"],
+        "passed": result["passed"],
+        "sessionKey": result["sessionKey"],
+        "turns": result["turns"],
+        "failedChecks": [c["name"] for c in result["checks"] if not c["ok"]],
+        "toolCalls": [a.get("toolCalls") for a in analyses],
+        "modelCalls": [a.get("modelCalls") for a in analyses],
+        "peakInput": [(a.get("tokens") or {}).get("providerReported", {}).get("peakInputTokens") for a in analyses],
+        "totalInput": [(a.get("tokens") or {}).get("providerReported", {}).get("inputTokensTotal") for a in analyses],
+        "redundantReads": [(a.get("reads") or {}).get("redundantReadCount") for a in analyses],
+        "searchDumps": [len((a.get("reads") or {}).get("searchDumps") or []) for a in analyses],
+        "receiptedOutputs": [((a.get("header") or {}).get("replayReceipts") or {}).get("receiptedOutputs") for a in analyses],
+        "verifiedAfterLastEdit": [(a.get("verification") or {}).get("afterLastMutation") for a in analyses],
+    }
+
+
 def render_suite_report(summary: dict[str, Any], results: list[dict[str, Any]]) -> str:
     lines = [
         f"# Coding-agent benchmark — {summary['provider']} / {summary['model'] or 'default'}",

@@ -65,12 +65,12 @@ def _analysis(ctx: GradeContext, index: int = -1) -> dict:
 def search_discipline(analysis: dict, *, max_dumps: int = 1) -> Check:
     dumps = (analysis.get("reads") or {}).get("searchDumps") or []
     detail = ", ".join(f"step {d.get('step')} /{d.get('pattern')}/ → {d.get('totalMatches')} matches" for d in dumps[:4]) or "no search over 200 matches"
-    return Check(f"at most {max_dumps} search returned more than 200 matches", len(dumps) <= max_dumps, detail)
+    return Check(f"at most {max_dumps} search returned more than 200 matches", len(dumps) <= max_dumps, detail, source="trace")
 
 
 def no_redundant_reads(analysis: dict, *, allowed: int = 1) -> Check:
     count = int((analysis.get("reads") or {}).get("redundantReadCount") or 0)
-    return Check(f"redundant reads ≤ {allowed}", count <= allowed, f"redundant reads: {count}, distinct files: {(analysis.get('reads') or {}).get('distinctFilesRead')}")
+    return Check(f"redundant reads ≤ {allowed}", count <= allowed, f"redundant reads: {count}, distinct files: {(analysis.get('reads') or {}).get('distinctFilesRead')}", source="trace")
 
 
 def no_changes(workdir: Path) -> Check:
@@ -161,7 +161,7 @@ def grade_repo_fix_gated(workdir: Path, ctx: GradeContext) -> list[Check]:
         changes_within(workdir, {CHANGE_LEDGER}),
         file_matches(workdir, CHANGE_LEDGER, r'if not state\["digest"\]', expect=False, label="first-digest guard removed"),
         file_matches(workdir, CHANGE_LEDGER, r'^\s+state\["digest"\] = entry\.digest_after$', expect=True, label="latest digest is the one kept"),
-        Check("ran the tests at least once", (analysis.get("verification") or {}).get("testRuns", 0) >= 1, f"test runs: {(analysis.get('verification') or {}).get('testRuns', 0)}"),
+        Check("ran the tests at least once", (analysis.get("verification") or {}).get("testRuns", 0) >= 1, f"test runs: {(analysis.get('verification') or {}).get('testRuns', 0)}", source="trace"),
         verification_after_last_edit(analysis),
         search_discipline(analysis),
     ]
@@ -185,14 +185,15 @@ def grade_repo_two_turn(workdir: Path, ctx: GradeContext) -> list[Check]:
         file_matches(workdir, REPLAY_RECEIPTS, r'get\("ok"\) is False', expect=True, label="failures are verbatim again"),
         file_matches(workdir, REPLAY_RECEIPTS, r'receipt\["exitCode"\]', expect=True, label="shell receipt carries the exit code again"),
         answer_mentions(ctx.final_text, ["replay_receipts.py", "is_verbatim", "exitCode"], label="final answer names the file and both changes"),
-        Check("turn 2 received the change ledger from turn 1", bool((turn2.get("changeLedger") or {}).get("injected")), f"ledger: {turn2.get('changeLedger')}"),
-        Check("no stale-digest errors in turn 2", (turn2.get("edits") or {}).get("staleDigestErrors", 0) == 0, f"stale digest errors: {(turn2.get('edits') or {}).get('staleDigestErrors', 0)}"),
+        Check("turn 2 received the change ledger from turn 1", bool((turn2.get("changeLedger") or {}).get("injected")), f"ledger: {turn2.get('changeLedger')}", source="trace"),
+        Check("no stale-digest errors in turn 2", (turn2.get("edits") or {}).get("staleDigestErrors", 0) == 0, f"stale digest errors: {(turn2.get('edits') or {}).get('staleDigestErrors', 0)}", source="trace"),
         Check(
             "turn 2 replay receipts (informational)",
             True,
             (f"receiptTurns={receipts.get('receiptTurns')} receiptedOutputs={receipts.get('receiptedOutputs')} "
              f"replayedChars={receipts.get('replayedChars')} verbatimChars={receipts.get('verbatimChars')}")
             if receipts else "no receipts: with one prior turn, that turn is the newest and replays verbatim by design",
+            source="trace",
         ),
         verification_after_last_edit(turn2, label="turn 2 ran a verification command after its last edit") if turn2.get("edits", {}).get("mutations") else verification_after_last_edit(_analysis(ctx, 0), label="turn 1 ran a verification command after its last edit"),
     ]
