@@ -321,6 +321,79 @@ commit and the "sample/ unchanged" check was vacuous. Fixed (`/ledger.json`); th
 kept baseline workspace was diffed against the fixture by hand and the sample was
 untouched.
 
+## 5b. Large-repo family: first runs (2026-09-14)
+
+The fixture could not provoke the repo-scale failures (§3 F1/F2/F5), so a second
+task family runs against the CopeNet checkout itself in a detached git worktree
+(`benchmarks/coding/repo_tasks.py`; five tasks, three read-only). gpt-5.5, one run
+each; same caveat as §5 about single runs.
+
+**Baseline (commit ad3372e tool behavior)** — 3/5 after the analyzer correction
+described below; one further fail was a grader over-specification, not the model.
+
+| task | pass | tool calls | model calls | tool-result tokens | peak input | billed input | searches >200 | seconds |
+|---|---|---|---|---|---|---|---|---|
+| repo-where-is-it | ✓ | 17 | 14 | 16,327 | 24,724 | 269,423 | 0 | 70 |
+| repo-trace-event | ✓* | 39 | 27 | 31,440 | 41,940 | 812,405 | 0 | 205 |
+| repo-broad-question | ✗ | 41 | 34 | 71,714 | 81,391 | 2,008,098 | 2 | 215 |
+| repo-fix-gated | ✓ | 10 | 9 | 13,591 | 22,460 | 165,629 | 1 | 36 |
+| repo-two-turn (t1 / t2) | ✗† | 16 / 5 | 13 / 6 | 19,144 / 924 | 29,326 / 30,750 | 285,086 / 180,656 | 1 / 0 | 56 / 31 |
+
+\* Graded red live on "7 redundant reads"; every one was the model re-issuing a
+read that had returned a single line (below). Under the corrected coverage rule
+the trace has 0 redundant reads and the answer was fully correct.
+† The model's fix was correct and the tests passed; the grader accepted only one
+spelling of it. Relaxed.
+
+What the traces showed, in order of cost:
+
+1. **A tool-contract defect, not a model habit.** In `repo-trace-event` step 2 the
+   model sent ten `files.read` calls with `start_line`/`end_line` *and* `limit: 1`.
+   `limit` was a character cap even in by-line mode, so each call returned one
+   line ("lines 1-1") and the model re-issued all ten with `limit: 12000`. Fixed
+   (3055a7e): in by-line mode the line range is the size control and `limit` can
+   only raise the default cap. The analyzer was fooled the same way — it counted
+   coverage from the *requested* range — and now counts the *returned* range.
+2. **Search dumps are the whole story on the broad question.** Two step-2 searches
+   returned 834 and 3,443 matches; the model asked for 120 rows of each and paid
+   ~5.5K tokens per page for an arbitrary sample. `files.rg` results were 31K of
+   the turn's 72K tool-result tokens; billed input reached 2.0M for one turn.
+3. **Multi-root search is a real want.** `path: "tests src"` failed twice ("path
+   not found") in `repo-two-turn` before the model split it. Now accepted (08ea385).
+4. **The ledger and edit freshness held at scale.** Turn 2 of `repo-two-turn`
+   received the ledger (1 file, 249 chars), edited the same file it had edited in
+   turn 1 with no stale refusal and no re-read of the whole module, and reported
+   both changes correctly. With one prior turn there are no receipts by design
+   (`VERBATIM_RECENT_TURNS = 1`).
+5. **Recovery worked where the seed demanded it.** In `repo-two-turn` turn 1 the
+   first edit left the targeted test red; the model edited again and re-ran it.
+
+**After the tool fixes (3055a7e + 08ea385)** — the three affected tasks re-run:
+
+| task | pass | tool calls | model calls | tool-result tokens | peak input | billed input | searches >200 | seconds |
+|---|---|---|---|---|---|---|---|---|
+| repo-trace-event | ✓ | 39 → 35 | 27 → 27 | 31,440 → 28,505 | 41,940 → 37,588 | 812,405 → 769,172 | 0 → 0 | 205 → 121 |
+| repo-two-turn (t1 / t2) | ✓ | 16 / 5 → 14 / 2 | 13 / 6 → 14 / 3 | 19,144 / 924 → 9,369 / 704 | 29,326 / 30,750 → 19,725 / 20,731 | 285,086 / 180,656 → 213,220 / 60,916 | 1 / 0 → 1 / 0 | 56 / 31 → 61 / 13 |
+| repo-broad-question | ✗ | 41 → 47 | 34 → 43 | 71,714 → 67,173 | 81,391 → 77,854 | 2,008,098 → 2,310,516 | 2 → 4 | 215 → 211 |
+
+Read honestly: the by-line fix removed the ten wasted reads (trace-event: −4 tool
+calls, −41% wall time, −5% billed); the two-turn task's second turn went from 5
+tool calls to 2 and from 181K to 61K billed. The overflow map halved what the
+searches cost on the broad question (`files.rg` tokens 31,138 → 14,787) **but did
+not change the behavior that caused them**: the model issued four alternation
+patterns of unrelated words (`chat\.send|send_chat|…|locked`,
+`SessionStore|…|binding|bound`) and paid for more model calls instead. The map is
+cheaper than a page of arbitrary rows and it is what a person would want; it is
+not a substitute for the model choosing one concept per pattern. That is a prompt
+or tool-description lever (see P10), and it is the one open finding from this
+family.
+
+**Every run now carries these numbers.** `core/harness/coding_metrics.py` is the
+rule set behind both the analyzer and run finalization; the run record's
+`codingMetrics` block and the inspector's "How it worked" section show the same
+redundant-read, search-dump, verification-after-last-edit and blind-retry counts
+for real sessions that this table shows for the benchmark (f451ac7).
+
 ## 6. Proposals, each with its tradeoff
 
 Shipped today (each small, each with a test, each measured by re-running the suite):
@@ -417,6 +490,18 @@ visited paths, failed actions and evidence per step and is consumed by nothing
 that decides. The P2 receipts are the natural place for its content. *Tradeoff:*
 none for deletion; for use, the bookkeeping must stay a few hundred tokens or it
 becomes the problem it solves.
+
+**P10. One concept per search pattern.** Evidence: `repo-broad-question` twice
+(baseline and after the overflow map) — four `files.rg` calls with alternations of
+five to nine unrelated words, 332–3,443 matches each, ~1M extra billed tokens
+across the turn versus the comparable `repo-where-is-it`. The overflow map lowers
+the cost of each such call; nothing yet discourages the call. Cheapest lever: the
+`files.rg` description says so in one sentence and the overflow summary names the
+alternation as the cause when the pattern contains `|`. Tradeoff: prompt text is a
+soft control and this repo's philosophy is to equip, not coerce — measure it on the
+same task before keeping it. Stronger lever, if the soft one fails: per-alternative
+counts in the overflow map so the model sees which branch of its pattern produced
+the flood.
 
 What I would *not* do: aggressive summarization by a model call (a second model
 summarizing tool output loses the exact lines a debugger needs and doubles cost on
