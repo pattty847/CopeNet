@@ -126,7 +126,7 @@ def test_flatten_messages_renders_tool_exchange_readably() -> None:
     messages = build_chat_messages(transcript_messages=transcript, current_user_message="next")
     prompt = flatten_messages_to_prompt(messages)
     assert "assistant called files.read" in prompt
-    assert "tool result: contents" in prompt
+    assert 'tool result: {"toolId": null, "ok": true, "summary": "Read x", "body": "contents"}' in prompt
 
 
 def test_flatten_messages_keeps_complete_tool_output() -> None:

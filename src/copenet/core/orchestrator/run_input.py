@@ -167,12 +167,16 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
         admission.market_context,
         token_limit=chart_token_limit,
     )
+    replay_stats: dict[str, int] = {}
     unbounded_chat_messages = build_chat_messages(
         transcript_messages=history_for_replay,
         current_user_message=current_message,
         current_user_image_parts=admission.current_image_parts or None,
         attachment_resolver=lambda refs: resolve_attachment_images(orchestrator._chat_attachment_store, refs),
+        replay_stats=replay_stats,
     )
+    if replay_stats.get("receiptTurns"):
+        admission.trace.record("replay_receipts_applied", dict(replay_stats))
     unbounded_token_estimate = estimate_input_tokens(unbounded_chat_messages)
     chat_messages = trim_messages_to_request_budget(
         unbounded_chat_messages,

@@ -21,6 +21,8 @@ from __future__ import annotations
 import json
 from typing import Any, Callable, TypedDict
 
+from .replay_receipts import VERBATIM_RECENT_TURNS, replay_output
+
 # Resolves a transcript message's stored attachment refs (list of dicts carrying
 # `attachmentId`) into Responses `input_image` content parts. Injected by the
 # orchestrator so this module stays free of storage dependencies.
@@ -125,11 +127,21 @@ def function_call_output_item(*, call_id: str, output: str | dict[str, Any]) -> 
 # -- Transcript walking ---------------------------------------------------------
 
 
-def parts_to_response_items(parts: list[dict[str, Any]], *, run_id: str) -> list[dict[str, Any]]:
+def parts_to_response_items(
+    parts: list[dict[str, Any]],
+    *,
+    run_id: str,
+    receipt: bool = False,
+    turn_number: int | None = None,
+    replay_stats: dict[str, int] | None = None,
+) -> list[dict[str, Any]]:
     """Replay only complete exchanges paired by the canonical callId.
 
     Interrupted turns retain attempted calls in the transcript, but an unpaired
     call/result is not a valid provider input. Never infer identity by position.
+
+    `receipt=True` replays this turn's read-only tool bodies as receipts
+    (see replay_receipts.py); edits and failures stay verbatim regardless.
     """
     calls = {
         part["toolCall"]["callId"]
@@ -181,12 +193,15 @@ def parts_to_response_items(parts: list[dict[str, Any]], *, run_id: str) -> list
             call_id = te.get("callId")
             if call_id not in paired:
                 continue
-            items.append(
-                function_call_output_item(
-                    call_id=call_id,
-                    output=_tool_output_for_replay(te),
-                )
-            )
+            output = replay_output(te, receipt=receipt, turn_number=turn_number)
+            if replay_stats is not None:
+                verbatim = replay_output(te, receipt=False, turn_number=turn_number) if receipt else output
+                replay_stats["outputs"] = replay_stats.get("outputs", 0) + 1
+                replay_stats["verbatimChars"] = replay_stats.get("verbatimChars", 0) + len(verbatim)
+                replay_stats["replayedChars"] = replay_stats.get("replayedChars", 0) + len(output)
+                if receipt and output != verbatim:
+                    replay_stats["receiptedOutputs"] = replay_stats.get("receiptedOutputs", 0) + 1
+            items.append(function_call_output_item(call_id=call_id, output=output))
     return items
 
 
@@ -196,6 +211,7 @@ def transcript_to_input_array(
     current_user_message: str,
     current_user_image_parts: list[dict[str, Any]] | None = None,
     attachment_resolver: AttachmentResolver | None = None,
+    replay_stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Walk a session's full transcript and emit the input[] array for the next turn.
 
@@ -209,6 +225,13 @@ def transcript_to_input_array(
     follow-up about an image uploaded several turns ago).
     """
     items: list[dict[str, Any]] = []
+    assistant_total = sum(1 for message in transcript_messages if str(message.get("role") or "").strip() == "assistant")
+    assistant_index = 0
+    if replay_stats is not None:
+        replay_stats.update({
+            "receiptTurns": max(assistant_total - VERBATIM_RECENT_TURNS, 0),
+            "verbatimTurns": min(assistant_total, VERBATIM_RECENT_TURNS),
+        })
     for message in transcript_messages:
         role = str(message.get("role") or "").strip()
         if role == "user":
@@ -220,10 +243,19 @@ def transcript_to_input_array(
             if content or past_image_parts:
                 items.append(user_input_item(content, past_image_parts or None))
         elif role == "assistant":
+            assistant_index += 1
             parts = message.get("parts")
             run_id = str(message.get("run_id") or message.get("runId") or "unknown")
             if isinstance(parts, list) and parts:
-                items.extend(parts_to_response_items(parts, run_id=run_id))
+                items.extend(
+                    parts_to_response_items(
+                        parts,
+                        run_id=run_id,
+                        receipt=assistant_index <= assistant_total - VERBATIM_RECENT_TURNS,
+                        turn_number=assistant_index,
+                        replay_stats=replay_stats,
+                    )
+                )
             else:
                 # No structured parts — fall back to whatever text content exists.
                 content = str(message.get("content") or "").strip()
@@ -233,32 +265,3 @@ def transcript_to_input_array(
     return items
 
 
-# -- Helpers --------------------------------------------------------------------
-
-
-def _tool_output_for_replay(tool_execution: dict[str, Any]) -> str:
-    """Serialize a tool execution payload into the string the model should see on replay.
-
-    The UI consumes the rich ToolExecutionResult (summary, body, output dict, etc.);
-    the model needs a single string. Prefer body, fall back to summary, then output.
-    """
-    # replayOutput is the actual tool output (file contents, stdout, ...) the
-    # runtime persisted specifically for cross-turn replay. Prefer it over the
-    # one-line summary so the model keeps what it saw in earlier turns.
-    replay_output = tool_execution.get("replayOutput")
-    if isinstance(replay_output, str) and replay_output.strip():
-        return replay_output
-    body = tool_execution.get("body")
-    if isinstance(body, str) and body.strip():
-        return body
-    if isinstance(body, (dict, list)):
-        return json.dumps(body, ensure_ascii=False, indent=2)
-    summary = tool_execution.get("summary")
-    if isinstance(summary, str) and summary.strip():
-        return summary
-    output = tool_execution.get("output")
-    if isinstance(output, (dict, list)):
-        return json.dumps(output, ensure_ascii=False, indent=2)
-    if isinstance(output, str):
-        return output
-    return ""

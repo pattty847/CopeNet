@@ -35,6 +35,7 @@ def build_chat_messages(
     max_context_tokens: int | None = None,
     current_user_image_parts: list[dict[str, Any]] | None = None,
     attachment_resolver: responses_items.AttachmentResolver | None = None,
+    replay_stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
     """Walk transcript parts and produce a Responses-API input array.
 
@@ -54,6 +55,7 @@ def build_chat_messages(
         current_user_message=current_user_message,
         current_user_image_parts=current_user_image_parts,
         attachment_resolver=attachment_resolver,
+        replay_stats=replay_stats,
     )
     if max_context_tokens is None:
         return messages

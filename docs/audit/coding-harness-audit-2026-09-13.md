@@ -371,7 +371,7 @@ exact recall of an old body costs one `files.read` (vs. thousands of tokens on e
 step); each compaction changes the cache prefix, so batch it every few steps rather
 than every step; the analyzer's redundant-read counter is the regression alarm.
 
-**P3. Cross-turn replay as receipts, the way the chart lane already does it.**
+**P3. Cross-turn replay as receipts, the way the chart lane already does it.** *(Shipped 2026-09-14 with the change ledger: `core/harness/replay_receipts.py`, newest turn verbatim, edits and failures always verbatim, receipts only when smaller.)*
 `_with_chart_references` stubs old chart bodies; generalize it so prior turns' tool
 bodies replay as receipts except the most recent turn's. Persist last-known file
 digests in session state so S3 also covers turn N+1. Evidence: F8, the turn-2

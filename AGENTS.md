@@ -201,6 +201,15 @@ For current behavior, assume:
   file. This exists because shortening the replayed transcript (the old 600-char compaction, whole-turn
   budget drops) used to erase the agent's memory of what it changed; the ledger is what must survive any
   future compaction. Trace event: `change_ledger_injected`.
+- **Older turns replay as receipts; the newest turn, every edit, and every failure replay verbatim.**
+  `core/harness/replay_receipts.py` decides what a prior turn's tool result looks like in the next
+  turn's input: the most recent completed turn keeps its bodies; older `files.read`/`files.rg`/
+  `shell.exec`/`web.*` results become receipts (path, range, digest, exit code, match count, first
+  and last lines, and a note that one call brings the body back), used only when the receipt is
+  actually smaller. `files.edit`/`files.write` and any `ok: false` result are never receipted at
+  any age. Replayed outputs carry the same `{toolId, ok, summary, error, body}` envelope the model
+  saw live. Trace event: `replay_receipts_applied`. Do not add a second replay-shaping path; extend
+  this one.
 
 ### WebSocket / RPC
 
@@ -317,7 +326,8 @@ For current behavior, assume:
   significant digits). The packet also carries the drawing list (id, kind, timeframe, label, owner).
   `market.chart.context` returns orientation, digest, inventory and drawings only — it never repeats
   rows, because a measured turn re-fetched the identical 32K-token packet through it. Cross-turn
-  replay already stubs old chart tool bodies (`_with_chart_references`), so nothing stacks.
+  replay stubs old chart tool bodies (`_with_chart_references`) and, for every other tool, replays
+  turns older than the newest one as receipts (`core/harness/replay_receipts.py`), so nothing stacks.
 - **Chart agent turns capture render inputs, never refetch them.** `core/market/chart_workspace/`
   owns immutable observations and revision-checked drawing documents; `orchestrator/market_context.py`
   binds them to ordinary sessions. The ticker's `viewState/` contributions and `useTickerViewModel`

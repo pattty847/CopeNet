@@ -112,6 +112,7 @@ run_started
 session_resolved
 prompt_context_policy_resolved
 change_ledger_injected   (only when the session has earlier agent edits — fileCount, changedOnDisk, missing, entryCount, chars)
+replay_receipts_applied  (only when turns older than the newest one exist — receiptTurns, verbatimTurns, outputs, receiptedOutputs, verbatimChars, replayedChars)
 chat_messages_built
 harness_planned          willAttemptToolLoop: false
 prompt_context_assembled
@@ -192,6 +193,11 @@ earlier file edits, with an on-disk drift check per file) was appended to the li
 user message: how many files it lists, how many have changed on disk since the agent
 last touched them, how many are missing, and the block's size. It is absent on a
 turn with no earlier edits. See `core/sessions/change_ledger.py`.
+
+`replay_receipts_applied` records how the durable transcript was shaped for the
+provider view: how many earlier turns replayed as receipts versus verbatim, how many
+tool outputs were actually receipted, and the output characters before and after.
+See `core/harness/replay_receipts.py`. Absent on a session's first two turns.
 
 `chat_messages_built` records the bounded and unbounded input estimates, how many
 oldest provider-view message items were omitted, and the resolved budget:

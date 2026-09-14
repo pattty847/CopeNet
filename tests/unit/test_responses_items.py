@@ -101,7 +101,8 @@ def test_parts_to_response_items_emits_text_then_tool_exchange() -> None:
     assert items[1]["call_id"] == "call_1"
     assert items[2]["type"] == "function_call_output"
     assert items[2]["call_id"] == "call_1"
-    assert items[2]["output"] == "Hello, world!"
+    # Replay carries the same envelope the model saw live; the body is the tool's output.
+    assert json.loads(items[2]["output"])["body"] == "Hello, world!"
     assert items[3]["type"] == "message"
     assert items[3]["content"][0]["text"] == "It says hello."
 
@@ -191,8 +192,8 @@ def test_transcript_to_input_array_falls_back_to_content_when_no_parts() -> None
     assert items[1]["content"][0]["text"] == "Hi there!"
 
 
-def test_tool_output_for_replay_prefers_body_string() -> None:
-    """Tool output serialization: body string > body dict > summary > output."""
+def test_replay_output_prefers_body_string() -> None:
+    """Replay body source: replayOutput > body > output > summary, inside the live envelope."""
     parts = [
         {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {}}},
         {
@@ -206,10 +207,10 @@ def test_tool_output_for_replay_prefers_body_string() -> None:
         }
     ]
     items = parts_to_response_items(parts, run_id="run_test")
-    assert items[1]["output"] == "raw string body"
+    assert json.loads(items[1]["output"])["body"] == "raw string body"
 
 
-def test_tool_output_for_replay_serializes_dict_body() -> None:
+def test_replay_output_serializes_dict_body() -> None:
     parts = [
         {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {}}},
         {
@@ -222,10 +223,11 @@ def test_tool_output_for_replay_serializes_dict_body() -> None:
     ]
     items = parts_to_response_items(parts, run_id="run_test")
     parsed = json.loads(items[1]["output"])
-    assert parsed == {"matches": [{"path": "foo.txt"}]}
+    assert parsed["body"] == {"matches": [{"path": "foo.txt"}]}
+    assert parsed["ok"] is True
 
 
-def test_tool_output_for_replay_falls_back_to_summary() -> None:
+def test_replay_output_falls_back_to_summary() -> None:
     parts = [
         {"kind": "tool_call", "toolCall": {"callId": "c1", "toolId": "files.read", "arguments": {}}},
         {
@@ -237,7 +239,8 @@ def test_tool_output_for_replay_falls_back_to_summary() -> None:
         }
     ]
     items = parts_to_response_items(parts, run_id="run_test")
-    assert items[1]["output"] == "Listed 3 entries."
+    envelope = json.loads(items[1]["output"])
+    assert envelope["body"] == "Listed 3 entries." and envelope["summary"] == "Listed 3 entries."
 
 
 def test_replay_pairs_by_identity_and_omits_interrupted_calls():

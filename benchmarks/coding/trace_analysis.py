@@ -159,6 +159,8 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
             persisted += 1
         elif event == "change_ledger_injected":
             ledger = {"injected": True, **payload}
+        elif event == "replay_receipts_applied":
+            header["replayReceipts"] = dict(payload)
         elif event == "turn_completed":
             terminal_reason = payload.get("terminalReason")
         elif event == "run_completed":
