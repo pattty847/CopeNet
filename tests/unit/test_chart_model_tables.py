@@ -70,10 +70,29 @@ def test_context_header_floats_are_rounded_too():
 
 @pytest.mark.parametrize("rows", [[], [{}], [{"t": 1, "text": 'Research, "quoted"\nnext line'}],
                                   [{"financial": {"value": 12, "availableAt": "2024-07-03"}}]])
-def test_non_numeric_and_empty_resources_remain_exact_json(rows):
+def test_non_numeric_and_empty_resources_fall_back_to_json_rows(rows):
     assert numeric_csv(rows) is None
     text = format_read(resource(rows), max_chars=30000)
     assert json.loads(text.split("JSON rows:\n", 1)[1]) == rows
+
+
+def test_json_fallback_rounds_nested_floats_like_the_csv_path():
+    """The fallback holds the float-heaviest resources, not the numeric-free ones.
+
+    A CSV cannot represent the ticker overview's nested quote and stats, evidence rows,
+    drawing anchors or an account position, so all of them land here — and rounding only the
+    header shipped every one of those prices at full precision. The cases above never caught
+    it because not one of them contains a float."""
+    rows = [{"quote": {"price": 11.123456789, "changePct": -0.004321987},
+             "verdict": "hold", "anchors": [{"t": 1, "value": 42.987654321}]}]
+    assert numeric_csv(rows) is None
+    text = format_read(resource(rows), max_chars=30000)
+
+    assert json.loads(text.split("JSON rows:\n", 1)[1]) == [
+        {"quote": {"price": 11.12, "changePct": -0.004322},
+         "verdict": "hold", "anchors": [{"t": 1, "value": 42.99}]}]
+    assert "rounded to 2 decimals" in text
+    assert "11.123456789" not in text
 
 
 def test_response_budget_paginates_whole_rows_without_dropping_evidence():

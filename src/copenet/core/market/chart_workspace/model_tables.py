@@ -70,8 +70,10 @@ def _utc(value: int | float) -> str:
         return f"unrepresentable UTC date ({value})"
 
 
-LEGEND = (f"Floats are rounded to {FLOAT_DECIMALS} decimals (values under 0.01 keep "
-          f"{SMALL_FLOAT_SIGNIFICANT_DIGITS} significant digits); null = recorded gap, empty cell = absent field.")
+_FLOAT_RULE = (f"Floats are rounded to {FLOAT_DECIMALS} decimals (values under 0.01 keep "
+               f"{SMALL_FLOAT_SIGNIFICANT_DIGITS} significant digits)")
+LEGEND = _FLOAT_RULE + "; null = recorded gap, empty cell = absent field."
+JSON_LEGEND = _FLOAT_RULE + "."
 CANDLE_LEGEND = (" t=timestamp; o,h,l,c=open,high,low,close; v=volume; any other column is an indicator output"
                  " named in metadata.columns. Units and time basis are in metadata; unspecified units are unknown.")
 
@@ -104,7 +106,11 @@ def format_resource(resource: dict) -> str:
     table = numeric_csv(rows)
     description = compact_json(round_floats(header))
     if table is None:
-        return description + "\nJSON rows:\n" + compact_json(rows)
+        # The fallback carries the resources a CSV cannot hold, and those are the ones with
+        # the most floats: the ticker overview's quote and stats, evidence rows, drawing
+        # anchors, an account position. Rounding only the header left all of them at full
+        # precision, so the path meant for structure was shipping 17-digit prices.
+        return description + "\n" + JSON_LEGEND + "\nJSON rows:\n" + compact_json(round_floats(rows))
     legend = LEGEND + (CANDLE_LEGEND if resource.get("kind") == "candles" else "")
     return description + "\n" + legend + "\n```csv\n" + table + "\n```"
 

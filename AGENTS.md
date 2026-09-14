@@ -309,6 +309,10 @@ For current behavior, assume:
   `market.chart.context` returns orientation, digest, inventory and drawings only — it never repeats
   rows, because a measured turn re-fetched the identical 32K-token packet through it. Cross-turn
   replay already stubs old chart tool bodies (`_with_chart_references`), so nothing stacks.
+  "Every float" includes the JSON fallback `format_resource` takes when rows will not fit a CSV.
+  That path looks structural but holds the float-heaviest resources — the ticker overview's nested
+  quote and stats, evidence rows, drawing anchors, an account position — and it rounded only the
+  header until 2026-09-14, shipping those at full precision (32% of that panel's tokens).
 - **Check the model against the rounded value it read, never the stored float.** Rounding covers
   every model-facing path, `market.chart.read` included, so there is no full-precision view left to
   cite from. Anchor verification kept comparing to the stored value and measured a gap the model
