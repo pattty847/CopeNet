@@ -18,8 +18,6 @@ INPUT_WINDOW_RATIO = 0.60
 _PROVIDER_FALLBACK_CONTEXT_TOKENS: dict[str, int] = {
     "claude-cli": 200_000,
     "openai-codex": 200_000,
-    "lm-studio": 32_000,
-    "ollama": 32_000,
 }
 _UNKNOWN_PROVIDER_CONTEXT_TOKENS = 32_000
 

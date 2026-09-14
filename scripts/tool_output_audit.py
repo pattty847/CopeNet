@@ -182,7 +182,7 @@ def build_context(workspace: Path, store_dir: Path) -> ToolExecutionContext:
         providers={},
         # Full access so write tools execute rather than reporting a policy block —
         # the audit is about output shape, not about policy.
-        policy=policy_for_task_mode("full-access", provider="openai-codex"),
+        policy=policy_for_task_mode("full-access"),
         memory_service=MemoryService(MemoryStore(path=store_dir / "memory.json")),
         persona_service=persona_service,
         user_notes_service=UserNotesService(

@@ -100,11 +100,11 @@ Current event names:
   "message": {
     "role": "assistant",
     "content": "Hello",
-    "provider": "lm-studio",
+    "provider": "openai-codex",
     "model": "gemma-4-e4b-it"
   },
   "errorMessage": null,
-  "provider": "lm-studio",
+  "provider": "openai-codex",
   "model": "gemma-4-e4b-it",
   "capabilities": {
     "toolCalls": false

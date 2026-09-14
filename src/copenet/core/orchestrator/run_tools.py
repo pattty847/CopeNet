@@ -12,9 +12,7 @@ def select_run_tools(orchestrator, admission: RunAdmission) -> ToolSelection:
     requested_tool_ids = normalize_requested_tool_ids(
         admission.request.requested_tool_ids, registered_tool_ids=(tool.id for tool in registered_tools)
     )
-    effective_tool_policy = policy_for_task_mode(
-        admission.entry.task_prompt_id or admission.request.task_prompt_id, provider=admission.provider_name
-    )
+    effective_tool_policy = policy_for_task_mode(admission.entry.task_prompt_id or admission.request.task_prompt_id)
     effective_tool_policy = chart_policy(effective_tool_policy, admission.market_context)
     scoped_tool_ids = (
         chart_tool_ids(admission.market_context) if admission.market_context is not None else None

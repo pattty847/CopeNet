@@ -93,7 +93,7 @@ Every line is a JSON object:
   "event": "harness_planned",
   "runId": "abc-123",
   "sessionKey": "session-key",
-  "provider": "lm-studio",
+  "provider": "openai-codex",
   "model": "llama-3.2-3b",
   "payload": { ... }
 }
@@ -236,7 +236,7 @@ traces.
 ```json
 {
   "capabilityProfile": {
-    "provider": "lm-studio",
+    "provider": "openai-codex",
     "model": "llama-3.2-3b",
     "chat": true,
     "toolCalls": true,
@@ -305,7 +305,7 @@ This record is for trace continuity and UI inspection only. V1 does not steer, s
 | `"provider"` | chat-only path, single provider turn |
 | `"prompted_tool"` | one prompted tool-loop pass; the model may call a tool or answer |
 
-`provider_turn_completed` includes `deltaCount`. A value of `1` is normal for Ollama, which often returns the entire response in one chunk.
+`provider_turn_completed` includes `deltaCount`, the number of text deltas the provider streamed for that turn.
 
 ### `tool_requested`
 

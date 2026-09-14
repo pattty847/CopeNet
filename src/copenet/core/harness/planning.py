@@ -66,7 +66,7 @@ async def plan_turn(
     )
     # Phase 2 routing: prefer the native Responses-API loop when the provider
     # declares it. Otherwise fall back to the legacy native (Chat Completions)
-    # path, then the prompted path (LM Studio / Ollama), then none.
+    # path, then the prompted path (claude-cli), then none.
     use_responses_tools = bool(tools and profile.responses_api)
     use_native_tools = bool(tools and not use_responses_tools and profile.tool_calls)
     use_prompted_tools = bool(

@@ -190,7 +190,7 @@ def test_280k_model_reaches_the_168k_absolute_product_ceiling() -> None:
 
 
 def test_model_metadata_below_the_target_lowers_the_effective_budget() -> None:
-    budget = resolve_context_budget(provider="lm-studio", model_context_tokens=16_000)
+    budget = resolve_context_budget(provider="openai-codex", model_context_tokens=16_000)
 
     assert budget.input_tokens == 9_600
     assert budget.input_tokens < CONTEXT_INPUT_TARGET_TOKENS
@@ -205,7 +205,7 @@ def test_unknown_providers_do_not_get_an_optimistic_window() -> None:
 
 
 def test_a_tiny_reported_window_is_never_overridden_by_a_dangerous_floor() -> None:
-    budget = resolve_context_budget(provider="ollama", model_context_tokens=2_000)
+    budget = resolve_context_budget(provider="claude-cli", model_context_tokens=2_000)
 
     assert budget.input_tokens == 1_200
     assert budget.source == "model_metadata"

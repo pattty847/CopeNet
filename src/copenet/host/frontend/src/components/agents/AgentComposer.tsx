@@ -4,7 +4,7 @@ import { Check, ChevronDown, FolderOpen, Loader2, Mic, Paperclip, Plus, Send, Sp
 import { wsClient } from '../../lib/wsClient';
 import { useVoiceToText } from '../../lib/useVoiceToText';
 import { useAppStore } from '../../store/useAppStore';
-import { accessOptionsFor, providerAllowsFullAccess } from '../../lib/access';
+import { accessOptionsFor } from '../../lib/access';
 import { uploadChatAttachment } from '../../lib/appApi';
 import type { ChatAttachment, DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 import type { UniverseAsset } from '../../sections/market/types';
@@ -660,7 +660,7 @@ export function AgentComposer({
   const providerOptions = useMemo(() => makeProviderOptions(providers), [providers]);
   const modelOptions = useMemo(() => makeModelOptions(availableModels), [availableModels]);
   const profileOptions = useMemo(() => makePromptOptions(profiles), [profiles]);
-  const accessOptions = useMemo(() => accessOptionsFor(draftSettings.provider), [draftSettings.provider]);
+  const accessOptions = useMemo(() => accessOptionsFor(), []);
 
   const selectedProvider = providerOptions.find((option) => option.id === draftSettings.provider)?.label || 'Select provider';
   const selectedModel = modelOptions.find((option) => option.id === draftSettings.model)?.label || (draftSettings.provider ? 'Select model' : 'Pick provider first');
@@ -676,7 +676,7 @@ export function AgentComposer({
   const lockedModelValue = lockedOverride?.model ?? lockedSession?.model ?? '';
   const lockedAccessValue = lockedOverride?.taskPromptId ?? lockedSession?.taskPromptId ?? 'none';
   const lockedProviderModels = lockedSession ? modelsByProvider[lockedSession.provider] || [] : [];
-  const lockedAccessOptions = useMemo(() => accessOptionsFor(lockedSession?.provider), [lockedSession?.provider]);
+  const lockedAccessOptions = useMemo(() => accessOptionsFor(), []);
   const lockedRuntimeDirty = Boolean(lockedOverride && (lockedOverride.model || lockedOverride.taskPromptId));
   const lockedModelLabel = lockedProviderModels.find((model) => model.id === lockedModelValue)?.displayName || lockedModelValue || runtimeSummary.model;
 
@@ -686,15 +686,6 @@ export function AgentComposer({
     if (loadedModelProviders[lockedSession.provider]) return;
     void wsClient.loadModels(lockedSession.provider);
   }, [lockedSession, loadedModelProviders]);
-
-  // Keep the draft honest: if the chosen provider can't grant Full Access, drop the
-  // draft back to Read-only so the UI matches what the backend would actually enforce.
-  useEffect(() => {
-    if (!isDraft) return;
-    if (draftSettings.taskPromptId === 'full-access' && !providerAllowsFullAccess(draftSettings.provider)) {
-      patchDraftSettings({ taskPromptId: 'none' });
-    }
-  }, [isDraft, draftSettings.provider, draftSettings.taskPromptId, patchDraftSettings]);
 
   useEffect(() => {
     if (!textareaRef.current) return;

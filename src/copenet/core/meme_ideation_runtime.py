@@ -10,7 +10,6 @@ from copenet.providers.base import Provider
 from .meme_ideation_constants import (
     MEME_IDEATION_PROMPT_VERSION,
     MEME_IDEATION_SCHEMA_VERSION,
-    _LOCAL_PROVIDER_IDS,
     _MAX_REQUESTED_COUNT,
 )
 from .meme_ideation_models import MemeIdeationRequest, MemeIdeationResponse, MemeRefinementRequest, MemeRefinementResponse
@@ -54,9 +53,6 @@ async def ideate_memes(
     provider: Provider,
     request: MemeIdeationRequest,
 ) -> MemeIdeationResponse:
-    if provider_name not in _LOCAL_PROVIDER_IDS:
-        raise ValueError(f"provider {provider_name} is not a supported local meme ideation provider")
-
     knowledge_context = build_meme_knowledge_index()
     knowledge_pack = build_meme_knowledge_pack(
         knowledge_context,
@@ -107,9 +103,6 @@ async def refine_memes(
     provider: Provider,
     request: MemeRefinementRequest,
 ) -> MemeRefinementResponse:
-    if provider_name not in _LOCAL_PROVIDER_IDS:
-        raise ValueError(f"provider {provider_name} is not a supported local meme ideation provider")
-
     ideation_request = request.ideation_request
     knowledge_context = build_meme_knowledge_index()
     knowledge_pack = build_meme_knowledge_pack(

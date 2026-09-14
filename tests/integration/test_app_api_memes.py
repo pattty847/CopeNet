@@ -125,8 +125,8 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
     kb_root = tmp_path / "meme-kb"
     _seed_library(kb_root)
     monkeypatch.setenv("COPNET_MEME_KB_ROOT", str(kb_root))
-    lm_studio = FakeLocalProvider(
-        "lm-studio",
+    codex = FakeLocalProvider(
+        "openai-codex",
         """
         {
           "candidates": [
@@ -148,8 +148,8 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         }
         """.strip(),
     )
-    ollama = FakeLocalProvider(
-        "ollama",
+    claude = FakeLocalProvider(
+        "claude-cli",
         """
         {
           "candidates": [
@@ -168,12 +168,12 @@ def app_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
         session_store=SessionStore(path=tmp_path / "index.json"),
         transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
         sessions_dir=tmp_path,
-        providers={"lm-studio": lm_studio, "ollama": ollama},
+        providers={"openai-codex": codex, "claude-cli": claude},
     )
-    _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext", default_provider="lm-studio")
+    _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext", default_provider="openai-codex")
     app = create_app(orchestrator, media_service=FakeMediaService())
     with TestClient(app) as client:
-        yield client, token, lm_studio, ollama
+        yield client, token, codex, claude
 
 
 def _auth(token: str) -> dict[str, str]:
@@ -181,7 +181,7 @@ def _auth(token: str) -> dict[str, str]:
 
 
 def test_meme_ideation_endpoint_happy_path(app_client) -> None:
-    client, token, lm_studio, _ = app_client
+    client, token, codex, _ = app_client
 
     response = client.post(
         "/api/v1/memes/ideate",
@@ -196,7 +196,7 @@ def test_meme_ideation_endpoint_happy_path(app_client) -> None:
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["provider"] == "lm-studio"
+    assert payload["provider"] == "openai-codex"
     assert payload["model"] == "uncensored-gemma-4"
     assert payload["preset"] == "meme-ideation"
     assert payload["schemaVersion"] == "v1"
@@ -205,12 +205,12 @@ def test_meme_ideation_endpoint_happy_path(app_client) -> None:
     assert payload["artifactShell"]
     assert payload["mutationNotes"]
     assert payload["candidates"][0]["direction"] == "Existential caption"
-    assert "retail traders acting brave in a selloff" in (lm_studio.calls[0]["prompt"] or "")
-    assert "Anti-pattern bans" in (lm_studio.calls[0]["system_prompt"] or "")
+    assert "retail traders acting brave in a selloff" in (codex.calls[0]["prompt"] or "")
+    assert "Anti-pattern bans" in (codex.calls[0]["system_prompt"] or "")
 
 
 def test_meme_ideation_endpoint_accepts_frontend_alias_preset(app_client) -> None:
-    client, token, lm_studio, _ = app_client
+    client, token, codex, _ = app_client
 
     response = client.post(
         "/api/v1/memes/ideate",
@@ -226,24 +226,24 @@ def test_meme_ideation_endpoint_accepts_frontend_alias_preset(app_client) -> Non
     assert response.status_code == 200
     payload = response.json()
     assert payload["preset"] == "sharpshooter"
-    assert "Preset mode: sharpshooter" in (lm_studio.calls[0]["prompt"] or "")
+    assert "Preset mode: sharpshooter" in (codex.calls[0]["prompt"] or "")
 
 
 def test_meme_ideation_endpoint_supports_provider_override(app_client) -> None:
-    client, token, _, ollama = app_client
+    client, token, _, claude = app_client
 
     response = client.post(
         "/api/v1/memes/ideate",
         headers=_auth(token),
-        json={"imageSpringboard": "guy laughing while portfolio burns", "requestedCount": 1, "provider": "ollama"},
+        json={"imageSpringboard": "guy laughing while portfolio burns", "requestedCount": 1, "provider": "claude-cli"},
     )
 
     assert response.status_code == 200
     payload = response.json()
-    assert payload["provider"] == "ollama"
+    assert payload["provider"] == "claude-cli"
     assert payload["candidates"][0]["format"] == "tweet_screenshot"
     assert payload["artifactShell"] in {"reaction image overlay", "screenshot annotation"}
-    assert len(ollama.calls) == 1
+    assert len(claude.calls) == 1
 
 
 def test_meme_ideation_endpoint_judge_filters_mid_candidates(app_client) -> None:
@@ -266,16 +266,16 @@ def test_meme_ideation_endpoint_handles_missing_knowledge_base_with_warning(monk
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
     monkeypatch.setenv("COPNET_MEME_KB_ROOT", str(tmp_path / "missing-kb"))
     provider = FakeLocalProvider(
-        "lm-studio",
+        "openai-codex",
         '{"candidates":[{"direction":"Artifact","format":"receipt","text":"pending review before the allocation committee notices","needs_visual_context":true}]}',
     )
     orchestrator = Orchestrator(
         session_store=SessionStore(path=tmp_path / "index.json"),
         transcript_store=TranscriptStore(root_dir=tmp_path / "transcripts"),
         sessions_dir=tmp_path,
-        providers={"lm-studio": provider},
+        providers={"openai-codex": provider},
     )
-    _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext", default_provider="lm-studio")
+    _, token = orchestrator.register_app(app_id="subtext", display_name="Subtext", default_provider="openai-codex")
     app = create_app(orchestrator)
 
     with TestClient(app) as client:
@@ -304,7 +304,7 @@ def test_meme_ideation_endpoint_rejects_invalid_requests(app_client) -> None:
 
 
 def test_meme_ideation_endpoint_accepts_media_asset_context(app_client) -> None:
-    client, token, lm_studio, _ = app_client
+    client, token, codex, _ = app_client
 
     response = client.post(
         "/api/v1/memes/ideate",
@@ -317,14 +317,14 @@ def test_meme_ideation_endpoint_accepts_media_asset_context(app_client) -> None:
 
     assert response.status_code == 200
     assert response.json()["candidates"]
-    prompt = lm_studio.calls[-1]["prompt"] or ""
+    prompt = codex.calls[-1]["prompt"] or ""
     assert "mediaTitle: Gym authority clip" in prompt
     assert "mediaTranscriptSummary" in prompt
     assert "People are spiritually unemployed." in prompt
 
 
 def test_meme_refine_endpoint_returns_stateless_reply_and_candidates(app_client) -> None:
-    client, token, lm_studio, _ = app_client
+    client, token, codex, _ = app_client
 
     response = client.post(
         "/api/v1/memes/refine",
@@ -356,4 +356,4 @@ def test_meme_refine_endpoint_returns_stateless_reply_and_candidates(app_client)
     payload = response.json()
     assert payload["assistantReply"].startswith("Push the juxtaposition harder")
     assert payload["suggestedCandidates"][0]["format"] == "screenshot annotation"
-    assert "currentGenerationSummary" in (lm_studio.calls[-1]["prompt"] or "")
+    assert "currentGenerationSummary" in (codex.calls[-1]["prompt"] or "")

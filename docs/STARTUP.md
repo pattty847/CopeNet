@@ -6,10 +6,8 @@ A practical bring-up checklist for running CopeNet on a fresh machine.
 
 - Python 3.11+
 - `uv` package manager
-- Optional local model runtimes:
-  - Ollama
-  - LM Studio (local server mode)
-- Optional Codex CLI (for `codex-cli` provider)
+- Claude CLI on PATH (for `claude-cli`)
+- OpenAI Codex OAuth (for `openai-codex`): `uv run copenet auth login --provider openai-codex`
 
 ## 2) Clone + install
 
@@ -19,17 +17,10 @@ cd CopeNet
 uv sync
 ```
 
-## 3) Start local runtimes (optional but recommended)
+## 3) Authenticate a provider
 
-- Ollama endpoint default: `http://127.0.0.1:11434`
-- LM Studio endpoint default: `http://127.0.0.1:1234`
-
-If you use non-default ports, set env vars before launch:
-
-```bash
-export COPNET_OLLAMA_BASE_URL="http://127.0.0.1:11434"
-export COPNET_LM_STUDIO_BASE_URL="http://127.0.0.1:1234"
-```
+- `claude-cli`: run `claude` once and sign in
+- `openai-codex`: `uv run copenet auth login --provider openai-codex`
 
 ## 4) Run CopeNet
 
@@ -77,10 +68,9 @@ COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 
 ## Common gotchas
 
-- **No models listed**: local runtime server not running or wrong base URL.
+- **Provider unavailable**: `claude` not on PATH, or `uv run copenet auth status` shows `openai-codex` unauthenticated.
 - **Profile change didn’t apply**: create a new chat session.
 - **Port conflict**: change `COPNET_PORT`.
-- **Codex provider unavailable**: Codex CLI not installed/authenticated.
 - **Tailnet launch refuses `dev-token`**: put a random `COPNET_TOKEN` in the
   gitignored root `.copenet.env` and use `uv run --env-file .copenet.env`.
 - **Remote UI says unauthorized**: enter the `.copenet.env` token in the authentication

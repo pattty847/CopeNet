@@ -7,7 +7,6 @@ MEME_IDEATION_PRESET_ID = "meme-ideation"
 MEME_IDEATION_PROMPT_VERSION = "meme-ideation-v2"
 MEME_IDEATION_SCHEMA_VERSION = "v1"
 _MAX_REQUESTED_COUNT = 8
-_LOCAL_PROVIDER_IDS = {"lm-studio", "ollama"}
 _PRESET_ALIASES = {
     "shotgun": MEME_IDEATION_PRESET_ID,
     "sharpshooter": MEME_IDEATION_PRESET_ID,

@@ -21,10 +21,10 @@ class ProviderEvent:
 
 
 # Meta key carrying the model that actually answered, as distinct from the model
-# that was requested. These diverge for real: LM Studio resolves a request against
-# whatever instance is currently loaded, and a run stamped with the requested id
-# cannot tell you what produced the output. Before this existed, 95 of 334 local
-# traces (28%) carried a null model at all.
+# that was requested. These diverge for real: a provider may resolve a request
+# against a default or alias, and a run stamped with the requested id cannot tell
+# you what produced the output. Before this existed, 95 of 334 local traces (28%)
+# carried a null model at all.
 RESOLVED_MODEL_META_KEY = "resolvedModel"
 
 

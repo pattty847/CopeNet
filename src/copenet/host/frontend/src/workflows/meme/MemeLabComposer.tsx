@@ -27,7 +27,7 @@ export function MemeLabComposer({
   const modelsByProvider = useAppStore((s) => s.modelsByProvider);
   const loadedModelProviders = useAppStore((s) => s.loadedModelProviders);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const provider = brief.provider || providers.find((p) => p.available)?.id || 'lm-studio';
+  const provider = brief.provider || providers.find((p) => p.available)?.id || 'openai-codex';
   const canGenerate =
     Boolean(brief.topic.trim() || brief.trendSummary.trim() || brief.imageSpringboard.trim()) &&
     brief.count >= 1 &&

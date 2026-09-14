@@ -54,7 +54,6 @@ jq 'select(.event == "provider_turn_completed" and .payload.phase == "prompted_t
 Check the provider text around that pass — the model either answered directly or did not emit a parseable JSON invocation.
 
 **Common causes:**
-- Model doesn't report `toolCalls: true` in its capabilities (LM Studio/Ollama model config issue)
 - Model ignored the tool-use prompt and answered directly in prose
 - Model output was not valid JSON — check if the response was close to the expected shape
 
@@ -64,7 +63,7 @@ If you want to compare real provider/model behavior before digging through trace
 
 ```bash
 COPNET_TRACE=1 uv run copenet
-uv run python scripts/live_probe_matrix.py --lm-model <your-lm-studio-model>
+uv run python scripts/live_probe_matrix.py
 ```
 
 Then use the JSON artifact in `tmp/live_probe_results/` plus the trace files named by `runId` to compare:

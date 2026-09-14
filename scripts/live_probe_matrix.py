@@ -32,7 +32,7 @@ from copenet.probes.runtime_bundle import validate_debug_copy_bundle
 
 DEFAULT_WS_URL = "ws://127.0.0.1:17123/ws"
 DEFAULT_TOKEN = "dev-token"
-DEFAULT_PROVIDERS = "openai-codex,lm-studio"
+DEFAULT_PROVIDERS = "openai-codex"
 
 
 @dataclass(frozen=True)
@@ -70,7 +70,6 @@ def _default_trace_path(run_id: str | None) -> Path | None:
 async def _resolve_targets(
     client: GatewayClient,
     providers_csv: str,
-    lm_model: str | None,
     codex_model: str | None,
 ) -> list[Target]:
     requested = [item.strip() for item in providers_csv.split(",") if item.strip()]
@@ -81,13 +80,6 @@ async def _resolve_targets(
     for provider_id in requested:
         if provider_id not in available:
             print(f"Skipping unavailable provider: {provider_id}")
-            continue
-        if provider_id == "lm-studio":
-            chosen_model = lm_model
-            if not chosen_model:
-                models = await client.list_models(provider="lm-studio")
-                chosen_model = models[0]["id"] if models else None
-            targets.append(Target(provider="lm-studio", model=chosen_model))
             continue
         if provider_id == "codex-cli":
             chosen_model = codex_model
@@ -322,7 +314,6 @@ async def main() -> None:
     parser.add_argument("--ws-url", default=os.environ.get("COPNET_WS_URL", DEFAULT_WS_URL))
     parser.add_argument("--token", default=os.environ.get("COPNET_TOKEN", DEFAULT_TOKEN))
     parser.add_argument("--providers", default=DEFAULT_PROVIDERS)
-    parser.add_argument("--lm-model", default=os.environ.get("COPNET_LM_MODEL"))
     parser.add_argument("--codex-model", default=os.environ.get("COPNET_CODEX_MODEL"))
     parser.add_argument("--output-dir", default=str(REPO_ROOT / "tmp" / "probe_runs"))
     parser.add_argument("--probes", default=None, help="Comma-separated subset of probe names to run.")
@@ -331,9 +322,9 @@ async def main() -> None:
     args = parser.parse_args()
 
     client = GatewayClient(GatewayConfig(url=args.ws_url, token=args.token))
-    targets = await _resolve_targets(client, args.providers, args.lm_model, args.codex_model)
+    targets = await _resolve_targets(client, args.providers, args.codex_model)
     if not targets:
-        raise SystemExit("No runnable targets found. Check provider availability and --providers/--lm-model/--codex-model options.")
+        raise SystemExit("No runnable targets found. Check provider availability and --providers/--codex-model options.")
 
     suite_dir = _suite_dir(args.output_dir)
     selected_names = _selected_probe_names(args.probes)

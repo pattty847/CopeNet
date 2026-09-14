@@ -38,7 +38,7 @@ def test_ask_mode_says_the_block_is_a_pause_not_a_wall() -> None:
 
 
 def test_full_access_does_not_enumerate_an_allowlist_it_does_not_use() -> None:
-    disclosure = shell_policy_disclosure(policy_for_task_mode("full-access", provider="openai-codex"))
+    disclosure = shell_policy_disclosure(policy_for_task_mode("full-access"))
 
     assert "ACCESS: full-access" in disclosure
     assert "approval_required" in disclosure
@@ -60,7 +60,7 @@ def test_disclosure_never_mutates_the_shared_registry_descriptors() -> None:
     """Policy differs per run; the module-level descriptors are shared."""
     original = SHELL.description
     disclose_policy_in_descriptions([SHELL], policy_for_task_mode(None))
-    disclose_policy_in_descriptions([SHELL], policy_for_task_mode("full-access", provider="openai-codex"))
+    disclose_policy_in_descriptions([SHELL], policy_for_task_mode("full-access"))
 
     assert SHELL.description == original
 
@@ -68,7 +68,7 @@ def test_disclosure_never_mutates_the_shared_registry_descriptors() -> None:
 def test_write_disclosure_flips_with_full_access() -> None:
     guarded = disclose_policy_in_descriptions([WRITE], policy_for_task_mode(None))[0]
     full = disclose_policy_in_descriptions(
-        [WRITE], policy_for_task_mode("full-access", provider="openai-codex")
+        [WRITE], policy_for_task_mode("full-access")
     )[0]
 
     assert "NOT available" in guarded.description

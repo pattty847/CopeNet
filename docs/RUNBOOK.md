@@ -20,7 +20,7 @@ Checklist:
 - UI loads
 - connect handshake succeeds
 - `providers.list` shows the runtimes you expect
-- `models.list` returns chat models for LM Studio / Ollama
+- `models.list` returns chat models for `openai-codex` and `claude-cli`
 - `tools.list` returns the built-in safe tool catalog
 
 ## Enable Debug Mode
@@ -42,7 +42,7 @@ Then reproduce one run and inspect:
 - provider unavailable at startup
 - locked session binding mismatch
 - tool blocked by workdir or allowlist policy
-- local model answered in chat-only mode instead of using tools
+- model answered in chat-only mode instead of using tools
 
 ## Reset / Recover
 
@@ -67,11 +67,7 @@ ls -lt ~/.copenet/logs/runs/ | head -10
 
 ### Verify runtime availability
 
-Use the UI provider list or inspect the local runtime directly:
-
-- LM Studio native catalog: `http://127.0.0.1:1234/api/v1/models`
-- LM Studio OpenAI chat endpoint: `http://127.0.0.1:1234/v1/chat/completions`
-- Ollama: `http://127.0.0.1:11434/api/tags`
+Use the UI provider list, `uv run copenet auth status` for `openai-codex`, and `which claude` for `claude-cli`.
 
 ## Best First Questions
 

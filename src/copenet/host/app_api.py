@@ -452,7 +452,7 @@ def create_app_router(
 
     @router.post("/memes/ideate")
     async def ideate_memes_endpoint(body: MemeIdeationApiRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
-        provider_name = (body.provider or app.default_provider or "lm-studio").strip()
+        provider_name = (body.provider or app.default_provider or "openai-codex").strip()
         provider = orchestrator._providers.get(provider_name)
         if provider is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unsupported provider: {provider_name}")
@@ -510,7 +510,7 @@ def create_app_router(
 
     @router.post("/memes/refine")
     async def refine_memes_endpoint(body: MemeRefinementApiRequest, app: AuthenticatedApp = Depends(require_media_access)) -> dict[str, Any]:
-        provider_name = (body.provider or app.default_provider or "lm-studio").strip()
+        provider_name = (body.provider or app.default_provider or "openai-codex").strip()
         provider = orchestrator._providers.get(provider_name)
         if provider is None:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"unsupported provider: {provider_name}")

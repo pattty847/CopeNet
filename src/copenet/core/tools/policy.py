@@ -58,25 +58,21 @@ class ToolPolicy:
     guidance_char_limit: int = 6000
 
 
-# Full Access (write + unrestricted shell) is only granted to frontier providers we
-# trust with that power. A local/other model that requests full-access is downgraded to
-# the read-only base policy. provider=None (e.g. internal callers/tests) is not gated.
-FULL_ACCESS_PROVIDERS: frozenset[str] = frozenset({"claude-cli", "openai-codex"})
+def policy_for_task_mode(task_prompt_id: str | None) -> ToolPolicy:
+    """Return the effective tool policy for one access level.
 
-
-def policy_for_task_mode(task_prompt_id: str | None, provider: str | None = None) -> ToolPolicy:
-    """Return the effective tool policy for one access level (Full Access provider-gated).
-
-    Access levels ride on `task_prompt_id` for backwards-compat:
-      - `full-access` → writes + unrestricted shell (gated to frontier providers)
+    Access levels ride on `task_prompt_id`:
+      - `full-access` → writes + unrestricted shell
       - `ask`         → read-only allowlist, but prompts the operator before running
-                        anything outside it (ungated — approval is the gate)
+                        anything outside it (approval is the gate)
       - anything else → read-only (the default)
+
+    Every registered provider is a frontier lane now (the local runtimes that were
+    denied Full Access were removed 2026-09-13), so Access is the only gate.
     """
     normalized = (task_prompt_id or "none").strip().lower() or "none"
     base = {"repo-read", "shell-read", "context", "artifact", "web"}
-    full_access_allowed = provider is None or provider.strip().lower() in FULL_ACCESS_PROVIDERS
-    if normalized == "full-access" and full_access_allowed:
+    if normalized == "full-access":
         return ToolPolicy(
             allowed_categories={*base, "repo-write"},
             unrestricted_shell=True,

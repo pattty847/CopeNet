@@ -498,7 +498,7 @@ export function RightPanel({ mobile = false, overviewOnly = false }: { mobile?: 
                       onChange={(e) => updateDraftSetting('taskPromptId', e.target.value)}
                       className={selectClass}
                     >
-                      {accessOptionsFor(currentProvider).map((option) => (
+                      {accessOptionsFor().map((option) => (
                         <option key={option.id} value={option.id}>{option.label}</option>
                       ))}
                     </select>

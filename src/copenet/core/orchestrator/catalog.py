@@ -2,14 +2,13 @@
 
 from __future__ import annotations
 
-import os
 import json
 from typing import Any
 from typing import TYPE_CHECKING
 
 from copenet.core.orchestrator.starter_intent import normalize_starter_intent, starter_intent_tags
 from copenet.core.sessions import SessionStateRecord
-from copenet.providers import ClaudeCliProvider, LmStudioProvider, OllamaProvider, OpenAICodexProvider, Provider
+from copenet.providers import ClaudeCliProvider, OpenAICodexProvider, Provider
 
 if TYPE_CHECKING:
     from . import Orchestrator
@@ -18,8 +17,6 @@ if TYPE_CHECKING:
 _PROVIDER_CLASSES: tuple[type, ...] = (
     ClaudeCliProvider,
     OpenAICodexProvider,
-    LmStudioProvider,
-    OllamaProvider,
 )
 
 
@@ -34,12 +31,8 @@ def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, st
     except Exception as exc:
         init_errors["claude-cli"] = str(exc)
     providers["openai-codex"] = OpenAICodexProvider()
-    providers["lm-studio"] = LmStudioProvider(
-        base_url=os.environ.get("COPNET_LM_STUDIO_BASE_URL", "http://127.0.0.1:1234")
-    )
-    providers["ollama"] = OllamaProvider(
-        base_url=os.environ.get("COPNET_OLLAMA_BASE_URL", "http://127.0.0.1:11434")
-    )
+    # lm-studio and ollama were removed 2026-09-13: never used in practice, never
+    # granted Full Access, and they were the only reason a third tool loop existed.
     return providers, init_errors
 
 

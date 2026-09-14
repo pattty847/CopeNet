@@ -7,7 +7,7 @@ This document is the shared working agreement for human contributors and coding 
 CopeNet is an agent harness. It provides:
 
 - a FastAPI + WebSocket host (with a secondary REST + SSE `/api/v1` lane for external apps)
-- pluggable provider adapters for Claude CLI, OpenAI Codex (OAuth), LM Studio, and Ollama
+- pluggable provider adapters for Claude CLI and OpenAI Codex (OAuth)
 - persisted session and transcript storage, plus per-run records and per-session artifacts
 - operator-side stores for Pulse, memory, messaging routes, profile, and external-app credentials
 - a React operator workspace UI with a Home dashboard and agent console
@@ -18,7 +18,7 @@ The current product direction is:
 
 - sessions lock provider/profile/persona/workspace after first send; the operator may
   change model within that provider and may change Access
-- local runtimes should feel plug-and-play
+- two frontier lanes, Codex and Claude CLI; the local runtimes (LM Studio, Ollama) were removed 2026-09-13 as unused
 - prompt behavior should be layered but simple
 - harness/tooling should stay provider-agnostic
 
@@ -48,7 +48,7 @@ The current product direction is:
 | Knowledge runtime | `src/copenet/core/knowledge_runtime.py` + `meme_*.py` | Meme Lab knowledge runtime + ideation API |
 | External apps  | `src/copenet/core/apps/`                     | Bearer-token registry for `/api/v1` consumers |
 | Provider auth  | `src/copenet/core/provider_auth/`            | Provider-owned auth state (e.g. OpenAI Codex OAuth) |
-| Providers      | `src/copenet/providers/`                     | Adapters: `codex-cli`, `claude-cli`, `openai-codex`, `lm-studio`, `ollama` |
+| Providers      | `src/copenet/providers/`                     | Adapters: `claude-cli`, `openai-codex` |
 | CLI runner     | `src/copenet/runner/cli_runner.py`           | Shared CLI subprocess runner used by Codex/Claude CLI providers |
 | Prompts        | `src/copenet/prompts/`                       | Profile + Access-overlay loaders, optimizer, preset markdown |
 | Client         | `src/copenet/client.py`                      | Programmatic GatewayClient |
@@ -168,7 +168,7 @@ For current behavior, assume:
 - Implement provider-specific request/response translation only.
 - Return rich model metadata when available.
 - Keep runtime detection, model listing, and chat execution consistent with the shared provider contract.
-- Do not leak LM Studio or Ollama quirks into the orchestrator unless absolutely required.
+- Do not leak provider transport quirks into the orchestrator unless absolutely required.
 
 ### Prompts
 

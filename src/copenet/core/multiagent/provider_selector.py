@@ -40,15 +40,14 @@ _DEFAULT_ROLES: tuple[ProviderRole, ...] = ("heavy_lifting", "thinking", "breadt
 class ProviderRoleMap:
     """Maps abstract orchestration roles to concrete CopeNet provider ids.
 
-    Heavy lifting -> openai-codex, thinking -> claude-cli, breadth -> a local
-    model for cheap alternatives. (The original spec named Gemini for breadth,
-    but no Gemini provider exists in CopeNet — selection still filters out any
-    role whose provider isn't registered, so callers can override freely.)
+    Heavy lifting -> openai-codex, thinking -> claude-cli. Breadth has no default
+    provider since the local runtimes were removed (2026-09-13); an empty role is
+    skipped, and callers may still map it to a registered provider.
     """
 
     heavy_lifting: str = "openai-codex"
     thinking: str = "claude-cli"
-    breadth: str = "lm-studio"
+    breadth: str = ""
 
     def provider_for(self, role: ProviderRole) -> str:
         return getattr(self, role)

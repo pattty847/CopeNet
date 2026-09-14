@@ -277,7 +277,7 @@ chart renders those intervals as real gaps and keeps its financial scale on the 
 
 ## Why CopeNet
 
-CopeNet started as a local-only project — small models on-device, no cloud dependency. That fell apart fast: small local models can't reliably plan multi-step tool use or hold an operator workflow together, so CopeNet grew a CLI-backed and subscription-backed provider layer (`codex-cli`, `claude-cli`, `openai-codex`) alongside the local runtimes. Local-first is still the default posture — sessions, transcripts, and control stay on your machine — but the models doing the actual reasoning are frontier-capable now.
+CopeNet started as a local-only project — small models on-device, no cloud dependency. That fell apart fast: small local models can't reliably plan multi-step tool use or hold an operator workflow together, so CopeNet grew a CLI-backed and subscription-backed provider layer (`claude-cli`, `openai-codex`) and, in September 2026, dropped the local runtimes entirely. Local-first is still the posture — sessions, transcripts, and control stay on your machine — but the models doing the reasoning are frontier-capable.
 
 Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built for the workflows that happen after that:
 
@@ -294,7 +294,7 @@ CopeNet is evolving into an operator workspace, not just a chat client. Today it
 - **Agent sessions** with persistent transcripts, first-send runtime binding (provider/profile lock; model + Access changeable mid-session), archive/restore, and inline tool execution
 - **Fleet rooms** where ChatGPT and Claude independently research the same question, share evidence receipts after reveal, and critique each other in attributed follow-up turns
 - **Observability** with a per-run timeline, provider reasoning provenance, exact tool evidence, model-input snapshots, and raw local traces
-- **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured local-model generation
+- **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured generation
 - **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
 - **Experiments** for comparing provider/model behavior across real runs
 - **Profile + Access layering**: behavioral Profiles (markdown presets) plus a separate **Read-only · Ask · Full Access** permission axis with operator approvals and a persisted shell allowlist
@@ -302,13 +302,10 @@ CopeNet is evolving into an operator workspace, not just a chat client. Today it
 
 ## Providers
 
-CopeNet currently supports local, CLI-backed, and subscription-backed runtimes through a shared harness:
+CopeNet runs two frontier lanes through one shared harness:
 
-- `codex-cli` — local Codex CLI subprocess
 - `claude-cli` — local `claude` CLI subprocess
 - `openai-codex` — OpenAI Codex via OAuth (`uv run copenet auth login --provider openai-codex`)
-- `lm-studio` — local LM Studio HTTP server
-- `ollama` — local Ollama daemon
 
 The goal is provider-agnostic operator tooling: one workspace, multiple runtimes, consistent session semantics. See [`docs/CAPABILITY-MATRIX.md`](docs/CAPABILITY-MATRIX.md) for tool-loop and feature support per provider.
 
@@ -318,14 +315,8 @@ The goal is provider-agnostic operator tooling: one workspace, multiple runtimes
 
 - Python 3.11+
 - [`uv`](https://docs.astral.sh/uv/)
-- Optional local runtimes:
-  - Ollama running on `http://127.0.0.1:11434`
-  - LM Studio local server on `http://127.0.0.1:1234`
-- Optional CLI runtimes:
-  - Codex CLI installed and authenticated (for `codex-cli`)
-  - Claude CLI on PATH (for `claude-cli`)
-- Optional subscription-backed runtime:
-  - OpenAI Codex OAuth via `uv run copenet auth login --provider openai-codex`
+- Claude CLI on PATH (for `claude-cli`)
+- OpenAI Codex OAuth via `uv run copenet auth login --provider openai-codex` (for `openai-codex`)
 
 ### 2) Install dependencies
 
@@ -364,11 +355,10 @@ shared URL.
 
 ## Local Setup Notes
 
-1. Start your local runtimes first (Ollama and/or LM Studio).
-2. Run `uv run copenet`.
-3. Open the UI and create a new session.
-4. Pick provider, model, profile, and Access.
-5. Send the first message to create the session and lock provider/profile/persona/workspace.
+1. Run `uv run copenet`.
+2. Open the UI and create a new session.
+3. Pick provider, model, profile, and Access.
+4. Send the first message to create the session and lock provider/profile/persona/workspace.
 
 The operator may change model within the same provider and may change Access on later
 runs. Start a new chat for another provider, profile, persona, or workspace.
@@ -383,8 +373,6 @@ Environment variables:
 - `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
 - `COPNET_TRACE` (`1` to enable per-run JSONL traces)
-- `COPNET_LM_STUDIO_BASE_URL` (default: `http://127.0.0.1:1234`)
-- `COPNET_OLLAMA_BASE_URL` (default: `http://127.0.0.1:11434`)
 - `COPNET_MEME_KB_ROOT` (optional local knowledge-library root for Meme Lab extensions)
 - `COPNET_MEME_KB_CACHE_DIR` (optional cache directory for generated knowledge indexes)
 
@@ -474,13 +462,10 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 
 ## Troubleshooting
 
-### Models not showing up
+### Provider unavailable
 
-- Verify the runtime server is running:
-  - Ollama: `http://127.0.0.1:11434`
-  - LM Studio: `http://127.0.0.1:1234`
-- Check environment-variable overrides
-- Restart CopeNet after changing endpoints
+- `claude-cli`: `claude` must be on PATH and authenticated
+- `openai-codex`: run `uv run copenet auth status`, then `uv run copenet auth login --provider openai-codex` if needed
 
 ### Debugging a weird run
 

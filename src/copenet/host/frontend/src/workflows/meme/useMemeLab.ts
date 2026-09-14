@@ -54,7 +54,7 @@ export const DEFAULT_BRIEF: MemeBrief = {
   imageSpringboard: '',
   toneHints: ['copecore', 'dry'],
   count: 8,
-  provider: 'lm-studio',
+  provider: 'openai-codex',
   model: null,
   preset: 'shotgun',
   attachedMedia: null,

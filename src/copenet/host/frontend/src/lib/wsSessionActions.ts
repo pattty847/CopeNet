@@ -9,7 +9,7 @@ type WsRpcRequest = <T extends Record<string, unknown>>(
   params: Record<string, unknown>,
 ) => Promise<T>;
 
-const PROVIDER_PRIORITY = ['lm-studio', 'ollama', 'openai-codex'];
+const PROVIDER_PRIORITY = ['openai-codex', 'claude-cli'];
 
 function pickPreferredProvider(providers: Provider[]): string {
   for (const id of PROVIDER_PRIORITY) {

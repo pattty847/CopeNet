@@ -152,21 +152,6 @@ async def run_scenario(
 async def main() -> None:
     scenarios = [
         {
-            "name": "S5-LMStudio-chat-only",
-            "provider": "lm-studio",
-            "message": "What are Python source files typically named? Give a one-sentence answer.",
-        },
-        {
-            "name": "S6-LMStudio-filesystem-question",
-            "provider": "lm-studio",
-            "message": "List the Python files you would expect to find in a FastAPI project. Give a brief list.",
-        },
-        {
-            "name": "S7-Ollama-chat-only",
-            "provider": "ollama",
-            "message": "What is Python? Give a one-sentence answer.",
-        },
-        {
             "name": "S1-Codex-tool-assisted",
             "provider": "codex-cli",
             "message": "List the Python files in this repo.",
