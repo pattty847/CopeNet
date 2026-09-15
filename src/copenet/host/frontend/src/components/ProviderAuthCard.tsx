@@ -19,7 +19,7 @@
  *     Refresh to pick up new auth state after completing login.
  */
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   AlertCircle,
   CheckCircle2,
@@ -171,7 +171,7 @@ function LoginView({
           className="flex w-full items-center justify-center gap-1.5 rounded-lg border border-operator-accent/40 bg-operator-accent/10 px-3 py-1.5 text-[12px] font-medium text-operator-accent hover:bg-operator-accent/20 transition-colors duration-150 disabled:opacity-50"
         >
           <KeyRound className="w-3 h-3" />
-          {beginningLogin ? 'Preparing login…' : 'Log in to Codex'}
+          {beginningLogin ? 'Preparing login…' : 'Start OpenAI OAuth'}
         </button>
       )}
 
@@ -190,7 +190,7 @@ function LoginView({
             <span className="truncate">{loginUrl}</span>
           </a>
           <div className="text-[10px] text-operator-muted/70 italic">
-            The callback is handled locally. Click Refresh after completing login.
+            CopeNet is listening for the local callback and will update automatically.
           </div>
         </div>
       )}
@@ -215,6 +215,16 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
   const [loginUrl, setLoginUrl] = useState<string | null>(null);
   const [beginningLogin, setBeginningLogin] = useState(false);
 
+  useEffect(() => {
+    if (!loginUrl || status?.authenticated) return;
+    const timer = window.setInterval(refresh, 2_000);
+    return () => window.clearInterval(timer);
+  }, [loginUrl, refresh, status?.authenticated]);
+
+  useEffect(() => {
+    if (status?.authenticated) setLoginUrl(null);
+  }, [status?.authenticated]);
+
   const handleLogout = async () => {
     setLoggingOut(true);
     try {
@@ -233,6 +243,7 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
     try {
       const info = await wsClient.providerAuthBeginLogin(providerId);
       setLoginUrl(info.authorizeUrl);
+      window.open(info.authorizeUrl, '_blank', 'noopener,noreferrer');
     } catch {
       setLoginUrl(null);
     } finally {
@@ -299,6 +310,9 @@ export function ProviderAuthCard({ providerId, displayName }: ProviderAuthCardPr
               loginUrl={loginUrl}
               beginningLogin={beginningLogin}
             />
+            {status.loginError && (
+              <div className="mt-2 text-[10px] text-operator-error">{status.loginError}</div>
+            )}
           </>
         )}
 

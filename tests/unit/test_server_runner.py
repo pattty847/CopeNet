@@ -41,3 +41,33 @@ def test_host_reserves_socket_before_server_loads_application(monkeypatch) -> No
         ("server_run", 1),
         "socket_closed",
     ]
+
+
+def test_keyboard_interrupt_is_a_clean_shutdown(monkeypatch) -> None:
+    closed = False
+
+    class Socket:
+        def close(self) -> None:
+            nonlocal closed
+            closed = True
+
+    class Config:
+        def __init__(self, app, **kwargs) -> None:
+            pass
+
+        def bind_socket(self):
+            return Socket()
+
+    class Server:
+        def __init__(self, config) -> None:
+            pass
+
+        def run(self, *, sockets) -> None:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(server_runner.uvicorn, "Config", Config)
+    monkeypatch.setattr(server_runner.uvicorn, "Server", Server)
+
+    server_runner.run_host_app(host="127.0.0.1", port=17123)
+
+    assert closed is True

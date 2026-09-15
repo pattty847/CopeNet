@@ -54,6 +54,22 @@ async def test_claude_cli_describe_reports_native_cli_auth(provider: ClaudeCliPr
     assert description["capabilities"]["resume"] is True
 
 
+@pytest.mark.asyncio
+async def test_claude_cli_describe_marks_logged_out_cli_unavailable(
+    provider: ClaudeCliProvider,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def logged_out() -> tuple[bool, None]:
+        return False, None
+
+    monkeypatch.setattr(provider, "_auth_status", logged_out)
+
+    description = await provider.describe()
+
+    assert description["available"] is False
+    assert description["authenticated"] is False
+
+
 def test_claude_cli_build_args_defaults_to_opus(provider: ClaudeCliProvider) -> None:
     args = provider._build_args(prompt="hello", provider_session_id=None, model=None)
 

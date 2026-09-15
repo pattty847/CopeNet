@@ -337,16 +337,27 @@ The goal is provider-agnostic operator tooling: one workspace, multiple runtimes
 
 ### 1) Prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - [`uv`](https://docs.astral.sh/uv/)
-- Claude CLI on PATH (for `claude-cli`)
-- OpenAI Codex OAuth via `uv run copenet auth login --provider openai-codex` (for `openai-codex`)
+- Node.js 20+ and npm
+
+You do **not** need a model provider or the separate CopeTech-Edgar repository
+before installing. CopeNet starts first, then Home walks you through either OpenAI
+Codex OAuth or Claude CLI setup.
 
 ### 2) Install dependencies
 
 ```bash
-uv sync
+git clone https://github.com/pattty847/CopeNet.git
+cd CopeNet
+./scripts/setup.sh
 ```
+
+That one command installs the Python environment, installs the frontend packages,
+and builds the UI. To include SEC filings, fundamentals, and insider evidence in
+Market, use `./scripts/setup.sh --with-sec`. The optional package is fetched from
+GitHub; no sibling checkout is required. Market charts and price data still work
+without it.
 
 ### 3) Run CopeNet
 
@@ -357,6 +368,18 @@ uv run copenet
 Open the desktop UI at:
 
 - `http://127.0.0.1:17123`
+
+On first launch, the Home page shows provider readiness:
+
+- **OpenAI Codex:** choose **Start OpenAI OAuth** and finish in the browser.
+- **Claude CLI:** install `claude` if it is missing, then run `claude auth login`.
+
+You only need one ready provider to create a chat. The terminal equivalents are:
+
+```bash
+uv run copenet auth login --provider openai-codex
+claude auth login
+```
 
 ### 4) Optional: open it remotely on your own devices
 
@@ -379,10 +402,11 @@ shared URL.
 
 ## Local Setup Notes
 
-1. Run `uv run copenet`.
-2. Open the UI and create a new session.
-3. Pick provider, model, profile, and Access.
-4. Send the first message to create the session and lock provider/profile/persona/workspace.
+1. Run `./scripts/setup.sh` once.
+2. Run `uv run copenet`.
+3. Open Home and finish setup for at least one provider.
+4. Create a new session and pick provider, model, profile, and Access.
+5. Send the first message to create the session and lock provider/profile/persona/workspace.
 
 The operator may change model within the same provider and may change Access on later
 runs. Start a new chat for another provider, profile, persona, or workspace.
@@ -488,8 +512,13 @@ from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
 
 ### Provider unavailable
 
-- `claude-cli`: `claude` must be on PATH and authenticated
-- `openai-codex`: run `uv run copenet auth status`, then `uv run copenet auth login --provider openai-codex` if needed
+- Check the provider setup panel on Home first; it shows whether each provider is
+  missing, signed out, or ready.
+- `claude-cli`: install Claude Code so `claude` is on PATH, then run `claude auth login`.
+- `openai-codex`: use **Start OpenAI OAuth** on Home, or run
+  `uv run copenet auth login --provider openai-codex`.
+- SEC-backed Market data missing: rerun `./scripts/setup.sh --with-sec`. A separate
+  CopeTech-Edgar checkout is not required.
 
 ### Debugging a weird run
 

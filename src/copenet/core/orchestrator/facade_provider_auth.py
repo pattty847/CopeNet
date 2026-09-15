@@ -19,6 +19,8 @@ class ProviderAuthFacadeMixin:
         auth_service = getattr(provider, "auth_service", None)
         if auth_service is None or not hasattr(auth_service, "begin_login"):
             raise ValueError(f"provider does not expose auth management: {provider_id}")
+        if hasattr(auth_service, "begin_login_with_callback"):
+            return auth_service.begin_login_with_callback(redirect_uri=redirect_uri)
         return auth_service.begin_login(redirect_uri=redirect_uri)
 
     def provider_auth_complete_login(

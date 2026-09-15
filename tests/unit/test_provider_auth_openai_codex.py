@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 import json
+import time
 from pathlib import Path
 
 import pytest
@@ -53,6 +54,46 @@ def test_openai_codex_begin_login_returns_authorize_url(tmp_path: Path) -> None:
     assert result["redirectUri"] == "http://localhost:1455/auth/callback"
     assert "auth.openai.com/oauth/authorize" in str(result["authorizeUrl"])
     assert "code_challenge=" in str(result["authorizeUrl"])
+
+
+def test_openai_codex_browser_login_completes_from_background_callback(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    service = OpenAICodexAuthService(store=_store(tmp_path))
+    access_token = _jwt(
+        {
+            "exp": 2_000_000_000,
+            "https://api.openai.com/auth": {"chatgpt_account_id": "acct_browser"},
+        }
+    )
+
+    def callback_redirect(*, redirect_uri: str, timeout_sec: float) -> str:
+        pending = next(iter(service._pending.values()))
+        return f"{redirect_uri}?code=browser-code&state={pending.state}"
+
+    monkeypatch.setattr(
+        "copenet.core.provider_auth.openai_codex._wait_for_callback_redirect",
+        callback_redirect,
+    )
+    monkeypatch.setattr(
+        "copenet.core.provider_auth.openai_codex._token_request",
+        lambda payload: {
+            "access_token": access_token,
+            "refresh_token": "browser-refresh",
+            "expires_in": 3600,
+            "scope": "openid profile email offline_access",
+        },
+    )
+
+    result = service.begin_login_with_callback(timeout_sec=1)
+    deadline = time.time() + 1
+    while not service.status()["authenticated"] and time.time() < deadline:
+        time.sleep(0.01)
+
+    assert result["authorizeUrl"]
+    assert service.status()["authenticated"] is True
+    assert service.status()["loginError"] is None
 
 
 

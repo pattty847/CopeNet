@@ -101,14 +101,19 @@ class ClaudeCliProvider:
 
     async def describe(self) -> dict[str, object]:
         """Report provider status for UI catalog rendering."""
+        authenticated, auth_error = await self._auth_status()
         return {
             "id": self.name,
             "displayName": self.display_name,
-            "available": True,
+            # Older Claude CLI versions may not expose `auth status`; keep those
+            # usable and label their state unknown instead of inventing a failure.
+            "available": authenticated is not False,
             "supportsModelSelection": True,
             "modelCount": len(SUPPORTED_CLAUDE_CLI_MODELS),
             "requiresAuth": True,
             "authType": "native-cli",
+            "authenticated": authenticated,
+            "authStatusError": auth_error,
             "authInstructions": "Run `claude auth login` in a terminal, then restart CopeNet if needed.",
             "capabilities": {
                 "chat": True,
@@ -119,6 +124,30 @@ class ClaudeCliProvider:
                 "resume": True,
             },
         }
+
+    async def _auth_status(self) -> tuple[bool | None, str | None]:
+        """Read Claude's own login state without copying account details into CopeNet."""
+        try:
+            process = await asyncio.create_subprocess_exec(
+                self._cli,
+                "auth",
+                "status",
+                "--json",
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=5.0)
+        except (OSError, asyncio.TimeoutError) as exc:
+            return None, f"Could not check Claude login: {exc}"
+        if process.returncode != 0:
+            detail = stderr.decode(errors="replace").strip()
+            return False, detail or "Claude CLI reports that it is not authenticated."
+        try:
+            payload = json.loads(stdout.decode(errors="replace"))
+        except json.JSONDecodeError:
+            return None, "Claude CLI returned an unreadable auth status."
+        logged_in = payload.get("loggedIn") if isinstance(payload, dict) else None
+        return (logged_in if isinstance(logged_in, bool) else None), None
 
     async def list_models(self) -> list[ProviderModel]:
         """Return the supported Claude CLI chat models."""

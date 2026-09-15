@@ -27,6 +27,7 @@ import { Card } from './panels/Card';
 import { LaunchPicker } from './panels/LaunchPicker';
 import { MarketPulse } from './panels/MarketPulse';
 import { MyFocus } from './panels/MyFocus';
+import { ProviderSetup } from './panels/ProviderSetup';
 import { QuickLaunch } from './panels/QuickLaunch';
 import { RecentActivity } from './panels/RecentActivity';
 import { SystemHealth } from './panels/SystemHealth';
@@ -138,6 +139,8 @@ export function HomeDesk() {
 
   return (
     <div className="hd">
+      <ProviderSetup secMarket={snapshot?.extensions.secMarket} />
+
       <BriefingCard
         dashboard={dashboard ?? null}
         brief={brief ?? null}

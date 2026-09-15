@@ -347,6 +347,11 @@ export interface Provider {
   displayName: string;
   available: boolean;
   error?: string;
+  requiresAuth?: boolean;
+  authType?: 'oauth' | 'native-cli' | 'api_key' | 'none';
+  authenticated?: boolean | null;
+  authInstructions?: string;
+  authStatusError?: string;
   capabilities?: Record<string, boolean>;
 }
 
@@ -1114,7 +1119,7 @@ export interface RunTimeline {
 // Mirrors openai_codex.py OpenAICodexAuthService.status() return shape.
 // ---------------------------------------------------------------------------
 
-export type ProviderAuthType = 'oauth' | 'api_key' | 'none';
+export type ProviderAuthType = 'oauth' | 'native-cli' | 'api_key' | 'none';
 
 export interface ProviderAuthStatus {
   provider: string;                   // e.g. "openai-codex"
@@ -1126,6 +1131,8 @@ export interface ProviderAuthStatus {
   accountId: string | null;           // user account identifier if known
   expiresAt: number | null;           // unix ms — when the token expires
   scopes: string[];                   // OAuth scopes granted
+  loginInProgress?: boolean;
+  loginError?: string | null;
   // storePath is backend-only, not surfaced in UI
 }
 
@@ -1321,6 +1328,13 @@ export interface DeskSnapshot {
   activity: DeskActivityEntry[];
   health: DeskHealth;
   quote: { text: string; attribution: string } | null;
+  extensions: {
+    secMarket: {
+      available: boolean;
+      installCommand: string;
+      unavailableFeatures: string[];
+    };
+  };
 }
 
 export interface FocusItem {

@@ -4,33 +4,47 @@ A practical bring-up checklist for running CopeNet on a fresh machine.
 
 ## 1) Install prerequisites
 
-- Python 3.11+
+- Python 3.12+
 - `uv` package manager
-- Claude CLI on PATH (for `claude-cli`)
-- OpenAI Codex OAuth (for `openai-codex`): `uv run copenet auth login --provider openai-codex`
+- Node.js 20+ and npm
+
+Provider setup happens after CopeNet starts. You do not need Claude CLI, OpenAI
+OAuth, or a CopeTech-Edgar checkout to install the core app.
 
 ## 2) Clone + install
 
 ```bash
 git clone <your-repo-url>
 cd CopeNet
-uv sync
+./scripts/setup.sh
 ```
 
-## 3) Authenticate a provider
+The script installs Python and frontend dependencies and builds the UI in the
+required order. Use `./scripts/setup.sh --with-sec` to add SEC filings,
+fundamentals, and insider evidence. It fetches the optional package directly;
+there is no required sibling repository.
 
-- `claude-cli`: run `claude` once and sign in
-- `openai-codex`: `uv run copenet auth login --provider openai-codex`
-
-## 4) Run CopeNet
+## 3) Start CopeNet and connect a provider
 
 ```bash
 uv run copenet
 ```
 
-Open:
+Open `http://127.0.0.1:17123`. The Home page presents both supported paths and
+their live readiness state:
 
-- `http://127.0.0.1:17123`
+- **OpenAI Codex:** click **Start OpenAI OAuth** and finish in the browser.
+- **Claude CLI:** install Claude Code if needed, then run `claude auth login`.
+
+Only one provider needs to be ready. Terminal-only OpenAI setup remains available:
+
+```bash
+uv run copenet auth login --provider openai-codex
+```
+
+## 4) Run CopeNet
+
+CopeNet is already running from step 3. Return to the same command for later launches.
 
 ## 5) First-run flow in UI
 
@@ -68,7 +82,9 @@ COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 
 ## Common gotchas
 
-- **Provider unavailable**: `claude` not on PATH, or `uv run copenet auth status` shows `openai-codex` unauthenticated.
+- **Provider unavailable**: Home shows the exact missing install or login step.
+- **SEC evidence unavailable**: run `./scripts/setup.sh --with-sec`; core chat and
+  price/chart features do not require it.
 - **Profile change didn’t apply**: create a new chat session.
 - **Port conflict**: change `COPNET_PORT`.
 - **Tailnet launch refuses `dev-token`**: put a random `COPNET_TOKEN` in the
@@ -80,9 +96,11 @@ COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 ## Useful commands
 
 ```bash
-# Build the React UI first. Without frontend/dist, the host returns 503 at /.
-# Run this before packaging a wheel so the production UI is included.
-cd src/copenet/host/frontend && npm ci && npm run build && cd -
+# Repeatable full setup (Python + frontend build)
+./scripts/setup.sh
+
+# Include optional SEC-backed Market features
+./scripts/setup.sh --with-sec
 
 # Full app (only `copenet` and `copenet-browser-demo` entry points exist)
 uv run copenet

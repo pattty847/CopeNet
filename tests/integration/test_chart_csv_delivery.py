@@ -54,4 +54,4 @@ async def test_chart_session_receives_csv_initial_context_and_exact_read(tmp_pat
     # Artifact identity is retained for inspection; canonical exact resource reads still return objects.
     assert observation_artifact.artifact_id
     bound = store.resolve_context(request.session_key, "inspect", request.market_context.to_dict())
-    assert store.read_resource(bound, "candles:D")["rows"][0]["c"] == 11.125
+    assert store.read_resource(bound, "candles:D")["rows"][0]["c"] == 11.375

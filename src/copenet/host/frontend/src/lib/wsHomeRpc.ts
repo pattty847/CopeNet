@@ -24,6 +24,8 @@ function normalizeSnapshot(raw: unknown): DeskSnapshot {
   const health = asRecord(value.health);
   const activity = Array.isArray(value.activity) ? value.activity : [];
   const quote = value.quote ? asRecord(value.quote) : null;
+  const extensions = asRecord(value.extensions);
+  const secMarket = asRecord(extensions.secMarket);
   return {
     generatedAt: String(value.generatedAt || ''),
     activity: activity.map((entry) => {
@@ -57,6 +59,15 @@ function normalizeSnapshot(raw: unknown): DeskSnapshot {
       windowMinutes: Number(health.windowMinutes) || 60,
     },
     quote: quote ? { text: String(quote.text || ''), attribution: String(quote.attribution || '') } : null,
+    extensions: {
+      secMarket: {
+        available: secMarket.available === true,
+        installCommand: String(secMarket.installCommand || './scripts/setup.sh --with-sec'),
+        unavailableFeatures: Array.isArray(secMarket.unavailableFeatures)
+          ? secMarket.unavailableFeatures.map(String)
+          : [],
+      },
+    },
   };
 }
 

@@ -87,6 +87,60 @@
 .hd-span-8 { grid-column: span 8; }
 .hd-span-12 { grid-column: span 12; }
 
+/* ---------------------------------------------------------------- provider onboarding */
+
+.hd-provider-setup { border-color: color-mix(in srgb, var(--mkt-accent) 40%, var(--mkt-seam)); }
+.hd-provider-setup__intro {
+  padding: 11px 14px;
+  border-bottom: 1px solid var(--mkt-seam-soft);
+  color: var(--mkt-muted);
+  font: 400 var(--mkt-t-body)/1.5 var(--mkt-sans);
+}
+.hd-provider-setup__grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.hd-provider-setup__lane { min-width: 0; padding: 13px 14px; }
+.hd-provider-setup__lane + .hd-provider-setup__lane { border-left: 1px solid var(--mkt-seam); }
+.hd-provider-setup__lane-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  color: var(--mkt-text);
+  font: 600 var(--mkt-t-body) var(--mkt-sans);
+}
+.hd-provider-setup__lane-title svg { color: var(--mkt-positive); }
+.hd-provider-setup__lane p { margin: 8px 0 0; color: var(--mkt-muted); font: 400 var(--mkt-t-value)/1.5 var(--mkt-sans); }
+.hd-provider-setup__steps { display: flex; flex-direction: column; align-items: flex-start; gap: 7px; }
+.hd-provider-setup__steps code,
+.hd-provider-setup__terminal code {
+  border: 1px solid var(--mkt-seam);
+  border-radius: 3px;
+  background: var(--mkt-ground);
+  color: var(--mkt-soft);
+  font: 500 var(--mkt-t-micro) var(--mkt-mono);
+  padding: 4px 6px;
+}
+.hd-provider-setup__steps a,
+.hd-provider-setup__recheck {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 0;
+  background: transparent;
+  color: var(--mkt-accent);
+  cursor: pointer;
+  font: 600 var(--mkt-t-micro) var(--mkt-sans);
+  padding: 0;
+  text-decoration: none;
+}
+.hd-provider-setup__terminal {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-top: 1px solid var(--mkt-seam-soft);
+  color: var(--mkt-dim);
+  font: 400 var(--mkt-t-micro) var(--mkt-sans);
+}
+
 /* -------------------------------------------------------------------------- the briefing */
 
 .hd-brief { padding: 14px 16px 12px; }
@@ -507,6 +561,8 @@
 @media (max-width: 820px) {
   .hd { padding: var(--mkt-s2); gap: var(--mkt-s2); }
   .hd-span-3, .hd-span-4, .hd-span-5, .hd-span-6, .hd-span-7, .hd-span-8 { grid-column: span 12; }
+  .hd-provider-setup__grid { grid-template-columns: 1fr; }
+  .hd-provider-setup__lane + .hd-provider-setup__lane { border-left: 0; border-top: 1px solid var(--mkt-seam); }
   .hd-strip { grid-auto-flow: row; grid-auto-columns: auto; }
   .hd-strip__cell { border-right: 0; border-bottom: 1px solid var(--mkt-seam-soft); padding-left: 0; padding-right: 0; }
   .hd-strip__cell:last-child { border-bottom: 0; }

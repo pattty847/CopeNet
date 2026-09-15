@@ -292,6 +292,11 @@ export function normalizeProvider(raw: unknown): Provider {
     displayName: String(payload.displayName || payload.id || ''),
     available: payload.available !== false,
     error: payload.error ? String(payload.error) : '',
+    requiresAuth: payload.requiresAuth === true,
+    authType: (payload.authType as Provider['authType']) || 'none',
+    authenticated: typeof payload.authenticated === 'boolean' ? payload.authenticated : null,
+    authInstructions: payload.authInstructions ? String(payload.authInstructions) : '',
+    authStatusError: payload.authStatusError ? String(payload.authStatusError) : '',
     capabilities: (payload.capabilities as Record<string, boolean> | undefined) || {},
   };
 }

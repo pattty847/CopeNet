@@ -16,6 +16,12 @@ def run_host_app(*, host: str, port: int) -> None:
     )
     server_socket = config.bind_socket()
     try:
-        uvicorn.Server(config).run(sockets=[server_socket])
+        try:
+            uvicorn.Server(config).run(sockets=[server_socket])
+        except KeyboardInterrupt:
+            # Python 3.13 can let the runner's cancellation escape after Uvicorn
+            # has already completed its graceful shutdown. Ctrl-C is a normal
+            # operator action, not an application failure or a useful traceback.
+            pass
     finally:
         server_socket.close()

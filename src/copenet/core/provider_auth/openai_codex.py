@@ -43,6 +43,8 @@ class OpenAICodexAuthService:
         auth_dir = default_provider_auth_dir()
         self._store = store or ProviderAuthStore(auth_dir / f"{OPENAI_CODEX_PROVIDER_ID}.json")
         self._pending: dict[str, PendingOpenAICodexLogin] = {}
+        self._browser_login_threads: dict[str, threading.Thread] = {}
+        self._browser_login_error: str | None = None
 
     @property
     def store(self) -> ProviderAuthStore:
@@ -64,6 +66,8 @@ class OpenAICodexAuthService:
             "expiresAt": profile.expires_at if profile else None,
             "scopes": list(profile.scopes) if profile else list(OPENAI_CODEX_SCOPES),
             "storePath": str(self._store.path),
+            "loginInProgress": any(thread.is_alive() for thread in list(self._browser_login_threads.values())),
+            "loginError": self._browser_login_error,
         }
 
     def begin_login(self, redirect_uri: str | None = None) -> dict[str, object]:
@@ -94,6 +98,42 @@ class OpenAICodexAuthService:
             "redirectUri": redirect,
             "state": state,
         }
+
+    def begin_login_with_callback(
+        self,
+        redirect_uri: str | None = None,
+        *,
+        timeout_sec: float = 300.0,
+    ) -> dict[str, object]:
+        """Begin OAuth and listen for its localhost callback in the background.
+
+        The CLI owns this listener synchronously. The web UI needs the same flow
+        without parking its RPC request for five minutes, so the listener and
+        token exchange run on a short-lived daemon thread while status is polled.
+        """
+        begun = self.begin_login(redirect_uri=redirect_uri)
+        login_id = str(begun["loginToken"])
+        callback_uri = str(begun["redirectUri"])
+        self._browser_login_error = None
+
+        def finish_login() -> None:
+            try:
+                redirect_url = _wait_for_callback_redirect(
+                    redirect_uri=callback_uri,
+                    timeout_sec=timeout_sec,
+                )
+                if redirect_url is None:
+                    raise TimeoutError("OpenAI OAuth timed out before the callback arrived.")
+                self.complete_login(login_token=login_id, redirect_url=redirect_url)
+            except Exception as exc:
+                self._browser_login_error = str(exc)
+            finally:
+                self._browser_login_threads.pop(login_id, None)
+
+        thread = threading.Thread(target=finish_login, daemon=True, name="copenet-openai-oauth")
+        self._browser_login_threads[login_id] = thread
+        thread.start()
+        return begun
 
     def complete_login(
         self,
