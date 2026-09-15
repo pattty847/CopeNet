@@ -64,6 +64,18 @@ resolved independently per window. Comparative repeats are deduplicated; later
 amendments win; the earliest filing carrying the selected value remains its
 availability date.
 
+Instant annual series use the actual balance date from each annual filing. A
+comparative balance repeated in a later 10-K does not become another annual
+period, and the UI labels annual bars from `periodEnd` rather than the filing's
+later `fy` value.
+
+Net debt uses a reported aggregate debt fact when available and otherwise falls
+back to current plus noncurrent debt. The aggregate parent and its components
+are mutually exclusive, so the pipeline does not double count them. Missing
+debt facts now make net debt unavailable instead of silently assuming zero.
+The generic formula remains debt minus cash and short-term investments, with an
+explicit warning that it is not comparable for financial companies.
+
 Canonical Q4 is derived only when one annual value and three compatible
 standalone quarters exist. TTM is the sum of four contiguous canonical quarters.
 All contributors remain attached as sources.

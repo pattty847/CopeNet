@@ -152,7 +152,10 @@ function quarterLabel(date: Date): string {
 
 function financialObservationLabel(observation: FinancialSeriesObservation, frequency: FinancialFrequency): string {
   const date = new Date(`${observation.periodEnd}T00:00:00Z`);
-  if (frequency === 'annual') return String(observation.fiscalYear ?? date.getUTCFullYear());
+  // Company Facts fiscal metadata describes the filing context. Comparative
+  // balance-sheet facts can therefore carry a later filing year than their
+  // economic date. Annual chart labels must identify the balance date.
+  if (frequency === 'annual') return String(date.getUTCFullYear());
   const fiscalPeriod = observation.fiscalPeriod && !['FY', 'TTM'].includes(observation.fiscalPeriod) ? observation.fiscalPeriod : null;
   return `${fiscalPeriod ?? `Q${Math.floor(date.getUTCMonth() / 3) + 1}`} ’${String(observation.fiscalYear ?? date.getUTCFullYear()).slice(-2)}`;
 }
