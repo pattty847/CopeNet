@@ -431,6 +431,42 @@ What to watch: a session that loads several deferred tools converges back toward
 the old cost, by design; chart sessions are unchanged; and a model that ignores
 the catalog would have to be told twice, which has not happened in five runs.
 
+## 5d. Within-turn receipts (P2): built, measured, reverted (2026-09-14)
+
+The design followed the cross-turn rule inside a running Responses turn: nothing
+until the request estimate passed 32K tokens, then every read-only result older
+than the last 3 steps rewritten to a receipt in one pass (edits, writes,
+failures verbatim; passes only when ≥8K tokens freed, to spare the prefix
+cache). Commit 6724019, reverted in 4013168; both stay in history.
+
+Five large-repo tasks, gpt-5.5, one run each. Three never crossed the trigger and
+were unchanged. On the two that did:
+
+| task | tool calls | model calls | peak input | billed input | receipt passes | reads after receipt | outcome |
+|---|---|---|---|---|---|---|---|
+| repo-trace-event | 35 → 100 | 27 → 81 | 37,588 → 31,301 | 769,172 → 1,748,840 | 4 (steps 12, 39, 50, 79) | 52 | every content check failed |
+| repo-broad-question | 47 → 82 | 43 → 71 | 77,854 → 36,313 | 2,310,516 → 1,662,883 | 9 | 41 | still failing, worse |
+
+What happened, from the traces: the model kept working from receipts until it
+had to write the answer, then went back for the bodies it needed to cite — a
+receipt carries path, range and digest, not the line a citation points at. Those
+re-reads aged past the keep window and were receipted again on the next pass, so
+the turn thrashed (52 reads after receipt on a task that needs about ten files).
+Peak context fell, which is the number a compaction scheme optimizes, and
+everything that matters got worse: calls, billed tokens, wall time, and on one
+task the answer itself. This is the failure the operator described from the old
+600-char compaction, reproduced under controlled conditions with a far gentler
+scheme.
+
+Why not tune it: the thrash is not a threshold problem. What the model re-reads is
+what it needs, and the harness cannot know that ahead of the model. Keeping more
+steps or pinning re-read paths would shrink the loss, not the reason for it. The
+gains on record all came from *not losing anything* — the ledger, cross-turn
+receipts the model can redeem with one call, a slimmer envelope, tool contracts
+that stop wasted calls, a smaller tool schema. P2 is closed unless a model lane
+arrives that was trained with mid-turn clearing in mind; even then, measure it on
+these tasks first.
+
 ## 6. Proposals, each with its tradeoff
 
 Shipped today (each small, each with a test, each measured by re-running the suite):
@@ -469,7 +505,7 @@ this. *Tradeoff:* a market question asked inside a coding session needs the tool
 added explicitly, and this is a product call about what Agents chat does by default
 — which is why it is not shipped in this pass.
 
-**P2. Within-turn compaction of old tool results, in the loop, not the transcript.**
+**P2. Within-turn compaction of old tool results, in the loop, not the transcript.** *(Built and measured 2026-09-14 — made both tasks it touched worse; reverted. See §5d.)*
 After each step, bodies older than the newest N results are replaced in the
 *outbound* array by receipts: `files.read` → path, line range, digest, "re-read if
 needed"; `shell.exec` → command, exit code, first and last few lines; `files.rg` →
