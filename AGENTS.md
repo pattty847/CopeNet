@@ -253,9 +253,25 @@ For current behavior, assume:
 - **The drawer shows the artifact, not the preview.** When a tool step carries an `artifactId`, `ToolBody` loads that `tool_output` artifact — the whole body. Without it the panel is the same clipped preview at a larger size, which is what it used to be.
 - **Thread detail lives in the overlay, never inline.** Every tool row and the per-turn internals row open `InspectorDrawer` (a portal overlay: 680px, own scroll, Escape) via `setInspectorTarget`. Nothing expands inside the transcript — tool output is routinely a whole file or a command dump, and rendering that between two chat messages is what made the thread unreadable. Do not add a new inline expander; add an `InspectorTarget` kind.
 - **One derivation renders run internals everywhere.** `runtime/runInternals.ts` turns a `SessionRunRecord` plus its lifecycle trace into the stat line and the what-it-saw / what-it-did / how-it-worked / why-it-stopped / raw-trace sections; `components/runtime/RunInternals.tsx` renders it in the drawer (`showDid={false}` — the thread already lists the calls) and in the Observability inspector (`showDid` default), with `internalsPalette.ts` selecting `operator-*` vs `shell-*` classes. Add to the derivation, not to a per-surface renderer. Three rules that are easy to break: a chat-only turn must keep its "Context it saw" row (that is the `promptedToolUse: false` case, where the question is asked most); grouping is by run, not adjacency, so narration between calls must not split a turn; and `inputTokenEstimate` counts **messages only** — never label it as everything the model saw.
+- **Observability has two views over the same run records; `ObservabilityPage.tsx` is only the
+  switch.** `components/observability/RunExplorer.tsx` is the run inspector ("what happened in
+  THIS run"); `components/observability/usage/` is Usage ("what has all of it added up to"),
+  routed at `/observability?view=usage`. Each view owns its own `SectionHead`, because their
+  header actions differ. Usage is backed by one RPC, **`observability.usage.get`**
+  `{days?, includeBench?}`, over `core/observability/usage_rollup.py` (+ `usage_buckets.py`)
+  and `RunStore.list_since` — pure grouping of numbers the run records already carry, no new
+  collection. Frontend derivations are pure in `runtime/usageModel.ts`; the components only
+  render. Four rules the view must not break: usage is **provider-reported or absent** (never
+  substitute `inputTokenEstimate` — a provider that reports nothing must read as missing
+  coverage, not as a cheap provider); **cached input is a subset of input**, so the by-type
+  split is output / fresh input / cache read; **a rate with no denominator is null and renders
+  as an em dash**, never 0%; and **no dollar costs** — CopeNet runs on subscriptions, so any
+  price would be invented. Benchmark sessions (`bench-`) are excluded unless asked for. The
+  `--usage-series-*` tokens in `index.css` are two SELECTED palettes, one per theme, each
+  validated against its own chart surface — do not flip one into the other theme.
 - Run records for the thread come from `runtime/runIndex.ts` (one `sessions.runs` call per session, module-level promise cache); trace events load lazily on expand. Do not add a per-message fetch.
 - Section status, verified 2026-08-01 — keep this current, because a stale entry here sends the next contributor to rebuild something that already ships:
-  - **Live and load-bearing:** `Agents`, `Market`, `Observability` (run inspector over durable run records + `logs/runs/*.jsonl`, see `docs/plans/OBSERVABILITY.md`), `Home`.
+  - **Live and load-bearing:** `Agents`, `Market`, `Observability` (run inspector + Usage, both over durable run records + `logs/runs/*.jsonl`, see `docs/plans/OBSERVABILITY.md`), `Home`.
   - **Still direction-setting shells:** `Workflows` and `Data & Tools` — neither issues a single RPC. `Experiments` is thin but wired.
 - **The Market landing is a sectioned workstation, not a dock.** `sections/market/MarketWorkstation.tsx` holds fixed chrome (market bar, `workstation/WatchRail.tsx`, `workstation/MarketSectionTabs.tsx`) around one scrolling body; the seven sections live under `sections/market/workstation/`. The section is a route (`/market?view=…`, helpers in `lib/appSectionRouting.ts`) and is restored after a ticker round-trip via `marketWorkstationState.ts`. Briefing derivations (matters ranking, rail order, rotation quadrants) are pure functions in `marketBriefModel.ts`; layout customization (order / hide / half-full per panel) goes through `workstation/SectionGrid.tsx` — do not reintroduce a free-form grid or a resizable split on this page. The `ResearchDrawer` dock belongs to the ticker workspace only.
 - Global app state lives in `src/copenet/host/frontend/src/store/useAppStore.ts`. Keep it explicit and small.

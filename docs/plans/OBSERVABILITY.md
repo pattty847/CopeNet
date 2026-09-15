@@ -1,4 +1,4 @@
-# Observability Run Inspector
+# Observability: Run Inspector and Usage
 
 ## Product goal
 
@@ -29,6 +29,50 @@ persisted operator setting is the canonical runtime control once it exists.
 Inspector tabs, since workstream 2: **Internals** (the shared per-turn view, and
 the default), **Timeline**, **Model input**, **Raw trace**. The old standalone
 Tools tab is now the "What it did" section inside Internals.
+
+### Usage — shipped 2026-09-15
+
+Observability has a second view over the same durable run records, switched in the
+section header and routed at `/observability?view=usage`. The run inspector answers
+*"what happened in this run"*; Usage answers *"what has all of it added up to"* — the
+cross-run query the split above says belongs only here.
+
+It shows an overview tile strip (runs, tokens, cache hit rate, tool calls, run error
+rate, peak context, verified-after-edit, average run time), tokens by day stacked by
+kind, a token-activity calendar heatmap, runs by weekday and by hour, top models /
+providers / tools, and a coding-habits panel built on the `codingMetrics` every run
+already carries — redundant reads, reads after the agent's own edit, searches over the
+`files.rg` cap, exact repeats, blind retries, stale-edit refusals, policy blocks, and
+recovery after a red run.
+
+RPC: **`observability.usage.get`** `{days?: number, includeBench?: boolean}` → `{usage}`.
+Window is whole LOCAL days ending today, capped at 365. Sessions prefixed `bench-` are
+excluded unless `includeBench` is set, because a benchmark suite is real usage but not
+the operator's own work.
+
+Backend: `core/observability/usage_rollup.py` (the grouping pass) over
+`usage_buckets.py` (the accumulators), reached through
+`facade_observability.get_usage_rollup` and `RunStore.list_since`. Pure functions, no
+collection of their own — every number is already on a `RunRecord`. Frontend: pure
+derivations in `runtime/usageModel.ts`, rendered by `components/observability/usage/`.
+
+Four rules this view must keep, because a usage dashboard is exactly where an invented
+number would never be caught:
+
+- **Usage is provider-reported or absent.** A run with no `token_usage` counts in `runs`
+  and in `usageCoverage.runsWithoutUsage` and contributes zero tokens.
+  `inputTokenEstimate` is never substituted for it — a provider that reports nothing
+  must read as missing coverage, not as a cheap provider.
+- **Cached input is a subset of input.** The by-type split is output / fresh input /
+  cache read, where fresh = input − cached. Stacking input beside its own cache would
+  double-count the whole cache.
+- **A rate with no denominator is null, and renders as an em dash.** Not 0%.
+- **No money.** CopeNet runs on subscriptions; there is no per-token price to multiply
+  by, so any dollar figure here would be invented.
+
+Tests: `tests/unit/test_usage_rollup.py` (17), the `observability.usage.get` case in
+`tests/integration/test_ws_rpc.py`, and `src/copenet/host/frontend/tests/usageModel.test.ts`
+(11).
 
 ## Data flow
 
@@ -114,6 +158,8 @@ fourth implementation of one idea. Two concrete symptoms:
 What genuinely belongs only in Observability, because it is a query across runs rather
 than a view of one:
 
+- **[shipped — Usage view]** error rates, cache hit rate, token and tool volume by day,
+  weekday, hour, model, provider and tool, and the coding-habit series
 - every run where a tool was **blocked by policy**, across all sessions
 - registered tools that have **never once been called** — the strongest available signal
   that a tool description is wrong
@@ -121,7 +167,7 @@ than a view of one:
   surfaces it)
 - **model comparison**: same prompt, different model or Access, diffed on manifest, tool
   behavior, latency, and terminal reason
-- error rates, retention, purge
+- retention, purge
 
 Those become answerable only once tracing is always on — which is workstream 1.
 
