@@ -5,6 +5,7 @@ from __future__ import annotations
 import difflib
 import hashlib
 import json
+import re
 from pathlib import Path
 import subprocess
 
@@ -48,8 +49,10 @@ DESCRIPTORS = [
             "Search text inside files under the current workdir with a ripgrep regex pattern. "
             "Returns at most 200 matches per call (default 80); use offset to page. When a pattern matches "
             "more than 200 lines the result is a per-file count map (byFile) plus the first 25 matches — "
-            "narrow the pattern or the path instead of paging. path may be one file or directory, or several "
-            "separated by spaces. context_lines adds lines of context around each match. "
+            "narrow the pattern or the path instead of paging. Search for one concept per call: an alternation "
+            "of unrelated words (chat|session|lock|provider) matches most of a repository and buys a map, not an "
+            "answer. path may be one file or directory, or several separated by spaces. context_lines adds lines "
+            "of context around each match. "
             "Note: searches file contents only, not filenames or directory paths. "
             "To locate files or directories by name, use shell.exec with find."
         ),
@@ -131,6 +134,9 @@ SEARCH_RESULT_HARD_CAP = 200
 # page and learning nothing from it; the per-file map below is what they needed.
 SEARCH_OVERFLOW_SAMPLE = 25
 SEARCH_OVERFLOW_FILES = 30
+# An overflow pattern that is a top-level alternation gets per-branch counts, so
+# the model can see which of its words produced the flood instead of guessing.
+SEARCH_BRANCH_LIMIT = 12
 
 
 async def read_file(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
@@ -374,6 +380,7 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
     by_file: dict[str, int] = {}
     for hit in all_hits:
         by_file[str(hit["path"])] = by_file.get(str(hit["path"]), 0) + 1
+    by_branch = _alternation_branch_counts(pattern, all_hits) if overflow else []
     if overflow:
         ranked = sorted(by_file.items(), key=lambda item: (-item[1], item[0]))
         top_path, top_count = ranked[0]
@@ -382,6 +389,12 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
             f"Returning per-file counts (byFile) and matches {offset + 1}-{next_offset}; narrow the pattern or the path "
             f"(most matches: {top_path} ×{top_count})."
         )
+        if by_branch:
+            loudest = by_branch[0]
+            summary += (
+                f" The pattern is an alternation of {len(by_branch)} branches (byBranch); "
+                f"'{loudest['branch']}' alone accounts for {loudest['matches']} matches — search one concept per call."
+            )
     else:
         summary = f"Found {total_matches} matches for pattern via ripgrep; returning {len(hits)}."
         if truncated:
@@ -406,12 +419,57 @@ async def ripgrep_files(request: ToolExecutionRequest, context: ToolExecutionCon
         output["byFile"] = [{"path": path, "matches": count} for path, count in ranked[:SEARCH_OVERFLOW_FILES]]
         if len(ranked) > SEARCH_OVERFLOW_FILES:
             output["byFileOmitted"] = len(ranked) - SEARCH_OVERFLOW_FILES
+        if by_branch:
+            output["byBranch"] = by_branch
     return ToolExecutionResult(
         tool_id=request.tool_id,
         ok=True,
         summary=summary,
         output=output,
     )
+
+
+def _top_level_alternation(pattern: str) -> list[str]:
+    """Split a regex on `|` at nesting depth 0; [] when it is not an alternation."""
+    branches: list[str] = []
+    depth = 0
+    current: list[str] = []
+    escaped = False
+    for char in pattern:
+        if escaped:
+            current.append(char)
+            escaped = False
+            continue
+        if char == "\\":
+            current.append(char)
+            escaped = True
+            continue
+        if char in "([":
+            depth += 1
+        elif char in ")]":
+            depth = max(0, depth - 1)
+        if char == "|" and depth == 0:
+            branches.append("".join(current))
+            current = []
+            continue
+        current.append(char)
+    branches.append("".join(current))
+    return [branch for branch in branches if branch.strip()] if len(branches) > 1 else []
+
+
+def _alternation_branch_counts(pattern: str, hits: list[dict[str, object]]) -> list[dict[str, object]]:
+    branches = _top_level_alternation(pattern)
+    if not branches or len(branches) > SEARCH_BRANCH_LIMIT:
+        return []
+    counts: list[dict[str, object]] = []
+    for branch in branches:
+        try:
+            compiled = re.compile(branch)
+        except re.error:
+            return []
+        counts.append({"branch": branch, "matches": sum(1 for hit in hits if compiled.search(str(hit.get("text") or "")))})
+    counts.sort(key=lambda item: -int(item["matches"]))
+    return counts
 
 
 def _search_roots(raw: object, context: ToolExecutionContext) -> list[Path]:

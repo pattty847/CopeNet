@@ -256,3 +256,31 @@ async def test_files_rg_accepts_several_search_roots(monkeypatch: pytest.MonkeyP
 
     missing = await registry.execute(ToolExecutionRequest("files.rg", {"pattern": "needle", "path": "tests nowhere"}), _tool_context(tmp_path))
     assert missing.ok is False and "nowhere" in str(missing.error) and "several separated by spaces" in str(missing.error)
+
+
+@pytest.mark.asyncio
+async def test_files_rg_overflow_names_the_alternation_branch_that_caused_the_flood(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    def line(path: str, i: int, text: str) -> str:
+        return (
+            '{"type":"match","data":{"path":{"text":"%s"},"lines":{"text":"%s\\n"},"line_number":%d,'
+            '"submatches":[{"match":{"text":"x"},"start":0,"end":1}]}}\n' % (path, text, i)
+        )
+    stdout = "".join(line("a.py", i, "session is locked here") for i in range(180)) + "".join(line("b.py", i, "provider = x") for i in range(30))
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(args=args, returncode=0, stdout=stdout, stderr="")
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+    result = await ToolRegistry().execute(ToolExecutionRequest("files.rg", {"pattern": r"session.*lock|provider|chat\.send", "path": "."}), _tool_context(tmp_path))
+    assert result.output["byBranch"] == [{"branch": "session.*lock", "matches": 180}, {"branch": "provider", "matches": 30}, {"branch": "chat\\.send", "matches": 0}]
+    assert "alternation of 3 branches" in result.summary and "'session.*lock' alone accounts for 180 matches" in result.summary
+    assert "search one concept per call" in result.summary
+
+
+def test_top_level_alternation_respects_groups() -> None:
+    from copenet.core.tools.handlers.files import _top_level_alternation
+
+    assert _top_level_alternation("a|b|c") == ["a", "b", "c"]
+    assert _top_level_alternation("(a|b)c") == []
+    assert _top_level_alternation(r"foo\|bar") == []
+    assert _top_level_alternation("def (x|y)|class") == ["def (x|y)", "class"]
