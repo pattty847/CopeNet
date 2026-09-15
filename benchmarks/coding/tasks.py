@@ -175,6 +175,29 @@ def line_of(workdir: Path, relative: str, needle: str) -> int:
     return -1
 
 
+def span_of(workdir: Path, relative: str, needle: str) -> tuple[int, int]:
+    """(start, end) lines of the top-level def/class containing `needle`: from its line to the next top-level def/class."""
+    lines = (workdir / relative).read_text(encoding="utf-8").splitlines()
+    start = next((number for number, line in enumerate(lines, start=1) if needle in line), -1)
+    if start < 0:
+        return (-1, -1)
+    end = len(lines)
+    for number in range(start + 1, len(lines) + 1):
+        if re.match(r"^(async def |def |class )", lines[number - 1]):
+            end = number - 1
+            break
+    return (start, end)
+
+
+def answer_cites_within(text: str, relative: str, span: tuple[int, int], *, label: str) -> Check:
+    """Accept any cited line inside the function's span: a citation of the line that does the work is as good as the def line."""
+    stem = Path(relative).name
+    candidates = [int(m) for m in re.findall(rf"{re.escape(stem)}[^\d\n]{{0,24}}?(\d{{1,4}})", text)]
+    start, end = span
+    hit = any(start - 3 <= number <= end for number in candidates)
+    return Check(label, hit, f"expected {stem}:{start}-{end}; cited {sorted(set(candidates))[:12] or 'nothing'}", source="answer")
+
+
 def answer_cites_line(text: str, relative: str, line: int, *, tolerance: int = 3, label: str) -> Check:
     """Accept `path:line`, `path line N`, `path (line N)`, `path#LN` within tolerance."""
     stem = Path(relative).name
@@ -223,8 +246,8 @@ def grade_explore_locate(workdir: Path, ctx: GradeContext) -> list[Check]:
         answer_mentions(text, ["importers.py", "dedupe_key", "normalize_description"], label="names the deciding function and normalizer"),
         answer_mentions(text, ["date", "amount", "description"], label="lists the three compared fields"),
         answer_mentions(text, ["cli.py", "skipped"], label="traces the skipped count to the CLI"),
-        answer_cites_line(text, "ledgerly/importers.py", line_of(workdir, "ledgerly/importers.py", "def dedupe_key"), label="cites dedupe_key's line"),
-        answer_cites_line(text, "ledgerly/models.py", line_of(workdir, "ledgerly/models.py", "def normalize_description"), label="cites normalize_description's line"),
+        answer_cites_within(text, "ledgerly/importers.py", span_of(workdir, "ledgerly/importers.py", "def dedupe_key"), label="cites dedupe_key"),
+        answer_cites_within(text, "ledgerly/models.py", span_of(workdir, "ledgerly/models.py", "def normalize_description"), label="cites normalize_description"),
     ]
 
 
