@@ -71,6 +71,7 @@ async def start_harness(
                 artifact_store=orchestrator._artifact_store,
                 edit_backup_store=orchestrator._edit_backup_store,
                 change_ledger_store=orchestrator._change_ledger_store,
+                session_state_store=orchestrator._session_state_store,
                 permission_store=orchestrator._permission_store,
                 task_prompt_id=admission.entry.task_prompt_id or admission.request.task_prompt_id,
                 run_id=admission.run_id,
@@ -83,6 +84,9 @@ async def start_harness(
                     # at in EARLIER turns, so an operator change between turns is caught
                     # the same way as one within a turn.
                     "file_read_state": dict(prepared.ledger_last_digests),
+                    # Deferred disclosure: what tools.load may bring in, and what it has so far.
+                    "deferred_tools": {tool.id: tool for tool in prepared.tools.deferred_tools},
+                    "loaded_tool_ids": [],
                     **(
                         {"chart_event_emit": emit_event}
                         if admission.market_context is not None and emit_event is not None

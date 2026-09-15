@@ -251,6 +251,21 @@ def _native_tool_message_content(tool_result: ToolExecutionResult) -> str:
     return tool_result.to_prompt_payload()
 
 
+def absorb_loaded_tools(plan, tool_context: ToolExecutionContext) -> list[ToolDescriptor]:
+    """Move tools the model loaded with tools.load into the plan; return what was added.
+
+    Called after each batch of tool calls. The next request then carries the new
+    schema (Responses lane) or manifest line (prompted lane).
+    """
+    loaded_ids = tool_context.ephemeral.get("loaded_tool_ids") or []
+    deferred = tool_context.ephemeral.get("deferred_tools") or {}
+    present = {tool.id for tool in plan.tools}
+    added = [deferred[tool_id] for tool_id in loaded_ids if tool_id in deferred and tool_id not in present]
+    if added:
+        plan.tools.extend(added)
+    return added
+
+
 def compose_prompted_tool_system_prompt(
     *,
     provider: Provider,

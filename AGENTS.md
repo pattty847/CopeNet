@@ -188,6 +188,17 @@ For current behavior, assume:
 ### Tools runtime
 
 - Handlers live under `src/copenet/core/tools/handlers/`; `builtin_readonly.py` aggregates them (the filename is historical). `context.py` / `context.prepare` were retired in Phase 0.3. The model-facing surface is the explicit `MANIFEST_TOOL_IDS` set: core file/shell/plan/web tools plus approved Market, persona, memory, and user-note tools. Treat that set—not an old numeric count in documentation—as canonical. `files.list`/`files.search` were consolidated into `files.rg`; `artifact.create` remains registered but off-manifest, while `artifact.read` is on-manifest so a `saved as artifact <id>` hint or a receipt's `artifactId` is something the model can open (session-scoped; reading back a persisted `web.*` result re-taints the run in Barricade).
+- **Deferred disclosure: an ordinary turn offers the coding core; the rest is a catalog.**
+  `core/tools/disclosure.py` names the always-loaded set (`files.*`, `shell.exec`, `plan.write`,
+  `artifact.read`, `web.*`, `memory.read`, `tools.load`); every other manifest tool the policy allows
+  is listed one line each in a `<deferred_tools>` system-prompt block and loaded on request with
+  `tools.load`. A loaded tool is in the schema list from the next step and is persisted on
+  `SessionStateRecord.loaded_tool_ids`, so later turns start with it. Operator-attached tools
+  (`requestedToolIds`) are loaded outright; chart-bound sessions keep their own scoped set and are
+  not deferred. This is the standard shape (Claude Code's deferred tools, the Claude API's
+  `defer_loading`): the seventeen non-coding schemas were 6.2K tokens on every model call of every
+  coding turn. Trace: `deferredToolIds` on `prompt_context_policy_resolved`, `tools_loaded` when
+  the model loads one.
 - Categories: `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, `mcp`. Effective policy is **`policy_for_task_mode(session task_prompt_id)`**: baseline Access allows read/shell/context/artifact; **Full Access** (`full-access`) adds **`repo-write`** (`files.edit`, `files.write`) and unrestricted user-level `shell.exec`.
 - Full-access shell commands run with the current OS user's permissions and may use normal shell syntax (`|`, `&&`, redirects, scripts, etc.). High-risk command patterns return `policyDecision: "approval_required"` instead of executing; wire operator confirmation before allowing those proposal records to resume.
 - Permission claims should be tested with the direct matrix before trusting a live model's self-report: `uv run python scripts/permission_probe_matrix.py`. A model that only proves `pwd` works has proven shell-read, not full-access.

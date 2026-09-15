@@ -100,6 +100,7 @@ def successful_record(
         plan=events.plan,
         task_prompt_id=admission.entry.task_prompt_id or admission.request.task_prompt_id,
         created_artifact_ids=events.created_artifact_ids,
+        deferred_tool_ids=frozenset(tool.id for tool in prepared.tools.deferred_tools),
     )
     orchestrator._session_state_store.save(updated_state)
     admission.trace.record(

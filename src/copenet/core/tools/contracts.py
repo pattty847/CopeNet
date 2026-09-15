@@ -297,6 +297,8 @@ class ToolExecutionContext:
     # Per-session record of the agent's own file changes; rendered into every later
     # turn and used to seed cross-turn edit freshness (core/sessions/change_ledger.py).
     change_ledger_store: Any | None = None
+    # tools.load persists the session's loaded deferred tools here (SessionStateStore).
+    session_state_store: Any | None = None
     # Global operator shell allowlist (Brick E). The shell handler consults it as a
     # standing approval; the approval-gated executor adds to it on "approved_always".
     permission_store: Any | None = None

@@ -44,6 +44,8 @@ class ToolSelection:
     requested_tool_ids: tuple[str, ...]
     active_requested_tool_ids: tuple[str, ...]
     rejected_requested_tool_ids: tuple[str, ...]
+    # Policy-allowed tools held back behind the catalog until tools.load asks for them.
+    deferred_tools: list[ToolDescriptor] = field(default_factory=list)
 
 
 @dataclass

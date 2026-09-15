@@ -51,6 +51,8 @@ export interface InternalsSaw {
   contextWindow: InternalsFact[];
   offeredToolIds: string[];
   withheldNote: string | null;
+  /** Deferred disclosure: tools behind the catalog that tools.load can bring in. */
+  deferredNote: string | null;
   detailAvailable: boolean;
 }
 
@@ -392,11 +394,19 @@ function buildSaw(run: SessionRunRecord, events: ObservabilityTraceEvent[]): Int
       ? 'No tools were offered for this turn.'
       : null;
 
+  const deferred = Array.isArray(policy?.deferredToolIds)
+    ? policy.deferredToolIds.filter((id): id is string => typeof id === 'string')
+    : [];
+  const deferredNote = deferred.length > 0
+    ? `${deferred.length} more available on request via tools.load: ${deferred.slice(0, 6).join(', ')}${deferred.length > 6 ? `, +${deferred.length - 6} more` : ''}`
+    : null;
+
   return {
     promptBlocks,
     contextWindow,
     offeredToolIds,
     withheldNote,
+    deferredNote,
     detailAvailable: promptBlocks.length > 0 || contextWindow.length > 0 || offeredToolIds.length > 0,
   };
 }

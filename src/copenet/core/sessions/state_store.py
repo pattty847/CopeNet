@@ -34,6 +34,8 @@ class SessionStateRecord:
     relevant_artifact_ids: list[str] = field(default_factory=list)
     merge_state: dict[str, Any] = field(default_factory=dict)
     pulse_state: dict[str, Any] = field(default_factory=dict)
+    # Deferred tools the agent loaded with tools.load; they start loaded in later turns.
+    loaded_tool_ids: list[str] = field(default_factory=list)
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
@@ -56,6 +58,7 @@ class SessionStateRecord:
             relevant_artifact_ids=_string_list(raw.get("relevant_artifact_ids")),
             merge_state=_dict_value(raw.get("merge_state")),
             pulse_state=_dict_value(raw.get("pulse_state")),
+            loaded_tool_ids=_string_list(raw.get("loaded_tool_ids")),
             created_at=str(raw.get("created_at") or utc_now_iso()),
             updated_at=str(raw.get("updated_at") or utc_now_iso()),
         )

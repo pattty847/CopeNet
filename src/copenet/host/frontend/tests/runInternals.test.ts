@@ -230,3 +230,14 @@ test('a chat-only turn has no coding section and no coding verdicts', () => {
   assert.deepEqual(internals.worked, []);
   assert.equal(internals.verdicts.some((verdict) => verdict.id === 'unverified-edit'), false);
 });
+
+test('deferred tools show as a note under the offered list, never as offered', () => {
+  const events = [
+    traceEvent('harness_planned', { willAttemptToolLoop: true, availableToolIds: ['files.read', 'tools.load'] }),
+    traceEvent('prompt_context_policy_resolved', { deferredToolIds: ['market.ticker', 'memory.write'] }),
+  ];
+  const internals = buildRunInternals(makeRun(), events);
+  assert.deepEqual(internals.saw.offeredToolIds, ['files.read', 'tools.load']);
+  assert.equal(internals.saw.deferredNote, '2 more available on request via tools.load: market.ticker, memory.write');
+  assert.equal(buildRunInternals(makeRun(), [events[0]]).saw.deferredNote, null);
+});

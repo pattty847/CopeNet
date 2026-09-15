@@ -118,6 +118,9 @@ export function RunInternalsBody({ internals, artifacts = [], palette = 'operato
             {internals.saw.withheldNote && (
               <p className="text-[10.5px] text-amber-400">{internals.saw.withheldNote}</p>
             )}
+            {internals.saw.deferredNote && (
+              <p className={`text-[10.5px] ${classes.mutedSoft}`}>{internals.saw.deferredNote}</p>
+            )}
           </div>
         ) : (
           <p className={`text-[11px] ${classes.mutedSoft}`}>

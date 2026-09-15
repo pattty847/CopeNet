@@ -12,6 +12,7 @@ from copenet.providers import Provider, ProviderEvent
 from .context_window import estimate_request_tokens
 from .planning import HarnessTurnPlan
 from .tool_loop_common import (
+    absorb_loaded_tools,
     MAX_TOOL_STEPS,
     ToolExecutor,
     TraceRecorder,
@@ -229,6 +230,12 @@ async def run_with_prompted_tools(
             if provider.name in _RESUMABLE_PROMPTED_PROVIDERS
             else list(prior_tool_exchanges)
         )
+        if absorb_loaded_tools(plan, tool_context):
+            current_system_prompt = compose_prompted_tool_system_prompt(
+                provider=provider, system_prompt=system_prompt, tools=plan.tools,
+            )
+            active_tool_ids = [tool.id for tool in plan.tools]
+            active_tool_id_set = set(active_tool_ids)
         current_prompt = _compose_prompted_tool_followup(
             user_prompt=prompt,
             assistant_text=assistant_text,

@@ -18,6 +18,7 @@ def _evolve_session_state(
     plan,
     task_prompt_id: str | None,
     created_artifact_ids: list[str],
+    deferred_tool_ids: frozenset[str] = frozenset(),
 ) -> SessionStateRecord:
     """Update durable session state after a run.
 
@@ -36,6 +37,12 @@ def _evolve_session_state(
         session_state.relevant_artifact_ids,
         created_artifact_ids,
     )[-10:]
+    # Deferred tools the model loaded this run stay loaded for the session. tools.load
+    # already wrote them; this keeps the finalization save from clobbering that write.
+    loaded_tool_ids = _append_unique(
+        session_state.loaded_tool_ids,
+        [str(tool.id) for tool in getattr(plan, "tools", []) if str(tool.id) in deferred_tool_ids],
+    )
     agent_runtime = _build_agent_runtime_payload(
         session_key=session_state.session_key,
         task_prompt_id=task_prompt_id,
@@ -64,6 +71,7 @@ def _evolve_session_state(
         relevant_artifact_ids=relevant_artifact_ids,
         merge_state=dict(session_state.merge_state),
         pulse_state=dict(session_state.pulse_state),
+        loaded_tool_ids=loaded_tool_ids,
         created_at=session_state.created_at,
         updated_at=transcript_now(),
     )

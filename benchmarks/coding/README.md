@@ -32,6 +32,7 @@ one-file toy tasks. Two families:
 | `recover-from-failure` | dedupe fix where the first attempt leaves tests red | full-access |
 | `verify-runtime` | crash no test covers; only running the command proves the fix | full-access |
 | `multi-turn-continuation` | second turn depends on remembering the first turn's edits | full-access |
+| `deferred-tool-load` | a market question in a coding session: the model must `tools.load` a deferred tool before using it | read-only |
 
 ## Large-repo tasks
 

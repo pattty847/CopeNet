@@ -308,6 +308,13 @@ Acceptance:
 
 ### Phase 6 — Purpose-filter tool manifests
 
+> **Shipped 2026-09-14 as deferred disclosure, not purpose bundles.** `core/tools/disclosure.py`
+> offers the coding core plus `memory.read` and `tools.load` on every ordinary turn and lists the
+> other manifest tools as a one-line catalog the model loads on request; loaded tools persist on
+> the session. Chart-bound sessions keep their scoped set. Measured in
+> `docs/audit/coding-harness-audit-2026-09-13.md` §5c. The purpose-to-bundle table below was not
+> built: the model choosing from a catalog replaced the harness guessing a purpose.
+
 Changes:
 
 1. Introduce explicit purpose-to-tool-bundle selection.

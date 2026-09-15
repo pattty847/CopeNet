@@ -13,6 +13,7 @@ from . import responses_items
 from .context_window import estimate_request_tokens, trim_messages_to_request_budget
 from .planning import HarnessTurnPlan
 from .tool_loop_common import (
+    absorb_loaded_tools,
     MAX_TOOL_STEPS,
     ToolExecutor,
     TraceRecorder,
@@ -276,6 +277,10 @@ async def run_with_responses_tools(
             if trace is not None:
                 trace("turn_transition", turn_state.to_public_dict())
 
+        newly_loaded = absorb_loaded_tools(plan, tool_context)
+        if newly_loaded:
+            tool_schemas = build_responses_tool_schemas(plan.tools)
+            safe_name_to_tool_id = {responses_safe_tool_name(tool.id): tool.id for tool in plan.tools}
         if cap_reached:
             turn_state.terminal_reason = "max_turns"
             if trace is not None:

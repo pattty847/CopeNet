@@ -11,6 +11,7 @@ from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMO
 from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
+from .handlers.tools_load import DESCRIPTORS as TOOLS_LOAD_DESCRIPTORS, HANDLERS as TOOLS_LOAD_HANDLERS
 from .handlers.user_note import DESCRIPTORS as USER_NOTE_DESCRIPTORS, HANDLERS as USER_NOTE_HANDLERS
 from .handlers.web import DESCRIPTORS as WEB_DESCRIPTORS, HANDLERS as WEB_HANDLERS
 from .handlers.workspace_intel import DESCRIPTORS as WORKSPACE_INTEL_DESCRIPTORS, HANDLERS as WORKSPACE_INTEL_HANDLERS
@@ -39,6 +40,9 @@ MANIFEST_TOOL_IDS = {
     "files.rg",
     "shell.exec",
     "plan.write",
+    # Deferred disclosure (core/tools/disclosure.py): everything below the always-loaded
+    # core is offered as a one-line catalog and loaded on request through tools.load.
+    "tools.load",
     "web.search",
     "web.fetch",
     "market.dashboard",
@@ -78,6 +82,7 @@ ALL_DESCRIPTORS = (
     + WEB_DESCRIPTORS
     + MARKET_DESCRIPTORS
     + USER_NOTE_DESCRIPTORS
+    + TOOLS_LOAD_DESCRIPTORS
 )
 ALL_HANDLERS = {
     **FILE_HANDLERS,
@@ -91,6 +96,7 @@ ALL_HANDLERS = {
     **WEB_HANDLERS,
     **MARKET_HANDLERS,
     **USER_NOTE_HANDLERS,
+    **TOOLS_LOAD_HANDLERS,
 }
 
 

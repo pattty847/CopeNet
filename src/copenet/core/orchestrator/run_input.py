@@ -36,6 +36,7 @@ from copenet.prompts import (
 
 from .run_types import RunAdmission, RunInput
 from .run_tools import select_run_tools
+from copenet.core.tools.disclosure import deferred_tool_overlay
 from .run_state import _build_agent_runtime_payload
 
 # Providers that maintain their own conversation thread and resume it via
@@ -80,7 +81,8 @@ def _history_excluding_current(history: list[dict], *, run_id: str) -> list[dict
 
 
 async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmission):
-    tools = select_run_tools(orchestrator, admission)
+    session_state = orchestrator._session_state_store.get_or_create(admission.session_key)
+    tools = select_run_tools(orchestrator, admission, session_loaded_tool_ids=tuple(session_state.loaded_tool_ids))
     orchestrator._transcript_store.append_message(
         admission.entry.session_id,
         TranscriptMessage(
@@ -96,7 +98,6 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
             market_context=admission.market_reference,
         ),
     )
-    session_state = orchestrator._session_state_store.get_or_create(admission.session_key)
     admission.trace.record(
         "state_loaded",
         {
@@ -114,6 +115,9 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
         requested_tool_overlay(tools.active_requested_tool_ids),
     )
     effective_system_prompt = append_system_overlay(
+        effective_system_prompt, deferred_tool_overlay(tools.deferred_tools)
+    )
+    effective_system_prompt = append_system_overlay(
         effective_system_prompt, chart_system_overlay(admission.market_context)
     )
     prompt_policy = chart_prompt_policy(admission.market_context, resolved_system_prompt_id)
@@ -128,6 +132,8 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
             "requestedToolIds": list(tools.requested_tool_ids),
             "activeRequestedToolIds": list(tools.active_requested_tool_ids),
             "rejectedRequestedToolIds": list(tools.rejected_requested_tool_ids),
+            "deferredToolIds": [tool.id for tool in tools.deferred_tools],
+            "sessionLoadedToolIds": list(session_state.loaded_tool_ids),
             "includePersonaContext": prompt_policy.include_persona_context,
             "includePersonaAgentInstructions": prompt_policy.include_persona_agent_instructions,
             "includeRelevantMemory": prompt_policy.include_relevant_memory,

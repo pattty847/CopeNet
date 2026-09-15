@@ -394,6 +394,22 @@ def grade_multi_turn(workdir: Path, ctx: GradeContext) -> list[Check]:
     ]
 
 
+def grade_deferred_tool_load(workdir: Path, ctx: GradeContext) -> list[Check]:
+    analysis = ctx.analyses[-1] if ctx.analyses else {}
+    timeline = analysis.get("timeline") or []
+    load_index = next((i for i, row in enumerate(timeline) if row.get("toolId") == "tools.load" and row.get("ok") and "market." in str(row.get("summary") or "")), None)
+    market_index = next((i for i, row in enumerate(timeline) if str(row.get("toolId") or "").startswith("market.") and row.get("ok")), None)
+    direct_before_load = [row for i, row in enumerate(timeline) if str(row.get("toolId") or "").startswith("market.") and (load_index is None or i < load_index)]
+    return [
+        Check("no files changed", not changed_files(workdir), ", ".join(changed_files(workdir)) or "clean"),
+        Check("loaded a market tool through tools.load", load_index is not None, f"tools.load steps: {[row.get('summary') for row in timeline if row.get('toolId') == 'tools.load']}", source="trace"),
+        Check("then called the market tool successfully", market_index is not None and load_index is not None and market_index > load_index, f"market calls: {[(row.get('toolId'), row.get('ok')) for row in timeline if str(row.get('toolId') or '').startswith('market.')]}", source="trace"),
+        Check("no market call attempted before loading", not direct_before_load, f"{len(direct_before_load)} early attempt(s)", source="trace"),
+        answer_mentions(ctx.final_text, ["AAPL"], label="answer is about AAPL"),
+        Check("few steps to get there", int(analysis.get("toolCalls") or 99) <= 6, f"tool calls: {analysis.get('toolCalls')}", source="trace"),
+    ]
+
+
 FIXTURE_TASKS: list[Task] = [
     Task(
         id="bugfix-local",
@@ -528,5 +544,18 @@ FIXTURE_TASKS: list[Task] = [
         ],
         grade=grade_multi_turn,
         allowed_changes={"ledgerly/ledger.py", "ledgerly/reports.py", "ledgerly/cli.py", "README.md"},
+    ),
+    Task(
+        id="deferred-tool-load",
+        title="A deferred tool must be loaded before use",
+        capability="notice a need the core toolset cannot meet, load the right deferred tool from the catalog, use it",
+        failure_modes=["calling a deferred tool before loading it", "loading the wrong tool or the whole catalog", "answering without the data"],
+        access=None,
+        turns=[
+            "Using CopeNet's market tool, tell me AAPL's most recent close and how far below its 52-week high it "
+            "sits, in one sentence. Do not modify any files."
+        ],
+        grade=grade_deferred_tool_load,
+        allowed_changes=set(),
     ),
 ]
