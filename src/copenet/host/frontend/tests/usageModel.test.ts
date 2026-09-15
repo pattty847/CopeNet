@@ -113,6 +113,8 @@ function usageFixture(overrides: Partial<ObservabilityUsage> = {}): Observabilit
       runsWithEdits: 0,
       runsVerifiedAfterLastEdit: 0,
       verifiedAfterEditRate: null,
+      failedVerificationsAfterEdit: 0,
+      editsAfterFailedVerification: 0,
       daily: [],
     },
     ...overrides,
