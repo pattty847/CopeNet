@@ -699,6 +699,130 @@ export interface ObservabilityRunDetail {
   lifecycleCaptured: boolean;
 }
 
+/** Token and run counts for one grouping of runs. Mirrors `usage_buckets.TokenBucket`.
+ *
+ *  `cachedInputTokens` is a SUBSET of `inputTokens`, so the by-type split is
+ *  output / cache-read / `freshInputTokens` — never input stacked beside its own
+ *  cache. A rate is null when its denominator was zero: nothing was measured,
+ *  which is not the same as a rate of 0. */
+export interface UsageTokenTotals {
+  runs: number;
+  runsWithUsage: number;
+  modelCalls: number;
+  toolCalls: number;
+  errorRuns: number;
+  errorRate: number | null;
+  inputTokens: number;
+  cachedInputTokens: number;
+  freshInputTokens: number;
+  outputTokens: number;
+  reasoningTokens: number;
+  peakInputTokens: number;
+  totalTokens: number;
+  cacheHitRate: number | null;
+  sessions: number;
+}
+
+export interface UsageOverview extends UsageTokenTotals {
+  toolFailures: number;
+  toolBlocked: number;
+  toolFailureRate: number | null;
+  distinctTools: number;
+  avgToolCallsPerRun: number | null;
+  avgTokensPerRun: number | null;
+  avgOutputTokensPerRun: number | null;
+  avgRunSeconds: number | null;
+  firstRunAt: string | null;
+  lastRunAt: string | null;
+  busiestDay: string | null;
+}
+
+export interface UsageModelRow extends UsageTokenTotals {
+  provider: string;
+  model: string;
+}
+
+export interface UsageProviderRow extends UsageTokenTotals {
+  provider: string;
+}
+
+export interface UsageToolRow {
+  toolId: string;
+  calls: number;
+  failures: number;
+  blocked: number;
+  runs: number;
+  failureRate: number | null;
+}
+
+/** The per-day slice of the coding metrics every run already carries. */
+export interface UsageCodingDay {
+  date: string;
+  runsWithMetrics: number;
+  toolCalls: number;
+  redundantReads: number;
+  blindRetries: number;
+  edits: number;
+  runsWithEdits: number;
+  runsVerifiedAfterLastEdit: number;
+  verifiedAfterEditRate: number | null;
+}
+
+export interface UsageCodingTotals {
+  runsWithMetrics: number;
+  toolCalls: number;
+  distinctFilesRead: number;
+  redundantReads: number;
+  readsAfterOwnEdit: number;
+  searches: number;
+  searchDumps: number;
+  edits: number;
+  staleEdits: number;
+  exactRepeats: number;
+  failures: number;
+  blocked: number;
+  blindRetries: number;
+  verificationCommands: number;
+  verificationTests: number;
+  runsWithEdits: number;
+  runsVerifiedAfterLastEdit: number;
+  verifiedAfterEditRate: number | null;
+  failedVerificationsAfterEdit: number;
+  editsAfterFailedVerification: number;
+  daily: UsageCodingDay[];
+}
+
+export interface UsageDayRow extends UsageTokenTotals {
+  date: string;
+  coding: Omit<UsageCodingDay, 'date'>;
+}
+
+export interface UsageWeekdayRow extends UsageTokenTotals {
+  weekday: number;
+}
+
+export interface UsageHourRow extends UsageTokenTotals {
+  hour: number;
+}
+
+/** `observability.usage.get`. Every field is grouped from durable run records;
+ *  nothing here is estimated or priced. */
+export interface ObservabilityUsage {
+  range: { days: number; start: string; end: string; generatedAt: string; timezone: string };
+  includeBench: boolean;
+  benchRunsExcluded: number;
+  undatedRunsSkipped: number;
+  totals: UsageOverview;
+  usageCoverage: { runs: number; runsWithUsage: number; runsWithoutUsage: number; ratio: number | null };
+  models: UsageModelRow[];
+  providers: UsageProviderRow[];
+  tools: UsageToolRow[];
+  daily: UsageDayRow[];
+  weekday: UsageWeekdayRow[];
+  hourly: UsageHourRow[];
+  coding: UsageCodingTotals;
+}
+
 export interface SessionStateRecord {
   session_key: string;
   task_summary: string | null;

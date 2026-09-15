@@ -1,6 +1,7 @@
 import type {
   Message,
   ObservabilityRunDetail,
+  ObservabilityUsage,
   ObservabilitySettings,
   ObservabilityTraceEvent,
   PublicMessagePayload,
@@ -71,4 +72,14 @@ export async function getObservabilityRunRpc(
     debugCaptured: Boolean(payload.detail.debugCaptured),
     lifecycleCaptured: Boolean(payload.detail.lifecycleCaptured),
   };
+}
+
+export async function getObservabilityUsageRpc(
+  request: WsRpcRequest,
+  days: number,
+  includeBench: boolean,
+): Promise<ObservabilityUsage> {
+  const payload = await request<{ usage?: ObservabilityUsage }>('observability.usage.get', { days, includeBench });
+  if (!payload.usage) throw new Error('The host returned no usage rollup.');
+  return payload.usage;
 }
