@@ -467,6 +467,33 @@ that stop wasted calls, a smaller tool schema. P2 is closed unless a model lane
 arrives that was trained with mid-turn clearing in mind; even then, measure it on
 these tasks first.
 
+## 5e. Prompt-cache misses were routing, and two headers fixed most of it (2026-09-15)
+
+Billed input ran 10–17× peak on every long turn because the loop re-sends the
+array each step and only 24–72% of it hit the prompt cache. Per-call usage across
+22 traces showed the shape: on ~35% of steps the cached count fell to exactly the
+shared system-prompt-plus-tools block (4,608 tokens) while the session-specific
+part missed, then hit again on the next step with the array a few hundred tokens
+longer. Our prefix was stable; the miss was intermittent. OpenAI documents
+caching as best-effort routing keyed by `prompt_cache_key`, with overflow above
+~15 requests a minute per key, and Codex CLI users report the same symptom.
+
+Codex's own client (`codex-rs/codex-api/src/requests/headers.rs`) sends
+`session-id` and `thread-id` on every request; our direct OAuth path sent
+neither. Adding them (896c849) with the session key as both values, A/B on two
+tasks, three runs each, against the baseline runs without them:
+
+| task | cache hit rate, no headers | with headers | steps ≥8K input missing >50% |
+|---|---|---|---|
+| repo-where-is-it | 60%, 74% | 86%, 88%, 94% | 5–6 → 1 |
+| repo-fix-gated | 53%, 54% | 79%, 87%, 88% | 4–5 → 0–2 |
+
+Correctness unchanged (5/6, the miss a citation-window grader case). Tried and
+dropped in the same change: `prompt_cache_retention: "24h"` (documented for the
+public API; the Codex backend answers 400 "Unsupported parameter"). What is left
+of the billed-versus-peak ratio is the loop itself, which is the same for every
+harness on this API.
+
 ## 6. Proposals, each with its tradeoff
 
 Shipped today (each small, each with a test, each measured by re-running the suite):
