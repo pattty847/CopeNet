@@ -494,6 +494,22 @@ public API; the Codex backend answers 400 "Unsupported parameter"). What is left
 of the billed-versus-peak ratio is the loop itself, which is the same for every
 harness on this API.
 
+## 5f. The reference baseline: 15 tasks × 3 runs (2026-09-15)
+
+`benchmarks/coding/run.py --repeat 3` on main at 83eb897 (before the session
+headers), gpt-5.5: **40/45**. Spread table in
+`docs/audit/baselines/2026-09-15-gpt-5.5-repeat3.md`, full rollup in the
+`.summary.json` beside it. This is the "before" for every later change.
+
+What the spread says: pass/fail is stable on 12 of 15 tasks (3/3 each). The
+three that are not: `debug-failing-test` 2/3 (one run lost its answer to a
+provider stream drop, since retried by 83eb897); `repo-where-is-it` 2/3 (one
+citation window); `repo-broad-question` 0/3 (search discipline, the open
+finding). Cost varies far more than correctness: `repo-trace-event` billed
+464K–1.23M across three passes of the same task, `repo-where-is-it` 243K–589K,
+`verify-runtime` 105K–263K. A single run's billed figure is not a measurement;
+the median of three is the smallest unit worth comparing.
+
 ## 6. Proposals, each with its tradeoff
 
 Shipped today (each small, each with a test, each measured by re-running the suite):
