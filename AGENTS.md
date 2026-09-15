@@ -221,6 +221,15 @@ For current behavior, assume:
   any age. Replayed outputs carry the same `{toolId, ok, summary, error, body}` envelope the model
   saw live. Trace event: `replay_receipts_applied`. Do not add a second replay-shaping path; extend
   this one.
+- **Inside a running turn the same receipts apply, late and in batches.** `core/harness/within_turn_receipts.py`
+  (Responses lane only — with `--resume` the CLI holds the thread) does nothing until the request
+  estimate passes 32K tokens; then it rewrites every eligible read-only result older than the last
+  3 steps to the same receipt shape in one pass, and only when that frees at least 8K tokens.
+  Edits, writes, failures and chart results are never receipted; the transcript keeps every body;
+  `files.read` or `artifact.read` brings one back. Passes are rare and large on purpose: rewriting
+  the front of the array breaks the provider prefix cache for every later step. Trace event:
+  `within_turn_receipts_applied` (per pass, with what was receipted); the benchmark analyzer counts
+  `readsAfterReceipt`, the number to watch.
 
 ### WebSocket / RPC
 

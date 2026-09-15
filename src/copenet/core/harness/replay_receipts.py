@@ -85,12 +85,12 @@ def _head_tail(text: str) -> dict[str, Any]:
     }
 
 
-def receipt_body(tool_execution: dict[str, Any], body: Any, *, turn_number: int | None) -> Any:
+def receipt_body(tool_execution: dict[str, Any], body: Any, *, turn_number: int | None, where: str | None = None) -> Any:
     """The identifying facts of an old result, with a pointer to the way back to the full body."""
     tool_id = str(tool_execution.get("toolId") or "")
     arguments = tool_execution.get("arguments") if isinstance(tool_execution.get("arguments"), dict) else {}
     data = body if isinstance(body, dict) else {}
-    where = f"turn {turn_number}" if turn_number else "an earlier turn"
+    where = where or (f"turn {turn_number}" if turn_number else "an earlier turn")
     receipt: dict[str, Any] = {}
 
     if tool_id == "files.read":
@@ -148,14 +148,14 @@ def receipt_body(tool_execution: dict[str, Any], body: Any, *, turn_number: int 
     return receipt
 
 
-def replay_output(tool_execution: dict[str, Any], *, receipt: bool, turn_number: int | None = None) -> str:
+def replay_output(tool_execution: dict[str, Any], *, receipt: bool, turn_number: int | None = None, where: str | None = None) -> str:
     """The `function_call_output` string for one stored tool result."""
     ok = tool_execution.get("ok") is not False
     body = parse_replay_body(tool_execution)
     verbatim = _envelope(tool_execution, slim_body(body, ok=ok))
     if not receipt or is_verbatim(tool_execution):
         return verbatim
-    receipted = _envelope(tool_execution, receipt_body(tool_execution, body, turn_number=turn_number))
+    receipted = _envelope(tool_execution, receipt_body(tool_execution, body, turn_number=turn_number, where=where))
     # A receipt that is not smaller than the body it stands in for is pure loss:
     # a two-line command output stays as it was.
     return receipted if len(receipted) < len(verbatim) else verbatim
