@@ -503,6 +503,18 @@ same task before keeping it. Stronger lever, if the soft one fails: per-alternat
 counts in the overflow map so the model sees which branch of its pattern produced
 the flood.
 
+*Measured (2026-09-14, both levers at once, one run of `repo-broad-question`):* the
+opening move did not change — the first call was a nine-branch alternation that hit
+6,153 matches, and the second a four-word one at 599; after that the model
+narrowed. Across the three runs of this task the dump count went 2 → 4 → 2, so a
+single run cannot separate the description's effect from noise, and the honest
+claim is "no visible behavior change". What did change is the price of each dump:
+a 3,443-match page cost 5,447 tokens before the map and a 6,153-match map cost
+2,190 after it, and `byBranch` told the model which word was the flood. Billed
+input for the turn: 2,008,098 → 2,310,516 → 1,587,047. Kept as information (it
+is cheap and correct); the next lever, if this still matters, is the coding
+profile prompt rather than the tool description, measured over several runs.
+
 What I would *not* do: aggressive summarization by a model call (a second model
 summarizing tool output loses the exact lines a debugger needs and doubles cost on
 short tasks), or shrinking file reads below what the coding prompt asks for
