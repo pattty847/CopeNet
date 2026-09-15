@@ -192,6 +192,7 @@ class OpenAICodexProvider:
                     access_token=profile.access_token,
                     account_id=profile.account_id,
                     abort_event=abort_event,
+                    session_id=prompt_cache_key,
                 ):
                     loop.call_soon_threadsafe(queue.put_nowait, event)
             except Exception as exc:

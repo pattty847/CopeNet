@@ -335,3 +335,13 @@ def test_completed_response_usage_is_forwarded_as_token_usage() -> None:
 
     assert usage == [{"inputTokens": 52079, "outputTokens": 1830, "cachedInputTokens": 40960, "reasoningTokens": 512}]
     assert events[-1].metadata.get("responsesCompleted") is True, "usage precedes completion"
+
+
+def test_codex_transport_sends_session_and_thread_headers_for_cache_locality() -> None:
+    from copenet.providers.codex_transport import _build_openai_codex_headers
+
+    with_session = _build_openai_codex_headers(access_token="t", accept="text/event-stream", session_id="session-1")
+    assert with_session["session-id"] == "session-1" and with_session["thread-id"] == "session-1"
+    assert with_session["originator"] == with_session["User-Agent"]
+    without = _build_openai_codex_headers(access_token="t", accept="text/event-stream")
+    assert "session-id" not in without and "thread-id" not in without

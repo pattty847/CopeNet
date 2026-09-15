@@ -18,10 +18,11 @@ def stream_responses(
     access_token: str,
     account_id: str | None,
     abort_event: asyncio.Event,
+    session_id: str | None = None,
 ) -> Iterator[ProviderEvent]:
     """POST one Responses turn and yield the Phase 2 tool-loop event vocabulary."""
     body = json.dumps(payload).encode("utf-8")
-    headers = _build_openai_codex_headers(access_token=access_token, accept="text/event-stream")
+    headers = _build_openai_codex_headers(access_token=access_token, accept="text/event-stream", session_id=session_id)
     if account_id:
         headers["ChatGPT-Account-Id"] = account_id
     req = request.Request(url, data=body, headers=headers, method="POST")
@@ -100,11 +101,19 @@ class _ChainedLines:
             yield line
 
 
-def _build_openai_codex_headers(*, access_token: str, accept: str) -> dict[str, str]:
-    return {
+def _build_openai_codex_headers(*, access_token: str, accept: str, session_id: str | None = None) -> dict[str, str]:
+    headers = {
         "Authorization": f"Bearer {access_token}",
         "Content-Type": "application/json",
         "Accept": accept,
         "originator": OPENAI_CODEX_ORIGINATOR,
         "User-Agent": OPENAI_CODEX_ORIGINATOR,
     }
+    if session_id:
+        # Codex's own client sends these on every request (codex-rs/codex-api
+        # requests/headers.rs: build_session_headers). Gateways in front of this
+        # backend describe a stable per-conversation header as what keeps a
+        # session on a cache-warm upstream; one CopeNet session is one thread.
+        headers["session-id"] = session_id
+        headers["thread-id"] = session_id
+    return headers
