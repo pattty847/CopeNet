@@ -29,6 +29,15 @@ from .tool_loop_common import (
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
 
+# A provider stream that dies mid-body (IncompleteRead, connection reset) is
+# re-requested this many times in total, with a short growing pause between.
+RESPONSES_STREAM_ATTEMPTS = 2
+RESPONSES_STREAM_RETRY_DELAY_SEC = 1.5
+
+
+def _retryable_stream_error(exc: BaseException) -> bool:
+    return "stream ended incomplete" in str(exc)
+
 
 class ResponsesProvider(Protocol):
     name: str
@@ -121,46 +130,73 @@ async def run_with_responses_tools(
                         "providerInputTokenEstimate": request_estimate,
                     })
             outbound_messages = bounded
-        async for event in provider.stream_responses(
-            messages=outbound_messages,
-            tools=tool_schemas or None,
-            model=model,
-            instructions=instructions,
-            prompt_cache_key=session_id,
-            reasoning=reasoning,
-            parallel_tool_calls=True,
-            abort_event=abort_event,
-        ):
-            if event.kind == "delta":
-                if event.text:
-                    assistant_text_chunks.append(event.text)
-                yield event
-            elif event.kind == "reasoning_delta":
-                yield event
-            elif event.kind == "meta" and isinstance(event.metadata, dict):
-                if "responsesCompleted" in event.metadata:
-                    response_completed = event.metadata["responsesCompleted"] is True
-                fc = event.metadata.get("responsesFunctionCall")
-                if isinstance(fc, dict) and str(fc.get("name") or "").strip():
-                    function_calls.append(fc)
-                replay_item = event.metadata.get("responsesOutputItem")
-                if isinstance(replay_item, dict):
-                    response_output_items.append(dict(replay_item))
-                    yield event
-                elif event.metadata.get(RESOLVED_MODEL_META_KEY) or event.metadata.get(TOKEN_USAGE_META_KEY):
-                    # Forward, don't swallow: this loop owns the stream the
-                    # orchestrator sees, so a dropped announcement is a run stamped
-                    # with the requested model instead of the answering one, and a
-                    # dropped usage block is a turn with no token count.
-                    yield event
-        if abort_event.is_set():
-            turn_state.terminal_reason = "aborted"
+        # A dropped stream is retried only while nothing from the attempt has
+        # reached the operator or the transcript: no text, no reasoning, no output
+        # item. Up to that point a step is idempotent — the array is untouched and
+        # no tool has run — so re-asking is safe. Past it, a retry would duplicate
+        # what was already shown or stored, and the error stands.
+        for attempt in range(1, RESPONSES_STREAM_ATTEMPTS + 1):
+            function_calls = []
+            response_output_items = []
+            assistant_text_chunks = []
+            response_completed = False
+            yielded_from_attempt = False
+            try:
+                async for event in provider.stream_responses(
+                    messages=outbound_messages,
+                    tools=tool_schemas or None,
+                    model=model,
+                    instructions=instructions,
+                    prompt_cache_key=session_id,
+                    reasoning=reasoning,
+                    parallel_tool_calls=True,
+                    abort_event=abort_event,
+                ):
+                    if event.kind == "delta":
+                        if event.text:
+                            assistant_text_chunks.append(event.text)
+                        yielded_from_attempt = True
+                        yield event
+                    elif event.kind == "reasoning_delta":
+                        yielded_from_attempt = True
+                        yield event
+                    elif event.kind == "meta" and isinstance(event.metadata, dict):
+                        if "responsesCompleted" in event.metadata:
+                            response_completed = event.metadata["responsesCompleted"] is True
+                        fc = event.metadata.get("responsesFunctionCall")
+                        if isinstance(fc, dict) and str(fc.get("name") or "").strip():
+                            function_calls.append(fc)
+                        replay_item = event.metadata.get("responsesOutputItem")
+                        if isinstance(replay_item, dict):
+                            response_output_items.append(dict(replay_item))
+                            yielded_from_attempt = True
+                            yield event
+                        elif event.metadata.get(RESOLVED_MODEL_META_KEY) or event.metadata.get(TOKEN_USAGE_META_KEY):
+                            # Forward, don't swallow: this loop owns the stream the
+                            # orchestrator sees, so a dropped announcement is a run stamped
+                            # with the requested model instead of the answering one, and a
+                            # dropped usage block is a turn with no token count.
+                            yield event
+            except RuntimeError as exc:
+                if not _retryable_stream_error(exc) or yielded_from_attempt or abort_event.is_set() or attempt >= RESPONSES_STREAM_ATTEMPTS:
+                    raise
+                if trace is not None:
+                    trace("provider_stream_retry", {"step": step_index + 1, "attempt": attempt, "error": str(exc)[:200]})
+                await asyncio.sleep(RESPONSES_STREAM_RETRY_DELAY_SEC * attempt)
+                continue
+            if abort_event.is_set():
+                turn_state.terminal_reason = "aborted"
+                if trace is not None:
+                    trace("turn_completed", turn_state.to_public_dict())
+                yield ProviderEvent(kind="final")
+                return
+            if response_completed:
+                break
+            if yielded_from_attempt or attempt >= RESPONSES_STREAM_ATTEMPTS:
+                raise RuntimeError("Responses provider stream ended incomplete")
             if trace is not None:
-                trace("turn_completed", turn_state.to_public_dict())
-            yield ProviderEvent(kind="final")
-            return
-        if not response_completed:
-            raise RuntimeError("Responses provider stream ended incomplete")
+                trace("provider_stream_retry", {"step": step_index + 1, "attempt": attempt, "error": "stream ended without response.completed"})
+            await asyncio.sleep(RESPONSES_STREAM_RETRY_DELAY_SEC * attempt)
         assistant_text = "".join(assistant_text_chunks).strip()
         if trace is not None:
             trace(
