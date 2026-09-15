@@ -295,7 +295,15 @@ async def main_async(args: argparse.Namespace) -> int:
 
     orchestrator = Orchestrator()
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    out_dir = Path(args.out) / f"{stamp}-{args.provider}-{(args.model or 'default').replace('/', '_')}"
+    if args.resume:
+        # Continue an interrupted suite in place: runs whose result.json exists are
+        # loaded, not re-run, so a killed two-hour baseline keeps what it finished.
+        out_dir = Path(args.resume)
+        if not out_dir.is_dir():
+            print(f"--resume: no such directory {out_dir}")
+            return 2
+    else:
+        out_dir = Path(args.out) / f"{stamp}-{args.provider}-{(args.model or 'default').replace('/', '_')}"
     out_dir.mkdir(parents=True, exist_ok=True)
     previous = orchestrator._observability_store.load_settings().debug_capture
     if not args.no_debug_capture and not previous:
@@ -307,6 +315,11 @@ async def main_async(args: argparse.Namespace) -> int:
         # every task's run k, not on all of one task's runs.
         for repeat_index in range(1, args.repeat + 1):
             for task in tasks:
+                existing = out_dir / task.id / (f"run{repeat_index}" if args.repeat > 1 else "") / "result.json"
+                if args.resume and existing.exists():
+                    results.append(json.loads(existing.read_text(encoding="utf-8")))
+                    print(f"↺ {task.id} run {repeat_index}/{args.repeat}: kept from {existing.parent}", flush=True)
+                    continue
                 results.append(await run_task(orchestrator, task, provider=args.provider, model=args.model, out_dir=out_dir, timeout_sec=args.timeout_sec, keep=args.keep, repeat_index=repeat_index, repeat_total=args.repeat))
     finally:
         if not args.no_debug_capture and not previous:
@@ -348,6 +361,7 @@ def main() -> int:
     parser.add_argument("--timeout-sec", type=float, default=900.0)
     parser.add_argument("--keep", action="store_true", help="keep temp workspaces")
     parser.add_argument("--repeat", type=int, default=1, help="run each task N times (fresh session and workspace each) and report medians")
+    parser.add_argument("--resume", default=None, help="continue an interrupted suite in this results dir; finished runs are kept, not re-run")
     parser.add_argument("--no-debug-capture", action="store_true", help="do not switch Debug capture on for the run")
     args = parser.parse_args()
     if args.list:
