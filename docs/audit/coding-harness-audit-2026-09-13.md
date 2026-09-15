@@ -394,6 +394,43 @@ rule set behind both the analyzer and run finalization; the run record's
 redundant-read, search-dump, verification-after-last-edit and blind-retry counts
 for real sessions that this table shows for the benchmark (f451ac7).
 
+## 5c. Deferred tool disclosure (P1, shipped 2026-09-14)
+
+An ordinary turn now offers the coding core (`files.*`, `shell.exec`, `plan.write`,
+`artifact.read`, `web.*`, `memory.read`, `tools.load`); every other policy-allowed
+tool is a one-line catalog entry in the system prompt, loaded on request with
+`tools.load`, and sticky for the session (`core/tools/disclosure.py`, a1134ae).
+This is the shape Claude Code and the Claude API's `defer_loading` use; ours works
+on both lanes because each loop builds a fresh request per step.
+
+Two corrections to the framing in P1: policy already filtered the manifest per
+turn, so the real "before" was 16–19 offered tools and 23–25K schema chars, not 26
+and 32K; and the catalog costs ~1.2K chars of system prompt, which the numbers
+below include. Same tasks, same model (gpt-5.5), one run each.
+
+| task | offered tools | schema chars | system prompt chars | tool calls | model calls | peak input | billed input |
+|---|---|---|---|---|---|---|---|
+| bugfix-local | 18 → 11 | 24,153 → 10,675 | 16,897 → 18,133 | 11 → 16 | 11 → 14 | 15,128 → 14,020 | 138,810 → 151,618 |
+| explore-locate | 16 → 9 | 22,856 → 9,378 | 16,177 → 17,413 | 7 → 7 | 4 → 4 | 15,736 → 12,644 | 46,838 → 36,682 |
+| repo-where-is-it | 17 → 9 | 23,803 → 9,378 | 16,177 → 17,413 | 17 → 19 | 14 → 13 | 24,724 → 26,557 | 269,423 → 253,166 |
+| repo-fix-gated | 19 → 11 | 25,100 → 10,675 | 16,897 → 18,133 | 10 → 14 | 9 → 11 | 22,460 → 19,675 | 165,629 → 170,956 |
+| deferred-tool-load (new) | 9 | 9,378 | 17,413 | 2 | 3 | 17,242 | 28,820 |
+
+Read honestly: the fixed cost of every model call fell by roughly 13K chars
+(about 3.3K tokens) and the catalog added back about 300; that is the part
+deferral controls, and it is exact. Peak input moved −7% to −20% on three tasks
+and +7% on one; billed input moved −22% to +9%, tracking the number of model calls
+the model happened to make, not the schema change — the same task varies by that
+much run to run (§5b). All four still pass except `explore-locate`, which missed
+one of its two line citations by seven lines; the tool set had nothing to do with
+it. The new task is the point: a market question inside a coding session was
+answered in two tool calls — `tools.load(["market.ticker"])`, then the call — in
+13 seconds, with no market schema in context until it was needed.
+
+What to watch: a session that loads several deferred tools converges back toward
+the old cost, by design; chart sessions are unchanged; and a model that ignores
+the catalog would have to be told twice, which has not happened in five runs.
+
 ## 6. Proposals, each with its tradeoff
 
 Shipped today (each small, each with a test, each measured by re-running the suite):
