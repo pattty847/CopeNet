@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any, Awaitable, Callable
 
+from copenet.core.orchestrator.facade_observability import DEFAULT_USAGE_DAYS
 from copenet.host.rpc_schema import ResponseFrame, RpcError, make_response_frame
 
 
@@ -48,6 +49,34 @@ async def handle_observability_traces_purge(request_id: str, send_json: SendJson
             ResponseFrame(id=request_id, ok=True, payload={"settings": orchestrator.purge_observability_traces()})
         )
     )
+
+
+async def handle_observability_usage_get(
+    request_id: str,
+    params: dict[str, Any] | None,
+    send_json: SendJson,
+    orchestrator,
+) -> None:
+    """Return the token/tool usage rollup over the requested window of days."""
+    raw = params or {}
+    days = raw.get("days")
+    include_bench = raw.get("includeBench")
+    if days is not None and not isinstance(days, int):
+        await send_json(
+            make_response_frame(
+                ResponseFrame(
+                    id=request_id,
+                    ok=False,
+                    error=RpcError(code="INVALID_REQUEST", message="days must be an integer"),
+                )
+            )
+        )
+        return
+    rollup = orchestrator.get_usage_rollup(
+        days=days if days is not None else DEFAULT_USAGE_DAYS,
+        include_bench=bool(include_bench),
+    )
+    await send_json(make_response_frame(ResponseFrame(id=request_id, ok=True, payload={"usage": rollup})))
 
 
 async def handle_observability_run_get(

@@ -117,6 +117,7 @@ from .rpc_observability import (
     handle_observability_settings_get,
     handle_observability_settings_update,
     handle_observability_traces_purge,
+    handle_observability_usage_get,
 )
 from .rpc_sessions import (
     handle_approvals_list,
@@ -212,6 +213,7 @@ RPC_ROUTES = build_routes(
         ("observability.settings.update", RpcRoute(handle_observability_settings_update, "standard")),
         ("observability.traces.purge", RpcRoute(handle_observability_traces_purge, "without_params")),
         ("observability.run.get", RpcRoute(handle_observability_run_get, "standard")),
+        ("observability.usage.get", RpcRoute(handle_observability_usage_get, "standard")),
         ("persona.get", RpcRoute(handle_persona_get, "standard")),
         ("persona.settings.get", RpcRoute(handle_persona_settings_get, "without_params")),
         ("persona.settings.update", RpcRoute(handle_persona_settings_update, "standard")),

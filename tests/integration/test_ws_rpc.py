@@ -1001,6 +1001,32 @@ def test_observability_debug_capture_is_runtime_adjustable_and_inspectable(rpc_c
         assert [message["role"] for message in detail["messages"]] == ["user", "assistant"]
 
 
+def test_observability_usage_rolls_up_the_runs_that_actually_happened(rpc_client: TestClient) -> None:
+    with _open_rpc(rpc_client) as socket:
+        send_id = socket.request(
+            "chat.send",
+            {"sessionKey": "usage-rollup", "message": "Say hello", "provider": "fake"},
+        )
+        run_id = socket.recv_response(send_id)["payload"]["runId"]
+        socket.recv_chat_until_terminal(session_key="usage-rollup", run_id=run_id)
+
+        usage_id = socket.request("observability.usage.get", {"days": 7})
+        usage = socket.recv_response(usage_id)["payload"]["usage"]
+
+        assert usage["range"]["days"] == 7
+        assert len(usage["daily"]) == 7
+        assert len(usage["weekday"]) == 7 and len(usage["hourly"]) == 24
+        assert usage["includeBench"] is False
+        assert usage["totals"]["runs"] >= 1
+        assert usage["usageCoverage"]["runs"] == usage["totals"]["runs"]
+        assert any(row["provider"] == "fake" for row in usage["providers"])
+
+        bad_id = socket.request("observability.usage.get", {"days": "week"})
+        rejected = socket.recv_response(bad_id)
+        assert rejected["ok"] is False
+        assert rejected["error"]["code"] == "INVALID_REQUEST"
+
+
 def test_session_state_rpc_exposes_runtime_state(rpc_client: TestClient) -> None:
     with _open_rpc(rpc_client) as socket:
         send_id = socket.request(

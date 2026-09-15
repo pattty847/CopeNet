@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from typing import Any
@@ -35,6 +36,20 @@ def _step_list(value: Any) -> list[dict[str, Any]]:
 
 def _dict_value(value: Any) -> dict[str, Any]:
     return dict(value) if isinstance(value, dict) else {}
+
+
+def _parse_utc(value: str | None) -> datetime | None:
+    """Parse one stored ISO timestamp as UTC-aware, or None when it is unusable."""
+    text = (value or "").strip()
+    if not text:
+        return None
+    if text.endswith("Z"):
+        text = f"{text[:-1]}+00:00"
+    try:
+        parsed = datetime.fromisoformat(text)
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
 
 
 @dataclass
@@ -222,6 +237,29 @@ class RunStore:
             rows.extend(self._read_tail(path, per_session))
         rows.sort(key=lambda record: record.started_at, reverse=True)
         return rows[:limit]
+
+    def list_since(self, since_iso: str, *, per_session: int = 5_000) -> list[RunRecord]:
+        """Return every run record started at or after `since_iso`, across every session.
+
+        The usage rollup needs a whole window rather than "the newest N", so this
+        cannot reuse `list_recent_across_sessions`. File mtime still prunes the walk:
+        a log whose last append predates the window cannot contain a run inside it.
+        """
+        cutoff = _parse_utc(since_iso)
+        if cutoff is None:
+            raise ValueError("since_iso must be an ISO-8601 timestamp")
+        rows: list[RunRecord] = []
+        for path in self._root_dir.glob("*.jsonl"):
+            if not path.is_file():
+                continue
+            if datetime.fromtimestamp(path.stat().st_mtime, tz=timezone.utc) < cutoff:
+                continue
+            for record in self._read_tail(path, per_session):
+                started = _parse_utc(record.started_at)
+                if started is not None and started >= cutoff:
+                    rows.append(record)
+        rows.sort(key=lambda record: record.started_at, reverse=True)
+        return rows
 
     def _read_tail(self, path: Path, limit: int) -> list[RunRecord]:
         with _path_lock(path):

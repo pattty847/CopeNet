@@ -1,6 +1,15 @@
-"""Observability facade: settings and evidence for one durable run."""
+"""Observability facade: settings, evidence for one durable run, and the usage rollup."""
 
 from __future__ import annotations
+
+from datetime import datetime, timedelta, timezone
+
+from copenet.core.observability.usage_rollup import build_usage_rollup
+
+# A year of daily buckets is the widest window the calendar heatmap can render
+# legibly, and it bounds how much of the run store one request walks.
+MAX_USAGE_DAYS = 365
+DEFAULT_USAGE_DAYS = 30
 
 
 class ObservabilityFacadeMixin:
@@ -25,6 +34,21 @@ class ObservabilityFacadeMixin:
         payload = settings.to_public_dict()
         payload["traceStorage"] = self._observability_store.trace_storage_stats()
         return payload
+
+    def get_usage_rollup(self, *, days: int = DEFAULT_USAGE_DAYS, include_bench: bool = False) -> dict:
+        """Group the run store's records in the window into the Usage view's payload.
+
+        The window is whole local days, so the store is read from local midnight
+        `days - 1` days ago — one day wider than the UTC window, which is what keeps
+        an evening run in a UTC-ahead timezone inside its own local day.
+        """
+        days = max(1, min(int(days), MAX_USAGE_DAYS))
+        now = datetime.now().astimezone()
+        start_of_window = datetime.combine(
+            now.date() - timedelta(days=days - 1), datetime.min.time(), tzinfo=now.tzinfo
+        )
+        records = self._run_store.list_since(start_of_window.astimezone(timezone.utc).isoformat())
+        return build_usage_rollup(records, days=days, now=now, include_bench=include_bench)
 
     def resolve_observability_run(self, session_key: str, run_id: str) -> dict | None:
         run = self.resolve_session_run(session_key, run_id)
