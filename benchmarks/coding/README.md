@@ -63,7 +63,16 @@ uv run --extra dev python -m benchmarks.coding.run --list
 uv run --extra dev python -m benchmarks.coding.run --dry-run           # no model: proves every seeded task starts red
 uv run --extra dev python -m benchmarks.coding.run --provider openai-codex --model gpt-5.5
 uv run --extra dev python -m benchmarks.coding.run --only repo-where-is-it repo-fix-gated
+uv run --extra dev python -m benchmarks.coding.run --repeat 3 --only repo-broad-question
 ```
+
+`--repeat N` runs every selected task N times, each in a fresh session and a
+fresh workspace, round-robin so a slow hour lands on every task's run k rather
+than on one task. The report then leads with a per-task table of pass rate and
+median (min–max) for tool calls, model calls, peak input, billed input, redundant
+reads, search dumps and seconds, with every run listed underneath. Single runs
+of the same task swing ±20% on billed tokens and 2→4→2 on search dumps, so a
+before/after decision needs at least three runs per side.
 
 `--extra dev` matters for the repo tasks: their graders (and the model) run this
 interpreter's pytest. For seeded repo tasks `--dry-run` also proves the gate is

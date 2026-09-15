@@ -43,7 +43,7 @@ if str(REPO_ROOT / "src") not in sys.path:
 
 from benchmarks.coding import trace_analysis  # noqa: E402
 from benchmarks.coding.catalog import TASKS, TASKS_BY_ID  # noqa: E402
-from benchmarks.coding.report import render_suite_report, summary_row  # noqa: E402
+from benchmarks.coding.report import aggregate_rows, render_suite_report, summary_row  # noqa: E402
 from benchmarks.coding.tasks import FIXTURE_ROOT, Check, GradeContext, Task  # noqa: E402
 
 DEFAULT_OUT = REPO_ROOT / "tmp" / "coding_bench"
@@ -116,15 +116,21 @@ def _check_rows(checks: list[Check]) -> list[dict[str, Any]]:
     return [asdict(check) for check in checks]
 
 
-async def run_task(orchestrator, task: Task, *, provider: str, model: str | None, out_dir: Path, timeout_sec: float, keep: bool) -> dict[str, Any]:
+async def run_task(orchestrator, task: Task, *, provider: str, model: str | None, out_dir: Path, timeout_sec: float, keep: bool, repeat_index: int = 1, repeat_total: int = 1) -> dict[str, Any]:
     stamp = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
-    session_key = f"bench-{task.id}-{stamp}"
+    # Every repeat is a fresh session and a fresh workspace: nothing carries over
+    # between runs except the model's own variance, which is what repeats measure.
+    session_key = f"bench-{task.id}-{stamp}" + (f"-r{repeat_index}" if repeat_total > 1 else "")
     workdir = prepare_workspace(task)
-    task_dir = out_dir / task.id
+    task_dir = out_dir / task.id / (f"run{repeat_index}" if repeat_total > 1 else "")
     task_dir.mkdir(parents=True, exist_ok=True)
-    print(f"\n▶ {task.id} — {task.title}\n  session {session_key}\n  workspace {workdir}", flush=True)
+    label = f" (run {repeat_index}/{repeat_total})" if repeat_total > 1 else ""
+    print(f"\n▶ {task.id}{label} — {task.title}\n  session {session_key}\n  workspace {workdir}", flush=True)
     try:
-        return await _run_task_in(orchestrator, task, workdir=workdir, task_dir=task_dir, session_key=session_key, provider=provider, model=model, timeout_sec=timeout_sec, keep=keep)
+        result = await _run_task_in(orchestrator, task, workdir=workdir, task_dir=task_dir, session_key=session_key, provider=provider, model=model, timeout_sec=timeout_sec, keep=keep)
+        result["repeat"] = repeat_index
+        (task_dir / "result.json").write_text(json.dumps(result, indent=1, default=str), encoding="utf-8")
+        return result
     except BaseException:
         if not keep:
             cleanup_workspace(task, workdir)
@@ -297,8 +303,11 @@ async def main_async(args: argparse.Namespace) -> int:
     print(f"Coding-agent benchmark — {args.provider} / {args.model or 'default'} — {len(tasks)} task(s) → {out_dir}")
     results: list[dict[str, Any]] = []
     try:
-        for task in tasks:
-            results.append(await run_task(orchestrator, task, provider=args.provider, model=args.model, out_dir=out_dir, timeout_sec=args.timeout_sec, keep=args.keep))
+        # Round-robin over repeats so a slow hour or a provider hiccup lands on
+        # every task's run k, not on all of one task's runs.
+        for repeat_index in range(1, args.repeat + 1):
+            for task in tasks:
+                results.append(await run_task(orchestrator, task, provider=args.provider, model=args.model, out_dir=out_dir, timeout_sec=args.timeout_sec, keep=args.keep, repeat_index=repeat_index, repeat_total=args.repeat))
     finally:
         if not args.no_debug_capture and not previous:
             orchestrator.update_observability_settings(debug_capture=False)
@@ -306,16 +315,26 @@ async def main_async(args: argparse.Namespace) -> int:
         "ranAt": stamp,
         "provider": args.provider,
         "model": args.model,
+        "repeat": args.repeat,
         "score": f"{sum(1 for r in results if r['passed'])}/{len(results)}",
         "tasks": [summary_row(r) for r in results],
+        "aggregate": aggregate_rows(results),
     }
     (out_dir / "summary.json").write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
     (out_dir / "REPORT.md").write_text(render_suite_report(summary, results), encoding="utf-8")
     print("\n" + "=" * 72)
     print(f"SCORE {summary['score']}  →  {out_dir / 'REPORT.md'}")
-    for row in summary["tasks"]:
-        print(f"  {'✓' if row['passed'] else '✗'} {row['id']:<26} tools={row['toolCalls']} calls={row['modelCalls']} peakIn={row['peakInput']} dumps={row['searchDumps']} failed={row['failedChecks']}")
+    if args.repeat > 1:
+        for row in summary["aggregate"]:
+            print(f"  {row['id']:<26} pass {row['passes']}/{row['runs']}  tools {_spread(row['toolCalls'])}  calls {_spread(row['modelCalls'])}  peak {_spread(row['peakInput'])}  billed {_spread(row['billedInput'])}  dumps {_spread(row['searchDumps'])}  failed={row['failedChecks']}")
+    else:
+        for row in summary["tasks"]:
+            print(f"  {'✓' if row['passed'] else '✗'} {row['id']:<26} tools={row['toolCalls']} calls={row['modelCalls']} peakIn={row['peakInput']} dumps={row['searchDumps']} failed={row['failedChecks']}")
     return 0 if all(r["passed"] for r in results) else 1
+
+
+def _spread(stat: dict[str, Any]) -> str:
+    return f"{stat['median']} ({stat['min']}–{stat['max']})"
 
 
 def main() -> int:
@@ -328,12 +347,16 @@ def main() -> int:
     parser.add_argument("--out", default=str(DEFAULT_OUT))
     parser.add_argument("--timeout-sec", type=float, default=900.0)
     parser.add_argument("--keep", action="store_true", help="keep temp workspaces")
+    parser.add_argument("--repeat", type=int, default=1, help="run each task N times (fresh session and workspace each) and report medians")
     parser.add_argument("--no-debug-capture", action="store_true", help="do not switch Debug capture on for the run")
     args = parser.parse_args()
     if args.list:
         for task in TASKS:
             print(f"{task.id:<26} {task.workspace:<8} {task.access or 'read-only':<12} {len(task.turns)} turn(s)  {task.title}")
         return 0
+    if args.repeat < 1:
+        print("--repeat must be at least 1")
+        return 2
     unknown = [task_id for task_id in (args.only or []) if task_id not in TASKS_BY_ID]
     if unknown:
         print(f"unknown task id(s): {unknown}; available: {list(TASKS_BY_ID)}")

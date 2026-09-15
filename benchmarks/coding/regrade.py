@@ -18,7 +18,7 @@ if str(REPO_ROOT / "src") not in sys.path:
     sys.path.insert(0, str(REPO_ROOT / "src"))
 
 from benchmarks.coding import trace_analysis  # noqa: E402
-from benchmarks.coding.report import render_suite_report, summary_row  # noqa: E402
+from benchmarks.coding.report import aggregate_rows, render_suite_report, summary_row  # noqa: E402
 from benchmarks.coding.run import cleanup_workspace, prepare_workspace  # noqa: E402
 from benchmarks.coding.catalog import TASKS_BY_ID  # noqa: E402
 from benchmarks.coding.tasks import GradeContext  # noqa: E402
@@ -29,7 +29,7 @@ def regrade(run_dir: Path) -> int:
     summary_path = run_dir / "summary.json"
     summary = json.loads(summary_path.read_text(encoding="utf-8")) if summary_path.exists() else {"provider": "?", "model": None, "ranAt": run_dir.name, "tasks": []}
     results = []
-    for result_path in sorted(run_dir.glob("*/result.json")):
+    for result_path in sorted(list(run_dir.glob("*/result.json")) + list(run_dir.glob("*/run*/result.json"))):
         result = json.loads(result_path.read_text(encoding="utf-8"))
         task = TASKS_BY_ID[result["id"]]
         task_dir = result_path.parent
@@ -64,6 +64,8 @@ def regrade(run_dir: Path) -> int:
         results.append(result)
     summary["score"] = f"{sum(1 for r in results if r['passed'])}/{len(results)}"
     summary["tasks"] = [summary_row(r) for r in results]
+    summary["repeat"] = max([r.get("repeat", 1) for r in results] or [1])
+    summary["aggregate"] = aggregate_rows(results)
     summary_path.write_text(json.dumps(summary, indent=1, default=str), encoding="utf-8")
     (run_dir / "REPORT.md").write_text(render_suite_report(summary, results), encoding="utf-8")
     print(f"regraded {len(results)} task(s): score {summary['score']} → {run_dir / 'REPORT.md'}")
