@@ -132,5 +132,9 @@ def render_suite_report(summary: dict[str, Any], results: list[dict[str, Any]]) 
             if not analysis or "error" in analysis and len(analysis) == 1:
                 lines += ["", f"### turn {index} trace", "", f"(no analysis: {analysis.get('error') if analysis else 'no trace'})"]
                 continue
-            lines += ["", f"### turn {index} trace", "", render_markdown(analysis)]
+            try:
+                rendered = render_markdown(analysis)
+            except (KeyError, TypeError) as exc:  # a partial analysis (failed mid-way) must not sink the report
+                rendered = f"(analysis incomplete: missing {exc})"
+            lines += ["", f"### turn {index} trace", "", rendered]
     return "\n".join(lines) + "\n"
