@@ -1,3 +1,4 @@
+import { usePosition } from './position/usePosition';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { assetProfile } from './assetProfile';
 import { buildRailEntries } from './symbolRailModel';
@@ -29,6 +30,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   // fundamental overlay on the outgoing issuer's candles: a market tool quietly attributing
   // one company's insider selling to another's price.
   const viewSymbol = ticker.detail?.symbol ?? symbol.trim().toUpperCase();
+  const position = usePosition(viewSymbol);
   const sec = useTickerEvidence(viewSymbol);
   const priceAlerts = usePriceAlerts(viewSymbol);
   const overlayMetrics = useFinancialMetrics();
@@ -110,12 +112,15 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
 
   const detail = ticker.detail;
   const profile = assetProfile(detail);
+  profile.tabs = profile.tabs.filter((entry) => entry !== 'position');
+  if (position.data?.position || detail?.intelligence?.portfolio) profile.tabs.splice(1, 0, 'position');
 
   // A fund has no Fundamentals or Evidence tab. Without this, a persisted `fundamentals`
   // rendered its panel — and fired an SEC fetch — with no tab highlighted anywhere.
   useEffect(() => {
+    if (!detail || (tab === 'position' && position.loading && !position.data)) return;
     if (!profile.tabs.includes(tab)) setTab(profile.tabs[0]);
-  }, [profile.tabs, tab]);
+  }, [profile.tabs, tab, detail, position.loading, position.data]);
 
   const {
     snap,
@@ -290,7 +295,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
   }, []);
 
   return {
-    ticker, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
+    ticker, position, viewSymbol, sec, priceAlerts, overlayMetrics, timeframe,
     setTimeframe, range: effectiveRange, setRange, logScale, setLogScale, candleStyle, setCandleStyle, showVolume,
     intraday,
     setShowVolume, tab, indicators, indicatorLayout, handlePaneStretch, railCollapsed,

@@ -44,21 +44,21 @@ export function MonitoringActivity({
       </section>
       <section>
         <h3>Alert events</h3>
-        {!events.length && <p className="mm-monitor-empty">No crossings yet. Armed rules establish a baseline first.</p>}
+        {!events.length && <p className="mm-monitor-empty">No alert events yet. Armed rules establish a baseline first.</p>}
         {events.map((event) => (
           <details key={event.eventId} className="mm-monitor-log">
             <summary>
               <b>
                 {event.symbol} · {event.timeframe}
               </b>
-              <span>{event.condition}</span>
+              <span>{event.phase?.replaceAll('_', ' ')} · {event.condition}</span>
               <time>{timeLabel(event.evaluatedAt)}</time>
             </summary>
             <p>
               Observed {event.leftValue} vs {event.rightValue}
             </p>
             <p>
-              Candle close {timeLabel(event.candleCloseAt)} · Scan {event.scanId}
+              {event.phase === 'interaction' ? 'Expected candle close' : 'Candle close'} {timeLabel(event.candleCloseAt)} · Scan {event.scanId}
             </p>
           </details>
         ))}

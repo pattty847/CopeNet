@@ -29,9 +29,9 @@ def publish_monitoring_events(orchestrator, events: list[dict]) -> None:
             if pulse_store is not None and pulse_store.get(event["eventId"]) is None:
                 pulse_store.create(PulseRecord(
                     pulse_id=event["eventId"], status="new",
-                    title=f"{event['symbol']} · {event['timeframe']} technical alert",
+                    title=f"{event['symbol']} · {event['timeframe']} · {event.get('phase', 'crossing').replace('_', ' ')}",
                     summary=event["condition"],
-                    why_now=f"Completed candle {event['candleCloseAt']}; observed {event['leftValue']} versus {event['rightValue']}.",
+                    why_now=f"{('Forming candle; expected close' if event.get('phase') == 'interaction' else 'Candle close')} {event['candleCloseAt']}; observed {event['leftValue']} versus {event['rightValue']} at {event['evaluatedAt']}.",
                     source_session_keys=["market-alerts"], source_run_ids=[],
                     created_at=event["evaluatedAt"], updated_at=event["evaluatedAt"],
                 ))

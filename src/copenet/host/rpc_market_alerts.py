@@ -71,3 +71,16 @@ async def handle_market_alerts_state(request_id, params, send_json, orchestrator
     rules, events, catalogue = await asyncio.gather(asyncio.to_thread(_rules, orchestrator, params),
         asyncio.to_thread(store.events), asyncio.to_thread(evaluator_catalogue))
     await _send(request_id, send_json, {'alerts': rules, 'events': events, 'catalogue': catalogue})
+
+
+async def handle_market_alerts_rehearse(request_id, params, send_json, orchestrator):
+    from copenet.core.market.alert_rules import validate_rule
+    from copenet.core.market.alert_rehearsal import rehearse_rule
+    raw = (params or {}).get('rule')
+    if not isinstance(raw, dict):
+        raise ValueError('rule is required')
+    rule = await asyncio.to_thread(validate_rule, {**raw, 'scanId': raw.get('scanId') or 'rehearsal'})
+    runtime = resolve_market_runtime(orchestrator)
+    def rehearse():
+        return rehearse_rule(rule, runtime.prices.load(rule.symbol))
+    await _send(request_id, send_json, await asyncio.to_thread(rehearse))

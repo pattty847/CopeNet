@@ -75,10 +75,8 @@ export function captureTickerView(options: {
     label: comparison.label, unit: comparison.valueMode === 'percent' ? 'percent' : 'number', status: 'loaded', rows: comparison.data.map((row) => ({ ...row })), metadata: { valueMode: comparison.valueMode, color: comparison.color, timestampUnit: 'seconds' } });
   resources.push({ key: 'chart:drawings', kind: 'drawings', label: 'Drawings at capture', status: document.objects.length ? 'loaded' : 'empty',
     rows: document.objects.map((object) => ({ ...object })), metadata: { documentId: document.documentId, revision: document.revision } });
-  if (detail.intelligence?.portfolio) resources.push({ key: 'account:position', kind: 'panel', label: 'Position in this ticker',
-    status: 'loaded', rows: [{ ...detail.intelligence.portfolio }], metadata: { accountContext: true } });
   resources.push(...contributions);
-  const requiredPanel = view.snap === 'collapsed' || view.tab === 'overview' ? null : `panel:${view.tab}`;
+  const requiredPanel = view.snap === 'collapsed' || view.tab === 'overview' ? null : view.tab === 'position' ? 'account:position' : `panel:${view.tab}`;
   if (requiredPanel && !contributions.some((resource) => resource.key === requiredPanel)) {
     throw new Error('The visible research panel is still updating. Try sending again when it is ready.');
   }

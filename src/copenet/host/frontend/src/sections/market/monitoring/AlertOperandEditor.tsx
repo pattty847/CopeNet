@@ -6,8 +6,10 @@ export function AlertOperandEditor({
   operand,
   catalogue,
   onChange,
+  priceOnly = false,
 }: {
   label: string;
+  priceOnly?: boolean;
   operand: AlertOperand;
   catalogue: IndicatorOption[];
   onChange: (operand: AlertOperand) => void;
@@ -31,15 +33,22 @@ export function AlertOperandEditor({
           value={operand.kind === 'indicator' ? operand.indicatorId : operand.kind}
           onChange={(event) => choose(event.target.value)}
         >
-          <option value="price">Price · close</option>
-          <option value="constant">Number</option>
-          {catalogue.map((item) => (
+          <option value="price">Price</option>
+          {!priceOnly && <option value="constant">Number</option>}
+          {!priceOnly && catalogue.map((item) => (
             <option key={item.id} value={item.id}>
               {item.name}
             </option>
           ))}
         </select>
       </label>
+      {operand.kind === 'price' && (
+        <label>Price field
+          <select className="tw-input" value={operand.field ?? 'close'} onChange={(event) => onChange({ ...operand, field: event.target.value as AlertOperand['field'] })}>
+            <option value="open">Open</option><option value="high">High</option><option value="low">Low</option><option value="close">Close / latest</option>
+          </select>
+        </label>
+      )}
       {operand.kind === 'constant' && (
         <label>
           Threshold

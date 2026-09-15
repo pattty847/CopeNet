@@ -8,24 +8,14 @@ import json
 
 from .alert_candles import completed_candles
 from .alert_evaluator import evaluator_request
-from .alert_rules import AlertRule
+from .alert_conditions import condition_label, chart_snapshot
+from .alert_interaction import evaluate_interaction
 from .alerts import resolve_alert_store
 from .price_history import split_fingerprint, chart_history_window
 
 
 def _hash(bars) -> str:
     return hashlib.sha256(json.dumps([asdict(bar) for bar in bars], sort_keys=True).encode()).hexdigest()
-
-
-def _condition(rule: AlertRule) -> str:
-    def label(operand):
-        if operand['kind'] == 'price':
-            return 'Close'
-        if operand['kind'] == 'constant':
-            return f"{operand['value']:g}"
-        settings = ', '.join(f'{key}={value}' for key, value in operand['config'].items())
-        return f"{operand['indicatorId'].upper()}({settings}) {operand['output']}"
-    return f"{label(rule.left)} crosses {rule.direction} {label(rule.right)}"
 
 
 def evaluate_scan_alerts(runtime, scan_id, symbols, *, now=None, alert_ids=None):
@@ -44,12 +34,15 @@ def evaluate_scan_alerts(runtime, scan_id, symbols, *, now=None, alert_ids=None)
                 if history is None:
                     replacement, event = replace(rule, status='missing_history', error='Run the linked price scan to load history', lastEvaluatedAt=now.isoformat()), None
                 else:
-                    replacement, event = _evaluate(rule, history, now)
+                    replacement, event = evaluate_interaction(rule, history, now) if rule.triggerMode == 'interaction' else _evaluate(rule, history, now)
             except Exception as exc:
                 replacement, event = replace(rule, status='error', error=str(exc), lastEvaluatedAt=now.isoformat()), None
-            if event:
+            for evidence in (event if isinstance(event, list) else [event] if event else []):
                 # Durable evidence precedes state advancement. Stable ID makes retry safe.
-                emitted.append(store._append_event(event))
+                if rule.includePosition:
+                    from .position_context import attach_position_context
+                    evidence = attach_position_context(evidence, history)
+                emitted.append(store._append_event(evidence))
             updated.append(replacement)
         store._save(updated)
     return emitted
@@ -92,8 +85,12 @@ def _evaluate(rule, history, now):
     observed = replace(observed, status='triggered' if rule.oneShot else 'active', enabled=not rule.oneShot)
     event = {'eventId': f"market-alert-{rule.alertId}-{rule.revision}-{latest['t']}",
         'alertId': rule.alertId, 'revision': rule.revision, 'symbol': rule.symbol,
-        'timeframe': rule.timeframe, 'condition': _condition(rule), 'leftValue': latest['left'],
+        'timeframe': rule.timeframe, 'condition': condition_label(rule), 'leftValue': latest['left'],
         'rightValue': latest['right'], 'candleCloseAt': observation['candleCloseAt'],
         'evaluatedAt': now.isoformat(), 'scanId': rule.scanId, 'destinationIds': rule.destinationIds,
         'rule': observed.to_wire()}
+    event['phase'] = 'confirmed'
+    event['reference'] = 'completed'
+    if rule.includeChart:
+        event['chartSnapshot'] = chart_snapshot(calculation_bars, points, 'completed')
     return observed, event

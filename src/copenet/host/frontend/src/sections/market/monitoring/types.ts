@@ -64,6 +64,7 @@ export interface ScanPreview {
 
 export interface AlertOperand {
   kind: 'price' | 'indicator' | 'constant';
+  field?: 'open' | 'high' | 'low' | 'close';
   indicatorId?: string;
   config?: Record<string, number | string | boolean>;
   output?: string;
@@ -83,6 +84,10 @@ export interface AlertRule {
   right: AlertOperand;
   destinationIds: string[];
   telegramAuthorized: boolean;
+  triggerMode?: 'cross' | 'interaction';
+  confirmation?: { left: AlertOperand; right: AlertOperand; direction: 'above' | 'below' } | null;
+  includePosition?: boolean;
+  includeChart?: boolean;
   status: string;
   createdAt?: string;
   updatedAt?: string;
@@ -92,7 +97,14 @@ export interface AlertRule {
   error?: string | null;
 }
 
+export interface AlertRehearsal {
+  status: string; error: string | null; note: string; candles: number; matchCount: number;
+  cacheUpdatedAt?: string;
+  matches: { t: number; candleCloseAt: string; leftValue: number; rightValue: number; phase: string }[];
+}
+
 export interface AlertEvent {
+  phase?: string;
   eventId: string;
   alertId: string;
   symbol: string;

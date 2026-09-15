@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from base64 import b64encode, b64decode
 from datetime import datetime, timezone
 from hashlib import sha256
 import os
@@ -13,11 +14,12 @@ from uuid import uuid4
 
 from .market_outbox import MarketOutbox
 from .store import MessagingConfigRecord
-from .telegram_delivery import TelegramReceipt, send_telegram_message, telegram_transport_configured
+from .telegram_delivery import TelegramReceipt, send_telegram_message, send_telegram_photo, telegram_transport_configured
 
 ConfigLoader = Callable[[], MessagingConfigRecord]
 RuleActive = Callable[[str, int], bool]
 Transport = Callable[[str, str], TelegramReceipt]
+PhotoTransport = Callable[[str, str, bytes], TelegramReceipt]
 PENDING = {"queued", "approval_required", "failed", "uncertain", "sending"}
 
 
@@ -35,26 +37,62 @@ def _ticker_link(symbol: str) -> str:
 
 
 def market_event_message(event: dict) -> str:
+    from copenet.core.market.alert_chart import PHASE_LABELS
+    phase = event.get("phase")
+    stage = PHASE_LABELS.get(phase, "Completed candle signal")
+    close_label = "Candle closes" if phase == "interaction" else "Candle closed"
     text = (
         f"CopeNet · {event['symbol']} · {event['timeframe']}\n"
-        f"{event['condition']}\n"
+        f"{stage}\n{event['condition']}\n"
         f"Observed: {event['leftValue']} / {event['rightValue']}\n"
-        f"Candle closed: {event['candleCloseAt']}\n"
-        f"Evaluated: {event['evaluatedAt']}\n"
-        f"{_ticker_link(event['symbol'])}"
+        f"{close_label}: {event['candleCloseAt']}\n"
+        f"Data observed: {event.get('observedAt') or event['evaluatedAt']}\n"
+        f"Evaluated: {event['evaluatedAt']}"
     )
-    if len(text.encode("utf-16-le")) // 2 > 4096:
-        raise ValueError("Alert evidence exceeds Telegram's message limit")
+    position = event.get("position") if event.get("rule", {}).get("includePosition", False) else None
+    if position:
+        def number(key, suffix=""):
+            value = position.get(key)
+            return "unknown" if value is None else f"{value:,.2f}{suffix}"
+        text += (
+            f"\nPosition: {number('quantity')} shares · Avg {number('avg_cost')} {position.get('currency') or ''}"
+            f"\nUnrealized: {number('unrealized_pl')} {position.get('currency') or ''} ({number('unrealized_pl_pct', '%')})"
+            f" · Weight {number('allocation_pct', '%')}"
+            f"\nBroker snapshot: {position.get('synced_at') or 'unknown'}"
+        )
+    text += f"\n{_ticker_link(event['symbol'])}"
     return text
+
+
+def _bounded_message(text: str, limit: int) -> str:
+    if len(text.encode("utf-16-le")) // 2 <= limit:
+        return text
+    suffix = "\n… Full evidence saved in CopeNet."
+    return text.encode("utf-16-le")[:(limit - len(suffix)) * 2].decode("utf-16-le", errors="ignore") + suffix
 
 
 def enqueue_market_event(root: Path, event: dict, destination_ids: list[str], authorized: bool = False) -> list[dict]:
     """Persist an immutable message once per event/destination. Never send here."""
     outbox = MarketOutbox(root)
     text = market_event_message(event)
-    return [_public(outbox.insert(_row(
-        event["eventId"], event["alertId"], event["revision"], destination_id, text, authorized,
-    ))) for destination_id in dict.fromkeys(destination_ids)]
+    photo = None
+    chart_error = None
+    if event.get("rule", {}).get("includeChart", False):
+        from copenet.core.market.alert_chart import render_alert_chart
+        try:
+            photo = b64encode(render_alert_chart(event)).decode("ascii")
+        except Exception:
+            # Rendering occurs before any network write; a text fallback is unambiguous.
+            chart_error = "Chart snapshot unavailable; alert evidence is saved."
+            text += f"\n{chart_error}"
+    rows = []
+    for destination_id in dict.fromkeys(destination_ids):
+        row = _row(event["eventId"], event["alertId"], event["revision"], destination_id,
+                   _bounded_message(text, 4096), authorized)
+        row.update(evidence=event, photo=photo, hasChart=photo is not None, chartError=chart_error,
+                   caption=_bounded_message(text, 1024) if photo else None)
+        rows.append(_public(outbox.insert(row)))
+    return rows
 
 
 def _row(event_id: str, alert_id: str | None, revision: int, destination_id: str, text: str, authorized: bool) -> dict:
@@ -72,7 +110,7 @@ def _row(event_id: str, alert_id: str | None, revision: int, destination_id: str
 
 
 def _public(row: dict) -> dict:
-    return {key: value for key, value in row.items() if key not in {"authorized", "targetFingerprint"}}
+    return {key: value for key, value in row.items() if key not in {"authorized", "targetFingerprint", "evidence", "photo"}}
 
 
 def _destination(config: MessagingConfigRecord, destination_id: str):
@@ -121,7 +159,7 @@ def _cancel_invalid(outbox: MarketOutbox, row: dict, config: MessagingConfigReco
 
 def process_market_deliveries(
     root: Path, config_loader: ConfigLoader, rule_active: RuleActive,
-    *, transport: Transport = send_telegram_message, now: float | None = None,
+    *, transport: Transport = send_telegram_message, photo_transport: PhotoTransport = send_telegram_photo, now: float | None = None,
     only_delivery_id: str | None = None,
 ) -> list[dict]:
     """One bounded batch; a host scheduler may invoke this independently of scans."""
@@ -173,7 +211,10 @@ def process_market_deliveries(
             row["attempts"].append(attempt)
             outbox.save(row)  # Commit before the network write, so crashes never cause automatic duplicates.
             try:
-                receipt = transport(destination.target, row["text"])
+                if row.get("photo"):
+                    receipt = photo_transport(destination.target, row["caption"], b64decode(row["photo"]))
+                else:
+                    receipt = transport(destination.target, row["text"])
             except Exception:
                 receipt = TelegramReceipt("uncertain", error="Sender failed without a confirmed receipt. Check the chat before retrying.")
             sent_this_batch += 1

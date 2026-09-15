@@ -98,12 +98,21 @@ they do not replace the broad-market briefing.
 
 ![Market scan controls — synthetic demonstration data](docs/imgs/market-scans-alerts.png)
 
-Technical alerts use the chart’s own price/SMA/EMA/RSI/MACD calculations on completed
-daily, weekly, or monthly US-equity candles. Arming establishes a baseline, not an old
-crossing. Rules can repeat or stop after one event. Every crossing is recorded in Pulse;
-optional Telegram delivery has per-rule consent, approval, receipts, retry, and explicit
-uncertain-send handling. An indicator’s bell carries its current settings into the editor.
+Technical alerts reuse every chart indicator, including Supertrend and MAMA/FAMA, on
+US-equity daily, weekly, and monthly candles. Choose open, high, low, or close. A
+completed crossing sends one event; **first interaction + close follow-up** observes a
+forming candle against the previous completed signal and later reports whether the close
+confirmed it. Custom confirmation can compare indicator outputs. These are linked-scan
+observations, not a continuous tick service: scan cadence determines when a heads-up arrives.
+Rehearsal checks stored history without arming a rule or acquiring data; historical bars
+cannot reconstruct the actual intraperiod path or scan timing.
 
+Each rule has explicit Telegram consent and optional cached-position context and chart
+images. Images render the frozen alert evidence, including comparison values, rather than
+requiring an open browser. Position context includes its broker timestamp; chart images
+exclude holdings unless the separate position option is selected. Durable receipts preserve
+uncertain sends without automatic duplicate retries. Arming never reports an old crossing
+or an existing touch; repeating monitors need an observed reset.
 ![Technical alert editor — synthetic demonstration data](docs/imgs/market-alert-editor.png)
 
 Build the frontend with `npm run build` before running the host: it also produces the
@@ -156,6 +165,21 @@ default; individual trades remain available for inspection. Linear/log axis mode
 explicit toolbar control.
 
 ![CopeNet Market Monitor — chart-first asset workspace](docs/imgs/market-ticker-workspace.png)
+
+**Your position** — a held equity gets a Position tab, a quiet average-cost line, and
+snapshot P&L on its chart. Recorded buy/sell markers and shading are optional. Hold Alt
+over the chart, or enter a price in Position, to estimate P&L using current shares and
+average cost. The expandable position story shows filled-order aggregates, not a
+reconstructed historical valuation. Position layers pause in replay and comparison views.
+Account context follows the chart agent's existing opt-in boundary.
+
+![Position tab and optional chart layers — synthetic demonstration data](docs/imgs/market-position.png)
+
+The Webull SDK now uses the current v3 order-history contract, including cursor pagination
+and executed quantities on partially filled/cancelled orders. After updating, re-sync
+positions and fill history once: older caches lack an exact account fingerprint and are
+excluded from the new position layer until refreshed. No trade placement or modification
+is added. Open-order overlays and historical unrealized P&L remain future work.
 
 **Chart agent preview** — open **Agent** beside the ticker chart to ask about its
 actual candles, plotted indicators, quote and research panels. Every send freezes those

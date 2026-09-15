@@ -10,7 +10,7 @@ import type { CandleStyle } from './heikinAshi';
 import { INTRADAY_TIMEFRAMES, type ChartTimeframe } from './chartRanges';
 import { loadRailPreference, railCollapsed, saveRailPreference } from './marketWorkstationState';
 
-export type ResearchTab = 'overview' | 'fundamentals' | 'evidence' | 'synthesis';
+export type ResearchTab = 'overview' | 'position' | 'fundamentals' | 'evidence' | 'synthesis';
 export type DrawerSnap = 'collapsed' | 'half' | 'full';
 export type DrawerSizes = Partial<Record<ResearchTab, number>>;
 
@@ -19,6 +19,7 @@ export const DRAWER_MAX_PERCENT = 78;
 
 export const RESEARCH_TABS: { id: ResearchTab; label: string }[] = [
   { id: 'overview', label: 'Overview' },
+  { id: 'position', label: 'Position' },
   { id: 'fundamentals', label: 'Fundamentals' },
   { id: 'evidence', label: 'SEC & Events' },
   { id: 'synthesis', label: 'Synthesis' },

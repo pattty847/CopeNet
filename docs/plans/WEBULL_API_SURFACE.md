@@ -1,4 +1,63 @@
-# Webull API Surface — Live Probe Audit (2026-07-28)
+> September 14 read-only runtime validation: positions and full fill history synced
+> successfully with SDK 3.0.0, and the cached-position RPC accepted the refreshed account
+> fingerprint. No order writes or notification sends were made. Account values remain local.
+
+# Webull API Surface — Compatibility Review (2026-09-14)
+
+## Current compatibility review
+
+The dependency now requires `webull-openapi-python-sdk>=3.0.0,<4` and locks 3.0.0.
+This review inspected the published SDK source and official schemas, with synthetic tests;
+it did not query an account or test current entitlements.
+
+- History uses `order_v3.list_order_history` with ISO-8601 `start_time`/`end_time` and the
+  opaque `pagination_key`, consuming `{data, pagination_key}` until the cursor is absent.
+  The previous `order_v2` cursor path is removed. The SDK supplies the current endpoint
+  path and `x-version: v3`; no handwritten request/signing shim is needed.
+- Every page is consumed regardless of its length. Invalid shapes, repeated cursors, or
+  the bounded page limit fail the sync before replacing the previous stored history.
+  The documented earliest start date is 2018-05-21. HTTP rate-limit retries remain bounded.
+- Executed quantity is retained even when an order is partially filled or later cancelled.
+  Duplicate order IDs are counted once. Records are order aggregates (average fill price
+  at the last execution time), **not individual executions**. Missing execution times,
+  unsupported instrument types, and options without one identifiable leg are skipped with
+  warnings instead of being mislabeled as equity fills.
+- The account positions endpoint remains an unpaginated list. The SDK now supplies
+  `/trading/assets/positions/list`. Malformed/incomplete position responses fail before
+  replacing the cached snapshot. Non-equity positions never use their underlying equity's
+  Yahoo price or equity P&L formula. Short equity percentage returns respect position direction.
+- Sandbox configuration now uses `api.sandbox.webull.com`; the retired UAT hostname and
+  its `uat_host` configuration property are removed. No sandbox account was opened or used.
+- New snapshots and fill caches carry `account_fingerprint` (SHA-256 of the exact account
+  identifier). Position overlays, stories and alert context require a match to the selected
+  account. Older caches must be refreshed by a manual broker sync before these features
+  appear; masked account suffixes are never used as identity. A split dated after the
+  snapshot's New York session suppresses the position overlay until the next sync.
+- Existing broad field-name aliases in `normalize_positions`/`normalize_balance` remain
+  a separate cleanup item; this review does not extend them.
+
+**Open-order feasibility:** SDK 3.0.0 exposes the read-only
+`order_v3.list_order_open(account_id, pagination_key=...)`. It can support future pending-order
+lines with the same cursor handling and explicit sync timestamp. This release does not add
+an open-order store or execution controls. List responses can lag; use order detail for the
+latest status of a known order. Do not represent a planned chart level as a broker order.
+
+**Coverage limits:** no live 3.0.0 account sync was performed. Snapshot/fill freshness is still
+manual-sync freshness, missing historical executions or corporate actions can prevent full
+reconciliation, and option strategies do not have trustworthy per-leg P&L from this order
+aggregate feed. The new September 12 execution endpoint belongs to the separate **Broker API**;
+its release does not establish availability to this individual Trading API integration.
+
+Sources: [SDK release](https://pypi.org/project/webull-openapi-python-sdk/3.0.0/),
+[change log](https://developer.webull.com/apis/docs/changelog/),
+[order history](https://developer.webull.com/apis/docs/reference/order-history/),
+[positions](https://developer.webull.com/apis/docs/reference/account-position/),
+[open orders](https://developer.webull.com/apis/docs/reference/order-open/).
+
+## Historical live probe (2026-07-28)
+
+The remainder records the older probe and its shipped changes; it is not a current
+entitlement check or a description of the new SDK contract.
 
 This records the account-neutral SDK capabilities verified with read-only calls. No order/trade
 calls were made. Live account values and entitlement details belong in ignored private notes, not

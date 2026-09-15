@@ -62,10 +62,10 @@ export function timeLabel(value?: string | null, timezone?: string): string {
   }).format(date);
 }
 export function operandLabel(operand: AlertOperand): string {
-  if (operand.kind === 'price') return 'Close';
+  if (operand.kind === 'price') return (operand.field ?? 'close').replace(/^./, (letter) => letter.toUpperCase());
   if (operand.kind === 'constant') return String(operand.value ?? '—');
   return `${operand.indicatorId?.toUpperCase()}${operand.config?.period ? ` (${operand.config.period})` : ''} · ${operand.output}`;
 }
 export function conditionLabel(rule: AlertRule): string {
-  return `${operandLabel(rule.left)} crosses ${rule.direction} ${operandLabel(rule.right)}`;
+  return `${operandLabel(rule.left)} ${rule.triggerMode === 'interaction' ? 'reaches or moves' : 'crosses'} ${rule.direction} ${operandLabel(rule.right)}`;
 }

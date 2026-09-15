@@ -20,6 +20,7 @@ export interface AssetProfile {
 
 export function assetProfile(detail: TickerDetailPayload | null): AssetProfile {
   const exposure = detail?.intelligence?.exposure;
+  const held: ResearchTab[] = detail?.intelligence?.portfolio ? ['position'] : [];
   const isFund = Boolean(exposure && (exposure.topHoldings?.length || Object.keys(exposure.sectorWeightPct ?? {}).length));
   if (isFund) {
     return {
@@ -27,8 +28,8 @@ export function assetProfile(detail: TickerDetailPayload | null): AssetProfile {
       label: 'Fund',
       // No issuer files behind a fund, so Fundamentals and SEC evidence have nothing to
       // draw. Overview absorbs the holdings and sector weights, which is what a fund IS.
-      tabs: ['overview', 'synthesis'],
+      tabs: ['overview', ...held, 'synthesis'],
     };
   }
-  return { kind: 'issuer', label: 'Equity', tabs: ['overview', 'fundamentals', 'evidence', 'synthesis'] };
+  return { kind: 'issuer', label: 'Equity', tabs: ['overview', ...held, 'fundamentals', 'evidence', 'synthesis'] };
 }

@@ -5,6 +5,7 @@ import type { ComputedIndicator } from '../indicators/compute';
 import { AlertEditor } from './AlertEditor';
 import { MonitoringSheet } from './MonitoringSheet';
 import { newAlert } from './model';
+import { TickerMonitorProvider, useTickerMonitorRefresh } from './TickerMonitors';
 import { useMonitoring } from './useMonitoring';
 import './monitoring.css';
 
@@ -13,6 +14,7 @@ export const TickerAlertContext = createContext<{ symbol: string; timeframe: 'D'
 function TickerAlertEditor({ indicator, onClose }: { indicator: ComputedIndicator; onClose: () => void }) {
   const context = useContext(TickerAlertContext)!;
   const { scans, notifications, catalogue, error, reload } = useMonitoring();
+  const refreshMonitors = useTickerMonitorRefresh();
   if (!scans || !notifications || !catalogue.length)
     return (
       <MonitoringSheet title="Create indicator alert" onClose={onClose}>
@@ -38,7 +40,7 @@ function TickerAlertEditor({ indicator, onClose }: { indicator: ComputedIndicato
     },
   };
   return (
-    <AlertEditor initial={rule} scans={scans} notifications={notifications} catalogue={catalogue} onClose={onClose} onSaved={reload} />
+    <AlertEditor initial={rule} scans={scans} notifications={notifications} catalogue={catalogue} onClose={onClose} onSaved={async () => { await reload(); await refreshMonitors?.(); }} />
   );
 }
 
@@ -63,10 +65,10 @@ export function IndicatorAlertButton({ indicator }: { indicator: ComputedIndicat
 }
 
 export function TickerAlertProvider({ symbol, timeframe, children }: { symbol: string; timeframe: ChartTimeframe; children: ReactNode }) {
-  // The alert engine evaluates COMPLETED DAILY CLOSES — there is no intraday evaluation lane
+  // The alert engine evaluates daily or longer periods — there is no intraday evaluation lane
   // yet (that is Sentinel Phase 1, which the intraday store unblocks but does not deliver).
   // So an alert placed while reading a 5m chart is still a daily alert, and saying `daily`
   // here is the truth about what will be evaluated rather than a guess at what was on screen.
   const evaluated = isIntradayTimeframe(timeframe) ? 'D' : timeframe;
-  return <TickerAlertContext.Provider value={{ symbol, timeframe: evaluated }}>{children}</TickerAlertContext.Provider>;
+  return <TickerAlertContext.Provider value={{ symbol, timeframe: evaluated }}><TickerMonitorProvider symbol={symbol} timeframe={({ D: 'daily', W: 'weekly', M: 'monthly' } as const)[evaluated]}>{children}</TickerMonitorProvider></TickerAlertContext.Provider>;
 }

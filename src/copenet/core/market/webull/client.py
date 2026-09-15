@@ -1,6 +1,6 @@
 """Webull SDK client construction + auth state — the only file that touches the SDK's auth.
 
-Notes grounded in the SDK source (webull-openapi-python-sdk 2.0.12):
+Notes grounded in the SDK source (webull-openapi-python-sdk 3.0.0):
 - `TradeClient(api_client)` runs the full token flow at construction: load local token → create/
   refresh on the server → if not yet approved, poll (default 300s @ 5s) while the user approves the
   request in the Webull mobile app. First-time auth therefore BLOCKS until approval — callers must
@@ -14,6 +14,7 @@ Notes grounded in the SDK source (webull-openapi-python-sdk 2.0.12):
 from __future__ import annotations
 
 import json
+import hashlib
 import logging
 import os
 from pathlib import Path
@@ -44,8 +45,8 @@ def _api_client(config: WebullConfig):
     from webull.core.client import ApiClient
 
     api_client = ApiClient(config.app_key, config.app_secret, "us")
-    if config.uat_host:
-        api_client.add_endpoint("us", config.uat_host)
+    if config.sandbox_host:
+        api_client.add_endpoint("us", config.sandbox_host)
     api_client.set_token_dir(str(_token_dir()))
 
     # Route SDK logging to ~/.copenet/logs at WARNING (never stdout, never the repo CWD).
@@ -143,3 +144,8 @@ def select_account(account_id: str, *, nickname: str | None = None) -> dict[str,
 def mask_account_id(account_id: str) -> str:
     text = str(account_id)
     return f"***{text[-4:]}" if len(text) > 4 else "***"
+
+
+def account_fingerprint(account_id: str) -> str:
+    """Stable exact account identity without persisting the unmasked broker identifier."""
+    return hashlib.sha256(account_id.encode("utf-8")).hexdigest()

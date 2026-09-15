@@ -44,6 +44,10 @@ class AlertRule:
     observation: dict[str, Any] | None = None
     error: str | None = None
     baseline: dict[str, Any] | None = None
+    triggerMode: str = 'cross'
+    confirmation: dict[str, Any] | None = None
+    includePosition: bool = False
+    includeChart: bool = False
 
     def to_wire(self) -> dict[str, Any]:
         wire = asdict(self)
@@ -66,10 +70,21 @@ def validate_rule(raw: dict[str, Any], previous: AlertRule | None = None) -> Ale
     destinations = raw.get('destinationIds', [])
     if not isinstance(destinations, list) or any(not isinstance(value, str) or not value.strip() for value in destinations) or len(destinations) > 10:
         raise ValueError('Select valid notification destinations')
-    for key in ('enabled', 'oneShot', 'telegramAuthorized'):
+    for key in ('enabled', 'oneShot', 'telegramAuthorized', 'includePosition', 'includeChart'):
         if key in raw and not isinstance(raw[key], bool):
             raise ValueError(f'{key} must be a boolean')
     operands = evaluator_request({'action': 'validate', 'left': raw.get('left'), 'right': raw.get('right')})
+    trigger_mode = raw.get('triggerMode', 'cross')
+    if trigger_mode not in {'cross', 'interaction'}:
+        raise ValueError('Choose completed crossing or first interaction')
+    if trigger_mode == 'interaction' and operands['left']['kind'] != 'price':
+        raise ValueError('First interaction observes a price field against a stable signal')
+    confirmation = raw.get('confirmation')
+    if confirmation is not None:
+        if trigger_mode != 'interaction' or not isinstance(confirmation, dict) or confirmation.get('direction') not in {'above', 'below'}:
+            raise ValueError('Confirmation requires an interaction rule and an above/below condition')
+        validated = evaluator_request({'action': 'validate', 'left': confirmation.get('left'), 'right': confirmation.get('right')})
+        confirmation = {**validated, 'direction': confirmation['direction']}
     now = now_iso()
     enabled = raw.get('enabled', True)
     return AlertRule(
@@ -78,6 +93,7 @@ def validate_rule(raw: dict[str, Any], previous: AlertRule | None = None) -> Ale
         symbol=symbol, timeframe=timeframe, scanId=scan_id.strip(), enabled=enabled,
         oneShot=raw.get('oneShot', True), direction=raw['direction'], left=operands['left'], right=operands['right'],
         destinationIds=list(dict.fromkeys(destinations)), telegramAuthorized=raw.get('telegramAuthorized', False),
+        triggerMode=trigger_mode, confirmation=confirmation, includePosition=raw.get('includePosition', False), includeChart=raw.get('includeChart', False),
         status='baseline_pending' if enabled else 'paused', createdAt=previous.createdAt if previous else now, updatedAt=now,
     )
 
