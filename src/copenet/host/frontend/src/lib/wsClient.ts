@@ -43,6 +43,7 @@ import {
   WorkspaceFileContent,
   ShellAllowlistEntry,
   ObservabilityRunDetail,
+  ObservabilityUsage,
   CompanyProfile,
   DeskSnapshot,
   FocusState,
@@ -136,6 +137,7 @@ import { browseWorkspaceRootRpc, setWorkspaceRootRpc } from './wsRuntimeRpc';
 import {
   getObservabilityRunRpc,
   getObservabilitySettingsRpc,
+  getObservabilityUsageRpc,
   updateObservabilitySettingsRpc,
   purgeObservabilityTracesRpc,
 } from './wsObservabilityRpc';
@@ -1073,6 +1075,10 @@ class WsClient {
 
   async purgeObservabilityTraces(): Promise<ObservabilitySettings> {
     return purgeObservabilityTracesRpc(this.request.bind(this));
+  }
+
+  async getObservabilityUsage(days: number, includeBench: boolean): Promise<ObservabilityUsage> {
+    return getObservabilityUsageRpc(this.request.bind(this), days, includeBench);
   }
 
   async getObservabilityRun(sessionKey: string, runId: string): Promise<ObservabilityRunDetail | null> {

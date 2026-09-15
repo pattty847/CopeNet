@@ -109,6 +109,7 @@ models.list
 nasa.apod
 nasa.apod.list
 observability.run.get
+observability.usage.get
 observability.settings.get
 observability.settings.update
 observability.traces.purge

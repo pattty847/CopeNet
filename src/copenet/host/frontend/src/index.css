@@ -65,6 +65,15 @@
   --color-code-border: rgba(17, 24, 39, 0.15);
   --color-code-inline-bg: rgba(194, 122, 58, 0.08);
   --color-code-inline-text: #a85d20;
+
+  /* ── Usage chart series (light) ──
+     Selected against the light chart surface (#ffffff) and validated for the
+     OKLCH lightness band, chroma floor, colourblind separation and contrast.
+     The dark steps below are a separate selection, not a flip of these. */
+  --usage-series-output: #c27a3a;
+  --usage-series-fresh: #3b6fa8;
+  --usage-series-cache: #2f8f67;
+  --usage-heat: 194, 122, 58;
 }
 
 /* ── Dark mode overrides ── */
@@ -86,6 +95,14 @@ html[data-theme='dark'] {
   --color-shell-error: #d96d5f;
   --color-shell-ink: #010204;
   --color-shell-operator-frame: #010204;
+
+  /* ── Usage chart series (dark) ──
+     Validated against the dark chart surface (#080809). Deeper than the UI
+     accent on purpose: #fb9423 sits above the dark lightness band. */
+  --usage-series-output: #d07d22;
+  --usage-series-fresh: #5289d9;
+  --usage-series-cache: #2f9c6c;
+  --usage-heat: 251, 148, 35;
 
   /* Only the overlay keeps a shadow: a portalled drawer has no seam to sit against. */
   --shadow-shell-0: none;
