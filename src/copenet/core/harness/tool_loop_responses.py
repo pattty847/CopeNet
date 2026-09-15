@@ -28,7 +28,6 @@ from .tool_loop_common import (
     trace_tool_requested,
 )
 from .tool_result_materialization import _materialize_tool_result_artifact
-from .within_turn_receipts import KEEP_RECENT_STEPS as KEEP_RECENT_STEPS_GUARD, LiveToolResult, apply_within_turn_receipts, remember_result
 
 
 class ResponsesProvider(Protocol):
@@ -79,9 +78,6 @@ async def run_with_responses_tools(
     # the real dotted tool ids when the model calls them.
     safe_name_to_tool_id = {responses_safe_tool_name(tool.id): tool.id for tool in plan.tools}
     working_messages: list[dict[str, Any]] = [dict(item) for item in messages]
-    # What each function_call_output in the array was, so old read-only results can
-    # be shrunk to receipts once the request grows past the trigger.
-    live_results: dict[str, LiveToolResult] = {}
     if trace is not None:
         trace("turn_started", turn_state.to_public_dict())
 
@@ -99,15 +95,6 @@ async def run_with_responses_tools(
         # Re-check the budget on every step because a tool-heavy turn grows the
         # array after each result. Never abbreviate an observation because it got
         # older: file digests, compiler errors, and other control data remain live.
-        if len(live_results) > KEEP_RECENT_STEPS_GUARD:
-            pass_stats = apply_within_turn_receipts(
-                working_messages,
-                live_results,
-                current_step=step_index + 1,
-                request_tokens=estimate_request_tokens(working_messages, instructions=instructions, tools=tool_schemas),
-            )
-            if pass_stats is not None and trace is not None:
-                trace("within_turn_receipts_applied", pass_stats)
         outbound_messages = list(working_messages)
         if input_token_budget:
             bounded = trim_messages_to_request_budget(
@@ -280,21 +267,11 @@ async def run_with_responses_tools(
             if artifact_draft is not None:
                 meta_payload["artifactDraft"] = artifact_draft
             yield ProviderEvent(kind="meta", metadata=meta_payload)
-            output_text = _native_tool_message_content(tool_result)
             working_messages.append(
-                responses_items.function_call_output_item(call_id=call_id, output=output_text)
-            )
-            remember_result(
-                live_results,
-                call_id=call_id,
-                step=step_index + 1,
-                tool_id=tool_result.tool_id,
-                ok=tool_result.ok,
-                summary=tool_result.summary,
-                error=tool_result.error,
-                artifact_id=tool_result.artifact_id,
-                arguments=arguments,
-                output=output_text if isinstance(output_text, str) else str(output_text),
+                responses_items.function_call_output_item(
+                    call_id=call_id,
+                    output=_native_tool_message_content(tool_result),
+                )
             )
             turn_state.drain_pending_input()
             if trace is not None:

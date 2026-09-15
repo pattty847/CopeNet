@@ -111,7 +111,6 @@ tracked as open observability work in [ROADMAP.md](plans/ROADMAP.md).
 run_started
 session_resolved
 prompt_context_policy_resolved
-within_turn_receipts_applied (Responses lane, only when a pass ran — step, requestTokensBefore/After, freedTokens, itemsReceipted, receipted[callId, step, toolId, target, tokensBefore/After])
 tools_loaded             (only when the model calls tools.load — toolIds, sessionLoadedCount; deferredToolIds / sessionLoadedToolIds ride on prompt_context_policy_resolved)
 change_ledger_injected   (only when the session has earlier agent edits — fileCount, changedOnDisk, missing, entryCount, chars)
 replay_receipts_applied  (only when turns older than the newest one exist — receiptTurns, verbatimTurns, outputs, receiptedOutputs, verbatimChars, replayedChars)

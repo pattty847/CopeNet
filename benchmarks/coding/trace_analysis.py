@@ -64,9 +64,6 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
     persisted = 0
     trimmed_events = 0
     ledger: dict[str, Any] = {"injected": False}
-    within_turn_passes: list[dict[str, Any]] = []
-    receipted_paths: set[str] = set()
-    reads_after_receipt = 0
 
     for row in rows:
         event = row.get("event")
@@ -102,14 +99,7 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
             usage_steps.append(dict(payload))
         elif event == "reasoning_delta":
             reasoning_chars += int(payload.get("chars") or 0)
-        elif event == "within_turn_receipts_applied":
-            within_turn_passes.append({"step": payload.get("step"), "itemsReceipted": payload.get("itemsReceipted"), "freedTokens": payload.get("freedTokens"), "requestTokensBefore": payload.get("requestTokensBefore")})
-            for row in payload.get("receipted") or []:
-                if row.get("toolId") == "files.read" and row.get("target"):
-                    receipted_paths.add(str(row["target"]))
         elif event == "tool_requested":
-            if payload.get("toolId") == READ_TOOL and str((payload.get("arguments") or {}).get("path") or "") in receipted_paths:
-                reads_after_receipt += 1
             call = {
                 "index": len(calls) + len(pending),
                 "step": payload.get("step"),
@@ -271,13 +261,6 @@ def analyze(rows: list[dict[str, Any]]) -> dict[str, Any]:
             "readsAfterOwnEdit": reads_after_own_edit,
             "distinctFilesRead": len({c["arguments"].get("path") for c in calls if c["toolId"] == READ_TOOL and isinstance(c["arguments"].get("path"), str)}),
             "searchDumps": search_dumps,
-            "readsAfterReceipt": reads_after_receipt,
-            "withinTurnReceipts": {
-                "passes": len(within_turn_passes),
-                "itemsReceipted": sum(int(p.get("itemsReceipted") or 0) for p in within_turn_passes),
-                "freedTokens": sum(int(p.get("freedTokens") or 0) for p in within_turn_passes),
-                "steps": [p.get("step") for p in within_turn_passes],
-            },
         },
         "changeLedger": ledger,
         "edits": {
@@ -320,8 +303,7 @@ def render_markdown(analysis: dict[str, Any]) -> str:
         f"- tokens (provider-reported): total input {reported['inputTokensTotal']}, peak input {reported['peakInputTokens']}, cached {reported['cachedInputTokensTotal']}, output {reported['outputTokensTotal']}, reasoning {reported['reasoningTokensTotal']}",
         f"- tokens (harness estimate): peak input {tokens['peakInputEstimate']}, attributed to tool results {tokens['attributedToToolResults']}",
         f"- largest tool results: {tokens['largestToolResults']}",
-        f"- reads: {analysis['reads']['distinctFilesRead']} files, redundant {analysis['reads']['redundantReadCount']}, after-own-edit {analysis['reads']['readsAfterOwnEdit']}, search dumps {len(analysis['reads']['searchDumps'])}, after-receipt {analysis['reads'].get('readsAfterReceipt', 0)}",
-        f"- within-turn receipts: {analysis['reads'].get('withinTurnReceipts', {}).get('passes', 0)} pass(es), {analysis['reads'].get('withinTurnReceipts', {}).get('itemsReceipted', 0)} items, {analysis['reads'].get('withinTurnReceipts', {}).get('freedTokens', 0)} tokens freed",
+        f"- reads: {analysis['reads']['distinctFilesRead']} files, redundant {analysis['reads']['redundantReadCount']}, after-own-edit {analysis['reads']['readsAfterOwnEdit']}, search dumps {len(analysis['reads']['searchDumps'])}",
         f"- edits: {analysis['edits']}",
         f"- change ledger on this turn: {analysis['changeLedger']}",
         f"- exact repeats: {analysis['repeats']['exactRepeatCount']}",
