@@ -32,6 +32,22 @@ test('financial explorer aligns metrics by reporting period and computes annual 
   assert.equal(periodChange(rows, 1, 'revenue', 'annual'), 25);
 });
 
+test('annual balance-sheet labels use economic dates instead of repeated filing years', () => {
+  const balanceSheet = FINANCIAL_STORIES.find((story) => story.id === 'balance-sheet')!;
+  const rows = buildFinancialChartRows([
+    {
+      metric: balanceSheet.metrics[0],
+      payload: financialPayload('cash_equivalents', [
+        { periodEnd: '2019-12-31', value: 80, fiscalYear: 2021 },
+        { periodEnd: '2020-12-31', value: 90, fiscalYear: 2021 },
+        { periodEnd: '2021-12-31', value: 100, fiscalYear: 2021 },
+      ]),
+    },
+  ]);
+
+  assert.deepEqual(rows.map((row) => row.label), ['2019', '2020', '2021']);
+});
+
 test('period change matches the same metric fiscal period when another series inserts a row', () => {
   const quarterly = (metric: string, observations: Array<{ periodEnd: string; value: number; fiscalYear: number; fiscalPeriod: string }>): FinancialSeriesPayload => ({
     ...financialPayload(metric, []),
