@@ -7,7 +7,6 @@ from pathlib import Path
 
 from fastapi import FastAPI, HTTPException, WebSocket
 from fastapi.responses import FileResponse
-from fastapi.staticfiles import StaticFiles
 
 from copenet.core.market.sentinel import MarketSentinel
 from copenet.core.media import MediaIngestionService
@@ -15,6 +14,11 @@ from copenet.core.orchestrator import Orchestrator
 from copenet.core.web_ingest import WebIngestionService
 from copenet.host.agents_api import create_agents_router
 from copenet.host.app_api import create_app_router
+from copenet.host.static_cache import (
+    ImmutableStaticFiles,
+    RevalidatingStaticFiles,
+    revalidating_headers,
+)
 from copenet.host.ws_server import CopeNetWsServer
 
 _FRONTEND_DIST_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
@@ -69,10 +73,20 @@ def create_app(
     )
     app.include_router(create_agents_router())
 
+    # Hashed bundles are immutable; everything served under a stable URL revalidates.
+    # See copenet.host.static_cache for why the shell HTML must never be heuristically cached.
     if (_FRONTEND_DIST_DIR / "assets").is_dir():
-        app.mount("/assets", StaticFiles(directory=_FRONTEND_DIST_DIR / "assets"), name="assets")
+        app.mount(
+            "/assets",
+            ImmutableStaticFiles(directory=_FRONTEND_DIST_DIR / "assets"),
+            name="assets",
+        )
     if (_FRONTEND_DIST_DIR / "imgs").is_dir():
-        app.mount("/imgs", StaticFiles(directory=_FRONTEND_DIST_DIR / "imgs"), name="imgs")
+        app.mount(
+            "/imgs",
+            RevalidatingStaticFiles(directory=_FRONTEND_DIST_DIR / "imgs"),
+            name="imgs",
+        )
 
     @app.get("/nasa/apod/image/{date}")
     def nasa_apod_image(date: str) -> FileResponse:
@@ -93,7 +107,7 @@ def create_app(
                     "`cd src/copenet/host/frontend && npm ci && npm run build`."
                 ),
             )
-        return FileResponse(path)
+        return FileResponse(path, headers=revalidating_headers())
 
     @app.get("/")
     def index() -> FileResponse:
@@ -122,7 +136,9 @@ def create_app(
         path = _FRONTEND_DIST_DIR / asset_name
         if not path.is_file():
             raise HTTPException(status_code=404, detail="Not found")
-        return FileResponse(path)
+        # The manifest and the icons keep their filenames across builds, so a long cache
+        # here would pin a stale app identity on a home-screen install.
+        return FileResponse(path, headers=revalidating_headers())
 
     @app.get("/{section}/{client_path:path}")
     def frontend_nested_route(section: str, client_path: str) -> FileResponse:
