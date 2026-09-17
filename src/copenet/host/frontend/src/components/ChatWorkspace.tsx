@@ -8,6 +8,7 @@ import { ApprovalRequestCard } from './ApprovalRequestCard';
 import { ArrowDown, ArrowUp, Ellipsis, GitMerge, X } from 'lucide-react';
 import { ConversationDebugActions } from './ConversationDebugActions';
 import { SessionActionsMenu } from './SessionActionsMenu';
+import { MobilePanelButtons, WorkspaceModeSwitch } from './agents/AgentsMobileChrome';
 import { PERSONAL_STARTER_PRESETS } from '../lib/personalHistory';
 import { useIsMobile } from '../lib/responsive';
 import { TranscriptScroll } from './agents/TranscriptScroll';
@@ -460,8 +461,11 @@ export function ChatWorkspace() {
 
       {/* Header */}
       <div className="border-b border-operator-border bg-operator-bg">
-        <div className={`flex gap-2.5 sm:px-4 sm:py-2 ${isMobile ? 'items-start justify-between px-3 py-2' : 'px-3 py-2 items-center justify-between'}`}>
-          <div className="min-w-0 flex flex-1 items-center gap-2.5">
+        <div className={`flex gap-2 sm:px-4 sm:py-2 ${isMobile ? 'h-11 items-center justify-between px-2' : 'px-3 py-2 items-center gap-2.5 justify-between'}`}>
+          <div className={`min-w-0 flex flex-1 items-center ${isMobile ? 'gap-2' : 'gap-2.5'}`}>
+            {/* The phone's only chrome row, so the panel buttons open it. */}
+            {isMobile && <MobilePanelButtons />}
+
             {/* Status dot */}
             <span
               className={`relative flex h-2 w-2 shrink-0 ${activeSession?.archived ? 'opacity-60' : ''}`}
@@ -509,7 +513,8 @@ export function ChatWorkspace() {
           </div>
 
           {/* Actions */}
-          <div className={`flex shrink-0 items-center ${isMobile ? 'pt-0' : 'ml-3'}`}>
+          <div className={`flex shrink-0 items-center ${isMobile ? 'gap-1.5' : 'ml-3'}`}>
+            {isMobile && <WorkspaceModeSwitch compact />}
             {isMobile ? (
               <ConversationDebugActions
                 disabled={!canDebugConversation}

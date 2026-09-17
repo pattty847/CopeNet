@@ -91,16 +91,19 @@ export function ConversationDebugActions({
   if (compact) {
     return (
       <>
+        {/* Icon only. The word cost 116px of a 430px row that now also carries the panel
+            buttons, the session title and the Chat/Fleet switch — and the sheet it opens is
+            titled "Conversation Actions" anyway. */}
         <div className="flex items-center">
           <button
             type="button"
             onClick={() => setMobileActionsOpen(true)}
             disabled={disabled}
-            className="inline-flex items-center gap-2 rounded-xl border border-operator-border px-3 py-2 text-[12px] font-medium text-operator-muted transition-all duration-150 hover:border-operator-accent/30 hover:text-operator-text disabled:cursor-not-allowed disabled:opacity-40"
+            className="flex h-8 w-8 items-center justify-center rounded-lg border border-operator-border text-operator-muted transition-all duration-150 hover:border-operator-accent/30 hover:text-operator-text disabled:cursor-not-allowed disabled:opacity-40"
+            aria-label={getConversationActionTriggerLabel(true)}
             title="Conversation actions"
           >
             <Ellipsis className="h-4 w-4" />
-            <span>{getConversationActionTriggerLabel(true)}</span>
           </button>
         </div>
 

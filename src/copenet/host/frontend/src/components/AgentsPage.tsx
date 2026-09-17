@@ -7,7 +7,6 @@ import { InspectorDrawer } from './runtime/InspectorDrawer';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
 import { MobileSheet } from './mobile/MobileSheet';
-import { PanelLeft, SlidersHorizontal } from 'lucide-react';
 import { FleetInspector } from './fleet/FleetInspector';
 
 const RIGHT_MIN = 270;
@@ -112,26 +111,10 @@ export function AgentsPage() {
   if (isMobile) {
     return (
       <>
-        <div className="flex h-full min-h-0 flex-col gap-2">
-          <div className="sticky top-0 z-10 -mx-1 flex items-center gap-2 overflow-x-auto px-1 pb-1 pt-1">
-            <button
-              type="button"
-              onClick={() => setMobileSessionsOpen(true)}
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] font-medium text-shell-text shadow-shell"
-            >
-              <PanelLeft className="h-4 w-4 text-shell-accent" />
-              Sessions
-            </button>
-            <button
-              type="button"
-              onClick={() => setMobileInspectorOpen(true)}
-              className="inline-flex h-10 shrink-0 items-center gap-2 rounded-2xl border border-shell-border bg-shell-panel px-3 py-2 text-[12px] font-medium text-shell-text shadow-shell"
-            >
-              <SlidersHorizontal className="h-4 w-4 text-shell-accent" />
-              Inspector
-            </button>
-          </div>
-
+        {/* No chrome row of its own: the Sessions and Inspector buttons render inside the
+            workspace's title row (see AgentsMobileChrome), so the phone has one bar rather
+            than three. The sheets they open still belong to this page. */}
+        <div className="flex h-full min-h-0 flex-col">
           <div className="shell-operator-pane shell-operator-pane--main min-h-0 flex-1">
             <AgentsWorkspaceSurface />
           </div>

@@ -1,6 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Archive, ArrowUp, Bot, CircleDot, Plus, Sparkles, UsersRound, Wrench } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
+import { useIsMobile } from '../../lib/responsive';
+import { MobilePanelButtons, WorkspaceModeSwitch } from '../agents/AgentsMobileChrome';
 import { wsClient } from '../../lib/wsClient';
 import { ChatMarkdown } from '../ChatMarkdown';
 import { ToolPromptPalette } from '../ToolPromptPalette';
@@ -158,6 +160,7 @@ export function FleetWorkspace() {
   const activeRoomId = useAppStore((state) => state.activeFleetRoomId);
   const pendingByRoom = useAppStore((state) => state.fleetPendingCountsByRoom);
   const setAppError = useAppStore((state) => state.setAppError);
+  const isMobile = useIsMobile();
   const room = rooms.find((item) => item.roomId === activeRoomId && item.status === 'active')
     || rooms.find((item) => item.status === 'active')
     || null;
@@ -176,9 +179,28 @@ export function FleetWorkspace() {
 
   const fleetCreateOpen = useAppStore((state) => state.fleetCreateOpen);
   const setFleetCreateOpen = useAppStore((state) => state.setFleetCreateOpen);
-  if (!room) return <FleetCreate />;
+  // The create screen is the phone's dead-end risk: with the standalone mode bar gone, a
+  // Fleet with no room would have nothing on screen that leads back to Chat.
+  const withMobileBar = (title: string, body: React.ReactNode) =>
+    isMobile ? (
+      <div className="flex h-full min-h-0 flex-col bg-operator-bg">
+        <header className="flex h-11 shrink-0 items-center justify-between gap-2 border-b border-operator-border bg-operator-panel/35 px-2">
+          <MobilePanelButtons />
+          <h2 className="min-w-0 flex-1 truncate text-[14px] font-semibold text-operator-text">{title}</h2>
+          <WorkspaceModeSwitch compact />
+        </header>
+        <div className="min-h-0 flex-1">{body}</div>
+      </div>
+    ) : (
+      body
+    );
+
+  if (!room) return withMobileBar('Fleet', <FleetCreate />);
   if (fleetCreateOpen) {
-    return <FleetCreate currentRoom={{ roomId: room.roomId, title: room.title }} onCancel={() => setFleetCreateOpen(false)} />;
+    return withMobileBar(
+      'New room',
+      <FleetCreate currentRoom={{ roomId: room.roomId, title: room.title }} onCancel={() => setFleetCreateOpen(false)} />,
+    );
   }
 
   const send = async () => {
@@ -203,23 +225,34 @@ export function FleetWorkspace() {
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-operator-bg">
-      <header className="border-b border-operator-border bg-operator-panel/35 px-4 py-3">
-        <div className="flex items-start justify-between gap-4">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]" />
+      {/* Phone: one 44px row, same shape as the Chat header — panel buttons, room title,
+          mode switch, archive. The participant/model line is desktop-only; the Inspector
+          sheet carries the same facts. */}
+      <header className={`border-b border-operator-border bg-operator-panel/35 ${isMobile ? 'h-11 px-2' : 'px-4 py-3'}`}>
+        <div className={`flex justify-between ${isMobile ? 'h-full items-center gap-2' : 'items-start gap-4'}`}>
+          {isMobile && <MobilePanelButtons />}
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="h-2 w-2 shrink-0 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.55)]" />
               <h2 className="truncate text-[14px] font-semibold text-operator-text">{room.title}</h2>
-              <span className="rounded-full border border-operator-border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-operator-muted">Manual</span>
+              {!isMobile && (
+                <span className="rounded-full border border-operator-border px-2 py-0.5 text-[9px] uppercase tracking-[0.12em] text-operator-muted">Manual</span>
+              )}
             </div>
-            <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-operator-muted">
-              {Object.values(room.participants).map((participant) => (
-                <span key={participant.participantId}>{participantLabel(participant.participantId)} · {participant.model || 'default'}</span>
-              ))}
-            </div>
+            {!isMobile && (
+              <div className="mt-1.5 flex flex-wrap gap-2 text-[10px] text-operator-muted">
+                {Object.values(room.participants).map((participant) => (
+                  <span key={participant.participantId}>{participantLabel(participant.participantId)} · {participant.model || 'default'}</span>
+                ))}
+              </div>
+            )}
           </div>
-          <button type="button" onClick={() => void archive()} className="rounded-lg border border-operator-border p-2 text-operator-muted transition hover:text-operator-text" title="Archive Fleet room">
-            <Archive className="h-3.5 w-3.5" />
-          </button>
+          <div className="flex shrink-0 items-center gap-1.5">
+            {isMobile && <WorkspaceModeSwitch compact />}
+            <button type="button" onClick={() => void archive()} className={`rounded-lg border border-operator-border text-operator-muted transition hover:text-operator-text ${isMobile ? 'flex h-8 w-8 items-center justify-center' : 'p-2'}`} title="Archive Fleet room">
+              <Archive className="h-3.5 w-3.5" />
+            </button>
+          </div>
         </div>
       </header>
 
