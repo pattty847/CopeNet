@@ -78,6 +78,7 @@ _ENV_VARS: list[tuple[str, str]] = [
     ("SEC_API_USER_AGENT", "contact SEC requires, e.g. 'Your Name you@email.com' — a placeholder risks a 403"),
     ("COPNET_SEC_FETCH_PACE", "seconds between SEC requests (default 0.15 = ~6.7/s; raise for bulk pulls)"),
     ("COPNET_MARKET_FETCH_PACE", "seconds between yfinance price requests (default 0.2)"),
+    ("FRED_API_KEY", "FRED macro search, curated snapshots, and point-in-time series data"),
     ("NASA_API_KEY", "key for the NASA Picture of the Day feature (loaded from .env)"),
     ("TMDB_ACCESS_TOKEN", "TMDB API read-access token for the personal Movie Lab"),
     ("TMDB_WATCHED_FILE", "watched XLSX path (default: ~/Downloads/Watched Movies.xlsx)"),
