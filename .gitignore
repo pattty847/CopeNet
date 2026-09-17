@@ -66,3 +66,7 @@ docs/redteam-demo/output/
 # Red-team demo: agent-generated scratch (restore inbox via git checkout)
 docs/redteam-demo/workspace/result.txt
 docs/redteam-demo/workspace/shell_ran.txt
+
+# Agent scratch: host logs and one-off research visualizations
+.run/
+.research-visualizations/
