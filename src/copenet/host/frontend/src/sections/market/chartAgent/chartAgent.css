@@ -117,6 +117,13 @@
   .ca-scroll { min-height:80px; }
 }
 
+/* Phone: the drawing bar keeps every tool on one row and gives back the padding it was not
+ * using. 30px is still a thumb target; the row lands at 32px instead of 39px. */
+@media (max-width: 560px) {
+  .ca-toolbar { min-height:32px; padding:1px 7px; gap:4px; }
+  .ca-toolbar button { min-height:30px; }
+}
+
 .ca-source { min-width:0; border-top:1px solid var(--mkt-seam); padding:7px 0; }
 .ca-source pre { max-height:260px; overflow:auto; font:10px/1.6 var(--mkt-mono); color:var(--mkt-soft); background:var(--mkt-ground); padding:8px; }
 .ca-source small { display:block; overflow-wrap:anywhere; }

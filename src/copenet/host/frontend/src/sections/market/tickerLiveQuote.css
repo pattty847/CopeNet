@@ -34,3 +34,31 @@
     font-size: 9px;
   }
 }
+
+/* Phone: horizontal, on the asset bar's one row.
+ *
+ * The 700px rule above gives the quote a row of its own, which is right on a tablet and
+ * ruinous on a phone — it was 47px of a 105px asset bar. Price and change go on the
+ * baseline with the stream status beside them. The status is not dropped: a cached price
+ * that reads as a live one is the single thing this component must never show. */
+@media (max-width: 560px) {
+  .tw-livequote {
+    flex: 1 1 auto;
+    flex-basis: auto;
+    flex-direction: row;
+    align-items: baseline;
+    justify-content: flex-end;
+    gap: 7px;
+    overflow: hidden;
+  }
+
+  .tw-livequote__meta {
+    flex: 0 1 auto;
+    flex-wrap: nowrap;
+    gap: 6px;
+    overflow: hidden;
+    font-size: 9px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}

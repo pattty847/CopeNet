@@ -1093,6 +1093,60 @@
   .tw-jump { left: var(--mkt-s2); right: var(--mkt-s2); width: auto; }
 }
 
+/* ------------------------------------------------------------------ phone
+ *
+ * On a 430px-wide phone the frame is the whole budget: there is no page scroll to spill
+ * into, so every row of chrome is taken directly out of the chart. Measured before this
+ * block, the asset bar was 105px, the chart toolbar 111px and the drawing bar 39px — 255px
+ * of chrome above a 197px chart. The chart was smaller than the controls that operate it.
+ *
+ * Nothing is removed here and nothing moves into a menu. The rows are made to hold what
+ * they already have: the wide-layout rules that FORCE a wrap (two greedy spacers in the
+ * asset bar, a 100%-basis spacer in the toolbar) are what produced rows of three icons, and
+ * those are the rules this block undoes. */
+@media (max-width: 560px) {
+  /* One row: back, symbol, kind, watch, search, then the quote. The bar had two `flex: 1`
+   * spacers around the search field, which between them pushed the 406px-wide quote onto a
+   * row of its own. */
+  .tw-assetbar {
+    height: 46px;
+    flex-wrap: nowrap;
+    gap: var(--mkt-s2);
+    padding: 0 var(--mkt-s2);
+  }
+
+  .tw-assetbar__identity { flex: 0 1 auto; gap: 6px; }
+  .tw-assetbar__symbol { font-size: 19px; }
+  .tw-assetbar__kind { display: none; }
+  .tw-assetbar__spacer:first-of-type { display: none; }
+
+  /* The quote's own phone layout lives in tickerLiveQuote.css, which is imported after this
+   * file and so wins the cascade at equal specificity. */
+
+  .tw-assetbar__quote { flex: 0 0 auto; gap: 6px; }
+  .tw-assetbar__quote .tw-livequote__label { display: none; }
+  .tw-assetbar__price { font-size: 20px; }
+
+  /* Two deliberate rows instead of three accidental ones: the segments own the first,
+   * every icon owns the second. The spacer's 100% basis was forcing a third row that held
+   * four controls, and the segments were ~5px too wide to keep the icons company. */
+  .tw-toolbar {
+    padding: 4px var(--mkt-s2);
+    gap: 4px;
+  }
+
+  .tw-toolbar__spacer { display: none; }
+  .tw-segment { flex: 0 0 auto; padding: 1px; }
+  .tw-segment > button { padding: 0 6px; }
+
+  /* Wider, shorter hit targets: 34px across for a thumb, 30px tall so the two rows come to
+   * ~68px. Scoped to the two bars, because `.tw-iconbtn--xs` inside the indicator popover
+   * is a deliberate 20px and this block would otherwise outrank it. */
+  .tw-toolbar .tw-iconbtn,
+  .tw-assetbar .tw-iconbtn { width: 34px; height: 30px; }
+  .tw-toolbar .tw-axis-toggle { width: 34px; height: 30px; }
+}
+
 /* ------------------------------------------------------- indicator layers
  *
  * The Plots popover's active list. Same grammar as everything else in the workspace: 4px
