@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { collapseRenderedMessageParts } from '../src/components/MessageBubble';
+import { collapseRenderedMessageParts } from '../src/runtime/turnTrail';
 import type { MessagePart } from '../src/types/backend';
 
 test('collapseRenderedMessageParts hides tool call rows once the matching result arrives', () => {

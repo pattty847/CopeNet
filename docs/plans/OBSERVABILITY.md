@@ -347,10 +347,12 @@ things only became visible once it was on screen:
    happened in the turn. Once framed that way they become a row in the same list, and the
    separate panel has no reason to exist.
 
-The shipped shape: one group per turn (`TurnToolGroup`) with a summary header —
-"Searched 1×, ran command 2×" plus a failed count — expanding to one row per action. Every
-row opens the overlay. The last row is the turn's internals (`InspectorTarget`
-`{kind: 'run'}` → `RunInternalsDrawerBody` → `RunInternalsBody` with `showDid={false}`).
+The shape shipped then was one group per turn. It was superseded on 2026-09-16 by the
+turn trail (`components/transcript/TurnTrail.tsx`, rules in `runtime/turnTrail.ts`): parts
+render in the order they happened while the run is live, and fold into one collapsed box
+above the answer once it settles. The internals row (`InspectorTarget` `{kind: 'run'}` →
+`RunInternalsDrawerBody` → `RunInternalsBody` with `showDid={false}`) now closes the
+message instead of sitting inside the group. See "Web UI" in `AGENTS.md`.
 
 Details worth keeping:
 

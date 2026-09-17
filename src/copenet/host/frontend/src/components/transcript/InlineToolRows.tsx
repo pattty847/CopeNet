@@ -33,6 +33,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { langFromPath } from '../../lib/syntax';
 import { wsClient } from '../../lib/wsClient';
 import { FileLinesView, DiffView, PlanView } from '../runtime/CodeViews';
+import { shortPath, toolRowTitle, type ToolRowTitle } from '../../runtime/turnTrail';
 
 // ---------------------------------------------------------------------------
 // Operator-verb labels — replace protocol tool ids with English verbs in the UI.
@@ -113,13 +114,6 @@ function formatHint(hint: string | null | undefined): string | null {
     }
   }
   return trimmed.slice(0, 120);
-}
-
-/** Show last 2 path segments: "…/components/MessageBubble.tsx" */
-function shortPath(path: string): string {
-  const parts = path.replace(/\\/g, '/').split('/').filter(Boolean);
-  if (parts.length <= 2) return path;
-  return `…/${parts.slice(-2).join('/')}`;
 }
 
 // hostOf — the bare hostname for a result URL ("docs.python.org"), for the
@@ -352,21 +346,32 @@ function ToolPreview({ preview }: { preview: ToolResultPreview }) {
 // Shows a spinner while the run is live; a static terminal icon once complete.
 // ---------------------------------------------------------------------------
 
-export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boolean }) {
-  const hint = formatHint(part.target || part.hint);
-  const verb = operatorVerb(part.toolId);
+/** Row title: a plain-English label, then the target — mono when it is something
+ *  that was typed (a command, a pattern) rather than a path. */
+function RowTitle({ title, failed }: { title: ToolRowTitle; failed?: boolean }) {
   return (
-    <div className="flex items-center gap-2 px-1 py-1 text-[11px]">
+    <>
+      <span className={`shrink-0 text-[11px] ${failed ? '' : 'text-operator-muted/80'}`}>{title.label}</span>
+      {title.detail && (
+        <span
+          className={`min-w-0 flex-1 truncate text-[11px] ${failed ? '' : 'text-operator-text/75'} ${title.literal ? 'font-mono text-[10.5px]' : ''}`}
+        >
+          {title.detail}
+        </span>
+      )}
+    </>
+  );
+}
+
+export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boolean }) {
+  const target = part.target ? part.target : formatHint(part.hint);
+  return (
+    <div className="flex items-center gap-2 px-1 py-1 text-[11px]" title={target || undefined}>
       {isLive
         ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-operator-accent/70" />
         : <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-operator-muted/40" />
       }
-      <span className="text-[11px] text-operator-muted/70 shrink-0">{verb}</span>
-      {hint && (
-        <span className="truncate text-[11px] text-operator-muted/55 min-w-0" title={hint}>
-          {part.target ? shortPath(hint) : hint}
-        </span>
-      )}
+      <RowTitle title={toolRowTitle(part.toolId, target, { inFlight: isLive })} />
     </div>
   );
 }
@@ -414,18 +419,12 @@ export function hasMoreThanShown(part: ToolResultPart): boolean {
 }
 
 export function ToolResultRow({ part }: { part: ToolResultPart }) {
-  // Three levels, matching how every agent surface converged: a summary row, an
-  // in-place expansion in a bounded scroll box, and — only when the body was
-  // clipped — the overlay. Expanding in place is what makes a three-line command
-  // result readable without leaving the conversation; the fixed max height is
-  // what stops a 900-line file from swallowing the thread.
-  //
-  // `Inspect →` appears ONLY when something was clipped, so the button means
-  // "there is more than this" instead of being decoration on every row.
+  // A titled row that expands in place. The preview blocks each own a bounded
+  // scroll box, so the expansion adds no second one around them — a 900-line
+  // file still cannot swallow the thread, and there is one scrollbar, not two.
   const [expanded, setExpanded] = useState(false);
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
-  const verb = operatorVerb(part.toolId);
-  const targetLabel = part.target ? shortPath(part.target) : null;
+  const title = toolRowTitle(part.toolId, part.target, { summary: part.summary });
   const failed = !part.ok;
   const hasBody = !!part.preview || (!part.ok && !!part.error);
   const hasMore = hasMoreThanShown(part);
@@ -438,25 +437,21 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
         onClick={() => (hasBody ? setExpanded((value) => !value) : setInspectorTarget({ kind: 'tool', tool: part }))}
         aria-expanded={hasBody ? expanded : undefined}
         className={`flex w-full items-center gap-2 rounded px-1 py-1 text-left transition-colors duration-100 hover:bg-operator-panel/20 ${failed ? 'text-operator-error' : ''}`}
-        title={part.target || part.summary || verb}
+        title={part.target || part.summary || title.label}
       >
         {failed
           ? <XCircle className="h-3 w-3 shrink-0 text-operator-error" />
           : <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-operator-muted/40" />
         }
-        <span className="shrink-0 text-[11px] text-operator-muted/80">{verb}</span>
-        {(targetLabel || (!part.target && part.summary)) && (
-          <span className="min-w-0 flex-1 truncate text-[11px] text-operator-text/75">
-            {targetLabel || part.summary}
-          </span>
-        )}
+        <RowTitle title={title} failed={failed} />
+        {!title.detail && <span className="flex-1" />}
         {hasBody && (expanded
           ? <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/40" />
           : <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/40" />)}
       </button>
 
       {expanded && (
-        <div className="max-h-80 overflow-y-auto rounded-lg border border-operator-border/50 bg-operator-bg/40 px-2 py-1.5">
+        <div className="px-1 pb-1">
           {!part.ok && part.error && (
             <pre className="overflow-x-auto whitespace-pre-wrap break-words rounded border border-operator-error/20 bg-operator-error/5 px-2.5 py-1.5 text-[10.5px] font-mono text-operator-error">
               {part.error}

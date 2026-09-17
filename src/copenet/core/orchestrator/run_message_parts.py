@@ -45,21 +45,14 @@ def _append_thinking_part(parts: list[dict], text: str, *, source: str = "summar
 
 
 def _normalize_final_message_parts(parts: list[dict], *, assistant_text: str) -> list[dict]:
-    if not assistant_text:
-        return [dict(part) for part in parts]
-    non_text_parts = [dict(part) for part in parts if part.get("kind") != "text"]
-    if not non_text_parts:
-        return [{"kind": "text", "text": assistant_text}]
-    normalized: list[dict] = []
-    inserted_text = False
-    for part in parts:
-        if part.get("kind") == "text":
-            if inserted_text:
-                continue
-            normalized.append({"kind": "text", "text": assistant_text})
-            inserted_text = True
-            continue
-        normalized.append(dict(part))
-    if not inserted_text:
-        normalized.insert(0, {"kind": "text", "text": assistant_text})
+    """Return the persisted parts in the order the run produced them.
+
+    Narration between tool calls stays where it happened: the thread renders a
+    reloaded turn the same way it streamed, and cross-turn replay sees each text
+    in its real position. This used to fold the whole answer into the first text
+    part, which moved the final answer ahead of every tool call on reload.
+    """
+    normalized = [dict(part) for part in parts]
+    if assistant_text and not any(part.get("kind") == "text" for part in normalized):
+        normalized.append({"kind": "text", "text": assistant_text})
     return normalized

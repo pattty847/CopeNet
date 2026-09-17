@@ -2,114 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Message, ChatAttachment } from '../types/backend';
 import { fetchChatAttachmentObjectUrl } from '../lib/appApi';
 import { ToolTraceCard } from './ToolTraceCard';
-import { TurnContextRow, TurnToolGroup } from './transcript/TurnToolGroup';
-import { InlineToolPart } from './transcript/InlineToolRows';
+import { TurnTrail } from './transcript/TurnTrail';
 import { Copy, Check } from 'lucide-react';
 import { Spinner } from './Spinner';
 import { ChatMarkdown } from './ChatMarkdown';
-import type { MessagePart, ToolBatchPart, ToolCallPart, ToolResultPart } from '../types/backend';
 import { formatMessageForClipboard } from '../lib/chatExport';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { useAppStore } from '../store/useAppStore';
 import { ToolGlyph, toolDisplayName } from './ToolPromptPalette';
-
-function partsShouldCollapseIntoSingleRow(current: ToolCallPart, next: ToolResultPart | ToolBatchPart): boolean {
-  if (next.kind === 'tool_result') {
-    if (current.callId && next.callId && current.callId === next.callId) return true;
-    return current.toolId === next.toolId;
-  }
-  if (next.kind === 'tool_batch') {
-    return current.toolId === 'tool.batch';
-  }
-  return false;
-}
-
-export function collapseRenderedMessageParts(parts: MessagePart[]): MessagePart[] {
-  const collapsed: MessagePart[] = [];
-  for (let index = 0; index < parts.length; index += 1) {
-    const current = parts[index];
-    if (current.kind === 'tool_call') {
-      const next = parts[index + 1];
-      if (
-        next &&
-        (next.kind === 'tool_result' || next.kind === 'tool_batch') &&
-        partsShouldCollapseIntoSingleRow(current, next)
-      ) {
-        continue;
-      }
-    }
-    collapsed.push(current);
-  }
-  return collapsed;
-}
-
-const TOOL_PART_KINDS = new Set(['tool_call', 'tool_result', 'tool_batch']);
-
-// PartsBody — renders a structured parts array, collapsing consecutive tool
-// parts into one TurnToolGroup.
-//
-// Grouping is by RUN, not by position: a turn's tool calls belong together even
-// when the model narrated between them, so a text part does not close the group.
-// The group opens by default while the run is live so the operator watches work
-// happen, and stays open afterwards — collapsing content out from under someone
-// who just watched it appear is worse than one extra expanded row. Turns loaded
-// from history start collapsed.
-function PartsBody({
-  parts,
-  isLive,
-  sessionKey,
-  runId,
-}: {
-  parts: NonNullable<Message['parts']>;
-  isLive?: boolean;
-  sessionKey: string;
-  runId: string | null;
-}) {
-  const renderParts = collapseRenderedMessageParts(parts);
-  // A thinking part is "active" (live, auto-expanded) only while it is the
-  // trailing part of a still-streaming message. As soon as a tool row or the
-  // answer text streams in after it, it settles and collapses to one line.
-  const lastIndex = renderParts.length - 1;
-  const toolParts = renderParts.filter((part) => TOOL_PART_KINDS.has(part.kind));
-
-  const rendered: React.ReactNode[] = [];
-  let groupEmitted = false;
-  renderParts.forEach((part, i) => {
-    if (part.kind === 'text') {
-      if (part.content) rendered.push(<ChatMarkdown key={`text-${i}`} content={part.content} />);
-      return;
-    }
-    if (!TOOL_PART_KINDS.has(part.kind)) {
-      // Thinking parts keep their own inline row — they are the model's voice,
-      // not an action, and belong in the reading flow.
-      rendered.push(
-        <InlineToolPart key={`part-${i}`} part={part} isLive={isLive} active={!!isLive && i === lastIndex} />,
-      );
-      return;
-    }
-    if (groupEmitted) return;
-    groupEmitted = true;
-    rendered.push(
-      <TurnToolGroup key="tool-group" sessionKey={sessionKey} runId={runId} parts={toolParts} defaultOpen={!!isLive}>
-        {toolParts.map((toolPart, index) => (
-          <InlineToolPart
-            key={`tool-${index}`}
-            part={toolPart}
-            isLive={isLive}
-            active={!!isLive && index === toolParts.length - 1}
-          />
-        ))}
-      </TurnToolGroup>,
-    );
-  });
-
-  // A chat-only turn still gets the context row — see TurnContextRow.
-  if (!groupEmitted && runId && !isLive) {
-    rendered.push(<TurnContextRow key="turn-context" sessionKey={sessionKey} runId={runId} />);
-  }
-
-  return <div className="space-y-2">{rendered}</div>;
-}
 
 function formatTimestamp(ts: string) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -272,7 +172,7 @@ export function MessageBubble({ message }: { message: Message }) {
           ) : null}
 
           {message.parts && message.parts.length > 0 ? (
-            <PartsBody
+            <TurnTrail
               parts={message.parts}
               isLive={!!(message.optimistic && message.state === 'delta')}
               sessionKey={message.sessionKey}
