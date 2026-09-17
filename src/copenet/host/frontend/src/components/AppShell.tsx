@@ -91,14 +91,14 @@ export function AppShell() {
   }, []);
 
   return (
-    <div className="flex h-screen w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">
+    <div className="flex h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">
       <CommandPalette />
       <PersonaFlavorReviewModal />
       <div className="relative flex h-full w-full max-w-full overflow-x-hidden">
         {!isMobile && <SidebarNav />}
         <div
           className={`shell-app-frame flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden bg-shell-canvas ${
-            isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+6rem)]' : ''
+            isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+4.75rem)]' : ''
           }`}
         >
           {showMobileTopBar && <MobileTopBar />}
