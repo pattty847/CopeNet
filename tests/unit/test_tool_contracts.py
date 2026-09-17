@@ -33,6 +33,26 @@ def test_describe_available_tools_can_filter_by_tool_id() -> None:
     assert [tool["id"] for tool in described] == ["files.edit"]
 
 
+def test_responses_tool_schema_requires_a_bounded_activity_title() -> None:
+    descriptor = ToolDescriptor(
+        id="files.read",
+        name="Read File",
+        description="Read one file.",
+        category="repo-read",
+        input_schema={"type": "object", "properties": {"path": {"type": "string"}}, "required": ["path"], "additionalProperties": False},
+    )
+
+    schema = descriptor.to_responses_tool()["parameters"]
+
+    assert schema["required"] == ["path", "activity_title"]
+    assert schema["properties"]["activity_title"] == {
+        "type": "string",
+        "description": "A concise one-line title for the live activity group this call begins or continues.",
+        "minLength": 1,
+        "maxLength": 100,
+    }
+
+
 def test_files_rg_description_distinguishes_content_search_from_path_lookup() -> None:
     descriptor = next(tool for tool in ToolRegistry().list_tools() if tool.id == "files.rg")
 

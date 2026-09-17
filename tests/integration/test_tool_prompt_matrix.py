@@ -118,7 +118,7 @@ async def test_prompted_provider_executes_json_tool_request_then_follows_up(tmp_
     (tmp_path / "README.md").write_text("# CopeNet\nLocal agent gateway.\n", encoding="utf-8")
     provider = ScriptedPromptProvider(
         outputs=[
-            _tool_block('{"tool_id":"files.read","arguments":{"path":"README.md"}}'),
+            _tool_block('{"tool_id":"files.read","activity_title":"Fixture tool call","arguments":{"path":"README.md"}}'),
             "I read README.md and found that CopeNet is a local agent gateway.",
         ]
     )

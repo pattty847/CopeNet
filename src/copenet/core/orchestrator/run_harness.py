@@ -18,6 +18,7 @@ from copenet.core.orchestrator.approval_execution import make_approval_gated_exe
 from copenet.core.tools import (
     ToolExecutionContext,
 )
+from copenet.core.tools.handlers.terminal import close_terminal_for_run
 
 from .run_types import RunAdmission, RunInput, RunEvents
 from .run_identity import _build_identity_memory_overlay
@@ -31,7 +32,53 @@ async def start_harness(
         orchestrator, admission.market_context, admission.market_reference
     )
     update_chart_admission(orchestrator, admission.request, "dispatched")
-    events.plan, event_stream = await orchestrator._harness.run_turn(
+    tool_context = prepare_chart_tool_context(
+        ToolExecutionContext(
+            workdir=admission.session_workspace_root,
+            session_workspace_root=admission.session_workspace_root,
+            session_key=admission.session_key,
+            provider_name=admission.provider_name,
+            model=admission.request.model,
+            session_store=orchestrator._session_store,
+            transcript_store=orchestrator._transcript_store,
+            providers=orchestrator._providers,
+            policy=prepared.tools.effective_tool_policy,
+            available_tools=prepared.tools.available_tools,
+            memory_service=orchestrator._memory_service,
+            workspace_intel_service=orchestrator._workspace_intel_service,
+            persona_service=orchestrator._persona_service,
+            user_notes_service=orchestrator._user_notes_service,
+            artifact_store=orchestrator._artifact_store,
+            edit_backup_store=orchestrator._edit_backup_store,
+            change_ledger_store=orchestrator._change_ledger_store,
+            session_state_store=orchestrator._session_state_store,
+            permission_store=orchestrator._permission_store,
+            task_prompt_id=admission.entry.task_prompt_id or admission.request.task_prompt_id,
+            run_id=admission.run_id,
+            trace=admission.trace.record,
+            market_context=admission.market_context,
+            chart_store=chart_store(orchestrator) if admission.market_context is not None else None,
+            allowed_tool_ids=prepared.tools.scoped_tool_ids if admission.request.allow_tools else frozenset(),
+            ephemeral={
+                # Seed edit freshness with the digest the agent last left each file
+                # at in EARLIER turns, so an operator change between turns is caught
+                # the same way as one within a turn.
+                "file_read_state": dict(prepared.ledger_last_digests),
+                # Deferred disclosure: what tools.load may bring in, and what it has so far.
+                "deferred_tools": {tool.id: tool for tool in prepared.tools.deferred_tools},
+                "loaded_tool_ids": [],
+                **(
+                    {"chart_event_emit": emit_event}
+                    if admission.market_context is not None and emit_event is not None
+                    else {}
+                ),
+            },
+        ),
+        orchestrator=orchestrator,
+        market_context=admission.market_context,
+        history=prepared.history_for_replay,
+    )
+    events.plan, raw_event_stream = await orchestrator._harness.run_turn(
         provider=orchestrator._providers[admission.provider_name],
         prompt=prepared.chat_prompt,
         messages=prepared.chat_messages,
@@ -52,52 +99,7 @@ async def start_harness(
             run_id=admission.run_id,
             abort_event=admission.abort_event,
         ),
-        tool_context=prepare_chart_tool_context(
-            ToolExecutionContext(
-                workdir=admission.session_workspace_root,
-                session_workspace_root=admission.session_workspace_root,
-                session_key=admission.session_key,
-                provider_name=admission.provider_name,
-                model=admission.request.model,
-                session_store=orchestrator._session_store,
-                transcript_store=orchestrator._transcript_store,
-                providers=orchestrator._providers,
-                policy=prepared.tools.effective_tool_policy,
-                available_tools=prepared.tools.available_tools,
-                memory_service=orchestrator._memory_service,
-                workspace_intel_service=orchestrator._workspace_intel_service,
-                persona_service=orchestrator._persona_service,
-                user_notes_service=orchestrator._user_notes_service,
-                artifact_store=orchestrator._artifact_store,
-                edit_backup_store=orchestrator._edit_backup_store,
-                change_ledger_store=orchestrator._change_ledger_store,
-                session_state_store=orchestrator._session_state_store,
-                permission_store=orchestrator._permission_store,
-                task_prompt_id=admission.entry.task_prompt_id or admission.request.task_prompt_id,
-                run_id=admission.run_id,
-                trace=admission.trace.record,
-                market_context=admission.market_context,
-                chart_store=chart_store(orchestrator) if admission.market_context is not None else None,
-                allowed_tool_ids=prepared.tools.scoped_tool_ids if admission.request.allow_tools else frozenset(),
-                ephemeral={
-                    # Seed edit freshness with the digest the agent last left each file
-                    # at in EARLIER turns, so an operator change between turns is caught
-                    # the same way as one within a turn.
-                    "file_read_state": dict(prepared.ledger_last_digests),
-                    # Deferred disclosure: what tools.load may bring in, and what it has so far.
-                    "deferred_tools": {tool.id: tool for tool in prepared.tools.deferred_tools},
-                    "loaded_tool_ids": [],
-                    **(
-                        {"chart_event_emit": emit_event}
-                        if admission.market_context is not None and emit_event is not None
-                        else {}
-                    ),
-                },
-            ),
-            orchestrator=orchestrator,
-            market_context=admission.market_context,
-            history=prepared.history_for_replay,
-        ),
+        tool_context=tool_context,
         trace=admission.trace.record,
         prompt_context_builder=lambda resolved_plan: _build_identity_memory_overlay(
             orchestrator=orchestrator,
@@ -132,4 +134,13 @@ async def start_harness(
                 },
             },
         )
-    return (events.plan, event_stream)
+    return (events.plan, _close_terminal_when_stream_ends(raw_event_stream, tool_context))
+
+
+async def _close_terminal_when_stream_ends(event_stream, tool_context):
+    """Tie PTY lifetime to the run even when the model omits terminal.close."""
+    try:
+        async for event in event_stream:
+            yield event
+    finally:
+        await close_terminal_for_run(tool_context)

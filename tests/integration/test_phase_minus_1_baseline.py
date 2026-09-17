@@ -59,7 +59,7 @@ class ToolOnlyProvider:
         # Emit a prompted-tool JSON request (no human text)
         yield ProviderEvent(
             kind="delta",
-            text=_tool_block('{"tool_id":"shell.exec","arguments":{"command":"pwd"}}'),
+            text=_tool_block('{"tool_id":"shell.exec","activity_title":"Fixture tool call","arguments":{"command":"pwd"}}'),
             provider_session_id=provider_session_id or "ps",
         )
         yield ProviderEvent(kind="final")

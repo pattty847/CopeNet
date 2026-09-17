@@ -47,7 +47,7 @@ def test_prose_containing_json_executes_nothing(assistant_text: str) -> None:
 
 
 def test_delimited_active_tool_executes_once() -> None:
-    call = json.dumps({"tool_id": "shell.exec", "arguments": {"command": "pwd"}})
+    call = json.dumps({"tool_id": "shell.exec", "activity_title": "Checking the workspace directory", "arguments": {"command": "pwd"}})
     text = "Let me check the directory.\n" + _block(call)
 
     parse = parse_prompted_tool_turn(text, active_tool_ids=ACTIVE)
@@ -55,12 +55,13 @@ def test_delimited_active_tool_executes_once() -> None:
     assert len(parse.requests) == 1
     assert parse.requests[0].tool_id == "shell.exec"
     assert parse.requests[0].arguments == {"command": "pwd"}
+    assert parse.requests[0].activity_title == "Checking the workspace directory"
     assert parse.malformed == []
 
 
 def test_two_delimited_blocks_produce_two_calls() -> None:
-    text = _block('{"tool_id":"files.read","arguments":{"path":"a"}}') + "\nand\n" + _block(
-        '{"tool_id":"files.read","arguments":{"path":"b"}}'
+    text = _block('{"tool_id":"files.read","activity_title":"Reading a","arguments":{"path":"a"}}') + "\nand\n" + _block(
+        '{"tool_id":"files.read","activity_title":"Reading b","arguments":{"path":"b"}}'
     )
 
     parse = parse_prompted_tool_turn(text, active_tool_ids=ACTIVE)
@@ -70,7 +71,7 @@ def test_two_delimited_blocks_produce_two_calls() -> None:
 
 def test_off_manifest_tool_is_rejected_not_executed() -> None:
     """Access categories must not be a back door to tools the turn never advertised."""
-    parse = parse_prompted_tool_turn(_block('{"tool_id":"git.diff","arguments":{}}'), active_tool_ids=ACTIVE)
+    parse = parse_prompted_tool_turn(_block('{"tool_id":"git.diff","activity_title":"Checking the diff","arguments":{}}'), active_tool_ids=ACTIVE)
 
     assert parse.requests == []
     assert parse.rejected_tool_ids == ["git.diff"]
@@ -102,10 +103,22 @@ def test_non_dict_arguments_are_rejected() -> None:
 
 
 def test_missing_arguments_defaults_to_empty() -> None:
-    parse = parse_prompted_tool_turn(_block('{"tool_id":"files.read"}'), active_tool_ids=ACTIVE)
+    parse = parse_prompted_tool_turn(_block('{"tool_id":"files.read","activity_title":"Checking a file"}'), active_tool_ids=ACTIVE)
 
     assert len(parse.requests) == 1
     assert parse.requests[0].arguments == {}
+
+
+@pytest.mark.parametrize("activity_title", [None, "", "x" * 101, "first line\nsecond line"])
+def test_missing_or_invalid_activity_title_is_rejected(activity_title: str | None) -> None:
+    payload = {"tool_id": "files.read", "arguments": {"path": "x"}}
+    if activity_title is not None:
+        payload["activity_title"] = activity_title
+
+    parse = parse_prompted_tool_turn(_block(json.dumps(payload)), active_tool_ids=ACTIVE)
+
+    assert parse.requests == []
+    assert parse.malformed
 
 
 def test_malformed_json_inside_a_block_is_attempted_not_completed() -> None:
@@ -119,7 +132,7 @@ def test_malformed_json_inside_a_block_is_attempted_not_completed() -> None:
 def test_unterminated_but_well_formed_block_still_executes() -> None:
     """Intent is unambiguous when the remainder is exactly one valid call."""
     parse = parse_prompted_tool_turn(
-        f'{PROMPTED_TOOL_OPEN}\n{{"tool_id":"files.read","arguments":{{"path":"x"}}}}',
+        f'{PROMPTED_TOOL_OPEN}\n{{"tool_id":"files.read","activity_title":"Reading x","arguments":{{"path":"x"}}}}',
         active_tool_ids=ACTIVE,
     )
 
@@ -129,7 +142,7 @@ def test_unterminated_but_well_formed_block_still_executes() -> None:
 
 def test_unterminated_block_followed_by_prose_is_attempted_not_executed() -> None:
     parse = parse_prompted_tool_turn(
-        f'{PROMPTED_TOOL_OPEN}\n{{"tool_id":"files.read","arguments":{{"path":"x"}}}}\nand then I will explain.',
+        f'{PROMPTED_TOOL_OPEN}\n{{"tool_id":"files.read","activity_title":"Reading x","arguments":{{"path":"x"}}}}\nand then I will explain.',
         active_tool_ids=ACTIVE,
     )
 

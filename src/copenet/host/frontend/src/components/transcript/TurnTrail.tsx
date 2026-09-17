@@ -25,6 +25,7 @@ import {
   collapseRenderedMessageParts,
   countFailedToolParts,
   isToolPart,
+  latestActivityTitle,
   segmentTrail,
   splitTurn,
   summarizeToolParts,
@@ -122,7 +123,11 @@ function ToolGroup({ parts, isLive, busy }: { parts: ToolPart[]; isLive?: boolea
     return <InlineToolPart part={parts[0]} isLive={isLive} />;
   }
   return (
-    <Disclosure header={summarizeToolParts(parts)} failed={countFailedToolParts(parts)} busy={busy}>
+    <Disclosure
+      header={(busy && latestActivityTitle(parts)) || summarizeToolParts(parts)}
+      failed={countFailedToolParts(parts)}
+      busy={busy}
+    >
       {parts.map((part, index) => (
         <InlineToolPart key={`tool-${index}`} part={part} isLive={isLive} />
       ))}

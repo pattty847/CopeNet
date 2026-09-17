@@ -174,6 +174,7 @@ async def run_with_prompted_tools(
                         decision_id=plan.decision_id,
                         native=False,
                         call_id=call_id,
+                        activity_title=request.activity_title,
                     ),
                     "turnState": turn_state.to_public_dict(),
                 },

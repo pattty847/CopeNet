@@ -80,6 +80,7 @@ copenet/
 │   │       ├── files.py               ← files.read/rg/write/edit (manifest); list/search registered but off-manifest
 │   │       ├── git.py                 ← git.diff/status (off-manifest; use shell.exec git)
 │   │       ├── shell.py               ← shell.exec
+│   │       ├── terminal.py            ← run-owned persistent PTY terminal tools
 │   │       ├── artifacts.py           ← artifact.create (off-manifest, deferred)
 │   │       ├── workspace_intel.py     ← repo.map + test.discover (off-manifest)
 │   │       └── _shared.py
@@ -351,8 +352,9 @@ The harness keeps provider execution normalized and prepares for richer capabili
 
 ### Prompted tools and policy (today)
 
-- **Categories** (`ToolCategory` in `core/tools/contracts.py`): `repo-read`, `repo-write`, `shell-read`, `context`, `artifact`, and reserved `mcp`.
-- **Task mode drives policy**: `policy_for_task_mode()` in `core/tools/policy.py` builds the effective policy from the persisted session **`task_prompt_id`**. Baseline modes allow **`repo-read`**, **`shell-read`**, **`context`**, **`artifact`**. **`full-access`** adds **`repo-write`** so `files.edit` / `files.write` register in `available_tools` for that run.
+- **Categories** (`ToolCategory` in `core/tools/contracts.py`): `repo-read`, `repo-write`, `shell-read`, `shell-write`, `context`, `artifact`, and reserved `mcp`.
+- **Task mode drives policy**: `policy_for_task_mode()` in `core/tools/policy.py` builds the effective policy from the persisted session **`task_prompt_id`**. Baseline modes allow **`repo-read`**, **`shell-read`**, **`context`**, **`artifact`**. **`full-access`** adds **`repo-write`** and **`shell-write`**, so file writes and persistent terminal tools register in `available_tools` for that run.
+- **Persistent terminal sessions** are explicit `terminal.start` / `terminal.exec` / `terminal.read` / `terminal.interrupt` / `terminal.close` tools. A session belongs to one active run, retains normal shell state only during that run, and the harness terminates its process group when the run stream ends.
 - **Model-facing manifest** is the explicit `MANIFEST_TOOL_IDS` set in
   `core/tools/builtin_readonly.py`. It includes the core file/shell/plan/web tools plus
   approved domain tools for Market, personas, memory, and user-note proposals.

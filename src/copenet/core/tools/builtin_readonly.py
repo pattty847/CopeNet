@@ -11,6 +11,7 @@ from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMO
 from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
+from .handlers.terminal import DESCRIPTORS as TERMINAL_DESCRIPTORS, HANDLERS as TERMINAL_HANDLERS
 from .handlers.tools_load import DESCRIPTORS as TOOLS_LOAD_DESCRIPTORS, HANDLERS as TOOLS_LOAD_HANDLERS
 from .handlers.user_note import DESCRIPTORS as USER_NOTE_DESCRIPTORS, HANDLERS as USER_NOTE_HANDLERS
 from .handlers.web import DESCRIPTORS as WEB_DESCRIPTORS, HANDLERS as WEB_HANDLERS
@@ -39,6 +40,11 @@ MANIFEST_TOOL_IDS = {
     "files.edit",
     "files.rg",
     "shell.exec",
+    "terminal.start",
+    "terminal.exec",
+    "terminal.read",
+    "terminal.interrupt",
+    "terminal.close",
     "plan.write",
     # Deferred disclosure (core/tools/disclosure.py): everything below the always-loaded
     # core is offered as a one-line catalog and loaded on request through tools.load.
@@ -77,6 +83,7 @@ ALL_DESCRIPTORS = (
     FILE_DESCRIPTORS
     + GIT_DESCRIPTORS
     + SHELL_DESCRIPTORS
+    + TERMINAL_DESCRIPTORS
     + ARTIFACT_DESCRIPTORS
     + MEMORY_DESCRIPTORS
     + PERSONA_DESCRIPTORS
@@ -93,6 +100,7 @@ ALL_HANDLERS = {
     **MEMORY_HANDLERS,
     **PERSONA_HANDLERS,
     **SHELL_HANDLERS,
+    **TERMINAL_HANDLERS,
     **ARTIFACT_HANDLERS,
     **WORKSPACE_INTEL_HANDLERS,
     **PLAN_HANDLERS,

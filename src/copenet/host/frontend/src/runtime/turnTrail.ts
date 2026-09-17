@@ -74,8 +74,13 @@ export function splitTurn(parts: MessagePart[]): { trail: MessagePart[]; answer:
 }
 
 // ---------------------------------------------------------------------------
-// Titles — what a row and a group header say. Derived from the tool id and its
-// target; a model-supplied title is future work and would slot in ahead of this.
+// Titles. The model titles each CALL (`activityTitle`: what the call is meant to
+// establish), so the title belongs on that call's row. A closed group or the
+// settled trail box covers many calls, and one call's title would mislabel the
+// rest, so those headers are derived counts. The one exception is a group still
+// running: its header shows the latest title, which is how a collapsed group is
+// followed live. A call with no title (direct calls, older transcripts) derives
+// its row from the tool id and target.
 // ---------------------------------------------------------------------------
 
 interface ToolPhrase {
@@ -151,8 +156,9 @@ export interface ToolRowTitle {
 export function toolRowTitle(
   toolId: string,
   target: string | null | undefined,
-  options: { inFlight?: boolean; summary?: string | null } = {},
+  options: { inFlight?: boolean; summary?: string | null; activityTitle?: string | null } = {},
 ): ToolRowTitle {
+  if (options.activityTitle) return { label: options.activityTitle, detail: null, literal: false };
   // A tool with no phrase yet says what its own result summary says, which beats
   // a raw id. Phrases are added per tool as each one is reviewed.
   if (!TOOL_PHRASES[toolId] && options.summary) return { label: options.summary, detail: null, literal: false };
@@ -197,6 +203,20 @@ export function summarizeToolParts(parts: MessagePart[]): string {
   });
   const joined = phrases.join(', ');
   return joined.charAt(0).toUpperCase() + joined.slice(1);
+}
+
+/** The most recent model title in a group — the header of a group still running. */
+export function latestActivityTitle(parts: MessagePart[]): string | null {
+  for (let index = parts.length - 1; index >= 0; index -= 1) {
+    const part = parts[index];
+    if (part.kind === 'tool_batch') {
+      const titled = [...part.members].reverse().find((member) => member.activityTitle);
+      if (titled?.activityTitle) return titled.activityTitle;
+    } else if ((part.kind === 'tool_call' || part.kind === 'tool_result') && part.activityTitle) {
+      return part.activityTitle;
+    }
+  }
+  return null;
 }
 
 export function countFailedToolParts(parts: MessagePart[]): number {

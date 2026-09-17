@@ -117,6 +117,8 @@ export interface ToolExecution {
   toolId: string;
   ok: boolean;
   summary: string;
+  /** Model-supplied, operator-facing title for this call's activity group. */
+  activityTitle?: string | null;
   turnId?: string | null;
   decisionId?: string | null;
   callId?: string | null;
@@ -195,6 +197,7 @@ export interface ToolCallPart {
   toolId: string;
   turnId?: string | null;
   decisionId?: string | null;
+  activityTitle?: string | null;
   /** One-line hint shown while the tool is in-flight — path, query, etc. */
   hint?: string | null;
   target?: string | null;
@@ -297,6 +300,7 @@ export interface ToolResultPart {
   decisionId?: string | null;
   ok: boolean;
   summary: string;
+  activityTitle?: string | null;
   error?: string | null;
   artifactId?: string | null;
   target?: string | null;
@@ -317,6 +321,7 @@ export interface ToolBatchMember {
   decisionId?: string | null;
   ok: boolean;
   summary: string;
+  activityTitle?: string | null;
   error?: string | null;
   artifactId?: string | null;
   target?: string | null;

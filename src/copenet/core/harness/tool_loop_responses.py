@@ -19,6 +19,7 @@ from .tool_loop_common import (
     TraceRecorder,
     _bounded_tool_calls,
     _force_call_id,
+    extract_activity_title,
     _max_step_explanation,
     _native_tool_message_content,
     _new_call_id,
@@ -245,6 +246,7 @@ async def run_with_responses_tools(
             name = safe_name_to_tool_id.get(raw_name, raw_name)
             arguments_json = str(call.get("arguments") or "").strip() or "{}"
             arguments = _parse_native_tool_arguments(arguments_json)
+            activity_title = extract_activity_title(arguments)
             working_messages.append(
                 responses_items.function_call_item(
                     item_id=str(call.get("id") or "") or f"fc_{call_id}",
@@ -253,7 +255,7 @@ async def run_with_responses_tools(
                     arguments=arguments_json,
                 )
             )
-            request = ToolExecutionRequest(tool_id=name, arguments=arguments)
+            request = ToolExecutionRequest(tool_id=name, arguments=arguments, activity_title=activity_title)
             trace_tool_requested(
                 trace,
                 tool_id=name,
@@ -273,6 +275,7 @@ async def run_with_responses_tools(
                         decision_id=plan.decision_id,
                         native=True,
                         call_id=call_id,
+                        activity_title=activity_title,
                     ),
                     "turnState": turn_state.to_public_dict(),
                 },

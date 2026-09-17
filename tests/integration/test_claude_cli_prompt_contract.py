@@ -64,7 +64,7 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         "copenet.core.harness.tool_loop_prompted._new_call_id",
         lambda _tool_id: "call-fixed",
     )
-    tool_call_json = json.dumps({"tool_id": "files.read", "arguments": {"path": "fixture.txt"}})
+    tool_call_json = json.dumps({"tool_id": "files.read", "activity_title":"Fixture tool call","arguments": {"path": "fixture.txt"}})
     tool_request = f"{PROMPTED_TOOL_OPEN}\n{tool_call_json}\n{PROMPTED_TOOL_CLOSE}"
     runner = SequencedRecordingRunner(
         turns=[
@@ -117,6 +117,7 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         assert request == ToolExecutionRequest(
             tool_id="files.read",
             arguments={"path": "fixture.txt"},
+            activity_title="Fixture tool call",
         )
         return ToolExecutionResult(
             tool_id="files.read",
@@ -144,17 +145,19 @@ async def test_claude_cli_prompt_and_tool_followup_contract(
         "PERSONA_SENTINEL\n\nMEMORY_SENTINEL\n\n"
         "To call a CopeNet tool, emit a fenced block exactly like this and nothing else inside it:\n\n"
         f"{PROMPTED_TOOL_OPEN}\n"
-        '{"tool_id":"shell.exec","arguments":{"command":"pwd"}}\n'
+        '{"tool_id":"shell.exec","activity_title":"Checking the workspace directory","arguments":{"command":"pwd"}}\n'
         f"{PROMPTED_TOOL_CLOSE}\n\n"
         "Rules:\n"
         f"- Only JSON inside {PROMPTED_TOOL_OPEN}...{PROMPTED_TOOL_CLOSE} is executed. JSON anywhere else in "
         "your reply is treated as ordinary prose, so you can quote and explain tool calls freely.\n"
-        "- One block per tool call. Use the exact keys `tool_id` and `arguments`.\n"
+        "- One block per tool call. Use the exact keys `tool_id`, `activity_title`, and `arguments`.\n"
+        "- `activity_title` is required. Write a specific one-line description of what this call is meant to establish, with at most 100 characters. It is shown to the operator and is never passed to the tool.\n"
         "- `tool_id` must be one of the tools listed below; nothing else is callable.\n"
         "- For shell commands, use one command per call. Do not use pipes, chaining, redirection, or multiple commands.\n"
         "- After tool results are returned, answer using the observed output.\n\n"
         "Available tools:\n"
-        '- files.read: Read one fixture. Schema: {"properties": {"path": {"type": "string"}}, "type": "object"}'
+        "- files.read: Read one fixture. Schema: "
+        + json.dumps(tool.to_responses_tool()["parameters"], ensure_ascii=False, sort_keys=True)
     )
     # The model-facing envelope: no call id or channel (the loop pairs results
     # itself), no indentation, no access-policy bookkeeping on an allowed call.

@@ -74,7 +74,7 @@ def policy_for_task_mode(task_prompt_id: str | None) -> ToolPolicy:
     base = {"repo-read", "shell-read", "context", "artifact", "web"}
     if normalized == "full-access":
         return ToolPolicy(
-            allowed_categories={*base, "repo-write"},
+            allowed_categories={*base, "repo-write", "shell-write"},
             unrestricted_shell=True,
             shell_timeout_sec=120.0,
             shell_output_limit=30000,  # match Claude Code's Bash-output default

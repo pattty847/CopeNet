@@ -28,6 +28,25 @@ ToolSideEffect = Literal["none", "read", "write", "external"]
 # run record need it; the model needs it only when a call was blocked or roamed.
 MODEL_HIDDEN_POLICY_FIELDS = frozenset({"target", "workspaceRoot", "scope", "accessAction", "policyDecision", "policySummary"})
 ToolEffectKind = Literal["file_read", "repo_search", "shell_command", "file_write", "file_edit", "artifact", "context", "web_search", "web_fetch", "raw"]
+ACTIVITY_TITLE_MAX_LENGTH = 100
+
+
+def _tool_schema_with_activity_title(input_schema: dict[str, Any]) -> dict[str, Any]:
+    """Add the required, non-executable presentation field to a tool schema."""
+    schema = dict(input_schema) if isinstance(input_schema, dict) else {"type": "object", "properties": {}}
+    properties = dict(schema.get("properties") or {})
+    properties["activity_title"] = {
+        "type": "string",
+        "description": "A concise one-line title for the live activity group this call begins or continues.",
+        "minLength": 1,
+        "maxLength": ACTIVITY_TITLE_MAX_LENGTH,
+    }
+    schema["properties"] = properties
+    required = [str(value) for value in schema.get("required", []) if isinstance(value, str)]
+    if "activity_title" not in required:
+        required.append("activity_title")
+    schema["required"] = required
+    return schema
 
 
 @dataclass(frozen=True)
@@ -71,7 +90,7 @@ class ToolDescriptor:
         and strict mode requires every property to be required + additionalProperties
         false, which would reject those calls.
         """
-        schema = dict(self.input_schema) if isinstance(self.input_schema, dict) else {"type": "object", "properties": {}}
+        schema = _tool_schema_with_activity_title(self.input_schema)
         return {
             "type": "function",
             # Responses function names must match ^[a-zA-Z0-9_-]+$ (no dots).
@@ -108,10 +127,16 @@ ToolSpec = ToolDescriptor
 
 @dataclass(frozen=True)
 class ToolExecutionRequest:
-    """Normalized request to execute a tool."""
+    """Normalized request to execute a tool.
+
+    ``activity_title`` is model-authored presentation metadata.  It is never
+    handed to a tool handler or consulted for policy; the live transcript uses
+    it to name the consecutive activity group that contains this call.
+    """
 
     tool_id: str
     arguments: dict[str, Any] = field(default_factory=dict)
+    activity_title: str | None = None
 
 
 ToolCallRequest = ToolExecutionRequest
@@ -181,6 +206,7 @@ class ToolExecutionResult:
         decision_id: str | None = None,
         arguments: dict[str, Any] | None = None,
         evidence_role: ToolEvidenceRole = "none",
+        activity_title: str | None = None,
     ) -> dict[str, Any]:
         """Return chat-event metadata for observability."""
         from .projection import _arguments_payload, _preview_payload, _batch_member_payloads, build_tool_effect_payload
@@ -190,6 +216,8 @@ class ToolExecutionResult:
             "ok": self.ok,
             "summary": self.summary,
         }
+        if activity_title:
+            payload["activityTitle"] = activity_title
         if turn_id:
             payload["turnId"] = turn_id
         if decision_id:

@@ -426,11 +426,20 @@ async def test_harness_sends_agent_instructions_on_responses_path(tmp_path: Path
             {
                 "type": "function",
                 "name": "files_read",
-                "description": "Read a file.",
-                "parameters": {
-                    "type": "object",
-                    "properties": {"path": {"type": "string"}},
-                },
+                    "description": "Read a file.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "path": {"type": "string"},
+                            "activity_title": {
+                                "type": "string",
+                                "description": "A concise one-line title for the live activity group this call begins or continues.",
+                                "minLength": 1,
+                                "maxLength": 100,
+                            },
+                        },
+                        "required": ["activity_title"],
+                    },
             }
         ]
     ]

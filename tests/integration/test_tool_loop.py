@@ -110,7 +110,7 @@ async def test_orchestrator_runs_prompted_json_tool_loop(monkeypatch, tmp_path: 
     monkeypatch.setenv("COPNET_WORKDIR", str(tmp_path))
     (tmp_path / "README.md").write_text("# Temp Repo\nHello\n", encoding="utf-8")
     provider = PromptedProvider([
-        _tool_block('{"tool_id":"files.read","arguments":{"path":"README.md"}}'),
+        _tool_block('{"tool_id":"files.read","activity_title":"Fixture tool call","arguments":{"path":"README.md"}}'),
         "I read the README and found Temp Repo.",
     ])
     orchestrator = Orchestrator(
@@ -172,7 +172,7 @@ async def test_orchestrator_persists_trace_only_harness_decision(monkeypatch, tm
 @pytest.mark.asyncio
 async def test_harness_prompted_provider_executes_json_tool_requests(tmp_path: Path) -> None:
     provider = PromptedProvider([
-        _tool_block('{"tool_id":"shell.exec","arguments":{"command":"pwd","timeout":120000}}'),
+        _tool_block('{"tool_id":"shell.exec","activity_title":"Fixture tool call","arguments":{"command":"pwd","timeout":120000}}'),
         "The command returned the workspace path.",
     ])
     harness = ChatHarness()
@@ -274,7 +274,7 @@ async def test_harness_decision_call_tool_does_not_force_tool_execution(tmp_path
 async def test_harness_decision_direct_response_does_not_suppress_tool_loop(tmp_path: Path) -> None:
     provider = DecisionPromptedProvider(
         [
-            _tool_block('{"tool_id":"files.read","arguments":{"path":"README.md"}}'),
+            _tool_block('{"tool_id":"files.read","activity_title":"Fixture tool call","arguments":{"path":"README.md"}}'),
             "Read the README.",
         ],
         decision_text=(

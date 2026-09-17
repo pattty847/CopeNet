@@ -33,6 +33,7 @@ import { useAppStore } from '../../store/useAppStore';
 import { langFromPath } from '../../lib/syntax';
 import { wsClient } from '../../lib/wsClient';
 import { FileLinesView, DiffView, PlanView } from '../runtime/CodeViews';
+import { ChatMarkdown } from '../ChatMarkdown';
 import { shortPath, toolRowTitle, type ToolRowTitle } from '../../runtime/turnTrail';
 
 // ---------------------------------------------------------------------------
@@ -371,7 +372,7 @@ export function ToolCallRow({ part, isLive }: { part: ToolCallPart; isLive?: boo
         ? <Loader2 className="h-3 w-3 shrink-0 animate-spin text-operator-accent/70" />
         : <span className="inline-block h-1.5 w-1.5 shrink-0 rounded-full bg-operator-muted/40" />
       }
-      <RowTitle title={toolRowTitle(part.toolId, target, { inFlight: isLive })} />
+      <RowTitle title={toolRowTitle(part.toolId, target, { inFlight: isLive, activityTitle: part.activityTitle })} />
     </div>
   );
 }
@@ -424,7 +425,10 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
   // file still cannot swallow the thread, and there is one scrollbar, not two.
   const [expanded, setExpanded] = useState(false);
   const setInspectorTarget = useAppStore((state) => state.setInspectorTarget);
-  const title = toolRowTitle(part.toolId, part.target, { summary: part.summary });
+  const title = toolRowTitle(part.toolId, part.target, { summary: part.summary, activityTitle: part.activityTitle });
+  // The model's title says why; the hover keeps what was literally called.
+  const derived = toolRowTitle(part.toolId, part.target, { summary: part.summary });
+  const literalCall = [derived.label, derived.detail].filter(Boolean).join(' ');
   const failed = !part.ok;
   const hasBody = !!part.preview || (!part.ok && !!part.error);
   const hasMore = hasMoreThanShown(part);
@@ -437,7 +441,7 @@ export function ToolResultRow({ part }: { part: ToolResultPart }) {
         onClick={() => (hasBody ? setExpanded((value) => !value) : setInspectorTarget({ kind: 'tool', tool: part }))}
         aria-expanded={hasBody ? expanded : undefined}
         className={`flex w-full items-center gap-2 rounded px-1 py-1 text-left transition-colors duration-100 hover:bg-operator-panel/20 ${failed ? 'text-operator-error' : ''}`}
-        title={part.target || part.summary || title.label}
+        title={literalCall}
       >
         {failed
           ? <XCircle className="h-3 w-3 shrink-0 text-operator-error" />
@@ -492,9 +496,10 @@ function ToolBatchMemberRow({ member }: { member: ToolBatchMember }) {
   const hasPreview = !!member.preview;
   const failed = !member.ok;
   // Show path when available via file_read preview; otherwise verb + target
-  const label = member.preview?.type === 'file_read'
-    ? shortPath(member.preview.path)
-    : `${operatorVerb(member.toolId)}${member.target ? ` ${shortPath(member.target)}` : ''}`;
+  const label = member.activityTitle
+    || (member.preview?.type === 'file_read'
+      ? shortPath(member.preview.path)
+      : `${operatorVerb(member.toolId)}${member.target ? ` ${shortPath(member.target)}` : ''}`);
 
   return (
     <div className="last:border-0">
@@ -620,22 +625,20 @@ export function ToolBatchCard({ part, isLive }: { part: ToolBatchPart; isLive?: 
 // isLive: true while the owning message is still streaming (optimistic delta).
 // ---------------------------------------------------------------------------
 
-// ThinkingRow — collapsible inline reasoning narration, Claude Code / Codex style.
+// ThinkingRow — the model's reasoning, as quiet text where it happened.
 //
-//   active  (reasoning is still streaming, this is the trailing live part):
-//           pulsing "Thinking…" header, body shown live, no toggle.
-//   settled (reasoning burst finished — the model moved on to a tool or the
-//           answer): collapses to a single "Thought process" line with a
-//           chevron; click to re-expand the reasoning text.
+// No header, no toggle: between two tool groups the reasoning IS the narration,
+// and wrapping it in a "Thought process" disclosure made the thread a stack of
+// chevrons. It is muted so it never competes with the answer, and on a settled
+// turn it sits inside the trail box with the calls it explains.
 //
 // The backend coalesces consecutive reasoning deltas into one thinking part per
 // burst (see _append_thinking_part), so each row is one self-contained thought.
 function ThinkingRow({ part, active }: { part: { kind: 'thinking'; text: string }; active?: boolean }) {
   const text = part.text.trim();
-  const [expanded, setExpanded] = useState(false);
 
-  // While actively streaming, before any text has arrived, show just the header
-  // so the operator sees the model start thinking immediately.
+  // Before any reasoning text arrives, say the model has started — otherwise the
+  // turn looks stalled.
   if (!text) {
     if (!active) return null;
     return (
@@ -646,31 +649,9 @@ function ThinkingRow({ part, active }: { part: { kind: 'thinking'; text: string 
     );
   }
 
-  const open = active || expanded;
   return (
-    <div className="overflow-hidden">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        disabled={active}
-        className="flex w-full items-center gap-1.5 px-1 py-0.5 text-left text-[11px] text-operator-muted/70 hover:text-operator-muted transition-colors duration-100 disabled:cursor-default"
-      >
-        <Sparkles
-          className={`h-3 w-3 shrink-0 ${active ? 'animate-pulse text-operator-accent/70' : 'text-operator-muted/45'}`}
-        />
-        <span className={active ? 'text-operator-accent/80' : ''}>{active ? 'Thinking…' : 'Thought process'}</span>
-        {!active &&
-          (open ? (
-            <ChevronDown className="h-3 w-3 shrink-0 text-operator-muted/45" />
-          ) : (
-            <ChevronRight className="h-3 w-3 shrink-0 text-operator-muted/45" />
-          ))}
-      </button>
-      {open && (
-        <div className="mt-1 ml-1 border-l-2 border-operator-muted/25 pl-3 text-[12px] italic leading-relaxed text-operator-muted/75 whitespace-pre-wrap">
-          {text}
-        </div>
-      )}
+    <div className="px-1 text-[12.5px] leading-relaxed text-operator-muted/80 [&_*]:text-inherit">
+      <ChatMarkdown content={text} density="compact" />
     </div>
   );
 }

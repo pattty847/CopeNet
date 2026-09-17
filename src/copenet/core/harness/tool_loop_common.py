@@ -9,6 +9,7 @@ from typing import Any, AsyncIterator, Awaitable, Callable, TypeVar
 from uuid import uuid4
 
 from copenet.core.tools import ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
+from copenet.core.tools.contracts import ACTIVITY_TITLE_MAX_LENGTH
 from copenet.providers import RESOLVED_MODEL_META_KEY, TOKEN_USAGE_META_KEY, Provider, ProviderEvent
 
 from .planning import HarnessTurnPlan
@@ -191,6 +192,7 @@ def _tool_call_event_payload(
     channel: str = "tool",
     native: bool = False,
     call_id: str | None = None,
+    activity_title: str | None = None,
 ) -> dict[str, Any]:
     hint = None
     for key in ("path", "query", "pattern", "file", "dir", "uri"):
@@ -216,6 +218,8 @@ def _tool_call_event_payload(
         payload["turnId"] = turn_id
     if decision_id:
         payload["decisionId"] = decision_id
+    if activity_title:
+        payload["activityTitle"] = activity_title
     return payload
 
 
@@ -231,6 +235,7 @@ def _tool_result_event_payload(
         decision_id=plan.decision_id,
         arguments=request.arguments,
         evidence_role=descriptor.evidence_role if descriptor is not None else "none",
+        activity_title=request.activity_title,
     )
 
 
@@ -244,6 +249,21 @@ def _parse_native_tool_arguments(value: Any) -> dict[str, Any]:
     except json.JSONDecodeError:
         return {}
     return dict(parsed) if isinstance(parsed, dict) else {}
+
+
+def extract_activity_title(arguments: dict[str, Any]) -> str | None:
+    """Remove and validate the model-only activity title from tool arguments."""
+    return normalize_activity_title(arguments.pop("activity_title", None))
+
+
+def normalize_activity_title(value: Any) -> str | None:
+    """Validate a model-authored operator-facing activity title."""
+    if not isinstance(value, str):
+        return None
+    title = value.strip()
+    if not title or len(title) > ACTIVITY_TITLE_MAX_LENGTH or "\n" in title:
+        return None
+    return title
 
 
 def _native_tool_message_content(tool_result: ToolExecutionResult) -> str:
@@ -274,17 +294,18 @@ def compose_prompted_tool_system_prompt(
 ) -> str | None:
     tool_lines = []
     for tool in tools:
-        schema = json.dumps(tool.input_schema, ensure_ascii=False, sort_keys=True)
+        schema = json.dumps(tool.to_responses_tool()["parameters"], ensure_ascii=False, sort_keys=True)
         tool_lines.append(f"- {tool.id}: {tool.description} Schema: {schema}")
     extra = (
         "To call a CopeNet tool, emit a fenced block exactly like this and nothing else inside it:\n\n"
         f"{PROMPTED_TOOL_OPEN}\n"
-        '{"tool_id":"shell.exec","arguments":{"command":"pwd"}}\n'
+        '{"tool_id":"shell.exec","activity_title":"Checking the workspace directory","arguments":{"command":"pwd"}}\n'
         f"{PROMPTED_TOOL_CLOSE}\n\n"
         f"Rules:\n"
         f"- Only JSON inside {PROMPTED_TOOL_OPEN}...{PROMPTED_TOOL_CLOSE} is executed. JSON anywhere else in "
         "your reply is treated as ordinary prose, so you can quote and explain tool calls freely.\n"
-        "- One block per tool call. Use the exact keys `tool_id` and `arguments`.\n"
+        "- One block per tool call. Use the exact keys `tool_id`, `activity_title`, and `arguments`.\n"
+        f"- `activity_title` is required. Write a specific one-line description of what this call is meant to establish, with at most {ACTIVITY_TITLE_MAX_LENGTH} characters. It is shown to the operator and is never passed to the tool.\n"
         "- `tool_id` must be one of the tools listed below; nothing else is callable.\n"
         "- For shell commands, use one command per call. Do not use pipes, chaining, redirection, or multiple commands.\n"
         "- After tool results are returned, answer using the observed output.\n\n"
@@ -371,7 +392,7 @@ def _prompted_tool_blocks(text: str) -> list[str]:
 
 
 def _coerce_prompted_tool_request(value: Any) -> ToolExecutionRequest | None:
-    """Accept only the canonical `{tool_id, arguments}` shape.
+    """Accept only the canonical `{tool_id, activity_title, arguments}` shape.
 
     The previous `name`/bare-`command` fallbacks made any JSON object with a
     `name` field — or any quoted shell snippet — an executable call.
@@ -386,7 +407,10 @@ def _coerce_prompted_tool_request(value: Any) -> ToolExecutionRequest | None:
         arguments = {}
     if not isinstance(arguments, dict):
         return None
-    return ToolExecutionRequest(tool_id=tool_id, arguments=dict(arguments))
+    activity_title = normalize_activity_title(value.get("activity_title"))
+    if activity_title is None:
+        return None
+    return ToolExecutionRequest(tool_id=tool_id, arguments=dict(arguments), activity_title=activity_title)
 
 
 def compose_prompted_tool_correction(*, malformed: list[str], rejected_tool_ids: list[str], active_tool_ids: list[str]) -> str:
@@ -395,7 +419,7 @@ def compose_prompted_tool_correction(*, malformed: list[str], rejected_tool_ids:
     if malformed:
         problems.append(
             f"{len(malformed)} tool block(s) could not be read. Each block must contain a single JSON "
-            'object with exactly the keys "tool_id" and "arguments".'
+            'object with exactly the keys "tool_id", "activity_title", and "arguments".'
         )
     if rejected_tool_ids:
         problems.append(
@@ -490,6 +514,11 @@ def compose_responses_tool_instructions(
         "you lack file access or are constrained from calling tools; call the "
         "tools directly, gather what you need, then give your answer."
     )
+    if tools:
+        directive += (
+            f" Every tool call must include its required activity_title parameter: a specific, one-line description of what the call is meant to establish, no more than {ACTIVITY_TITLE_MAX_LENGTH} characters. "
+            "This title is live operator-facing UI metadata, not prose; put it in the tool call and do not send a separate progress message."
+        )
     if any(tool.id == "plan.write" for tool in tools):
         directive += (
             " Use plan.write when a task is genuinely complex and tracking steps helps — lay out the "

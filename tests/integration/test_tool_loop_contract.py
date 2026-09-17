@@ -108,7 +108,7 @@ class _ResponsesProvider:
                         "id": f"fc-{index}",
                         "call_id": f"call-{index}",
                         "name": call["tool_id"].replace(".", "_"),
-                        "arguments": json.dumps(call["arguments"]),
+                        "arguments": json.dumps({"activity_title": call["activity_title"], **call["arguments"]}),
                     }
                 },
             )
@@ -121,6 +121,7 @@ class _ResponsesProvider:
 def _call(index: int = 0) -> dict[str, Any]:
     return {
         "tool_id": "files.read",
+        "activity_title": f"Reading scripted file {index}",
         "arguments": {"path": f"file-{index}.txt"},
     }
 
@@ -244,7 +245,11 @@ async def test_tool_loops_execute_and_correlate_one_tool_call(
     tool_call = call_event.metadata["toolCall"]
     tool_result = result_event.metadata["toolExecution"]
 
-    assert executions == [ToolExecutionRequest(tool_id="files.read", arguments={"path": "file-0.txt"})]
+    assert executions == [ToolExecutionRequest(
+        tool_id="files.read", arguments={"path": "file-0.txt"}, activity_title="Reading scripted file 0"
+    )]
+    assert tool_call["activityTitle"] == "Reading scripted file 0"
+    assert tool_result["activityTitle"] == "Reading scripted file 0"
     assert tool_call["callId"] == tool_result["callId"]
     assert tool_call["turnId"] == tool_result["turnId"]
     assert tool_call["decisionId"] == tool_result["decisionId"]
@@ -342,7 +347,9 @@ async def test_tool_loops_stop_before_the_next_side_effect_after_abort(
         abort_event=abort_event,
     )
 
-    assert executions == [ToolExecutionRequest(tool_id="files.read", arguments={"path": "file-0.txt"})]
+    assert executions == [ToolExecutionRequest(
+        tool_id="files.read", arguments={"path": "file-0.txt"}, activity_title="Reading scripted file 0"
+    )]
     assert len([event for event in events if event.metadata and event.metadata.get("toolExecution")]) == 1
     assert _completed_trace(traces)["terminalReason"] == "aborted"
     assert [event.kind for event in events].count("final") == 1

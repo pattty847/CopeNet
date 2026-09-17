@@ -217,7 +217,7 @@ def _shell_access_metadata(argv: list[str], context: ToolExecutionContext) -> di
     return default
 
 
-def _approval_required(command: str, context: ToolExecutionContext) -> ToolExecutionResult | None:
+def approval_required_result(command: str, context: ToolExecutionContext) -> ToolExecutionResult | None:
     # Operator pre-approved this exact command via the approval flow — run it.
     approved = context.ephemeral.get("approved_commands") if isinstance(context.ephemeral, dict) else None
     if isinstance(approved, (set, frozenset, list, tuple)) and command in approved:
@@ -419,7 +419,7 @@ async def shell_exec(request: ToolExecutionRequest, context: ToolExecutionContex
 
     # Full Access: arbitrary shell, only high-risk patterns pause for approval.
     if context.policy.unrestricted_shell:
-        approval_result = _approval_required(command, context)
+        approval_result = approval_required_result(command, context)
         if approval_result is not None:
             return approval_result
         return await _run_unrestricted_shell(
