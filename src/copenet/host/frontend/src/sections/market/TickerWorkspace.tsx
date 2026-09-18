@@ -10,6 +10,7 @@ import { PositionPanel } from './position/PositionPanel';
 import { ChartStage, type StagePlot } from './ChartStage';
 import { ReplayBar } from './replay/ReplayBar';
 import { ChartToolbar } from './ChartToolbar';
+import { ChartMenuProvider } from './chartMenuRegistry';
 import { CompareMenu, EventsMenu, SettingsMenu } from './chartMenus';
 import { PlotsMenu } from './PlotsMenu';
 import { MM } from './marketUi';
@@ -130,6 +131,9 @@ export function TickerWorkspace({
           onSelect={onNavigate}
         />
 
+        {/* One menu open at a time across BOTH bars: opening Plots puts an open drawing
+            group away, and picking a drawing tool closes Plots. */}
+        <ChartMenuProvider>
         <div className="tw-main">
           <ChartToolbar
             timeframe={timeframe}
@@ -310,6 +314,7 @@ export function TickerWorkspace({
             {tab === 'synthesis' && <TickerReadPanel symbol={detail.symbol} />}
           </ResearchDrawer>
         </div>
+        </ChartMenuProvider>
         <ChartAgentPanel workspace={chartWorkspace} symbol={detail.symbol} timeframe={timeframe} />
       </div>
     </div>

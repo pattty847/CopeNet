@@ -21,6 +21,13 @@
 .ca-toolbar button[aria-pressed=true],.ca-panel button[aria-selected=true] { color:var(--mkt-accent); background:var(--mkt-accent-soft); }
 .ca-toolbar button:disabled,.ca-panel button:disabled { opacity:.4; cursor:default; }
 .ca-toolbar button:focus-visible,.ca-panel :is(button,input,textarea,select,summary):focus-visible { outline:2px solid var(--mkt-accent); outline-offset:2px; }
+.ca-tool-menu { position:relative; }
+.ca-tool-menu summary { display:inline-flex; align-items:center; gap:5px; list-style:none; padding:6px 7px; color:var(--mkt-dim); cursor:pointer; font:500 11px var(--mkt-sans); border-radius:4px; }
+.ca-tool-menu summary::-webkit-details-marker { display:none; }
+.ca-tool-menu summary:hover,.ca-tool-menu[open] summary,.ca-tool-menu.is-active summary { color:var(--mkt-accent); background:var(--mkt-accent-soft); }
+.ca-tool-menu__items { position:absolute; z-index:20; top:calc(100% + 4px); left:0; display:grid; min-width:190px; padding:4px; border:1px solid var(--mkt-seam); border-radius:6px; background:var(--mkt-canvas); box-shadow:0 8px 24px rgba(0,0,0,.28); }
+.ca-tool-menu__items button { justify-content:flex-start; width:100%; text-align:left; }
+.ca-tool-menu__items button svg { flex:none; }
 .ca-tool-hint { font:10px var(--mkt-sans); color:var(--mkt-dim); flex:1; }
 .ca-toolbar .ca-open { margin-left:auto; padding:5px 10px; border-color:var(--mkt-seam); }
 .ca-panel { position:relative; display:flex; flex-direction:column; width:var(--ca-width,380px); min-width:320px; max-width:48%; flex-shrink:0; min-height:0; border-left:1px solid var(--mkt-seam); background:var(--mkt-canvas); font:12px var(--mkt-sans); color:var(--mkt-text); }
@@ -118,10 +125,26 @@
 }
 
 /* Phone: the drawing bar keeps every tool on one row and gives back the padding it was not
- * using. 30px is still a thumb target; the row lands at 32px instead of 39px. */
+ * using. 30px is still a thumb target; the row lands at 32px instead of 39px.
+ *
+ * The Agent button is the reason the rest of this block exists. Measured at 430px the bar
+ * wanted 471px, and since nothing here scrolls, `margin-left: auto` pushed `.ca-open` to
+ * left: 438 — off the right edge, unreachable, with no way to open the chart agent on a
+ * phone at all. The four group labels were most of that overrun, so they go and the icons
+ * speak for themselves; the hint gets `min-width: 0` so it is the thing that gives way as
+ * width runs out, and `.ca-open` is pinned so it can never be the thing pushed out again.
+ * Deliberately no `overflow-x` on the tools row: `.ca-tool-menu__items` is absolutely
+ * positioned inside it and a scroll container would clip every dropdown. */
 @media (max-width: 560px) {
   .ca-toolbar { min-height:32px; padding:1px 7px; gap:4px; }
   .ca-toolbar button { min-height:30px; }
+  .ca-toolbar__tools { min-width:0; }
+  .ca-tool-menu summary { padding:6px 5px; }
+  .ca-tool-menu summary span { display:none; }
+  .ca-tool-hint { min-width:0; flex:1 1 0; }
+  .ca-toolbar .ca-open { flex:0 0 auto; }
+  /* The rightmost dropdown opens leftward so it cannot hang off the screen edge. */
+  .ca-tool-menu:last-of-type .ca-tool-menu__items { left:auto; right:0; }
 }
 
 .ca-source { min-width:0; border-top:1px solid var(--mkt-seam); padding:7px 0; }

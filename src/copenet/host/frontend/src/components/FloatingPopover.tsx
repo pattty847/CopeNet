@@ -49,9 +49,17 @@ export function FloatingPopover({
     };
   }, [anchorRef, open, width]);
 
+  // `pointerdown`, in the capture phase, rather than `mousedown`.
+  //
+  // A tap on the Lightweight Charts canvas produced no dismissal on a phone: the library
+  // handles the touch itself and calls `preventDefault`, which suppresses the synthesized
+  // mouse events, so `mousedown` never reached this listener. The chart menus therefore
+  // stayed open over the chart — and because opening a second menu also relies on this
+  // listener to close the first, every menu could be open at once. `pointerdown` fires for
+  // touch, pen and mouse alike, and capture means nothing downstream can stop it.
   useEffect(() => {
     if (!open) return;
-    const dismiss = (event: MouseEvent) => {
+    const dismiss = (event: Event) => {
       if (!dismissOnOutside) return;
       const target = event.target as Node;
       if (!popoverRef.current?.contains(target) && !anchorRef.current?.contains(target)) onClose();
@@ -59,10 +67,10 @@ export function FloatingPopover({
     const escape = (event: KeyboardEvent) => {
       if (event.key === 'Escape') onClose();
     };
-    document.addEventListener('mousedown', dismiss);
+    document.addEventListener('pointerdown', dismiss, true);
     document.addEventListener('keydown', escape);
     return () => {
-      document.removeEventListener('mousedown', dismiss);
+      document.removeEventListener('pointerdown', dismiss, true);
       document.removeEventListener('keydown', escape);
     };
   }, [anchorRef, dismissOnOutside, onClose, open]);

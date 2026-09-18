@@ -6,9 +6,10 @@
 // is a 28px icon that opens a popover. Grouping is semantic — what period am I looking at,
 // what is drawn on it, how is it drawn — and the groups are separated by seams, not by gaps.
 
-import { useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import { ChartSpline, FileText, GitCompareArrows, PanelBottomClose, PanelBottomOpen, Rewind, Settings2 } from 'lucide-react';
 import { FloatingPopover } from '../../components/FloatingPopover';
+import { useChartMenu } from './chartMenuRegistry';
 import { rangesFor, type ChartRange, type ChartTimeframe } from './chartRanges';
 import { TimeframeSelector } from './TimeframeSelector';
 import type { CandleStyle } from './heikinAshi';
@@ -189,7 +190,9 @@ function ToolbarMenu({
   count?: number;
   render: (anchor: RefObject<HTMLButtonElement | null>, open: boolean, close: () => void) => ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
+  // The toolbar decides which menu is open; see chartMenuRegistry for why that cannot be
+  // left to each popover's own dismissal.
+  const { open, setOpen } = useChartMenu(`toolbar:${label}`);
   const anchor = useRef<HTMLButtonElement>(null);
   return (
     <>
@@ -201,7 +204,7 @@ function ToolbarMenu({
         aria-expanded={open}
         aria-label={label}
         title={label}
-        onClick={() => setOpen((value) => !value)}
+        onClick={() => setOpen(!open)}
       >
         {icon}
         {count != null && count > 0 && <span aria-hidden="true" className="tw-iconbtn__count">{count}</span>}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bell, Crosshair, X } from 'lucide-react';
 import { FloatingPopover } from '../../components/FloatingPopover';
+import { useChartMenu } from './chartMenuRegistry';
 import { MM, mono } from './marketUi';
 import type { PriceAlert } from './types';
 
@@ -30,7 +31,10 @@ export function PriceAlertControl({
   /** Comparison rebases the price pane, so a price threshold has no meaning while it is on. */
   disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  // Shared with the rest of the chart toolbar so another menu opening puts this away. The
+  // popover keeps `dismissOnOutside={false}`: a stray tap on the chart must not discard a
+  // half-typed threshold, but a deliberate press on another toolbar button should.
+  const { open, setOpen } = useChartMenu('toolbar:price-alert');
   const [thresholdText, setThresholdText] = useState('');
   const [direction, setDirection] = useState<'above' | 'below'>('above');
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -41,6 +45,12 @@ export function PriceAlertControl({
     setDirection(pickedPrice >= currentPrice ? 'above' : 'below');
     setOpen(true);
   }, [pickedPrice, currentPrice]);
+
+  // `close()` is no longer the only way this shuts: the registry can close it when another
+  // toolbar menu opens, and placement mode would otherwise stay armed on the chart.
+  useEffect(() => {
+    if (!open && placing) onStopPlacing();
+  }, [open, placing, onStopPlacing]);
 
   const threshold = Number(thresholdText);
   const valid = Number.isFinite(threshold) && threshold > 0 && currentPrice > 0;
