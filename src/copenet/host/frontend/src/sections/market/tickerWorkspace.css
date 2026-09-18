@@ -399,6 +399,8 @@
   background: color-mix(in srgb, var(--mkt-canvas) 94%, transparent);
   box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
 }
+.tw-drawbar__grip { display: inline-flex; align-items: center; min-height: 32px; padding: 0 3px; color: var(--mkt-dimmer); cursor: grab; touch-action: none; }
+.tw-drawbar__grip:active { cursor: grabbing; color: var(--mkt-text); }
 .tw-drawbar__name {
   min-width: 0;
   max-width: 120px;

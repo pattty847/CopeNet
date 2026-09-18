@@ -1,9 +1,10 @@
 // The quick path: the bar over the chart for whatever is selected. It applies instantly and
 // carries only the controls reached for constantly; the gear opens the full popup.
 import { useEffect, useRef, useState } from 'react';
-import { EyeOff, Lock, Settings2, Trash2, Type, Undo2, Unlock, X } from 'lucide-react';
+import { EyeOff, GripVertical, Lock, Settings2, Trash2, Type, Undo2, Unlock, X } from 'lucide-react';
 import { ColorField, StrokeSample } from './StyleFields';
 import { LINE_STYLES, LINE_WIDTHS, type FillField, type StrokeField } from './types';
+import { useBarPosition } from './useBarPosition';
 
 export interface SelectionBarModel {
   id: string;
@@ -30,7 +31,9 @@ function LabelEditor({ value, onCommit }: { value: string; onCommit: (label: str
 }
 
 export function DeletedBar({ label, onUndo }: { label: string; onUndo: () => void }) {
-  return <div className="tw-drawbar" role="status">
+  const barRef = useRef<HTMLDivElement | null>(null);
+  const position = useBarPosition(barRef);
+  return <div className="tw-drawbar" role="status" ref={barRef} style={position.style}>
     <span className="tw-drawbar__name">Deleted {label}</span>
     <button type="button" className="tw-drawbar__wide" onClick={onUndo}><Undo2 size={13} /> Undo</button>
   </div>;
@@ -39,6 +42,7 @@ export function DeletedBar({ label, onUndo }: { label: string; onUndo: () => voi
 export function SelectionBar({ model }: { model: SelectionBarModel }) {
   const [menu, setMenu] = useState<Menu>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
+  const position = useBarPosition(barRef);
   // A note is its text, so placing one leads straight into typing it.
   useEffect(() => { setMenu(model.text?.openOnSelect ? 'text' : null); }, [model.id, model.text?.openOnSelect]);
   useEffect(() => {
@@ -52,7 +56,9 @@ export function SelectionBar({ model }: { model: SelectionBarModel }) {
   const color = stroke?.value.color ?? fill?.value.color;
   const setColor = (next: string) => { if (stroke) stroke.onChange({ color: next }); else fill?.onChange({ color: next }); };
 
-  return <div className="tw-drawbar" role="toolbar" aria-label={`Settings for ${model.title}`} ref={barRef}>
+  return <div className="tw-drawbar" role="toolbar" aria-label={`Settings for ${model.title}`} ref={barRef} style={position.style}>
+    <span className="tw-drawbar__grip" role="button" tabIndex={-1} aria-label="Drag to move this bar; double-click to put it back" title="Drag to move · double-click to reset"
+      onPointerDown={position.onGripPointerDown} onDoubleClick={position.reset}><GripVertical size={14} /></span>
     <span className="tw-drawbar__name">{model.title}</span>
     {color && <button type="button" aria-label="Color" aria-expanded={menu === 'color'} onClick={() => toggle('color')}><i className="tw-drawbar__swatch" style={{ background: color }} /></button>}
     {stroke && !stroke.colorOnly && <button type="button" aria-label="Line width and style" aria-expanded={menu === 'stroke'} onClick={() => toggle('stroke')}>

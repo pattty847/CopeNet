@@ -22,3 +22,11 @@ test('an indicator output can be switched off on its own, and Cancel puts the in
   assert.deepEqual(styled[0].styles, { value: { visible: false, lineWidth: 3 } });
   assert.deepEqual(restoreIndicator(styled, instance), [instance]);
 });
+
+test('a dragged selection bar can never be placed or restored outside the chart', async () => {
+  const { clampBarPosition } = await import('../src/sections/market/chartStyle/useBarPosition');
+  const bar = { width: 300, height: 40 };
+  assert.deepEqual(clampBarPosition({ x: -50, y: 900 }, bar, { width: 800, height: 500 }), { x: 0, y: 460 });
+  assert.deepEqual(clampBarPosition({ x: 700, y: 20 }, bar, { width: 800, height: 500 }), { x: 500, y: 20 });
+  assert.deepEqual(clampBarPosition({ x: 200, y: 10 }, bar, { width: 280, height: 500 }), { x: 0, y: 10 }, 'a bar wider than a phone chart pins left');
+});
