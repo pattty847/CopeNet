@@ -1,17 +1,20 @@
-import { LineSeries, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
+import { LineSeries, LineStyle, type IChartApi, type ISeriesApi, type UTCTimestamp } from 'lightweight-charts';
 import type { ChartComparisonLine } from './chartComparison';
+import type { LineStyle as LineStyleName } from './chartStyle/types';
 
 export function replaceComparisonSeries(
   chart: IChartApi,
   existing: ISeriesApi<'Line'>[],
   lines: ChartComparisonLine[],
+  stroke: { width: number; style: LineStyleName } = { width: 2, style: 'solid' },
 ): ISeriesApi<'Line'>[] {
   existing.forEach((series) => chart.removeSeries(series));
   return lines.map((line) => {
     const series = chart.addSeries(LineSeries, {
       priceScaleId: 'right',
       color: line.color,
-      lineWidth: 2,
+      lineWidth: stroke.width as 1 | 2 | 3 | 4,
+      lineStyle: stroke.style === 'dashed' ? LineStyle.Dashed : stroke.style === 'dotted' ? LineStyle.Dotted : LineStyle.Solid,
       priceLineVisible: false,
       lastValueVisible: true,
       crosshairMarkerVisible: true,

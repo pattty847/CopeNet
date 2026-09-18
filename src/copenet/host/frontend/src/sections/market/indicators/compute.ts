@@ -37,6 +37,8 @@ export interface ComputedOutput {
   color: string;
   lineWidth: number;
   lineStyle: 'solid' | 'dashed' | 'dotted';
+  /** Off means computed but not painted, and absent from the legend. */
+  visible: boolean;
   points: IndicatorPoint[];
   /** Last computable value in the visible range, already formatted for the legend. */
   latest: string | null;
@@ -129,6 +131,7 @@ export function createIndicatorComputer(): IndicatorComputer {
             color: style?.color ?? output.color,
             lineWidth: style?.lineWidth ?? output.lineWidth ?? 2,
             lineStyle: style?.lineStyle ?? output.lineStyle ?? 'solid',
+            visible: style?.visible ?? !output.hiddenByDefault,
             points,
             latest: lastValue == null
               ? null
@@ -173,7 +176,7 @@ export function createIndicatorComputer(): IndicatorComputer {
  *  by the histogram invites the wrong number to be read as the MACD value. */
 export function legendOutputs(indicator: ComputedIndicator): ComputedOutput[] {
   const rank = (output: ComputedOutput) => (output.plot === 'histogram' ? 1 : 0);
-  return [...indicator.outputs].sort((left, right) => rank(left) - rank(right));
+  return indicator.outputs.filter((output) => output.visible).sort((left, right) => rank(left) - rank(right));
 }
 
 /** The colour that identifies the indicator: its first line, or its only series. */

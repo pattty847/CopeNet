@@ -18,6 +18,7 @@ import {
   ColorType,
   HistogramSeries,
   LineSeries,
+  LineStyle,
   LineType,
   PriceScaleMode,
   createChart,
@@ -32,7 +33,8 @@ import {
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { PriceAlert } from './types';
 import { useChartWorkspace } from './drawings/useChartWorkspace';
-import { ChartSettingsLayer } from './ChartSettingsLayer';
+import { ChartSettingsLayer, type ChartPick } from './ChartSettingsLayer';
+import { DEFAULT_CHART_STYLE, useChartStyle } from './chartStyle/store';
 import type { ChartWorkspaceBridge } from './drawings/types';
 import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
@@ -57,6 +59,10 @@ import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBucket
 /** Empty slots shown right of the latest candle by default; the rest is reached by scrolling. */
 const DEFAULT_FUTURE_ROOM_BARS = 12;
 const SEC_MARKER_ID = 'sec:';
+function withAlpha(hex: string, alpha: number): string {
+  const value = parseInt(hex.slice(1), 16);
+  return `rgba(${(value >> 16) & 255},${(value >> 8) & 255},${value & 255},${alpha})`;
+}
 /** Markers stack above a candle's high and below its low; this is how far that stack reaches. */
 const SEC_MARKER_BAND_PX = 56;
 
@@ -120,6 +126,13 @@ export function CandleChart({
    *  and therefore how far to slide the operator's range to hold the newest candle still. */
   const replayFrameRef = useRef({ active: false, bars: 0, generation: -1 });
   const frameRef = useRef<{ from: number; to: number } | null>(null);
+  // What the operator has picked that is not a drawing: an indicator line or a chart series.
+  const [pick, setPick] = useState<ChartPick | null>(null);
+  const [settingsPick, setSettingsPick] = useState<ChartPick | null>(null);
+  const indicatorOwnerRef = useRef<((series: unknown) => { instanceId: string; outputKey: string } | null) | null>(null);
+  const chartStyle = useChartStyle();
+  const chartStyleRef = useRef(chartStyle);
+  chartStyleRef.current = chartStyle;
   const rafRef = useRef<number | null>(null);
   evidenceRef.current = evidence;
   eventsRef.current = events;
@@ -138,6 +151,7 @@ export function CandleChart({
     containerRef,
     indicatorPriceStretch,
     onIndicatorPaneStretch,
+    indicatorOwnerRef,
   );
 
   /** Recompute markers + cluster boxes for the current data and zoom. Derived, never stored:
@@ -340,6 +354,17 @@ export function CandleChart({
       onHoverBarRef.current?.(barsRef.current.find((bar) => bar.t === time) ?? null);
     });
 
+    const pickSeries = (series: unknown, includeBase: boolean): ChartPick | null => {
+      if (!series) return null;
+      const owner = indicatorOwnerRef.current?.(series);
+      if (owner) return { kind: 'indicator', ...owner };
+      if (series === financialSeries || financialSegmentRefs.current.includes(series as ISeriesApi<'Line'>)) return { kind: 'series', id: 'overlay' };
+      if (comparisonRefs.current.includes(series as ISeriesApi<'Line'>)) return { kind: 'series', id: 'comparison' };
+      if (includeBase && series === candle) return { kind: 'series', id: 'candles' };
+      if (includeBase && series === volume) return { kind: 'series', id: 'volume' };
+      return null;
+    };
+
     // Click a marker day → popup with everything that hit that day (who, $, filing link).
     chart.subscribeClick((param) => {
       // Arming is a modal state the operator entered deliberately, so it takes the click
@@ -351,6 +376,11 @@ export function CandleChart({
         return;
       }
       const workspace = workspaceRef.current;
+      // A line is a thing you can pick. The chart reports the series under the click, so an
+      // indicator, the overlay or a comparison line selects exactly as a drawing does.
+      const picked = workspace?.mode === 'select' || !workspace ? pickSeries(param.hoveredSeries, false) : null;
+      setPick(picked);
+      if (picked) { workspace?.onSelectObject(null); setDayPopup(null); return; }
       if (workspace?.enabled && (workspace.mode !== 'select' || workspace.objects.some((object) => object.id === param.hoveredObjectId))) {
         setDayPopup(null);
         return;
@@ -386,6 +416,16 @@ export function CandleChart({
       }
       // Same pane-vs-wrapper offset as the cluster boxes: param.point.x is pane-relative.
       setDayPopup({ x: param.point.x + leftAxisWidth(chart), y: param.point.y, time, items });
+    });
+
+    // Double-click opens settings. Candles and volume answer only to this: a single click on
+    // them is ordinary chart use and must not raise a bar every time.
+    chart.subscribeDblClick((param) => {
+      const picked = pickSeries(param.hoveredSeries, true);
+      if (!picked) return;
+      workspaceRef.current?.onSelectObject(null);
+      setPick(picked);
+      setSettingsPick(picked);
     });
 
     // The day popup is anchored to a pixel position that stops meaning anything the moment
@@ -516,7 +556,7 @@ export function CandleChart({
     // colouring the day's actual volume green to match would assert something false about
     // a measured quantity. The two can disagree; only one of them is a fact.
     volume.setData(
-      rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: b.c >= b.o ? 'rgba(105,197,137,.3)' : 'rgba(217,109,95,.3)' })),
+      rows.map((b) => ({ time: b.t as UTCTimestamp, value: b.v, color: withAlpha(b.c >= b.o ? chartStyle.candles.up : chartStyle.candles.down, chartStyle.volume.opacity) })),
     );
 
     // THE FRAMING RULE.
@@ -552,7 +592,7 @@ export function CandleChart({
     // chartGeneration: a height change tears the chart down and builds a new one, so the
     // data has to be written again. Without this the chart comes back blank — latent while
     // height was effectively constant, immediate once the layout can resize it.
-  }, [bars, displayBars, replay?.active, events, evidence, chartGeneration]);
+  }, [bars, displayBars, replay?.active, events, evidence, chartGeneration, chartStyle.candles.up, chartStyle.candles.down, chartStyle.volume.opacity]);
 
   useEffect(() => {
     const chart = chartRef.current;
@@ -574,11 +614,12 @@ export function CandleChart({
       chart,
       comparisonRefs.current,
       comparisonMode ? comparisonLines : [],
+      chartStyle.comparison,
     );
     // Comparison lines are rebuilt from the truncated bars, so this effect fires on every
     // replay step. Refitting here would undo the slide above one frame later.
     if (!replay?.active && frameRef.current) chart.timeScale().setVisibleLogicalRange(frameRef.current);
-  }, [comparisonMode, comparisonLines, showVolume, replay?.active, chartGeneration]);
+  }, [comparisonMode, comparisonLines, showVolume, replay?.active, chartGeneration, chartStyle.comparison]);
 
   // Overlay changes must not reset the operator's zoom. Underlying observations
   // stay periodic; the step is explicitly an availability-date visualization.
@@ -656,7 +697,11 @@ export function CandleChart({
       : 1;
     series.forEach((item, index) => {
       item.applyOptions({
-        color: financialOverlayValuation ? '#d9ad67' : '#8fb8e8',
+        // The untouched default stays automatic (gold for a valuation, blue for a reported
+        // figure); once the operator picks a color, theirs wins for every overlay.
+        color: chartStyle.overlay.color !== DEFAULT_CHART_STYLE.overlay.color ? chartStyle.overlay.color : financialOverlayValuation ? '#d9ad67' : '#8fb8e8',
+        lineWidth: chartStyle.overlay.width as 1 | 2 | 3 | 4,
+        lineStyle: chartStyle.overlay.style === 'dashed' ? LineStyle.Dashed : chartStyle.overlay.style === 'dotted' ? LineStyle.Dotted : LineStyle.Solid,
         lineType: financialOverlayValuation ? LineType.Simple : LineType.WithSteps,
         pointMarkersVisible: !financialOverlayValuation,
         lastValueVisible: index === series.length - 1,
@@ -668,7 +713,11 @@ export function CandleChart({
     // chart redraws, so invalidate and let the next frame reposition against it.
     transformKeyRef.current = '';
     requestAnimationFrame(() => syncRef.current());
-  }, [comparisonMode, financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted, chartGeneration]);
+  }, [comparisonMode, financialOverlayKind, financialOverlay, financialOverlayUnit, financialOverlayValuation, financialOverlayInverted, chartGeneration, chartStyle.overlay]);
+
+  useEffect(() => {
+    candleRef.current?.applyOptions({ upColor: chartStyle.candles.up, wickUpColor: chartStyle.candles.up, downColor: chartStyle.candles.down, wickDownColor: chartStyle.candles.down });
+  }, [chartStyle.candles, chartGeneration]);
 
   const popupNet = dayPopup
     ? dayPopup.items.reduce(
@@ -686,7 +735,8 @@ export function CandleChart({
   return (
     <div style={{ position: 'relative', cursor: alertPlacementActive || replay?.arming ? 'crosshair' : undefined }}>
       <div ref={containerRef} style={{ width: '100%' }} />
-      {!comparisonMode && <ChartSettingsLayer workspace={chartWorkspace} />}
+      <ChartSettingsLayer workspace={comparisonMode ? undefined : chartWorkspace} indicators={indicators ?? []} indicatorActions={indicatorActions}
+        overlayLabel={financialOverlayKind ?? undefined} pick={pick} settings={settingsPick} onPick={setPick} onSettings={setSettingsPick} />
       {!comparisonMode && (
         <ChartClusterBoxes
           boxes={clusterBoxes}

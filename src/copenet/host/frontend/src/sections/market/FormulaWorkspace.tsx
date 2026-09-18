@@ -16,6 +16,7 @@ const NO_INDICATOR_ACTIONS: IndicatorRowActions = {
   onVisibility: () => undefined,
   onDuplicate: () => undefined,
   onReset: () => undefined,
+  onRestore: () => undefined,
   onRemove: () => undefined,
   onMove: () => undefined,
 };

@@ -21,6 +21,7 @@ export interface IndicatorRowActions {
   onVisibility: (instanceId: string, visible: boolean) => void;
   onDuplicate: (instanceId: string) => void;
   onReset: (instanceId: string) => void;
+  onRestore: (snapshot: IndicatorInstance) => void;
   onRemove: (instanceId: string) => void;
   onMove: (instanceId: string, delta: number) => void;
 }

@@ -23,6 +23,7 @@ export function IndicatorSettings({
   onDuplicate,
   onReset,
   onRemove,
+  hideStyles = false,
 }: {
   definition: IndicatorDefinition;
   instance: IndicatorInstance;
@@ -31,6 +32,8 @@ export function IndicatorSettings({
   onDuplicate: () => void;
   onReset: () => void;
   onRemove: () => void;
+  /** The shared settings popup has its own Style tab; the form then shows inputs only. */
+  hideStyles?: boolean;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const fieldIdPrefix = useId();
@@ -45,7 +48,7 @@ export function IndicatorSettings({
         <InputRow key={input.key} idPrefix={fieldIdPrefix} input={input} config={instance.config} onConfigure={onConfigure} />
       ))}
 
-      <div className="tw-ind-settings__styles">
+      {!hideStyles && <div className="tw-ind-settings__styles">
         {definition.outputs.map((output) => (
           <label key={output.key} className="tw-ind-swatch" title={`${output.label} colour`}>
             <input
@@ -57,7 +60,7 @@ export function IndicatorSettings({
             <span>{output.label}</span>
           </label>
         ))}
-      </div>
+      </div>}
 
       {advanced.length > 0 && (
         <>

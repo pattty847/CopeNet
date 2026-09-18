@@ -20,6 +20,8 @@ export interface IndicatorStyle {
   color?: string;
   lineWidth?: number;
   lineStyle?: 'solid' | 'dashed' | 'dotted';
+  /** One output switched off on its own; the indicator still computes it. */
+  visible?: boolean;
 }
 
 export interface IndicatorInstance {
@@ -151,6 +153,7 @@ function normalizeStyles(raw: unknown): Record<string, IndicatorStyle> | undefin
     if (style.lineStyle === 'solid' || style.lineStyle === 'dashed' || style.lineStyle === 'dotted') {
       next.lineStyle = style.lineStyle;
     }
+    if (typeof style.visible === 'boolean') next.visible = style.visible;
     if (Object.keys(next).length) styles[key] = next;
   }
   return Object.keys(styles).length ? styles : undefined;
@@ -258,6 +261,11 @@ export function setIndicatorVisibility(
   visible: boolean,
 ): IndicatorInstance[] {
   return instances.map((instance) => (instance.instanceId === instanceId ? { ...instance, visible } : instance));
+}
+
+/** Put an instance back exactly as it was: the settings popup's Cancel. */
+export function restoreIndicator(instances: IndicatorInstance[], snapshot: IndicatorInstance): IndicatorInstance[] {
+  return instances.map((instance) => instance.instanceId === snapshot.instanceId ? snapshot : instance);
 }
 
 export function styleIndicator(

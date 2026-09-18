@@ -59,6 +59,8 @@ function signatureOf(indicator: ComputedIndicator): string {
   return `${indicator.placement}:${indicator.outputs.map((output) => `${output.key}/${output.plot}`).join(',')}`;
 }
 
+const COARSE_POINTER = typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(pointer: coarse)').matches;
+
 export class IndicatorChartLayer {
   private entries = new Map<string, RenderedEntry>();
 
@@ -83,6 +85,15 @@ export class IndicatorChartLayer {
 
     this.reorderPanes(active);
     this.applyPaneSizing(active, priceStretch);
+  }
+
+  /** Which indicator output a series belongs to: the chart reports the series under a click,
+   *  and this turns it back into something the operator can select. */
+  ownerOf(series: unknown): { instanceId: string; outputKey: string } | null {
+    for (const [instanceId, entry] of this.entries) {
+      for (const [outputKey, candidate] of entry.series) if (candidate === series) return { instanceId, outputKey };
+    }
+    return null;
   }
 
   /** Remove every series and pane this layer owns. The caller still owns the chart. */
@@ -248,6 +259,9 @@ export class IndicatorChartLayer {
     const references = indicator.references ?? [];
     return {
       color: output.color,
+      visible: output.visible,
+      // A finger needs more room than a pointer to land on a one-pixel line.
+      hitTestTolerance: COARSE_POINTER ? 14 : 5,
       lineWidth: output.lineWidth as 1 | 2 | 3 | 4,
       lineStyle: LINE_STYLES[output.lineStyle],
       lineType: output.plot === 'stepline' ? LineType.WithSteps : LineType.Simple,

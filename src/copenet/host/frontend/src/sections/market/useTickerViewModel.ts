@@ -4,7 +4,7 @@ import { assetProfile } from './assetProfile';
 import { buildRailEntries } from './symbolRailModel';
 import { barsPerYear, createIndicatorComputer } from './indicators/compute';
 import type { IndicatorRowActions } from './indicators/IndicatorRows';
-import { addIndicator, applyPaneStretch, configureIndicator, duplicateIndicator, loadIndicatorLayout, moveIndicator, removeIndicator, resetIndicator, saveIndicatorLayout, setIndicatorVisibility, styleIndicator, type IndicatorInstance } from './indicators/state';
+import { addIndicator, applyPaneStretch, configureIndicator, duplicateIndicator, loadIndicatorLayout, moveIndicator, removeIndicator, resetIndicator, restoreIndicator, saveIndicatorLayout, setIndicatorVisibility, styleIndicator, type IndicatorInstance } from './indicators/state';
 import { buildComparisonLines } from './chartComparison';
 import { isIntradayTimeframe, rangeForTimeframe, visibleBars, type ChartRange, type ChartTimeframe, type InsiderDisplayMode, type InsiderLookback } from './chartRanges';
 import { useIntradayBars } from './useIntradayBars';
@@ -282,6 +282,7 @@ export function useTickerViewModel(symbol: string, watchlist: MarketWatchlistSta
     onVisibility: (instanceId, visible) => setIndicators((current) => setIndicatorVisibility(current, instanceId, visible)),
     onDuplicate: (instanceId) => setIndicators((current) => duplicateIndicator(current, instanceId)),
     onReset: (instanceId) => setIndicators((current) => resetIndicator(current, instanceId)),
+    onRestore: (snapshot) => setIndicators((current) => restoreIndicator(current, snapshot)),
     onRemove: (instanceId) => setIndicators((current) => removeIndicator(current, instanceId)),
     onMove: (instanceId, delta) => setIndicators((current) => moveIndicator(current, instanceId, delta)),
   }), []);

@@ -35,8 +35,11 @@ export function useChartIndicators(
   /** Called when the operator finishes dragging a pane separator, so the new division can be
    *  persisted. Never called for a division this hook applied itself. */
   onPaneStretchChange?: (next: { priceStretch: number; byInstance: Record<string, number> }) => void,
+  /** Filled with the lookup from a clicked series to the indicator output that owns it. */
+  ownerRef?: RefObject<((series: unknown) => { instanceId: string; outputKey: string } | null) | null>,
 ): IndicatorPaneRect[] {
   const layerRef = useRef<IndicatorChartLayer | null>(null);
+  if (ownerRef) ownerRef.current = (series) => layerRef.current?.ownerOf(series) ?? null;
   const [paneRects, setPaneRects] = useState<IndicatorPaneRect[]>([]);
 
   useEffect(() => {
