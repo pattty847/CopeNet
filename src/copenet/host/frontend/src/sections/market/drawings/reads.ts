@@ -9,9 +9,8 @@
 import type { ChartObject } from '../chartAgent/types';
 import type { Ohlcv } from '../types';
 import { futureDrawingTimes } from '../chartDecorations';
-import { DRAWING_KINDS } from './kinds';
+import { DRAWING_KINDS, shownOn, type DrawingExtent } from './kinds';
 
-export type DrawingExtent = 'none' | 'right' | 'both';
 export const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618];
 const EXTENT: Partial<Record<ChartObject['kind'], DrawingExtent>> = {
   level: 'both', horizontal_ray: 'right', trendline: 'none', ray: 'right', extended_trendline: 'both',
@@ -34,6 +33,19 @@ export function colorName(hex: string): string {
   const rgb = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
   return COLOR_NAMES.map(([name, target]) => ({ name, distance: target.reduce((sum, channel, index) => sum + (channel - rgb[index]) ** 2, 0) }))
     .sort((a, z) => a.distance - z.distance)[0].name;
+}
+
+/** A drawing shown on a timeframe it was not placed on has anchors between this chart's
+ *  candles. It lands on the candle that contains it: the last one at or before the anchor. */
+export function snapToBar(bars: Ohlcv[], time: number): number | null {
+  let low = 0;
+  let high = bars.length - 1;
+  if (high < 0 || time < bars[0].t) return null;
+  while (low < high) {
+    const middle = (low + high + 1) >> 1;
+    if (bars[middle].t <= time) low = middle; else high = middle - 1;
+  }
+  return bars[low].t;
 }
 
 /** Ratio 0 is the first anchor and ratio 1 the second, whichever way the swing was drawn. */
@@ -70,14 +82,14 @@ export function readDrawings(objects: ChartObject[], bars: Ohlcv[], options: { t
   const close = bars[lastIndex].c;
   const avwapColumns = avwapColumnNames(objects, options.timeframe);
 
-  return objects.filter((object) => object.visible && object.timeframe === options.timeframe).map((object) => {
+  return objects.filter((object) => object.visible && shownOn(object, options.timeframe)).map((object) => {
     const [a, b, c] = object.anchors;
     const read: DrawingRead = { id: object.id, kind: object.kind, owner: object.owner.kind === 'agent' ? 'agent' : 'you',
       color: colorName(object.color), label: object.label === DRAWING_KINDS[object.kind].label ? '' : object.label, t1: a.t, p1: a.value };
     if (b) { read.t2 = b.t; read.p2 = b.value; }
     if (c) { read.t3 = c.t; read.p3 = c.value; }
     if (EXTENT[object.kind]) read.extends = EXTENT[object.kind];
-    const positions = object.anchors.map((anchor) => index.get(anchor.t));
+    const positions = object.anchors.map((anchor) => index.get(anchor.t) ?? (anchor.t <= bars[lastIndex].t ? index.get(snapToBar(bars, anchor.t) ?? -1) : undefined));
     if (positions.some((position) => position === undefined)) { read.detail = 'anchor outside the loaded range; not painted'; return read; }
     const [i1, i2] = positions as number[];
     const against = (value: number) => { read.atLast = value; read.vsClosePct = percent(close, value); };
@@ -135,6 +147,6 @@ export function readDrawings(objects: ChartObject[], bars: Ohlcv[], options: { t
  *  in `projection._matrix_rows`: the first is `avwap`, later ones carry their resource suffix. */
 export const AVWAP_COLUMNS_MAX = 4;
 export function avwapColumnNames(objects: ChartObject[], timeframe: ChartObject['timeframe']): Map<string, string> {
-  const studies = objects.filter((object) => object.kind === 'avwap' && object.visible && object.timeframe === timeframe).slice(0, AVWAP_COLUMNS_MAX);
+  const studies = objects.filter((object) => object.kind === 'avwap' && object.visible && shownOn(object, timeframe)).slice(0, AVWAP_COLUMNS_MAX);
   return new Map(studies.map((object, position) => [object.id, position === 0 ? 'avwap' : `avwap@avwap#${position + 1}`]));
 }

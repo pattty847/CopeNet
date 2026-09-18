@@ -32,7 +32,7 @@ import {
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { PriceAlert } from './types';
 import { useChartWorkspace } from './drawings/useChartWorkspace';
-import { DrawingToolbar } from './drawings/DrawingToolbar';
+import { ChartSettingsLayer } from './ChartSettingsLayer';
 import type { ChartWorkspaceBridge } from './drawings/types';
 import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
@@ -686,7 +686,7 @@ export function CandleChart({
   return (
     <div style={{ position: 'relative', cursor: alertPlacementActive || replay?.arming ? 'crosshair' : undefined }}>
       <div ref={containerRef} style={{ width: '100%' }} />
-      {!comparisonMode && chartWorkspace && <DrawingToolbar workspace={chartWorkspace} />}
+      {!comparisonMode && <ChartSettingsLayer workspace={chartWorkspace} />}
       {!comparisonMode && (
         <ChartClusterBoxes
           boxes={clusterBoxes}

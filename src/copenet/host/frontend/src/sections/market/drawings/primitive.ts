@@ -6,8 +6,9 @@ import type { ChartObject } from '../chartAgent/types';
 import type { Ohlcv } from '../types';
 import { hitDrawing, projectDrawing, type DrawingGeometry, type Point } from './geometry';
 import type { ChartWorkspaceBridge } from './types';
-import { fillOpacityOf, lineDash, strokeOf } from './kinds';
-import { anchoredVwapValues } from './reads';
+import { fillOpacityOf, shownOn, strokeOf } from './kinds';
+import { lineDash } from '../chartStyle/types';
+import { anchoredVwapValues, snapToBar } from './reads';
 
 export function paintDrawing(context: CanvasRenderingContext2D, geometry: DrawingGeometry, selected: boolean): void {
   const { object, points, width } = geometry;
@@ -109,7 +110,7 @@ export class DrawingPrimitive implements ISeriesPrimitive {
       const bridge = this.bridge;
       if (!bridge) return;
       const hidden = !bridge.enabled || this.comparisonMode;
-      const eligible = hidden ? [] : bridge.objects.filter((object) => object.visible && object.timeframe === bridge.timeframe);
+      const eligible = hidden ? [] : bridge.objects.filter((object) => object.visible && shownOn(object, bridge.timeframe));
       try {
         this.updateAllViews();
         target.useMediaCoordinateSpace(({ context, mediaSize }) => {
@@ -180,11 +181,17 @@ export class DrawingPrimitive implements ISeriesPrimitive {
     const size = state.chart.paneSize(0);
     const projection = {
       width: size.width, height: size.height,
-      time: (timestamp: number) => state.chart.timeScale().timeToCoordinate(timestamp as UTCTimestamp),
+      time: (timestamp: number) => {
+        const exact = state.chart.timeScale().timeToCoordinate(timestamp as UTCTimestamp);
+        if (exact != null) return exact;
+        const snapped = snapToBar(bridge.bars ?? [], timestamp);
+        return snapped == null ? null : state.chart.timeScale().timeToCoordinate(snapped as UTCTimestamp);
+      },
       price: (value: number) => state.series.priceToCoordinate(value),
       barsBetween: (from: number, to: number) => (bridge.bars ?? []).filter((bar) => bar.t > from && bar.t <= to).length,
     };
-    this.geometry = [...bridge.objects.filter((object) => object.visible && object.timeframe === bridge.timeframe), ...(this.preview ? [this.preview] : [])]
+    const draft = bridge.draft;
+    this.geometry = [...bridge.objects.map((object) => draft && draft.id === object.id ? draft : object).filter((object) => object.visible && shownOn(object, bridge.timeframe)), ...(this.preview ? [this.preview] : [])]
       .map((object) => {
         const geometry = projectDrawing(object, projection);
         if (geometry && object.kind === 'avwap') geometry.path = anchoredVwapPath(object, bridge.bars ?? [], projection);

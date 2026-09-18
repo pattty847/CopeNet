@@ -11,6 +11,7 @@ import { DrawingPrimitive } from './primitive';
 import type { ChartWorkspaceBridge } from './types';
 import { beginTouch, dragTouch, touchCommits, type ChartPoint, type TouchGesture } from './touchPlacement';
 
+const DOUBLE_CLICK_MS = 350;
 const anchorsFor = (mode: DrawingMode): number => mode === 'select' || mode === 'range' ? 0 : DRAWING_KINDS[mode].anchors;
 
 function createDrawingCrosshair(container: HTMLDivElement) {
@@ -108,6 +109,7 @@ export function useChartWorkspace(
     let first: ChartAnchor | null = null;
     let second: ChartAnchor | null = null;
     let drag: { object: ChartObject; index: number; anchor: ChartAnchor; revision: number } | null = null;
+    let lastHit: { id: string; at: number } | null = null;
     let ownsPointer = false;
     let pointerId: number | null = null;
     let viewportKey = '';
@@ -209,6 +211,10 @@ export function useChartWorkspace(
         const index = anchorIndexAt(hit, point, touching ? TOUCH_HIT_TOLERANCE + 6 : undefined);
         if (hit.object.id === active.selectedObjectId && index >= 0 && !hit.object.locked) drag = { object: hit.object, index, anchor, revision: active.revision };
         active.onSelectObject(hit.object.id);
+        // Double-click (or double-tap) a drawing to open its settings.
+        const now = performance.now();
+        if (lastHit && lastHit.id === hit.object.id && now - lastHit.at < DOUBLE_CLICK_MS) { drag = null; active.onOpenDrawingSettings?.(hit.object.id); lastHit = null; }
+        else lastHit = { id: hit.object.id, at: now };
       }
       ownsPointer = true;
       pointerId = event.pointerId;

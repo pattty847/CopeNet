@@ -193,6 +193,21 @@ def test_drawing_style_is_optional_patchable_and_bounded(scene):
                      "operations": [{"kind": "update", "objectId": created["id"], "patch": {"lineWidth": 9}}]})
 
 
+def test_a_segment_changes_extent_by_kind_but_never_its_anchor_count(scene):
+    store, document, capture, observation, context = scene
+    base = {"id": "seg", "kind": "trendline", "anchors": [{"t": 100, "value": 7.0}, {"t": 200, "value": 8.0}],
+            "timeframe": "D", "label": "", "color": "#abcdef", "visible": True, "rationale": "", "evidence": []}
+    store.apply({"documentId": document["documentId"], "expectedRevision": 0, "operationId": "make",
+                 "operations": [{"kind": "create", "object": base}]})
+    changed = store.apply({"documentId": document["documentId"], "expectedRevision": 1, "operationId": "extend",
+                           "operations": [{"kind": "update", "objectId": "seg", "patch": {
+                               "kind": "ray", "timeframes": ["D", "W"], "showStats": True}}]})["document"]["objects"][0]
+    assert (changed["kind"], changed["timeframes"], changed["showStats"]) == ("ray", ["D", "W"], True)
+    with pytest.raises(ValueError):
+        store.apply({"documentId": document["documentId"], "expectedRevision": 2, "operationId": "bad",
+                     "operations": [{"kind": "update", "objectId": "seg", "patch": {"kind": "channel"}}]})
+
+
 def test_render_receipts_distinguish_saved_from_visible(scene):
     store, document, capture, observation, context = scene
     receipt = store.apply(drawing_request(document, observation), context)

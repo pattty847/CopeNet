@@ -27,13 +27,20 @@ export interface ChartWorkspaceBridge {
   /** Pause edits during a save while continuing to show the committed document. */
   interactionEnabled?: boolean;
   selectedObjectId: string | null;
+  /** Whether evidence viewers may read account-scoped resources. */
+  includeAccountContext?: boolean;
   mode: DrawingMode;
   selection?: ChartSelection | null;
   onViewport: (viewport: ChartViewport) => void;
   onSelectRange: (range: ChartSelection | null) => void;
   onSelectObject: (id: string | null) => void;
   onDeleteObject: (id: string) => void;
-  onOpenDrawingSettings?: (id: string) => void;
+  /** The drawing whose settings popup is open, and the door to open or close it. */
+  settingsObjectId?: string | null;
+  onOpenDrawingSettings?: (id: string | null) => void;
+  /** The popup's unsaved draft: painted in place of the saved object, never persisted. */
+  draft?: ChartObject | null;
+  onDraft?: (object: ChartObject | null) => void;
   onCancelDrawing?: () => void;
   onCreate: (proposal: DrawingProposal) => void;
   onUpdate: (proposal: { id: string; patch: DrawingPatch }) => void;

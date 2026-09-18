@@ -127,6 +127,13 @@ class ChartObject(Contract):
     lineStyle: Literal["solid", "dashed", "dotted"] | None = None
     fillOpacity: float | None = Field(default=None, ge=0, le=0.6)
     locked: bool | None = None
+    # `timeframe` is the basis the anchors were placed on and the one evidence is checked
+    # against. `timeframes` is where the drawing is SHOWN; absent means its own timeframe only.
+    timeframes: list[Literal["D", "W", "M"]] | None = Field(default=None, min_length=1, max_length=3)
+    showStats: bool | None = None
+    # What a study computes with, as opposed to how it looks: an anchored VWAP's source and
+    # bands. Flat and bounded so it stays a settings record, never a payload.
+    params: dict[str, float | str | bool] | None = Field(default=None, max_length=12)
     rationale: str = Field(default="", max_length=4000)
     evidence: list[EvidenceRef] = Field(default_factory=list, max_length=20)
     owner: Owner = Field(default_factory=lambda: Owner(kind="operator"))
@@ -141,7 +148,11 @@ class ChartObject(Contract):
 
 
 PATCH_FIELDS = frozenset({"anchors", "label", "color", "visible", "rationale", "evidence",
-                         "lineWidth", "lineStyle", "fillOpacity", "locked"})
+                         "lineWidth", "lineStyle", "fillOpacity", "locked",
+                         # `kind` may change only between kinds with the same anchor count
+                         # (trendline / ray / extended line are one segment with a different
+                         # extent); ChartObject.anchor_count rejects anything else.
+                         "kind", "timeframes", "showStats", "params"})
 
 
 class Operation(Contract):

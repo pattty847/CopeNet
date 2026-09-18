@@ -11,9 +11,9 @@
 // settings toolbar, the gesture (anchor count) and the renderer all read this table and
 // never branch on a kind by name. Adding a drawing means adding a row here.
 import type { ChartObject, DrawingKind } from '../chartAgent/types';
+import { STYLE_COLORS, type LineStyle } from '../chartStyle/types';
 
 export type DrawingForm = 'point' | 'line' | 'segment' | 'area' | 'composite' | 'study';
-export type LineStyle = 'solid' | 'dashed' | 'dotted';
 export interface DrawingKindSpec {
   form: DrawingForm;
   label: string;
@@ -45,11 +45,20 @@ export const DRAWING_KINDS: Record<DrawingKind, DrawingKindSpec> = {
   avwap: { form: 'study', label: 'Anchored VWAP', anchors: 1, stroke: true, fill: false },
 };
 
-export const DRAWING_COLORS = ['#fb9423', '#e5484d', '#69c589', '#3b9eff', '#b58cf5', '#f2c94c', '#e6e6e6', '#8b8d98'];
-export const DEFAULT_DRAWING_COLOR = DRAWING_COLORS[0];
-export const LINE_WIDTHS = [1, 2, 3, 4] as const;
-export const LINE_STYLES: LineStyle[] = ['solid', 'dashed', 'dotted'];
-export const FILL_OPACITIES = [0, 0.1, 0.2, 0.35];
+export const DEFAULT_DRAWING_COLOR = STYLE_COLORS[0];
+
+/** Trendline, ray and extended line are ONE segment; the kind is only where its stroke stops.
+ *  The toolbar keeps three tools because that is the fast way to draw; settings can change it. */
+export type DrawingExtent = 'none' | 'right' | 'both';
+export const SEGMENT_EXTENTS: Array<{ kind: DrawingKind; extent: DrawingExtent; label: string }> = [
+  { kind: 'trendline', extent: 'none', label: "Don't extend" },
+  { kind: 'ray', extent: 'right', label: 'Extend right' },
+  { kind: 'extended_trendline', extent: 'both', label: 'Extend both ways' },
+];
+
+export function shownOn(object: ChartObject, timeframe: ChartObject['timeframe']): boolean {
+  return (object.timeframes ?? [object.timeframe]).includes(timeframe);
+}
 
 /** Absent style means the default for this owner: the agent's layer dashes, yours is solid. */
 export function strokeOf(object: ChartObject): { width: number; style: LineStyle } {
@@ -59,4 +68,3 @@ export function strokeOf(object: ChartObject): { width: number; style: LineStyle
 export function fillOpacityOf(object: ChartObject): number { return object.fillOpacity ?? (object.kind === 'measurement' ? 0.22 : 0.1); }
 export const UP_COLOR = '#69c589';
 export const DOWN_COLOR = '#d96d5f';
-export function lineDash(style: LineStyle): number[] { return style === 'dashed' ? [6, 4] : style === 'dotted' ? [2, 3] : []; }

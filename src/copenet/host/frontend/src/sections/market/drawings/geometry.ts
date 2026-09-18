@@ -62,6 +62,16 @@ export function projectDrawing(object: ChartObject, projection: CoordinateProjec
   if (object.kind === 'trendline') geometry.lines = [{ points }];
   if (object.kind === 'extended_trendline') geometry.lines = [{ points: lineToBoundary(points[0], points[1], projection.width, projection.height, true) }];
   if (object.kind === 'fib_retracement') geometry.lines = addFibLines(points, object, projection);
+  if (object.showStats && (object.kind === 'trendline' || object.kind === 'ray' || object.kind === 'extended_trendline' || object.kind === 'channel')) {
+    // The same facts the model reads for this line (`reads.ts`), painted beside its end.
+    const [a, b] = object.anchors;
+    const bars = projection.barsBetween?.(Math.min(a.t, b.t), Math.max(a.t, b.t));
+    const change = b.value - a.value;
+    const percent = a.value === 0 ? 0 : (change / a.value) * 100;
+    const slope = bars ? ` · ${change / bars >= 0 ? '+' : ''}${(change / bars).toFixed(2)}/bar` : '';
+    geometry.annotations = [{ x: points[1].x + 8, y: points[1].y + 14,
+      text: `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%)${bars != null ? ` · ${bars} bars` : ''}${slope}` }];
+  }
   if (object.kind === 'measurement') {
     const [a, b] = object.anchors;
     const change = b.value - a.value;

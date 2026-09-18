@@ -1,0 +1,56 @@
+/* The settings popup floats beside the chart on a desktop and rises as a sheet on a phone,
+ * so the live preview behind it stays visible while a control is being changed. */
+.cs-popup {
+  position: fixed;
+  top: 96px;
+  right: 24px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  width: 320px;
+  max-height: calc(100dvh - 120px);
+  border: 1px solid var(--mkt-seam);
+  border-radius: 8px;
+  background: var(--mkt-canvas);
+  color: var(--mkt-text);
+  font-family: var(--mkt-sans);
+  box-shadow: 0 18px 48px rgb(0 0 0 / 45%);
+}
+.cs-popup > header { display: flex; align-items: center; justify-content: space-between; padding: 12px 14px 6px; }
+.cs-popup h2 { margin: 0; font: 600 14px var(--mkt-sans); }
+.cs-icon { display: inline-flex; padding: 6px; border: 0; border-radius: 4px; background: transparent; color: var(--mkt-muted); cursor: pointer; }
+.cs-icon:hover { background: var(--mkt-raise); color: var(--mkt-text); }
+.cs-tabs { display: flex; gap: 14px; padding: 0 14px; border-bottom: 1px solid var(--mkt-seam); overflow-x: auto; }
+.cs-tabs button { padding: 8px 0; border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--mkt-muted); font: 500 12px var(--mkt-sans); cursor: pointer; white-space: nowrap; }
+.cs-tabs button[aria-selected='true'] { color: var(--mkt-text); border-bottom-color: var(--mkt-accent); }
+.cs-body { display: flex; flex-direction: column; gap: 12px; padding: 14px; overflow-y: auto; }
+.cs-popup > footer { display: flex; align-items: center; gap: 8px; padding: 10px 14px; border-top: 1px solid var(--mkt-seam); }
+.cs-popup > footer > span { flex: 1; }
+.cs-btn, .cs-defaults { min-height: 32px; padding: 0 12px; border: 1px solid var(--mkt-seam); border-radius: 5px; background: transparent; color: var(--mkt-text); font: 500 12px var(--mkt-sans); cursor: pointer; }
+.cs-btn--primary { background: var(--mkt-text); color: var(--mkt-canvas); border-color: var(--mkt-text); }
+.cs-field { margin: 0; padding: 0; border: 0; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.cs-field > legend { padding: 0 0 6px; color: var(--mkt-soft); font: 500 11px var(--mkt-sans); }
+.cs-field[data-off='true'] > :not(legend) { opacity: 0.4; }
+.cs-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.cs-colors { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.cs-colors button { display: inline-flex; padding: 4px; border: 1px solid transparent; border-radius: 50%; background: transparent; cursor: pointer; }
+.cs-colors button i { display: block; width: 16px; height: 16px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 22%); }
+.cs-colors button[aria-checked='true'] { border-color: var(--mkt-accent); }
+.cs-colors__custom input { width: 26px; height: 26px; padding: 0; border: 0; background: transparent; cursor: pointer; }
+.cs-seg { display: inline-flex; border: 1px solid var(--mkt-seam); border-radius: 5px; overflow: hidden; }
+.cs-seg button { display: inline-flex; align-items: center; justify-content: center; min-width: 34px; min-height: 30px; border: 0; background: transparent; color: var(--mkt-muted); cursor: pointer; }
+.cs-seg button[aria-checked='true'] { background: var(--mkt-raise); color: var(--mkt-text); }
+.cs-line { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--mkt-soft); font: 12px var(--mkt-sans); }
+.cs-line--stack { flex-direction: column; align-items: stretch; }
+.cs-line input, .cs-line select, .cs-line textarea { min-height: 32px; min-width: 0; padding: 4px 8px; border: 1px solid var(--mkt-seam); border-radius: 5px; background: var(--mkt-raise); color: var(--mkt-text); font: 16px var(--mkt-sans); }
+.cs-line input[type='number'] { width: 110px; }
+.cs-check { display: flex; align-items: center; gap: 8px; color: var(--mkt-soft); font: 12px var(--mkt-sans); }
+.cs-slider { display: grid; grid-template-columns: auto 1fr 38px; align-items: center; gap: 10px; color: var(--mkt-soft); font: 12px var(--mkt-sans); }
+.cs-slider output { text-align: right; font-family: var(--mkt-mono); }
+.cs-note { margin: 0; color: var(--mkt-muted); font: 11px var(--mkt-sans); }
+.cs-popup :focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+@media (max-width: 640px) {
+  .cs-popup { top: auto; right: 0; bottom: 0; left: 0; width: auto; max-height: 56dvh; border-radius: 12px 12px 0 0; padding-bottom: env(safe-area-inset-bottom); }
+}
+.cs-evidence { display: flex; flex-direction: column; gap: 8px; color: var(--mkt-soft); font: 12px/1.5 var(--mkt-sans); }
+.cs-evidence p { margin: 0; }

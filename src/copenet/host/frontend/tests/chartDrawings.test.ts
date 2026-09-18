@@ -225,3 +225,26 @@ test('drawings can reach far past the latest candle', () => {
   assert.ok(times.length >= 200, 'roughly a trading year of room on a daily chart');
   assert.equal(times[0], 300);
 });
+
+test('the settings popup saves one patch holding only what changed', async () => {
+  const { drawingPatch } = await import('../src/sections/market/drawings/patch');
+  const original = object('trendline');
+  const draft = { ...original, kind: 'ray' as const, lineWidth: 3, timeframes: ['D', 'W'] as ChartObject['timeframe'][] };
+  assert.deepEqual(drawingPatch(original, draft), { kind: 'ray', lineWidth: 3, timeframes: ['D', 'W'] });
+  assert.deepEqual(drawingPatch(original, { ...original }), {});
+});
+
+test('a drawing shown on another timeframe lands on the candle that contains its anchor', async () => {
+  const { snapToBar } = await import('../src/sections/market/drawings/reads');
+  const { shownOn } = await import('../src/sections/market/drawings/kinds');
+  const weekly = [100, 800, 1500].map((t) => ({ t, o: 1, h: 1, l: 1, c: 1, v: 1 }));
+  assert.equal(snapToBar(weekly, 900), 800);
+  assert.equal(snapToBar(weekly, 50), null, 'before the loaded range there is no candle to land on');
+  assert.equal(shownOn(object('level'), 'W'), false);
+  assert.equal(shownOn({ ...object('level'), timeframes: ['D', 'W'] }, 'W'), true);
+});
+
+test('stats painted beside a line are the numbers the model reads for it', () => {
+  const geometry = projectDrawing({ ...object('ray'), showStats: true }, { ...projection, barsBetween: () => 10 })!;
+  assert.equal(geometry.annotations![0].text, '+90.00 (+900.0%) · 10 bars · +9.00/bar');
+});

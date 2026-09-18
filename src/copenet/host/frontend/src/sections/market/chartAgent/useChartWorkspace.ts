@@ -9,6 +9,7 @@ import { captureTickerView, instrumentFor } from '../viewState/capture';
 import type { useTickerViewModel } from '../useTickerViewModel';
 import type { ChartWorkspaceBridge, DrawingMode } from '../drawings/types';
 import { DEFAULT_DRAWING_COLOR, DRAWING_KINDS } from '../drawings/kinds';
+import { readChartStyle } from '../chartStyle/store';
 import type { ChartDocument, ChartObject, ChartOperation, ChartSelection, ChartViewport, DrawingReceipt } from './types';
 
 const EMPTY_VIEWPORT: ChartViewport = { from: null, to: null, logicalFrom: null, logicalTo: null };
@@ -125,11 +126,11 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
   }, [apply]);
 
   const [labelRequestId, setLabelRequestId] = useState<string | null>(null);
-  const [drawingSettingsRequest, setDrawingSettingsRequest] = useState(0);
-  const openDrawingSettings = useCallback((id: string) => {
-    setSelectedObjectId(id);
-    setDrawingSettingsRequest((request) => request + 1);
-    setOpen(true);
+  const [settingsObjectId, setSettingsObjectId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<ChartObject | null>(null);
+  const openDrawingSettings = useCallback((id: string | null) => {
+    if (id) setSelectedObjectId(id);
+    setSettingsObjectId(id);
   }, []);
 
   const undo = useCallback(async (batchId: string) => {
@@ -157,17 +158,18 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
 
   const bridge: ChartWorkspaceBridge | undefined = document && document.instrument.symbol === view.viewSymbol ? {
     documentId: document.documentId, revision: document.revision, objects: document.objects,
-    timeframe: view.timeframe, bars: view.bars, enabled: !view.comparing, interactionEnabled: !busy, selectedObjectId, mode, selection,
+    timeframe: view.timeframe, bars: view.bars, enabled: !view.comparing, interactionEnabled: !busy, selectedObjectId, includeAccountContext, mode, selection,
     forecasts: { splitFingerprint: view.detail?.priceProvenance?.splitFingerprint, records: forecasts.records.filter((record) => record.documentId === document.documentId), hidden: hiddenForecasts, viewId,
       onSelect: setSelectedForecastId,
       onRendered: async (receipt) => { await wsClient.marketForecast.rendered(receipt); } },
     onViewport, onSelectRange: (range) => { setSelection(range); setMode('select'); }, onSelectObject: (id) => { setSelectedObjectId(id); },
-    onDeleteObject: (id) => { void deleteObject(id); }, onOpenDrawingSettings: openDrawingSettings,
+    onDeleteObject: (id) => { void deleteObject(id); }, onOpenDrawingSettings: openDrawingSettings, settingsObjectId, draft, onDraft: setDraft,
     onCancelDrawing: () => { setMode('select'); },
     onCreate: (proposal) => {
       const id = safeUUID();
       void apply([{ kind: 'create', object: { ...proposal, id, label: DRAWING_KINDS[proposal.kind].label,
-        color: DEFAULT_DRAWING_COLOR, visible: true, rationale: '', evidence: [] } }]);
+        color: DEFAULT_DRAWING_COLOR, visible: true, rationale: '', evidence: [],
+        ...Object.fromEntries(Object.entries(readChartStyle().drawingDefaults[proposal.kind] ?? {}).filter(([, value]) => value !== undefined)) } }]);
       setSelectedObjectId(id); setMode('select');
       setLabelRequestId(DRAWING_KINDS[proposal.kind].form === 'point' ? id : null);
     },
@@ -182,7 +184,7 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
       contributions: resources.read(view.viewSymbol), includeAccountContext: accountContext });
   };
   const toggleForecast = (id: string) => setForecastVisibility((previous) => ({ ...previous, [id]: hiddenForecasts.has(id) }));
-  return { forecasts, selectedForecastId, setSelectedForecastId, hiddenForecasts, toggleForecast, resources, bridge, open, setOpen, document, sessionKey, setSessionKey, batches, renderStatus, viewId, mode, setMode, drawingSettingsRequest,
+  return { forecasts, selectedForecastId, setSelectedForecastId, hiddenForecasts, toggleForecast, resources, bridge, open, setOpen, document, sessionKey, setSessionKey, batches, renderStatus, viewId, mode, setMode,
     selectedObjectId, setSelectedObjectId, selection, setSelection, viewport, error, busy, apply, undo,
     includeAccountContext, setIncludeAccountContext, capture, refresh, retry: () => setRetryKey((key) => key + 1) };
 }

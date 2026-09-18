@@ -25,6 +25,10 @@ export interface ChartObject {
   lineStyle?: 'solid' | 'dashed' | 'dotted';
   fillOpacity?: number;
   locked?: boolean;
+  /** Where it is shown. Absent means its own `timeframe` only. */
+  timeframes?: ChartTimeframe[];
+  showStats?: boolean;
+  params?: Record<string, number | string | boolean>;
   rationale: string;
   evidence: ChartEvidence[];
   owner: { kind: 'agent' | 'operator'; sessionKey?: string; runId?: string };
@@ -77,7 +81,7 @@ export interface MarketContext {
   detail: ChartDetail;
   access: 'read' | 'annotate';
 }
-export type DrawingPatch = Partial<Pick<ChartObject, 'anchors' | 'label' | 'color' | 'visible' | 'rationale' | 'evidence' | 'lineWidth' | 'lineStyle' | 'fillOpacity' | 'locked'>>;
+export type DrawingPatch = Partial<Pick<ChartObject, 'anchors' | 'label' | 'color' | 'visible' | 'rationale' | 'evidence' | 'lineWidth' | 'lineStyle' | 'fillOpacity' | 'locked' | 'kind' | 'timeframes' | 'showStats' | 'params'>>;
 export type ChartOperation =
   | { kind: 'create'; object: Omit<ChartObject, 'owner'> }
   | { kind: 'update'; objectId: string; patch: DrawingPatch }
