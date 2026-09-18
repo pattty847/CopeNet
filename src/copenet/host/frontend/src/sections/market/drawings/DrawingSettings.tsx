@@ -11,6 +11,7 @@ import { readChartStyle, writeChartStyle } from '../chartStyle/store';
 import type { FillField, StrokeField, Styleable } from '../chartStyle/types';
 import { DEFAULT_DRAWING_COLOR, DRAWING_KINDS, SEGMENT_EXTENTS, fillOpacityOf, strokeOf } from './kinds';
 import { drawingPatch } from './patch';
+import { AVWAP_SOURCES } from './reads';
 import type { ChartWorkspaceBridge } from './types';
 
 const TIMEFRAMES: Array<{ value: ChartObject['timeframe']; label: string }> = [
@@ -26,6 +27,20 @@ function fillField(object: ChartObject, change: (patch: DrawingPatch) => void): 
   return { key: 'fill', label: 'Fill', opacityOnly: true, value: { color: object.color, opacity: fillOpacityOf(object) },
     onChange: (next) => { if (next.opacity !== undefined) change({ fillOpacity: next.opacity }); } };
 }
+/** What an anchored VWAP computes with: its `own` compartment. */
+function AvwapInputs({ draft, change }: { draft: ChartObject; change: (patch: DrawingPatch) => void }) {
+  const params = draft.params ?? {};
+  const set = (key: string, value: number | string) => change({ params: { ...params, [key]: value } });
+  return <>
+    <label className="cs-line">Source<select value={String(params.source ?? 'hlc3')} onChange={(event) => set('source', event.target.value)}>
+      {AVWAP_SOURCES.map((source) => <option key={source.value} value={source.value}>{source.label}</option>)}</select></label>
+    <label className="cs-line">Bands<select value={String(params.bandMode ?? 'stdev')} onChange={(event) => set('bandMode', event.target.value)}>
+      <option value="stdev">Standard deviation</option><option value="percent">Percent</option></select></label>
+    {['band1', 'band2', 'band3'].map((key, index) => <label key={key} className="cs-line">Band {index + 1} multiplier (0 = off)
+      <input type="number" min={0} max={20} step={0.5} value={Number(params[key] ?? 0)} onChange={(event) => set(key, Math.max(0, Number(event.target.value) || 0))} /></label>)}
+  </>;
+}
+
 const titleOf = (object: ChartObject) => object.label || DRAWING_KINDS[object.kind].label;
 
 export function drawingBarModel(object: ChartObject, workspace: ChartWorkspaceBridge): SelectionBarModel {
@@ -53,8 +68,8 @@ export function drawingStyleable(original: ChartObject, draft: ChartObject, setD
   return {
     id: `drawing:${original.id}`, title: titleOf(draft),
     // An agent drawing is a claim: why it was drawn and what it cites stay one tap away.
-    ownLabel: 'Evidence',
-    own: original.rationale || original.evidence.length ? <div className="cs-evidence">
+    ownLabel: draft.kind === 'avwap' ? undefined : 'Evidence',
+    own: draft.kind === 'avwap' ? <AvwapInputs draft={draft} change={change} /> : original.rationale || original.evidence.length ? <div className="cs-evidence">
       {original.rationale && <p>{original.rationale}</p>}
       {original.evidence.map((reference, index) => <ChartEvidenceViewer key={index} reference={reference} sessionKey={original.owner.sessionKey ?? null}
         documentId={workspace.documentId} includeAccountContext={workspace.includeAccountContext === true} />)}

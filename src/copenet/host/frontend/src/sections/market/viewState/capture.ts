@@ -1,7 +1,7 @@
 import type { ChartDocument, ChartSelection, ChartViewport, InstrumentRef, MarketCapture, ViewResource } from '../chartAgent/types';
 import type { TickerIntelligence } from '../types';
 import type { useTickerViewModel } from '../useTickerViewModel';
-import { anchoredVwapValues, avwapColumnNames, readDrawings } from '../drawings/reads';
+import { anchoredVwap, avwapColumnNames, avwapSettings, colorName, readDrawings } from '../drawings/reads';
 
 export function instrumentFor(symbol: string, assetClass = 'equity'): InstrumentRef {
   return { instrumentId: `yahoo:${symbol}`, symbol, assetClass, source: 'yahoo', currency: null };
@@ -52,13 +52,16 @@ export function captureTickerView(options: {
         completeness: 'Latest daily/weekly/monthly candle may be forming; do not infer completion from capture time.' } });
   }
   for (const indicator of view.computedIndicators) {
-    const outputs = indicator.outputs.map((output) => ({ output, values: new Map(output.points.map((point) => [point.t, point.value])) }));
+    // Only what is painted: an output the operator switched off is not on their chart.
+    const outputs = indicator.outputs.filter((output) => output.visible).map((output) => ({ output, values: new Map(output.points.map((point) => [point.t, point.value])) }));
     resources.push({ key: `indicator:${indicator.instanceId}`, kind: 'indicator', label: indicator.label,
       status: indicator.insufficientHistory ? 'empty' : 'loaded', observedAt: detail.asOf,
       rows: view.bars.map((bar) => ({ t: bar.t, ...Object.fromEntries(outputs.map(({ output, values }) => [output.key, values.get(bar.t) ?? null])) })),
       metadata: { indicatorId: indicator.indicatorId, config: indicator.instance.config, timeframe: view.timeframe,
         visible: indicator.visible && !view.comparing, placement: indicator.placement, source: 'chart_indicator_registry',
-        outputs: indicator.outputs.map(({ key, label, plot, color, lineWidth, lineStyle, latest }) => ({ key, label, plot, color, lineWidth, lineStyle, latest })),
+        // The color travels as a WORD: the operator says "the blue line", and a hex, a width
+        // and a dash pattern resolve nothing for a reader that cannot see the chart.
+        outputs: indicator.outputs.filter((output) => output.visible).map(({ key, label, plot, color, latest }) => ({ key, label, plot, color: colorName(color), latest })),
         references: indicator.references, paneRange: indicator.paneRange, timestampUnit: 'seconds',
         historyBars: view.rawBars.length, warmup: 'Computed over full loaded history before slicing' } });
   }
@@ -84,11 +87,15 @@ export function captureTickerView(options: {
     metadata: { timeframe: view.timeframe, logScale: view.logScale, timestampUnit: 'seconds' } });
   if (painted) for (const [id, column] of avwapColumnNames(document.objects, view.timeframe)) {
     const study = document.objects.find((object) => object.id === id)!;
-    const values = anchoredVwapValues(study, view.bars);
+    const computed = anchoredVwap(study, view.bars);
+    const values = computed.values;
+    const settings = avwapSettings(study);
     resources.push({ key: `indicator:${column.includes('#') ? column.split('@')[1] : 'avwap'}`, kind: 'indicator', label: `Anchored VWAP (${study.label || 'drawing'})`,
-      status: 'loaded', observedAt: detail.asOf, rows: view.bars.map((bar, position) => ({ t: bar.t, value: values[position] })),
+      status: 'loaded', observedAt: detail.asOf, rows: view.bars.map((bar, position) => ({ t: bar.t, value: values[position],
+        ...Object.fromEntries(computed.bands.flatMap((band, index) => [[`avwapUpper${index + 1}`, band.upper[position]], [`avwapLower${index + 1}`, band.lower[position]]])) })),
       metadata: { drawingId: id, timeframe: view.timeframe, visible: true, source: 'chart_drawing', timestampUnit: 'seconds',
-        definition: 'Cumulative (h+l+c)/3 volume-weighted average from the anchor candle; null before it' } });
+        definition: `Cumulative ${settings.source} volume-weighted average from the anchor candle; null before it`,
+        bands: settings.bands.length ? { mode: settings.bandMode, multipliers: settings.bands } : undefined } });
   }
   resources.push(...contributions);
   const requiredPanel = view.snap === 'collapsed' || view.tab === 'overview' ? null : view.tab === 'position' ? 'account:position' : `panel:${view.tab}`;

@@ -102,3 +102,16 @@ test('the operator says "the red line", so a custom hex still resolves to a colo
   assert.equal(colorName('#ff2020'), 'red');
   assert.equal(colorName('#3b9eff'), 'blue');
 });
+
+test('anchored VWAP bands: a standard-deviation band is symmetric, a percent band is a fixed share, and the source is honored', async () => {
+  const { anchoredVwap } = await import('../src/sections/market/drawings/reads');
+  const study = drawing('avwap', [{ t: 100, value: 0 }], { params: { band1: 2, source: 'close' } });
+  const { values, bands } = anchoredVwap(study, bars);
+  assert.equal(values[0], bars[0].c, 'close source');
+  const last = values.length - 1;
+  assert.ok(Math.abs((bands[0].upper[last]! - values[last]!) - (values[last]! - bands[0].lower[last]!)) < 1e-9);
+  assert.ok(bands[0].upper[last]! > values[last]!);
+  const percent = anchoredVwap(drawing('avwap', [{ t: 100, value: 0 }], { params: { band1: 5, bandMode: 'percent' } }), bars);
+  assert.ok(Math.abs(percent.bands[0].upper[last]! - percent.values[last]! * 1.05) < 1e-9);
+  assert.equal(anchoredVwap(drawing('avwap', [{ t: 100, value: 0 }]), bars).bands.length, 0, 'no params is the classic study');
+});

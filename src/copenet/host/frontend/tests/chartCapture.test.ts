@@ -14,7 +14,7 @@ function fixture(): CaptureOptions {
     instanceId: 'rsi-one', indicatorId: 'rsi', label: 'RSI 14', visible: true, placement: 'pane', insufficientHistory: false,
     instance: { id: 'rsi-one', indicatorId: 'rsi', config: { period: 14 } },
     definition: { compute: () => { throw new Error('Capture must never recompute indicators'); } },
-    outputs: [{ key: 'rsi', label: 'RSI', plot: 'line', color: '#fb9423', lineWidth: 2, lineStyle: 'solid', latest: '64.2', points: [{ t: 200, value: 64.23456789 }] }],
+    outputs: [{ key: 'rsi', label: 'RSI', plot: 'line', color: '#fb9423', lineWidth: 2, lineStyle: 'solid', visible: true, latest: '64.2', points: [{ t: 200, value: 64.23456789 }] }],
     references: [{ value: 70 }], paneRange: { min: 0, max: 100 },
   };
   const view = {

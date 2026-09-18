@@ -87,7 +87,8 @@ PACKET_GUIDE = (
     "what exists, not what was delivered), coverage and sampleOmissions (exactly which rows follow "
     "and which were left out), budget. (2) A Drawings table when anything is drawn. (3) Data tables: "
     "each is a one-line JSON description, a legend, then CSV. The candle table is one row per candle, "
-    "oldest first; extra columns are indicator or study outputs named in metadata.columns. Rows "
+    "oldest first; extra columns are indicator or study outputs named in metadata.columns, and "
+    "metadata.indicators gives each output the color word the operator sees it in. Rows "
     "absent from a table were omitted for budget, never because they do not exist; read them with "
     "market.chart.read."
 )

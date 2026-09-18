@@ -29,6 +29,8 @@ export interface DrawingRead {
 
 /** The operator says "the red line"; the nearest palette name is what lets the model resolve it. */
 export function colorName(hex: string): string {
+  // Registry colors are not all six-digit hex; an unparseable one travels as written.
+  if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
   const value = parseInt(hex.slice(1), 16);
   const rgb = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
   return COLOR_NAMES.map(([name, target]) => ({ name, distance: target.reduce((sum, channel, index) => sum + (channel - rgb[index]) ** 2, 0) }))
@@ -53,17 +55,48 @@ export function fibLevelValues(first: number, second: number): Array<{ ratio: nu
   return FIB_LEVELS.map((ratio) => ({ ratio, value: first + (second - first) * ratio }));
 }
 
-/** Cumulative typical-price VWAP from the anchor candle forward; null before the anchor. */
-export function anchoredVwapValues(object: ChartObject, bars: Ohlcv[]): Array<number | null> {
-  let priceVolume = 0;
-  let volume = 0;
-  return bars.map((bar) => {
-    if (bar.t < object.anchors[0].t) return null;
-    const typical = (bar.h + bar.l + bar.c) / 3;
-    if (bar.v > 0 && Number.isFinite(bar.v)) { priceVolume += typical * bar.v; volume += bar.v; }
-    return volume > 0 ? priceVolume / volume : typical;
-  });
+export type AvwapSource = 'hlc3' | 'close' | 'hl2' | 'ohlc4';
+export const AVWAP_SOURCES: Array<{ value: AvwapSource; label: string }> = [
+  { value: 'hlc3', label: '(H + L + C) / 3' }, { value: 'close', label: 'Close' }, { value: 'hl2', label: '(H + L) / 2' }, { value: 'ohlc4', label: '(O + H + L + C) / 4' },
+];
+export interface AvwapSettings { source: AvwapSource; bandMode: 'stdev' | 'percent'; bands: number[] }
+
+/** What an anchored VWAP computes with. Absent params are the classic study: hlc3, no bands. */
+export function avwapSettings(object: ChartObject): AvwapSettings {
+  const params = object.params ?? {};
+  const source = AVWAP_SOURCES.some((entry) => entry.value === params.source) ? params.source as AvwapSource : 'hlc3';
+  const bands = ['band1', 'band2', 'band3'].map((key) => params[key]).filter((value): value is number => typeof value === 'number' && value > 0);
+  return { source, bandMode: params.bandMode === 'percent' ? 'percent' : 'stdev', bands };
 }
+
+const sourcePrice = (bar: Ohlcv, source: AvwapSource) => source === 'close' ? bar.c : source === 'hl2' ? (bar.h + bar.l) / 2
+  : source === 'ohlc4' ? (bar.o + bar.h + bar.l + bar.c) / 4 : (bar.h + bar.l + bar.c) / 3;
+
+/** Cumulative volume-weighted average from the anchor candle forward, with optional bands:
+ *  a multiple of the volume-weighted standard deviation, or a fixed percent of the line.
+ *  Every series is null before the anchor. */
+export function anchoredVwap(object: ChartObject, bars: Ohlcv[]): { values: Array<number | null>; bands: Array<{ multiplier: number; upper: Array<number | null>; lower: Array<number | null> }> } {
+  const settings = avwapSettings(object);
+  let priceVolume = 0;
+  let squareVolume = 0;
+  let volume = 0;
+  const values: Array<number | null> = [];
+  const deviations: Array<number | null> = [];
+  for (const bar of bars) {
+    if (bar.t < object.anchors[0].t) { values.push(null); deviations.push(null); continue; }
+    const price = sourcePrice(bar, settings.source);
+    if (bar.v > 0 && Number.isFinite(bar.v)) { priceVolume += price * bar.v; squareVolume += price * price * bar.v; volume += bar.v; }
+    const average = volume > 0 ? priceVolume / volume : price;
+    values.push(average);
+    deviations.push(volume > 0 ? Math.sqrt(Math.max(0, squareVolume / volume - average * average)) : 0);
+  }
+  const offset = (index: number, multiplier: number) => settings.bandMode === 'percent' ? (values[index] as number) * multiplier / 100 : (deviations[index] as number) * multiplier;
+  return { values, bands: settings.bands.map((multiplier) => ({ multiplier,
+    upper: values.map((value, index) => value == null ? null : value + offset(index, multiplier)),
+    lower: values.map((value, index) => value == null ? null : value - offset(index, multiplier)) })) };
+}
+
+export function anchoredVwapValues(object: ChartObject, bars: Ohlcv[]): Array<number | null> { return anchoredVwap(object, bars).values; }
 
 /** The line through two (bar index, price) points, evaluated at another bar index. */
 function lineAt(i1: number, p1: number, i2: number, p2: number, index: number, logScale: boolean): number {
@@ -134,7 +167,8 @@ export function readDrawings(objects: ChartObject[], bars: Ohlcv[], options: { t
         const last = values[lastIndex];
         if (last != null) against(last);
         const column = avwapColumns.get(object.id);
-        if (column) read.detail = `series in table column ${column}`;
+        const bands = avwapSettings(object).bands;
+        if (column) read.detail = `series in table column ${column}${bands.length ? `; bands x${bands.join('/')} ${avwapSettings(object).bandMode} in avwapUpperN/avwapLowerN` : ''}`;
         break;
       }
       default: break;

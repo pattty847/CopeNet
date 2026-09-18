@@ -1,6 +1,7 @@
 # Chart Style System
 
-Status: audited 2026-09-18, not built. One settings popup for anything painted on the chart.
+Status: steps 1-5 built 2026-09-18 on `claude/chart-menus-mobile` (see Shipped, below). One
+settings popup for anything painted on the chart.
 
 ## The idea
 
@@ -159,3 +160,22 @@ What the screenshots confirm or change:
   annual / TTM), step vs line, show points, its own scale vs shared, growth-% mode.
 - Fib ratio editing, position sizing fields, per-timeframe visibility for drawings.
 - Trendline / ray / extended trendline as one segment with an extent, behind separate tools.
+
+## Shipped (2026-09-18)
+
+| Step | Where |
+| --- | --- |
+| 1. Shared module, tabbed popup, draft + Ok as one patch | `chartStyle/`, `drawings/DrawingSettings.tsx`, `drawings/patch.ts` |
+| 1b. Visibility tab | `ChartObject.timeframes` (optional, no migration: `timeframe` stays the anchors' basis); `reads.snapToBar` lands off-timeframe anchors on the containing candle |
+| 2. Indicators selectable, same bar and popup | `IndicatorChartLayer.ownerOf`, `indicators/IndicatorStyleable.tsx`, per-output `visible` |
+| 3. Chart series style + per-kind drawing defaults | `chartStyle/store.ts` (`mm-chart-style`), `chartStyle/SeriesSettings.tsx` |
+| 3b. AVWAP source and bands, Show stats | `reads.anchoredVwap`, `ChartObject.params` / `showStats` |
+| 4. Side-panel edit form removed | `ChartDrawingsPanel` rows open the popup |
+| 5. Model reads color words | indicator `outputs[].color` is a word; hex, width and dash dropped |
+
+`ChartSettingsLayer.tsx` is the one composition point: it decides which adapter is showing and
+knows nothing about what the controls are.
+
+Not done, deliberately: alert lines, the position cost line, the indicator cloud and reference
+lines are still constants (each needs its own adapter, none needs new popup code); text size
+and alignment; named templates; fib ratio editing; the financial series `own` tab.

@@ -203,8 +203,13 @@ def test_a_segment_changes_extent_by_kind_but_never_its_anchor_count(scene):
                            "operations": [{"kind": "update", "objectId": "seg", "patch": {
                                "kind": "ray", "timeframes": ["D", "W"], "showStats": True}}]})["document"]["objects"][0]
     assert (changed["kind"], changed["timeframes"], changed["showStats"]) == ("ray", ["D", "W"], True)
+    study = {**base, "id": "study", "kind": "avwap", "anchors": [{"t": 100, "value": 7.0}],
+             "params": {"source": "close", "bandMode": "stdev", "band1": 2, "band2": 2.5}}
+    saved = store.apply({"documentId": document["documentId"], "expectedRevision": 2, "operationId": "study",
+                         "operations": [{"kind": "create", "object": study}]})["document"]["objects"][-1]
+    assert saved["params"] == {"source": "close", "bandMode": "stdev", "band1": 2, "band2": 2.5}
     with pytest.raises(ValueError):
-        store.apply({"documentId": document["documentId"], "expectedRevision": 2, "operationId": "bad",
+        store.apply({"documentId": document["documentId"], "expectedRevision": 3, "operationId": "bad",
                      "operations": [{"kind": "update", "objectId": "seg", "patch": {"kind": "channel"}}]})
 
 

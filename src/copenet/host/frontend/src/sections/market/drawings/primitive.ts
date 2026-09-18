@@ -8,7 +8,7 @@ import { hitDrawing, projectDrawing, type DrawingGeometry, type Point } from './
 import type { ChartWorkspaceBridge } from './types';
 import { fillOpacityOf, shownOn, strokeOf } from './kinds';
 import { lineDash } from '../chartStyle/types';
-import { anchoredVwapValues, snapToBar } from './reads';
+import { anchoredVwap, snapToBar } from './reads';
 
 export function paintDrawing(context: CanvasRenderingContext2D, geometry: DrawingGeometry, selected: boolean): void {
   const { object, points, width } = geometry;
@@ -33,6 +33,17 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
   if (geometry.path && geometry.path.length > 1) {
     context.moveTo(geometry.path[0].x, geometry.path[0].y);
     for (const point of geometry.path.slice(1)) context.lineTo(point.x, point.y);
+    // A study's bands are drawn quieter than the study itself.
+    context.stroke();
+    context.globalAlpha = 0.55;
+    for (const line of geometry.lines ?? []) {
+      context.beginPath();
+      context.moveTo(line.points[0].x, line.points[0].y);
+      for (const point of line.points.slice(1)) context.lineTo(point.x, point.y);
+      context.stroke();
+    }
+    context.globalAlpha = 1;
+    context.beginPath();
   } else if (geometry.lines) {
     for (const line of geometry.lines) {
       context.beginPath();
@@ -83,14 +94,21 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
   }
 }
 
-function anchoredVwapPath(object: ChartObject, bars: Ohlcv[], projection: { time: (timestamp: number) => number | null; price: (value: number) => number | null; width: number }): Point[] {
+type SeriesProjection = { time: (timestamp: number) => number | null; price: (value: number) => number | null; width: number };
+
+function seriesPath(values: Array<number | null>, bars: Ohlcv[], projection: SeriesProjection): Point[] {
   const path: Point[] = [];
-  anchoredVwapValues(object, bars).forEach((value, index) => {
+  values.forEach((value, index) => {
     if (value == null) return;
     const x = projection.time(bars[index].t);
     const y = projection.price(value);
     if (x != null && y != null && Number.isFinite(y)) path.push({ x, y });
   });
+  return path;
+}
+
+function anchoredVwapPath(object: ChartObject, bars: Ohlcv[], projection: SeriesProjection): Point[] {
+  const path = seriesPath(anchoredVwap(object, bars).values, bars, projection);
   const last = path[path.length - 1];
   if (last && last.x < projection.width) path.push({ x: projection.width, y: last.y });
   return path;
@@ -194,7 +212,11 @@ export class DrawingPrimitive implements ISeriesPrimitive {
     this.geometry = [...bridge.objects.map((object) => draft && draft.id === object.id ? draft : object).filter((object) => object.visible && shownOn(object, bridge.timeframe)), ...(this.preview ? [this.preview] : [])]
       .map((object) => {
         const geometry = projectDrawing(object, projection);
-        if (geometry && object.kind === 'avwap') geometry.path = anchoredVwapPath(object, bridge.bars ?? [], projection);
+        if (geometry && object.kind === 'avwap') {
+          geometry.path = anchoredVwapPath(object, bridge.bars ?? [], projection);
+          geometry.lines = anchoredVwap(object, bridge.bars ?? []).bands.flatMap((band) => [band.upper, band.lower])
+            .map((values) => ({ points: seriesPath(values, bridge.bars ?? [], projection) })).filter((line) => line.points.length > 1);
+        }
         return geometry;
       }).filter((item): item is DrawingGeometry => item !== null);
   }
