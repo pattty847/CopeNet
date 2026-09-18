@@ -90,13 +90,66 @@ interface Styleable {
 - New store `mm-chart-style` (versioned like the indicator layout) for candles, volume,
   financial overlay, comparison, alert and position line style.
 
+## Delta: the TradingView dialogs, mapped (2026-09-18)
+
+Reference: TradingView's Trendline, Anchored VWAP and SMA settings dialogs. Same shell for all
+three; only the tabs differ. That is the design above with one correction: the compartments are
+**tabs**, and there are five of them, not four.
+
+| TV tab | Our compartment | Drawings today | Indicators today | Gap |
+| --- | --- | --- | --- | --- |
+| Inputs | `own` | none (fib ratios, AVWAP source are constants) | registry `inputs`, basic + advanced | AVWAP source and bands; fib ratios |
+| Style | `strokes` + `fills` | color, width, style, fill opacity | color only in the UI; width/style stored | per-output show/hide, plot type, precision, price-scale label |
+| Text | `text` | label string only | n/a | size, bold/italic, alignment |
+| Coordinates | **new: `anchors`** | price editable in the side panel; date is not | n/a | date + price per anchor, as bar-exact fields |
+| Visibility | **new: `visibility`** | a drawing shows only on the timeframe it was made on | one `visible` flag | per-timeframe checkboxes (D / W / M) |
+
+`Styleable` gains `anchors?` and `visibility?` beside `strokes`, `fills`, `text`, `own`. A tab
+appears only when the thing has that compartment, exactly as TV drops Text and Coordinates for
+an SMA.
+
+What the screenshots confirm or change:
+
+- **Extend is a dropdown on one Trendline.** TV models trendline / ray / extended line as a
+  single object with `Don't extend | Right | Left | Both`. Keep our separate toolbar tools (they
+  are the fast path); each just presets the extent, and the Style tab can change it afterwards.
+  This settles the "collapse" question: one object, several doors.
+- **Stats are already computed.** TV's trendline "Stats" (price range, percent, bars, angle) are
+  the numbers `drawings/reads.ts` derives for the model: `perBar`, `atLast`, `vsClosePct`, bars.
+  A "Show stats" toggle paints those same values beside the line. One calculation feeds the
+  canvas, the popup and the model.
+- **Cancel / Ok means a draft.** Today every control applies instantly, and for drawings each
+  click is its own revision and its own undo batch. The popup edits a local draft with live
+  preview (the preview path the drag gesture already uses), and **Ok sends one `update` patch**:
+  one revision, one undo step. Cancel discards. Indicators snapshot their instance on open and
+  restore it on Cancel. The top bar stays instant, because it is the quick path.
+- **Defaults / Template.** First version: `Reset to defaults` and `Save as default` per kind,
+  stored in `mm-chart-style`. A new trendline is born with your saved trendline style; a new
+  SMA with your SMA style. Named templates are a later addition to the same store.
+- **AVWAP is an indicator wearing a drawing's anchor.** TV gives it Inputs (source, band mode,
+  three multipliers) and Style, no Text or Coordinates. Ours has a fixed `hlc3` source and no
+  bands. Its `own` tab: source, band mode (standard deviation | percent), up to three
+  multipliers; each band becomes one more stroke in Style and one more column in the matrix.
+- **Indicator Style rows are per output.** TV's SMA row is `[x] MA  color/line  plot type`, then
+  precision, "labels on price scale", "values in status line". Ours maps directly: the checkbox
+  is a per-output `visible` (we only have `hiddenByDefault`), plot type is `IndicatorPlot`,
+  precision exists in the registry, the price-scale label is `lastValueVisible`, and the status
+  line is our top-left legend.
+- **Not adopting now:** line-end arrows, middle point, SMA smoothing/offset, and the indicator
+  Timeframe input (multi-timeframe waits on `INTRADAY_BARS.md`).
+
 ## Build order
 
-1. Extract `chartStyle/` from `DrawingToolbar`; add the popup; double-click a drawing opens it
-   with opacity and the kind's `own` compartment. Drawings only, no behavior lost.
+1. Extract `chartStyle/` from `DrawingToolbar`; add the tabbed popup with draft + Cancel/Ok;
+   double-click a drawing opens it with Style (incl. opacity and extent), Text and Coordinates.
+   Drawings only, no behavior lost.
+1b. Visibility tab: drawings carry `timeframes` instead of one `timeframe` (a migration of saved
+   documents, and the model's Drawings table filters on it).
 2. Indicators: series-to-owner map, click to select, the same popup with one stroke compartment
    per output and the existing inputs form as `own`. Gives width and style their missing controls.
-3. `mm-chart-style` + adapters for candles, volume, financial overlay, comparison lines.
+3. `mm-chart-style` + adapters for candles, volume, financial overlay, comparison lines; the
+   same store holds per-kind defaults (`Save as default` / `Reset`).
+3b. AVWAP `own` tab: source and bands. "Show stats" on segments, painted from `reads.ts`.
 4. Remove the `ChartDrawingsPanel` editor form; the panel keeps the list, visibility and undo.
 5. Model packet: color word per column, drop hex/width/style from indicator metadata.
 
