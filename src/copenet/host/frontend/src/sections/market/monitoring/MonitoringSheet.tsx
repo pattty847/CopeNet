@@ -5,6 +5,10 @@ import { X } from 'lucide-react';
 export function MonitoringSheet({ title, children, onClose }: { title: string; children: ReactNode; onClose: () => void }) {
   const ref = useRef<HTMLDialogElement>(null);
   const titleId = useId();
+  const close = () => {
+    ref.current?.close();
+    onClose();
+  };
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
     const dialog = ref.current;
@@ -19,14 +23,15 @@ export function MonitoringSheet({ title, children, onClose }: { title: string; c
       ref={ref}
       className="mm-monitor-sheet"
       aria-labelledby={titleId}
+      onClick={(event) => { if (event.target === event.currentTarget) close(); }}
       onCancel={(event) => {
         event.preventDefault();
-        onClose();
+        close();
       }}
     >
       <header>
         <h2 id={titleId}>{title}</h2>
-        <button className="tw-iconbtn" onClick={onClose} aria-label="Close editor">
+        <button type="button" className="tw-iconbtn" onClick={close} aria-label={`Close ${title}`}>
           <X size={16} />
         </button>
       </header>

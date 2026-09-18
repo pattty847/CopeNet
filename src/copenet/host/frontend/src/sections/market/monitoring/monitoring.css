@@ -154,6 +154,9 @@
 }
 .mm-monitor-sheet {
   box-sizing: border-box;
+  position: fixed;
+  inset: 0 0 0 auto;
+  z-index: 1000;
   margin: 0 0 0 auto;
   height: 100dvh;
   max-height: 100dvh;
@@ -324,6 +327,10 @@
   }
   .mm-monitor-form {
     padding: 20px 16px;
+  }
+  .mm-monitor-sheet {
+    inset: 0;
+    width: 100vw;
   }
   .mm-monitor-form .tw-input {
     font-size: 16px;
