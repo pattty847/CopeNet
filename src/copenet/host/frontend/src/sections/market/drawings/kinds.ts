@@ -37,9 +37,9 @@ export const DRAWING_KINDS: Record<DrawingKind, DrawingKindSpec> = {
   trendline: { ...segment, label: 'Trendline' },
   ray: { ...segment, label: 'Ray' },
   extended_trendline: { ...segment, label: 'Extended trendline' },
-  measurement: { ...segment, label: 'Measurement' },
   fib_retracement: { ...segment, label: 'Fibonacci retracement' },
   zone: { ...area, label: 'Price zone' },
+  measurement: { ...area, label: 'Measurement' },
   channel: { form: 'composite', label: 'Parallel channel', anchors: 3, stroke: true, fill: false },
   position: { form: 'composite', label: 'Position setup', anchors: 3, stroke: true, fill: true },
   avwap: { form: 'study', label: 'Anchored VWAP', anchors: 1, stroke: true, fill: false },
@@ -55,5 +55,8 @@ export const FILL_OPACITIES = [0, 0.1, 0.2, 0.35];
 export function strokeOf(object: ChartObject): { width: number; style: LineStyle } {
   return { width: object.lineWidth ?? 1, style: object.lineStyle ?? (object.owner.kind === 'agent' ? 'dashed' : 'solid') };
 }
-export function fillOpacityOf(object: ChartObject): number { return object.fillOpacity ?? 0.1; }
+/** A measurement is read at a glance, so its box is stronger than a zone's wash. */
+export function fillOpacityOf(object: ChartObject): number { return object.fillOpacity ?? (object.kind === 'measurement' ? 0.22 : 0.1); }
+export const UP_COLOR = '#69c589';
+export const DOWN_COLOR = '#d96d5f';
 export function lineDash(style: LineStyle): number[] { return style === 'dashed' ? [6, 4] : style === 'dotted' ? [2, 3] : []; }

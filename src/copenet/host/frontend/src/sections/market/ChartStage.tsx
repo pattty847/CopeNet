@@ -42,6 +42,8 @@ export interface StagePlot {
   onRemove?: () => void;
 }
 
+const LEGEND_ROWS_BEFORE_FOLD = 5;
+
 export function ChartStage({
   symbol,
   timeframe,
@@ -116,6 +118,7 @@ export function ChartStage({
   const stageRef = useRef<HTMLDivElement>(null);
   const [height, setHeight] = useState(420);
   const [hovered, setHovered] = useState<Ohlcv | null>(null);
+  const [legendOpen, setLegendOpen] = useState(false);
 
   // Rounding to 8px keeps sub-pixel layout jitter from churning the chart's size.
   const measure = useCallback(() => {
@@ -152,6 +155,45 @@ export function ChartStage({
     ? new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }).format(new Date(shown.t * 1000))
     : null;
 
+  // Everything active on the chart lists here, top-left, and keeps appending downward. Past
+  // a handful the stack would climb over the candles, so it folds behind one toggle.
+  const legendRows: ReactNode[] = [
+    ...plots.map((plot) => (
+              <div key={plot.id} className="tw-legend__row tw-legend__plot">
+                <span className="tw-legend__swatch" style={{ background: plot.color }} />
+                <span style={{ color: MM.muted, fontSize: 10 }}>{plot.label}</span>
+                {plot.value && <span style={{ color: plot.color, fontFamily: mono, fontSize: 10 }}>{plot.value}</span>}
+                {plot.onRemove && (
+                  <button type="button" onClick={plot.onRemove} title={`Remove ${plot.label}`} aria-label={`Remove ${plot.label}`}><X size={10} /></button>
+                )}
+              </div>
+            )),
+    // PRICE OVERLAYS ONLY. A pane indicator reports inside its own pane, anchored with
+    // IPaneApi.getHTMLElement() — so its reading sits where its line is rather than in a
+    // stack over the price pane describing something two panes down.
+    ...indicators
+              .filter((indicator) => indicator.visible && indicator.placement === 'price')
+              .map((indicator) => (
+              <div key={indicator.instanceId} className="tw-legend__row tw-legend__plot">
+                <span className="tw-legend__swatch" style={{ background: legendColor(indicator) }} />
+                <span style={{ color: MM.muted, fontSize: 10 }}>{indicator.label}</span>
+                {indicator.insufficientHistory ? (
+                  <span style={{ color: MM.dimmer, fontFamily: mono, fontSize: 10 }}>needs history</span>
+                ) : (
+                  legendOutputs(indicator)
+                    .filter((output) => output.latest != null)
+                    .map((output) => (
+                      <span key={output.key} title={output.label} style={{ color: output.color, fontFamily: mono, fontSize: 10 }}>
+                        {output.latest}
+                      </span>
+                    ))
+                )}
+                <IndicatorControls indicator={indicator} actions={indicatorActions} />
+              </div>
+            )),
+  ];
+  const legendFolded = !legendOpen && legendRows.length > LEGEND_ROWS_BEFORE_FOLD;
+
   return (
     <div className="tw-stage" ref={stageRef}>
       {bars.length === 0 ? (
@@ -176,39 +218,12 @@ export function ChartStage({
                 {showVolume && <span>V <b>{volume(shown.v)}</b></span>}
               </div>
             )}
-            {plots.map((plot) => (
-              <div key={plot.id} className="tw-legend__row tw-legend__plot">
-                <span className="tw-legend__swatch" style={{ background: plot.color }} />
-                <span style={{ color: MM.muted, fontSize: 10 }}>{plot.label}</span>
-                {plot.value && <span style={{ color: plot.color, fontFamily: mono, fontSize: 10 }}>{plot.value}</span>}
-                {plot.onRemove && (
-                  <button type="button" onClick={plot.onRemove} title={`Remove ${plot.label}`} aria-label={`Remove ${plot.label}`}><X size={10} /></button>
-                )}
-              </div>
-            ))}
-            {/* PRICE OVERLAYS ONLY. A pane indicator reports inside its own pane, anchored
-                with IPaneApi.getHTMLElement() — so its reading sits where its line is rather
-                than in a stack over the price pane describing something two panes down. */}
-            {indicators
-              .filter((indicator) => indicator.visible && indicator.placement === 'price')
-              .map((indicator) => (
-              <div key={indicator.instanceId} className="tw-legend__row tw-legend__plot">
-                <span className="tw-legend__swatch" style={{ background: legendColor(indicator) }} />
-                <span style={{ color: MM.muted, fontSize: 10 }}>{indicator.label}</span>
-                {indicator.insufficientHistory ? (
-                  <span style={{ color: MM.dimmer, fontFamily: mono, fontSize: 10 }}>needs history</span>
-                ) : (
-                  legendOutputs(indicator)
-                    .filter((output) => output.latest != null)
-                    .map((output) => (
-                      <span key={output.key} title={output.label} style={{ color: output.color, fontFamily: mono, fontSize: 10 }}>
-                        {output.latest}
-                      </span>
-                    ))
-                )}
-                <IndicatorControls indicator={indicator} actions={indicatorActions} />
-              </div>
-            ))}
+            {legendFolded ? legendRows.slice(0, LEGEND_ROWS_BEFORE_FOLD - 1) : legendRows}
+            {legendRows.length > LEGEND_ROWS_BEFORE_FOLD && (
+              <button type="button" className="tw-legend__fold" aria-expanded={legendOpen} onClick={() => setLegendOpen((open) => !open)}>
+                {legendOpen ? 'Show less' : `+${legendRows.length - (LEGEND_ROWS_BEFORE_FOLD - 1)} more`}
+              </button>
+            )}
             {comparisonMode && (
               <div className="tw-legend__row" style={{ gap: 12 }}>
                 {comparisonLines.map((line) => {

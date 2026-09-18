@@ -54,6 +54,12 @@ import { replayDateLabel, replayEntryRange, type ChartReplayBinding } from './re
 
 import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, futureDrawingTimes, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
 
+/** Empty slots shown right of the latest candle by default; the rest is reached by scrolling. */
+const DEFAULT_FUTURE_ROOM_BARS = 12;
+const SEC_MARKER_ID = 'sec:';
+/** Markers stack above a candle's high and below its low; this is how far that stack reaches. */
+const SEC_MARKER_BAND_PX = 56;
+
 export function CandleChart({
   bars,
   displayBars,
@@ -113,6 +119,7 @@ export function CandleChart({
   /** What the last data write drew, so the next one can tell how many bars were revealed —
    *  and therefore how far to slide the operator's range to hold the newest candle still. */
   const replayFrameRef = useRef({ active: false, bars: 0, generation: -1 });
+  const frameRef = useRef<{ from: number; to: number } | null>(null);
   const rafRef = useRef<number | null>(null);
   evidenceRef.current = evidence;
   eventsRef.current = events;
@@ -179,7 +186,7 @@ export function CandleChart({
       }
       markers.push(...(individual ? individualMarkers(bucket) : bucketMarkers(bucket, room >= LABEL_ROOM_PX)));
     }
-    markersApi.setMarkers([...markers, ...futureMarkersRef.current].sort((a, z) => (a.time as number) - (z.time as number)));
+    markersApi.setMarkers([...markers, ...futureMarkersRef.current].map((marker) => ({ ...marker, id: `${SEC_MARKER_ID}${marker.time as number}` })).sort((a, z) => (a.time as number) - (z.time as number)));
 
     const boxes: RenderedBox[] = [];
     clusters.forEach((cluster, ci) => {
@@ -363,7 +370,16 @@ export function CandleChart({
         return;
       }
       const time = param.time as number;
-      const items = evidenceForDay(evidenceRef.current, normalize(barsRef.current), time);
+      // The whole candle column is not a button. A day's activity opens from its marker (or
+      // the band beside the candle where markers stack), so a click elsewhere in that column
+      // stays an ordinary chart click.
+      const bar = barsRef.current.find((row) => row.t === time);
+      const highY = bar ? candle.priceToCoordinate(bar.h) : null;
+      const lowY = bar ? candle.priceToCoordinate(bar.l) : null;
+      const onMarker = typeof param.hoveredObjectId === 'string' && param.hoveredObjectId.startsWith(SEC_MARKER_ID);
+      const nearMarkers = highY != null && lowY != null &&
+        ((param.point.y <= highY + 6 && param.point.y >= highY - SEC_MARKER_BAND_PX) || (param.point.y >= lowY - 6 && param.point.y <= lowY + SEC_MARKER_BAND_PX));
+      const items = onMarker || nearMarkers ? evidenceForDay(evidenceRef.current, normalize(barsRef.current), time) : [];
       if (!items.length) {
         setDayPopup(null);
         return;
@@ -516,8 +532,13 @@ export function CandleChart({
     const frame = replayFrameRef.current;
     const replaying = replay?.active ?? false;
     const rebuilt = frame.generation !== chartGeneration;
+    // fitContent() would fit the reserved drawing whitespace too and squeeze the real candles
+    // into a corner. Frame the real bars plus the room the default view always had, widened
+    // only as far as a future-dated SEC marker actually needs.
+    const lastFutureMarker = future.times.length ? timelineTimes.filter((t) => t > rows[rows.length - 1]?.t).indexOf(Math.max(...future.times)) + 1 : 0;
+    frameRef.current = { from: -0.5, to: rows.length - 1 + Math.max(DEFAULT_FUTURE_ROOM_BARS, lastFutureMarker) };
     if (!replaying) {
-      timeScale.fitContent();
+      timeScale.setVisibleLogicalRange(frameRef.current);
     } else if (!frame.active || rebuilt) {
       timeScale.setVisibleLogicalRange(replayEntryRange(rows.length));
     } else {
@@ -556,7 +577,7 @@ export function CandleChart({
     );
     // Comparison lines are rebuilt from the truncated bars, so this effect fires on every
     // replay step. Refitting here would undo the slide above one frame later.
-    if (!replay?.active) chart.timeScale().fitContent();
+    if (!replay?.active && frameRef.current) chart.timeScale().setVisibleLogicalRange(frameRef.current);
   }, [comparisonMode, comparisonLines, showVolume, replay?.active, chartGeneration]);
 
   // Overlay changes must not reset the operator's zoom. Underlying observations

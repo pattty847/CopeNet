@@ -14,7 +14,10 @@ export const MIN_CLUSTER_DAYS = 2; // single busy days are served by the day pop
 export const PRICE_SPLIT_FRACTION = 0.06; // split a time-cluster where price shelves gap >6%
 export const PRICE_PROBE_PX = 100; // second sample point for detecting vertical rescales
 /** Empty candle slots reserved for operator drawings after the latest real candle. */
-export const DRAWING_FUTURE_SLOTS = 12;
+// Trendlines meet, channels resolve and targets sit well past the latest candle. The slots
+// are whitespace on the index axis (never invented candles), so a generous count is free;
+// the chart still opens framed on real bars and the operator scrolls right into the room.
+export const DRAWING_FUTURE_SLOTS = 250;
 
 /** Lightweight Charts briefly detaches a newly shown price scale while recalculating its
  *  pane. Calling width() in that frame throws even though the chart and scale API are both

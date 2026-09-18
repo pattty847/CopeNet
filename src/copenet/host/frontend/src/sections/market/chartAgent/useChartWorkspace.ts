@@ -124,6 +124,7 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
     if (receipt && target) setDeleted({ label: target.label || DRAWING_KINDS[target.kind].label, batchId: receipt.batchId });
   }, [apply]);
 
+  const [labelRequestId, setLabelRequestId] = useState<string | null>(null);
   const [drawingSettingsRequest, setDrawingSettingsRequest] = useState(0);
   const openDrawingSettings = useCallback((id: string) => {
     setSelectedObjectId(id);
@@ -168,9 +169,10 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
       void apply([{ kind: 'create', object: { ...proposal, id, label: DRAWING_KINDS[proposal.kind].label,
         color: DEFAULT_DRAWING_COLOR, visible: true, rationale: '', evidence: [] } }]);
       setSelectedObjectId(id); setMode('select');
+      setLabelRequestId(DRAWING_KINDS[proposal.kind].form === 'point' ? id : null);
     },
     onUpdate: ({ id, patch }) => { void apply([{ kind: 'update', objectId: id, patch }]); },
-    deleted, onUndoDelete: () => { if (deleted) { void undo(deleted.batchId); setDeleted(null); } },
+    labelRequestId, deleted, onUndoDelete: () => { if (deleted) { void undo(deleted.batchId); setDeleted(null); } },
     onRendered,
   } : undefined;
 

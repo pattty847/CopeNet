@@ -289,9 +289,20 @@ export function useChartWorkspace(
       }
     };
     const onKey = (event: KeyboardEvent) => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return;
       const active = current.current.bridge;
-      if (!active || active.mode === 'select') return;
+      if ((event.key === 'Delete' || event.key === 'Backspace') && !event.defaultPrevented) {
+        // Never steal the key from a field: the label editor lives on the chart too.
+        const target = event.target as HTMLElement | null;
+        const typing = target?.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(target?.tagName ?? '');
+        if (!typing && active?.enabled && active.interactionEnabled !== false && active.mode === 'select' && active.selectedObjectId && !current.current.comparisonMode) {
+          event.preventDefault();
+          active.onDeleteObject(active.selectedObjectId);
+        }
+        return;
+      }
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      if (!active) return;
+      if (active.mode === 'select') { if (active.selectedObjectId) active.onSelectObject(null); return; }
       event.preventDefault();
       clear();
       active.onCancelDrawing?.();

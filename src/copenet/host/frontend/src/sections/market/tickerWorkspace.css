@@ -365,6 +365,20 @@
   cursor: pointer;
 }
 
+.tw-legend__fold {
+  align-self: flex-start;
+  min-height: 22px;
+  padding: 0 6px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--mkt-canvas) 80%, transparent);
+  color: var(--mkt-muted);
+  font: 10px var(--mkt-mono);
+  pointer-events: auto;
+  cursor: pointer;
+}
+.tw-legend__fold:hover { color: var(--mkt-text); }
+
 .tw-legend__plot button:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
 
 /* The selected drawing's settings bar. Top-centre so it never sits on the latest candle,

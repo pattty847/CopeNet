@@ -38,6 +38,8 @@ export interface ChartWorkspaceBridge {
   onCreate: (proposal: DrawingProposal) => void;
   onUpdate: (proposal: { id: string; patch: DrawingPatch }) => void;
   /** Set for a few seconds after a delete, so one tap on a phone is never final. */
+  /** A just-placed text drawing: the settings bar opens its label field so typing is next. */
+  labelRequestId?: string | null;
   deleted?: { label: string } | null;
   onUndoDelete?: () => void;
   onRendered: (receipt: ChartRenderReceipt) => void;

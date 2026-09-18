@@ -208,3 +208,20 @@ test('a drawing with no saved style renders the owner default, and a saved style
   assert.deepEqual(strokeOf({ ...base, anchors: [], evidence: [], owner: { kind: 'operator' } }), { width: 1, style: 'solid' });
   assert.deepEqual(strokeOf({ ...base, anchors: [], evidence: [], owner: { kind: 'agent' }, lineStyle: 'solid', lineWidth: 3 }), { width: 3, style: 'solid' });
 });
+
+test('a measurement is a signed box: green when price rose, red when it fell, with its size written inside', () => {
+  const up = projectDrawing(object('measurement'), { ...projection, barsBetween: () => 7 })!;
+  assert.equal(up.lines, undefined, 'no ray from start to stop');
+  assert.equal(up.regions![0].color, '#69c589');
+  assert.match(up.annotations![0].text, /^\+90\.00 \(\+900\.0%\) · 7 bars · /);
+  const fell = { ...object('measurement'), anchors: [{ t: 100, value: 100 }, { t: 400, value: 10 }] };
+  assert.equal(projectDrawing(fell, projection)!.regions![0].color, '#d96d5f');
+  assert.equal(hitDrawing(up, { x: 30, y: (up.regions![0].top + up.regions![0].height / 2) }), true, 'the whole box selects it');
+});
+
+test('drawings can reach far past the latest candle', () => {
+  const rows = [{ t: 100, o: 1, h: 1, l: 1, c: 1, v: 1 }, { t: 200, o: 1, h: 1, l: 1, c: 1, v: 1 }];
+  const times = futureDrawingTimes(rows);
+  assert.ok(times.length >= 200, 'roughly a trading year of room on a daily chart');
+  assert.equal(times[0], 300);
+});

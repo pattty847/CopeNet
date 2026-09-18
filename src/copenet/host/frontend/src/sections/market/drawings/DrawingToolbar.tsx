@@ -14,7 +14,7 @@ function StrokeSample({ width, style }: { width: number; style: LineStyle }) {
 function LabelEditor({ object, onCommit }: { object: ChartObject; onCommit: (label: string) => void }) {
   const [value, setValue] = useState(object.label);
   return <form className="tw-drawbar__text" onSubmit={(event) => { event.preventDefault(); onCommit(value.trim()); }}>
-    <input autoFocus value={value} maxLength={200} aria-label="Drawing label" onChange={(event) => setValue(event.target.value)} />
+    <input autoFocus onFocus={(event) => event.target.select()} value={value} maxLength={200} aria-label="Drawing label" onChange={(event) => setValue(event.target.value)} />
     <button type="submit">Save</button>
   </form>;
 }
@@ -25,7 +25,8 @@ export function DrawingToolbar({ workspace }: { workspace: ChartWorkspaceBridge 
   const selected = workspace.objects.find((object) => object.id === workspace.selectedObjectId) ?? null;
   const [menu, setMenu] = useState<Menu>(null);
   const barRef = useRef<HTMLDivElement | null>(null);
-  useEffect(() => { setMenu(null); }, [selected?.id]);
+  // A note is its text, so placing one leads straight into typing it.
+  useEffect(() => { setMenu(selected && selected.id === workspace.labelRequestId ? 'text' : null); }, [selected?.id, workspace.labelRequestId]);
   useEffect(() => {
     if (!menu) return;
     const close = (event: PointerEvent) => { if (!barRef.current?.contains(event.target as Node)) setMenu(null); };

@@ -56,7 +56,7 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
     context.fillRect(left, top, zoneWidth, zoneHeight);
     context.globalAlpha = 1;
     context.rect(left, top, zoneWidth, zoneHeight);
-  } else {
+  } else if (!geometry.regions) {
     context.arc(a.x, a.y, 3, 0, 2 * Math.PI);
     context.fill();
   }
@@ -64,8 +64,8 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
   context.setLineDash([]);
   if (geometry.annotations) {
     context.font = '10px "IBM Plex Mono", monospace';
+    for (const annotation of geometry.annotations) { context.fillStyle = annotation.color ?? object.color; context.fillText(annotation.text, Math.max(5, Math.min(width - 180, annotation.x)), Math.max(12, Math.min(geometry.height - 4, annotation.y))); }
     context.fillStyle = object.color;
-    for (const annotation of geometry.annotations) context.fillText(annotation.text, Math.max(5, Math.min(width - 180, annotation.x)), Math.max(12, Math.min(geometry.height - 4, annotation.y)));
   }
   if (object.label) {
     context.font = '11px "IBM Plex Mono", monospace';
@@ -182,6 +182,7 @@ export class DrawingPrimitive implements ISeriesPrimitive {
       width: size.width, height: size.height,
       time: (timestamp: number) => state.chart.timeScale().timeToCoordinate(timestamp as UTCTimestamp),
       price: (value: number) => state.series.priceToCoordinate(value),
+      barsBetween: (from: number, to: number) => (bridge.bars ?? []).filter((bar) => bar.t > from && bar.t <= to).length,
     };
     this.geometry = [...bridge.objects.filter((object) => object.visible && object.timeframe === bridge.timeframe), ...(this.preview ? [this.preview] : [])]
       .map((object) => {

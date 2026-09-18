@@ -1,5 +1,5 @@
 import type { ChartAnchor, ChartObject } from '../chartAgent/types';
-import { DRAWING_KINDS } from './kinds';
+import { DOWN_COLOR, DRAWING_KINDS, UP_COLOR } from './kinds';
 import { fibLevelValues } from './reads';
 
 export interface Point { x: number; y: number }
@@ -11,10 +11,12 @@ export interface DrawingGeometry {
   lines?: Array<{ points: Point[]; label?: string }>;
   regions?: Array<{ left: number; top: number; width: number; height: number; color: string; label?: string }>;
   path?: Point[];
-  annotations?: Array<{ x: number; y: number; text: string }>;
+  annotations?: Array<{ x: number; y: number; text: string; color?: string }>;
 }
 export interface CoordinateProjection {
   time: (timestamp: number) => number | null;
+  /** Candles between two timestamps; absent in contexts that have no bar list. */
+  barsBetween?: (from: number, to: number) => number;
   price: (value: number) => number | null;
   width: number;
   height: number;
@@ -57,7 +59,7 @@ export function projectDrawing(object: ChartObject, projection: CoordinateProjec
   if (object.kind === 'horizontal_ray') geometry.lines = [{ points: [points[0], { x: projection.width, y: points[0].y }] }];
   if (object.kind === 'vertical_line') geometry.lines = [{ points: [{ x: points[0].x, y: 0 }, { x: points[0].x, y: projection.height }] }];
   if (object.kind === 'ray') geometry.lines = [{ points: lineToBoundary(points[0], points[1], projection.width, projection.height) }];
-  if (object.kind === 'trendline' || object.kind === 'measurement') geometry.lines = [{ points }];
+  if (object.kind === 'trendline') geometry.lines = [{ points }];
   if (object.kind === 'extended_trendline') geometry.lines = [{ points: lineToBoundary(points[0], points[1], projection.width, projection.height, true) }];
   if (object.kind === 'fib_retracement') geometry.lines = addFibLines(points, object, projection);
   if (object.kind === 'measurement') {
@@ -65,8 +67,14 @@ export function projectDrawing(object: ChartObject, projection: CoordinateProjec
     const change = b.value - a.value;
     const percent = a.value === 0 ? 0 : (change / a.value) * 100;
     const days = Math.abs(b.t - a.t) / 86400;
-    geometry.annotations = [{ x: Math.max(points[0].x, points[1].x) + 6, y: points[1].y - 6,
-      text: `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%) · ${days.toFixed(0)}d` }];
+    const bars = projection.barsBetween?.(Math.min(a.t, b.t), Math.max(a.t, b.t));
+    const color = change >= 0 ? UP_COLOR : DOWN_COLOR;
+    const left = Math.min(points[0].x, points[1].x);
+    const top = Math.min(points[0].y, points[1].y);
+    // A signed box, not a ray with a caption: green gained, red lost, read before any number.
+    geometry.regions = [{ left, top, width: Math.abs(points[1].x - points[0].x), height: Math.abs(points[1].y - points[0].y), color }];
+    geometry.annotations = [{ x: left + 6, y: top + 14, color,
+      text: `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%) · ${bars != null ? `${bars} bars · ` : ''}${days.toFixed(0)}d` }];
   }
   if (object.kind === 'channel') {
     const [a, b, offset] = points;
@@ -80,8 +88,8 @@ export function projectDrawing(object: ChartObject, projection: CoordinateProjec
     const profitTop = Math.min(entry.y, target.y);
     const riskTop = Math.min(entry.y, stop.y);
     geometry.regions = [
-      { left, top: profitTop, width: right - left, height: Math.abs(entry.y - target.y), color: '#69c589', label: 'target' },
-      { left, top: riskTop, width: right - left, height: Math.abs(entry.y - stop.y), color: '#d96d5f', label: 'stop' },
+      { left, top: profitTop, width: right - left, height: Math.abs(entry.y - target.y), color: UP_COLOR, label: 'target' },
+      { left, top: riskTop, width: right - left, height: Math.abs(entry.y - stop.y), color: DOWN_COLOR, label: 'stop' },
     ];
     geometry.annotations = [
       { x: entry.x + 6, y: entry.y - 6, text: `Entry ${object.anchors[0].value.toFixed(2)}` },

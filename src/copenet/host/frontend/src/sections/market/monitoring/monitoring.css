@@ -154,6 +154,9 @@
 }
 .mm-monitor-sheet {
   box-sizing: border-box;
+  /* Opened from inside the chart legend, which is pointer-events: none. A top-layer dialog
+   * still inherits that, which left the sheet open with nothing in it clickable. */
+  pointer-events: auto;
   position: fixed;
   inset: 0 0 0 auto;
   z-index: 1000;
