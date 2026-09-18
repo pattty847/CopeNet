@@ -47,7 +47,7 @@ export interface ChartViewport {
 export interface ChartSelection { from: number; to: number }
 export interface ViewResource {
   key: string;
-  kind: 'candles' | 'indicator' | 'financial' | 'comparison' | 'evidence' | 'panel' | 'quote' | 'drawings';
+  kind: 'candles' | 'indicator' | 'financial' | 'comparison' | 'evidence' | 'panel' | 'quote' | 'drawings' | 'drawing_reads';
   label: string;
   unit?: string;
   status: 'loaded' | 'empty' | 'stale' | 'error' | 'not-loaded';

@@ -44,7 +44,7 @@ class Selection(Contract):
 
 class Resource(Contract):
     key: str = Field(min_length=1, max_length=120)
-    kind: Literal["candles", "indicator", "financial", "comparison", "evidence", "panel", "quote", "drawings"]
+    kind: Literal["candles", "indicator", "financial", "comparison", "evidence", "panel", "quote", "drawings", "drawing_reads"]
     label: str = Field(min_length=1, max_length=160)
     unit: str | None = Field(default=None, max_length=80)
     status: Literal["loaded", "empty", "stale", "error", "not-loaded"]

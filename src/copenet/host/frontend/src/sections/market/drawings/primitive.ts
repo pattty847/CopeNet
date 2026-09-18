@@ -7,6 +7,7 @@ import type { Ohlcv } from '../types';
 import { hitDrawing, projectDrawing, type DrawingGeometry, type Point } from './geometry';
 import type { ChartWorkspaceBridge } from './types';
 import { fillOpacityOf, lineDash, strokeOf } from './kinds';
+import { anchoredVwapValues } from './reads';
 
 export function paintDrawing(context: CanvasRenderingContext2D, geometry: DrawingGeometry, selected: boolean): void {
   const { object, points, width } = geometry;
@@ -82,18 +83,13 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
 }
 
 function anchoredVwapPath(object: ChartObject, bars: Ohlcv[], projection: { time: (timestamp: number) => number | null; price: (value: number) => number | null; width: number }): Point[] {
-  const start = bars.findIndex((bar) => bar.t >= object.anchors[0].t);
-  if (start < 0) return [];
-  let priceVolume = 0;
-  let volume = 0;
   const path: Point[] = [];
-  for (const bar of bars.slice(start)) {
-    if (bar.v > 0 && Number.isFinite(bar.v)) { priceVolume += ((bar.h + bar.l + bar.c) / 3) * bar.v; volume += bar.v; }
-    const value = volume > 0 ? priceVolume / volume : (bar.h + bar.l + bar.c) / 3;
-    const x = projection.time(bar.t);
+  anchoredVwapValues(object, bars).forEach((value, index) => {
+    if (value == null) return;
+    const x = projection.time(bars[index].t);
     const y = projection.price(value);
     if (x != null && y != null && Number.isFinite(y)) path.push({ x, y });
-  }
+  });
   const last = path[path.length - 1];
   if (last && last.x < projection.width) path.push({ x: projection.width, y: last.y });
   return path;

@@ -1,6 +1,7 @@
 import type { ChartDocument, ChartSelection, ChartViewport, InstrumentRef, MarketCapture, ViewResource } from '../chartAgent/types';
 import type { TickerIntelligence } from '../types';
 import type { useTickerViewModel } from '../useTickerViewModel';
+import { anchoredVwapValues, avwapColumnNames, readDrawings } from '../drawings/reads';
 
 export function instrumentFor(symbol: string, assetClass = 'equity'): InstrumentRef {
   return { instrumentId: `yahoo:${symbol}`, symbol, assetClass, source: 'yahoo', currency: null };
@@ -75,6 +76,20 @@ export function captureTickerView(options: {
     label: comparison.label, unit: comparison.valueMode === 'percent' ? 'percent' : 'number', status: 'loaded', rows: comparison.data.map((row) => ({ ...row })), metadata: { valueMode: comparison.valueMode, color: comparison.color, timestampUnit: 'seconds' } });
   resources.push({ key: 'chart:drawings', kind: 'drawings', label: 'Drawings at capture', status: document.objects.length ? 'loaded' : 'empty',
     rows: document.objects.map((object) => ({ ...object })), metadata: { documentId: document.documentId, revision: document.revision } });
+  // What the drawings MEAN, next to what they are: the rows above are the stored objects
+  // (the backend checks them against the document), these are the painted facts.
+  const painted = !view.comparing;
+  resources.push({ key: 'chart:drawing-reads', kind: 'drawing_reads', label: 'Drawings as painted', status: painted && document.objects.length ? 'loaded' : 'empty',
+    rows: painted ? readDrawings(document.objects, view.bars, { timeframe: view.timeframe, logScale: view.logScale }).map((row) => ({ ...row })) : [],
+    metadata: { timeframe: view.timeframe, logScale: view.logScale, timestampUnit: 'seconds' } });
+  if (painted) for (const [id, column] of avwapColumnNames(document.objects, view.timeframe)) {
+    const study = document.objects.find((object) => object.id === id)!;
+    const values = anchoredVwapValues(study, view.bars);
+    resources.push({ key: `indicator:${column.includes('#') ? column.split('@')[1] : 'avwap'}`, kind: 'indicator', label: `Anchored VWAP (${study.label || 'drawing'})`,
+      status: 'loaded', observedAt: detail.asOf, rows: view.bars.map((bar, position) => ({ t: bar.t, value: values[position] })),
+      metadata: { drawingId: id, timeframe: view.timeframe, visible: true, source: 'chart_drawing', timestampUnit: 'seconds',
+        definition: 'Cumulative (h+l+c)/3 volume-weighted average from the anchor candle; null before it' } });
+  }
   resources.push(...contributions);
   const requiredPanel = view.snap === 'collapsed' || view.tab === 'overview' ? null : view.tab === 'position' ? 'account:position' : `panel:${view.tab}`;
   if (requiredPanel && !contributions.some((resource) => resource.key === requiredPanel)) {

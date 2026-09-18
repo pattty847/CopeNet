@@ -1,5 +1,6 @@
 import type { ChartAnchor, ChartObject } from '../chartAgent/types';
 import { DRAWING_KINDS } from './kinds';
+import { fibLevelValues } from './reads';
 
 export interface Point { x: number; y: number }
 export interface DrawingGeometry {
@@ -19,7 +20,6 @@ export interface CoordinateProjection {
   height: number;
 }
 
-const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618];
 
 function lineToBoundary(start: Point, end: Point, width: number, height: number, both = false): Point[] {
   const dx = end.x - start.x;
@@ -37,10 +37,7 @@ function lineToBoundary(start: Point, end: Point, width: number, height: number,
 
 function addFibLines(points: Point[], object: ChartObject, projection: CoordinateProjection): Array<{ points: Point[]; label?: string }> {
   const [a, b] = object.anchors;
-  const low = Math.min(a.value, b.value);
-  const span = Math.abs(b.value - a.value);
-  return FIB_LEVELS.map((ratio) => {
-    const value = a.value <= b.value ? low + span * ratio : low + span * (1 - ratio);
+  return fibLevelValues(a.value, b.value).map(({ ratio, value }) => {
     const y = projection.price(value);
     return y == null ? null : { points: [{ x: Math.min(points[0].x, points[1].x), y }, { x: Math.max(points[0].x, points[1].x), y }], label: `${(ratio * 100).toFixed(1)}%` };
   }).filter((line): line is { points: Point[]; label: string } => line !== null);

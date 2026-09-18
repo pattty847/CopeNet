@@ -10,7 +10,7 @@ INSTRUMENT = {
 }
 
 
-def _scene(tmp_path, *, count: int = 800):
+def _scene(tmp_path, *, count: int = 800, extra_resources=()):
     store = ChartStore(tmp_path / "chart.sqlite3")
     document = store.workspace("primary", INSTRUMENT)["document"]
     start = 1_700_000_000
@@ -45,6 +45,7 @@ def _scene(tmp_path, *, count: int = 800):
             {"key": "quote:displayed", "kind": "quote", "label": "Displayed quote", "status": "loaded",
              "rows": [{"price": rows[-1]["c"], "quoteTime": rows[-1]["t"]}],
              "metadata": {"source": "synthetic"}},
+            *[resource(rows) if callable(resource) else resource for resource in extra_resources],
         ],
         "documentId": document["documentId"], "documentRevision": 0,
     }
@@ -147,5 +148,57 @@ def test_context_tool_never_repeats_delivered_rows(tmp_path):
 
     assert payload["samples"] == [] and payload["coverage"] == []
     assert "never repeated" in payload["samplesNote"]
-    assert payload["drawings"] == {"count": 0, "listed": 0, "objects": [], "readTool": "market.chart.document"}
+    assert payload["drawings"]["count"] == 0 and payload["drawings"]["readTool"] == "market.chart.document"
+    assert payload["drawingTable"] is None
     assert payload["digest"]["visibleBarCount"] == 40
+
+
+def _drawing_reads(rows):
+    return {"key": "chart:drawing-reads", "kind": "drawing_reads", "label": "Drawings as painted", "status": "loaded",
+            "rows": [
+                {"id": "d1", "kind": "ray", "owner": "you", "color": "red", "label": "", "t1": rows[0]["t"], "p1": 100.0,
+                 "t2": rows[20]["t"], "p2": 101.0, "extends": "right", "perBar": 0.05, "atLast": 101.95, "vsClosePct": -0.0049},
+                {"id": "d2", "kind": "avwap", "owner": "you", "color": "purple", "label": "Earnings", "t1": rows[10]["t"],
+                 "p1": 100.5, "extends": "right", "atLast": 101.123456, "vsClosePct": 0.8, "detail": "series in table column avwap"},
+            ],
+            "metadata": {"timeframe": "D", "logScale": False, "timestampUnit": "seconds"}}
+
+
+def _avwap_column(rows):
+    return {"key": "indicator:avwap", "kind": "indicator", "label": "Anchored VWAP (Earnings)", "status": "loaded",
+            "rows": [{"t": row["t"], "value": None if index < 10 else row["c"] - 0.5} for index, row in enumerate(rows)],
+            "metadata": {"timeframe": "D", "timestampUnit": "seconds", "visible": True, "source": "chart_drawing"}}
+
+
+def test_painted_drawings_reach_the_model_as_one_explained_table(tmp_path):
+    from copenet.core.market.chart_workspace.model_tables import format_context
+    store, context, _ = _scene(tmp_path, count=40, extra_resources=(_drawing_reads, _avwap_column))
+
+    payload = store.context_payload(context)
+    text = format_context(payload)
+
+    assert text.startswith("Packet layout")
+    guide, table = text.split("Drawings. ", 1)[1].split("```csv\n", 1)
+    for taught in ("owner=you", "perBar", "atLast", "vsClosePct", "never calendar days", "extends"):
+        assert taught in guide, f"the reading guide must explain {taught}"
+    header, first, second = table.split("\n```", 1)[0].split("\n")
+    # Columns nobody used are dropped, floats are two decimals, and edit authority is joined in.
+    assert header == "n,kind,owner,color,label,t1,p1,t2,p2,extends,perBar,atLast,vsClosePct,detail"
+    assert first.startswith("1,ray,you,red,,") and ",0.05,101.95," in first
+    assert "101.12" in second and "101.123456" not in text
+    # An anchored VWAP is a study over the candles, so its series is a column of the one matrix.
+    assert payload["samples"][-1]["metadata"]["columns"]["avwap"] == {"resource": "indicator:avwap", "field": "value"}
+
+
+def test_drawing_table_stays_cheap_enough_to_always_send(tmp_path):
+    from copenet.core.harness.token_count import count_text_tokens
+    from copenet.core.market.chart_workspace.drawing_reads import GUIDE, drawing_table, format_drawing_table
+    rows = [{"id": f"object-{index:02d}-abcdef", "kind": "trendline", "owner": "you", "color": "red", "label": "",
+             "t1": 1_700_000_000 + index * 86_400, "p1": 100.25 + index, "t2": 1_702_000_000 + index * 86_400, "p2": 140.5 + index,
+             "extends": "none", "perBar": 0.31, "atLast": 151.2, "vsClosePct": -2.4} for index in range(20)]
+
+    text = format_drawing_table(drawing_table(rows, [], "session"))
+
+    per_drawing = (count_text_tokens(text) - count_text_tokens(GUIDE)) / len(rows)
+    assert per_drawing < 45, f"{per_drawing:.0f} tokens per drawing"
+    assert count_text_tokens(GUIDE) < 400

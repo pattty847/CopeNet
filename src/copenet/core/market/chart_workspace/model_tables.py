@@ -78,6 +78,21 @@ CANDLE_LEGEND = (" t=timestamp; o,h,l,c=open,high,low,close; v=volume; any other
                  " named in metadata.columns. Units and time basis are in metadata; unspecified units are unknown.")
 
 
+# Every packet opens by saying what it is made of. A model that has to infer the layout
+# from field names spends its first reasoning on the container instead of the chart.
+PACKET_GUIDE = (
+    "Packet layout, in order. (1) One JSON header: orientation (timeframe, visible range, focus, "
+    "settings such as logScale and candleStyle), latest (newest values), digest (facts over every "
+    "visible bar, including bars not delivered below), resources (what was captured; rowCount is "
+    "what exists, not what was delivered), coverage and sampleOmissions (exactly which rows follow "
+    "and which were left out), budget. (2) A Drawings table when anything is drawn. (3) Data tables: "
+    "each is a one-line JSON description, a legend, then CSV. The candle table is one row per candle, "
+    "oldest first; extra columns are indicator or study outputs named in metadata.columns. Rows "
+    "absent from a table were omitted for budget, never because they do not exist; read them with "
+    "market.chart.read."
+)
+
+
 def trim_read_metadata(metadata: dict, timeframe: str | None) -> dict:
     """Drop provenance the model already holds from the turn packet.
 
@@ -116,8 +131,12 @@ def format_resource(resource: dict) -> str:
 
 
 def format_context(payload: dict) -> str:
-    header = {key: value for key, value in payload.items() if key != "samples"}
-    return "\n\n".join([compact_json(round_floats(header)), *(format_resource(sample) for sample in payload["samples"])])
+    from .drawing_reads import format_drawing_table
+    header = {key: value for key, value in payload.items() if key not in ("samples", "drawingTable")}
+    table = payload.get("drawingTable")
+    return "\n\n".join([PACKET_GUIDE, compact_json(round_floats(header)),
+                        *([format_drawing_table(table)] if table else []),
+                        *(format_resource(sample) for sample in payload["samples"])])
 
 
 def format_read(payload: dict, *, max_chars: int) -> str:

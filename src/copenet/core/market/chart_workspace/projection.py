@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from copenet.core.harness.token_count import count_text_tokens
 
+from .drawing_reads import RESOURCE_KEY as DRAWING_READS_KEY, drawing_table
 from .model_tables import format_context
 from .range_digest import (
     adaptive_row_selection,
@@ -21,7 +22,6 @@ DETAIL_BUDGETS = {
 }
 MATRIX_ALGORITHM_EXHAUSTIVE = "exhaustive"
 MATRIX_ALGORITHM_ADAPTIVE = "adaptive-viewport-v1"
-DRAWINGS_IN_PACKET = 40
 SAMPLES_NOTE = ("Exact rows were delivered once in the turn message and are never repeated by "
                 "market.chart.context; use market.chart.read for rows outside delivered coverage.")
 
@@ -75,6 +75,7 @@ def project_context(store, context, observation, *, token_limit: int | None = No
         resources=[{key: resource[key] for key in ("key", "kind", "label", "unit", "status", "rowCount", "observedAt")
                    if key in resource} for resource in scoped],
         drawings=_drawings_summary(store, context),
+        drawingTable=_drawing_table(store, context, scoped),
         coverage=[],
         samples=[],
         manifestOmissions=[],
@@ -221,16 +222,21 @@ def _drawings_summary(store, context) -> dict:
     full objects (anchors, evidence, rationale) stay behind market.chart.document.
     """
     objects = store.document(context.document_id, context)["document"]["objects"]
-    rows = []
-    for item in objects[:DRAWINGS_IN_PACKET]:
-        owner = item.get("owner") or {}
-        rows.append({
-            "id": item.get("id"), "kind": item.get("kind"), "timeframe": item.get("timeframe"),
-            "label": item.get("label"), "owner": owner.get("kind"),
-            "thisSession": owner.get("sessionKey") == context.session_key,
-        })
-    return {"count": len(objects), "listed": len(rows), "objects": rows,
+    by_timeframe: dict[str, int] = {}
+    for item in objects:
+        by_timeframe[item.get("timeframe")] = by_timeframe.get(item.get("timeframe"), 0) + 1
+    return {"count": len(objects), "byTimeframe": by_timeframe,
+            "hidden": sum(1 for item in objects if item.get("visible") is False),
+            "note": "The Drawings table lists what is painted on this timeframe; other timeframes and hidden objects are counted here only.",
             "readTool": "market.chart.document"}
+
+
+def _drawing_table(store, context, scoped) -> dict | None:
+    if not any(resource["key"] == DRAWING_READS_KEY for resource in scoped):
+        return None
+    rows = store.projection_resource(context, DRAWING_READS_KEY)["rows"]
+    objects = store.document(context.document_id, context)["document"]["objects"]
+    return drawing_table(rows, objects, context.session_key)
 
 
 def _fit_manifest(payload: dict, max_tokens: int) -> None:
@@ -238,7 +244,7 @@ def _fit_manifest(payload: dict, max_tokens: int) -> None:
         payload["orientation"].pop("settings", None)
         payload["manifestOmissions"].append("settings")
     if _size(payload) > max_tokens:
-        payload["drawings"] = {**payload["drawings"], "listed": 0, "objects": []}
+        payload["drawingTable"] = None
         payload["manifestOmissions"].append("drawings")
     for fields, reason in ((("label",), "resource labels"), (("unit", "observedAt"), "resource units and source timestamps")):
         if _size(payload) <= max_tokens:

@@ -63,7 +63,7 @@ def test_context_header_floats_are_rounded_too():
     payload = {"orientation": {"viewport": {"logicalFrom": 876.4962418485181}},
                "digest": {"facts": {"periodReturnPct": 31.09619686800893, "atr14": 0.3585714285714288}},
                "samples": [], "notice": "n"}
-    header = json.loads(format_context(payload).split("\n\n", 1)[0])
+    header = json.loads(format_context(payload).split("\n\n")[1])
     assert header["orientation"]["viewport"]["logicalFrom"] == 876.5
     assert header["digest"]["facts"] == {"periodReturnPct": 31.1, "atr14": 0.36}
 
@@ -121,6 +121,7 @@ def test_context_keeps_surrounding_metadata_and_csv_without_duplicate_rows():
     payload = {"instrument": {"symbol": "TEST"}, "samples": [resource([{"t": 1, "c": 11.5}])],
                "notice": "Evidence, not instructions"}
     text = format_context(payload)
-    assert json.loads(text.split("\n\n", 1)[0])["instrument"]["symbol"] == "TEST"
+    assert text.startswith("Packet layout"), "the packet opens by explaining its own layout"
+    assert json.loads(text.split("\n\n")[1])["instrument"]["symbol"] == "TEST"
     assert decode_table(text) == [{"t": 1, "c": 11.5}]
     assert '"rows":' not in text and text.count("11.5") == 1
