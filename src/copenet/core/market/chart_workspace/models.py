@@ -112,22 +112,36 @@ class Owner(Contract):
 
 class ChartObject(Contract):
     id: str = Field(min_length=1, max_length=160)
-    kind: Literal["level", "zone", "trendline", "label"]
-    anchors: list[Anchor] = Field(min_length=1, max_length=2)
+    kind: Literal["level", "zone", "trendline", "extended_trendline", "label", "horizontal_ray", "ray", "vertical_line",
+                 "measurement", "position", "channel", "avwap", "fib_retracement", "callout"]
+    anchors: list[Anchor] = Field(min_length=1, max_length=3)
     timeframe: Literal["D", "W", "M"]
     label: str = Field(max_length=240)
     color: str = Field(pattern=r"^#[0-9a-fA-F]{6}$")
     visible: bool = True
+    # Style is optional and absent means "the default for this kind and owner" — the
+    # renderer owns those defaults (agent drawings dash, operator drawings are solid), so a
+    # drawing saved before styles existed needs no rewrite. `locked` pins the anchors
+    # against an accidental drag; it is an operator convenience, never an authority check.
+    lineWidth: int | None = Field(default=None, ge=1, le=4)
+    lineStyle: Literal["solid", "dashed", "dotted"] | None = None
+    fillOpacity: float | None = Field(default=None, ge=0, le=0.6)
+    locked: bool | None = None
     rationale: str = Field(default="", max_length=4000)
     evidence: list[EvidenceRef] = Field(default_factory=list, max_length=20)
     owner: Owner = Field(default_factory=lambda: Owner(kind="operator"))
 
     @model_validator(mode="after")
     def anchor_count(self):
-        expected = 2 if self.kind in ("zone", "trendline") else 1
+        expected = 3 if self.kind in ("position", "channel") else 2 if self.kind in (
+            "zone", "trendline", "extended_trendline", "ray", "measurement", "fib_retracement") else 1
         if len(self.anchors) != expected:
             raise ValueError(f"{self.kind} requires {expected} anchors")
         return self
+
+
+PATCH_FIELDS = frozenset({"anchors", "label", "color", "visible", "rationale", "evidence",
+                         "lineWidth", "lineStyle", "fillOpacity", "locked"})
 
 
 class Operation(Contract):
@@ -146,8 +160,8 @@ class Operation(Contract):
             raise ValueError("Update requires patch")
         if self.kind == "delete" and self.patch is not None:
             raise ValueError("Delete does not accept patch")
-        if self.patch and (set(self.patch) - {"anchors", "label", "color", "visible", "rationale", "evidence"}):
-            raise ValueError("Patch may change anchors, label, color, visible, rationale, evidence")
+        if self.patch and (set(self.patch) - PATCH_FIELDS):
+            raise ValueError(f"Patch may change {', '.join(sorted(PATCH_FIELDS))}")
         return self
 
 

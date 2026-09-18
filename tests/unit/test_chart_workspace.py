@@ -147,6 +147,52 @@ def test_observation_reads_and_draws_cannot_escape_turn_scope(scene):
         store.apply(request, context)
 
 
+def test_operator_drawings_can_extend_beyond_the_latest_candle(scene):
+    store, document, capture, observation, context = scene
+    request = drawing_request(document, observation)
+    request["operations"][0]["object"]["anchors"][0]["t"] = 300
+    request["operations"][0]["object"]["evidence"] = []
+    receipt = store.apply(request)
+    assert receipt["document"]["objects"][0]["anchors"][0]["t"] == 300
+
+
+def test_all_toolbar_drawing_kinds_validate_at_apply_boundary(scene):
+    store, document, capture, observation, context = scene
+    anchor_counts = {
+        "level": 1, "zone": 2, "trendline": 2, "extended_trendline": 2,
+        "label": 1, "horizontal_ray": 1, "ray": 2, "vertical_line": 1,
+        "measurement": 2, "position": 3, "channel": 3, "avwap": 1,
+        "fib_retracement": 2, "callout": 1,
+    }
+    operations = []
+    for index, (kind, count) in enumerate(anchor_counts.items()):
+        operations.append({"kind": "create", "object": {
+            "id": f"{kind}-{index}", "kind": kind,
+            "anchors": [{"t": 100 + (anchor * 100), "value": 7.0 + anchor} for anchor in range(count)],
+            "timeframe": "D", "label": kind, "color": "#abcdef", "visible": True,
+            "rationale": "Toolbar drawing validation", "evidence": [],
+        }})
+    receipt = store.apply({"documentId": document["documentId"], "expectedRevision": 0,
+                           "operationId": "all-toolbar-kinds", "operations": operations})
+    assert [obj["kind"] for obj in receipt["document"]["objects"]] == list(anchor_counts)
+
+
+def test_drawing_style_is_optional_patchable_and_bounded(scene):
+    store, document, capture, observation, context = scene
+    request = drawing_request(document, observation)
+    request["operations"][0]["object"]["evidence"] = []
+    created = store.apply(request)["document"]["objects"][0]
+    assert "lineWidth" not in created and "lineStyle" not in created, "absent style means the renderer default"
+    styled = store.apply({"documentId": document["documentId"], "expectedRevision": 1, "operationId": "style",
+                          "operations": [{"kind": "update", "objectId": created["id"], "patch": {
+                              "lineWidth": 3, "lineStyle": "dotted", "fillOpacity": 0.25, "locked": True}}]})
+    saved = styled["document"]["objects"][0]
+    assert (saved["lineWidth"], saved["lineStyle"], saved["fillOpacity"], saved["locked"]) == (3, "dotted", 0.25, True)
+    with pytest.raises(ValueError):
+        store.apply({"documentId": document["documentId"], "expectedRevision": 2, "operationId": "too-wide",
+                     "operations": [{"kind": "update", "objectId": created["id"], "patch": {"lineWidth": 9}}]})
+
+
 def test_render_receipts_distinguish_saved_from_visible(scene):
     store, document, capture, observation, context = scene
     receipt = store.apply(drawing_request(document, observation), context)

@@ -184,9 +184,12 @@ class DocumentStore:
                                      (context.observation_id,)).fetchall()
             candle_times = {r["t"] for row in candle_rows for resource in [json.loads(row[0])]
                             if resource["kind"] == "candles" and resource["metadata"].get("timeframe") == obj["timeframe"]
-                            for r in resource["rows"] if "t" in r}
-            if any(anchor["t"] not in candle_times for anchor in obj["anchors"]):
-                raise ValueError("Drawing anchors must use captured candle timestamps")
+                            for r in resource["rows"] if "t" in r and r.get("c") is not None}
+            latest_candle_time = max(candle_times, default=None)
+            future_operator_anchor = obj["owner"]["kind"] == "operator" and latest_candle_time is not None
+            if any(anchor["t"] not in candle_times and not (future_operator_anchor and anchor["t"] > latest_candle_time)
+                   for anchor in obj["anchors"]):
+                raise ValueError("Drawing anchors must use captured candle timestamps or a future operator timestamp")
         self._verify_anchors(obj, cited_candles)
 
     @classmethod
