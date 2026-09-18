@@ -20,7 +20,7 @@ function load(): BarPosition | null {
 }
 let saved: BarPosition | null | undefined;
 
-export function useBarPosition(barRef: RefObject<HTMLElement | null>): { style: CSSProperties | undefined; onGripPointerDown: (event: ReactPointerEvent<HTMLElement>) => void; reset: () => void } {
+export function useBarPosition(barRef: RefObject<HTMLElement | null>): { style: CSSProperties | undefined; lowerHalf: boolean; onGripPointerDown: (event: ReactPointerEvent<HTMLElement>) => void; reset: () => void } {
   const [fraction, setFraction] = useState<BarPosition | null>(() => saved === undefined ? (saved = load()) : saved);
   const [pixels, setPixels] = useState<BarPosition | null>(null);
 
@@ -69,5 +69,7 @@ export function useBarPosition(barRef: RefObject<HTMLElement | null>): { style: 
     try { localStorage.removeItem(STORAGE_KEY); } catch { /* nothing stored */ }
   }, []);
 
-  return { style: pixels ? { left: pixels.x, top: pixels.y, transform: 'none' } : undefined, onGripPointerDown, reset };
+  // In the lower half of the chart the bar's menus have to open upward to stay on it.
+  const chartHeight = (barRef.current?.offsetParent as HTMLElement | null)?.clientHeight ?? 0;
+  return { lowerHalf: pixels != null && chartHeight > 0 && pixels.y > chartHeight / 2, style: pixels ? { left: pixels.x, top: pixels.y, transform: 'none' } : undefined, onGripPointerDown, reset };
 }

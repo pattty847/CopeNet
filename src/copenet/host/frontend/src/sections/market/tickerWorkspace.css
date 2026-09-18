@@ -449,6 +449,7 @@
   background: var(--mkt-canvas);
   box-shadow: 0 8px 20px rgb(0 0 0 / 32%);
 }
+.tw-drawbar[data-menus='up'] .tw-drawbar__menu { top: auto; bottom: calc(100% + 6px); }
 .tw-drawbar__menu--rows { flex-direction: column; }
 .tw-drawbar__menu--rows > div { display: flex; gap: 2px; }
 .tw-drawbar__text { display: flex; gap: 4px; }

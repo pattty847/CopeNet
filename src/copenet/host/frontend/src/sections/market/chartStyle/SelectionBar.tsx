@@ -56,7 +56,7 @@ export function SelectionBar({ model }: { model: SelectionBarModel }) {
   const color = stroke?.value.color ?? fill?.value.color;
   const setColor = (next: string) => { if (stroke) stroke.onChange({ color: next }); else fill?.onChange({ color: next }); };
 
-  return <div className="tw-drawbar" role="toolbar" aria-label={`Settings for ${model.title}`} ref={barRef} style={position.style}>
+  return <div className="tw-drawbar" role="toolbar" aria-label={`Settings for ${model.title}`} ref={barRef} style={position.style} data-menus={position.lowerHalf ? 'up' : 'down'}>
     <span className="tw-drawbar__grip" role="button" tabIndex={-1} aria-label="Drag to move this bar; double-click to put it back" title="Drag to move · double-click to reset"
       onPointerDown={position.onGripPointerDown} onDoubleClick={position.reset}><GripVertical size={14} /></span>
     <span className="tw-drawbar__name">{model.title}</span>
