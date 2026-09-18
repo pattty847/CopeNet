@@ -421,6 +421,10 @@ export function CandleChart({
     // Double-click opens settings. Candles and volume answer only to this: a single click on
     // them is ordinary chart use and must not raise a bar every time.
     chart.subscribeDblClick((param) => {
+      // On touch the library sees the double-tap too, even when a drawing took it. A drawing
+      // under the pointer owns the gesture; otherwise its popup opens with Candles queued behind.
+      const active = workspaceRef.current;
+      if (active?.settingsObjectId || active?.objects.some((object) => object.id === param.hoveredObjectId)) return;
       const picked = pickSeries(param.hoveredSeries, true);
       if (!picked) return;
       workspaceRef.current?.onSelectObject(null);
