@@ -8,7 +8,8 @@ import { ViewResources } from '../viewState/resources';
 import { captureTickerView, instrumentFor } from '../viewState/capture';
 import type { useTickerViewModel } from '../useTickerViewModel';
 import type { ChartWorkspaceBridge, DrawingMode } from '../drawings/types';
-import type { ChartDocument, ChartOperation, ChartSelection, ChartViewport, DrawingReceipt } from './types';
+import { DEFAULT_DRAWING_COLOR, DRAWING_KINDS } from '../drawings/kinds';
+import type { ChartDocument, ChartObject, ChartOperation, ChartSelection, ChartViewport, DrawingReceipt } from './types';
 
 const EMPTY_VIEWPORT: ChartViewport = { from: null, to: null, logicalFrom: null, logicalTo: null };
 
@@ -101,11 +102,34 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
         }
         await refresh();
       }
+      return receipt;
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'The drawing could not be saved.');
       await refresh().catch(() => undefined);
     } finally { setBusy(false); }
   }, [refresh]);
+
+  // One tap deletes on a phone, so a delete stays reversible for a few seconds.
+  const [deleted, setDeleted] = useState<{ label: string; batchId: string } | null>(null);
+  useEffect(() => {
+    if (!deleted) return;
+    const timer = window.setTimeout(() => setDeleted(null), 6000);
+    return () => window.clearTimeout(timer);
+  }, [deleted]);
+  const deleteObject = useCallback(async (id: string) => {
+    const target = documentRef.current?.objects.find((object) => object.id === id);
+    const receipt = await apply([{ kind: 'delete', objectId: id }]);
+    if (documentRef.current?.objects.some((object) => object.id === id)) return;
+    setSelectedObjectId(null);
+    if (receipt && target) setDeleted({ label: target.label || DRAWING_KINDS[target.kind].label, batchId: receipt.batchId });
+  }, [apply]);
+
+  const [drawingSettingsRequest, setDrawingSettingsRequest] = useState(0);
+  const openDrawingSettings = useCallback((id: string) => {
+    setSelectedObjectId(id);
+    setDrawingSettingsRequest((request) => request + 1);
+    setOpen(true);
+  }, []);
 
   const undo = useCallback(async (batchId: string) => {
     const current = documentRef.current;
@@ -132,18 +156,21 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
 
   const bridge: ChartWorkspaceBridge | undefined = document && document.instrument.symbol === view.viewSymbol ? {
     documentId: document.documentId, revision: document.revision, objects: document.objects,
-    timeframe: view.timeframe, enabled: !view.comparing, interactionEnabled: !busy, selectedObjectId, mode, selection,
+    timeframe: view.timeframe, bars: view.bars, enabled: !view.comparing, interactionEnabled: !busy, selectedObjectId, mode, selection,
     forecasts: { splitFingerprint: view.detail?.priceProvenance?.splitFingerprint, records: forecasts.records.filter((record) => record.documentId === document.documentId), hidden: hiddenForecasts, viewId,
       onSelect: setSelectedForecastId,
       onRendered: async (receipt) => { await wsClient.marketForecast.rendered(receipt); } },
-    onViewport, onSelectRange: (range) => { setSelection(range); setMode('select'); }, onSelectObject: (id) => { setSelectedObjectId(id); if (id) setOpen(true); },
+    onViewport, onSelectRange: (range) => { setSelection(range); setMode('select'); }, onSelectObject: (id) => { setSelectedObjectId(id); },
+    onDeleteObject: (id) => { void deleteObject(id); }, onOpenDrawingSettings: openDrawingSettings,
+    onCancelDrawing: () => { setMode('select'); },
     onCreate: (proposal) => {
       const id = safeUUID();
-      void apply([{ kind: 'create', object: { ...proposal, id, label: proposal.kind === 'level' ? 'Price level' : proposal.kind === 'zone' ? 'Price zone' : proposal.kind === 'trendline' ? 'Trendline' : 'Note',
-        color: '#fb9423', visible: true, rationale: '', evidence: [] } }]);
-      setSelectedObjectId(id); setMode('select'); setOpen(true);
+      void apply([{ kind: 'create', object: { ...proposal, id, label: DRAWING_KINDS[proposal.kind].label,
+        color: DEFAULT_DRAWING_COLOR, visible: true, rationale: '', evidence: [] } }]);
+      setSelectedObjectId(id); setMode('select');
     },
-    onUpdate: ({ id, anchors }) => { void apply([{ kind: 'update', objectId: id, patch: { anchors } }]); },
+    onUpdate: ({ id, patch }) => { void apply([{ kind: 'update', objectId: id, patch }]); },
+    deleted, onUndoDelete: () => { if (deleted) { void undo(deleted.batchId); setDeleted(null); } },
     onRendered,
   } : undefined;
 
@@ -153,7 +180,7 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
       contributions: resources.read(view.viewSymbol), includeAccountContext: accountContext });
   };
   const toggleForecast = (id: string) => setForecastVisibility((previous) => ({ ...previous, [id]: hiddenForecasts.has(id) }));
-  return { forecasts, selectedForecastId, setSelectedForecastId, hiddenForecasts, toggleForecast, resources, bridge, open, setOpen, document, sessionKey, setSessionKey, batches, renderStatus, viewId, mode, setMode,
+  return { forecasts, selectedForecastId, setSelectedForecastId, hiddenForecasts, toggleForecast, resources, bridge, open, setOpen, document, sessionKey, setSessionKey, batches, renderStatus, viewId, mode, setMode, drawingSettingsRequest,
     selectedObjectId, setSelectedObjectId, selection, setSelection, viewport, error, busy, apply, undo,
     includeAccountContext, setIncludeAccountContext, capture, refresh, retry: () => setRetryKey((key) => key + 1) };
 }

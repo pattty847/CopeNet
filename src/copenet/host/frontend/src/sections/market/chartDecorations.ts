@@ -13,6 +13,8 @@ export const MIN_CLUSTER_EVENTS = 3; // smaller groups stay as plain markers
 export const MIN_CLUSTER_DAYS = 2; // single busy days are served by the day popup, not a box
 export const PRICE_SPLIT_FRACTION = 0.06; // split a time-cluster where price shelves gap >6%
 export const PRICE_PROBE_PX = 100; // second sample point for detecting vertical rescales
+/** Empty candle slots reserved for operator drawings after the latest real candle. */
+export const DRAWING_FUTURE_SLOTS = 12;
 
 /** Lightweight Charts briefly detaches a newly shown price scale while recalculating its
  *  pane. Calling width() in that frame throws even though the chart and scale API are both
@@ -114,6 +116,15 @@ export function normalize(bars: Ohlcv[]): Ohlcv[] {
     if (b && Number.isFinite(b.t)) byTime.set(b.t, b);
   }
   return [...byTime.entries()].sort((a, z) => a[0] - z[0]).map(([, b]) => b);
+}
+
+/** Add logical whitespace so drawing tools have real timestamps to project into the future. */
+export function futureDrawingTimes(rows: Ohlcv[], slots = DRAWING_FUTURE_SLOTS): number[] {
+  if (!rows.length || slots <= 0) return [];
+  const last = rows[rows.length - 1].t;
+  const spacing = rows.length > 1 ? last - rows[rows.length - 2].t : 86400;
+  if (!Number.isFinite(spacing) || spacing <= 0) return [];
+  return Array.from({ length: slots }, (_, index) => last + spacing * (index + 1));
 }
 
 export type Glyph = '▲' | '▼' | '●' | '▽' | '8-K';

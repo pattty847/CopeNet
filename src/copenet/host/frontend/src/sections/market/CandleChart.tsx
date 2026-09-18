@@ -32,6 +32,7 @@ import {
 import type { ChartEvent, EvidenceItem, Ohlcv } from './types';
 import type { PriceAlert } from './types';
 import { useChartWorkspace } from './drawings/useChartWorkspace';
+import { DrawingToolbar } from './drawings/DrawingToolbar';
 import type { ChartWorkspaceBridge } from './drawings/types';
 import { useChartPriceAlertLines } from './chartPriceAlerts';
 import type { FinancialOverlayPoint } from './financialOverlay';
@@ -51,7 +52,7 @@ import { MM, evidenceDate, evidenceTypeBg, evidenceTypeColor, mono, toneColor } 
 import { ChartClusterBoxes } from './ChartClusterBoxes';
 import { replayDateLabel, replayEntryRange, type ChartReplayBinding } from './replay/chartReplay';
 
-import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
+import { LABEL_ROOM_PX, PRICE_PROBE_PX, barSpacingPx, bucketMarkers, buildBuckets, clusterBuckets, eventsAsEvidence, evidenceForDay, formatMoney, futureDecorations, futureDrawingTimes, individualMarkers, leftAxisWidth, normalize, pricePaneHeight, type DayPopupState, type RenderedBox } from './chartDecorations';
 
 export function CandleChart({
   bars,
@@ -489,9 +490,10 @@ export function CandleChart({
     const priorRange = timeScale.getVisibleLogicalRange();
     // Whitespace points extend the time scale past the last candle so future-dated
     // planned-sale markers have a coordinate to land on.
+    const timelineTimes = [...new Set([...future.times, ...futureDrawingTimes(rows)])].sort((a, z) => a - z);
     candle.setData([
       ...drawn.map((b) => ({ time: b.t as UTCTimestamp, open: b.o, high: b.h, low: b.l, close: b.c })),
-      ...future.times.map((t) => ({ time: t as UTCTimestamp })),
+      ...timelineTimes.filter((t) => t > rows[rows.length - 1]?.t).map((t) => ({ time: t as UTCTimestamp })),
     ]);
     // Volume colour follows the REAL bar, not the drawn one. Heikin Ashi prints green
     // through a day that genuinely closed down — that is the whole point of it — and
@@ -663,6 +665,7 @@ export function CandleChart({
   return (
     <div style={{ position: 'relative', cursor: alertPlacementActive || replay?.arming ? 'crosshair' : undefined }}>
       <div ref={containerRef} style={{ width: '100%' }} />
+      {!comparisonMode && chartWorkspace && <DrawingToolbar workspace={chartWorkspace} />}
       {!comparisonMode && (
         <ChartClusterBoxes
           boxes={clusterBoxes}

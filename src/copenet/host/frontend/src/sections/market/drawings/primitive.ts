@@ -3,29 +3,55 @@ import type {
   SeriesAttachedParameter, UTCTimestamp,
 } from 'lightweight-charts';
 import type { ChartObject } from '../chartAgent/types';
-import { hitDrawing, projectDrawing, type DrawingGeometry } from './geometry';
+import type { Ohlcv } from '../types';
+import { hitDrawing, projectDrawing, type DrawingGeometry, type Point } from './geometry';
 import type { ChartWorkspaceBridge } from './types';
+import { fillOpacityOf, lineDash, strokeOf } from './kinds';
 
 export function paintDrawing(context: CanvasRenderingContext2D, geometry: DrawingGeometry, selected: boolean): void {
   const { object, points, width } = geometry;
   const [a, b] = points;
   context.strokeStyle = object.color;
   context.fillStyle = object.color;
-  context.lineWidth = selected ? 2.5 : 1.5;
-  context.setLineDash(object.owner.kind === 'agent' ? [6, 4] : []);
+  const stroke = strokeOf(object);
+  const fill = fillOpacityOf(object);
+  context.lineWidth = stroke.width + (selected ? 1.5 : 0.5);
+  context.setLineDash(lineDash(stroke.style));
   context.beginPath();
-  if (object.kind === 'level') {
+  if (geometry.regions) {
+    for (const region of geometry.regions) {
+      context.globalAlpha = Math.min(1, fill + (selected ? 0.1 : 0));
+      context.fillStyle = region.color;
+      context.fillRect(region.left, region.top, region.width, region.height);
+      context.globalAlpha = 1;
+      context.strokeStyle = region.color;
+      context.strokeRect(region.left, region.top, region.width, region.height);
+    }
+  }
+  if (geometry.path && geometry.path.length > 1) {
+    context.moveTo(geometry.path[0].x, geometry.path[0].y);
+    for (const point of geometry.path.slice(1)) context.lineTo(point.x, point.y);
+  } else if (geometry.lines) {
+    for (const line of geometry.lines) {
+      context.beginPath();
+      context.moveTo(line.points[0].x, line.points[0].y);
+      for (const point of line.points.slice(1)) context.lineTo(point.x, point.y);
+      context.stroke();
+      if (line.label) {
+        const point = line.points[line.points.length - 1];
+        context.font = '10px "IBM Plex Mono", monospace';
+        context.fillText(line.label, Math.max(5, Math.min(width - 90, point.x + 5)), point.y - 5);
+      }
+    }
+  } else if (object.kind === 'level') {
     context.moveTo(0, a.y);
     context.lineTo(width, a.y);
-  } else if (object.kind === 'trendline') {
-    context.moveTo(a.x, a.y);
-    context.lineTo(b.x, b.y);
   } else if (object.kind === 'zone') {
     const left = Math.min(a.x, b.x);
     const top = Math.min(a.y, b.y);
     const zoneWidth = Math.abs(b.x - a.x);
     const zoneHeight = Math.abs(b.y - a.y);
-    context.globalAlpha = selected ? 0.2 : 0.1;
+    context.globalAlpha = Math.min(1, fill + (selected ? 0.1 : 0));
     context.fillRect(left, top, zoneWidth, zoneHeight);
     context.globalAlpha = 1;
     context.rect(left, top, zoneWidth, zoneHeight);
@@ -35,6 +61,11 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
   }
   context.stroke();
   context.setLineDash([]);
+  if (geometry.annotations) {
+    context.font = '10px "IBM Plex Mono", monospace';
+    context.fillStyle = object.color;
+    for (const annotation of geometry.annotations) context.fillText(annotation.text, Math.max(5, Math.min(width - 180, annotation.x)), Math.max(12, Math.min(geometry.height - 4, annotation.y)));
+  }
   if (object.label) {
     context.font = '11px "IBM Plex Mono", monospace';
     context.fillText(object.label, Math.max(5, Math.min(width - 50, a.x + 7)), a.y - 7, 260);
@@ -48,6 +79,24 @@ export function paintDrawing(context: CanvasRenderingContext2D, geometry: Drawin
       context.stroke();
     }
   }
+}
+
+function anchoredVwapPath(object: ChartObject, bars: Ohlcv[], projection: { time: (timestamp: number) => number | null; price: (value: number) => number | null; width: number }): Point[] {
+  const start = bars.findIndex((bar) => bar.t >= object.anchors[0].t);
+  if (start < 0) return [];
+  let priceVolume = 0;
+  let volume = 0;
+  const path: Point[] = [];
+  for (const bar of bars.slice(start)) {
+    if (bar.v > 0 && Number.isFinite(bar.v)) { priceVolume += ((bar.h + bar.l + bar.c) / 3) * bar.v; volume += bar.v; }
+    const value = volume > 0 ? priceVolume / volume : (bar.h + bar.l + bar.c) / 3;
+    const x = projection.time(bar.t);
+    const y = projection.price(value);
+    if (x != null && y != null && Number.isFinite(y)) path.push({ x, y });
+  }
+  const last = path[path.length - 1];
+  if (last && last.x < projection.width) path.push({ x: projection.width, y: last.y });
+  return path;
 }
 
 /** Attached to the price series: LWC owns clipping, pane placement, log transforms and DPR. */
@@ -139,7 +188,11 @@ export class DrawingPrimitive implements ISeriesPrimitive {
       price: (value: number) => state.series.priceToCoordinate(value),
     };
     this.geometry = [...bridge.objects.filter((object) => object.visible && object.timeframe === bridge.timeframe), ...(this.preview ? [this.preview] : [])]
-      .map((object) => projectDrawing(object, projection)).filter((item): item is DrawingGeometry => item !== null);
+      .map((object) => {
+        const geometry = projectDrawing(object, projection);
+        if (geometry && object.kind === 'avwap') geometry.path = anchoredVwapPath(object, bridge.bars ?? [], projection);
+        return geometry;
+      }).filter((item): item is DrawingGeometry => item !== null);
   }
 
   geometries(): DrawingGeometry[] { this.updateAllViews(); return this.geometry; }

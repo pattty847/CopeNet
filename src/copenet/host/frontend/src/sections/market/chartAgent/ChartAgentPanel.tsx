@@ -33,7 +33,7 @@ export function ChartAgentPanel({ workspace, symbol, timeframe }: { workspace: C
   const approvals = useAppStore((state) => state.pendingApprovalsById);
   const inspect = useAppStore((state) => state.setInspectorTarget);
   const pendingApproval = Object.values(approvals).find((approval) => approval.sessionKey === conversation.sessionKey && approval.status === 'pending');
-  useEffect(() => { if (workspace.selectedObjectId) setTab('drawings'); }, [workspace.selectedObjectId]);
+  useEffect(() => { if (workspace.drawingSettingsRequest > 0) setTab('drawings'); }, [workspace.drawingSettingsRequest]);
   useEffect(() => { end.current?.scrollIntoView({ block: 'nearest' }); }, [conversation.messages.length, conversation.activeRun]);
   const resize = (event: PointerEvent<HTMLDivElement>) => {
     if (!resizeStart.current) return;

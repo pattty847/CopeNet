@@ -1,3 +1,4 @@
+import { DRAWING_KINDS } from '../drawings/kinds';
 import { useEffect, useRef } from 'react';
 import { Activity, ArrowRight, CircleDot, GitBranch, Layers3, MessageSquare, MousePointer2, Minus, MoveVertical, Ruler, Scan, Square, Target, TrendingUp, Type, X } from 'lucide-react';
 import type { ChartWorkspaceController } from './useChartWorkspace';
@@ -99,7 +100,8 @@ export function ChartWorkspaceToolbar({ workspace, comparing }: { workspace: Cha
     };
   }, [menus, openGroup]);
 
-  const hint = comparing ? 'Price drawings are hidden in comparison mode' : workspace.mode === 'range' ? 'Drag across candles or tap start and end · Esc cancels' : workspace.mode === 'zone' || workspace.mode === 'trendline' || workspace.mode === 'extended_trendline' || workspace.mode === 'ray' || workspace.mode === 'measurement' || workspace.mode === 'fib_retracement' ? 'Click two anchors on the chart' : workspace.mode === 'position' || workspace.mode === 'channel' ? 'Click three anchors on the chart' : workspace.mode === 'select' ? '' : 'Click on the chart to place';
+  const touchHint = workspace.mode !== 'select' && workspace.mode !== 'range' && window.matchMedia('(pointer: coarse)').matches;
+  const hint = comparing ? 'Price drawings are hidden in comparison mode' : touchHint ? 'Tap to drop the cursor · drag anywhere to move it · tap to place' : workspace.mode === 'range' ? 'Drag across candles or tap start and end · Esc cancels' : workspace.mode === 'select' ? '' : ['Click/tap the chart to place', 'Click/tap anchor 1, then anchor 2', 'Click/tap three anchors'][DRAWING_KINDS[workspace.mode].anchors - 1] + ' · Esc cancels';
   return <div className="ca-toolbar" aria-label="Chart drawing tools" ref={barRef}><div className="ca-toolbar__tools">
     {PRIMARY.map((tool) => <ToolButton key={tool.mode} tool={tool} workspace={workspace} />)}
     {GROUPS.map((group) => (

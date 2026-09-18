@@ -1,5 +1,6 @@
 import type { ForecastBridge } from '../forecasts/types';
-import type { ChartObject, ChartSelection, ChartViewport } from '../chartAgent/types';
+import type { ChartObject, ChartSelection, ChartViewport, DrawingPatch } from '../chartAgent/types';
+import type { Ohlcv } from '../types';
 
 export type DrawingMode = 'select' | 'range' | ChartObject['kind'];
 export interface DrawingProposal {
@@ -20,6 +21,8 @@ export interface ChartWorkspaceBridge {
   revision: number;
   objects: ChartObject[];
   timeframe: ChartObject['timeframe'];
+  /** Real candles for derived drawings such as anchored VWAP. */
+  bars?: Ohlcv[];
   enabled: boolean;
   /** Pause edits during a save while continuing to show the committed document. */
   interactionEnabled?: boolean;
@@ -29,7 +32,13 @@ export interface ChartWorkspaceBridge {
   onViewport: (viewport: ChartViewport) => void;
   onSelectRange: (range: ChartSelection | null) => void;
   onSelectObject: (id: string | null) => void;
+  onDeleteObject: (id: string) => void;
+  onOpenDrawingSettings?: (id: string) => void;
+  onCancelDrawing?: () => void;
   onCreate: (proposal: DrawingProposal) => void;
-  onUpdate: (proposal: { id: string; anchors: ChartObject['anchors'] }) => void;
+  onUpdate: (proposal: { id: string; patch: DrawingPatch }) => void;
+  /** Set for a few seconds after a delete, so one tap on a phone is never final. */
+  deleted?: { label: string } | null;
+  onUndoDelete?: () => void;
   onRendered: (receipt: ChartRenderReceipt) => void;
 }

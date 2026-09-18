@@ -1,4 +1,5 @@
 import type { ChartTimeframe } from '../chartRanges';
+import type { Ohlcv } from '../types';
 
 export interface InstrumentRef {
   instrumentId: string;
@@ -10,7 +11,8 @@ export interface InstrumentRef {
 
 export interface ChartAnchor { t: number; value: number }
 export interface ChartEvidence { observationId: string; resourceKey: string; from?: number; to?: number }
-export type DrawingKind = 'level' | 'zone' | 'trendline' | 'label';
+export type DrawingKind = 'level' | 'zone' | 'trendline' | 'extended_trendline' | 'label' | 'horizontal_ray' | 'ray' | 'vertical_line' |
+  'measurement' | 'position' | 'channel' | 'avwap' | 'fib_retracement' | 'callout';
 export interface ChartObject {
   id: string;
   kind: DrawingKind;
@@ -19,6 +21,10 @@ export interface ChartObject {
   label: string;
   color: string;
   visible: boolean;
+  lineWidth?: number;
+  lineStyle?: 'solid' | 'dashed' | 'dotted';
+  fillOpacity?: number;
+  locked?: boolean;
   rationale: string;
   evidence: ChartEvidence[];
   owner: { kind: 'agent' | 'operator'; sessionKey?: string; runId?: string };
@@ -71,9 +77,10 @@ export interface MarketContext {
   detail: ChartDetail;
   access: 'read' | 'annotate';
 }
+export type DrawingPatch = Partial<Pick<ChartObject, 'anchors' | 'label' | 'color' | 'visible' | 'rationale' | 'evidence' | 'lineWidth' | 'lineStyle' | 'fillOpacity' | 'locked'>>;
 export type ChartOperation =
   | { kind: 'create'; object: Omit<ChartObject, 'owner'> }
-  | { kind: 'update'; objectId: string; patch: Partial<Pick<ChartObject, 'anchors' | 'label' | 'color' | 'visible' | 'rationale' | 'evidence'>> }
+  | { kind: 'update'; objectId: string; patch: DrawingPatch }
   | { kind: 'delete'; objectId: string };
 export interface DrawingReceipt {
   batchId: string;

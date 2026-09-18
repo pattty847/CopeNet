@@ -5,10 +5,16 @@ import type { ChartObject } from '../src/sections/market/chartAgent/types';
 import { anchorIndexAt, hitDrawing, projectDrawing, replaceAnchor } from '../src/sections/market/drawings/geometry';
 import { DrawingPrimitive } from '../src/sections/market/drawings/primitive';
 import { readChartViewport } from '../src/sections/market/drawings/useChartWorkspace';
+import { futureDrawingTimes } from '../src/sections/market/chartDecorations';
+import { beginTouch, dragTouch, touchCommits } from '../src/sections/market/drawings/touchPlacement';
+import { DRAWING_KINDS, strokeOf } from '../src/sections/market/drawings/kinds';
 import type { ChartRenderReceipt, ChartWorkspaceBridge } from '../src/sections/market/drawings/types';
 
 function object(kind: ChartObject['kind'] = 'level'): ChartObject {
-  return { id: kind, kind, anchors: kind === 'zone' || kind === 'trendline' ? [{ t: 100, value: 10 }, { t: 400, value: 100 }] : [{ t: 100, value: 10 }],
+  const anchors = kind === 'position' || kind === 'channel' ? [{ t: 100, value: 10 }, { t: 400, value: 100 }, { t: 400, value: 80 }]
+    : kind === 'zone' || kind === 'trendline' || kind === 'extended_trendline' || kind === 'ray' || kind === 'measurement' || kind === 'fib_retracement' ? [{ t: 100, value: 10 }, { t: 400, value: 100 }]
+      : [{ t: 100, value: 10 }];
+  return { id: kind, kind, anchors,
     timeframe: 'D', label: 'Evidence', color: '#fb9423', visible: true, rationale: '', evidence: [], owner: { kind: 'operator' } };
 }
 
@@ -41,6 +47,14 @@ test('levels span only the price pane and zones accept reversed anchors', () => 
   assert.equal(hitDrawing(projectDrawing(object('label'), projection)!, { x: 25, y: 68 }), true);
 });
 
+test('composite drawing tools project their derived geometry', () => {
+  for (const kind of ['extended_trendline', 'ray', 'measurement', 'fib_retracement', 'channel', 'position'] as ChartObject['kind'][]) {
+    const geometry = projectDrawing(object(kind), projection);
+    assert.ok(geometry, `${kind} should project`);
+    assert.ok(geometry.lines?.length || geometry.regions?.length || geometry.annotations?.length, `${kind} should render more than handles`);
+  }
+});
+
 test('unknown time anchors and nonfinite transforms cannot create invented drawing positions', () => {
   const drawing = object();
   drawing.anchors[0].t = 200;
@@ -48,9 +62,13 @@ test('unknown time anchors and nonfinite transforms cannot create invented drawi
   assert.equal(projectDrawing(object(), { ...projection, price: () => Number.NaN }), null);
 });
 
+test('drawing timeline reserves future candle slots without changing real bars', () => {
+  assert.deepEqual(futureDrawingTimes([{ t: 100, o: 1, h: 2, l: 1, c: 2, v: 3 }, { t: 200, o: 2, h: 3, l: 2, c: 3, v: 4 }], 3), [300, 400, 500]);
+});
+
 function bridge(objects: ChartObject[], receipts: ChartRenderReceipt[]): ChartWorkspaceBridge {
   return { documentId: 'document', revision: 1, objects, timeframe: 'D', enabled: true,
-    selectedObjectId: null, mode: 'select', onViewport() {}, onSelectRange() {}, onSelectObject() {}, onCreate() {}, onUpdate() {},
+    selectedObjectId: null, mode: 'select', onViewport() {}, onSelectRange() {}, onSelectObject() {}, onDeleteObject() {}, onCreate() {}, onUpdate() {},
     onRendered: (receipt) => receipts.push(receipt) };
 }
 
@@ -156,4 +174,37 @@ test('future marker whitespace cannot become a captured candle range', () => {
   assert.deepEqual(readChartViewport(chart, candle), { from: 100, to: 400, logicalFrom: 0, logicalTo: 4 });
   range = { from: 2, to: 4 };
   assert.deepEqual(readChartViewport(chart, candle), { from: null, to: null, logicalFrom: 2, logicalTo: 4 });
+});
+
+test('touch placement drops a cursor on the first tap, moves it by the drag delta from anywhere, and commits on a plain tap', () => {
+  const pane = { width: 400, height: 300 };
+  const first = beginTouch(null, { x: 100, y: 100 });
+  assert.equal(dragTouch(first, { x: 102, y: 101 }, pane), null);
+  assert.equal(touchCommits(first), false, 'the first tap only positions the cursor');
+
+  const drag = beginTouch({ x: 100, y: 100 }, { x: 300, y: 250 });
+  assert.deepEqual(dragTouch(drag, { x: 330, y: 230 }, pane), { x: 130, y: 80 });
+  assert.deepEqual(dragTouch(drag, { x: 900, y: -500 }, pane), { x: 400, y: 0 }, 'the cursor stays inside the price pane');
+  assert.equal(touchCommits(drag), false, 'a drag never commits');
+
+  assert.equal(touchCommits(beginTouch({ x: 130, y: 80 }, { x: 10, y: 10 })), true);
+});
+
+test('each drawing form inherits the settings of the form before it, and anchor counts match the backend contract', () => {
+  // Mirrors ChartObject.anchor_count in chart_workspace/models.py.
+  const backend = { level: 1, zone: 2, trendline: 2, extended_trendline: 2, label: 1, horizontal_ray: 1, ray: 2, vertical_line: 1,
+    measurement: 2, position: 3, channel: 3, avwap: 1, fib_retracement: 2, callout: 1 };
+  assert.deepEqual(Object.fromEntries(Object.entries(DRAWING_KINDS).map(([kind, spec]) => [kind, spec.anchors]).sort()), Object.fromEntries(Object.entries(backend).sort()));
+  for (const spec of Object.values(DRAWING_KINDS)) {
+    if (spec.form === 'point') assert.equal(spec.stroke || spec.fill, false, 'a point has nothing to stroke');
+    else assert.equal(spec.stroke, true, `${spec.label} is built on a line and keeps its stroke`);
+    if (spec.form === 'area') assert.equal(spec.fill, true);
+  }
+});
+
+test('a drawing with no saved style renders the owner default, and a saved style wins', () => {
+  const base = { id: 'x', kind: 'trendline', anchors: [], timeframe: 'D', label: '', color: '#ffffff', visible: true, rationale: '', evidence: [] } as const;
+  assert.deepEqual(strokeOf({ ...base, anchors: [], evidence: [], owner: { kind: 'agent' } }), { width: 1, style: 'dashed' });
+  assert.deepEqual(strokeOf({ ...base, anchors: [], evidence: [], owner: { kind: 'operator' } }), { width: 1, style: 'solid' });
+  assert.deepEqual(strokeOf({ ...base, anchors: [], evidence: [], owner: { kind: 'agent' }, lineStyle: 'solid', lineWidth: 3 }), { width: 3, style: 'solid' });
 });

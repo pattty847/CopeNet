@@ -3,10 +3,48 @@ import { ForecastPrimitive } from '../forecasts/primitive';
 import { useEffect, useRef, type RefObject } from 'react';
 import type { IChartApi, ISeriesApi } from 'lightweight-charts';
 import type { ChartAnchor, ChartObject, ChartViewport } from '../chartAgent/types';
+import type { DrawingMode } from './types';
 import { leftAxisWidth } from '../chartDecorations';
-import { anchorIndexAt, hitDrawing, replaceAnchor } from './geometry';
+import { anchorIndexAt, hitDrawing, replaceAnchor, TOUCH_HIT_TOLERANCE } from './geometry';
+import { DEFAULT_DRAWING_COLOR, DRAWING_KINDS } from './kinds';
 import { DrawingPrimitive } from './primitive';
 import type { ChartWorkspaceBridge } from './types';
+import { beginTouch, dragTouch, touchCommits, type ChartPoint, type TouchGesture } from './touchPlacement';
+
+const anchorsFor = (mode: DrawingMode): number => mode === 'select' || mode === 'range' ? 0 : DRAWING_KINDS[mode].anchors;
+
+function createDrawingCrosshair(container: HTMLDivElement) {
+  const previousPosition = container.style.position;
+  const vertical = document.createElement('div');
+  const horizontal = document.createElement('div');
+  const common: Partial<CSSStyleDeclaration> = {
+    position: 'absolute', pointerEvents: 'none', zIndex: '8', display: 'none',
+    borderColor: 'rgba(251, 148, 35, .72)', borderStyle: 'dotted',
+  };
+  Object.assign(vertical.style, common, { top: '0', bottom: '0', width: '0', borderLeftWidth: '1px' });
+  Object.assign(horizontal.style, common, { left: '0', right: '0', height: '0', borderTopWidth: '1px' });
+  vertical.className = 'ca-drawing-crosshair ca-drawing-crosshair--vertical';
+  horizontal.className = 'ca-drawing-crosshair ca-drawing-crosshair--horizontal';
+  if (!previousPosition) container.style.position = 'relative';
+  container.append(vertical, horizontal);
+  return {
+    update(point: { x: number; y: number }, xOffset: number) {
+      vertical.style.left = `${point.x + xOffset}px`;
+      horizontal.style.top = `${point.y}px`;
+      vertical.style.display = 'block';
+      horizontal.style.display = 'block';
+    },
+    hide() {
+      vertical.style.display = 'none';
+      horizontal.style.display = 'none';
+    },
+    destroy() {
+      vertical.remove();
+      horizontal.remove();
+      if (!previousPosition) container.style.position = '';
+    },
+  };
+}
 
 export function readChartViewport(chart: IChartApi, candle: ISeriesApi<'Candlestick'>): ChartViewport {
   const logical = chart.timeScale().getVisibleLogicalRange();
@@ -55,6 +93,7 @@ export function useChartWorkspace(
     if (!chart || !candle || !container) return;
     const primitive = new DrawingPrimitive(() => container.getClientRects().length > 0 && container.clientWidth > 0 && container.clientHeight > 0);
     primitiveRef.current = primitive;
+    const crosshair = createDrawingCrosshair(container);
     candle.attachPrimitive(primitive);
     const forecast = new ForecastPrimitive(() => container.getClientRects().length > 0 && container.clientWidth > 0);
     forecastRef.current = forecast;
@@ -67,12 +106,15 @@ export function useChartWorkspace(
     chart.subscribeClick(selectForecast);
     primitive.setState(current.current.bridge, current.current.comparisonMode);
     let first: ChartAnchor | null = null;
+    let second: ChartAnchor | null = null;
     let drag: { object: ChartObject; index: number; anchor: ChartAnchor; revision: number } | null = null;
     let ownsPointer = false;
     let pointerId: number | null = null;
     let viewportKey = '';
     let rangeDown: ChartAnchor | null = null;
     let rangeLast: ChartAnchor | null = null;
+    let cursor: ChartPoint | null = null;
+    let touch: TouchGesture | null = null;
     const rangeOverlay = createRangeOverlay(container, chart);
     const updateRange = () => {
       const active = current.current.bridge;
@@ -94,12 +136,16 @@ export function useChartWorkspace(
     };
     const clear = () => {
       first = null;
+      second = null;
       rangeDown = null;
       rangeLast = null;
       updateRange();
       drag = null;
+      cursor = null;
+      touch = null;
       ownsPointer = false;
       primitive.setPreview(null);
+      crosshair.hide();
       if (pointerId !== null && container.hasPointerCapture(pointerId)) container.releasePointerCapture(pointerId);
       pointerId = null;
     };
@@ -109,21 +155,38 @@ export function useChartWorkspace(
       return { x: event.clientX - bounds.left - leftAxisWidth(chart), y: event.clientY - bounds.top };
     };
     const anchorAt = (point: { x: number; y: number }): ChartAnchor | null => {
+      const active = current.current.bridge;
       const pane = chart.paneSize(0);
       const rangeMode = current.current.bridge?.mode === 'range';
       if (point.x < 0 || point.x > pane.width || point.y < 0 || point.y > (rangeMode ? container.clientHeight - chart.timeScale().height() : pane.height)) return null;
       const time = chart.timeScale().coordinateToTime(point.x);
       const value = rangeMode ? 1 : candle.coordinateToPrice(point.y);
       if (typeof time !== 'number' || value == null || !Number.isFinite(value) || value <= 0) return null;
-      // Whitespace can have a chart timestamp but no candle; those are not valid anchors.
       const logical = chart.timeScale().coordinateToLogical(point.x);
       const row = logical == null ? null : candle.dataByIndex(Math.round(logical));
-      return row && 'close' in row ? { t: time, value } : null;
+      const candleRows = candle.data();
+      const latestCandleIndex = candleRows.reduce((latest, candidate, index) => 'close' in candidate ? index : latest, -1);
+      // Range selection stays evidence-bound. Drawing tools may use the reserved whitespace
+      // after the latest real candle, which gives trendlines and zones future endpoints.
+      const futureDrawingAnchor = !rangeMode && logical != null && logical > latestCandleIndex;
+      const actualBar = logical == null ? null : current.current.bridge?.bars?.[Math.round(logical)] ?? null;
+      if (active?.mode === 'avwap' && actualBar) {
+        // AVWAP starts at the selected candle's typical price; the plotted path performs
+        // the cumulative volume weighting from this date through the latest real candle.
+        return { t: actualBar.t, value: (actualBar.h + actualBar.l + actualBar.c) / 3 };
+      }
+      return row && 'close' in row || futureDrawingAnchor ? { t: time, value } : null;
     };
     const preview = (active: ChartWorkspaceBridge, anchors: ChartAnchor[]) => {
       if (active.mode === 'select' || active.mode === 'range') return;
       primitive.setPreview({ id: '__preview', kind: active.mode, anchors, timeframe: active.timeframe,
-        color: '#fb9423', label: '', rationale: '', evidence: [], owner: { kind: 'operator' }, visible: true });
+        color: DEFAULT_DRAWING_COLOR, label: '', rationale: '', evidence: [], owner: { kind: 'operator' }, visible: true });
+    };
+    const showCursor = (active: ChartWorkspaceBridge) => {
+      if (!cursor) return;
+      crosshair.update(cursor, leftAxisWidth(chart));
+      const anchor = anchorAt(cursor);
+      if (first && anchor) preview(active, anchorsFor(active.mode) === 3 ? [first, second ?? anchor, anchor] : [first, anchor]);
     };
     const onDown = (event: PointerEvent) => {
       const active = current.current.bridge;
@@ -131,12 +194,20 @@ export function useChartWorkspace(
       const point = pointFromEvent(event);
       const anchor = anchorAt(point);
       if (!anchor) return;
+      if (active.mode !== 'select' && active.mode !== 'range') {
+        if (event.pointerType === 'touch') {
+          touch = beginTouch(cursor, point);
+          cursor = cursor ?? point;
+          showCursor(active);
+        } else crosshair.update(point, leftAxisWidth(chart));
+      }
       if (active.mode === 'range') { rangeDown = anchor; rangeLast = anchor; updateRange(); }
       if (active.mode === 'select') {
-        const hit = [...primitive.geometries()].reverse().find((geometry) => geometry.object.id !== '__preview' && hitDrawing(geometry, point));
+        const touching = event.pointerType === 'touch';
+        const hit = [...primitive.geometries()].reverse().find((geometry) => geometry.object.id !== '__preview' && hitDrawing(geometry, point, touching ? TOUCH_HIT_TOLERANCE : undefined));
         if (!hit) { active.onSelectObject(null); return; }
-        const index = anchorIndexAt(hit, point);
-        if (hit.object.id === active.selectedObjectId && index >= 0) drag = { object: hit.object, index, anchor, revision: active.revision };
+        const index = anchorIndexAt(hit, point, touching ? TOUCH_HIT_TOLERANCE + 6 : undefined);
+        if (hit.object.id === active.selectedObjectId && index >= 0 && !hit.object.locked) drag = { object: hit.object, index, anchor, revision: active.revision };
         active.onSelectObject(hit.object.id);
       }
       ownsPointer = true;
@@ -148,8 +219,20 @@ export function useChartWorkspace(
     const onMove = (event: PointerEvent) => {
       const active = current.current.bridge;
       if (!active?.enabled || active.interactionEnabled === false || current.current.comparisonMode) return;
-      const anchor = anchorAt(pointFromEvent(event));
+      const point = pointFromEvent(event);
+      if (touch) {
+        if (!ownsPointer || event.pointerId !== pointerId) return;
+        const moved = dragTouch(touch, point, chart.paneSize(0));
+        if (!moved) return;
+        cursor = moved;
+        showCursor(active);
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        return;
+      }
+      const anchor = anchorAt(point);
       if (!anchor) return;
+      if (active.mode !== 'select' && active.mode !== 'range') crosshair.update(point, leftAxisWidth(chart));
       if (active.mode === 'range' && (first || rangeDown)) {
         if (ownsPointer && event.pointerId !== pointerId) return;
         rangeLast = anchor; updateRange();
@@ -159,40 +242,66 @@ export function useChartWorkspace(
         primitive.setPreview({ ...drag.object, id: '__preview', anchors: replaceAnchor(drag.object.anchors, drag.index, anchor) });
         event.preventDefault();
         event.stopImmediatePropagation();
-      } else if (first) preview(active, [first, anchor]);
+      } else if (first) preview(active, anchorsFor(active.mode) === 3 ? [first, second ?? anchor, anchor] : [first, anchor]);
+    };
+    const onLeave = () => {
+      const active = current.current.bridge;
+      if (!active || active.mode === 'select' || active.mode === 'range') return;
+      if (!ownsPointer && !first) crosshair.hide();
     };
     const onUp = (event: PointerEvent) => {
       if (!ownsPointer || event.pointerId !== pointerId) return;
       const active = current.current.bridge;
-      const anchor = anchorAt(pointFromEvent(event)) ?? (active?.mode === 'range' ? rangeLast : null);
+      const gesture = touch;
+      touch = null;
+      const anchor = gesture ? (cursor ? anchorAt(cursor) : null) : anchorAt(pointFromEvent(event)) ?? (active?.mode === 'range' ? rangeLast : null);
       ownsPointer = false;
       if (container.hasPointerCapture(event.pointerId)) container.releasePointerCapture(event.pointerId);
       pointerId = null;
       event.preventDefault();
       event.stopImmediatePropagation();
+      // A first tap or a drag only positions the cursor; the next plain tap commits it.
+      if (gesture && (!touchCommits(gesture) || !anchor)) return;
       if (!active || !anchor) { clear(); return; }
+      // A tap in Select mode selected on pointerdown. It must never reach the create branch.
+      if (active.mode === 'select' && !drag) { clear(); return; }
+      const drawingMode = active.mode as ChartObject['kind'];
       if (drag) {
         if (active.revision !== drag.revision) { clear(); return; }
-        active.onUpdate({ id: drag.object.id, anchors: replaceAnchor(drag.object.anchors, drag.index, drag.anchor) });
+        active.onUpdate({ id: drag.object.id, patch: { anchors: replaceAnchor(drag.object.anchors, drag.index, drag.anchor) } });
         clear();
       } else if (active.mode === 'range') {
         const start = first ?? rangeDown;
         if (start && (first || start.t !== anchor.t)) {
           active.onSelectRange({ from: Math.min(start.t, anchor.t), to: Math.max(start.t, anchor.t) }); clear();
         } else { first = anchor; rangeDown = null; rangeLast = anchor; updateRange(); }
-      } else if (active.mode === 'level' || active.mode === 'label') {
-        active.onCreate({ kind: active.mode, anchors: [anchor], timeframe: active.timeframe }); clear();
-      } else if (active.mode === 'zone' || active.mode === 'trendline') {
+      } else if (anchorsFor(active.mode) === 1) {
+        active.onCreate({ kind: drawingMode, anchors: [anchor], timeframe: active.timeframe }); clear();
+      } else if (anchorsFor(active.mode) === 2) {
         if (!first) { first = anchor; preview(active, [anchor, anchor]); }
-        else if (first.t !== anchor.t) { active.onCreate({ kind: active.mode, anchors: [first, anchor], timeframe: active.timeframe }); clear(); }
+        else if (first.t !== anchor.t) { active.onCreate({ kind: drawingMode, anchors: [first, anchor], timeframe: active.timeframe }); clear(); }
+      } else {
+        if (!first) { first = anchor; preview(active, [anchor, anchor, anchor]); }
+        else if (!second) { second = anchor; preview(active, [first, second, anchor]); }
+        else if (first.t !== anchor.t && second.t !== anchor.t) {
+          active.onCreate({ kind: drawingMode, anchors: [first, second, anchor], timeframe: active.timeframe }); clear();
+        }
       }
     };
-    const onKey = (event: KeyboardEvent) => { if (event.key === 'Escape') clear(); };
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape' || event.defaultPrevented) return;
+      const active = current.current.bridge;
+      if (!active || active.mode === 'select') return;
+      event.preventDefault();
+      clear();
+      active.onCancelDrawing?.();
+    };
     const onVisibility = () => { if (document.visibilityState === 'visible') { primitive.setState(current.current.bridge, current.current.comparisonMode); publishViewport(); } };
     chart.timeScale().subscribeVisibleLogicalRangeChange(publishViewport);
     container.addEventListener('pointerdown', onDown, true);
     container.addEventListener('pointermove', onMove, true);
     container.addEventListener('pointerup', onUp, true);
+    container.addEventListener('pointerleave', onLeave, true);
     container.addEventListener('pointercancel', clear, true);
     window.addEventListener('keydown', onKey);
     document.addEventListener('visibilitychange', onVisibility);
@@ -208,6 +317,7 @@ export function useChartWorkspace(
       container.removeEventListener('pointerdown', onDown, true);
       container.removeEventListener('pointermove', onMove, true);
       container.removeEventListener('pointerup', onUp, true);
+      container.removeEventListener('pointerleave', onLeave, true);
       container.removeEventListener('pointercancel', clear, true);
       window.removeEventListener('keydown', onKey);
       document.removeEventListener('visibilitychange', onVisibility);
@@ -217,6 +327,7 @@ export function useChartWorkspace(
       if (chartRef.current === chart) candle.detachPrimitive(forecast);
       forecast.detached(); forecastRef.current = null;
       primitive.detached();
+      crosshair.destroy();
       primitiveRef.current = null;
     };
   }, [chartRef, candleRef, containerRef, generation]);
@@ -236,7 +347,8 @@ export function useChartWorkspace(
   useEffect(() => {
     const container = containerRef.current;
     const chart = chartRef.current;
-    if (!container || !chart || bridge?.mode !== 'range' || !bridge.enabled || comparisonMode) return;
+    const touchDrawing = bridge != null && bridge.mode !== 'select' && bridge.mode !== 'range' && window.matchMedia('(pointer: coarse)').matches;
+    if (!container || !chart || !bridge?.enabled || comparisonMode || (bridge.mode !== 'range' && !touchDrawing)) return;
     const previous = container.style.touchAction;
     const handleScroll = structuredClone(chart.options().handleScroll);
     const handleScale = structuredClone(chart.options().handleScale);

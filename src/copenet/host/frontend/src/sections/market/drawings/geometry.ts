@@ -1,4 +1,5 @@
 import type { ChartAnchor, ChartObject } from '../chartAgent/types';
+import { DRAWING_KINDS } from './kinds';
 
 export interface Point { x: number; y: number }
 export interface DrawingGeometry {
@@ -6,12 +7,43 @@ export interface DrawingGeometry {
   points: Point[];
   width: number;
   height: number;
+  lines?: Array<{ points: Point[]; label?: string }>;
+  regions?: Array<{ left: number; top: number; width: number; height: number; color: string; label?: string }>;
+  path?: Point[];
+  annotations?: Array<{ x: number; y: number; text: string }>;
 }
 export interface CoordinateProjection {
   time: (timestamp: number) => number | null;
   price: (value: number) => number | null;
   width: number;
   height: number;
+}
+
+const FIB_LEVELS = [0, 0.236, 0.382, 0.5, 0.618, 0.786, 1, 1.272, 1.618];
+
+function lineToBoundary(start: Point, end: Point, width: number, height: number, both = false): Point[] {
+  const dx = end.x - start.x;
+  const dy = end.y - start.y;
+  if (dx === 0 && dy === 0) return [start, end];
+  const candidates: Array<{ scale: number; point: Point }> = [];
+  if (dx !== 0) for (const x of [0, width]) { const scale = (x - start.x) / dx; if (scale > 0) candidates.push({ scale, point: { x, y: start.y + scale * dy } }); }
+  if (dy !== 0) for (const y of [0, height]) { const scale = (y - start.y) / dy; if (scale > 0) candidates.push({ scale, point: { x: start.x + scale * dx, y } }); }
+  const forward = candidates.filter(({ point }) => point.x >= -0.1 && point.x <= width + 0.1 && point.y >= -0.1 && point.y <= height + 0.1)
+    .sort((a, z) => a.scale - z.scale)[0]?.point ?? end;
+  if (!both) return [start, forward];
+  const reverse = lineToBoundary(start, { x: start.x - dx, y: start.y - dy }, width, height, false)[1];
+  return [reverse, forward];
+}
+
+function addFibLines(points: Point[], object: ChartObject, projection: CoordinateProjection): Array<{ points: Point[]; label?: string }> {
+  const [a, b] = object.anchors;
+  const low = Math.min(a.value, b.value);
+  const span = Math.abs(b.value - a.value);
+  return FIB_LEVELS.map((ratio) => {
+    const value = a.value <= b.value ? low + span * ratio : low + span * (1 - ratio);
+    const y = projection.price(value);
+    return y == null ? null : { points: [{ x: Math.min(points[0].x, points[1].x), y }, { x: Math.max(points[0].x, points[1].x), y }], label: `${(ratio * 100).toFixed(1)}%` };
+  }).filter((line): line is { points: Point[]; label: string } => line !== null);
 }
 
 /** Never interpolate time by elapsed seconds: the chart axis is indexed by candles. */
@@ -23,8 +55,44 @@ export function projectDrawing(object: ChartObject, projection: CoordinateProjec
     if (x == null || y == null || !Number.isFinite(x) || !Number.isFinite(y)) return null;
     points.push({ x, y });
   }
-  if (points.length !== (object.kind === 'zone' || object.kind === 'trendline' ? 2 : 1)) return null;
-  return { object, points, width: projection.width, height: projection.height };
+  if (points.length !== DRAWING_KINDS[object.kind].anchors) return null;
+  const geometry: DrawingGeometry = { object, points, width: projection.width, height: projection.height };
+  if (object.kind === 'horizontal_ray') geometry.lines = [{ points: [points[0], { x: projection.width, y: points[0].y }] }];
+  if (object.kind === 'vertical_line') geometry.lines = [{ points: [{ x: points[0].x, y: 0 }, { x: points[0].x, y: projection.height }] }];
+  if (object.kind === 'ray') geometry.lines = [{ points: lineToBoundary(points[0], points[1], projection.width, projection.height) }];
+  if (object.kind === 'trendline' || object.kind === 'measurement') geometry.lines = [{ points }];
+  if (object.kind === 'extended_trendline') geometry.lines = [{ points: lineToBoundary(points[0], points[1], projection.width, projection.height, true) }];
+  if (object.kind === 'fib_retracement') geometry.lines = addFibLines(points, object, projection);
+  if (object.kind === 'measurement') {
+    const [a, b] = object.anchors;
+    const change = b.value - a.value;
+    const percent = a.value === 0 ? 0 : (change / a.value) * 100;
+    const days = Math.abs(b.t - a.t) / 86400;
+    geometry.annotations = [{ x: Math.max(points[0].x, points[1].x) + 6, y: points[1].y - 6,
+      text: `${change >= 0 ? '+' : ''}${change.toFixed(2)} (${percent >= 0 ? '+' : ''}${percent.toFixed(1)}%) · ${days.toFixed(0)}d` }];
+  }
+  if (object.kind === 'channel') {
+    const [a, b, offset] = points;
+    geometry.lines = [{ points: lineToBoundary(a, b, projection.width, projection.height, true), label: 'basis' },
+      { points: lineToBoundary(offset, { x: offset.x + b.x - a.x, y: offset.y + b.y - a.y }, projection.width, projection.height, true), label: 'parallel' }];
+  }
+  if (object.kind === 'position') {
+    const [entry, target, stop] = points;
+    const left = Math.min(entry.x, target.x, stop.x);
+    const right = Math.max(entry.x, target.x, stop.x);
+    const profitTop = Math.min(entry.y, target.y);
+    const riskTop = Math.min(entry.y, stop.y);
+    geometry.regions = [
+      { left, top: profitTop, width: right - left, height: Math.abs(entry.y - target.y), color: '#69c589', label: 'target' },
+      { left, top: riskTop, width: right - left, height: Math.abs(entry.y - stop.y), color: '#d96d5f', label: 'stop' },
+    ];
+    geometry.annotations = [
+      { x: entry.x + 6, y: entry.y - 6, text: `Entry ${object.anchors[0].value.toFixed(2)}` },
+      { x: target.x + 6, y: target.y - 6, text: `Target ${object.anchors[1].value.toFixed(2)}` },
+      { x: stop.x + 6, y: stop.y + 14, text: `Stop ${object.anchors[2].value.toFixed(2)}` },
+    ];
+  }
+  return geometry;
 }
 
 export function segmentDistance(point: Point, start: Point, end: Point): number {
@@ -38,18 +106,29 @@ export function segmentDistance(point: Point, start: Point, end: Point): number 
 export function hitDrawing(geometry: DrawingGeometry, point: Point, tolerance = 7): boolean {
   if (point.x < 0 || point.x > geometry.width || point.y < 0 || point.y > geometry.height) return false;
   const [a, b] = geometry.points;
+  if (geometry.path?.some((current, index) => index > 0 && segmentDistance(point, geometry.path![index - 1], current) <= tolerance)) return true;
+  if (geometry.lines?.some((line) => line.points.some((current, index) => index > 0 && segmentDistance(point, line.points[index - 1], current) <= tolerance))) return true;
+  if (geometry.regions?.some((region) => point.x >= region.left - tolerance && point.x <= region.left + region.width + tolerance && point.y >= region.top - tolerance && point.y <= region.top + region.height + tolerance)) return true;
   switch (geometry.object.kind) {
     case 'level': return Math.abs(point.y - a.y) <= tolerance;
     case 'label': return Math.hypot(point.x - a.x, point.y - a.y) <= tolerance ||
       (point.x >= a.x + 6 && point.x <= a.x + 6 + Math.min(260, geometry.object.label.length * 7) && point.y >= a.y - 19 && point.y <= a.y);
-    case 'trendline': return segmentDistance(point, a, b) <= tolerance;
     case 'zone': return point.x >= Math.min(a.x, b.x) - tolerance && point.x <= Math.max(a.x, b.x) + tolerance &&
       point.y >= Math.min(a.y, b.y) - tolerance && point.y <= Math.max(a.y, b.y) + tolerance;
+    case 'trendline': return segmentDistance(point, a, b) <= tolerance;
+    case 'horizontal_ray': return Math.abs(point.y - a.y) <= tolerance && point.x >= a.x - tolerance;
+    case 'vertical_line': return Math.abs(point.x - a.x) <= tolerance;
+    case 'callout': return Math.hypot(point.x - a.x, point.y - a.y) <= tolerance ||
+      (point.x >= a.x + 6 && point.x <= a.x + 6 + Math.min(260, geometry.object.label.length * 7) && point.y >= a.y - 24 && point.y <= a.y + 5);
+    default: return false;
   }
 }
 
-export function anchorIndexAt(geometry: DrawingGeometry, point: Point): number {
-  return geometry.points.findIndex((anchor) => Math.hypot(point.x - anchor.x, point.y - anchor.y) <= 10);
+/** A fingertip is far wider than a mouse pointer; touch gets a matching hit area. */
+export const TOUCH_HIT_TOLERANCE = 18;
+
+export function anchorIndexAt(geometry: DrawingGeometry, point: Point, tolerance = 10): number {
+  return geometry.points.findIndex((anchor) => Math.hypot(point.x - anchor.x, point.y - anchor.y) <= tolerance);
 }
 
 export function replaceAnchor(anchors: ChartAnchor[], index: number, anchor: ChartAnchor): ChartAnchor[] {

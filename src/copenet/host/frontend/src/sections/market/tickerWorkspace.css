@@ -367,6 +367,87 @@
 
 .tw-legend__plot button:hover { background: var(--mkt-raise-hi); color: var(--mkt-text); }
 
+/* The selected drawing's settings bar. Top-centre so it never sits on the latest candle,
+ * and one row at 430px: every control is an icon, the name is the first thing to yield. */
+.tw-drawbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 9;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  max-width: calc(100% - 16px);
+  padding: 3px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--mkt-canvas) 94%, transparent);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 28%);
+}
+.tw-drawbar__name {
+  min-width: 0;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 0 6px;
+  color: var(--mkt-soft);
+  font: 10px var(--mkt-mono);
+}
+.tw-drawbar button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0 6px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--mkt-muted);
+  font: 500 10px var(--mkt-sans);
+  cursor: pointer;
+}
+.tw-drawbar button:hover:not(:disabled),
+.tw-drawbar button[aria-expanded='true'],
+.tw-drawbar button[aria-pressed='true'],
+.tw-drawbar button[aria-checked='true'] { color: var(--mkt-text); background: var(--mkt-raise); }
+.tw-drawbar button[aria-checked='true'] { border-color: var(--mkt-accent); }
+.tw-drawbar button:disabled { opacity: 0.45; cursor: default; }
+.tw-drawbar button:focus-visible { outline: 2px solid var(--mkt-accent); outline-offset: 1px; }
+.tw-drawbar__swatch { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgb(255 255 255 / 25%); }
+.tw-drawbar__fill { width: 14px; height: 12px; border-radius: 2px; border: 1px solid var(--mkt-seam); }
+.tw-drawbar__sep { width: 1px; height: 18px; margin: 0 2px; background: var(--mkt-seam); }
+.tw-drawbar__menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 6px;
+  background: var(--mkt-canvas);
+  box-shadow: 0 8px 20px rgb(0 0 0 / 32%);
+}
+.tw-drawbar__menu--rows { flex-direction: column; }
+.tw-drawbar__menu--rows > div { display: flex; gap: 2px; }
+.tw-drawbar__text { display: flex; gap: 4px; }
+.tw-drawbar__text input {
+  width: min(56vw, 220px);
+  min-height: 32px;
+  padding: 0 8px;
+  border: 1px solid var(--mkt-seam);
+  border-radius: 4px;
+  background: var(--mkt-raise);
+  color: var(--mkt-text);
+  font: 16px var(--mkt-sans); /* 16px: iOS zooms the page for anything smaller */
+}
+@media (max-width: 520px) { .tw-drawbar[role='toolbar'] .tw-drawbar__name { display: none; } }
+
 /* Data-quality caveats qualify every trend claim on the page, so they surface on the chart
  * itself when triggered — and are completely silent otherwise. */
 .tw-warnband {
@@ -1145,6 +1226,13 @@
   .tw-toolbar .tw-iconbtn,
   .tw-assetbar .tw-iconbtn { width: 34px; height: 30px; }
   .tw-toolbar .tw-axis-toggle { width: 34px; height: 30px; }
+
+  .tw-drawing-actions {
+    left: 8px;
+    right: 8px;
+    max-width: none;
+  }
+  .tw-drawing-actions button { min-height: 36px; padding-inline: 9px; }
 }
 
 /* ------------------------------------------------------- indicator layers
