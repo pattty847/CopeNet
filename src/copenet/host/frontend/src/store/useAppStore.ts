@@ -361,7 +361,10 @@ export const useAppStore = create<AppState>((set) => ({
     } catch {
       // Private mode or blocked storage: the panel still works, it just forgets.
     }
-    set({ sessionsPanelOpen: open });
+    // Opening Sessions collapses the nav to its icons: while you are choosing a THREAD
+    // you are not choosing a section, so the section labels are 152px of nothing. The
+    // two together read as one navigator, and each chevron closes its own half.
+    set(open ? { sessionsPanelOpen: true, primaryNavCollapsed: true } : { sessionsPanelOpen: false });
   },
   pinnedSessionKeys: readPinnedSessionKeys(),
   togglePinnedSessionKey: (key) =>
