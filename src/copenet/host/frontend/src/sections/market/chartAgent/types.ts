@@ -9,7 +9,7 @@ export interface InstrumentRef {
   currency: string | null;
 }
 
-export interface ChartAnchor { t: number; value: number }
+export interface ChartAnchor { t: number; value: number; evidenceField?: 'o' | 'h' | 'l' | 'c'; verified?: 'exact' | 'in-range' | 'out-of-range' | 'unchecked' }
 export interface ChartEvidence { observationId: string; resourceKey: string; from?: number; to?: number }
 export type DrawingKind = 'level' | 'zone' | 'trendline' | 'extended_trendline' | 'label' | 'horizontal_ray' | 'ray' | 'vertical_line' |
   'measurement' | 'position' | 'channel' | 'avwap' | 'fib_retracement' | 'callout';

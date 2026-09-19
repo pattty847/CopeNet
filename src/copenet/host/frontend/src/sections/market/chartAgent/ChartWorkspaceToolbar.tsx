@@ -1,6 +1,7 @@
 import { DRAWING_KINDS } from '../drawings/kinds';
+import { MAGNET_LABELS, MAGNET_MODES } from '../drawings/magnet';
 import { useEffect, useRef } from 'react';
-import { Activity, ArrowRight, CircleDot, GitBranch, Layers3, MessageSquare, MousePointer2, Minus, MoveVertical, Ruler, Scan, Square, Target, TrendingUp, Type, X } from 'lucide-react';
+import { Activity, ArrowRight, CircleDot, GitBranch, Layers3, Magnet, MessageSquare, MousePointer2, Minus, MoveVertical, Ruler, Scan, Square, Target, TrendingUp, Type, X } from 'lucide-react';
 import type { ChartWorkspaceController } from './useChartWorkspace';
 import type { DrawingMode } from '../drawings/types';
 import { useChartMenuRegistry } from '../chartMenuRegistry';
@@ -115,6 +116,11 @@ export function ChartWorkspaceToolbar({ workspace, comparing }: { workspace: Cha
         onPick={() => menus.setOpenId(null)}
       />
     ))}
+    <button type="button" className="ca-magnet" data-magnet={workspace.magnet} aria-label={MAGNET_LABELS[workspace.magnet]} title={`${MAGNET_LABELS[workspace.magnet]} · click to change`}
+      aria-pressed={workspace.magnet !== 'off'} disabled={comparing}
+      onClick={() => workspace.setMagnet(MAGNET_MODES[(MAGNET_MODES.indexOf(workspace.magnet) + 1) % MAGNET_MODES.length])}>
+      <Magnet size={14} />{workspace.magnet === 'strong' && <sup>+</sup>}
+    </button>
   {workspace.selection && <button type="button" aria-label="Clear selected range" title="Clear selected range · use visible range" onClick={() => workspace.setSelection(null)}><X size={14} /></button>}
   </div><span className="ca-tool-hint">{hint}</span>
     <button type="button" className="ca-open" aria-label={workspace.open ? 'Close chart agent' : 'Open chart agent'} aria-pressed={workspace.open} onClick={() => workspace.setOpen(!workspace.open)}><MessageSquare size={14} /> Agent</button>

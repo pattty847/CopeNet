@@ -156,3 +156,5 @@
 
 .ca-turn-context { display:flex; align-items:center; justify-content:flex-end; gap:8px; margin-bottom:5px; color:var(--mkt-muted); font:9px var(--mkt-mono); }
 .ca-turn-context button { padding:2px 0; font-size:9px; text-decoration:underline; }
+.ca-magnet { position:relative; }
+.ca-magnet sup { position:absolute; top:2px; right:3px; font:600 9px var(--mkt-mono); }

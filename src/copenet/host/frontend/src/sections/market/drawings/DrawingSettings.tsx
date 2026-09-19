@@ -86,7 +86,7 @@ export function drawingStyleable(original: ChartObject, draft: ChartObject, setD
     anchors: { times: [...bars.map((bar) => bar.t), ...futureDrawingTimes(bars)],
       fields: draft.anchors.map((anchor, index) => ({ key: `anchor-${index}`, label: `Point ${index + 1}`, time: anchor.t, price: anchor.value,
         onChange: (next) => change({ anchors: draft.anchors.map((current, position) => position === index
-          ? { ...current, t: next.time ?? current.t, value: next.price ?? current.value } : current) }) })) },
+          ? { t: next.time ?? current.t, value: next.price ?? current.value } : current) }) })) },
     visibility: TIMEFRAMES.map(({ value, label }) => ({ key: value, label, value: shown.includes(value),
       onChange: (on) => { const next = TIMEFRAMES.map((entry) => entry.value).filter((entry) => entry === value ? on : shown.includes(entry)); if (next.length) change({ timeframes: next }); } })),
     actions: {

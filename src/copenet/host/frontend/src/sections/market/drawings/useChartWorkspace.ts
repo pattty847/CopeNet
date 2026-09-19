@@ -7,6 +7,7 @@ import type { DrawingMode } from './types';
 import { leftAxisWidth } from '../chartDecorations';
 import { anchorIndexAt, hitDrawing, replaceAnchor, TOUCH_HIT_TOLERANCE } from './geometry';
 import { DEFAULT_DRAWING_COLOR, DRAWING_KINDS } from './kinds';
+import { MAGNET_REACH_PX, magnetSnap } from './magnet';
 import { DrawingPrimitive } from './primitive';
 import type { ChartWorkspaceBridge } from './types';
 import { beginTouch, dragTouch, touchCommits, type ChartPoint, type TouchGesture } from './touchPlacement';
@@ -156,7 +157,12 @@ export function useChartWorkspace(
       const bounds = container.getBoundingClientRect();
       return { x: event.clientX - bounds.left - leftAxisWidth(chart), y: event.clientY - bounds.top };
     };
+    // Set by anchorAt: where the magnet put the price, so the crosshair shows the snap.
+    let snappedY: number | null = null;
+    let touching = false;
+    const shown = (point: { x: number; y: number }) => snappedY == null ? point : { x: point.x, y: snappedY };
     const anchorAt = (point: { x: number; y: number }): ChartAnchor | null => {
+      snappedY = null;
       const active = current.current.bridge;
       const pane = chart.paneSize(0);
       const rangeMode = current.current.bridge?.mode === 'range';
@@ -177,6 +183,9 @@ export function useChartWorkspace(
         // the cumulative volume weighting from this date through the latest real candle.
         return { t: actualBar.t, value: (actualBar.h + actualBar.l + actualBar.c) / 3 };
       }
+      const snap = actualBar && !rangeMode && active?.mode !== 'range' && row && 'close' in row
+        ? magnetSnap(actualBar, point.y, (price) => candle.priceToCoordinate(price), active?.magnet ?? 'off', touching ? MAGNET_REACH_PX.touch : MAGNET_REACH_PX.mouse) : null;
+      if (snap) { snappedY = snap.y; return { t: time, value: snap.value, evidenceField: snap.field }; }
       return row && 'close' in row || futureDrawingAnchor ? { t: time, value } : null;
     };
     const preview = (active: ChartWorkspaceBridge, anchors: ChartAnchor[]) => {
@@ -186,13 +195,14 @@ export function useChartWorkspace(
     };
     const showCursor = (active: ChartWorkspaceBridge) => {
       if (!cursor) return;
-      crosshair.update(cursor, leftAxisWidth(chart));
       const anchor = anchorAt(cursor);
+      crosshair.update(shown(cursor), leftAxisWidth(chart));
       if (first && anchor) preview(active, anchorsFor(active.mode) === 3 ? [first, second ?? anchor, anchor] : [first, anchor]);
     };
     const onDown = (event: PointerEvent) => {
       const active = current.current.bridge;
       if (!active?.enabled || active.interactionEnabled === false || current.current.comparisonMode || event.button !== 0 || ownsPointer) return;
+      touching = event.pointerType === 'touch';
       const point = pointFromEvent(event);
       const anchor = anchorAt(point);
       if (!anchor) return;
@@ -201,11 +211,10 @@ export function useChartWorkspace(
           touch = beginTouch(cursor, point);
           cursor = cursor ?? point;
           showCursor(active);
-        } else crosshair.update(point, leftAxisWidth(chart));
+        } else crosshair.update(shown(point), leftAxisWidth(chart));
       }
       if (active.mode === 'range') { rangeDown = anchor; rangeLast = anchor; updateRange(); }
       if (active.mode === 'select') {
-        const touching = event.pointerType === 'touch';
         const hit = [...primitive.geometries()].reverse().find((geometry) => geometry.object.id !== '__preview' && hitDrawing(geometry, point, touching ? TOUCH_HIT_TOLERANCE : undefined));
         if (!hit) { active.onSelectObject(null); return; }
         const index = anchorIndexAt(hit, point, touching ? TOUCH_HIT_TOLERANCE + 6 : undefined);
@@ -225,6 +234,7 @@ export function useChartWorkspace(
     const onMove = (event: PointerEvent) => {
       const active = current.current.bridge;
       if (!active?.enabled || active.interactionEnabled === false || current.current.comparisonMode) return;
+      touching = event.pointerType === 'touch';
       const point = pointFromEvent(event);
       if (touch) {
         if (!ownsPointer || event.pointerId !== pointerId) return;
@@ -238,7 +248,7 @@ export function useChartWorkspace(
       }
       const anchor = anchorAt(point);
       if (!anchor) return;
-      if (active.mode !== 'select' && active.mode !== 'range') crosshair.update(point, leftAxisWidth(chart));
+      if (active.mode !== 'select' && active.mode !== 'range') crosshair.update(shown(point), leftAxisWidth(chart));
       if (active.mode === 'range' && (first || rangeDown)) {
         if (ownsPointer && event.pointerId !== pointerId) return;
         rangeLast = anchor; updateRange();

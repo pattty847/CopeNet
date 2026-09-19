@@ -10,6 +10,7 @@ import type { useTickerViewModel } from '../useTickerViewModel';
 import type { ChartWorkspaceBridge, DrawingMode } from '../drawings/types';
 import { DEFAULT_DRAWING_COLOR, DRAWING_KINDS } from '../drawings/kinds';
 import { readChartStyle } from '../chartStyle/store';
+import { loadMagnet, saveMagnet, type MagnetMode } from '../drawings/magnet';
 import type { ChartDocument, ChartObject, ChartOperation, ChartSelection, ChartViewport, DrawingReceipt } from './types';
 
 const EMPTY_VIEWPORT: ChartViewport = { from: null, to: null, logicalFrom: null, logicalTo: null };
@@ -126,6 +127,8 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
   }, [apply]);
 
   const [labelRequestId, setLabelRequestId] = useState<string | null>(null);
+  const [magnet, setMagnetState] = useState<MagnetMode>(loadMagnet);
+  const setMagnet = useCallback((next: MagnetMode) => { setMagnetState(next); saveMagnet(next); }, []);
   const [settingsObjectId, setSettingsObjectId] = useState<string | null>(null);
   const [draft, setDraft] = useState<ChartObject | null>(null);
   const openDrawingSettings = useCallback((id: string | null) => {
@@ -158,7 +161,7 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
 
   const bridge: ChartWorkspaceBridge | undefined = document && document.instrument.symbol === view.viewSymbol ? {
     documentId: document.documentId, revision: document.revision, objects: document.objects,
-    timeframe: view.timeframe, bars: view.bars, enabled: !view.comparing, interactionEnabled: !busy, selectedObjectId, includeAccountContext, mode, selection,
+    timeframe: view.timeframe, bars: view.bars, enabled: !view.comparing, interactionEnabled: !busy, selectedObjectId, includeAccountContext, magnet, mode, selection,
     forecasts: { splitFingerprint: view.detail?.priceProvenance?.splitFingerprint, records: forecasts.records.filter((record) => record.documentId === document.documentId), hidden: hiddenForecasts, viewId,
       onSelect: setSelectedForecastId,
       onRendered: async (receipt) => { await wsClient.marketForecast.rendered(receipt); } },
@@ -184,7 +187,7 @@ export function useChartWorkspace(view: ReturnType<typeof useTickerViewModel>) {
       contributions: resources.read(view.viewSymbol), includeAccountContext: accountContext });
   };
   const toggleForecast = (id: string) => setForecastVisibility((previous) => ({ ...previous, [id]: hiddenForecasts.has(id) }));
-  return { forecasts, selectedForecastId, setSelectedForecastId, hiddenForecasts, toggleForecast, resources, bridge, open, setOpen, document, sessionKey, setSessionKey, batches, renderStatus, viewId, mode, setMode,
+  return { forecasts, selectedForecastId, setSelectedForecastId, hiddenForecasts, toggleForecast, resources, bridge, open, setOpen, document, sessionKey, setSessionKey, batches, renderStatus, viewId, mode, setMode, magnet, setMagnet,
     selectedObjectId, setSelectedObjectId, selection, setSelection, viewport, error, busy, apply, undo,
     includeAccountContext, setIncludeAccountContext, capture, refresh, retry: () => setRetryKey((key) => key + 1) };
 }

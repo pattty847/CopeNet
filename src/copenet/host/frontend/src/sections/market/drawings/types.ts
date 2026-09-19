@@ -1,6 +1,7 @@
 import type { ForecastBridge } from '../forecasts/types';
 import type { ChartObject, ChartSelection, ChartViewport, DrawingPatch } from '../chartAgent/types';
 import type { Ohlcv } from '../types';
+import type { MagnetMode } from './magnet';
 
 export type DrawingMode = 'select' | 'range' | ChartObject['kind'];
 export interface DrawingProposal {
@@ -30,6 +31,7 @@ export interface ChartWorkspaceBridge {
   /** Whether evidence viewers may read account-scoped resources. */
   includeAccountContext?: boolean;
   mode: DrawingMode;
+  magnet?: MagnetMode;
   selection?: ChartSelection | null;
   onViewport: (viewport: ChartViewport) => void;
   onSelectRange: (range: ChartSelection | null) => void;
