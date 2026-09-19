@@ -254,7 +254,12 @@ For current behavior, assume:
   - archive/restore
   - right-panel runtime + tool telemetry (**Tool Activity proof** groups `SessionRunRecord.toolSteps` and run-scoped artifacts via `runtime/activityProof.ts` + `ToolActivityProof.tsx`)
   - the **turn trail** (`components/transcript/TurnTrail.tsx`, rules in `runtime/turnTrail.ts`): in order while live, folded into one box once settled
-  - the **session row** (`components/session/SessionStandingRow.tsx`, rules in `runtime/sessionStanding.ts`) — see the standing entry below
+  - the **Sessions panel** (`components/session/SessionsPanel.tsx`) — ONE surface for the desktop
+    column and the mobile sheet; it replaced SessionDrawer (a popup, so it closed the moment you
+    opened a thread) and SessionSidebar, both deleted. It lives beside the nav rail in `AppShell`,
+    persists `sessionsPanelOpen` to localStorage, and collapses the primary nav to icons when it
+    opens. Rows come from `components/session/SessionStandingRow.tsx`, rules in
+    `runtime/sessionStanding.ts` — see the standing entry below
 - **A session row's title is where the thread stands, not a name, and it changes three
   times across a turn.** `runtime/sessionStanding.ts` is the one derivation: while the
   thread is ACTING the title is the model's own live tool-group phrase (the same
@@ -266,7 +271,12 @@ For current behavior, assume:
   the same ledger shape (`+added −removed`, last files, then tags) so the eye stops
   reading it. A new fact changes the icon, changes line 2, or becomes a tag — it never
   adds a fourth line, which is what keeps the row from becoming a stat block. Rows group
-  by the area the work lives in, because you remember by place, not by clock.
+  by the area the work lives in, because you remember by place, not by clock — the two MOST
+  specific path segments (`core/harness`), never the first two, because every file in a repo
+  shares its source root and `src/copenet` filed the whole list under one heading. A row whose
+  standing has NOT loaded yet is its own `unknown` state — a faint mark, no sentence, its own
+  "loading…" group — because one RPC covers every session and for a moment the list would
+  otherwise assert "idle · nothing changed" for all of them.
 - **One exclusive state per thread, and four of the five are pure facts.**
   `core/sessions/session_standing.py` resolves `running` (in-flight run) → `blocked`
   (last run's `policyDecision: "approval_required"`) → `talk` (empty ledger) → `unmerged`
