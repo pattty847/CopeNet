@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { NO_CHANGE_AREA, buildSessionRow, groupRowsByArea } from '../src/runtime/sessionStanding';
+import { NO_CHANGE_AREA, buildFilters, buildSessionRow, groupRowsByArea, matchesFilter } from '../src/runtime/sessionStanding';
 import type { LiveToolCall, Session, SessionStanding } from '../src/types/backend';
 
 function session(overrides: Partial<Session> = {}): Session {
@@ -172,4 +172,32 @@ test('rows group by the area their work lives in, with talk-only threads last', 
     groups.map((group) => [group.area, group.rows.length]),
     [['core/market', 2], [NO_CHANGE_AREA, 1]],
   );
+});
+
+// -- the filter chips over the list --------------------------------------------
+
+test('chips count what the operator is hunting for, and hide what has no matches', () => {
+  const rows = [
+    buildSessionRow(session({ key: 'a', inFlightRunId: 'r' }), standing({ sessionKey: 'a', state: 'running' }), []),
+    buildSessionRow(session({ key: 'b' }), standing({ sessionKey: 'b', state: 'unmerged' }), []),
+    buildSessionRow(session({ key: 'c' }), standing({ sessionKey: 'c', state: 'talk' }), []),
+  ];
+  assert.deepEqual(
+    buildFilters(rows).map((chip) => [chip.id, chip.count]),
+    [['all', 3], ['live', 1], ['unmerged', 1]],
+  );
+});
+
+test('all is always offered even when nothing matches anything else', () => {
+  assert.deepEqual(
+    buildFilters([buildSessionRow(session(), standing({ state: 'talk' }), [])]).map((chip) => chip.id),
+    ['all'],
+  );
+});
+
+test('a filter keeps only its own state, and all keeps everything', () => {
+  const unmerged = buildSessionRow(session(), standing({ state: 'unmerged' }), []);
+  assert.equal(matchesFilter(unmerged, 'unmerged'), true);
+  assert.equal(matchesFilter(unmerged, 'idle'), false);
+  assert.equal(matchesFilter(unmerged, 'all'), true);
 });

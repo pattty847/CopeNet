@@ -14,7 +14,7 @@ import {
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { organizeSessionDrawerSections } from '../lib/sessionDrawer';
-import { buildSessionRow } from '../runtime/sessionStanding';
+import { buildFilters, buildSessionRow, groupRowsByArea, matchesFilter, type SessionFilterId, type SessionRowModel } from '../runtime/sessionStanding';
 import { SessionStateIcon } from './session/SessionStateIcon';
 import { formatSessionAge } from '../lib/formatting';
 import type { Session } from '../types/backend';
@@ -29,6 +29,7 @@ function compactModelName(model?: string | null) {
 
 function SessionRow({
   session,
+  row,
   active,
   selected,
   pinned,
@@ -39,6 +40,7 @@ function SessionRow({
   onToggleArchive,
 }: {
   session: Session;
+  row: SessionRowModel;
   active: boolean;
   selected: boolean;
   pinned: boolean;
@@ -51,14 +53,6 @@ function SessionRow({
   const providers = useAppStore((state) => state.providers);
   const providerName = providers.find((provider) => provider.id === session.provider)?.displayName || session.provider;
   const modelLabel = compactModelName(session.model);
-  // Same derivation the sidebar row uses (runtime/sessionStanding.ts). This card keeps
-  // its own chrome and its provider/model footer, which is how you tell two lanes apart
-  // when jumping between them — but the body is where the thread stands, not a return
-  // cue built from fields nothing has written since the Phase 1 harness rebuild.
-  const standing = useAppStore((state) => state.sessionStanding[session.key]);
-  const runId = useAppStore((state) => state.activeRunsBySession[session.key]);
-  const liveToolCalls = useAppStore((state) => (runId ? state.liveToolCallsByRun[runId] : undefined));
-  const row = buildSessionRow(session, standing, liveToolCalls || []);
 
   return (
     <div
@@ -89,9 +83,15 @@ function SessionRow({
               {row.line ? (
                 <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-shell-muted/85">
                   <div className="min-w-0 truncate" title={row.line}>{row.line}</div>
-                  <span className="tabular-nums text-shell-muted/50">
-                    {row.phase === 'settled' ? formatSessionAge(session.updatedAt || session.createdAt) : 'now'}
-                  </span>
+                  {row.offerClose ? (
+                    <span className="rounded border border-shell-accent/35 px-[5px] py-[1px] text-[9.5px] font-semibold text-shell-accent">
+                      close?
+                    </span>
+                  ) : (
+                    <span className="tabular-nums text-shell-muted/50">
+                      {row.phase === 'settled' ? formatSessionAge(session.updatedAt || session.createdAt) : 'now'}
+                    </span>
+                  )}
                 </div>
               ) : null}
               {row.ledger || row.tags.length > 0 ? (
@@ -172,6 +172,7 @@ function SessionRow({
 function SessionSection({
   title,
   sessions,
+  rowFor,
   activeSessionKey,
   selectedSessionKeys,
   pinnedSessionKeys,
@@ -183,6 +184,7 @@ function SessionSection({
 }: {
   title: string;
   sessions: Session[];
+  rowFor: (session: Session) => SessionRowModel;
   activeSessionKey: string | null;
   selectedSessionKeys: string[];
   pinnedSessionKeys: string[];
@@ -204,6 +206,7 @@ function SessionSection({
           <SessionRow
             key={session.key}
             session={session}
+            row={rowFor(session)}
             active={activeSessionKey === session.key}
             selected={selectedSessionKeys.includes(session.key)}
             pinned={pinnedSessionKeys.includes(session.key)}
@@ -237,6 +240,7 @@ export function SessionDrawer() {
   const togglePinnedSessionKey = useAppStore((state) => state.togglePinnedSessionKey);
   const [query, setQuery] = useState('');
   const [drawerTab, setDrawerTab] = useState<'recent' | 'pinned' | 'archived'>('recent');
+  const [activeFilter, setActiveFilter] = useState<SessionFilterId>('all');
   const drawerRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
 
@@ -275,6 +279,44 @@ export function SessionDrawer() {
     () => organizeSessionDrawerSections({ sessions, pinnedSessionKeys, query }),
     [pinnedSessionKeys, query, sessions],
   );
+
+  // One derivation per session per render (runtime/sessionStanding.ts), shared by the
+  // grouping, the filter chips and each row.
+  const sessionStanding = useAppStore((state) => state.sessionStanding);
+  const activeRunsBySession = useAppStore((state) => state.activeRunsBySession);
+  const liveToolCallsByRun = useAppStore((state) => state.liveToolCallsByRun);
+  const rowsByKey = useMemo(() => {
+    const map = new Map<string, SessionRowModel>();
+    for (const session of sessions) {
+      const runId = activeRunsBySession[session.key];
+      map.set(
+        session.key,
+        buildSessionRow(session, sessionStanding[session.key], runId ? liveToolCallsByRun[runId] || [] : []),
+      );
+    }
+    return map;
+  }, [sessions, sessionStanding, activeRunsBySession, liveToolCallsByRun]);
+  const rowFor = (session: Session) =>
+    rowsByKey.get(session.key) || buildSessionRow(session, undefined, []);
+
+  // The Recent tab groups by the area the work lives in, not by clock: you remember a
+  // thread by where it was, and the chips answer "what still needs me".
+  const recentSessions = useMemo(
+    () => [...sections.recent.today, ...sections.recent.thisWeek, ...sections.recent.earlier],
+    [sections],
+  );
+  const filters = useMemo(() => buildFilters(recentSessions.map(rowFor)), [recentSessions, rowsByKey]);
+  const visibleRecent = useMemo(
+    () => recentSessions.filter((session) => matchesFilter(rowFor(session), activeFilter)),
+    [recentSessions, rowsByKey, activeFilter],
+  );
+  const areaGroups = useMemo(() => {
+    const byKey = new Map(visibleRecent.map((session) => [session.key, session]));
+    return groupRowsByArea(visibleRecent.map(rowFor)).map((group) => ({
+      area: group.area,
+      sessions: group.rows.map((row) => byKey.get(row.sessionKey)).filter((item): item is Session => Boolean(item)),
+    }));
+  }, [visibleRecent, rowsByKey]);
 
   const closeDrawerAndThen = (fn: () => void) => {
     setSessionDrawerOpen(false);
@@ -339,8 +381,8 @@ export function SessionDrawer() {
           <div className="border-b border-shell-border px-4 pb-3 pt-4">
             <div className="flex items-start justify-between gap-3">
               <div>
-                <div className="text-[15px] font-semibold text-shell-text">Resume Session</div>
-                <div className="mt-1 text-[12px] text-shell-muted">Jump back into any conversation.</div>
+                <div className="text-[15px] font-semibold text-shell-text">Sessions</div>
+                <div className="mt-1 text-[12px] text-shell-muted">Where every thread stands.</div>
               </div>
               <button
                 type="button"
@@ -428,6 +470,25 @@ export function SessionDrawer() {
                 </button>
               ))}
             </div>
+
+            {drawerTab === 'recent' && filters.length > 1 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1.5 text-[10px] font-semibold">
+                {filters.map((chip) => (
+                  <button
+                    key={chip.id}
+                    type="button"
+                    onClick={() => setActiveFilter(chip.id)}
+                    className={`rounded-full border px-2 py-1 transition-colors ${
+                      activeFilter === chip.id
+                        ? 'border-shell-accent/30 bg-shell-accent-soft text-shell-accent'
+                        : 'border-shell-border text-shell-muted hover:text-shell-text'
+                    }`}
+                  >
+                    {chip.label} <span className="tabular-nums opacity-70">{chip.count}</span>
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
 
           <div className="flex-1 overflow-y-auto px-3 py-3">
@@ -445,6 +506,7 @@ export function SessionDrawer() {
               {drawerTab === 'pinned' && (
                 <SessionSection
                   title="Pinned"
+                  rowFor={rowFor}
                   sessions={sections.pinned}
                   activeSessionKey={activeSessionKey}
                   selectedSessionKeys={selectedSessionKeys}
@@ -461,6 +523,7 @@ export function SessionDrawer() {
                 <>
                   <SessionSection
                     title="Pinned"
+                    rowFor={rowFor}
                     sessions={sections.pinned}
                     activeSessionKey={activeSessionKey}
                     selectedSessionKeys={selectedSessionKeys}
@@ -471,48 +534,29 @@ export function SessionDrawer() {
                     onTogglePin={togglePinnedSessionKey}
                     onToggleArchive={handleArchiveToggle}
                   />
-                  <SessionSection
-                    title="Today"
-                    sessions={sections.recent.today}
-                    activeSessionKey={activeSessionKey}
-                    selectedSessionKeys={selectedSessionKeys}
-                    pinnedSessionKeys={pinnedSessionKeys}
-                    selecting={sessionSelectMode}
-                    onOpen={handleSessionOpen}
-                    onToggleSelect={toggleSelectedSessionKey}
-                    onTogglePin={togglePinnedSessionKey}
-                    onToggleArchive={handleArchiveToggle}
-                  />
-                  <SessionSection
-                    title="This Week"
-                    sessions={sections.recent.thisWeek}
-                    activeSessionKey={activeSessionKey}
-                    selectedSessionKeys={selectedSessionKeys}
-                    pinnedSessionKeys={pinnedSessionKeys}
-                    selecting={sessionSelectMode}
-                    onOpen={handleSessionOpen}
-                    onToggleSelect={toggleSelectedSessionKey}
-                    onTogglePin={togglePinnedSessionKey}
-                    onToggleArchive={handleArchiveToggle}
-                  />
-                  <SessionSection
-                    title="Earlier"
-                    sessions={sections.recent.earlier}
-                    activeSessionKey={activeSessionKey}
-                    selectedSessionKeys={selectedSessionKeys}
-                    pinnedSessionKeys={pinnedSessionKeys}
-                    selecting={sessionSelectMode}
-                    onOpen={handleSessionOpen}
-                    onToggleSelect={toggleSelectedSessionKey}
-                    onTogglePin={togglePinnedSessionKey}
-                    onToggleArchive={handleArchiveToggle}
-                  />
+                  {areaGroups.map((group) => (
+                    <SessionSection
+                      key={group.area}
+                      title={group.area}
+                      rowFor={rowFor}
+                      sessions={group.sessions}
+                      activeSessionKey={activeSessionKey}
+                      selectedSessionKeys={selectedSessionKeys}
+                      pinnedSessionKeys={pinnedSessionKeys}
+                      selecting={sessionSelectMode}
+                      onOpen={handleSessionOpen}
+                      onToggleSelect={toggleSelectedSessionKey}
+                      onTogglePin={togglePinnedSessionKey}
+                      onToggleArchive={handleArchiveToggle}
+                    />
+                  ))}
                 </>
               )}
 
               {drawerTab === 'archived' && (
                 <SessionSection
                   title="Archived"
+                  rowFor={rowFor}
                   sessions={sections.archived}
                   activeSessionKey={activeSessionKey}
                   selectedSessionKeys={selectedSessionKeys}
@@ -525,9 +569,11 @@ export function SessionDrawer() {
                 />
               )}
 
-              {drawerTab === 'recent' && sections.pinned.length === 0 && sections.recent.today.length === 0 && sections.recent.thisWeek.length === 0 && sections.recent.earlier.length === 0 && (
+              {drawerTab === 'recent' && sections.pinned.length === 0 && areaGroups.length === 0 && (
                 <div className="rounded-2xl border border-dashed border-shell-border px-4 py-8 text-center text-[12px] text-shell-muted">
-                  No matching active sessions yet.
+                  {recentSessions.length > 0
+                    ? 'No sessions in that state right now.'
+                    : 'No matching active sessions yet.'}
                 </div>
               )}
 

@@ -163,3 +163,39 @@ export function groupRowsByArea(rows: SessionRowModel[]): { area: string; rows: 
     // Threads that changed nothing sink to the bottom; everything else keeps list order.
     .sort((left, right) => Number(left.area === NO_CHANGE_AREA) - Number(right.area === NO_CHANGE_AREA));
 }
+
+/** The filter chips over the list: what the operator is hunting for, with live counts. */
+export type SessionFilterId = 'all' | 'live' | 'unmerged' | 'blocked' | 'idle';
+
+export interface SessionFilter {
+  id: SessionFilterId;
+  label: string;
+  count: number;
+}
+
+const FILTER_MATCHES: Record<SessionFilterId, (row: SessionRowModel) => boolean> = {
+  all: () => true,
+  live: (row) => row.state === 'running',
+  unmerged: (row) => row.state === 'unmerged',
+  blocked: (row) => row.state === 'blocked',
+  // Work left in the middle of something: the threads you forgot were open.
+  idle: (row) => row.state === 'idle',
+};
+
+export function matchesFilter(row: SessionRowModel, filter: SessionFilterId): boolean {
+  return FILTER_MATCHES[filter](row);
+}
+
+/** Chips for every filter that currently matches something, 'all' always first. */
+export function buildFilters(rows: SessionRowModel[]): SessionFilter[] {
+  const labels: Record<SessionFilterId, string> = {
+    all: 'All',
+    live: 'Live',
+    unmerged: 'Unmerged',
+    blocked: 'Blocked',
+    idle: 'Idle',
+  };
+  return (Object.keys(labels) as SessionFilterId[])
+    .map((id) => ({ id, label: labels[id], count: rows.filter((row) => matchesFilter(row, id)).length }))
+    .filter((chip) => chip.id === 'all' || chip.count > 0);
+}
