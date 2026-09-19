@@ -464,6 +464,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "terminal.interrupt",
             "terminal.close",
             "plan.write",
+            "session.standing",
             "web.search",
             "web.fetch",
             "persona.author",
@@ -971,7 +972,7 @@ def test_session_run_rpcs_expose_durable_run_records(rpc_client: TestClient, tmp
         # Phase 3: the run's tool manifest is the small primitive set (+ plan.write).
         manifest_ids = {tool["id"] for tool in runs[0]["metadata"]["toolManifest"]}
         assert "files.read" in manifest_ids
-        assert manifest_ids <= {"artifact.read", "tools.load", "files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write", "user.remember", "market.dashboard", "market.ticker", "market.compare", "market.backtest", "market.evidence", "market.financials"}
+        assert manifest_ids <= {"artifact.read", "tools.load", "files.read", "files.write", "files.edit", "files.rg", "shell.exec", "plan.write", "session.standing", "web.search", "web.fetch", "persona.author", "memory.read", "memory.write", "user.remember", "market.dashboard", "market.ticker", "market.compare", "market.backtest", "market.evidence", "market.financials"}
         assert "repo.map" not in manifest_ids
 
         run_detail_id = socket.request("sessions.run", {"key": "tool-success", "runId": run_id})

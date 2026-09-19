@@ -162,3 +162,4 @@ userNotes.list
 workspace.listFiles
 workspace.readFile
 workspace.writeFile
+sessions.standing.list

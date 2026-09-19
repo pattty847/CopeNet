@@ -139,6 +139,7 @@ from .rpc_sessions import (
     handle_sessions_run,
     handle_sessions_runs,
     handle_sessions_resolve,
+    handle_sessions_standing_list,
     handle_sessions_state,
 )
 from .rpc_workspace import (
@@ -310,6 +311,7 @@ RPC_ROUTES = build_routes(
         ("sessions.runs", RpcRoute(handle_sessions_runs, "standard")),
         ("sessions.run", RpcRoute(handle_sessions_run, "standard")),
         ("sessions.state", RpcRoute(handle_sessions_state, "standard")),
+        ("sessions.standing.list", RpcRoute(handle_sessions_standing_list, "standard")),
         ("sessions.resolve", RpcRoute(handle_sessions_resolve, "standard")),
         ("pulse.list", RpcRoute(handle_pulse_list, "standard")),
         ("pulse.create_from_session", RpcRoute(handle_pulse_create_from_session, "standard")),

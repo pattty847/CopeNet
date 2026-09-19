@@ -60,6 +60,7 @@ from copenet.prompts.optimizer import optimize_prompt_variants
 from copenet.providers import Provider
 from copenet.core.runtime import ArtifactStore, EditBackupStore, RunStore
 from copenet.core.sessions import SessionStateStore, SessionStore, TranscriptStore, to_public_message
+from copenet.core.orchestrator.session_standing import list_session_standing as list_session_standing_impl
 from copenet.core.sessions.change_ledger import ChangeLedgerStore
 from copenet.core.tools import ToolPolicy, ToolRegistry
 from copenet.core.workspace_intel import WorkspaceIntelService, WorkspaceIntelStore
@@ -341,6 +342,10 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
     def list_sessions(self, include_archived: bool = False) -> list[dict]:
         """List known sessions."""
         return list_session_catalog(self, include_archived=include_archived)
+
+    def list_session_standing(self, include_archived: bool = False) -> list[dict]:
+        """List where every session stands: state, ledger, branch, shared files."""
+        return list_session_standing_impl(self, include_archived=include_archived)
 
     def resolve_session(self, session_key: str) -> dict | None:
         """Resolve one session by key."""

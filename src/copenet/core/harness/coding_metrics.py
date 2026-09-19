@@ -249,6 +249,9 @@ def summarize_coding_metrics(tool_steps: list[dict[str, Any]]) -> dict[str, Any]
             "commands": len(behavior.verification_calls),
             "tests": sum(1 for v in behavior.verification_calls if v["isTest"]),
             "afterLastEdit": behavior.verified_after_last_edit,
+            # Did the run stop with the suite failing? The session list titles that row
+            # "red" off this one fact — an exit code, not an interpretation.
+            "lastFailed": behavior.verification_calls[-1]["ok"] is False if behavior.verification_calls else False,
         },
         "recovery": {
             "failedVerificationsAfterEdit": behavior.failed_verifications_after_edit,

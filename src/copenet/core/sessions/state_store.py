@@ -36,6 +36,13 @@ class SessionStateRecord:
     pulse_state: dict[str, Any] = field(default_factory=dict)
     # Deferred tools the agent loaded with tools.load; they start loaded in later turns.
     loaded_tool_ids: list[str] = field(default_factory=list)
+    # Where the work stands, in the agent's own words, left by session.standing at the end
+    # of a turn. The session list renders it as the row title. It is stamped with the run
+    # that wrote it and expires when a later run does not write one, because a stale
+    # standing line ("six tests still red") is worse than no line at all.
+    standing_note: str | None = None
+    standing_done: bool = False
+    standing_run_id: str | None = None
     created_at: str = field(default_factory=utc_now_iso)
     updated_at: str = field(default_factory=utc_now_iso)
 
@@ -59,6 +66,9 @@ class SessionStateRecord:
             merge_state=_dict_value(raw.get("merge_state")),
             pulse_state=_dict_value(raw.get("pulse_state")),
             loaded_tool_ids=_string_list(raw.get("loaded_tool_ids")),
+            standing_note=_optional_text(raw.get("standing_note")),
+            standing_done=bool(raw.get("standing_done") or False),
+            standing_run_id=_optional_text(raw.get("standing_run_id")),
             created_at=str(raw.get("created_at") or utc_now_iso()),
             updated_at=str(raw.get("updated_at") or utc_now_iso()),
         )

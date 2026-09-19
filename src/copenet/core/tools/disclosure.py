@@ -32,6 +32,9 @@ ALWAYS_LOADED_TOOL_IDS = frozenset(
         "web.fetch",
         "memory.read",
         "tools.load",
+        # A thread cannot ask for the tool that says where it stands — by the time the
+        # model knows it is stopping, a tools.load round trip is a wasted step.
+        "session.standing",
     }
 )
 

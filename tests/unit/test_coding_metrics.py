@@ -94,7 +94,7 @@ def test_summary_shape_and_none_for_chat_only_turns() -> None:
         "edits": {"count": 1, "files": 1, "staleErrors": 0},
         "exactRepeats": 1,
         "failures": {"count": 1, "blocked": 1, "blindRetries": 0},
-        "verification": {"commands": 1, "tests": 0, "afterLastEdit": True},
+        "verification": {"commands": 1, "tests": 0, "afterLastEdit": True, "lastFailed": False},
         "recovery": {"failedVerificationsAfterEdit": 0, "editsAfterFailedVerification": 0},
     }
 

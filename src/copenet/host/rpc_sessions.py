@@ -48,6 +48,20 @@ async def handle_sessions_list(request_id: str, params: dict[str, Any] | None, s
     )
 
 
+async def handle_sessions_standing_list(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
+    """Where every session stands — one call for the whole session list."""
+    include_archived = bool((params or {}).get("includeArchived", False))
+    await send_json(
+        make_response_frame(
+            ResponseFrame(
+                id=request_id,
+                ok=True,
+                payload={"standing": orchestrator.list_session_standing(include_archived=include_archived)},
+            )
+        )
+    )
+
+
 async def handle_sessions_create(request_id: str, params: dict[str, Any] | None, send_json: SendJson, orchestrator) -> None:
     raw = params or {}
     provider = _required_text(raw, "provider")

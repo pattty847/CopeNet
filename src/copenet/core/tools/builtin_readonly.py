@@ -10,6 +10,7 @@ from .handlers.market import DESCRIPTORS as MARKET_DESCRIPTORS, HANDLERS as MARK
 from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMORY_HANDLERS
 from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
+from .handlers.session_standing import DESCRIPTORS as SESSION_STANDING_DESCRIPTORS, HANDLERS as SESSION_STANDING_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
 from .handlers.terminal import DESCRIPTORS as TERMINAL_DESCRIPTORS, HANDLERS as TERMINAL_HANDLERS
 from .handlers.tools_load import DESCRIPTORS as TOOLS_LOAD_DESCRIPTORS, HANDLERS as TOOLS_LOAD_HANDLERS
@@ -46,6 +47,9 @@ MANIFEST_TOOL_IDS = {
     "terminal.interrupt",
     "terminal.close",
     "plan.write",
+    # session.standing is the one thing the session list cannot derive: where the work
+    # stands, in the model's words. It titles the row (core/tools/handlers/session_standing.py).
+    "session.standing",
     # Deferred disclosure (core/tools/disclosure.py): everything below the always-loaded
     # core is offered as a one-line catalog and loaded on request through tools.load.
     "tools.load",
@@ -93,6 +97,7 @@ ALL_DESCRIPTORS = (
     + MARKET_DESCRIPTORS
     + USER_NOTE_DESCRIPTORS
     + TOOLS_LOAD_DESCRIPTORS
+    + SESSION_STANDING_DESCRIPTORS
 )
 ALL_HANDLERS = {
     **FILE_HANDLERS,
@@ -108,6 +113,7 @@ ALL_HANDLERS = {
     **MARKET_HANDLERS,
     **USER_NOTE_HANDLERS,
     **TOOLS_LOAD_HANDLERS,
+    **SESSION_STANDING_HANDLERS,
 }
 
 

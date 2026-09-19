@@ -101,6 +101,9 @@ def successful_record(
         task_prompt_id=admission.entry.task_prompt_id or admission.request.task_prompt_id,
         created_artifact_ids=events.created_artifact_ids,
         deferred_tool_ids=frozenset(tool.id for tool in prepared.tools.deferred_tools),
+        # session.standing wrote to the store during the run; prepared.session_state
+        # predates it, so read the live record back before folding it in.
+        live_state=orchestrator._session_state_store.get(admission.session_key),
     )
     orchestrator._session_state_store.save(updated_state)
     admission.trace.record(

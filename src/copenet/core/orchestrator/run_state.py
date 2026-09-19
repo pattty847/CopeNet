@@ -19,6 +19,7 @@ def _evolve_session_state(
     task_prompt_id: str | None,
     created_artifact_ids: list[str],
     deferred_tool_ids: frozenset[str] = frozenset(),
+    live_state: SessionStateRecord | None = None,
 ) -> SessionStateRecord:
     """Update durable session state after a run.
 
@@ -43,6 +44,7 @@ def _evolve_session_state(
         session_state.loaded_tool_ids,
         [str(tool.id) for tool in getattr(plan, "tools", []) if str(tool.id) in deferred_tool_ids],
     )
+    standing = _carry_standing(live_state, run_id)
     agent_runtime = _build_agent_runtime_payload(
         session_key=session_state.session_key,
         task_prompt_id=task_prompt_id,
@@ -72,9 +74,29 @@ def _evolve_session_state(
         merge_state=dict(session_state.merge_state),
         pulse_state=dict(session_state.pulse_state),
         loaded_tool_ids=loaded_tool_ids,
+        standing_note=standing[0],
+        standing_done=standing[1],
+        standing_run_id=standing[2],
         created_at=session_state.created_at,
         updated_at=transcript_now(),
     )
+
+
+def _carry_standing(
+    live_state: SessionStateRecord | None, run_id: str
+) -> tuple[str | None, bool, str | None]:
+    """Keep this run's standing line; drop an older one.
+
+    session.standing writes mid-run, so the record this finalization started from does
+    not have it — the live record does. A standing line survives only the run that wrote
+    it: a later turn that says nothing leaves the row titled plainly rather than claiming
+    something that stopped being true two turns ago.
+    """
+    if live_state is None or not live_state.standing_note:
+        return None, False, None
+    if live_state.standing_run_id != run_id:
+        return None, False, None
+    return live_state.standing_note, bool(live_state.standing_done), live_state.standing_run_id
 
 
 def _append_unique(existing: list[str], incoming: list[str]) -> list[str]:
