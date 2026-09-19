@@ -289,3 +289,14 @@ def test_a_thread_with_no_overlap_still_warns_that_the_branch_is_shared() -> Non
     assert counts == {"sessionCount": 1, "overlapCount": 0}
     assert "evaluate.py" in text
     assert "ALSO EDITED BY YOU" not in text
+
+
+def test_a_session_whose_workspace_is_unknown_collides_with_nobody() -> None:
+    """An unknown workspace used to fall back to the host's workdir, which credited
+    every old benchmark session with whatever branch this checkout was on."""
+    ledgers = {
+        "a": LedgerSummary(paths=frozenset({"src/HomePage.tsx"})),
+        "b": LedgerSummary(paths=frozenset({"src/HomePage.tsx"})),
+    }
+    assert find_shared_paths(ledgers, {"a": "", "b": ""})["a"] == []
+    assert find_shared_paths(ledgers, {"a": "", "b": "/repo"})["b"] == []

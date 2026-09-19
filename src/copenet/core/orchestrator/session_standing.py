@@ -36,13 +36,17 @@ def list_session_standing(
     ledgers: dict[str, LedgerSummary] = {}
     workspaces: dict[str, str] = {}
     branches: dict[str, BranchState] = {}
+    last_runs: dict[str, object] = {}
 
     for entry in entries:
         key = entry.session_key
         ledgers[key] = summarize_ledger(orchestrator._change_ledger_store.entries(key))
-        workspace = _workspace_for(orchestrator, entry)
-        workspaces[key] = str(workspace)
-        if str(workspace) not in branches:
+        last_runs[key] = _last_run(orchestrator, key)
+        workspace = _workspace_for(orchestrator, entry, last_runs[key])
+        # "" means we cannot say where this session's work went, so it shares a branch
+        # with nobody and gets no branch state.
+        workspaces[key] = str(workspace) if workspace is not None else ""
+        if workspace is not None and str(workspace) not in branches:
             branches[str(workspace)] = read_branch_state(workspace)
 
     shared = find_shared_paths(ledgers, workspaces)
@@ -51,10 +55,10 @@ def list_session_standing(
     for entry in entries:
         key = entry.session_key
         state_record = orchestrator._session_state_store.get(key)
-        last_run = _last_run(orchestrator, key)
+        last_run = last_runs[key]
         approval_command = approval_command_from(last_run)
         ledger = ledgers[key]
-        branch = branches[workspaces[key]]
+        branch = branches.get(workspaces[key], BranchState())
         standing_note = getattr(state_record, "standing_note", None) if state_record else None
         standing_done = bool(getattr(state_record, "standing_done", False)) if state_record else False
         rows.append(
@@ -80,14 +84,26 @@ def list_session_standing(
     return rows
 
 
-def _workspace_for(orchestrator: "Orchestrator", entry) -> Path:
-    """Resolve one session's workspace the same way a run does."""
-    if not entry.workspace_root:
-        return orchestrator._workdir
-    try:
-        return Path(orchestrator.validate_workspace_root(entry.workspace_root))
-    except (ValueError, OSError):
-        return orchestrator._workdir
+def _workspace_for(orchestrator: "Orchestrator", entry, last_run=None) -> Path | None:
+    """Where this session's work actually went, or None when we cannot say.
+
+    The run record stamps the workspace it used, and that is the authoritative
+    answer — falling back to the host's current workdir credited every old session
+    (benchmark runs against long-gone fixture repos included) with whatever branch
+    this checkout happens to be on. A session whose workspace no longer exists gets
+    no branch state rather than a borrowed one.
+    """
+    recorded = ""
+    if last_run is not None:
+        metadata = getattr(last_run, "metadata", None)
+        if isinstance(metadata, dict):
+            recorded = str(metadata.get("workspaceRoot") or "").strip()
+    candidate = recorded or (entry.workspace_root or "").strip()
+    if not candidate:
+        # Never ran, so nothing has been written anywhere yet.
+        return None
+    path = Path(candidate)
+    return path if path.is_dir() else None
 
 
 def _last_run(orchestrator: "Orchestrator", session_key: str):
@@ -129,7 +145,8 @@ def shared_work_for(
     for entry in orchestrator._session_store.list_sessions(include_archived=False):
         if entry.session_key == session_key:
             continue
-        if str(_workspace_for(orchestrator, entry)) != str(workspace_root):
+        other = _workspace_for(orchestrator, entry, _last_run(orchestrator, entry.session_key))
+        if other is None or str(other) != str(workspace_root):
             continue
         ledger = summarize_ledger(orchestrator._change_ledger_store.entries(entry.session_key))
         if ledger.file_count == 0:

@@ -217,7 +217,9 @@ def find_shared_paths(ledgers: dict[str, LedgerSummary], workspaces: dict[str, s
     keys = sorted(ledgers)
     for index, left in enumerate(keys):
         for right in keys[index + 1 :]:
-            if workspaces.get(left) != workspaces.get(right):
+            workspace = workspaces.get(left)
+            # "" means the session's workspace is unknown; unknown never collides.
+            if not workspace or workspace != workspaces.get(right):
                 continue
             overlap = ledgers[left].paths & ledgers[right].paths
             if not overlap:

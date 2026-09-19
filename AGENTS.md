@@ -188,6 +188,14 @@ For current behavior, assume:
 ### Tools runtime
 
 - Handlers live under `src/copenet/core/tools/handlers/`; `builtin_readonly.py` aggregates them (the filename is historical). `context.py` / `context.prepare` were retired in Phase 0.3. The model-facing surface is the explicit `MANIFEST_TOOL_IDS` set: core file/shell/plan/web tools plus approved Market, persona, memory, and user-note tools. Treat that set—not an old numeric count in documentation—as canonical. `files.list`/`files.search` were consolidated into `files.rg`; `artifact.create` remains registered but off-manifest, while `artifact.read` is on-manifest so a `saved as artifact <id>` hint or a receipt's `artifactId` is something the model can open (session-scoped; reading back a persisted `web.*` result re-taints the run in Barricade).
+- **`session.standing` is the only thing the session list asks the model for.** One line on
+  where the WORK stands plus an optional `done`, written at the end of a turn and used as
+  the row's title (`core/tools/handlers/session_standing.py`). It is always loaded, never
+  deferred — a thread cannot `tools.load` the tool that says it is stopping. The line is
+  stamped with the run that wrote it and **expires when a later run leaves none**
+  (`run_state._carry_standing`), because a stale "six tests still red" is worse than
+  falling back to the plain title. `done` is the only field anything branches on, and all
+  it does is offer the row for closing; archiving stays the operator's action.
 - **Deferred disclosure: an ordinary turn offers the coding core; the rest is a catalog.**
   `core/tools/disclosure.py` names the always-loaded set (`files.*`, `shell.exec`, `plan.write`,
   `artifact.read`, `web.*`, `memory.read`, `tools.load`); every other manifest tool the policy allows
@@ -246,6 +254,42 @@ For current behavior, assume:
   - archive/restore
   - right-panel runtime + tool telemetry (**Tool Activity proof** groups `SessionRunRecord.toolSteps` and run-scoped artifacts via `runtime/activityProof.ts` + `ToolActivityProof.tsx`)
   - the **turn trail** (`components/transcript/TurnTrail.tsx`, rules in `runtime/turnTrail.ts`): in order while live, folded into one box once settled
+  - the **session row** (`components/session/SessionStandingRow.tsx`, rules in `runtime/sessionStanding.ts`) — see the standing entry below
+- **A session row's title is where the thread stands, not a name, and it changes three
+  times across a turn.** `runtime/sessionStanding.ts` is the one derivation: while the
+  thread is ACTING the title is the model's own live tool-group phrase (the same
+  `activityTitle` the turn trail shows — reused, never asked for twice); while it is
+  WRITING the phrase stops so the title falls back to the last standing line and the row
+  reads "writing…"; once SETTLED it is the line the model left through `session.standing`,
+  falling back to the plain session title when it left none. Three lines, fixed budget:
+  line 1 identity, line 2 a SENTENCE about state and never a bare number, line 3 always
+  the same ledger shape (`+added −removed`, last files, then tags) so the eye stops
+  reading it. A new fact changes the icon, changes line 2, or becomes a tag — it never
+  adds a fourth line, which is what keeps the row from becoming a stat block. Rows group
+  by the area the work lives in, because you remember by place, not by clock.
+- **One exclusive state per thread, and four of the five are pure facts.**
+  `core/sessions/session_standing.py` resolves `running` (in-flight run) → `blocked`
+  (last run's `policyDecision: "approval_required"`) → `talk` (empty ledger) → `unmerged`
+  (branch ahead of trunk) → `done` (the model said so and nothing is unmerged) → `idle`.
+  **"waiting on you" is deliberately absent**: every reply ends with the model waiting, so
+  the state carried no information — what varies is the state of the WORK. `red` is a TAG,
+  not a state: `codingMetrics.verification.lastFailed`, an exit code from the rule set that
+  already decides which commands were verification. The whole sidebar is one RPC,
+  `sessions.standing.list`; it replaced an N+1 `sessions.state` fetch that read fields
+  nothing has written since the Phase 1 harness rebuild.
+- **Attribute a session's branch from the run record, never the host's current workdir.**
+  `metadata.workspaceRoot` is stamped on every run and is the authoritative answer; a
+  session whose workspace no longer exists gets NO branch state rather than a borrowed
+  one. Falling back to `orchestrator._workdir` credited 40 dead benchmark sessions with
+  whatever branch this checkout happened to be on, and invented file collisions between
+  them. An unknown workspace collides with nobody.
+- **A turn is told when another session is working in its branch.** You start a feature,
+  move to another model, forget the first thread is open, and the branch quietly ends up
+  holding two features. `render_shared_work` attaches a notice the way the change ledger
+  already rides along (never persisted into the transcript, never replayed): other
+  non-archived sessions in the same workspace that changed something, overlapping files
+  called out by name. Trace: `shared_work_injected`. Detecting it while it is still two
+  edits is the value; resolving it stays the operator's call.
 - **Previews declare their `type`; the client does not guess.** `_preview_payload` emits `file_read` (with `lines`, not `content`), `repo_search` (with `snippet`, not `text`), `raw`, `diff`, `plan`, `web_search`, `web_doc`. The normalizer used to infer `file_read` from `{path, content}` and `repo_search` from `{matches}`; that shim is gone, so an undeclared preview is genuinely raw. Add the `type` in the same commit as the projection.
 - **A preview type with no renderer renders blank.** `_preview_payload` in `core/tools/projection.py` selects explicit per-tool builders from `preview_builders.py`; the frontend's `ToolResultPreview` union is the list of shapes that can actually be displayed. The five `market_*` types were emitted for months with no renderer, so every market tool call showed the call and no output. `tests/unit/test_preview_renderability.py` now fails on any orphan — ship the renderer with the projection, or omit the branch and let `_generic_preview` return a raw body. Also note a tool step may carry its preview on `effect.preview` rather than `preview`; normalize before branching.
 - **The thread is true to when things happened.** While a run is live its parts render in order: narration, reasoning, and a collapsed group per burst of consecutive tool calls (one call is a bare row). Narration closes a group; a later call never jumps above earlier text. Groups start collapsed and stay collapsed — a box that opens itself pushes the text being read down the screen. Once the turn settles, everything before the answer (the text after the last action) folds into ONE collapsed trail box above it, and opening the box shows the same ordered trail. This depends on the persisted parts keeping their order: `_normalize_final_message_parts` must never fold narration into one text part again, or a reloaded turn stops matching the one that streamed.
