@@ -246,3 +246,46 @@ def test_same_file_in_different_workspaces_is_not_a_collision() -> None:
         "b": LedgerSummary(paths=frozenset({"src/HomePage.tsx"})),
     }
     assert find_shared_paths(ledgers, {"a": "/repo-one", "b": "/repo-two"})["a"] == []
+
+
+# -- "someone else is working here" ----------------------------------------------
+
+
+def test_shared_work_notice_names_the_other_thread_and_the_files_that_collide() -> None:
+    from copenet.core.sessions.session_standing import SharedWork, append_shared_work, render_shared_work
+
+    text, counts = render_shared_work(
+        [
+            SharedWork(
+                session_key="s2",
+                title="Home dashboard rebuild",
+                files=["HomePage.tsx", "SectionGrid.tsx"],
+                overlapping=["HomePage.tsx"],
+            )
+        ]
+    )
+    assert counts == {"sessionCount": 1, "overlapCount": 1}
+    assert "Home dashboard rebuild (session s2)" in text
+    assert "ALSO EDITED BY YOU: HomePage.tsx" in text
+    assert "same branch as theirs" in text
+    assert append_shared_work("do the thing", text).startswith("do the thing\n\n")
+
+
+def test_no_notice_when_no_other_session_is_working_here() -> None:
+    from copenet.core.sessions.session_standing import append_shared_work, render_shared_work
+
+    text, counts = render_shared_work([])
+    assert text == ""
+    assert counts == {"sessionCount": 0, "overlapCount": 0}
+    assert append_shared_work("do the thing", text) == "do the thing"
+
+
+def test_a_thread_with_no_overlap_still_warns_that_the_branch_is_shared() -> None:
+    from copenet.core.sessions.session_standing import SharedWork, render_shared_work
+
+    text, counts = render_shared_work(
+        [SharedWork(session_key="s3", title="Screener rule windows", files=["evaluate.py"], overlapping=[])]
+    )
+    assert counts == {"sessionCount": 1, "overlapCount": 0}
+    assert "evaluate.py" in text
+    assert "ALSO EDITED BY YOU" not in text

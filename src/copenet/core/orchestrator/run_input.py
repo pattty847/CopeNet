@@ -25,7 +25,9 @@ from copenet.core.orchestrator.tool_requests import (
     requested_tool_overlay,
 )
 from copenet.core.sessions import TranscriptMessage
+from copenet.core.orchestrator.session_standing import shared_work_for
 from copenet.core.sessions.change_ledger import append_change_ledger, last_digests, render_change_ledger
+from copenet.core.sessions.session_standing import append_shared_work, render_shared_work
 from copenet.core.sessions.transcript_store import utc_now_iso as transcript_now
 from copenet.core.tools import (
     build_responses_tool_schemas,
@@ -167,9 +169,21 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
             "change_ledger_injected",
             {**ledger_counts, "entryCount": len(ledger_entries), "chars": len(ledger_text)},
         )
+    # Another open session may already be changing files on this same branch. The agent
+    # cannot see one, so tell it before it edits rather than after the branch is holding
+    # two features (core/sessions/session_standing.py).
+    shared_text, shared_counts = render_shared_work(
+        shared_work_for(
+            orchestrator,
+            session_key=admission.session_key,
+            workspace_root=admission.session_workspace_root,
+        )
+    )
+    if shared_text:
+        admission.trace.record("shared_work_injected", {**shared_counts, "chars": len(shared_text)})
     current_message = current_chart_message(
         orchestrator,
-        append_change_ledger(admission.message, ledger_text),
+        append_shared_work(append_change_ledger(admission.message, ledger_text), shared_text),
         admission.market_context,
         token_limit=chart_token_limit,
     )

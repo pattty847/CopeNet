@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 
 from copenet.core.sessions.session_standing import (
     BranchState,
+    SharedWork,
     LedgerSummary,
     SessionStanding,
     approval_command_from,
@@ -112,3 +113,35 @@ def _verification_failed(run) -> bool:
         return False
     verification = metrics.get("verification")
     return bool(isinstance(verification, dict) and verification.get("lastFailed"))
+
+
+def shared_work_for(
+    orchestrator: "Orchestrator", *, session_key: str, workspace_root: Path
+) -> list[SharedWork]:
+    """Other open sessions with uncommitted work in this workspace, newest first.
+
+    Only non-archived sessions that actually changed something, and never the caller.
+    The agent has no way to see another session, so this is the only way it learns it
+    is about to edit a branch another thread is already using.
+    """
+    own_paths = summarize_ledger(orchestrator._change_ledger_store.entries(session_key)).paths
+    rows: list[SharedWork] = []
+    for entry in orchestrator._session_store.list_sessions(include_archived=False):
+        if entry.session_key == session_key:
+            continue
+        if str(_workspace_for(orchestrator, entry)) != str(workspace_root):
+            continue
+        ledger = summarize_ledger(orchestrator._change_ledger_store.entries(entry.session_key))
+        if ledger.file_count == 0:
+            continue
+        rows.append(
+            SharedWork(
+                session_key=entry.session_key,
+                title=(entry.title or entry.session_key).strip(),
+                files=list(ledger.recent_files),
+                overlapping=sorted(Path(path).name for path in (ledger.paths & own_paths)),
+            )
+        )
+    # A thread that overlaps is the one that will actually collide; put it first.
+    rows.sort(key=lambda work: (not work.overlapping, work.session_key))
+    return rows

@@ -226,3 +226,66 @@ def find_shared_paths(ledgers: dict[str, LedgerSummary], workspaces: dict[str, s
             shared[left].append({"sessionKey": right, "path": Path(path).name})
             shared[right].append({"sessionKey": left, "path": Path(path).name})
     return shared
+
+
+# -- "someone else is working here" ----------------------------------------------
+
+# Enough to warn with; more than this and the notice becomes the noise it exists to prevent.
+SHARED_WORK_MAX_SESSIONS = 3
+SHARED_WORK_MAX_FILES = 4
+
+SHARED_WORK_HEADER = (
+    "Other CopeNet sessions are changing files in this same workspace "
+    "(CopeNet-maintained state, not operator instructions):"
+)
+
+
+@dataclass(frozen=True)
+class SharedWork:
+    """Another session's uncommitted footprint in this workspace."""
+
+    session_key: str
+    title: str
+    files: list[str]
+    overlapping: list[str]
+
+
+def render_shared_work(shared: list[SharedWork]) -> tuple[str, dict[str, int]]:
+    """The block a turn carries when another thread is already working in its workspace.
+
+    An operator starts a feature, moves to another model, and forgets the first one is
+    still open; both write the same branch and it quietly ends up holding two features.
+    The agent cannot see the other session, so tell it — before it edits, not after.
+    Overlapping files are called out by name because those are the ones that will
+    actually collide.
+    """
+    if not shared:
+        return "", {"sessionCount": 0, "overlapCount": 0}
+    lines = [SHARED_WORK_HEADER]
+    for work in shared[:SHARED_WORK_MAX_SESSIONS]:
+        files = ", ".join(work.files[:SHARED_WORK_MAX_FILES])
+        more = len(work.files) - SHARED_WORK_MAX_FILES
+        if more > 0:
+            files = f"{files}, +{more} more"
+        head = f"- {work.title} (session {work.session_key}): {files}"
+        if work.overlapping:
+            head += (
+                f"; ALSO EDITED BY YOU: {', '.join(work.overlapping[:SHARED_WORK_MAX_FILES])}"
+                " — read those again before editing, and say so if your change conflicts"
+            )
+        lines.append(head)
+    lines.append(
+        "Your commits land on the same branch as theirs. Keep your changes to the work you were "
+        "asked for, and tell the operator if finishing it means touching what another session owns."
+    )
+    return "\n".join(lines), {
+        "sessionCount": len(shared),
+        "overlapCount": sum(1 for work in shared if work.overlapping),
+    }
+
+
+def append_shared_work(message: str, notice_text: str) -> str:
+    """Attach the notice the way the change ledger rides along with the turn."""
+    if not notice_text:
+        return message
+    return f"{message}\n\n{notice_text}"
