@@ -14,7 +14,8 @@ import {
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
 import { organizeSessionDrawerSections } from '../lib/sessionDrawer';
-import { describeSessionReturnCue } from '../lib/personalHistory';
+import { buildSessionRow } from '../runtime/sessionStanding';
+import { SessionStateIcon } from './session/SessionStateIcon';
 import { formatSessionAge } from '../lib/formatting';
 import type { Session } from '../types/backend';
 
@@ -48,18 +49,16 @@ function SessionRow({
   onToggleArchive: () => void;
 }) {
   const providers = useAppStore((state) => state.providers);
-  const sessionStates = useAppStore((state) => state.sessionStates);
-  const isRunning = useAppStore((state) => Boolean(state.activeRunsBySession[session.key]));
   const providerName = providers.find((provider) => provider.id === session.provider)?.displayName || session.provider;
   const modelLabel = compactModelName(session.model);
-  const sessionState = sessionStates[session.key];
-  const returnCue = describeSessionReturnCue({
-    providerLabel: providerName,
-    modelLabel,
-    taskSummary: sessionState?.task_summary || null,
-    starterIntent: sessionState?.starter_intent || null,
-    topicalTags: sessionState?.topical_tags || [],
-  });
+  // Same derivation the sidebar row uses (runtime/sessionStanding.ts). This card keeps
+  // its own chrome and its provider/model footer, which is how you tell two lanes apart
+  // when jumping between them — but the body is where the thread stands, not a return
+  // cue built from fields nothing has written since the Phase 1 harness rebuild.
+  const standing = useAppStore((state) => state.sessionStanding[session.key]);
+  const runId = useAppStore((state) => state.activeRunsBySession[session.key]);
+  const liveToolCalls = useAppStore((state) => (runId ? state.liveToolCallsByRun[runId] : undefined));
+  const row = buildSessionRow(session, standing, liveToolCalls || []);
 
   return (
     <div
@@ -81,18 +80,50 @@ function SessionRow({
         <div className="min-w-0 flex-1">
           <div className="flex items-start gap-2">
             <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <div className="truncate text-[13px] font-semibold text-shell-text">{session.title || session.key || 'New Chat'}</div>
-                {isRunning && (
-                  <span className="inline-flex shrink-0 items-center gap-1 text-[9px] font-semibold uppercase tracking-wide text-shell-accent">
-                    <span className="h-1.5 w-1.5 animate-pulse rounded-full bg-shell-accent" /> Running
+              <div className="flex items-start gap-2">
+                <SessionStateIcon state={row.state} phase={row.phase} />
+                <div className="line-clamp-2 min-w-0 flex-1 text-[13px] font-semibold leading-[1.3] text-shell-text" title={row.title}>
+                  {row.title}
+                </div>
+              </div>
+              {row.line ? (
+                <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-shell-muted/85">
+                  <div className="min-w-0 truncate" title={row.line}>{row.line}</div>
+                  <span className="tabular-nums text-shell-muted/50">
+                    {row.phase === 'settled' ? formatSessionAge(session.updatedAt || session.createdAt) : 'now'}
                   </span>
-                )}
-              </div>
-              <div className="mt-1 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-shell-muted/85">
-                <div className="min-w-0 truncate" title={returnCue.primary}>{returnCue.primary}</div>
-                <span className="text-shell-muted/50 tabular-nums">{formatSessionAge(session.updatedAt || session.createdAt)}</span>
-              </div>
+                </div>
+              ) : null}
+              {row.ledger || row.tags.length > 0 ? (
+                <div className="mt-1 flex items-center gap-[7px] font-mono text-[9.5px] text-shell-muted/85">
+                  {row.ledger ? (
+                    <>
+                      {row.ledger.added > 0 && <span className="text-operator-success">+{row.ledger.added}</span>}
+                      {row.ledger.removed > 0 && <span className="text-operator-error">&minus;{row.ledger.removed}</span>}
+                      {row.ledger.files.map((file) => (
+                        <span key={file} className="truncate">{file}</span>
+                      ))}
+                      {row.ledger.moreFiles > 0 && <span className="text-shell-muted/50">+{row.ledger.moreFiles}</span>}
+                    </>
+                  ) : null}
+                  {row.tags.length > 0 ? (
+                    <span className="ml-auto flex shrink-0 items-center gap-[4px]">
+                      {row.tags.map((tag) => (
+                        <span
+                          key={tag.label}
+                          className={`rounded border px-[5px] py-[1.5px] text-[8.5px] ${
+                            tag.tone === 'alert'
+                              ? 'border-operator-error/40 text-operator-error'
+                              : 'border-shell-accent/35 text-shell-accent'
+                          }`}
+                        >
+                          {tag.label}
+                        </span>
+                      ))}
+                    </span>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
             <div className="flex items-center gap-1 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
               {!session.archived && !selecting && (
@@ -202,7 +233,6 @@ export function SessionDrawer() {
   const toggleSelectedSessionKey = useAppStore((state) => state.toggleSelectedSessionKey);
   const clearSelectedSessionKeys = useAppStore((state) => state.clearSelectedSessionKeys);
   const setMergeDraft = useAppStore((state) => state.setMergeDraft);
-  const upsertSessionState = useAppStore((state) => state.upsertSessionState);
   const pinnedSessionKeys = useAppStore((state) => state.pinnedSessionKeys);
   const togglePinnedSessionKey = useAppStore((state) => state.togglePinnedSessionKey);
   const [query, setQuery] = useState('');
@@ -214,28 +244,6 @@ export function SessionDrawer() {
     if (!sessionDrawerOpen) return;
     void wsClient.refreshSessions();
   }, [sessionDrawerOpen]);
-
-  useEffect(() => {
-    let cancelled = false;
-    const candidates = sessions.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|');
-    if (!candidates) return;
-    void Promise.all(
-      sessions.map(async (session) => {
-        const state = await wsClient.resolveSessionState(session.key);
-        return state ? [session.key, state] as const : null;
-      }),
-    )
-      .then((records) => {
-        if (cancelled) return;
-        for (const record of records) {
-          if (record) upsertSessionState(record[1]);
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [sessions.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|'), upsertSessionState]);
 
   useEffect(() => {
     if (!sessionDrawerOpen) return;

@@ -44,26 +44,6 @@ function compact(text: string | null | undefined, limit = 70) {
   return `${value.slice(0, limit - 1).trimEnd()}…`;
 }
 
-export function describeSessionReturnCue(input: {
-  providerLabel: string;
-  modelLabel: string;
-  taskSummary: string | null;
-  starterIntent: string | null;
-  topicalTags: string[];
-}): { kind: 'personal' | 'runtime'; primary: string } {
-  const normalizedIntent = (input.starterIntent || '').trim() as PersonalStarterIntentId | '';
-  const taskSummary = compact(input.taskSummary, 56);
-  if (taskSummary && (normalizedIntent || input.topicalTags.length > 0)) {
-    const label = normalizedIntent ? STARTER_LABELS[normalizedIntent] : compact(input.topicalTags[0], 18).toLowerCase();
-    return {
-      kind: 'personal',
-      primary: label ? `${label} · ${taskSummary}` : taskSummary,
-    };
-  }
-  const runtimeLabel = [compact(input.providerLabel, 18), compact(input.modelLabel, 18)].filter(Boolean).join(' · ');
-  return { kind: 'runtime', primary: runtimeLabel || 'Session ready' };
-}
-
 export function shouldRenderResumeSnapshot(input: {
   taskSummary: string | null;
   unresolvedQuestions: string[];
