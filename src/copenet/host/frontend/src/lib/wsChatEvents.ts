@@ -46,6 +46,9 @@ export function handleChatEventAction(
         toolId,
         state: 'running',
         summary: `Calling ${toolId}`,
+        // The model's phrase for this call also titles the session-list row while the
+        // thread is acting (runtime/sessionStanding.ts) — nothing is asked for twice.
+        activityTitle: rawToolCall.activityTitle ? String(rawToolCall.activityTitle) : null,
         error: null,
         startedAt: new Date().toISOString(),
         completedAt: null,
@@ -89,6 +92,7 @@ export function handleChatEventAction(
             ? 'blocked'
             : 'failed',
         summary: toolExecution.summary,
+        activityTitle: toolExecution.activityTitle || existingMatch?.activityTitle || null,
         error: toolExecution.error ?? null,
         startedAt: existingMatch?.startedAt || new Date().toISOString(),
         completedAt: new Date().toISOString(),

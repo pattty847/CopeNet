@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
+import { DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
@@ -194,6 +194,9 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   mergeStates: Record<string, SessionMergeState>;
   setMergeState: (sessionKey: string, mergeState: SessionMergeState | null) => void;
   sessionStates: Record<string, SessionStateRecord>;
+  /** Where each thread stands, keyed by session key (sessions.standing.list). */
+  sessionStanding: Record<string, SessionStanding>;
+  setSessionStanding: (rows: SessionStanding[]) => void;
   upsertSessionState: (record: SessionStateRecord) => void;
   pulses: PulseRecord[];
   setPulses: (pulses: PulseRecord[]) => void;
@@ -478,6 +481,9 @@ export const useAppStore = create<AppState>((set) => ({
       return { mergeStates: { ...state.mergeStates, [sessionKey]: mergeState } };
     }),
   sessionStates: {},
+  sessionStanding: {},
+  setSessionStanding: (rows) =>
+    set({ sessionStanding: Object.fromEntries(rows.map((row) => [row.sessionKey, row])) }),
   upsertSessionState: (record) =>
     set((state) => ({
       sessionStates: { ...state.sessionStates, [record.session_key]: record },

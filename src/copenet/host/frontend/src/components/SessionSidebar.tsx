@@ -1,26 +1,9 @@
-import React, { useEffect, MouseEvent } from 'react';
+import React, { useEffect, useMemo, MouseEvent } from 'react';
 import { useAppStore } from '../store/useAppStore';
 import { wsClient } from '../lib/wsClient';
-import { ArchiveRestore, Archive, CheckSquare, GitMerge, Plus, Square } from 'lucide-react';
-import { describeSessionReturnCue } from '../lib/personalHistory';
-import { formatSessionAge } from '../lib/formatting';
-
-function compactModelName(model?: string | null) {
-  if (!model) return '';
-  const normalized = model.trim();
-  if (!normalized) return '';
-  if (normalized.length <= 18) return normalized;
-
-  const segments = normalized.split('-').filter(Boolean);
-  if (segments.length >= 3) {
-    const head = segments.slice(0, 2).join('-');
-    const tail = segments[segments.length - 1];
-    const shortened = `${head}-…-${tail}`;
-    if (shortened.length <= 20) return shortened;
-  }
-
-  return `${normalized.slice(0, 16)}…`;
-}
+import { CheckSquare, GitMerge, Plus, Square } from 'lucide-react';
+import { buildSessionRow, groupRowsByArea, NO_CHANGE_AREA } from '../runtime/sessionStanding';
+import { SessionStandingRow } from './session/SessionStandingRow';
 
 export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolean; onNavigate?: () => void }) {
   const sessions = useAppStore((state) => state.sessions);
@@ -36,35 +19,36 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
   const toggleSelectedSessionKey = useAppStore((state) => state.toggleSelectedSessionKey);
   const clearSelectedSessionKeys = useAppStore((state) => state.clearSelectedSessionKeys);
   const setMergeDraft = useAppStore((state) => state.setMergeDraft);
-  const providers = useAppStore((state) => state.providers);
-  const sessionStates = useAppStore((state) => state.sessionStates);
+  const sessionStanding = useAppStore((state) => state.sessionStanding);
   const activeRunsBySession = useAppStore((state) => state.activeRunsBySession);
-  const upsertSessionState = useAppStore((state) => state.upsertSessionState);
+  const liveToolCallsByRun = useAppStore((state) => state.liveToolCallsByRun);
   const filteredSessions = sessions.filter((session) => session.archived === showArchived);
 
   useEffect(() => {
     void wsClient.refreshSessions();
   }, [showArchived]);
 
-  useEffect(() => {
-    let cancelled = false;
-    const candidates = filteredSessions.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|');
-    if (!candidates) return;
-    void Promise.all(
-      filteredSessions.map(async (session) => {
-        const state = await wsClient.resolveSessionState(session.key);
-        return state ? [session.key, state] as const : null;
-      }),
-    ).then((records) => {
-      if (cancelled) return;
-      for (const record of records) {
-        if (record) upsertSessionState(record[1]);
-      }
-    }).catch(() => {});
-    return () => {
-      cancelled = true;
-    };
-  }, [filteredSessions.map((session) => `${session.key}:${session.updatedAt || ''}`).join('|'), upsertSessionState]);
+  // One derivation for every row (runtime/sessionStanding.ts). The standing facts
+  // arrive with the session list in a single call; this used to be an N+1
+  // sessions.state fetch that ran again on every list change.
+  const groups = useMemo(
+    () =>
+      groupRowsByArea(
+        filteredSessions.map((session) => {
+          const runId = activeRunsBySession[session.key];
+          return buildSessionRow(
+            session,
+            sessionStanding[session.key],
+            runId ? liveToolCallsByRun[runId] || [] : [],
+          );
+        }),
+      ),
+    [filteredSessions, sessionStanding, activeRunsBySession, liveToolCallsByRun],
+  );
+  const sessionsByKey = useMemo(
+    () => new Map(filteredSessions.map((session) => [session.key, session])),
+    [filteredSessions],
+  );
 
   const handleNewSession = () => {
     clearSelectedSessionKeys();
@@ -194,69 +178,40 @@ export function SessionSidebar({ mobile = false, onNavigate }: { mobile?: boolea
           </div>
         )}
 
-        {filteredSessions.map((session) => {
-          const isActive = activeSessionKey === session.key;
-          const isSelected = selectedSessionKeys.includes(session.key);
-          const providerName = providers.find((provider) => provider.id === session.provider)?.displayName || session.provider;
-          const modelLabel = compactModelName(session.model);
-          const sessionState = sessionStates[session.key];
-          const returnCue = describeSessionReturnCue({
-            providerLabel: providerName,
-            modelLabel,
-            taskSummary: sessionState?.task_summary || null,
-            starterIntent: sessionState?.starter_intent || null,
-            topicalTags: sessionState?.topical_tags || [],
-          });
-
-          return (
-            <div
-              key={session.key}
-              onClick={() => handleSessionSelect(session.key)}
-              className={`w-full flex flex-col px-2 py-1.5 text-[12px] transition-all duration-150 cursor-pointer group relative ${
-                sessionSelectMode
-                  ? isSelected
-                    ? 'bg-operator-panel/30 border-y border-operator-accent/16'
-                    : 'hover:bg-operator-panel/16 border-y border-transparent'
-                  : isActive
-                  ? 'bg-operator-panel/36 border-y border-operator-accent/18'
-                  : 'hover:bg-operator-panel/20 border-y border-transparent'
-              }`}
-            >
-              {!sessionSelectMode && isActive && <div className="absolute left-0 top-1.5 bottom-1.5 w-[2px] rounded-full bg-operator-accent" />}
-              <div className="flex justify-between items-start gap-2">
-                <div className="flex min-w-0 items-start gap-2 pr-5">
-                  {sessionSelectMode && !showArchived ? (
-                    <span className={`mt-0.5 flex h-4 w-4 items-center justify-center rounded-sm border ${isSelected ? 'border-operator-accent bg-operator-accent/12 text-operator-accent' : 'border-operator-border text-transparent'}`}>
-                      <CheckSquare className="w-3 h-3" />
-                    </span>
-                  ) : null}
-                  <span className={`font-semibold truncate text-[12px] ${isActive || isSelected ? 'text-operator-text' : 'text-operator-muted group-hover:text-operator-text'} transition-colors duration-150`}>
-                    {session.title || session.key || 'New Chat'}
-                  </span>
-                  {activeRunsBySession[session.key] && (
-                    <span className="mt-1 h-1.5 w-1.5 shrink-0 animate-pulse rounded-full bg-operator-accent" title="Run in progress" />
-                  )}
-                </div>
-                {!sessionSelectMode && (
-                  <button
-                    onClick={(e) => handleArchiveToggle(e, session.key, session.archived)}
-                    className="absolute top-1.5 right-1.5 opacity-0 group-hover:opacity-100 text-operator-muted hover:text-operator-accent transition-all duration-150"
-                    title={session.archived ? 'Restore Session' : 'Archive Session'}
-                  >
-                    {session.archived ? <ArchiveRestore className="w-3 h-3" /> : <Archive className="w-3 h-3" />}
-                  </button>
-                )}
-              </div>
-
-              <div className="mt-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-2 text-[10px] text-operator-muted/80">
-                <div className="min-w-0 truncate" title={returnCue.primary}>
-                  <span className={returnCue.kind === 'personal' ? 'text-operator-muted/92' : ''}>{returnCue.primary}</span>
-                </div>
-                <span className="shrink-0 text-[10px] text-operator-muted/45 tabular-nums">{formatSessionAge(session.updatedAt || session.createdAt)}</span>
-              </div>
+        {groups.map((group) => (
+          <div key={group.area}>
+            {/* Group by the area the work lives in — you remember by place, not by clock. */}
+            <div className="flex items-center gap-[7px] px-3 pb-1 pt-2">
+              <span
+                className={`font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] ${
+                  group.area === NO_CHANGE_AREA ? 'text-operator-muted/75' : 'text-operator-accent'
+                }`}
+              >
+                {group.area}
+              </span>
+              <span className="h-px flex-grow bg-operator-border" />
+              <span className="text-[9.5px] tabular-nums text-operator-muted/50">{group.rows.length}</span>
             </div>
-          );
-        })}
+            {group.rows.map((row) => {
+              const session = sessionsByKey.get(row.sessionKey);
+              if (!session) return null;
+              return (
+                <SessionStandingRow
+                  key={row.sessionKey}
+                  row={row}
+                  age={session.updatedAt || session.createdAt}
+                  active={activeSessionKey === row.sessionKey}
+                  selected={selectedSessionKeys.includes(row.sessionKey)}
+                  selectMode={sessionSelectMode}
+                  archived={session.archived}
+                  onSelect={() => handleSessionSelect(row.sessionKey)}
+                  onArchiveToggle={(event) => handleArchiveToggle(event, row.sessionKey, session.archived)}
+                />
+              );
+            })}
+          </div>
+        ))}
+
         {filteredSessions.length === 0 && (
           <div className="text-center text-operator-muted text-[12px] py-8 px-3 leading-relaxed">
             {showArchived ? 'No archived sessions yet.' : 'No saved sessions yet. Start a draft and send your first message.'}

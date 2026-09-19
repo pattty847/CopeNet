@@ -3,6 +3,7 @@ import { useAppStore } from '../store/useAppStore';
 import type { Message, Provider, PublicMessagePayload, Session } from '../types/backend';
 import { DRAFT_TRANSCRIPT_SESSION_KEY } from './personaCommands';
 import { normalizeMessage, normalizeSession } from './wsNormalizers';
+import { listSessionStandingRpc } from './wsSessionRpc';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
@@ -45,13 +46,19 @@ export function ensureDraftDefaultsAction(): void {
 }
 
 export async function refreshSessionsAction(request: WsRpcRequest): Promise<void> {
-  const payload = await request<{ sessions: unknown[] }>('sessions.list', {
-    includeArchived: useAppStore.getState().showArchived,
-  });
+  const includeArchived = useAppStore.getState().showArchived;
+  const payload = await request<{ sessions: unknown[] }>('sessions.list', { includeArchived });
   const sessions = (payload.sessions || []).map(normalizeSession);
   const store = useAppStore.getState();
   store.setSessions(sessions);
   store.syncActiveRuns(sessions);
+  // One call for the whole sidebar. This replaced an N+1 sessions.state fetch the
+  // sidebar used to run per session on every list change.
+  try {
+    store.setSessionStanding(await listSessionStandingRpc(request, includeArchived));
+  } catch {
+    // A sidebar without standing facts still lists sessions; don't fail the refresh.
+  }
 }
 
 export async function loadHistoryAction(request: WsRpcRequest, sessionKey: string): Promise<void> {

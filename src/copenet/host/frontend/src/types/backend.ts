@@ -1161,11 +1161,51 @@ export type ToolExecutionState = 'queued' | 'running' | 'success' | 'blocked' | 
 export interface LiveToolCall {
   id: string;                         // locally generated (runId + index)
   toolId: string;
+  // The model's own phrase for this call. The session list titles a running row with
+  // the latest one, which is prose the thread view already writes — nothing is asked
+  // for twice (runtime/sessionStanding.ts).
+  activityTitle?: string | null;
   state: ToolExecutionState;
   summary: string;
   error?: string | null;
   startedAt: string;                  // ISO — when we first saw this tool
   completedAt?: string | null;        // ISO — when toolExecution arrived
+}
+
+// ---------------------------------------------------------------------------
+// Session standing — where each thread stands (sessions.standing.list)
+// ---------------------------------------------------------------------------
+
+/** One exclusive state per thread. "waiting on you" is absent on purpose: every
+ *  reply ends with the model waiting, so it carried no information. */
+export type SessionStandingState = 'running' | 'blocked' | 'unmerged' | 'done' | 'idle' | 'talk';
+
+export interface SessionLedgerSummary {
+  linesAdded: number;
+  linesRemoved: number;
+  fileCount: number;
+  recentFiles: string[];
+  area: string | null;
+}
+
+export interface SessionBranchState {
+  branch: string | null;
+  commitsAhead: number;
+  trunk: string | null;
+}
+
+export interface SessionStanding {
+  sessionKey: string;
+  state: SessionStandingState;
+  /** The model's line on where the work stands; becomes the row title. */
+  standingNote: string | null;
+  standingDone: boolean;
+  ledger: SessionLedgerSummary;
+  branch: SessionBranchState;
+  toolCalls: number;
+  verificationFailed: boolean;
+  approvalCommand: string | null;
+  sharesWith: { sessionKey: string; path: string }[];
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,7 @@ import type {
   SessionExportPayload,
   SessionMergeState,
   SessionRunRecord,
+  SessionStanding,
   SessionStateRecord,
 } from '../types/backend';
 import { normalizeMergeState, normalizeMessage, normalizeSession } from './wsNormalizers';
@@ -104,6 +105,14 @@ export async function resolveSessionRunRpc(
 export async function resolveSessionStateRpc(request: WsRpcRequest, key: string): Promise<SessionStateRecord | null> {
   const payload = await request<{ state?: SessionStateRecord | null }>('sessions.state', { key });
   return payload.state ?? null;
+}
+
+export async function listSessionStandingRpc(
+  request: WsRpcRequest,
+  includeArchived: boolean,
+): Promise<SessionStanding[]> {
+  const payload = await request<{ standing?: SessionStanding[] }>('sessions.standing.list', { includeArchived });
+  return Array.isArray(payload.standing) ? payload.standing : [];
 }
 
 export async function resolveMergeStateRpc(request: WsRpcRequest, key: string): Promise<SessionMergeState | null> {
