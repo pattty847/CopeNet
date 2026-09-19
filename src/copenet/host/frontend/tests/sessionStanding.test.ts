@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 
-import { NO_CHANGE_AREA, buildFilters, buildSessionRow, groupRowsByArea, matchesFilter } from '../src/runtime/sessionStanding';
+import { NO_CHANGE_AREA, UNKNOWN_AREA, buildFilters, buildSessionRow, groupRowsByArea, matchesFilter } from '../src/runtime/sessionStanding';
 import type { LiveToolCall, Session, SessionStanding } from '../src/types/backend';
 
 function session(overrides: Partial<Session> = {}): Session {
@@ -183,14 +183,14 @@ test('chips count what the operator is hunting for, and hide what has no matches
     buildSessionRow(session({ key: 'c' }), standing({ sessionKey: 'c', state: 'talk' }), []),
   ];
   assert.deepEqual(
-    buildFilters(rows).map((chip) => [chip.id, chip.count]),
+    buildFilters(rows, { pinned: 0, archived: 0 }).map((chip) => [chip.id, chip.count]),
     [['all', 3], ['live', 1], ['unmerged', 1]],
   );
 });
 
 test('all is always offered even when nothing matches anything else', () => {
   assert.deepEqual(
-    buildFilters([buildSessionRow(session(), standing({ state: 'talk' }), [])]).map((chip) => chip.id),
+    buildFilters([buildSessionRow(session(), standing({ state: 'talk' }), [])], { pinned: 0, archived: 0 }).map((chip) => chip.id),
     ['all'],
   );
 });
@@ -200,4 +200,42 @@ test('a filter keeps only its own state, and all keeps everything', () => {
   assert.equal(matchesFilter(unmerged, 'unmerged'), true);
   assert.equal(matchesFilter(unmerged, 'idle'), false);
   assert.equal(matchesFilter(unmerged, 'all'), true);
+});
+
+test('pinned and archived ride the chip row with their own counts', () => {
+  const rows = [buildSessionRow(session(), standing({ state: 'idle' }), [])];
+  assert.deepEqual(
+    buildFilters(rows, { pinned: 2, archived: 7 }).map((chip) => [chip.id, chip.count]),
+    [['all', 1], ['idle', 1], ['pinned', 2], ['archived', 7]],
+  );
+});
+
+test('a shelf with nothing on it is not offered', () => {
+  const rows = [buildSessionRow(session(), standing({ state: 'idle' }), [])];
+  const ids = buildFilters(rows, { pinned: 0, archived: 0 }).map((chip) => chip.id);
+  assert.equal(ids.includes('pinned'), false);
+  assert.equal(ids.includes('archived'), false);
+});
+
+// -- not loaded is not "nothing changed" ----------------------------------------
+
+test('a row with no standing yet claims nothing at all', () => {
+  const row = buildSessionRow(session(), undefined, []);
+  assert.equal(row.state, 'unknown');
+  assert.equal(row.line, '');
+  assert.equal(row.ledger, null);
+  assert.equal(row.area, UNKNOWN_AREA);
+  assert.notEqual(row.area, NO_CHANGE_AREA);
+});
+
+test('a loaded thread that genuinely changed nothing is distinct from an unloaded one', () => {
+  const loaded = buildSessionRow(session(), standing({ state: 'talk', toolCalls: 3 }), []);
+  assert.equal(loaded.state, 'talk');
+  assert.equal(loaded.area, NO_CHANGE_AREA);
+  assert.notEqual(loaded.line, '');
+});
+
+test('loading is never offered as a chip to filter to', () => {
+  const ids = buildFilters([buildSessionRow(session(), undefined, [])], { pinned: 0, archived: 0 }).map((c) => c.id);
+  assert.deepEqual(ids, ['all']);
 });

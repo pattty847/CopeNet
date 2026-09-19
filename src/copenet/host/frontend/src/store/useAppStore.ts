@@ -286,6 +286,16 @@ const DEFAULT_DRAFT: DraftSettings = {
   workspaceRoot: '',
 };
 
+const SESSIONS_PANEL_STORAGE_KEY = 'copenet.agents.sessionsPanelOpen';
+
+function readSessionsPanelOpen(): boolean {
+  try {
+    return window.localStorage.getItem(SESSIONS_PANEL_STORAGE_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 export const useAppStore = create<AppState>((set) => ({
   ...createSessionRuntimeSlice<AppState>(set),
   ...createFleetSlice<AppState>(set),
@@ -342,8 +352,17 @@ export const useAppStore = create<AppState>((set) => ({
 
   primaryNavCollapsed: true,
   setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),
-  sessionsPanelOpen: false,
-  setSessionsPanelOpen: (open) => set({ sessionsPanelOpen: open }),
+  sessionsPanelOpen: readSessionsPanelOpen(),
+  setSessionsPanelOpen: (open) => {
+    // A panel that stays open should still be open after a reload; the whole point of
+    // moving it out of a popup was that it persists while you work elsewhere.
+    try {
+      window.localStorage.setItem(SESSIONS_PANEL_STORAGE_KEY, open ? '1' : '0');
+    } catch {
+      // Private mode or blocked storage: the panel still works, it just forgets.
+    }
+    set({ sessionsPanelOpen: open });
+  },
   pinnedSessionKeys: readPinnedSessionKeys(),
   togglePinnedSessionKey: (key) =>
     set((state) => {

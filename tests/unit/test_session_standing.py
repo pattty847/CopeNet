@@ -144,7 +144,9 @@ def test_ledger_summary_folds_lines_and_names_recent_files(tmp_path: Path) -> No
     assert summary.file_count == 2
     # Newest touch first, so the row names what was worked on last.
     assert summary.recent_files[0] == "model_tables.py"
-    assert summary.area == "src/copenet"
+    # The two MOST specific segments: every file shares the source root, so "src/copenet"
+    # would put the whole list under one heading.
+    assert summary.area == "core/market"
 
 
 def test_ledger_summary_of_a_thread_that_changed_nothing() -> None:
@@ -157,6 +159,11 @@ def test_ledger_summary_of_a_thread_that_changed_nothing() -> None:
 def test_common_area_of_a_top_level_file() -> None:
     assert common_area(["README.md"]) is None
     assert common_area(["docs/PLAN.md"]) == "docs"
+
+
+def test_common_area_ignores_the_source_root_every_file_shares() -> None:
+    assert common_area(["src/copenet/core/harness/replay_receipts.py"]) == "core/harness"
+    assert common_area(["src/copenet/host/frontend/src/components/session/Row.tsx"]) == "components/session"
 
 
 def test_state_running_beats_every_other_fact() -> None:

@@ -33,6 +33,10 @@ export function SessionStateIcon({ state, phase }: { state: SessionStandingState
   if (state === 'done') {
     return <GitMerge className="mt-[2px] h-[13px] w-[13px] shrink-0 text-operator-success/80" aria-label="Done, merged" />;
   }
+  if (state === 'unknown') {
+    // Standing has not arrived. Claim nothing: a faint mark, not a state.
+    return <span className="mt-[5px] inline-block h-[5px] w-[5px] shrink-0 rounded-full bg-operator-muted/25" title="Loading…" />;
+  }
   if (state === 'talk') {
     return <MessageSquare className="mt-[2px] h-[13px] w-[13px] shrink-0 text-operator-muted/50" aria-label="Talk only" />;
   }

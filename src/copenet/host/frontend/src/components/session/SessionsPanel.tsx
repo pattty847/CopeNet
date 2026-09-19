@@ -1,9 +1,10 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { GitMerge, PanelLeftClose, Plus, Search, Square } from 'lucide-react';
+import { GitMerge, PanelLeftClose, Plus, Search, SquareDashed } from 'lucide-react';
 import { useAppStore } from '../../store/useAppStore';
 import { wsClient } from '../../lib/wsClient';
 import { organizeSessionDrawerSections } from '../../lib/sessionDrawer';
 import {
+  SHELF_FILTERS,
   buildFilters,
   buildSessionRow,
   groupRowsByArea,
@@ -45,13 +46,15 @@ export function SessionsPanel({ embedded = false, onNavigate }: { embedded?: boo
   const liveToolCallsByRun = useAppStore((state) => state.liveToolCallsByRun);
 
   const [query, setQuery] = useState('');
-  const [tab, setTab] = useState<'recent' | 'pinned' | 'archived'>('recent');
+  // One chip row, not a tab row plus a chip row: pinned and archived are shelves, the
+  // rest are states, and to the eye both answer "show me this slice".
   const [activeFilter, setActiveFilter] = useState<SessionFilterId>('all');
   const searchRef = useRef<HTMLInputElement | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     void wsClient.refreshSessions();
-  }, [tab]);
+  }, [activeFilter]);
 
   const sections = useMemo(
     () => organizeSessionDrawerSections({ sessions, pinnedSessionKeys, query }),
@@ -76,7 +79,10 @@ export function SessionsPanel({ embedded = false, onNavigate }: { embedded?: boo
     () => [...sections.recent.today, ...sections.recent.thisWeek, ...sections.recent.earlier],
     [sections],
   );
-  const filters = useMemo(() => buildFilters(recentSessions.map(rowFor)), [recentSessions, rowsByKey]);
+  const filters = useMemo(
+    () => buildFilters(recentSessions.map(rowFor), { pinned: sections.pinned.length, archived: sections.archived.length }),
+    [recentSessions, rowsByKey, sections],
+  );
   const visibleRecent = useMemo(
     () => recentSessions.filter((session) => matchesFilter(rowFor(session), activeFilter)),
     [recentSessions, rowsByKey, activeFilter],
@@ -131,13 +137,15 @@ export function SessionsPanel({ embedded = false, onNavigate }: { embedded?: boo
     onNavigate?.();
   };
 
-  const groups =
-    tab === 'recent'
-      ? [...(sections.pinned.length ? [{ area: 'pinned', sessions: sections.pinned }] : []), ...areaGroups]
-      : tab === 'pinned'
-      ? [{ area: 'pinned', sessions: sections.pinned }]
-      : [{ area: 'archived', sessions: sections.archived }];
+  const groups = SHELF_FILTERS.has(activeFilter)
+    ? [{ area: activeFilter, sessions: activeFilter === 'pinned' ? sections.pinned : sections.archived }]
+    : [...(sections.pinned.length ? [{ area: 'pinned', sessions: sections.pinned }] : []), ...areaGroups];
   const isEmpty = groups.every((group) => group.sessions.length === 0);
+
+  const scrollToArea = (area: string) => {
+    const target = listRef.current?.querySelector(`[data-area="${CSS.escape(area)}"]`);
+    target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
 
   return (
     <aside
@@ -145,131 +153,112 @@ export function SessionsPanel({ embedded = false, onNavigate }: { embedded?: boo
         embedded ? 'w-full' : 'w-[340px] shrink-0 border-r border-operator-border'
       }`}
     >
-      {/* Header */}
-      <div className="shrink-0 border-b border-operator-border px-3 pb-2.5 pt-3">
-        <div className="flex items-start justify-between gap-2">
+      {/* Header — three bands: identity + actions, search, chips. */}
+      <div className="shrink-0 border-b border-operator-border px-3 pb-2 pt-3">
+        <div className="flex items-center justify-between gap-2">
           <div className="flex items-baseline gap-2">
             <span className="text-[10px] font-semibold uppercase tracking-[0.22em] text-operator-accent">Sessions</span>
             <span className="text-[10px] tabular-nums text-operator-muted/60">{sessions.length}</span>
           </div>
-          {!embedded && (
-            <button
-              type="button"
-              onClick={() => setSessionsPanelOpen(false)}
-              className="-mr-1 rounded p-1 text-operator-muted transition-colors hover:text-operator-accent"
-              title="Close sessions"
-              aria-label="Close sessions"
-            >
-              <PanelLeftClose className="h-3.5 w-3.5" />
-            </button>
-          )}
-        </div>
-
-        <label className="mt-2.5 flex items-center gap-2 rounded-md border border-operator-border bg-operator-panel px-2 py-1.5 transition-colors focus-within:border-operator-accent/35">
-          <Search className="h-3 w-3 shrink-0 text-operator-muted" />
-          <input
-            ref={searchRef}
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-[11px] text-operator-text outline-none placeholder:text-operator-muted/60"
-            placeholder="Search sessions, files, tickers"
-          />
-        </label>
-
-        <div className="mt-2 flex items-center gap-1.5">
-          {sessionSelectMode ? (
-            <>
+          <div className="-mr-1 flex items-center gap-0.5">
+            {sessionSelectMode ? (
               <button
                 type="button"
                 onClick={handleMergeIntoWorkspace}
                 disabled={selectedSessionKeys.length < 2}
-                className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md bg-operator-accent py-1.5 text-[11px] font-semibold text-operator-bg disabled:cursor-not-allowed disabled:opacity-40"
+                className="rounded px-1.5 py-1 text-[10px] font-semibold text-operator-accent transition-colors disabled:opacity-40"
+                title="Merge selected sessions into a workspace"
               >
                 <GitMerge className="h-3.5 w-3.5" />
-                Merge
               </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setSessionSelectMode(false);
-                  clearSelectedSessionKeys();
-                }}
-                className="rounded-md border border-operator-border px-2.5 py-1.5 text-[11px] font-semibold text-operator-muted transition-colors hover:text-operator-text"
-              >
-                {selectedSessionKeys.length} selected
-              </button>
-            </>
-          ) : (
-            <>
+            ) : (
               <button
                 type="button"
                 onClick={handleNewSession}
-                className="flex min-w-0 flex-1 items-center justify-center gap-1.5 rounded-md bg-operator-accent py-1.5 text-[11px] font-semibold text-operator-bg"
+                className="rounded p-1 text-operator-muted transition-colors hover:text-operator-accent"
+                title="New session"
+                aria-label="New session"
               >
                 <Plus className="h-3.5 w-3.5" />
-                New
               </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                const next = !sessionSelectMode;
+                setSessionSelectMode(next);
+                if (!next) clearSelectedSessionKeys();
+              }}
+              className={`rounded p-1 transition-colors ${
+                sessionSelectMode ? 'text-operator-accent' : 'text-operator-muted hover:text-operator-accent'
+              }`}
+              title={sessionSelectMode ? `${selectedSessionKeys.length} selected — exit select mode` : 'Select sessions to merge'}
+              aria-label="Select sessions"
+            >
+              <SquareDashed className="h-3.5 w-3.5" />
+            </button>
+            {!embedded && (
               <button
                 type="button"
-                onClick={() => setSessionSelectMode(true)}
-                className="flex items-center gap-1.5 rounded-md border border-operator-border px-2.5 py-1.5 text-[11px] font-semibold text-operator-muted transition-colors hover:text-operator-accent"
-                title="Select sessions to merge"
+                onClick={() => setSessionsPanelOpen(false)}
+                className="rounded p-1 text-operator-muted transition-colors hover:text-operator-accent"
+                title="Close sessions"
+                aria-label="Close sessions"
               >
-                <Square className="h-3 w-3" />
-                Select
+                <PanelLeftClose className="h-3.5 w-3.5" />
               </button>
-            </>
-          )}
+            )}
+          </div>
         </div>
-      </div>
 
-      {/* Tabs */}
-      <div className="flex shrink-0 border-b border-operator-border text-[10px] font-semibold tracking-wider">
-        {(
-          [
-            ['recent', 'RECENT'],
-            ['pinned', 'PINNED'],
-            ['archived', 'ARCHIVED'],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setTab(id)}
-            className={`flex-1 py-1.5 text-center transition-colors duration-150 ${
-              tab === id
-                ? 'border-b-2 border-operator-accent bg-operator-panel/40 text-operator-accent'
-                : 'text-operator-muted hover:text-operator-text'
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+        <label className="mt-2 flex items-center gap-2 border-b border-operator-border/60 pb-1.5 transition-colors focus-within:border-operator-accent/40">
+          <Search className="h-3 w-3 shrink-0 text-operator-muted/70" />
+          <input
+            ref={searchRef}
+            value={query}
+            onChange={(event) => setQuery(event.target.value)}
+            className="min-w-0 flex-1 bg-transparent text-[11px] text-operator-text outline-none placeholder:text-operator-muted/50"
+            placeholder="Search sessions, files, tickers"
+          />
+        </label>
 
-      {/* State chips — only for the live list, and only when they match something. */}
-      {tab === 'recent' && filters.length > 1 && (
-        <div className="flex shrink-0 flex-wrap items-center gap-1 border-b border-operator-border px-3 py-2 text-[9.5px] font-semibold">
+        <div className="mt-2 flex flex-wrap items-center gap-x-2.5 gap-y-1 text-[10px] font-semibold">
           {filters.map((chip) => (
             <button
               key={chip.id}
               type="button"
               onClick={() => setActiveFilter(chip.id)}
-              className={`rounded-full border px-2 py-[3px] transition-colors ${
-                activeFilter === chip.id
-                  ? 'border-operator-accent/30 bg-operator-accent/10 text-operator-accent'
-                  : 'border-operator-border text-operator-muted hover:text-operator-text'
+              className={`transition-colors ${
+                activeFilter === chip.id ? 'text-operator-accent' : 'text-operator-muted/70 hover:text-operator-text'
               }`}
             >
-              {chip.label} <span className="tabular-nums opacity-70">{chip.count}</span>
+              {chip.label} <span className="tabular-nums opacity-60">{chip.count}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Jump to an area. The headers are already down there; this saves the scroll. */}
+      {groups.length > 1 && (
+        <div className="flex shrink-0 flex-wrap items-center gap-x-2 gap-y-0.5 px-3 pb-2 font-mono text-[9.5px] text-operator-muted/60">
+          {groups.map((group) => (
+            <button
+              key={group.area}
+              type="button"
+              onClick={() => scrollToArea(group.area)}
+              className="transition-colors hover:text-operator-accent"
+              title={`Jump to ${group.area}`}
+            >
+              {group.area}
+              <span className="ml-1 tabular-nums opacity-60">{group.sessions.length}</span>
             </button>
           ))}
         </div>
       )}
 
       {/* List */}
-      <div className="min-h-0 flex-1 overflow-y-auto pb-3">
-        {draftOpen && tab !== 'archived' && (
+      <div ref={listRef} className="min-h-0 flex-1 overflow-y-auto pb-3">
+        {draftOpen && activeFilter !== 'archived' && (
           <div className="flex flex-col gap-0.5 border-y border-operator-accent/20 px-3 py-2">
             <div className="flex items-center justify-between gap-2">
               <span className="text-[12.5px] font-semibold text-operator-text">New Draft Session</span>
@@ -281,8 +270,8 @@ export function SessionsPanel({ embedded = false, onNavigate }: { embedded?: boo
 
         {groups.map((group) =>
           group.sessions.length === 0 ? null : (
-            <div key={group.area}>
-              <div className="flex items-center gap-2 px-3 pb-1.5 pt-3">
+            <div key={group.area} data-area={group.area}>
+              <div className="sticky top-0 z-10 flex items-center gap-2 bg-operator-bg px-3 pb-1.5 pt-3">
                 <span
                   className={`font-mono text-[9.5px] font-semibold uppercase tracking-[0.1em] ${
                     group.area === 'nothing changed' ? 'text-operator-muted/75' : 'text-operator-accent'
@@ -317,9 +306,9 @@ export function SessionsPanel({ embedded = false, onNavigate }: { embedded?: boo
 
         {isEmpty && (
           <div className="px-4 py-10 text-center text-[12px] leading-relaxed text-operator-muted">
-            {tab === 'archived'
+            {activeFilter === 'archived'
               ? 'No archived sessions yet.'
-              : tab === 'pinned'
+              : activeFilter === 'pinned'
               ? 'Pin the sessions you revisit the most and they’ll live here.'
               : recentSessions.length > 0
               ? 'No sessions in that state right now.'

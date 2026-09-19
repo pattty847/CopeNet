@@ -43,6 +43,8 @@ export interface SessionRowModel {
 
 /** Threads that changed nothing group together rather than scattering through the areas. */
 export const NO_CHANGE_AREA = 'nothing changed';
+/** Standing has not arrived for these yet. NOT the same as "nothing changed". */
+export const UNKNOWN_AREA = 'loading…';
 
 export function buildSessionRow(
   session: Session,
@@ -50,7 +52,10 @@ export function buildSessionRow(
   liveToolCalls: LiveToolCall[],
 ): SessionRowModel {
   const phase = resolvePhase(session, standing, liveToolCalls);
-  const state: SessionStandingState = standing?.state ?? (session.inFlightRunId ? 'running' : 'idle');
+  // No standing yet is UNKNOWN, never "idle, nothing changed". One call covers 694
+  // sessions, so for a moment after load every row would otherwise claim a state it
+  // has not been told — the same trap the Market panels are forbidden from falling in.
+  const state: SessionStandingState = standing?.state ?? (session.inFlightRunId ? 'running' : 'unknown');
   const liveTitle = latestActivityTitle(liveToolCalls);
   const standingNote = standing?.standingNote?.trim() || '';
   const fallback = session.title?.trim() || session.key || 'New Chat';
@@ -65,7 +70,7 @@ export function buildSessionRow(
     line: describeLine(phase, state, standing, liveToolCalls),
     tags: buildTags(standing),
     ledger: buildLedger(standing),
-    area: standing?.ledger.area || NO_CHANGE_AREA,
+    area: standing ? standing.ledger.area || NO_CHANGE_AREA : UNKNOWN_AREA,
     offerClose: Boolean(standing?.standingDone) && state === 'done',
   };
 }
@@ -102,6 +107,7 @@ function describeLine(
     const done = liveToolCalls.filter((call) => call.state !== 'running').length;
     return done > 0 ? `${done} ${plural(done, 'tool call')} so far` : 'starting…';
   }
+  // Say nothing rather than invent a state we were not told.
   if (!standing) return '';
 
   const { branch, ledger, toolCalls } = standing;
@@ -165,13 +171,18 @@ export function groupRowsByArea(rows: SessionRowModel[]): { area: string; rows: 
 }
 
 /** The filter chips over the list: what the operator is hunting for, with live counts. */
-export type SessionFilterId = 'all' | 'live' | 'unmerged' | 'blocked' | 'idle';
+export type SessionFilterId = 'all' | 'live' | 'unmerged' | 'blocked' | 'idle' | 'pinned' | 'archived' | 'unknown';
 
 export interface SessionFilter {
   id: SessionFilterId;
   label: string;
   count: number;
 }
+
+// Pinned and archived are not states a thread is IN — they are the operator's own
+// shelves. They ride the same chip row because to the eye they are the same question
+// ("show me this slice"), which is what let the header drop from five bands to three.
+export const SHELF_FILTERS: ReadonlySet<SessionFilterId> = new Set<SessionFilterId>(['pinned', 'archived']);
 
 const FILTER_MATCHES: Record<SessionFilterId, (row: SessionRowModel) => boolean> = {
   all: () => true,
@@ -180,6 +191,9 @@ const FILTER_MATCHES: Record<SessionFilterId, (row: SessionRowModel) => boolean>
   blocked: (row) => row.state === 'blocked',
   // Work left in the middle of something: the threads you forgot were open.
   idle: (row) => row.state === 'idle',
+  pinned: () => true,
+  archived: () => true,
+  unknown: (row) => row.state === 'unknown',
 };
 
 export function matchesFilter(row: SessionRowModel, filter: SessionFilterId): boolean {
@@ -187,15 +201,26 @@ export function matchesFilter(row: SessionRowModel, filter: SessionFilterId): bo
 }
 
 /** Chips for every filter that currently matches something, 'all' always first. */
-export function buildFilters(rows: SessionRowModel[]): SessionFilter[] {
+export function buildFilters(
+  rows: SessionRowModel[],
+  shelves: { pinned: number; archived: number },
+): SessionFilter[] {
   const labels: Record<SessionFilterId, string> = {
     all: 'All',
     live: 'Live',
     unmerged: 'Unmerged',
     blocked: 'Blocked',
     idle: 'Idle',
+    pinned: 'Pinned',
+    archived: 'Archived',
+    // Never offered as a chip: "we have not loaded yet" is not a slice to filter to.
+    unknown: '',
   };
   return (Object.keys(labels) as SessionFilterId[])
-    .map((id) => ({ id, label: labels[id], count: rows.filter((row) => matchesFilter(row, id)).length }))
-    .filter((chip) => chip.id === 'all' || chip.count > 0);
+    .map((id) => ({
+      id,
+      label: labels[id],
+      count: id === 'pinned' ? shelves.pinned : id === 'archived' ? shelves.archived : rows.filter((row) => matchesFilter(row, id)).length,
+    }))
+    .filter((chip) => chip.id !== 'unknown' && (chip.id === 'all' || chip.count > 0));
 }

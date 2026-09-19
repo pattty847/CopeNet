@@ -115,15 +115,17 @@ def summarize_ledger(entries: list[Any]) -> LedgerSummary:
 def common_area(paths: list[str]) -> str | None:
     """The directory a thread's work lives in, used to group the list by place.
 
-    Two segments where a path has them ("core/market"), the first otherwise. Threads
-    that touched several areas group under the one they touched most recently, which
-    is the one the operator was last thinking about.
+    The two MOST SPECIFIC directory segments, not the first two: every file in a repo
+    shares its source root, so "src/copenet" grouped the entire list under one useless
+    heading. "src/copenet/core/market/model_tables.py" is market work, so it groups
+    under "core/market". Threads that touched several areas group under the one they
+    touched most recently, which is the one the operator was last thinking about.
     """
     for path in paths:
         parts = [part for part in Path(path).parts if part not in (".", "/")][:-1]
         if not parts:
             continue
-        return "/".join(parts[:2]) if len(parts) >= 2 else parts[0]
+        return "/".join(parts[-2:])
     return None
 
 

@@ -1178,7 +1178,7 @@ export interface LiveToolCall {
 
 /** One exclusive state per thread. "waiting on you" is absent on purpose: every
  *  reply ends with the model waiting, so it carried no information. */
-export type SessionStandingState = 'running' | 'blocked' | 'unmerged' | 'done' | 'idle' | 'talk';
+export type SessionStandingState = 'running' | 'blocked' | 'unmerged' | 'done' | 'idle' | 'talk' | 'unknown';
 
 export interface SessionLedgerSummary {
   linesAdded: number;
