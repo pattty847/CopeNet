@@ -109,7 +109,7 @@ export function beginDraftAction(): void {
   store.setDraftOpen(true);
   store.setDraftStarterIntent(null);
   store.setMessages(DRAFT_TRANSCRIPT_SESSION_KEY, []);
-  store.setSessionDrawerOpen(false);
+  store.setSessionsPanelOpen(false);
   store.setInspectorTarget(null);
   store.clearAppError();
   ensureDraftDefaultsAction();

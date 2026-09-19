@@ -29,8 +29,8 @@ export function SidebarNav() {
   const wsStatus = useAppStore((state) => state.wsStatus);
   const primaryNavCollapsed = useAppStore((state) => state.primaryNavCollapsed);
   const setPrimaryNavCollapsed = useAppStore((state) => state.setPrimaryNavCollapsed);
-  const sessionDrawerOpen = useAppStore((state) => state.sessionDrawerOpen);
-  const setSessionDrawerOpen = useAppStore((state) => state.setSessionDrawerOpen);
+  const sessionsPanelOpen = useAppStore((state) => state.sessionsPanelOpen);
+  const setSessionsPanelOpen = useAppStore((state) => state.setSessionsPanelOpen);
 
   const systemLabel =
     wsStatus === 'connected' ? 'All systems nominal' : wsStatus === 'connecting' ? 'Connecting…' : 'Needs attention';
@@ -110,29 +110,27 @@ export function SidebarNav() {
         })}
       </nav>
 
-      {currentSection === 'agents' && (
-        <div className="border-t border-shell-border py-2">
+      <div className="border-t border-shell-border py-2">
           <button
             type="button"
-            onClick={() => setSessionDrawerOpen(!sessionDrawerOpen)}
-            title="Open Resume Session"
-            aria-label="Open Resume Session"
+            onClick={() => setSessionsPanelOpen(!sessionsPanelOpen)}
+            title="Toggle sessions panel"
+            aria-label="Toggle sessions panel"
             className={`group relative flex min-h-10 w-full items-center py-2 text-left text-[13px] font-medium transition-colors duration-150 ${
               primaryNavCollapsed ? 'justify-center' : 'gap-2.5 px-3'
             } ${
-              sessionDrawerOpen
+              sessionsPanelOpen
                 ? 'bg-shell-accent-soft text-shell-text'
                 : 'text-shell-muted hover:bg-shell-panel-strong hover:text-shell-text'
             }`}
           >
-            {sessionDrawerOpen && (
+            {sessionsPanelOpen && (
               <span className="absolute inset-y-0 left-0 w-0.5 bg-shell-accent" />
             )}
-            <PanelLeft className={`h-[15px] w-[15px] transition-colors duration-150 ${sessionDrawerOpen ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
-            {!primaryNavCollapsed && <span>Resume Session</span>}
+            <PanelLeft className={`h-[15px] w-[15px] transition-colors duration-150 ${sessionsPanelOpen ? 'text-shell-accent' : 'group-hover:text-shell-accent/60'}`} />
+            {!primaryNavCollapsed && <span>Sessions</span>}
           </button>
-        </div>
-      )}
+      </div>
 
       {/* Footer */}
       <div className="mt-auto">

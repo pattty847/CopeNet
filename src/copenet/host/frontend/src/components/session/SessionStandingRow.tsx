@@ -1,5 +1,5 @@
 import React, { MouseEvent } from 'react';
-import { Archive, ArchiveRestore, CheckSquare } from 'lucide-react';
+import { Archive, ArchiveRestore, CheckSquare, Star } from 'lucide-react';
 import type { SessionRowModel, SessionRowTag } from '../../runtime/sessionStanding';
 import { formatSessionAge } from '../../lib/formatting';
 import { SessionStateIcon } from './SessionStateIcon';
@@ -17,7 +17,9 @@ export function SessionStandingRow({
   selected,
   selectMode,
   archived,
+  pinned = false,
   onSelect,
+  onTogglePin,
   onArchiveToggle,
 }: {
   row: SessionRowModel;
@@ -26,7 +28,9 @@ export function SessionStandingRow({
   selected: boolean;
   selectMode: boolean;
   archived: boolean;
+  pinned?: boolean;
   onSelect: () => void;
+  onTogglePin?: () => void;
   onArchiveToggle: (event: MouseEvent) => void;
 }) {
   const live = row.phase !== 'settled';
@@ -122,13 +126,27 @@ export function SessionStandingRow({
       </div>
 
       {!selectMode && (
-        <button
-          onClick={onArchiveToggle}
-          className="absolute right-1.5 top-1.5 text-operator-muted opacity-0 transition-all duration-150 hover:text-operator-accent group-hover:opacity-100"
-          title={archived ? 'Restore Session' : 'Archive Session'}
-        >
-          {archived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
-        </button>
+        <div className="absolute right-1.5 top-1.5 flex items-center gap-1.5 opacity-0 transition-opacity duration-150 group-hover:opacity-100">
+          {onTogglePin && !archived && (
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                onTogglePin();
+              }}
+              className={`transition-colors ${pinned ? 'text-operator-accent' : 'text-operator-muted hover:text-operator-accent'}`}
+              title={pinned ? 'Unpin session' : 'Pin session'}
+            >
+              <Star className={`h-3 w-3 ${pinned ? 'fill-current' : ''}`} />
+            </button>
+          )}
+          <button
+            onClick={onArchiveToggle}
+            className="text-operator-muted transition-colors hover:text-operator-accent"
+            title={archived ? 'Restore Session' : 'Archive Session'}
+          >
+            {archived ? <ArchiveRestore className="h-3 w-3" /> : <Archive className="h-3 w-3" />}
+          </button>
+        </div>
       )}
     </div>
   );

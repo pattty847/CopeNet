@@ -117,8 +117,8 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
 
   primaryNavCollapsed: boolean;
   setPrimaryNavCollapsed: (collapsed: boolean) => void;
-  sessionDrawerOpen: boolean;
-  setSessionDrawerOpen: (open: boolean) => void;
+  sessionsPanelOpen: boolean;
+  setSessionsPanelOpen: (open: boolean) => void;
   pinnedSessionKeys: string[];
   togglePinnedSessionKey: (key: string) => void;
   mobileOverflowOpen: boolean;
@@ -342,8 +342,8 @@ export const useAppStore = create<AppState>((set) => ({
 
   primaryNavCollapsed: true,
   setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),
-  sessionDrawerOpen: false,
-  setSessionDrawerOpen: (open) => set({ sessionDrawerOpen: open }),
+  sessionsPanelOpen: false,
+  setSessionsPanelOpen: (open) => set({ sessionsPanelOpen: open }),
   pinnedSessionKeys: readPinnedSessionKeys(),
   togglePinnedSessionKey: (key) =>
     set((state) => {

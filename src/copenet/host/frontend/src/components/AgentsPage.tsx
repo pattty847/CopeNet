@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { AgentsWorkspaceSurface } from './AgentsWorkspaceSurface';
 import { RightPanel } from './RightPanel';
-import { SessionSidebar } from './SessionSidebar';
-import { SessionDrawer } from './SessionDrawer';
+import { SessionsPanel } from './session/SessionsPanel';
 import { InspectorDrawer } from './runtime/InspectorDrawer';
 import { useIsMobile } from '../lib/responsive';
 import { useAppStore } from '../store/useAppStore';
@@ -121,7 +120,7 @@ export function AgentsPage() {
         </div>
 
         <MobileSheet open={mobileSessionsOpen} onClose={() => setMobileSessionsOpen(false)} title="Sessions" fullHeight>
-          <SessionSidebar mobile onNavigate={() => setMobileSessionsOpen(false)} />
+          <SessionsPanel embedded onNavigate={() => setMobileSessionsOpen(false)} />
         </MobileSheet>
 
         <MobileSheet open={mobileInspectorOpen} onClose={() => setMobileInspectorOpen(false)} title="Inspector" fullHeight>
@@ -153,7 +152,6 @@ export function AgentsPage() {
         <div className="shell-operator-pane shell-operator-pane--inspector min-h-0 shrink-0">
           {agentsWorkspaceMode === 'fleet' ? <FleetInspector /> : <RightPanel overviewOnly />}
         </div>
-        <SessionDrawer />
       </div>
       <InspectorDrawer />
     </>

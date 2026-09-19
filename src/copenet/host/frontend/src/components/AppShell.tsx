@@ -12,6 +12,7 @@ import { MobileBottomNav, MobileTopBar } from './mobile/MobileNav';
 import { ObservabilityPage } from './ObservabilityPage';
 import { PersonaFlavorReviewModal } from './persona/PersonaFlavorReviewModal';
 import { SidebarNav } from './SidebarNav';
+import { SessionsPanel } from './session/SessionsPanel';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { TopCommandBar } from './TopCommandBar';
 import { WorkflowsPage } from './WorkflowsPage';
@@ -90,12 +91,15 @@ export function AppShell() {
     return () => window.removeEventListener('popstate', syncSectionFromLocation);
   }, []);
 
+  const sessionsPanelOpen = useAppStore((state) => state.sessionsPanelOpen);
+
   return (
     <div className="flex h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">
       <CommandPalette />
       <PersonaFlavorReviewModal />
       <div className="relative flex h-full w-full max-w-full overflow-x-hidden">
         {!isMobile && <SidebarNav />}
+        {!isMobile && sessionsPanelOpen && <SessionsPanel />}
         <div
           className={`shell-app-frame flex min-w-0 flex-1 max-w-full flex-col overflow-x-hidden overflow-y-hidden bg-shell-canvas ${
             isMobile ? 'pb-[calc(env(safe-area-inset-bottom)+4.75rem)]' : ''
