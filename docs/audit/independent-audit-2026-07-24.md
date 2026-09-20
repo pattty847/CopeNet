@@ -157,7 +157,7 @@ Telegram route (app_api) ───┘        │
 ### A-006 — `chat.send` optimistic ack races the in-flight check; loser hangs the UI
 **Medium-High · Confirmed · subsystem · small.**
 - **Evidence:** `rpc_chat.py:130-134` sends `{status:"started"}` before the orchestrator runs; the spawned run's `except SessionInFlightError` (`:172-184`) sends a *second* response frame (`status:"in_flight"`) for the same id and emits **no** chat event. The frontend `request()` resolved on the first `started`, registered an optimistic bubble + `setActiveRun`; the second frame has no waiter and is dropped. (The *other* setup-failure branch at `:185-194` does emit a terminal error — only the in-flight branch is silent.)
-- **Trigger:** two concurrent sends on one session (second device, or Telegram + browser) — a setup the broadcast fan-out (`ws_server.py:39-50`) supports.
+- **Trigger:** two concurrent sends on one session (second device, or Telegram + browser) — a setup that the broadcast fan-out (`ws_server.py:39-50`) supports.
 - **Impact:** permanent "thinking" bubble + stuck `activeRun`.
 - **Repair:** on `SessionInFlightError` emit a terminal chat error event for the runId, and/or run the in-flight check before the optimistic ack.
 
