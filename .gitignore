@@ -70,3 +70,4 @@ docs/redteam-demo/workspace/shell_ran.txt
 # Agent scratch: host logs and one-off research visualizations
 .run/
 .research-visualizations/
+/candidate-selection.json
