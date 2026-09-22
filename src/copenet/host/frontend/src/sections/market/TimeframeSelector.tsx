@@ -84,7 +84,7 @@ export function TimeframeSelector({
       </div>
 
       {/* The shared frame, not a hand-rolled one — its own comment says two popovers
-          re-declaring the same padding is how two popovers start looking different. Rolling
+          redeclaring the same padding is how two popovers start looking different. Rolling
           my own is exactly how this one shipped transparent, with the rows reading straight
           through onto the chart behind them. */}
       {open && (
