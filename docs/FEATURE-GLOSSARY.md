@@ -134,6 +134,10 @@ See [Knowledge Bases](KNOWLEDGE-BASES.md).
 
 Media workflows support URL and audio ingestion, transcription, and session-scoped asset storage. Remote use remains compatible with private Tailscale access.
 
+Transcription uses captions first, then MLX Whisper (`large-v3-turbo` by default, on the Apple GPU). One model serves imports and the composer mic: it loads on first use and unloads after `COPNET_WHISPER_IDLE_SECONDS` (default 600) without work. `COPNET_WHISPER_MODEL` takes a short name (`turbo`, `large-v3`, `small.en`) or a Hugging Face repo id.
+
+**Discuss** on a media asset opens a new Agents draft with the asset's full transcript attached as a text chat attachment. The transcript rides the same `attachmentIds` path as images, so the model receives every word on the first turn and again on each replayed turn, and the composer offers learning prompts (explain, check the claims, steelman, go deeper, takeaways).
+
 ### Telegram delivery
 
 Market alerts can send one chart image and caption through configured Messaging destinations. Delivery requires explicit per-rule consent and preserves uncertain receipts instead of silently sending a duplicate.

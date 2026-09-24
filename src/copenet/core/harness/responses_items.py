@@ -24,8 +24,8 @@ from typing import Any, Callable, TypedDict
 from .replay_receipts import VERBATIM_RECENT_TURNS, replay_output
 
 # Resolves a transcript message's stored attachment refs (list of dicts carrying
-# `attachmentId`) into Responses `input_image` content parts. Injected by the
-# orchestrator so this module stays free of storage dependencies.
+# `attachmentId`) into Responses content parts (`input_image` or `input_text`).
+# Injected by the orchestrator so this module stays free of storage dependencies.
 AttachmentResolver = Callable[[list[dict[str, Any]]], list[dict[str, Any]]]
 
 
@@ -72,16 +72,25 @@ def image_content_part(image_url: str) -> dict[str, Any]:
     return {"type": "input_image", "detail": "auto", "image_url": image_url}
 
 
-def user_input_item(text: str, image_parts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+def text_attachment_part(filename: str, text: str) -> dict[str, Any]:
+    """One `input_text` content part carrying an attached text file.
+
+    Prompt-only providers flatten a user item by joining its text parts, so the
+    file arrives as a delimited block after the operator's message.
+    """
+    return {"type": "input_text", "text": f'\n\n<attached_file name="{filename}">\n{text}\n</attached_file>'}
+
+
+def user_input_item(text: str, attachment_parts: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """One user-authored message in the input[] array.
 
     Text is always present (kept first so prompt-flattening still finds it). Any
-    `image_parts` (already-built `input_image` content parts) are appended, which
-    is how attachments reach a vision-capable model.
+    `attachment_parts` (already-built `input_image` / `input_text` content parts)
+    are appended, which is how attachments reach the model.
     """
     content: list[dict[str, Any]] = [{"type": "input_text", "text": text}]
-    if image_parts:
-        content.extend(image_parts)
+    if attachment_parts:
+        content.extend(attachment_parts)
     return {
         "role": "user",
         "content": content,
@@ -209,7 +218,7 @@ def transcript_to_input_array(
     *,
     transcript_messages: list[dict[str, Any]],
     current_user_message: str,
-    current_user_image_parts: list[dict[str, Any]] | None = None,
+    current_user_attachment_parts: list[dict[str, Any]] | None = None,
     attachment_resolver: AttachmentResolver | None = None,
     replay_stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
@@ -219,10 +228,11 @@ def transcript_to_input_array(
     (text + tool calls + tool outputs) interleaved in their original order, finally
     appending the new user message.
 
-    `current_user_image_parts` are `input_image` parts for the live turn's
-    attachments. `attachment_resolver`, when provided, re-inlines images for PAST
-    user turns that carried attachments — keeping multi-turn vision intact (ask a
-    follow-up about an image uploaded several turns ago).
+    `current_user_attachment_parts` are content parts for the live turn's
+    attachments. `attachment_resolver`, when provided, re-inlines attachments for
+    PAST user turns that carried them — keeping multi-turn vision intact (ask a
+    follow-up about an image uploaded several turns ago) and keeping an attached
+    transcript in context for every follow-up.
     """
     items: list[dict[str, Any]] = []
     assistant_total = sum(1 for message in transcript_messages if str(message.get("role") or "").strip() == "assistant")
@@ -236,12 +246,12 @@ def transcript_to_input_array(
         role = str(message.get("role") or "").strip()
         if role == "user":
             content = str(message.get("content") or "").strip()
-            past_image_parts: list[dict[str, Any]] = []
+            past_attachment_parts: list[dict[str, Any]] = []
             refs = message.get("attachments")
             if attachment_resolver is not None and isinstance(refs, list) and refs:
-                past_image_parts = attachment_resolver(refs)
-            if content or past_image_parts:
-                items.append(user_input_item(content, past_image_parts or None))
+                past_attachment_parts = attachment_resolver(refs)
+            if content or past_attachment_parts:
+                items.append(user_input_item(content, past_attachment_parts or None))
         elif role == "assistant":
             assistant_index += 1
             parts = message.get("parts")
@@ -261,7 +271,7 @@ def transcript_to_input_array(
                 content = str(message.get("content") or "").strip()
                 if content:
                     items.append(assistant_message_item(message_id=f"msg_{run_id}", text=content))
-    items.append(user_input_item(current_user_message, current_user_image_parts))
+    items.append(user_input_item(current_user_message, current_user_attachment_parts))
     return items
 
 

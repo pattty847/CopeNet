@@ -1,84 +1,166 @@
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 import pytest
 
-from copenet.core.media.transcriber import WhisperTranscriber
+from copenet.core.media.transcriber import (
+    DEFAULT_WHISPER_REPO,
+    MediaTranscriptionError,
+    WhisperTranscriber,
+    resolve_whisper_repo,
+)
 
 
-class _FakeModel:
-    def __init__(self, *, text: str) -> None:
-        self._text = text
-
-    def transcribe(self, _path: str, fp16: bool = False) -> dict[str, object]:
-        return {"text": self._text, "segments": [{"text": self._text}]}
-
-
-@pytest.mark.asyncio
-async def test_transcribe_stream_unloads_model_after_success(
+def _fake_transcriber(
     monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    transcriber = WhisperTranscriber(model_name="tiny")
-    monkeypatch.setattr(transcriber, "_ensure_ffmpeg_available", lambda: None)
-
-    load_calls = 0
-    unload_calls = 0
-
-    async def fake_load_model() -> None:
-        nonlocal load_calls
-        load_calls += 1
-        transcriber.model = _FakeModel(text="alpha")
-
-    def fake_unload_model() -> None:
-        nonlocal unload_calls
-        unload_calls += 1
-        transcriber.model = None
-
-    monkeypatch.setattr(transcriber, "load_model", fake_load_model)
-    monkeypatch.setattr(transcriber, "unload_model", fake_unload_model)
-
-    chunks: list[str] = []
-    async for chunk in transcriber.transcribe_stream(tmp_path / "clip.mp3"):
-        chunks.append(chunk)
-
-    assert chunks == ["alpha"]
-    assert load_calls == 1
-    assert unload_calls == 1
-    assert transcriber.model is None
-
-
-@pytest.mark.asyncio
-async def test_progress_stream_unloads_model_after_completion(
-    monkeypatch: pytest.MonkeyPatch,
-    tmp_path: Path,
-) -> None:
-    transcriber = WhisperTranscriber(model_name="tiny")
+    *,
+    idle_unload_seconds: float = 60.0,
+    segments: list[str] | None = None,
+    error: Exception | None = None,
+) -> tuple[WhisperTranscriber, dict[str, int]]:
+    transcriber = WhisperTranscriber(model_repo="mlx-community/whisper-tiny", idle_unload_seconds=idle_unload_seconds)
+    calls = {"load": 0, "unload": 0, "transcribe": 0}
     monkeypatch.setattr(transcriber, "_ensure_ffmpeg_available", lambda: None)
     monkeypatch.setattr(transcriber, "get_audio_duration", lambda _path: 0.0)
 
-    load_calls = 0
-    unload_calls = 0
-
     async def fake_load_model() -> None:
-        nonlocal load_calls
-        load_calls += 1
-        transcriber.model = _FakeModel(text="beta")
+        if transcriber.model is None:
+            calls["load"] += 1
+            transcriber.model = object()
 
     def fake_unload_model() -> None:
-        nonlocal unload_calls
-        unload_calls += 1
+        calls["unload"] += 1
         transcriber.model = None
+
+    def fake_transcribe_blocking(_path: Path) -> list[str]:
+        calls["transcribe"] += 1
+        if error is not None:
+            raise error
+        return list(segments or ["alpha", "beta"])
 
     monkeypatch.setattr(transcriber, "load_model", fake_load_model)
     monkeypatch.setattr(transcriber, "unload_model", fake_unload_model)
+    monkeypatch.setattr(transcriber, "_transcribe_blocking", fake_transcribe_blocking)
+    return transcriber, calls
 
-    events: list[dict[str, object]] = []
-    async for event in transcriber.progress_stream(tmp_path / "clip.mp3"):
-        events.append(event)
 
-    assert [event["type"] for event in events] == ["progress", "progress", "chunk", "progress"]
-    assert load_calls == 2
-    assert unload_calls == 1
+@pytest.mark.asyncio
+async def test_transcription_keeps_whisper_warm_between_imports(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    transcriber, calls = _fake_transcriber(monkeypatch)
+
+    first = await transcriber.transcribe(tmp_path / "one.mp3")
+    second = await transcriber.transcribe(tmp_path / "two.mp3")
+
+    assert first == second == "alpha beta"
+    assert calls == {"load": 1, "unload": 0, "transcribe": 2}
+    assert transcriber.model is not None
+
+
+@pytest.mark.asyncio
+async def test_idle_window_unloads_whisper(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    transcriber, calls = _fake_transcriber(monkeypatch, idle_unload_seconds=0.05)
+
+    await transcriber.transcribe(tmp_path / "clip.mp3")
+    await asyncio.sleep(0.2)
+
+    assert calls["unload"] == 1
     assert transcriber.model is None
+
+
+@pytest.mark.asyncio
+async def test_work_inside_idle_window_postpones_unload(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    transcriber, calls = _fake_transcriber(monkeypatch, idle_unload_seconds=0.2)
+
+    await transcriber.transcribe(tmp_path / "one.mp3")
+    await asyncio.sleep(0.12)
+    await transcriber.transcribe(tmp_path / "two.mp3")
+    await asyncio.sleep(0.12)
+    assert calls["unload"] == 0
+
+    await asyncio.sleep(0.2)
+    assert calls["unload"] == 1
+    assert calls["load"] == 1
+
+
+@pytest.mark.asyncio
+async def test_transcription_failure_is_wrapped_and_still_schedules_unload(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    transcriber, calls = _fake_transcriber(monkeypatch, idle_unload_seconds=0.05, error=ValueError("bad audio"))
+
+    with pytest.raises(MediaTranscriptionError, match="bad audio"):
+        await transcriber.transcribe(tmp_path / "clip.mp3")
+    await asyncio.sleep(0.2)
+
+    assert calls["unload"] == 1
+
+
+@pytest.mark.asyncio
+async def test_progress_stream_reports_loading_then_transcript_chunks(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    transcriber, _calls = _fake_transcriber(monkeypatch, segments=["first line", "second line"])
+
+    events = [event async for event in transcriber.progress_stream(tmp_path / "clip.mp3")]
+
+    assert [event["type"] for event in events] == ["progress", "chunk", "chunk", "progress"]
+    assert events[0]["stage"] == "loading"
+    assert [event["text"] for event in events if event["type"] == "chunk"] == ["first line", "second line"]
+    assert events[-1]["percent"] == 100.0
+
+    warm_events = [event async for event in transcriber.progress_stream(tmp_path / "clip.mp3")]
+    assert warm_events[0]["type"] == "chunk"
+
+
+def test_whisper_model_setting_accepts_short_names_and_repo_ids() -> None:
+    assert resolve_whisper_repo("") == DEFAULT_WHISPER_REPO
+    assert resolve_whisper_repo("turbo") == "mlx-community/whisper-large-v3-turbo"
+    assert resolve_whisper_repo("small.en") == "mlx-community/whisper-small.en-mlx"
+    assert resolve_whisper_repo("someone/custom-whisper") == "someone/custom-whisper"
+
+
+@pytest.mark.asyncio
+async def test_every_mlx_call_runs_on_one_thread(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    # MLX aborts the process when weights created on one thread are used on
+    # another ("There is no Stream(gpu, 1) in current thread").
+    import threading
+
+    thread_ids: dict[str, set[int]] = {"load": set(), "transcribe": set(), "clear": set()}
+
+    class FakeMx:
+        float16 = "float16"
+
+        @staticmethod
+        def clear_cache() -> None:
+            thread_ids["clear"].add(threading.get_ident())
+
+    class FakeModelHolder:
+        model = None
+        model_path = None
+
+        @classmethod
+        def get_model(cls, path: str, dtype: str) -> object:
+            thread_ids["load"].add(threading.get_ident())
+            cls.model = object()
+            return cls.model
+
+    class FakeMlxWhisper:
+        @staticmethod
+        def transcribe(_path: str, **_kwargs) -> dict:
+            thread_ids["transcribe"].add(threading.get_ident())
+            return {"segments": [{"text": "gamma"}]}
+
+    transcriber = WhisperTranscriber(model_repo="mlx-community/whisper-tiny", idle_unload_seconds=0.05)
+    monkeypatch.setattr(transcriber, "_ensure_ffmpeg_available", lambda: None)
+    monkeypatch.setattr(transcriber, "_require_mlx_whisper", lambda: (FakeMx, FakeMlxWhisper, FakeModelHolder))
+
+    for _ in range(3):
+        assert await transcriber.transcribe(tmp_path / "clip.mp3") == "gamma"
+    await asyncio.sleep(0.2)
+
+    assert transcriber.model is None
+    all_threads = thread_ids["load"] | thread_ids["transcribe"] | thread_ids["clear"]
+    assert len(all_threads) == 1
+    assert threading.get_ident() not in all_threads

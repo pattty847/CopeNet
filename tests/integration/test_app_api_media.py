@@ -60,14 +60,12 @@ class FakeMediaService:
         url: str,
         include_timestamps: bool = True,
         prefer_captions: bool = True,
-        whisper_model: str = "base",
     ) -> FakeMediaAsset:
         self.last_import = {
             "app_id": app_id,
             "url": url,
             "include_timestamps": include_timestamps,
             "prefer_captions": prefer_captions,
-            "whisper_model": whisper_model,
         }
         asset = FakeMediaAsset("media-2", "Imported Clip", "Transcript imported through fake media service.")
         self.assets.insert(0, asset)
@@ -80,7 +78,6 @@ class FakeMediaService:
         url: str,
         include_timestamps: bool = True,
         prefer_captions: bool = True,
-        whisper_model: str = "base",
     ):
         yield {"type": "progress", "stage": "download", "percent": 10.0, "message": f"Downloading {url} for {app_id}."}
         yield {"type": "chunk", "text": "first chunk"}
@@ -162,7 +159,6 @@ def test_media_import_returns_asset_and_uses_request_fields(media_app_client) ->
             "url": "https://youtu.be/example",
             "includeTimestamps": False,
             "preferCaptions": True,
-            "whisperModel": "tiny",
         },
     )
     assert response.status_code == 200
@@ -174,9 +170,26 @@ def test_media_import_returns_asset_and_uses_request_fields(media_app_client) ->
         "url": "https://youtu.be/example",
         "include_timestamps": False,
         "prefer_captions": True,
-        "whisper_model": "tiny",
     }
 
+
+def test_media_asset_becomes_text_chat_attachment_with_full_transcript(media_app_client) -> None:
+    client, token, _ = media_app_client
+
+    response = client.post("/api/v1/media/assets/media-1/chat-attachment", headers=_auth(token))
+    assert response.status_code == 200
+    attachment = response.json()["attachment"]
+    assert attachment["mimeType"] == "text/plain"
+    assert attachment["filename"] == "Clip One.txt"
+
+    body = client.get(f"/api/v1/chat/attachments/{attachment['attachmentId']}", headers=_auth(token)).text
+    assert body.startswith('Transcript of "Clip One"\nSource: https://example.com/video')
+    assert "Transcribed from: youtube-captions" in body
+    assert "Length: 0:12" in body
+    assert body.endswith("Full transcript for Clip One.")
+
+    missing = client.post("/api/v1/media/assets/nope/chat-attachment", headers=_auth(token))
+    assert missing.status_code == 404
 
 def test_media_asset_detail_returns_transcript_content(media_app_client) -> None:
     client, token, _ = media_app_client

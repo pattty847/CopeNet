@@ -20,9 +20,12 @@ class MediaIngestionService:
         *,
         store: MediaAssetStore | None = None,
         downloader: UniversalDownloader | None = None,
+        transcriber: WhisperTranscriber | None = None,
     ) -> None:
         self.store = store or MediaAssetStore()
         self.downloader = downloader or UniversalDownloader(self.store.downloads_dir)
+        # One warm model shared by imports and the composer mic.
+        self.transcriber = transcriber or WhisperTranscriber()
 
     async def import_url(
         self,
@@ -31,7 +34,6 @@ class MediaIngestionService:
         url: str,
         include_timestamps: bool = True,
         prefer_captions: bool = True,
-        whisper_model: str = "base",
     ) -> MediaAssetRecord:
         """Import one remote media URL into the store."""
         return await self._import_source(
@@ -40,7 +42,6 @@ class MediaIngestionService:
             source_path=None,
             include_timestamps=include_timestamps,
             prefer_captions=prefer_captions,
-            whisper_model=whisper_model,
         )
 
     async def import_local_file(
@@ -48,7 +49,6 @@ class MediaIngestionService:
         *,
         app_id: str,
         source_path: Path,
-        whisper_model: str = "base",
     ) -> MediaAssetRecord:
         """Import one local media file into the store."""
         return await self._import_source(
@@ -57,17 +57,15 @@ class MediaIngestionService:
             source_path=source_path,
             include_timestamps=False,
             prefer_captions=False,
-            whisper_model=whisper_model,
         )
 
-    async def transcribe_file(self, *, source_path: Path, whisper_model: str = "base") -> str:
+    async def transcribe_file(self, *, source_path: Path) -> str:
         """Transcribe one local media file to text WITHOUT persisting an asset.
 
         Used by the composer voice-to-text mic: a throwaway dictation clip should
         become text in the composer, not a stored media asset.
         """
-        transcriber = WhisperTranscriber(model_name=whisper_model)
-        return await transcriber.transcribe(source_path)
+        return await self.transcriber.transcribe(source_path)
 
     async def download_url(
         self,
@@ -84,7 +82,6 @@ class MediaIngestionService:
         url: str,
         include_timestamps: bool = True,
         prefer_captions: bool = True,
-        whisper_model: str = "base",
     ) -> AsyncIterator[dict[str, Any]]:
         """Yield progress events while importing one URL."""
         yield {"type": "progress", "stage": "download", "percent": 2.0, "message": "Preparing media import."}
@@ -96,7 +93,6 @@ class MediaIngestionService:
                     url=url,
                     include_timestamps=include_timestamps,
                     prefer_captions=True,
-                    whisper_model=whisper_model,
                 )
             except MediaDownloadError:
                 yield {"type": "progress", "stage": "download", "percent": 12.0, "message": "Captions unavailable. Falling back to downloaded media."}
@@ -107,7 +103,7 @@ class MediaIngestionService:
         yield {"type": "progress", "stage": "download", "percent": 20.0, "message": "Downloading media asset."}
         media_path, metadata = await self.downloader.download_best_video(url)
         yield {"type": "progress", "stage": "processing", "percent": 35.0, "message": f"Downloaded {media_path.name}."}
-        transcriber = WhisperTranscriber(model_name=whisper_model)
+        transcriber = self.transcriber
         chunks: list[str] = []
         async for event in transcriber.progress_stream(media_path):
             if event.get("type") == "chunk":
@@ -152,7 +148,6 @@ class MediaIngestionService:
         source_path: Path | None,
         include_timestamps: bool,
         prefer_captions: bool,
-        whisper_model: str,
     ) -> MediaAssetRecord:
         started = time.perf_counter()
         if url:
@@ -180,7 +175,7 @@ class MediaIngestionService:
         else:
             raise MediaDownloadError("A URL or local source path is required.")
 
-        transcriber = WhisperTranscriber(model_name=whisper_model)
+        transcriber = self.transcriber
         transcript = await transcriber.transcribe(media_path)
         return self._persist_record(
             app_id=app_id,

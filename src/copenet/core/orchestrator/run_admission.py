@@ -11,7 +11,7 @@ import asyncio
 from pathlib import Path
 from uuid import uuid4
 
-from copenet.core.harness.responses_items import image_content_part
+from .attachment_parts import attachment_content_part
 from copenet.core.orchestrator.market_context import (
     resolve_market_context,
     admit_chart_turn,
@@ -30,10 +30,10 @@ async def admit_run(orchestrator: "Orchestrator", request: "ChatSendRequest"):
     message = request.message.strip()
     if not session_key:
         raise ValueError("session_key is required")
-    current_image_parts, attachment_refs = resolve_current_attachments(
+    current_attachment_parts, attachment_refs = resolve_current_attachments(
         orchestrator._chat_attachment_store, request.attachment_ids
     )
-    if not message and (not current_image_parts):
+    if not message and (not current_attachment_parts):
         raise ValueError("message is required")
     idempotency_key = request.idempotency_key.strip() if request.idempotency_key else ""
     run_id = idempotency_key or str(uuid4())
@@ -110,25 +110,22 @@ async def admit_run(orchestrator: "Orchestrator", request: "ChatSendRequest"):
         run_started_at=run_started_at,
         is_first_turn=is_first_turn,
         attachment_refs=attachment_refs,
-        current_image_parts=current_image_parts,
+        current_attachment_parts=current_attachment_parts,
     )
 
 
 def resolve_current_attachments(
     attachment_store, attachment_ids: tuple[str, ...]
 ) -> tuple[list[dict], list[dict]]:
-    current_image_parts: list[dict] = []
+    current_attachment_parts: list[dict] = []
     attachment_refs: list[dict] = []
     for attachment_id in attachment_ids:
-        attachment = attachment_store.get(attachment_id)
-        if attachment is None:
+        part = attachment_content_part(attachment_store, attachment_id)
+        if part is None:
             continue
-        data_url = attachment_store.data_url(attachment_id)
-        if not data_url:
-            continue
-        current_image_parts.append(image_content_part(data_url))
-        attachment_refs.append(attachment.to_transcript_ref())
-    return current_image_parts, attachment_refs
+        current_attachment_parts.append(part)
+        attachment_refs.append(attachment_store.get(attachment_id).to_transcript_ref())
+    return current_attachment_parts, attachment_refs
 
 
 def bind_session(orchestrator, request: ChatSendRequest, provider_name: str, session_key: str, message: str):

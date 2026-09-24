@@ -1,17 +1,22 @@
 """Chat attachment storage for CopeNet.
 
-A lightweight, disk-backed store for images (and future files) attached to chat
-messages from the composer. Separate from the media library (`core/media/`),
-which is a transcription/ingestion lane with its own asset model.
+A lightweight, disk-backed store for images and text files attached to chat
+messages. Separate from the media library (`core/media/`), which is a
+transcription/ingestion lane with its own asset model; a media asset's
+transcript becomes a text attachment here when the operator discusses it.
 
 Flow:
-- The composer uploads a file to `POST /api/v1/chat/attachments`, which calls
-  `ChatAttachmentStore.save(...)` and returns an attachment id + metadata.
+- The composer uploads an image to `POST /api/v1/chat/attachments`, or a media
+  asset is turned into a text attachment by
+  `POST /api/v1/media/assets/{id}/chat-attachment`. Both call
+  `ChatAttachmentStore.save(...)` and return an attachment id + metadata.
 - `chat.send` carries `attachmentIds`. The orchestrator resolves each id to a
-  base64 data URL via `data_url(...)` and injects it as an `input_image` content
-  part on the user turn (the exact shape the Responses/codex backend accepts).
+  content part (`core/orchestrator/attachment_parts.py`): an image becomes an
+  `input_image` part carrying a base64 data URL, a text file an `input_text`
+  part carrying its contents.
 - The user transcript message persists the attachment metadata so later turns can
-  re-inline the same images (multi-turn vision).
+  re-inline the same attachments (multi-turn vision, and a transcript that stays
+  in context for every follow-up).
 
 Bytes live on disk under `<root>/<id>.<ext>`; a `<id>.json` sidecar holds the
 metadata. Nothing here mutates session state, so it sidesteps session-semantics
@@ -33,9 +38,7 @@ from uuid import uuid4
 from copenet._paths import default_chat_attachments_dir
 
 
-# Images are the only supported kind in v1. The codex/Responses backend accepts
-# these as `input_image` content parts; other mime types would need a different
-# ingestion path (text extraction), which is deliberately out of scope here.
+# The codex/Responses backend accepts images as `input_image` content parts.
 SUPPORTED_IMAGE_MIME_TYPES = {
     "image/png",
     "image/jpeg",
@@ -43,9 +46,18 @@ SUPPORTED_IMAGE_MIME_TYPES = {
     "image/gif",
 }
 
+# Text rides into the model input verbatim as an `input_text` part.
+SUPPORTED_TEXT_MIME_TYPES = {
+    "text/plain",
+    "text/markdown",
+}
+
 # Hard cap on a single attachment. Inlined images ride inside the request body to
 # the model, so keep this conservative to avoid oversized payloads.
 MAX_ATTACHMENT_BYTES = 20 * 1024 * 1024
+# Text is re-sent on every turn of the session, so its cap is about context
+# budget, not transport: ~400 KB is roughly 100k tokens, several hours of speech.
+MAX_TEXT_ATTACHMENT_BYTES = 400 * 1024
 
 
 class ChatAttachmentError(ValueError):
@@ -75,6 +87,10 @@ class ChatAttachment:
     created_at: str
     path: Path
 
+    @property
+    def is_text(self) -> bool:
+        return self.mime_type in SUPPORTED_TEXT_MIME_TYPES
+
     def to_public_dict(self) -> dict[str, Any]:
         """Wire shape returned to the UI (camelCase, no local path)."""
         return {
@@ -95,7 +111,7 @@ class ChatAttachment:
 
 
 class ChatAttachmentStore:
-    """File-backed store for composer image attachments."""
+    """File-backed store for chat image and text attachments."""
 
     def __init__(self, root_dir: Path | None = None) -> None:
         self._root_dir = root_dir if root_dir is not None else default_chat_attachments_dir()
@@ -113,21 +129,23 @@ class ChatAttachmentStore:
         return safe
 
     def save(self, *, data: bytes, mime_type: str, filename: str) -> ChatAttachment:
-        """Persist one image attachment and return its metadata.
+        """Persist one image or text attachment and return its metadata.
 
         Raises ChatAttachmentError for unsupported types or oversized payloads.
         """
         normalized_mime = (mime_type or "").split(";")[0].strip().lower()
-        if normalized_mime not in SUPPORTED_IMAGE_MIME_TYPES:
+        supported = SUPPORTED_IMAGE_MIME_TYPES | SUPPORTED_TEXT_MIME_TYPES
+        if normalized_mime not in supported:
             raise ChatAttachmentError(
                 f"unsupported attachment type: {normalized_mime or 'unknown'} "
-                f"(supported: {', '.join(sorted(SUPPORTED_IMAGE_MIME_TYPES))})"
+                f"(supported: {', '.join(sorted(supported))})"
             )
         if not data:
             raise ChatAttachmentError("attachment is empty")
-        if len(data) > MAX_ATTACHMENT_BYTES:
+        limit = MAX_TEXT_ATTACHMENT_BYTES if normalized_mime in SUPPORTED_TEXT_MIME_TYPES else MAX_ATTACHMENT_BYTES
+        if len(data) > limit:
             raise ChatAttachmentError(
-                f"attachment too large: {len(data)} bytes (limit {MAX_ATTACHMENT_BYTES})"
+                f"attachment too large: {len(data)} bytes (limit {limit})"
             )
 
         attachment_id = uuid4().hex
@@ -187,6 +205,16 @@ class ChatAttachmentStore:
         except OSError:
             return None
 
+    def read_text(self, attachment_id: str) -> str | None:
+        """Return a text attachment's contents, or None if missing or not text."""
+        attachment = self.get(attachment_id)
+        if attachment is None or not attachment.is_text:
+            return None
+        raw = self.read_bytes(attachment_id)
+        if raw is None:
+            return None
+        return raw.decode("utf-8", errors="replace")
+
     def data_url(self, attachment_id: str) -> str | None:
         """Return a base64 data URL (`data:<mime>;base64,<...>`) for the image.
 
@@ -208,5 +236,7 @@ __all__ = [
     "ChatAttachmentError",
     "ChatAttachmentStore",
     "MAX_ATTACHMENT_BYTES",
+    "MAX_TEXT_ATTACHMENT_BYTES",
     "SUPPORTED_IMAGE_MIME_TYPES",
+    "SUPPORTED_TEXT_MIME_TYPES",
 ]

@@ -9,17 +9,8 @@ import { uploadChatAttachment } from '../../lib/appApi';
 import type { ChatAttachment, DraftSettings, Model, PromptOptimizationVariant, PromptOption, Provider } from '../../types/backend';
 import type { UniverseAsset } from '../../sections/market/types';
 import { ComposerToolPickerButton, ComposerToolTray } from './ComposerToolControls';
+import { ComposerAttachmentTray, DiscussPromptChips, isTextAttachment, type PendingAttachment } from './ComposerAttachmentTray';
 import { shouldSubmitComposerOnEnter } from './composerKeyboard';
-
-/** A composer-local image attachment in flight: object-URL preview + upload status. */
-interface PendingAttachment {
-  localId: string;
-  filename: string;
-  previewUrl: string;
-  status: 'uploading' | 'ready' | 'error';
-  attachment: ChatAttachment | null;
-  error?: string;
-}
 
 const EMPTY_REQUESTED_TOOL_IDS: string[] = [];
 
@@ -478,6 +469,22 @@ export function AgentComposer({
   const [isDragging, setIsDragging] = useState(false);
   const hasUploadingAttachment = attachments.some((item) => item.status === 'uploading');
   const readyAttachments = attachments.filter((item) => item.status === 'ready' && item.attachment);
+  const hasTextAttachment = readyAttachments.some((item) => isTextAttachment(item.attachment));
+
+  // Discuss (Data & Tools) seeds a transcript attachment for the next draft.
+  const draftComposerAttachmentSeed = useAppStore((state) => state.draftComposerAttachmentSeed);
+  const setDraftComposerAttachmentSeed = useAppStore((state) => state.setDraftComposerAttachmentSeed);
+  useEffect(() => {
+    if (!draftComposerAttachmentSeed) return;
+    const seeded = draftComposerAttachmentSeed;
+    setDraftComposerAttachmentSeed(null);
+    setAttachments((current) => [
+      ...current.filter((item) => item.attachment?.attachmentId !== seeded.attachmentId),
+      { localId: `att-${seeded.attachmentId}`, filename: seeded.filename, previewUrl: '', status: 'ready', attachment: seeded },
+    ]);
+    // setAttachments is rebuilt each render; the seed is the only trigger.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draftComposerAttachmentSeed, setDraftComposerAttachmentSeed]);
 
   const ingestFiles = (files: File[]) => {
     const images = files.filter((file) => file.type.startsWith('image/'));
@@ -512,14 +519,14 @@ export function AgentComposer({
   const removeAttachment = (localId: string) => {
     setAttachments((current) => {
       const target = current.find((item) => item.localId === localId);
-      if (target) URL.revokeObjectURL(target.previewUrl);
+      if (target?.previewUrl) URL.revokeObjectURL(target.previewUrl);
       return current.filter((item) => item.localId !== localId);
     });
   };
 
   const clearAttachments = () => {
     setAttachments((current) => {
-      current.forEach((item) => URL.revokeObjectURL(item.previewUrl));
+      current.forEach((item) => item.previewUrl && URL.revokeObjectURL(item.previewUrl));
       return [];
     });
   };
@@ -932,36 +939,14 @@ export function AgentComposer({
           onDrop={handleDrop}
         >
           <ComposerToolTray composerKey={composerKey} />
-          {attachments.length > 0 && (
-            <div className="flex flex-wrap gap-2 border-b border-operator-border/60 px-3 py-2">
-              {attachments.map((item) => (
-                <div
-                  key={item.localId}
-                  className="group relative h-16 w-16 overflow-hidden rounded-lg border border-operator-border bg-operator-bg"
-                  title={item.error || item.filename}
-                >
-                  <img src={item.previewUrl} alt={item.filename} className="h-full w-full object-cover" />
-                  {item.status === 'uploading' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-operator-bg/60">
-                      <Loader2 className="h-4 w-4 animate-spin text-operator-accent" />
-                    </div>
-                  )}
-                  {item.status === 'error' && (
-                    <div className="absolute inset-0 flex items-center justify-center bg-operator-error/30 text-[9px] font-semibold text-operator-error">
-                      Failed
-                    </div>
-                  )}
-                  <button
-                    type="button"
-                    onClick={() => removeAttachment(item.localId)}
-                    className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-operator-bg/80 text-operator-muted opacity-0 transition-opacity hover:text-operator-error group-hover:opacity-100"
-                    title="Remove"
-                  >
-                    <X className="h-2.5 w-2.5" />
-                  </button>
-                </div>
-              ))}
-            </div>
+          <ComposerAttachmentTray attachments={attachments} onRemove={removeAttachment} />
+          {hasTextAttachment && !value.trim() && (
+            <DiscussPromptChips
+              onPick={(prompt) => {
+                onChange(prompt);
+                textareaRef.current?.focus();
+              }}
+            />
           )}
           <div className="relative flex items-end gap-1 px-3 py-2">
             {mentionOpen && (

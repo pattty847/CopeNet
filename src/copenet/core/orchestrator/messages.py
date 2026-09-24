@@ -33,7 +33,7 @@ def build_chat_messages(
     transcript_messages: list[dict[str, Any]],
     current_user_message: str,
     max_context_tokens: int | None = None,
-    current_user_image_parts: list[dict[str, Any]] | None = None,
+    current_user_attachment_parts: list[dict[str, Any]] | None = None,
     attachment_resolver: responses_items.AttachmentResolver | None = None,
     replay_stats: dict[str, int] | None = None,
 ) -> list[dict[str, Any]]:
@@ -43,9 +43,9 @@ def build_chat_messages(
     in chronological order, EXCLUDING the current user message — that is appended
     last from `current_user_message`.
 
-    `current_user_image_parts` carry the live turn's image attachments as
-    `input_image` parts; `attachment_resolver` re-inlines images for past user
-    turns so multi-turn vision survives replay.
+    `current_user_attachment_parts` carry the live turn's attachments as
+    `input_image` / `input_text` parts; `attachment_resolver` re-inlines them for
+    past user turns so images and attached transcripts survive replay.
 
     When `max_context_tokens` is set, oldest complete conversation turns are
     omitted from the provider view. Durable transcript storage is untouched.
@@ -53,7 +53,7 @@ def build_chat_messages(
     messages = responses_items.transcript_to_input_array(
         transcript_messages=_with_chart_references(transcript_messages),
         current_user_message=current_user_message,
-        current_user_image_parts=current_user_image_parts,
+        current_user_attachment_parts=current_user_attachment_parts,
         attachment_resolver=attachment_resolver,
         replay_stats=replay_stats,
     )

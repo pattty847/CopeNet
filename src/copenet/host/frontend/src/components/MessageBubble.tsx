@@ -3,13 +3,14 @@ import { Message, ChatAttachment } from '../types/backend';
 import { fetchChatAttachmentObjectUrl } from '../lib/appApi';
 import { ToolTraceCard } from './ToolTraceCard';
 import { TurnTrail } from './transcript/TurnTrail';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, FileText } from 'lucide-react';
 import { Spinner } from './Spinner';
 import { ChatMarkdown } from './ChatMarkdown';
 import { formatMessageForClipboard } from '../lib/chatExport';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { useAppStore } from '../store/useAppStore';
 import { ToolGlyph, toolDisplayName } from './ToolPromptPalette';
+import { isTextAttachment } from './agents/ComposerAttachmentTray';
 
 function formatTimestamp(ts: string) {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
@@ -63,12 +64,57 @@ function AttachmentImage({ attachment }: { attachment: ChatAttachment }) {
   );
 }
 
+// One attached text file (e.g. a discussed media transcript). The model saw the
+// whole text; the chip opens it so the operator can read what was sent.
+function AttachmentFile({ attachment }: { attachment: ChatAttachment }) {
+  const [href, setHref] = useState<string | null>(null);
+
+  useEffect(() => {
+    let revoked: string | null = null;
+    let cancelled = false;
+    fetchChatAttachmentObjectUrl(attachment.attachmentId)
+      .then((url) => {
+        if (cancelled) {
+          URL.revokeObjectURL(url);
+          return;
+        }
+        revoked = url;
+        setHref(url);
+      })
+      .catch(() => {
+        if (!cancelled) setHref(null);
+      });
+    return () => {
+      cancelled = true;
+      if (revoked) URL.revokeObjectURL(revoked);
+    };
+  }, [attachment.attachmentId]);
+
+  const body = (
+    <>
+      <FileText className="h-3.5 w-3.5 shrink-0 text-operator-accent" />
+      <span className="truncate">{attachment.filename}</span>
+    </>
+  );
+  const className =
+    'flex h-9 max-w-[18rem] items-center gap-2 rounded-lg border border-operator-border bg-operator-bg px-2.5 text-xs text-operator-text';
+  return href ? (
+    <a href={href} target="_blank" rel="noreferrer" title={`Open ${attachment.filename}`} className={`${className} hover:border-operator-accent/50`}>
+      {body}
+    </a>
+  ) : (
+    <div className={className} title={attachment.filename}>{body}</div>
+  );
+}
+
 function MessageAttachments({ attachments }: { attachments: ChatAttachment[] }) {
   if (!attachments.length) return null;
   return (
     <div className="mb-1.5 flex flex-wrap justify-end gap-1.5">
       {attachments.map((attachment) => (
-        <AttachmentImage key={attachment.attachmentId} attachment={attachment} />
+        isTextAttachment(attachment)
+          ? <AttachmentFile key={attachment.attachmentId} attachment={attachment} />
+          : <AttachmentImage key={attachment.attachmentId} attachment={attachment} />
       ))}
     </div>
   );

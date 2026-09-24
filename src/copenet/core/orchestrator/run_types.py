@@ -33,7 +33,7 @@ class RunAdmission:
     run_started_at: str
     is_first_turn: bool
     attachment_refs: list[dict]
-    current_image_parts: list[dict]
+    current_attachment_parts: list[dict]
 
 
 @dataclass

@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
+import { ChatAttachment, DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
@@ -112,6 +112,9 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   setWorkflowsRoute: (route: WorkflowsRoute) => void;
   draftComposerSeed: string | null;
   setDraftComposerSeed: (seed: string | null) => void;
+  /** An attachment (e.g. a discussed media transcript) the next draft composer picks up. */
+  draftComposerAttachmentSeed: ChatAttachment | null;
+  setDraftComposerAttachmentSeed: (attachment: ChatAttachment | null) => void;
   memeLabSeedAsset: MediaAssetDetail | null;
   setMemeLabSeedAsset: (asset: MediaAssetDetail | null) => void;
 
@@ -347,6 +350,8 @@ export const useAppStore = create<AppState>((set) => ({
   setWorkflowsRoute: (route) => set({ workflowsRoute: route }),
   draftComposerSeed: null,
   setDraftComposerSeed: (seed) => set({ draftComposerSeed: seed }),
+  draftComposerAttachmentSeed: null,
+  setDraftComposerAttachmentSeed: (attachment) => set({ draftComposerAttachmentSeed: attachment }),
   memeLabSeedAsset: null,
   setMemeLabSeedAsset: (asset) => set({ memeLabSeedAsset: asset }),
 

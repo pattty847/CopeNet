@@ -7,7 +7,7 @@ if TYPE_CHECKING:
     from . import Orchestrator
 
 
-from copenet.core.harness.responses_items import image_content_part
+from .attachment_parts import attachment_content_part
 from copenet.core.orchestrator.market_context import (
     chart_prompt_policy,
     current_chart_message,
@@ -53,16 +53,16 @@ def _tool_loop_reserve(input_tokens: int, has_tools: bool) -> int:
     return min(_MAX_TOOL_LOOP_RESERVE_TOKENS, max(4_000, input_tokens // 5))
 
 
-def resolve_attachment_images(attachment_store, refs: list[dict]) -> list[dict]:
-    """Re-inline images for a past user turn from its persisted attachment refs."""
+def resolve_attachment_parts(attachment_store, refs: list[dict]) -> list[dict]:
+    """Re-inline attachments for a past user turn from its persisted attachment refs."""
     parts: list[dict] = []
     for ref in refs:
         ref_id = str(ref.get("attachmentId") or "").strip()
         if not ref_id:
             continue
-        data_url = attachment_store.data_url(ref_id)
-        if data_url:
-            parts.append(image_content_part(data_url))
+        part = attachment_content_part(attachment_store, ref_id)
+        if part is not None:
+            parts.append(part)
     return parts
 
 
@@ -157,7 +157,7 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
     live_without_chart = build_chat_messages(
         transcript_messages=[],
         current_user_message=admission.message,
-        current_user_image_parts=admission.current_image_parts or None,
+        current_user_attachment_parts=admission.current_attachment_parts or None,
     )
     chart_token_limit = max(
         initial_input_budget - fixed_input_tokens - estimate_input_tokens(live_without_chart), 1
@@ -191,8 +191,8 @@ async def prepare_run_input(orchestrator: "Orchestrator", admission: RunAdmissio
     unbounded_chat_messages = build_chat_messages(
         transcript_messages=history_for_replay,
         current_user_message=current_message,
-        current_user_image_parts=admission.current_image_parts or None,
-        attachment_resolver=lambda refs: resolve_attachment_images(orchestrator._chat_attachment_store, refs),
+        current_user_attachment_parts=admission.current_attachment_parts or None,
+        attachment_resolver=lambda refs: resolve_attachment_parts(orchestrator._chat_attachment_store, refs),
         replay_stats=replay_stats,
     )
     if replay_stats.get("receiptTurns"):

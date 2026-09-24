@@ -243,6 +243,18 @@ export async function uploadChatAttachment(file: File): Promise<ChatAttachment> 
   return normalizeChatAttachment(payload.attachment);
 }
 
+/** Turn a media asset's full transcript into a text chat attachment (the Discuss flow). */
+export async function createMediaChatAttachment(assetId: string): Promise<ChatAttachment> {
+  const response = await fetch(`${getHttpBaseUrl()}/api/v1/media/assets/${encodeURIComponent(assetId)}/chat-attachment`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${getAuthToken()}`,
+    },
+  });
+  const payload = await readJson<{ attachment?: unknown }>(response);
+  return normalizeChatAttachment(payload.attachment);
+}
+
 /** Fetch a persisted attachment as an object URL (auth header can't ride on
  *  <img src>, so historical thumbnails fetch the bytes and wrap them). Caller
  *  owns revoking the returned URL. */
