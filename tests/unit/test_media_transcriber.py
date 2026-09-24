@@ -8,6 +8,7 @@ import pytest
 from copenet.core.media.transcriber import (
     DEFAULT_WHISPER_REPO,
     MediaTranscriptionError,
+    TranscriptSegment,
     WhisperTranscriber,
     resolve_whisper_repo,
 )
@@ -34,11 +35,13 @@ def _fake_transcriber(
         calls["unload"] += 1
         transcriber.model = None
 
-    def fake_transcribe_blocking(_path: Path) -> list[str]:
+    def fake_transcribe_blocking(_path: Path) -> list[TranscriptSegment]:
         calls["transcribe"] += 1
         if error is not None:
             raise error
-        return list(segments or ["alpha", "beta"])
+        texts = segments or ["alpha", "beta"]
+        # Segments 65 seconds apart so timestamps cross a minute boundary.
+        return [TranscriptSegment(start_seconds=index * 65.0, text=text) for index, text in enumerate(texts)]
 
     monkeypatch.setattr(transcriber, "load_model", fake_load_model)
     monkeypatch.setattr(transcriber, "unload_model", fake_unload_model)
@@ -113,6 +116,24 @@ async def test_progress_stream_reports_loading_then_transcript_chunks(
     warm_events = [event async for event in transcriber.progress_stream(tmp_path / "clip.mp3")]
     assert warm_events[0]["type"] == "chunk"
 
+    stamped = [event async for event in transcriber.progress_stream(tmp_path / "clip.mp3", include_timestamps=True)]
+    assert [event["text"] for event in stamped if event["type"] == "chunk"] == [
+        "[00:00:00] first line",
+        "[00:01:05] second line",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_imports_get_one_timestamped_line_per_segment_and_the_mic_gets_plain_text(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    transcriber, _calls = _fake_transcriber(monkeypatch, segments=["It is day out.", "Now it is night."])
+
+    assert await transcriber.transcribe(tmp_path / "clip.mp3", include_timestamps=True) == (
+        "[00:00:00] It is day out.\n[00:01:05] Now it is night."
+    )
+    assert await transcriber.transcribe(tmp_path / "clip.mp3") == "It is day out. Now it is night."
+
 
 def test_whisper_model_setting_accepts_short_names_and_repo_ids() -> None:
     assert resolve_whisper_repo("") == DEFAULT_WHISPER_REPO
@@ -150,7 +171,7 @@ async def test_every_mlx_call_runs_on_one_thread(monkeypatch: pytest.MonkeyPatch
         @staticmethod
         def transcribe(_path: str, **_kwargs) -> dict:
             thread_ids["transcribe"].add(threading.get_ident())
-            return {"segments": [{"text": "gamma"}]}
+            return {"segments": [{"start": 0.0, "text": "gamma"}]}
 
     transcriber = WhisperTranscriber(model_repo="mlx-community/whisper-tiny", idle_unload_seconds=0.05)
     monkeypatch.setattr(transcriber, "_ensure_ffmpeg_available", lambda: None)

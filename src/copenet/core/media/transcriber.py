@@ -18,7 +18,10 @@ from pathlib import Path
 import shutil
 import subprocess
 import time
+from dataclasses import dataclass
 from typing import Any, AsyncIterator
+
+from .timestamps import timestamped_line
 
 
 FFMPEG_DOWNLOAD_URL = "https://www.ffmpeg.org/download.html"
@@ -44,6 +47,23 @@ _MLX_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="mlx-whispe
 
 class MediaTranscriptionError(RuntimeError):
     """Raised when a media file cannot be transcribed."""
+
+
+@dataclass(frozen=True)
+class TranscriptSegment:
+    """One Whisper segment: where it starts in the audio, and what was said."""
+
+    start_seconds: float
+    text: str
+
+    def render(self, *, include_timestamps: bool) -> str:
+        return timestamped_line(self.start_seconds, self.text) if include_timestamps else self.text
+
+
+def join_segments(segments: list[TranscriptSegment], *, include_timestamps: bool) -> str:
+    """Timestamped transcripts keep one line per segment; plain text is one paragraph."""
+    separator = "\n" if include_timestamps else " "
+    return separator.join(segment.render(include_timestamps=include_timestamps) for segment in segments).strip()
 
 
 def resolve_whisper_repo(model_name: str) -> str:
@@ -142,7 +162,7 @@ class WhisperTranscriber:
         except ValueError:
             return 0.0
 
-    def _transcribe_blocking(self, audio_path: Path) -> list[str]:
+    def _transcribe_blocking(self, audio_path: Path) -> list[TranscriptSegment]:
         _mx, mlx_whisper, _model_holder = self._require_mlx_whisper()
         result = mlx_whisper.transcribe(
             str(audio_path),
@@ -150,15 +170,18 @@ class WhisperTranscriber:
             condition_on_previous_text=True,
             verbose=None,
         )
-        segments = [str(segment.get("text") or "").strip() for segment in result.get("segments") or []]
-        segments = [text for text in segments if text]
+        segments = [
+            TranscriptSegment(start_seconds=float(segment.get("start") or 0.0), text=str(segment.get("text") or "").strip())
+            for segment in result.get("segments") or []
+        ]
+        segments = [segment for segment in segments if segment.text]
         if not segments:
             text = str(result.get("text") or "").strip()
-            segments = [text] if text else []
+            segments = [TranscriptSegment(start_seconds=0.0, text=text)] if text else []
         return segments
 
-    async def transcribe_segments(self, audio_path: Path) -> list[str]:
-        """Transcribe one file and return its segment texts in order.
+    async def transcribe_segments(self, audio_path: Path) -> list[TranscriptSegment]:
+        """Transcribe one file and return its segments in order.
 
         Calls are serialized: one GPU model, one job at a time.
         """
@@ -176,12 +199,18 @@ class WhisperTranscriber:
                 self._last_used = time.monotonic()
                 self._schedule_idle_unload()
 
-    async def transcribe(self, audio_path: Path) -> str:
-        """Transcribe a full media file to text."""
-        return " ".join(await self.transcribe_segments(audio_path)).strip()
+    async def transcribe(self, audio_path: Path, *, include_timestamps: bool = False) -> str:
+        """Transcribe a full media file to text.
 
-    async def progress_stream(self, audio_path: Path) -> AsyncIterator[dict[str, object]]:
-        """Yield progress events while transcribing, then the transcript chunks."""
+        Imports ask for `[HH:MM:SS]` lines so a model can cite when something was
+        said; the composer mic wants plain dictation text (the default).
+        """
+        return join_segments(await self.transcribe_segments(audio_path), include_timestamps=include_timestamps)
+
+    async def progress_stream(
+        self, audio_path: Path, *, include_timestamps: bool = False
+    ) -> AsyncIterator[dict[str, object]]:
+        """Yield progress events while transcribing, then one chunk per segment."""
         duration = self.get_audio_duration(audio_path)
         if self.model is None:
             yield {"type": "progress", "stage": "loading", "percent": 0.0, "message": f"Loading Whisper {self.model_label}."}
@@ -201,8 +230,8 @@ class WhisperTranscriber:
                 "message": f"Transcribing {audio_path.name} ({int(elapsed)}s).",
             }
         segments = task.result()
-        for text in segments:
-            yield {"type": "chunk", "text": text}
+        for segment in segments:
+            yield {"type": "chunk", "text": segment.render(include_timestamps=include_timestamps)}
         yield {"type": "progress", "stage": "processing", "percent": 100.0, "message": f"Transcribed {len(segments)} segments."}
 
     def _cancel_idle_unload(self) -> None:

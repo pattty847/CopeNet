@@ -27,7 +27,7 @@ export const DISCUSS_PROMPTS: { label: string; prompt: string }[] = [
   {
     label: 'Check the claims',
     prompt:
-      'List the factual claims made in this video. For each, say how well it holds up (well supported / contested / wrong / unverifiable) and why. Use web search where you can, and flag anything said confidently that is actually shaky.',
+      'List the factual claims made in this video, citing the timestamp where each is made. For each, say how well it holds up (well supported / contested / wrong / unverifiable) and why. Use web search where you can. Flag anything said confidently that is actually shaky, and any place a speaker contradicts something said earlier (give both timestamps).',
   },
   {
     label: 'Steelman + push back',

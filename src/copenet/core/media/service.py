@@ -9,6 +9,7 @@ from typing import Any, AsyncIterator
 
 from .downloader import MediaDependencyError, MediaDownloadError, UniversalDownloader
 from .store import MediaAssetRecord, MediaAssetStore
+from .timestamps import strip_timestamps
 from .transcriber import MediaTranscriptionError, WhisperTranscriber
 
 
@@ -49,13 +50,14 @@ class MediaIngestionService:
         *,
         app_id: str,
         source_path: Path,
+        include_timestamps: bool = True,
     ) -> MediaAssetRecord:
         """Import one local media file into the store."""
         return await self._import_source(
             app_id=app_id,
             url=None,
             source_path=source_path,
-            include_timestamps=False,
+            include_timestamps=include_timestamps,
             prefer_captions=False,
         )
 
@@ -105,13 +107,14 @@ class MediaIngestionService:
         yield {"type": "progress", "stage": "processing", "percent": 35.0, "message": f"Downloaded {media_path.name}."}
         transcriber = self.transcriber
         chunks: list[str] = []
-        async for event in transcriber.progress_stream(media_path):
+        async for event in transcriber.progress_stream(media_path, include_timestamps=include_timestamps):
             if event.get("type") == "chunk":
                 text = str(event.get("text") or "")
                 if text:
                     chunks.append(text)
             yield event
-        transcript = " ".join(part.strip() for part in chunks if part.strip()).strip()
+        separator = "\n" if include_timestamps else " "
+        transcript = separator.join(part.strip() for part in chunks if part.strip()).strip()
         record = self._persist_record(
             app_id=app_id,
             source_type="url",
@@ -176,7 +179,7 @@ class MediaIngestionService:
             raise MediaDownloadError("A URL or local source path is required.")
 
         transcriber = self.transcriber
-        transcript = await transcriber.transcribe(media_path)
+        transcript = await transcriber.transcribe(media_path, include_timestamps=include_timestamps)
         return self._persist_record(
             app_id=app_id,
             source_type="url" if url else "file",
@@ -240,7 +243,8 @@ def _coerce_float(value: Any) -> float | None:
 
 
 def _excerpt(text: str, limit: int = 220) -> str:
-    compact = " ".join((text or "").split()).strip()
+    # Asset cards read as prose; the full transcript keeps its timestamps.
+    compact = " ".join(strip_timestamps(text or "").split()).strip()
     if len(compact) <= limit:
         return compact
     return compact[: limit - 1].rstrip() + "…"

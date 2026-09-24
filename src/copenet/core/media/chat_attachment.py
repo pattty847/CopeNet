@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from .timestamps import has_timestamps
+
 # Display names ride in the chat UI chip; keep them short and filesystem-safe.
 _MAX_FILENAME_TITLE_CHARS = 80
 _UNSAFE_FILENAME_CHARS = '/\\:*?"<>|'
@@ -26,6 +28,8 @@ def render_transcript_attachment(asset: dict[str, Any]) -> tuple[str, str]:
         minutes, seconds = divmod(int(duration), 60)
         header.append(f"Length: {minutes}:{seconds:02d}")
     transcript = str(asset.get("transcriptContent") or "").strip() or "(No transcript text was saved for this asset.)"
+    if has_timestamps(transcript):
+        header.append("Timestamps: each line starts with [HH:MM:SS], how far into the video it was said.")
     safe_title = "".join("-" if ch in _UNSAFE_FILENAME_CHARS else ch for ch in title)
     filename = f"{safe_title[:_MAX_FILENAME_TITLE_CHARS].strip()}.txt"
     return filename, "\n".join(header) + "\n\n" + transcript
