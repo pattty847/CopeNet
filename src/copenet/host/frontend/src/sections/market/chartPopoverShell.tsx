@@ -1,7 +1,7 @@
 // The frame every chart-toolbar popover uses.
 //
 // Extracted from chartMenus.tsx when the Plots menu moved to its own file: two popovers
-// re-declaring the same header and padding is how two popovers start looking different.
+// redeclaring the same header and padding is how two popovers start looking different.
 
 import type { ReactNode, RefObject } from 'react';
 import { X } from 'lucide-react';
