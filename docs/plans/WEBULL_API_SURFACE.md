@@ -70,7 +70,7 @@ CopeNet uses **3 of ~70** available SDK reads (`account_v2.get_account_list` /
 is never constructed.
 
 The assumption recorded in `webull/sync.py` ("Webull market data is a separate paid subscription")
-is **only true for realtime equity/option quotes**. Fundamentals, analyst data, capital flow,
+is **only true for real-time equity/option quotes**. Fundamentals, analyst data, capital flow,
 screeners, watchlists, and crypto all return 200 on our current app credentials.
 
 ## Verified: available now (HTTP 200, real data)
@@ -107,7 +107,7 @@ screeners, watchlists, and crypto all return 200 on our current app credentials.
 | `screener.get_gainers_losers(rank_type, category, sort_by, direction)` | requires enum `rank_type` (`DAY_1`, `WEEK_52`, `PRE_MARKET`, …) — passing `"1d"` silently returns an empty list |
 | `screener.get_most_active` / `get_52whl(NEW_HIGH…)` / `get_high_dividend` | ranked rows with price, volume, turnover_rate, relative_volume_10d, market_value, pe_ttm |
 | `watchlist.get_watchlist` / `get_instruments` | the authenticated operator's private lists; names and contents must remain local |
-| `crypto_market_data.get_crypto_snapshot` / `get_crypto_history_bar` | **realtime crypto price + bid/ask and OHLC bars, no subscription** |
+| `crypto_market_data.get_crypto_snapshot` / `get_crypto_history_bar` | **real-time crypto price + bid/ask and OHLC bars, no subscription** |
 | `instrument.get_crypto_instrument`, `get_event_categories`, `get_futures_products` | crypto/event/futures reference data |
 
 ## Verified: blocked
@@ -134,7 +134,7 @@ execution-oriented, which is out of scope for a slow-timeframe radar.
 2. **Background sync errors are silently dropped.** `handle_market_webull_sync` fires
    `asyncio.create_task(...)` and returns `startedAt`; a `fetch_snapshot` failure never reaches
    the UI. Contradicts the "do not swallow provider or storage errors silently" rule.
-3. **The paid-subscription comment in `sync.py` is stale** — narrow it to realtime quotes.
+3. **The paid-subscription comment in `sync.py` is stale** — narrow it to real-time quotes.
 4. New lanes should be new modules under `webull/` (`data_client.py`, `orders.py`,
    `watchlists.py`), not additions to `sync.py`.
 
@@ -171,4 +171,4 @@ returned in `market.webull.status.lastErrors` instead of vanishing into a discar
 3. **Analyst consensus + target price** on the ticker read.
 4. **Sector breadth** from `get_market_sectors` for the macro panel.
 5. **Discovery screeners** (52w high/low, most active, gainers/losers) for the morning sweep.
-6. **Crypto lane** — free realtime snapshots + bars, a surface CopeNet has none of today.
+6. **Crypto lane** — free real-time snapshots + bars, a surface CopeNet has none of today.
