@@ -3,7 +3,7 @@
 Three SDK calls, all reads: account_v2.get_account_list / get_account_balance /
 get_account_position. Vendor payload keys vary, so extraction is tolerant (multiple spellings) and
 ONLY whitelisted fields survive into the snapshot — everything else is dropped at this boundary.
-Prices are enriched via yfinance because Webull's *realtime equity quotes* need a paid
+Prices are enriched via yfinance because Webull's *real-time equity quotes* need a paid
 subscription (fundamentals, screeners, and watchlists do not — see docs/plans/WEBULL_API_SURFACE.md).
 
 Fill history and all-time P&L live next door in `orders.py` / `pnl.py`.
