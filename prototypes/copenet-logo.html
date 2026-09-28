@@ -1,0 +1,229 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0d0e">
+  <title>CopeNet — order-flow mark</title>
+  <style>
+    :root { color-scheme: dark; --carbon: #0b0d0e; --trace: #d8dcda; --fill: #ff5a1f; }
+    * { box-sizing: border-box; }
+    html, body { min-height: 100%; margin: 0; }
+    body {
+      display: grid;
+      place-items: center;
+      min-height: 100svh;
+      background: var(--carbon);
+      color: var(--trace);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+    main { width: min(100%, 760px); padding: 32px 24px 28px; }
+    .top, .bottom { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .top { border-bottom: 1px solid color-mix(in srgb, var(--trace) 23%, transparent); padding-bottom: 14px; }
+    .eyebrow, .serial, .bottom, .state { font-size: 10px; letter-spacing: .16em; text-transform: uppercase; }
+    .serial { opacity: .45; }
+    .lockup { min-height: min(66svh, 600px); display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    canvas { display: block; width: min(72vw, 360px); height: min(72vw, 360px); }
+    .wordmark { margin-top: 4px; font-size: clamp(30px, 5vw, 47px); font-weight: 600; line-height: 1; letter-spacing: -.085em; }
+    .wordmark span { color: var(--fill); }
+    .state { min-height: 1em; margin-top: 20px; opacity: .58; }
+    .bottom { border-top: 1px solid color-mix(in srgb, var(--trace) 23%, transparent); padding-top: 14px; }
+    button {
+      padding: 10px 14px; border: 1px solid var(--fill); border-radius: 0;
+      background: transparent; color: var(--fill); font: inherit; font-size: 10px;
+      letter-spacing: .14em; text-transform: uppercase; cursor: pointer;
+    }
+    button:hover, button:focus-visible { background: var(--fill); color: var(--carbon); }
+    button:focus-visible { outline: 1px solid var(--trace); outline-offset: 3px; }
+    @media (max-width: 480px) {
+      main { padding: 20px; }
+      .lockup { min-height: 68svh; }
+      .bottom { align-items: flex-end; }
+      .bottom > span { max-width: 140px; line-height: 1.5; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="top"><span class="eyebrow">CopeNet / market microstructure</span><span class="serial">CN—001</span></div>
+    <div class="lockup">
+      <canvas id="mark" role="img" aria-label="Animated CopeNet mark: a C return path interlocks with a stepped N matching path"></canvas>
+      <div class="wordmark" aria-hidden="true">Cope<span>Net</span></div>
+      <div class="state" id="state" role="status" aria-live="polite">Socket open / idle</div>
+    </div>
+    <div class="bottom"><span>Deterministic order flow</span><button id="execute" type="button">Trigger fill ↗</button></div>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById('mark');
+      const context = canvas.getContext('2d', { alpha: false });
+      const stateLabel = document.getElementById('state');
+      const button = document.getElementById('execute');
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+      const color = { carbon: '#0b0d0e', trace: '#d8dcda', fill: '#ff5a1f' };
+      const logicalSize = 256;
+      const idleTickMs = 120;
+      const fillTickMs = 42;
+      const fillPressure = [0, 1, 2, 3, 4, 5, 5, 5, 4, 3, 2, 1, 0];
+      const depthPattern = [0, 1, 0, 2, 1, 0, 1, 2];
+      let width = 0;
+      let pixelRatio = 1;
+      let fillStart = -Infinity;
+      let lastFrame = -1;
+      let lastIdleTick = -1;
+      let frameRequest = 0;
+
+      // All geometry lives in a 256 × 256 integer grid. The C uses the west return
+      // rail; the N uses the center and east rails, joined by an orthogonal stair.
+      // One unit of line width becomes one CSS pixel after the canvas transform.
+      function line(points, ink = color.trace, opacity = 1) {
+        context.strokeStyle = ink;
+        context.globalAlpha = opacity;
+        context.lineWidth = logicalSize / width;
+        context.beginPath();
+        context.moveTo(points[0], points[1]);
+        for (let i = 2; i < points.length; i += 2) context.lineTo(points[i], points[i + 1]);
+        context.stroke();
+        context.globalAlpha = 1;
+      }
+
+      function rect(x, y, w, h, ink = color.trace, opacity = 1) {
+        context.fillStyle = ink;
+        context.globalAlpha = opacity;
+        context.fillRect(x, y, w, h);
+        context.globalAlpha = 1;
+      }
+
+      function drawRegistration() {
+        const a = .38;
+        for (const [x, y, dx, dy] of [[18, 18, 1, 1], [238, 18, -1, 1], [18, 238, 1, -1], [238, 238, -1, -1]]) {
+          line([x, y + dy * 7, x, y, x + dx * 7, y], color.trace, a);
+        }
+        line([128, 18, 128, 28], color.trace, .28);
+        line([128, 228, 128, 238], color.trace, .28);
+        line([18, 128, 28, 128], color.trace, .28);
+        line([228, 128, 238, 128], color.trace, .28);
+      }
+
+      function drawGlyph(pressure, hot) {
+        const reach = pressure * 4;
+        // The parallel return traces make C legible without a thick stroke.
+        line([164 + reach, 58, 66, 58, 66, 198, 164 + reach, 198]);
+        line([156 + reach, 66, 74, 66, 74, 190, 156 + reach, 190], color.trace, .48);
+        // N is a packet route: vertical rails with a quantized, 8-unit stair.
+        line([126, 184, 126, 74]);
+        line([198 - reach, 184, 198 - reach, 74]);
+        const stair = [126, 74];
+        for (let i = 1; i <= 9; i++) {
+          const x = 126 + Math.floor(i * (72 - reach) / 9);
+          stair.push(x, 74 + (i - 1) * 12);
+          stair.push(x, 74 + i * 12);
+        }
+        line(stair, hot ? color.fill : color.trace);
+        line([120, 74, 126, 74], color.trace, .55);
+        line([198 - reach, 182, 205 - reach, 182], color.trace, .55);
+        // A hard square matching node lights only on the fill clock edge.
+        if (hot) {
+          rect(156, 118, 8, 8, color.fill);
+          line([150, 122, 156, 122], color.fill);
+          line([164, 122, 170, 122], color.fill);
+        } else {
+          rect(159, 121, 2, 2, color.fill, .88);
+        }
+      }
+
+      function drawDepth(tick, pressure, filling) {
+        const shift = filling ? pressure * 4 : depthPattern[tick % depthPattern.length] * 2;
+        const lengths = [12, 20, 16, 26, 18, 22, 14];
+        for (let i = 0; i < lengths.length; i++) {
+          const y = 83 + i * 15;
+          const left = 47 + shift + (i % 3) * 2;
+          const right = 210 - shift - (i % 2) * 2;
+          const active = filling && i >= 2 && i <= 4;
+          line([left - lengths[i], y, left, y], active ? color.fill : color.trace, active ? 1 : .28);
+          line([right, y, right + lengths[6 - i], y], active ? color.fill : color.trace, active ? 1 : .28);
+          rect(left, y - 1, 2, 3, active ? color.fill : color.trace, active ? 1 : .4);
+          rect(right - 2, y - 1, 2, 3, active ? color.fill : color.trace, active ? 1 : .4);
+        }
+      }
+
+      function render(tick, pressure, hot, filling) {
+        context.setTransform(1, 0, 0, 1, 0, 0);
+        context.fillStyle = color.carbon;
+        context.fillRect(0, 0, canvas.width, canvas.height);
+        const scale = canvas.width / logicalSize;
+        context.setTransform(scale, 0, 0, scale, 0, 0);
+        context.lineJoin = 'miter';
+        context.lineCap = 'square';
+        drawRegistration();
+        drawDepth(tick, pressure, filling);
+        drawGlyph(pressure, hot);
+        // Socket heartbeat is one square for one discrete clock tick.
+        rect(125, 217, 6, 2, tick % 12 === 0 || hot ? color.fill : color.trace, tick % 12 === 0 || hot ? 1 : .28);
+      }
+
+      function resize() {
+        width = canvas.getBoundingClientRect().width;
+        pixelRatio = Math.min(devicePixelRatio || 1, 3);
+        canvas.width = Math.round(width * pixelRatio);
+        canvas.height = canvas.width;
+        lastFrame = -1;
+        lastIdleTick = -1;
+        if (reducedMotion.matches) render(0, 0, false, false);
+      }
+
+      // State machine: IDLE samples fixed 120 ms clocks. FILL samples a 42 ms
+      // pressure table, then returns to IDLE. Timestamp sampling makes animation
+      // independent of display frame rate; every transition lands on an integer step.
+      function animate(now) {
+        if (reducedMotion.matches) return;
+        const frame = Math.floor((now - fillStart) / fillTickMs);
+        const filling = frame >= 0 && frame < fillPressure.length;
+        if (filling) {
+          if (frame !== lastFrame) {
+            const pressure = fillPressure[frame];
+            render(Math.floor(now / idleTickMs), pressure, frame >= 5 && frame <= 7, true);
+            lastFrame = frame;
+          }
+        } else {
+          if (lastFrame !== -1 && Number.isFinite(fillStart)) {
+            fillStart = -Infinity;
+            lastFrame = -1;
+            stateLabel.textContent = 'Socket open / idle';
+          }
+          const tick = Math.floor(now / idleTickMs);
+          if (tick !== lastIdleTick) {
+            render(tick, 0, false, false);
+            lastIdleTick = tick;
+          }
+        }
+        frameRequest = requestAnimationFrame(animate);
+      }
+
+      function fill() {
+        fillStart = performance.now();
+        lastFrame = -1;
+        stateLabel.textContent = 'Order matched / fill';
+        if (reducedMotion.matches) {
+          render(0, 5, true, true);
+          clearTimeout(fill.timeout);
+          fill.timeout = setTimeout(() => {
+            render(0, 0, false, false);
+            stateLabel.textContent = 'Socket open / idle';
+          }, 550);
+        }
+      }
+
+      button.addEventListener('click', fill);
+      window.CopeNetLogo = Object.freeze({ fill });
+      new ResizeObserver(resize).observe(canvas);
+      reducedMotion.addEventListener('change', () => {
+        cancelAnimationFrame(frameRequest);
+        if (reducedMotion.matches) render(0, 0, false, false);
+        else frameRequest = requestAnimationFrame(animate);
+      });
+      frameRequest = requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
