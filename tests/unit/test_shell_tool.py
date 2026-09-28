@@ -1,4 +1,5 @@
 from pathlib import Path
+import subprocess
 
 import pytest
 
@@ -85,7 +86,37 @@ async def test_shell_exec_blocks_chain_with_non_allowlisted_command(tmp_path: Pa
 
     assert result.ok is False
     assert result.output["policyDecision"] == "unsafe_unknown"
-    assert "chain blocked" in result.error
+    assert "command not allowed" in result.error
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("command", [
+    "git push", "git reset --hard", "git frobnicate",
+    "git diff --output=blocked.txt", "git log --output blocked.txt",
+    "tree -o blocked.txt", "tree -oblocked.txt", "rg --pre 'touch blocked.txt' pattern .",
+    "rg --pre-glob '*.py' pattern .",
+])
+@pytest.mark.parametrize("prefix", ["", "pwd && ", "pwd; "])
+async def test_guarded_shell_blocks_write_or_unknown_commands_in_every_segment(
+    tmp_path: Path, command: str, prefix: str,
+) -> None:
+    result = await ToolRegistry().execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": prefix + command}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is False
+    assert result.output["policyDecision"] in {"write_blocked", "unsafe_unknown"}
+    assert not (tmp_path / "blocked.txt").exists()
+
+
+@pytest.mark.asyncio
+async def test_guarded_shell_allows_pwd_then_git_status(tmp_path: Path) -> None:
+    subprocess.run(["git", "init", "-q", str(tmp_path)], check=True)
+    result = await ToolRegistry().execute(
+        ToolExecutionRequest(tool_id="shell.exec", arguments={"command": "pwd && git status"}),
+        _context_with_policy(tmp_path, policy_for_task_mode(None)),
+    )
+    assert result.ok is True
 
 
 @pytest.mark.asyncio

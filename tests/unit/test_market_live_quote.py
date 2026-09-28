@@ -163,6 +163,7 @@ async def test_browser_disconnect_closes_only_its_own_upstream(monkeypatch):
 
     class Browser:
         def __init__(self, token):
+            self.headers = {}
             self.frames = []
             self.requests = iter([
                 {"type": "req", "id": "auth", "method": "connect", "params": {"auth": {"token": token}}},

@@ -4,19 +4,15 @@ from __future__ import annotations
 
 import re
 import shlex
-from pathlib import Path
 
 from copenet.core.tools.contracts import ToolBlockedError, ToolDescriptor, ToolExecutionContext, ToolExecutionRequest, ToolExecutionResult
 
 from ._shared import (
-    display_path,
     expand_shell_argv,
-    policy_decision_for_scope,
-    resolve_relative_path,
     run_command,
     run_shell_command,
-    scope_for_path,
 )
+from .shell_guard import classify_guarded_command
 
 # Tokens that can hide write effects — always blocked in default mode.
 _HARD_BLOCKED_TOKENS = ("|", ">")
@@ -45,176 +41,6 @@ DESCRIPTORS = [
         side_effect="external",
     )
 ]
-
-_SAFE_GIT_SUBCOMMANDS = {
-    "status",
-    "diff",
-    "show",
-    "log",
-    "rev-parse",
-    "branch",
-    "ls-files",
-    "grep",
-}
-_WRITE_LIKE_GIT_SUBCOMMANDS = {
-    "add",
-    "apply",
-    "checkout",
-    "cherry-pick",
-    "clean",
-    "commit",
-    "merge",
-    "mv",
-    "pull",
-    "push",
-    "rebase",
-    "reset",
-    "restore",
-    "revert",
-    "rm",
-    "stash",
-    "switch",
-    "tag",
-}
-
-# Action predicates that make `find` write or execute. `find` is allowlisted as a
-# read tool, but the allowlist only inspects argv[0] — so `find . -delete` and
-# `find . -exec rm {} +` would pass straight through. Block them in guarded mode.
-_FIND_WRITE_PREDICATES = frozenset({
-    "-delete",
-    "-exec",
-    "-execdir",
-    "-ok",
-    "-okdir",
-    "-fprint",
-    "-fprintf",
-    "-fprint0",
-    "-fls",
-})
-
-# `git branch` is on the read safelist (listing branches is read-only), but these
-# flags — or any positional branch-name argument — create, delete, rename, move,
-# or re-point refs. Block those forms in guarded mode; plain listing still passes.
-_GIT_BRANCH_WRITE_FLAGS = frozenset({
-    "-d",
-    "-D",
-    "--delete",
-    "-m",
-    "-M",
-    "--move",
-    "-c",
-    "-C",
-    "--copy",
-    "-f",
-    "--force",
-    "-u",
-    "--set-upstream-to",
-    "--unset-upstream",
-    "--edit-description",
-})
-
-
-def _assert_no_write_predicates(argv: list[str], command: str, context: ToolExecutionContext) -> None:
-    """Block write/exec forms of otherwise-allowlisted commands in guarded mode.
-
-    The shell allowlist only checks argv[0], so write-capable flags on read
-    binaries slip through. This is the second gate (after the allowlist) that
-    keeps guarded mode actually read-only. Full-access mode never reaches here —
-    it runs via the unrestricted branch above.
-    """
-    cmd = argv[0]
-    if cmd == "find":
-        for token in argv[1:]:
-            base = token.split("=", 1)[0]
-            if base in _FIND_WRITE_PREDICATES:
-                raise ToolBlockedError(
-                    f"find predicate '{base}' can write or execute and is blocked in guarded mode",
-                    target=command,
-                    workspace_root=str(context.session_workspace_root),
-                    access_action="write",
-                    policy_decision="write_blocked",
-                    policy_summary="find write/exec predicates require full-access.",
-                )
-    elif cmd == "git" and len(argv) > 1 and argv[1] == "branch":
-        for token in argv[2:]:
-            base = token.split("=", 1)[0]
-            if base in _GIT_BRANCH_WRITE_FLAGS or not token.startswith("-"):
-                raise ToolBlockedError(
-                    "git branch with a write flag or branch-name argument is blocked in guarded mode",
-                    target=command,
-                    workspace_root=str(context.session_workspace_root),
-                    access_action="write",
-                    policy_decision="write_blocked",
-                    policy_summary="Only read-only `git branch` listing is allowed outside full-access.",
-                )
-
-
-def _path_candidate(token: str) -> bool:
-    if not token or token.startswith("-"):
-        return False
-    if token in {".", ".."}:
-        return True
-    return "/" in token or token.startswith("~")
-
-
-def _shell_access_metadata(argv: list[str], context: ToolExecutionContext) -> dict[str, str | None]:
-    command = " ".join(argv)
-    default = {
-        "target": command,
-        "workspaceRoot": str(context.session_workspace_root),
-        "scope": None,
-        "accessAction": "read",
-        "policyDecision": "allowed",
-        "policySummary": "Shell command stayed within the home workspace.",
-    }
-    cmd = argv[0]
-
-    if cmd == "pwd":
-        default["target"] = display_path(context.workdir, context)
-        default["scope"] = "inside_workspace"
-        return default
-
-    if cmd == "git":
-        subcommand = argv[1] if len(argv) > 1 else "status"
-        if subcommand in _WRITE_LIKE_GIT_SUBCOMMANDS:
-            raise ToolBlockedError(
-                f"git {subcommand} may write to the repository and is blocked in shell.exec v1",
-                target=command,
-                workspace_root=str(context.session_workspace_root),
-                access_action="write",
-                policy_decision="write_blocked",
-                policy_summary="Shell write blocked outside dedicated patch/apply flows.",
-            )
-        if subcommand not in _SAFE_GIT_SUBCOMMANDS:
-            raise ToolBlockedError(
-                f"git {subcommand} is not classified as safely read-only for shell.exec v1",
-                target=command,
-                workspace_root=str(context.session_workspace_root),
-                access_action="unknown",
-                policy_decision="unsafe_unknown",
-                policy_summary="Shell effect is not confidently read-only.",
-            )
-        default["target"] = display_path(context.workdir, context)
-        default["scope"] = "inside_workspace"
-        return default
-
-    path_tokens = [token for token in argv[1:] if _path_candidate(token)]
-    if not path_tokens:
-        default["target"] = command
-        default["scope"] = "inside_workspace"
-        return default
-
-    resolved = resolve_relative_path(path_tokens[-1], context)
-    scope = scope_for_path(resolved, context)
-    default["target"] = display_path(resolved, context)
-    default["scope"] = scope
-    default["policyDecision"] = policy_decision_for_scope(scope)
-    default["policySummary"] = (
-        "Shell read roamed outside the home workspace."
-        if scope == "outside_workspace"
-        else "Shell command stayed within the home workspace."
-    )
-    return default
 
 
 def approval_required_result(command: str, context: ToolExecutionContext) -> ToolExecutionResult | None:
@@ -341,7 +167,7 @@ async def _run_guarded_shell(
     request: ToolExecutionRequest,
     context: ToolExecutionContext,
 ) -> ToolExecutionResult:
-    """Guarded read-only execution: allowlist + write-predicate gates, no shell syntax.
+    """Guarded read-only execution: classify each command before running it.
 
     Raises ToolBlockedError for anything outside the read-only contract. Ask mode
     catches those and converts them to operator prompts; read-only lets them raise.
@@ -364,18 +190,7 @@ async def _run_guarded_shell(
     argv = expand_shell_argv(shlex.split(command))
     if not argv:
         raise ValueError("command is required")
-    if argv[0] not in context.policy.shell_allowlist:
-        raise ToolBlockedError(
-            f"command not allowed: {argv[0]}",
-            target=command,
-            workspace_root=str(context.session_workspace_root),
-            access_action="unknown",
-            policy_decision="unsafe_unknown",
-            policy_summary="Command is outside the shell allowlist.",
-        )
-    _assert_no_write_predicates(argv, command, context)
-
-    access = _shell_access_metadata(argv, context)
+    access = classify_guarded_command(argv, command, context)
     code, stdout_text, stderr_text = await run_command(
         argv,
         cwd=context.workdir,
@@ -458,8 +273,9 @@ async def _run_chain(
     request: ToolExecutionRequest,
     context: ToolExecutionContext,
 ) -> ToolExecutionResult:
-    """Run a &&/; chained command where every segment is individually allowlisted."""
+    """Run a &&/; chain after classifying every segment."""
     segments = [s for s in _CHAIN_SPLIT_RE.split(command) if s.strip()]
+    validated_argv: list[list[str]] = []
     for seg in segments:
         try:
             seg_argv = expand_shell_argv(shlex.split(seg))
@@ -472,23 +288,15 @@ async def _run_chain(
                 policy_decision="unsafe_unknown",
                 policy_summary="Chain segment could not be parsed.",
             ) from exc
-        if not seg_argv or seg_argv[0] not in context.policy.shell_allowlist:
-            blocked = seg_argv[0] if seg_argv else seg.strip()
-            raise ToolBlockedError(
-                f"chain blocked: '{blocked}' is not in the shell allowlist",
-                target=command,
-                workspace_root=str(context.session_workspace_root),
-                access_action="unknown",
-                policy_decision="unsafe_unknown",
-                policy_summary=f"'{blocked}' is outside the shell allowlist; only allowlisted commands may be chained.",
-            )
-        _assert_no_write_predicates(seg_argv, command, context)
+        if not seg_argv:
+            raise ValueError("command is required")
+        classify_guarded_command(seg_argv, command, context)
+        validated_argv.append(seg_argv)
 
     stdout_parts: list[str] = []
     stderr_parts: list[str] = []
     final_code = 0
-    for seg in segments:
-        seg_argv = expand_shell_argv(shlex.split(seg))
+    for seg_argv in validated_argv:
         code, stdout_text, stderr_text = await run_command(
             seg_argv,
             cwd=context.workdir,
