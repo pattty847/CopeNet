@@ -37,7 +37,7 @@ to someone who does not live in a terminal.
 
 ## Domain Workspaces
 
-- Market Monitor, Research Lab, Meme Lab, and future domain workspaces combine data,
+- Market Monitor, Research Lab, and future domain workspaces combine data,
   tools, prompts, layouts, and durable outputs.
 - A future declarative workspace manifest should let a model draft a workspace while the
   runtime validates capabilities and the operator approves what is instantiated.

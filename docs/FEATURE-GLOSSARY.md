@@ -20,7 +20,7 @@ Tool calls appear as one grouped block per turn. Each action has a compact resul
 
 ### Data & Tools
 
-Data & Tools is the home for imported assets, source material, tool surfaces, and structured inputs that can support later runs. The section is still a direction-setting shell rather than a complete operator workflow.
+Data & Tools houses working media and web ingestion, messaging routes, persona controls, and permission settings, alongside a small number of direction-setting catalog cards.
 
 ### Experiments
 
@@ -51,10 +51,6 @@ Personas give each runtime an explicit, editable identity backed by plain Markdo
 Sessions persist transcripts and runtime history. The first send locks the provider, profile, persona, and workspace. The operator can change the model within the same provider and can change Access for a later turn. Every run records the provider and model that produced it.
 
 See [Session Continuity](SESSION-CONTINUITY.md).
-
-### Workflows
-
-Workflows is the home for focused operator surfaces that deserve more structure than a conversation pane. It is currently a direction-setting shell.
 
 ## Market workspace
 

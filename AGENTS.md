@@ -9,10 +9,10 @@ CopeNet is an agent harness. It provides:
 - a FastAPI + WebSocket host (with a secondary REST + SSE `/api/v1` lane for external apps)
 - pluggable provider adapters for Claude CLI and OpenAI Codex (OAuth)
 - persisted session and transcript storage, plus per-run records and per-session artifacts
-- operator-side stores for Pulse, memory, messaging routes, profile, and external-app credentials
+- operator-side stores for memory, messaging routes, profile, and external-app credentials
 - a React operator workspace UI with a Home dashboard and agent console
 - a CopeNet-native harness layer that normalizes provider execution and tool capability work
-- An ever-growing stock market cockpit and terminal with agent integration
+- a stock market cockpit and terminal with agent integration
 
 The current product direction is:
 
@@ -27,7 +27,7 @@ The current product direction is:
 | Subsystem      | Location                                     | Role |
 |----------------|----------------------------------------------|------|
 | Host / RPC     | `src/copenet/host/`                          | FastAPI app, `/ws` JSON-RPC, `/api/v1` REST+SSE, static UI mounting |
-| Orchestrator   | `src/copenet/core/orchestrator/`             | Coordinates sessions, transcripts, provider execution, run lifecycle, merges, pulse, messaging |
+| Orchestrator   | `src/copenet/core/orchestrator/`             | Coordinates sessions, transcripts, provider execution, run lifecycle, merges, and messaging |
 | Harness        | `src/copenet/core/harness/`                  | Capability profiles, turn planning, tool loops (native Responses / prompted), `responses_items` replay shapes. See `docs/plans/HARNESS_REBUILD_V2.md` for the current architecture. |
 | Sessions       | `src/copenet/core/sessions/`                 | Session index, transcript store, structured session state |
 | Runtime        | `src/copenet/core/runtime/`                  | RunStore (durable run records), ArtifactStore, per-turn state |
@@ -41,11 +41,9 @@ The current product direction is:
 | NASA           | `src/copenet/core/nasa/`                     | APOD persistence, fetching, and wallpaper support |
 | Profile        | `src/copenet/core/profile/`                  | Pat Profile loader, changelog, return-briefing builder |
 | Memory         | `src/copenet/core/memory/`                   | User-visible memory items (preferences, conventions, facts) |
-| Pulse          | `src/copenet/core/pulse/`                    | Inbox pulse store |
 | Messaging      | `src/copenet/core/messaging/`                | Messaging config + Telegram chat→session route store |
 | Media          | `src/copenet/core/media/`                    | URL/audio ingestion + transcription + asset store |
 | Web ingest     | `src/copenet/core/web_ingest.py`             | Web URL ingestion service |
-| Knowledge runtime | `src/copenet/core/knowledge_runtime.py` + `meme_*.py` | Meme Lab knowledge runtime + ideation API |
 | External apps  | `src/copenet/core/apps/`                     | Bearer-token registry for `/api/v1` consumers |
 | Provider auth  | `src/copenet/core/provider_auth/`            | Provider-owned auth state (e.g. OpenAI Codex OAuth) |
 | Providers      | `src/copenet/providers/`                     | Adapters: `claude-cli`, `openai-codex` |
@@ -243,7 +241,6 @@ For current behavior, assume:
 - The app now has a product shell with sections:
   - `Home`
   - `Agents`
-  - `Workflows`
   - `Data & Tools`
   - `Observability`
   - `Experiments`
@@ -325,9 +322,9 @@ For current behavior, assume:
   `--usage-series-*` tokens in `index.css` are two SELECTED palettes, one per theme, each
   validated against its own chart surface — do not flip one into the other theme.
 - Run records for the thread come from `runtime/runIndex.ts` (one `sessions.runs` call per session, module-level promise cache); trace events load lazily on expand. Do not add a per-message fetch.
-- Section status, verified 2026-08-01 — keep this current, because a stale entry here sends the next contributor to rebuild something that already ships:
+- Section status, verified 2026-09-24 — keep this current, because a stale entry here sends the next contributor to rebuild something that already ships:
   - **Live and load-bearing:** `Agents`, `Market`, `Observability` (run inspector + Usage, both over durable run records + `logs/runs/*.jsonl`, see `docs/plans/OBSERVABILITY.md`), `Home`.
-  - **Still direction-setting shells:** `Workflows` and `Data & Tools` — neither issues a single RPC. `Experiments` is thin but wired.
+  - **Partially live:** `Data & Tools` combines working media/web ingestion, messaging, persona, and permission surfaces with a few direction-setting catalog cards. `Experiments` is thin but wired.
 - **The Market landing is a sectioned workstation, not a dock.** `sections/market/MarketWorkstation.tsx` holds fixed chrome (market bar, `workstation/WatchRail.tsx`, `workstation/MarketSectionTabs.tsx`) around one scrolling body; the seven sections live under `sections/market/workstation/`. The section is a route (`/market?view=…`, helpers in `lib/appSectionRouting.ts`) and is restored after a ticker round-trip via `marketWorkstationState.ts`. Briefing derivations (matters ranking, rail order, rotation quadrants) are pure functions in `marketBriefModel.ts`; layout customization (order / hide / half-full per panel) goes through `workstation/SectionGrid.tsx` — do not reintroduce a free-form grid or a resizable split on this page. The `ResearchDrawer` dock belongs to the ticker workspace only.
 - Global app state lives in `src/copenet/host/frontend/src/store/useAppStore.ts`. Keep it explicit and small.
 - If a feature needs backend support, add and verify the RPC first.

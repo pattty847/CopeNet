@@ -57,7 +57,6 @@ CopeNet is evolving into an operator workspace, not just a chat client. Today it
 - **Agent sessions** with persistent transcripts, first-send runtime binding (provider/profile lock; model + Access changeable mid-session), archive/restore, and inline tool execution
 - **Fleet rooms** where ChatGPT and Claude independently research the same question, share evidence receipts after reveal, and critique each other in attributed follow-up turns
 - **Observability** with a per-run timeline, provider reasoning provenance, exact tool evidence, model-input snapshots, and raw local traces
-- **Workflow surfaces** such as `Meme Lab`, built on top of a stateless ideation API for structured generation
 - **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
 - **Experiments** for comparing provider/model behavior across real runs
 - **Profile + Access layering**: behavioral Profiles (markdown presets) plus a separate **Read-only · Ask · Full Access** permission axis with operator approvals and a persisted shell allowlist
@@ -160,8 +159,6 @@ Environment variables:
 - `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
 - `COPNET_TRACE` (`1` to enable per-run JSONL traces)
-- `COPNET_MEME_KB_ROOT` (optional local knowledge-library root for Meme Lab extensions)
-- `COPNET_MEME_KB_CACHE_DIR` (optional cache directory for generated knowledge indexes)
 
 Example:
 

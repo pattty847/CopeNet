@@ -660,7 +660,7 @@ CopeNet's harness layer is Claude Code / Codex CLI / OpenClaw parity. The chat e
 
 The persona/identity/memory/profile layers are dormant but preserved. When they come back, they come back through explicit operator opt-in and a clean redesign — not auto-mutation.
 
-Pulse, Merge, Meme Lab, Web Ingest, Telegram routing, external `/api/v1` — all currently live, mostly orthogonal to the harness, degraded but not broken through the rebuild. Each gets its own future pass when it's worth attention.
+At the time of this rebuild, Pulse, Merge, Meme Lab, Web Ingest, Telegram routing, and external `/api/v1` were live and mostly orthogonal to the harness. Pulse and Meme Lab were retired during the 2026-09-24 subtraction pass; this paragraph remains historical context for the rebuild.
 
 This is the foundation. After this, every new feature builds on a harness that actually works.
 

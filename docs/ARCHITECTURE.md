@@ -49,8 +49,7 @@ copenet/
 │   │   ├── merge.py                   ← merged-session creation/hydration
 │   │   ├── messaging.py               ← messaging config / route helpers
 │   │   ├── messages.py                ← build_chat_messages: transcript → Responses input[] (Phase 1)
-│   │   ├── starter_intent.py          ← starter intent + tag normalization (was personal_history.py)
-│   │   └── pulse.py                   ← Inbox Pulse helpers
+│   │   └── starter_intent.py          ← starter intent + tag normalization (was personal_history.py)
 │   ├── profile/
 │   │   ├── __init__.py                ← Pat Profile public exports
 │   │   ├── service.py                 ← layered profile loader, changelog, briefing builder
@@ -60,8 +59,6 @@ copenet/
 │   ├── provider_auth/
 │   │   ├── openai_codex.py            ← OpenAI Codex OAuth flow
 │   │   └── store.py                   ← provider auth credential store
-│   ├── pulse/
-│   │   └── store.py                   ← PulseStore (Inbox pulses)
 │   ├── research_lab/                   ← evidence-first research dossiers and calculations
 │   ├── runtime/
 │   │   ├── runs.py                    ← RunStore (durable run records)
@@ -93,10 +90,6 @@ copenet/
 │   │   ├── models.py                  ← workspace intel DTOs
 │   │   ├── service.py                 ← repo mapping + verification discovery
 │   │   └── store.py                   ← durable workspace cache
-│   ├── knowledge_runtime.py           ← knowledge runtime entrypoint (Meme Lab and friends)
-│   ├── meme_ideation.py               ← Meme Lab ideation public facade
-│   ├── meme_ideation_*.py             ← Meme Lab constants, models, parsing, prompts, scoring, runtime
-│   ├── meme_knowledge.py              ← Meme knowledge index
 │   └── web_ingest.py                  ← WebIngestionService
 │
 ├── host/                              ← HTTP / WebSocket transport (no business logic)
@@ -106,7 +99,7 @@ copenet/
 │   ├── rpc_schema.py                  ← request/response/event shapes
 │   ├── rpc_dispatch.py                ← method routing
 │   ├── rpc_chat.py                    ← chat.send/abort/history handlers
-│   ├── rpc_sessions.py                ← session + pulse + artifact handlers
+│   ├── rpc_sessions.py                ← session + artifact handlers
 │   ├── rpc_fleet.py                    ← Fleet room handlers
 │   ├── rpc_market*.py                  ← Market dashboard/watchlist/calendar/yield handlers
 │   ├── rpc_nasa.py                     ← NASA APOD handlers
@@ -125,7 +118,6 @@ copenet/
 │   │   │   ├── components/            ← AppShell, AgentsPage, HomePage, RightPanel, …
 │   │   │   ├── runtime/               ← adapter, types, mocks, activityProof
 │   │   │   ├── store/                 ← useAppStore.ts (Zustand)
-│   │   │   ├── workflows/             ← Meme Lab and other workflow surfaces
 │   │   │   ├── lib/                   ← wsClient facade, normalizers, RPC/action/event helpers
 │   │   │   └── types/                 ← backend.ts (typed RPC payloads)
 │   │   ├── vite.config.ts
@@ -322,14 +314,12 @@ Runtime usage:
 These subsystems are owned by `core/` but are not part of the core chat path. They power the broader operator console:
 
 - **`core/runtime` (RunStore + ArtifactStore + turn state)** — durable per-run records and per-session artifacts. Backs Tool Activity proof in the UI.
-- **`core/pulse`** — Inbox pulses surfaced on Home and convertible into agent sessions.
 - **`core/memory`** — explicit user-visible memory items (preferences, conventions, ongoing priorities, facts).
 - **`core/messaging`** — messaging config + Telegram chat-to-session route mapping (Chat Anywhere foundations).
 - **`core/media`** — URL/audio ingestion and transcription used by Data & Tools workflows.
 - **`core/web_ingest`** — web ingestion service used by Data & Tools.
 - **`core/apps`** — external-app registry and bearer-token mapping for `/api/v1` clients (e.g. Subtext).
 - **`core/provider_auth`** — provider-owned auth state (currently OpenAI Codex OAuth).
-- **`core/knowledge_runtime` / `meme_*`** — Meme Lab knowledge runtime + ideation workflow.
 - **`core/market`** — Market Monitor data, evidence, signals, model reads, replay, and
   backtesting.
 - **`core/fleet` + `core/coordination`** — durable multi-provider rooms over shared lane
@@ -338,8 +328,8 @@ These subsystems are owned by `core/` but are not part of the core chat path. Th
   dossiers.
 - **`core/nasa` / `core/movies`** — APOD and Movie Lab operator workflows.
 
-These are surfaced through dedicated RPC namespaces (`pulse.*`, `memory.*`,
-`messaging.*`, `runtime.*`, `providerAuth.*`, `sessions.merge.*`, `fleet.*`,
+These are surfaced through dedicated RPC namespaces (`memory.*`, `messaging.*`,
+`runtime.*`, `providerAuth.*`, `sessions.merge.*`, `fleet.*`,
 `market.*`, `nasa.*`) — see `host/rpc_dispatch.py` for the canonical method list.
 
 ## Browser Agent (prototype lane)

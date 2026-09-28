@@ -148,7 +148,7 @@ work ships or is abandoned, move any remaining items here and remove the old pla
   in an adapter that silently discards it.
 - Remove duplicate/unused legacy Responses request paths after verifying the active OAuth
   provider flow.
-- Narrow `SessionStateRecord` only together with Pulse/Merge consumers.
+- Narrow `SessionStateRecord` only together with the remaining Merge consumer.
 - Make shell/tool output truncation explicit in result metadata.
 - Replace substring-only high-risk shell matching with parsed command classification and
   evaluate every path-bearing argument for workspace scope.

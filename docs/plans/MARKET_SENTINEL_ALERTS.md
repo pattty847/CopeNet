@@ -5,7 +5,7 @@
 **Started:** 2026-07-29
 
 **Product goal:** Deterministic, context-aware market surveillance for one operator, with
-durable events and noise-controlled Pulse/Telegram delivery.
+durable events and noise-controlled Telegram delivery.
 
 ## 1. Product boundary
 
@@ -20,7 +20,7 @@ Market data
   → deterministic rule evaluation
   → durable alert event
   → optional context/model annotation
-  → Pulse / Telegram / dashboard
+  → Telegram / dashboard
 ```
 
 The deterministic event remains canonical. Model annotation may explain importance but cannot
@@ -37,7 +37,8 @@ decide whether a mathematical crossing occurred.
 - Active levels render as dashed chart price lines.
 - Evaluation uses the canonical split-adjusted daily close during the unattended morning sweep.
   Manual full/signal refreshes intentionally do not evaluate rules because today's cached daily
-  candle is still forming during market hours. A completed-close crossing creates a Pulse item.
+  candle is still forming during market hours. A completed-close crossing appends a durable
+  alert event and, when explicitly authorized, queues Telegram delivery.
 - The UI explicitly says **daily close**. Intraday polling, Telegram, cooldown/rearm, indicator
   rules, and composite conditions are not implied by this slice.
 
@@ -61,7 +62,7 @@ decide whether a mathematical crossing occurred.
 ### Phase 2 — trusted internal delivery
 
 - Market-session-aware scheduler.
-- Pulse delivery.
+- Telegram delivery with durable outbox receipts.
 - Evaluation-history and "why did/didn't this trigger?" UI.
 - Cooldown, hysteresis, rearm, snooze, expiration, and scan aggregation.
 
