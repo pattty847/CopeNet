@@ -29,13 +29,13 @@ def _schema(properties: dict, required: list[str] | None = None) -> dict:
 
 
 DESCRIPTORS = [
-    ToolDescriptor("sentinel_state", "Sentinel State", "Read the local Sentinel GUI connection, configuration, layers and source freshness.", "context", _schema({"symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
-    ToolDescriptor("sentinel_viewport", "Sentinel Viewport", "Read Sentinel's active chart bounds, timeframe, follow mode and viewport version.", "context", _schema({"symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
-    ToolDescriptor("sentinel_candles", "Sentinel Candles", "Read locally held Sentinel candles in a half-open UTC millisecond interval; no history is fetched.", "context", _schema({"startMs": _INTEGER, "endMs": _INTEGER, "timeframeMs": {"type": "integer", "minimum": 1}, "limit": {"type": "integer", "minimum": 1, "maximum": 2000}, "symbol": _SYMBOL}, ["startMs", "endMs", "timeframeMs"]), side_effect="read", evidence_role="grounding"),
-    ToolDescriptor("sentinel_book", "Sentinel Book", "Read Sentinel's locally held order book levels and receive time; prices are dense-book buckets.", "context", _schema({"levels": {"type": "integer", "minimum": 1, "maximum": 200}, "symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
-    ToolDescriptor("sentinel_trades", "Sentinel Trades", "Read Sentinel's receive-time tape and full-window trade summary.", "context", _schema({"windowMs": {"type": "integer", "minimum": 1, "maximum": 900000}, "limit": {"type": "integer", "minimum": 1, "maximum": 1000}, "symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
-    ToolDescriptor("sentinel_screenshot", "Sentinel Screenshot", "Save a screenshot in Sentinel and return its PNG path and rendered frame metadata; Sentinel owns the path.", "context", _schema({"name": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,60}$"}, "target": {"type": "string", "enum": ["main", "heatmap", "lab"]}, "afterOperation": {"type": "string"}, "waitMs": {"type": "integer", "minimum": 0, "maximum": 5000}}), side_effect="read", evidence_role="grounding"),
-    ToolDescriptor("sentinel_set_view", "Set Sentinel View", "Change the owner's visible Sentinel symbol, timeframe, viewport or layers; each exact call requires operator approval. Wait for the rendered frame before reporting completion, with an optional guarded screenshot.", "context", _schema({
+    ToolDescriptor("sentinel.state", "Sentinel State", "Read the local Sentinel GUI connection, configuration, layers and source freshness.", "context", _schema({"symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
+    ToolDescriptor("sentinel.viewport", "Sentinel Viewport", "Read Sentinel's active chart bounds, timeframe, follow mode and viewport version.", "context", _schema({"symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
+    ToolDescriptor("sentinel.candles", "Sentinel Candles", "Read locally held Sentinel candles in a half-open UTC millisecond interval; no history is fetched.", "context", _schema({"startMs": _INTEGER, "endMs": _INTEGER, "timeframeMs": {"type": "integer", "minimum": 1}, "limit": {"type": "integer", "minimum": 1, "maximum": 2000}, "symbol": _SYMBOL}, ["startMs", "endMs", "timeframeMs"]), side_effect="read", evidence_role="grounding"),
+    ToolDescriptor("sentinel.book", "Sentinel Book", "Read Sentinel's locally held order book levels and receive time; prices are dense-book buckets.", "context", _schema({"levels": {"type": "integer", "minimum": 1, "maximum": 200}, "symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
+    ToolDescriptor("sentinel.trades", "Sentinel Trades", "Read Sentinel's receive-time tape and full-window trade summary.", "context", _schema({"windowMs": {"type": "integer", "minimum": 1, "maximum": 900000}, "limit": {"type": "integer", "minimum": 1, "maximum": 1000}, "symbol": _SYMBOL}), side_effect="read", evidence_role="grounding"),
+    ToolDescriptor("sentinel.screenshot", "Sentinel Screenshot", "Save a screenshot in Sentinel and return its PNG path and rendered frame metadata; Sentinel owns the path.", "context", _schema({"name": {"type": "string", "pattern": "^[A-Za-z0-9_-]{1,60}$"}, "target": {"type": "string", "enum": ["main", "heatmap", "lab"]}, "afterOperation": {"type": "string"}, "waitMs": {"type": "integer", "minimum": 0, "maximum": 5000}}), side_effect="read", evidence_role="grounding"),
+    ToolDescriptor("sentinel.view.set", "Set Sentinel View", "Change the owner's visible Sentinel symbol, timeframe, viewport or layers; each exact call requires operator approval. Wait for the rendered frame before reporting completion, with an optional guarded screenshot.", "context", _schema({
         "symbol": _SYMBOL,
         "heatmapTimeframeMs": {"type": "integer", "minimum": 1},
         "candleTimeframeMs": {"type": "integer", "minimum": 1},
@@ -65,18 +65,18 @@ def _read_params(request: ToolExecutionRequest) -> tuple[str, dict]:
         if not isinstance(symbol, str) or not re.fullmatch(r"[A-Za-z0-9]{2,20}-[A-Za-z0-9]{2,20}", symbol):
             raise ValueError("symbol must be BASE-QUOTE with 2–20 alphanumeric characters per side")
         symbol_params["symbol"] = symbol.upper()
-    if request.tool_id == "sentinel_state":
+    if request.tool_id == "sentinel.state":
         return "/api/v1/state", symbol_params
-    if request.tool_id == "sentinel_viewport":
+    if request.tool_id == "sentinel.viewport":
         return "/api/v1/viewport", symbol_params
-    if request.tool_id == "sentinel_candles":
+    if request.tool_id == "sentinel.candles":
         start = _int_argument(args, "startMs", None)
         end = _int_argument(args, "endMs", None)
         timeframe = _int_argument(args, "timeframeMs", None)
         if end <= start or timeframe == 0:
             raise ValueError("candles require startMs < endMs and positive timeframeMs")
         return "/api/v1/candles", {**symbol_params, "startMs": start, "endMs": end, "timeframeMs": timeframe, "limit": _int_argument(args, "limit", 500, 2000, 1)}
-    if request.tool_id == "sentinel_book":
+    if request.tool_id == "sentinel.book":
         return "/api/v1/book", {**symbol_params, "levels": _int_argument(args, "levels", 20, 200, 1)}
     return "/api/v1/trades", {**symbol_params, "windowMs": _int_argument(args, "windowMs", 60000, 900000, 1), "limit": _int_argument(args, "limit", 100, 1000, 1)}
 
@@ -84,14 +84,14 @@ def _read_params(request: ToolExecutionRequest) -> tuple[str, dict]:
 def _model_body(envelope: dict, tool_id: str) -> str:
     data = dict(envelope["data"])
     rows: list | None = None
-    field = {"sentinel_candles": "bars", "sentinel_trades": "trades"}.get(tool_id)
+    field = {"sentinel.candles": "bars", "sentinel.trades": "trades"}.get(tool_id)
     if field:
         rows = data.pop(field, [])
         data[f"{field}Count"] = len(rows)
         if rows:
             data["first"] = rows[0]
             data["last"] = rows[-1]
-    elif tool_id == "sentinel_book":
+    elif tool_id == "sentinel.book":
         for side in ("bids", "asks"):
             levels = data.pop(side, [])
             data[f"{side}Count"] = len(levels)
@@ -146,7 +146,7 @@ def _error(request: ToolExecutionRequest, error: SentinelApiError | ValueError) 
 
 async def read_sentinel(request: ToolExecutionRequest, context: ToolExecutionContext) -> ToolExecutionResult:
     try:
-        if request.tool_id == "sentinel_screenshot":
+        if request.tool_id == "sentinel.screenshot":
             args = request.arguments
             name = args.get("name", "agent-review")
             target = args.get("target", "main")
@@ -166,7 +166,7 @@ async def read_sentinel(request: ToolExecutionRequest, context: ToolExecutionCon
                                        output=screenshot, model_body=_screenshot_model_body(screenshot))
         path, params = _read_params(request)
         envelope = await sentinel_request("GET", path, params=params)
-        summary = f"Sentinel {request.tool_id.removeprefix('sentinel_')} observed"
+        summary = f"Sentinel {request.tool_id.removeprefix('sentinel.')} observed"
         return _result(request, envelope, summary)
     except (SentinelApiError, ValueError) as exc:
         return _error(request, exc)
@@ -214,7 +214,7 @@ def _controls(args: dict) -> list[tuple[str, dict]]:
             raise ValueError("layers must be a nonempty map of supported boolean layer values")
         controls.append(("layers", layers))
     if not controls:
-        raise ValueError("sentinel_set_view requires symbol, timeframe, viewport or layers")
+        raise ValueError("sentinel.view.set requires symbol, timeframe, viewport or layers")
     return controls
 
 
@@ -266,5 +266,5 @@ async def set_sentinel_view(request: ToolExecutionRequest, context: ToolExecutio
         return _error(request, exc)
 
 
-HANDLERS = {descriptor.id: (set_sentinel_view if descriptor.id == "sentinel_set_view" else read_sentinel)
+HANDLERS = {descriptor.id: (set_sentinel_view if descriptor.id == "sentinel.view.set" else read_sentinel)
             for descriptor in DESCRIPTORS}

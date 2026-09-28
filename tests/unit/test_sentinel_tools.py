@@ -106,18 +106,18 @@ async def test_each_sentinel_read_preserves_meta_and_uses_expected_route(tmp_pat
     requests, _ = server
     registry, ctx = ToolRegistry(), context(tmp_path)
     cases = [
-        ("sentinel_state", {}, "/api/v1/state"),
-        ("sentinel_viewport", {}, "/api/v1/viewport"),
-        ("sentinel_candles", {"startMs": 1, "endMs": 1000, "timeframeMs": 60000, "limit": 100}, "/api/v1/candles"),
-        ("sentinel_book", {"levels": 20}, "/api/v1/book"),
-        ("sentinel_trades", {"windowMs": 60000, "limit": 100}, "/api/v1/trades"),
-        ("sentinel_screenshot", {"name": "review", "target": "heatmap", "afterOperation": "o1", "waitMs": 100}, "/api/v1/screenshot"),
+        ("sentinel.state", {}, "/api/v1/state"),
+        ("sentinel.viewport", {}, "/api/v1/viewport"),
+        ("sentinel.candles", {"startMs": 1, "endMs": 1000, "timeframeMs": 60000, "limit": 100}, "/api/v1/candles"),
+        ("sentinel.book", {"levels": 20}, "/api/v1/book"),
+        ("sentinel.trades", {"windowMs": 60000, "limit": 100}, "/api/v1/trades"),
+        ("sentinel.screenshot", {"name": "review", "target": "heatmap", "afterOperation": "o1", "waitMs": 100}, "/api/v1/screenshot"),
     ]
     for tool_id, args, route in cases:
         result = await registry.execute(ToolExecutionRequest(tool_id, args), ctx)
         assert result.ok, (tool_id, result.error)
         assert requests[-1][1] == route
-        if tool_id == "sentinel_screenshot":
+        if tool_id == "sentinel.screenshot":
             assert result.output["path"] == "./screenshots/review.png"
             assert result.output["frameId"] == "f9"
             assert requests[-1][2]["afterOperation"] == ["o1"]
@@ -132,8 +132,8 @@ async def test_large_sentinel_results_are_summarized_with_full_output_retained(t
     monkeypatch.setenv("COPNET_MODEL_TOOL_RESULT_CHARS", "600")
     registry, ctx = ToolRegistry(), context(tmp_path)
     for tool_id, args, key in [
-        ("sentinel_candles", {"startMs": 1, "endMs": 1000, "timeframeMs": 60000}, "bars"),
-        ("sentinel_book", {}, "bids"), ("sentinel_trades", {}, "trades"),
+        ("sentinel.candles", {"startMs": 1, "endMs": 1000, "timeframeMs": 60000}, "bars"),
+        ("sentinel.book", {}, "bids"), ("sentinel.trades", {}, "trades"),
     ]:
         result = await registry.execute(ToolExecutionRequest(tool_id, args), ctx)
         assert result.ok
@@ -146,12 +146,12 @@ async def test_large_sentinel_results_are_summarized_with_full_output_retained(t
 async def test_sentinel_view_requires_exact_approval_then_waits_and_screenshots(tmp_path: Path, server) -> None:
     requests, _ = server
     registry, ctx = ToolRegistry(), context(tmp_path)
-    descriptor = registry.get_descriptor("sentinel_set_view")
+    descriptor = registry.get_descriptor("sentinel.view.set")
     assert descriptor.requires_confirmation is True
     assert descriptor.side_effect == "write"
     assert descriptor.manifest_permission() == "policy_gated"
-    assert {tool.id for tool in registry.list_tools()}.issuperset({"sentinel_set_view", "sentinel_state"})
-    request = ToolExecutionRequest("sentinel_set_view", {"symbol": "eth-usd", "heatmapTimeframeMs": 60000,
+    assert {tool.id for tool in registry.list_tools()}.issuperset({"sentinel.view.set", "sentinel.state"})
+    request = ToolExecutionRequest("sentinel.view.set", {"symbol": "eth-usd", "heatmapTimeframeMs": 60000,
         "viewport": {"startMs": 1, "endMs": 2}, "layers": {"heatmap": True}, "screenshot": True,
         "screenshotTarget": "heatmap"})
     blocked = await registry.execute(request, ctx)
@@ -171,7 +171,7 @@ async def test_sentinel_view_requires_exact_approval_then_waits_and_screenshots(
     assert requests[0][3] == {"symbol": "ETH-USD"}
     assert requests[-1][2]["afterOperation"] == ["o7"]
     assert requests[-1][2]["waitMs"] == ["5000"]
-    changed = ToolExecutionRequest("sentinel_set_view", {"symbol": "SOL-USD"})
+    changed = ToolExecutionRequest("sentinel.view.set", {"symbol": "SOL-USD"})
     assert (await registry.execute(changed, ctx)).output["policyDecision"] == "approval_required"
 
 
@@ -191,10 +191,10 @@ async def test_sentinel_view_approval_wrapper_classifies_and_resumes_exact_call(
 
     execute = make_approval_gated_executor(registry.execute, orchestrator=Approval(), emit_event=emit,
         session_key="sentinel-test", run_id="run", abort_event=asyncio.Event())
-    request = ToolExecutionRequest("sentinel_set_view", {"viewport": {"followLive": True}})
+    request = ToolExecutionRequest("sentinel.view.set", {"viewport": {"followLive": True}})
     result = await execute(request, ctx)
     assert result.ok
-    assert seen[0]["actionClass"] == "sentinel_view_control"
+    assert seen[0]["actionClass"] == "sentinel_view_set"
     assert seen[0]["payload"] == request.arguments
     assert [item[1] for item in requests] == ["/api/v1/viewport", "/api/v1/operations/o1"]
 
@@ -204,7 +204,7 @@ async def test_sentinel_operation_timeout_stops_following_controls(tmp_path: Pat
     requests, behavior = server
     behavior["operation_status"] = "applied"
     registry, ctx = ToolRegistry(), context(tmp_path)
-    request = ToolExecutionRequest("sentinel_set_view", {"symbol": "ETH-USD", "layers": {"candles": True}, "waitMs": 10})
+    request = ToolExecutionRequest("sentinel.view.set", {"symbol": "ETH-USD", "layers": {"candles": True}, "waitMs": 10})
     ctx.ephemeral["barricade_approved"] = {approval_key(request)}
     result = await registry.execute(request, ctx)
     assert result.ok is False
@@ -219,14 +219,14 @@ async def test_sentinel_api_error_envelope_and_gui_unavailable(tmp_path: Path, s
     _, behavior = server
     behavior["error"] = (409, "symbol_mismatch")
     registry, ctx = ToolRegistry(), context(tmp_path)
-    result = await registry.execute(ToolExecutionRequest("sentinel_state"), ctx)
+    result = await registry.execute(ToolExecutionRequest("sentinel.state"), ctx)
     assert result.error == "Sentinel rejected request"
     assert result.output["code"] == "symbol_mismatch"
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
         unused_port = sock.getsockname()[1]
     monkeypatch.setenv("COPNET_SENTINEL_URL", f"http://127.0.0.1:{unused_port}")
-    unavailable = await registry.execute(ToolExecutionRequest("sentinel_state"), ctx)
+    unavailable = await registry.execute(ToolExecutionRequest("sentinel.state"), ctx)
     assert unavailable.output["code"] == "gui_unavailable"
     assert "Sentinel GUI Agent API is unavailable" in unavailable.error
 
@@ -236,13 +236,13 @@ async def test_sentinel_non_loopback_configuration_is_refused_without_io(tmp_pat
     monkeypatch.setenv("COPNET_SENTINEL_URL", "http://example.com:17100")
     with pytest.raises(SentinelApiError, match="loopback"):
         sentinel_base_url()
-    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel_state"), context(tmp_path))
+    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel.state"), context(tmp_path))
     assert result.output["code"] == "invalid_base_url"
 
 
 @pytest.mark.asyncio
 async def test_invalid_sentinel_control_is_rejected_before_approval(tmp_path: Path, server) -> None:
     requests, _ = server
-    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel_set_view", {"viewport": {"startMs": 1}}), context(tmp_path))
+    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel.view.set", {"viewport": {"startMs": 1}}), context(tmp_path))
     assert result.output["code"] == "invalid_arguments"
     assert requests == []

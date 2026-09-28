@@ -21,7 +21,7 @@ const ACTION_CLASS_LABELS: Record<string, { label: string; icon: typeof ShieldAl
   process_execution: { label: 'Process Execution', icon: ShieldAlert, tone: 'text-operator-error' },
   chart_forecast: { label: 'Chart Forecast', icon: Pencil, tone: 'text-operator-accent' },
   chart_annotation: { label: 'Chart Annotation', icon: Pencil, tone: 'text-operator-accent' },
-  sentinel_view_control: { label: 'Sentinel View Change', icon: ShieldAlert, tone: 'text-amber-400' },
+  sentinel_view_set: { label: 'Sentinel View Change', icon: ShieldAlert, tone: 'text-amber-400' },
   network_side_effect: { label: 'Network Side Effect', icon: ShieldAlert, tone: 'text-amber-400' },
   credential_or_sensitive_target: { label: 'Sensitive Target', icon: ShieldAlert, tone: 'text-operator-error' },
 };

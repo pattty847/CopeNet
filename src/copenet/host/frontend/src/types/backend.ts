@@ -888,7 +888,7 @@ export type ApprovalActionClass =
   | 'process_execution'
   | 'chart_annotation'
   | 'chart_forecast'
-  | 'sentinel_view_control'
+  | 'sentinel_view_set'
   | 'network_side_effect'
   | 'credential_or_sensitive_target';
 
