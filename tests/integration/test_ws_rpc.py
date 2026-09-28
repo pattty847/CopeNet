@@ -5,16 +5,19 @@ from contextlib import contextmanager
 import json
 from pathlib import Path
 import time
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from starlette.websockets import WebSocketDisconnect
 
 from responses_fake import ScriptedResponsesProvider
 from copenet.core.orchestrator import Orchestrator
 from copenet.core.runtime import RunRecord
 from copenet.core.sessions import SessionStore, TranscriptStore
 from copenet.host.api import create_app
+from copenet.host.ws_server import _allowed_websocket_origins
 from copenet.providers import ProviderEvent, ProviderModel
 
 
@@ -286,6 +289,39 @@ def test_connect_handshake_requires_valid_token(rpc_client: TestClient) -> None:
         assert "fleet.event" in response["payload"]["features"]["events"]
         assert "sessions.merge.updated" in response["payload"]["features"]["events"]
         assert "messaging.updated" in response["payload"]["features"]["events"]
+
+
+def test_websocket_rejects_disallowed_browser_origin_before_challenge(rpc_client: TestClient) -> None:
+    with pytest.raises(WebSocketDisconnect) as denied:
+        with rpc_client.websocket_connect("/ws", headers={"origin": "https://other.example"}) as websocket:
+            websocket.receive_json()
+    assert denied.value.code == 1008
+
+
+@pytest.mark.parametrize("origin", ["http://localhost:17123", "http://127.0.0.1:17123", "http://localhost:3000", None])
+def test_websocket_accepts_allowed_or_missing_origin(rpc_client: TestClient, origin: str | None) -> None:
+    headers = {"origin": origin} if origin else {}
+    with rpc_client.websocket_connect("/ws", headers=headers) as websocket:
+        socket = RpcSocket(websocket)
+        assert socket.recv_challenge()["event"] == "connect.challenge"
+        assert socket.connect()["ok"] is True
+
+
+def test_websocket_accepts_explicit_origin_override(
+    rpc_client: TestClient, monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("COPNET_ALLOWED_ORIGINS", "https://first.example, https://operator.example")
+    with rpc_client.websocket_connect("/ws", headers={"origin": "https://operator.example"}) as websocket:
+        socket = RpcSocket(websocket)
+        assert socket.recv_challenge()["event"] == "connect.challenge"
+        assert socket.connect()["ok"] is True
+
+
+def test_websocket_allows_bound_tailscale_ip_origin(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("COPNET_HOST", "tailscale")
+    monkeypatch.setenv("COPNET_PORT", "17124")
+    websocket = SimpleNamespace(scope={"server": ("100.101.102.103", 17124)})
+    assert "http://100.101.102.103:17124" in _allowed_websocket_origins(websocket)
 
 
 def test_approvals_list_rpc_returns_recovery_shape(rpc_client: TestClient) -> None:

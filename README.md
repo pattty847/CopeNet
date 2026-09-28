@@ -156,6 +156,7 @@ Environment variables:
 - `COPNET_HOST` (default: `127.0.0.1`)
 - `COPNET_PORT` (default: `17123`)
 - `COPNET_TOKEN` (default: `dev-token` on loopback only; a private token is required beyond localhost)
+- `COPNET_ALLOWED_ORIGINS` (optional comma-separated browser WebSocket origins, such as `https://host.example`; include scheme and port when applicable). CopeNet's bind origin and local Vite dev origins are allowed automatically. Connections without an `Origin` header remain available to CLI clients.
 - `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
 - `COPNET_TRACE` (`1` to enable per-run JSONL traces)

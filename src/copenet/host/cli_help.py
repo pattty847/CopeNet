@@ -72,6 +72,7 @@ _ENV_VARS: list[tuple[str, str]] = [
     ("COPNET_PORT", "bind port (default 17123)"),
     ("COPNET_WORKDIR", "workspace root for tools (default: current directory)"),
     ("COPNET_TOKEN", "gateway auth token (default: dev-token)"),
+    ("COPNET_ALLOWED_ORIGINS", "extra browser WebSocket origins, comma-separated (scheme, host, and port)"),
     ("COPNET_TRACE", "set to 1 to write per-run JSONL traces"),
     ("COPNET_MARKET_SENTINEL", "0/1 to force scheduled market scans off/on (default: on unless bound to loopback)"),
     ("COPNET_WEB_FETCH_ALLOWLIST", "comma-separated domains web.fetch/web.search may reach (default: unrestricted)"),

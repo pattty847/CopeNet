@@ -25,6 +25,25 @@ from copenet.host.rpc_schema import (
 )
 
 
+def _allowed_websocket_origins(websocket: WebSocket) -> set[str]:
+    port = int(os.environ.get("COPNET_PORT", "17123"))
+    bind_host = os.environ.get("COPNET_HOST", "127.0.0.1").strip().lower()
+    allowed = {
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    }
+    if bind_host in {"127.0.0.1", "localhost", "0.0.0.0"}:
+        allowed.update({f"http://localhost:{port}", f"http://127.0.0.1:{port}"})
+    elif bind_host == "tailscale":
+        # The socket's server address is the resolved Tailscale IP, independent
+        # of the browser-controlled Host header.
+        allowed.add(f"http://{websocket.scope['server'][0]}:{port}")
+    else:
+        allowed.add(f"http://{bind_host}:{port}")
+    allowed.update(origin.strip() for origin in os.environ.get("COPNET_ALLOWED_ORIGINS", "").split(",") if origin.strip())
+    return allowed
+
+
 class CopeNetWsServer:
     """Minimal CopeNet WS RPC handler."""
 
@@ -55,6 +74,10 @@ class CopeNetWsServer:
 
     async def handle(self, websocket: WebSocket) -> None:
         """Accept and serve one websocket session."""
+        origin = websocket.headers.get("origin")
+        if origin is not None and origin not in _allowed_websocket_origins(websocket):
+            await websocket.close(code=1008)
+            return
         await websocket.accept()
         send_lock = asyncio.Lock()
         connected = False
