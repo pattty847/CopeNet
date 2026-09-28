@@ -3,6 +3,15 @@ from pathlib import Path
 import pytest
 
 from copenet.core.sessions import SessionStore, TranscriptStore
+from copenet.core.tools.barricade import reset_session_security
+
+
+@pytest.fixture(autouse=True)
+def isolated_barricade_session_state():
+    """Persisted taint belongs to a test's session, never another test's reuse of its key."""
+    reset_session_security()
+    yield
+    reset_session_security()
 
 
 @pytest.fixture(autouse=True)

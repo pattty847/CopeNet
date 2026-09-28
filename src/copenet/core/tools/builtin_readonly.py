@@ -10,6 +10,7 @@ from .handlers.market import DESCRIPTORS as MARKET_DESCRIPTORS, HANDLERS as MARK
 from .handlers.memory import DESCRIPTORS as MEMORY_DESCRIPTORS, HANDLERS as MEMORY_HANDLERS
 from .handlers.persona import DESCRIPTORS as PERSONA_DESCRIPTORS, HANDLERS as PERSONA_HANDLERS
 from .handlers.plan import DESCRIPTORS as PLAN_DESCRIPTORS, HANDLERS as PLAN_HANDLERS
+from .handlers.sentinel import DESCRIPTORS as SENTINEL_DESCRIPTORS, HANDLERS as SENTINEL_HANDLERS
 from .handlers.session_standing import DESCRIPTORS as SESSION_STANDING_DESCRIPTORS, HANDLERS as SESSION_STANDING_HANDLERS
 from .handlers.shell import DESCRIPTORS as SHELL_DESCRIPTORS, HANDLERS as SHELL_HANDLERS
 from .handlers.terminal import DESCRIPTORS as TERMINAL_DESCRIPTORS, HANDLERS as TERMINAL_HANDLERS
@@ -71,6 +72,13 @@ MANIFEST_TOOL_IDS = {
     "market.chart.undo",
     "market.forecast.submit",
     "market.forecast.read",
+    "sentinel.state",
+    "sentinel.viewport",
+    "sentinel.candles",
+    "sentinel.book",
+    "sentinel.trades",
+    "sentinel.screenshot",
+    "sentinel.view.set",
     "persona.author",
     # Memory came back into the manifest redesigned as draft-first (§3.6 opt-in):
     # memory.read recalls, memory.write PROPOSES a draft that the operator approves.
@@ -95,6 +103,7 @@ ALL_DESCRIPTORS = (
     + PLAN_DESCRIPTORS
     + WEB_DESCRIPTORS
     + MARKET_DESCRIPTORS
+    + SENTINEL_DESCRIPTORS
     + USER_NOTE_DESCRIPTORS
     + TOOLS_LOAD_DESCRIPTORS
     + SESSION_STANDING_DESCRIPTORS
@@ -111,6 +120,7 @@ ALL_HANDLERS = {
     **PLAN_HANDLERS,
     **WEB_HANDLERS,
     **MARKET_HANDLERS,
+    **SENTINEL_HANDLERS,
     **USER_NOTE_HANDLERS,
     **TOOLS_LOAD_HANDLERS,
     **SESSION_STANDING_HANDLERS,

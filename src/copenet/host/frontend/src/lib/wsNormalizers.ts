@@ -237,6 +237,7 @@ export function normalizeApprovalRequest(raw: unknown): ApprovalRequest | null {
     'external_communication',
     'filesystem_write',
     'process_execution',
+    'sentinel_view_set',
     'network_side_effect',
     'credential_or_sensitive_target',
   ];
