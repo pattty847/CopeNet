@@ -160,7 +160,7 @@ async def verify(browser, directory):
             responses = {
                 'connect': {}, 'market.dashboard.get': DashboardPayload.empty(as_of='Synthetic preview').to_wire(),
                 'persona.get': {'persona': None}, 'memory.list': {'items': []}, 'briefing.get': {'briefing': None},
-                'runtime.context': {'runtimeContext': None}, 'pulse.list': {'pulses': []}, 'messaging.config.get': {'config': None},
+                'runtime.context': {'runtimeContext': None}, 'messaging.config.get': {'config': None},
                 'fleet.list': {'rooms': []}, 'memory.drafts.list': {'drafts': []}, 'userNotes.list': {'items': []},
                 'market.watchlist.get': {'items': [], 'lists': ['Synthetic'], 'active': 'Synthetic'},
                 'market.ticker.get': detail, 'market.ticker.evidence.get': {'evidence': [], 'events': [], 'warnings': []},

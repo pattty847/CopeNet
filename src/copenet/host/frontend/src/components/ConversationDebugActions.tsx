@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Copy, CopyPlus, Download, Check, Archive, Ellipsis, Sparkles } from 'lucide-react';
+import { Copy, CopyPlus, Download, Check, Archive, Ellipsis } from 'lucide-react';
 import { getConversationActionTriggerLabel, getDebugActionLabel } from '../lib/agentMobile';
 import { MobileSheet } from './mobile/MobileSheet';
 
@@ -12,7 +12,6 @@ type Props = {
   onCopyConversationWithToolActivity: () => Promise<boolean>;
   onExportConversation: () => Promise<void>;
   onArchiveConversation?: () => void;
-  onCreatePulse?: () => Promise<void>;
 };
 
 export function ConversationDebugActions({
@@ -24,9 +23,8 @@ export function ConversationDebugActions({
   onExportConversation,
   compact = false,
   onArchiveConversation,
-  onCreatePulse,
 }: Props) {
-  const [busyAction, setBusyAction] = useState<'copy' | 'chat_copy' | 'chat_activity_copy' | 'export' | 'pulse' | null>(null);
+  const [busyAction, setBusyAction] = useState<'copy' | 'chat_copy' | 'chat_activity_copy' | 'export' | null>(null);
   const [copiedAction, setCopiedAction] = useState<'debug' | 'chat' | 'chat_activity' | null>(null);
   const [mobileActionsOpen, setMobileActionsOpen] = useState(false);
 
@@ -63,16 +61,6 @@ export function ConversationDebugActions({
         setCopiedAction('chat_activity');
         window.setTimeout(() => setCopiedAction((current) => (current === 'chat_activity' ? null : current)), 1800);
       }
-    } finally {
-      setBusyAction(null);
-    }
-  };
-
-  const handleCreatePulse = async () => {
-    if (disabled || busyAction) return;
-    setBusyAction('pulse');
-    try {
-      await onCreatePulse?.();
     } finally {
       setBusyAction(null);
     }
@@ -161,20 +149,6 @@ export function ConversationDebugActions({
               <Download className="h-4 w-4 shrink-0" />
               <span>{busyAction === 'export' ? 'Exporting…' : 'Export Chat + Tools'}</span>
             </button>
-            {onCreatePulse ? (
-              <button
-                type="button"
-                onClick={() => {
-                  void handleCreatePulse();
-                  setMobileActionsOpen(false);
-                }}
-                disabled={disabled || busyAction !== null}
-                className="flex w-full items-center gap-3 rounded-2xl border border-operator-border bg-operator-panel px-4 py-3 text-left text-[14px] font-medium text-operator-text disabled:opacity-40"
-              >
-                <Sparkles className="h-4 w-4 shrink-0" />
-                <span>{busyAction === 'pulse' ? 'Creating…' : 'Create Pulse'}</span>
-              </button>
-            ) : null}
             {onArchiveConversation ? (
               <button
                 type="button"
@@ -233,17 +207,6 @@ export function ConversationDebugActions({
         <Download className="w-3.5 h-3.5" />
         <span className="truncate">{busyAction === 'export' ? 'Exporting…' : getDebugActionLabel('export', compact)}</span>
       </button>
-      {onCreatePulse ? (
-        <button
-          onClick={() => void handleCreatePulse()}
-          disabled={disabled || busyAction !== null}
-          className={`${compact ? 'px-2 py-1.5 text-[11px] min-w-0 flex-1 justify-center' : 'px-3 py-1.5 text-[12px]'} border border-operator-border text-operator-muted hover:text-operator-accent hover:border-operator-accent/30 rounded-lg font-medium flex items-center gap-1.5 transition-all duration-150 disabled:opacity-40 disabled:cursor-not-allowed`}
-          title="Create a Pulse from this conversation"
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          <span className="truncate">{busyAction === 'pulse' ? 'Creating…' : 'Create Pulse'}</span>
-        </button>
-      ) : null}
       {onArchiveConversation ? (
         <button
           onClick={onArchiveConversation}

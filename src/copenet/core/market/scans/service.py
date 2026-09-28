@@ -30,14 +30,13 @@ async def finish_inflight(awaitable):
 
 
 class ScanService:
-    def __init__(self, runtime, *, sources=None, post_prices=None, forecast_prices=None, provider=None, pulse_store=None, pace=0.25):
+    def __init__(self, runtime, *, sources=None, post_prices=None, forecast_prices=None, provider=None, pace=0.25):
         self.runtime = runtime
         self.store = ScanStore(runtime.store.root_dir, runtime.watchlists)
         self.sources = sources or ScanSources(runtime)
         self.post_prices = post_prices
         self.forecast_prices = forecast_prices
         self.provider = provider
-        self.pulse_store = pulse_store
         self.pace = max(0.0, pace)
         self.tasks: set[asyncio.Task] = set()
         try:
@@ -237,7 +236,7 @@ class ScanService:
             dashboard.evidence.status = "stale"
             dashboard.evidence.note = "Partial SEC refresh; retaining prior evidence for unavailable assets"
         self.runtime.store.save_dashboard(dashboard)
-        run["brief"] = await publish_brief(self.runtime, previous, self.provider if scan["interpret"] else None, self.pulse_store, universe=tuple(UniverseAsset(**asset) for asset in run["assets"]))
+        run["brief"] = await publish_brief(self.runtime, previous, self.provider if scan["interpret"] else None, universe=tuple(UniverseAsset(**asset) for asset in run["assets"]))
 
 
 def resolve_scan_service(orchestrator) -> ScanService:
@@ -249,7 +248,6 @@ def resolve_scan_service(orchestrator) -> ScanService:
     if service is None:
         providers = getattr(orchestrator, "_providers", {})
         service = ScanService(resolve_market_runtime(orchestrator), provider=providers.get("openai-codex"),
-                              pulse_store=getattr(orchestrator, "_pulse_store", None),
                               post_prices=partial(on_scan_alert_events, orchestrator),
                               forecast_prices=partial(on_forecast_prices, orchestrator))
         orchestrator._market_scan_service = service

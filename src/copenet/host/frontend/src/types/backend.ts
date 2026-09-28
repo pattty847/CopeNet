@@ -1047,25 +1047,7 @@ export type InboxItemKind =
   | 'pending_approval'
   | 'failed_send'
   | 'resolved_approval'
-  | 'sent_message'
-  | 'pulse';
-
-export type PulseStatus = 'new' | 'saved' | 'dismissed';
-
-export interface PulseRecord {
-  pulseId: string;
-  status: PulseStatus;
-  title: string;
-  summary: string;
-  whyNow: string;
-  sourceSessionKeys: string[];
-  sourceRunIds: string[];
-  sourceSessions: Array<{ sessionKey: string; title: string }>;
-  createdAt: string;
-  updatedAt: string;
-  savedAt: string | null;
-  dismissedAt: string | null;
-}
+  | 'sent_message';
 
 export interface InboxItem {
   id: string;
@@ -1079,7 +1061,6 @@ export interface InboxItem {
   // Linked data — at most one will be set
   approvalData?: ApprovalRequest;
   outboundData?: OutboundMessageRecord;
-  pulseData?: PulseRecord;
 }
 
 // ---------------------------------------------------------------------------

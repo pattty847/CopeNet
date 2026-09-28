@@ -1,4 +1,4 @@
-"""Bridge durable alert evidence to Pulse and Telegram without acquiring market data."""
+"""Bridge durable alert evidence to Telegram without acquiring market data."""
 
 from __future__ import annotations
 
@@ -7,7 +7,6 @@ from functools import partial
 
 from copenet.core.messaging.market_delivery import enqueue_market_event, process_market_deliveries
 from copenet.core.messaging.market_outbox import MarketOutbox
-from copenet.core.pulse import PulseRecord
 from .alerts import delivery_rule_active, resolve_alert_store
 from .runtime import resolve_market_runtime
 from .scans.store import file_lock
@@ -25,18 +24,8 @@ def publish_monitoring_events(orchestrator, events: list[dict]) -> None:
                 if connection.execute("SELECT 1 FROM published_events WHERE event_id=?", (event["eventId"],)).fetchone():
                     continue
             enqueue_market_event(root, event, event["destinationIds"], authorized=event["rule"]["telegramAuthorized"])
-            pulse_store = getattr(orchestrator, "_pulse_store", None)
-            if pulse_store is not None and pulse_store.get(event["eventId"]) is None:
-                pulse_store.create(PulseRecord(
-                    pulse_id=event["eventId"], status="new",
-                    title=f"{event['symbol']} · {event['timeframe']} · {event.get('phase', 'crossing').replace('_', ' ')}",
-                    summary=event["condition"],
-                    why_now=f"{('Forming candle; expected close' if event.get('phase') == 'interaction' else 'Candle close')} {event['candleCloseAt']}; observed {event['leftValue']} versus {event['rightValue']} at {event['evaluatedAt']}.",
-                    source_session_keys=["market-alerts"], source_run_ids=[],
-                    created_at=event["evaluatedAt"], updated_at=event["evaluatedAt"],
-                ))
-            # Receipt follows both side effects. Replaying cannot resurrect a dismissed Pulse
-            # or duplicate an outbox item if the host stopped between these writes.
+            # The alert journal is the durable evidence record and the outbox is the
+            # delivery record. This receipt prevents duplicate outbox work after restart.
             with box.connection() as connection:
                 connection.execute("INSERT OR IGNORE INTO published_events VALUES (?)", (event["eventId"],))
 

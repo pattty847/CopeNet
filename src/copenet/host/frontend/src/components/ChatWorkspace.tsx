@@ -345,25 +345,6 @@ export function ChatWorkspace() {
     }
   };
 
-  const handleCreatePulse = async () => {
-    if (!activeSession) return;
-    try {
-      clearAppError();
-      const pulse = await wsClient.createPulseFromSession({
-        sessionKey: activeSession.key,
-        provider: draftSettings.provider || activeSession.provider,
-        model: draftSettings.model || activeSession.model || '',
-        systemPromptId: draftSettings.systemPromptId || activeSession.systemPromptId || 'default',
-        taskPromptId: draftSettings.taskPromptId || activeSession.taskPromptId || 'none',
-      });
-      useAppStore.getState().upsertPulse(pulse);
-      useAppStore.getState().setRightPanelTab('inbox');
-      useAppStore.getState().setRightPanelOpen(true);
-    } catch (error) {
-      setAppError(error instanceof Error ? error.message : 'Unable to create pulse.');
-    }
-  };
-
   const applyPromptSeed = (seed: string) => {
     setInput(seed);
   };
@@ -523,7 +504,6 @@ export function ChatWorkspace() {
                 onCopyConversation={handleCopyConversation}
                 onCopyConversationWithToolActivity={handleCopyConversationWithToolActivity}
                 onExportConversation={handleExportConversation}
-                onCreatePulse={activeSession ? handleCreatePulse : undefined}
                 onArchiveConversation={activeSession ? () => void wsClient.archiveSession(activeSession.key, !activeSession.archived) : undefined}
               />
             ) : (
@@ -546,7 +526,6 @@ export function ChatWorkspace() {
                     onCopyConversation={() => { void handleCopyConversation(); }}
                     onCopyConversationWithToolActivity={() => { void handleCopyConversationWithToolActivity(); }}
                     onExportConversation={() => { void handleExportConversation(); setActionsOpen(false); }}
-                    onCreatePulse={() => { void handleCreatePulse(); setActionsOpen(false); }}
                     onArchiveConversation={() => {
                       if (!activeSession) return;
                       void wsClient.archiveSession(activeSession.key, !activeSession.archived);

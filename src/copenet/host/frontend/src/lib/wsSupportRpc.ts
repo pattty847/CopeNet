@@ -3,19 +3,11 @@ import type {
   PromptOptimizationResult,
   PromptOptimizationVariant,
   ProviderAuthStatus,
-  PulseRecord,
-  Session,
-  SessionMergeState,
   ShellAllowlistEntry,
   WorkspaceFile,
   WorkspaceFileContent,
 } from '../types/backend';
-import {
-  normalizeMergeState,
-  normalizePulse,
-  normalizeSession,
-  normalizeShellAllowlist,
-} from './wsNormalizers';
+import { normalizeShellAllowlist } from './wsNormalizers';
 
 type WsRpcRequest = <T extends Record<string, unknown>>(
   method: string,
@@ -31,67 +23,6 @@ export async function fetchApodRpc(request: WsRpcRequest, opts?: { date?: string
     configured: Boolean(payload.configured),
     apod: payload.apod ?? null,
     error: payload.error ?? null,
-  };
-}
-
-export async function listPulsesRpc(request: WsRpcRequest): Promise<PulseRecord[]> {
-  const payload = await request<{ pulses?: unknown[] }>('pulse.list', {});
-  return Array.isArray(payload.pulses)
-    ? payload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null)
-    : [];
-}
-
-export async function createPulseFromSessionRpc(
-  request: WsRpcRequest,
-  params: {
-    sessionKey: string;
-    provider: string;
-    model: string;
-    systemPromptId: string;
-    taskPromptId: string;
-  },
-): Promise<PulseRecord> {
-  const payload = await request<{ pulse: unknown }>('pulse.create_from_session', {
-    sessionKey: params.sessionKey,
-    provider: params.provider,
-    model: params.model || undefined,
-    systemPromptId: params.systemPromptId || undefined,
-    taskPromptId: params.taskPromptId || undefined,
-  });
-  const pulse = normalizePulse(payload.pulse);
-  if (!pulse) throw new Error('Pulse creation returned no pulse.');
-  return pulse;
-}
-
-export async function dismissPulseRpc(request: WsRpcRequest, pulseId: string): Promise<PulseRecord> {
-  const payload = await request<{ pulse: unknown }>('pulse.dismiss', { pulseId });
-  const pulse = normalizePulse(payload.pulse);
-  if (!pulse) throw new Error('Pulse dismiss returned no pulse.');
-  return pulse;
-}
-
-export async function savePulsesRpc(
-  request: WsRpcRequest,
-  params: {
-    pulseIds: string[];
-    provider: string;
-    model: string;
-    systemPromptId: string;
-    taskPromptId: string;
-    workspaceRoot: string;
-  },
-): Promise<{ session: Session; mergeState: SessionMergeState | null }> {
-  const payload = await request<{ session: unknown; mergeState?: unknown | null }>('pulse.save', {
-    pulseIds: params.pulseIds,
-    provider: params.provider,
-    model: params.model || undefined,
-    systemPromptId: params.systemPromptId || undefined,
-    taskPromptId: params.taskPromptId || undefined,
-    workspaceRoot: params.workspaceRoot || undefined,
-  });
-  return {
-    session: normalizeSession(payload.session),
-    mergeState: normalizeMergeState(payload.mergeState),
   };
 }
 

@@ -34,13 +34,6 @@ from copenet.core.orchestrator.catalog import (
     resolve_session as resolve_session_record,
 )
 from copenet.core.orchestrator.merge import merge_sessions as merge_session_record
-from copenet.core.orchestrator.pulse import (
-    create_pulse_from_session as create_pulse_from_session_record,
-    dismiss_pulse as dismiss_pulse_record,
-    list_pulses as list_pulses_record,
-    save_pulses as save_pulses_record,
-)
-from copenet.core.pulse import PulseStore
 from copenet.core.persona import PersonaHomeService, PersonaPrivacyTier
 from copenet.core.orchestrator.runtime import send_chat as send_chat_impl
 from copenet.core.orchestrator.titles import generate_title as generate_title_impl, schedule_title_generation as schedule_title_generation_impl
@@ -111,7 +104,6 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
         self._edit_backup_store = EditBackupStore(root_dir=None if sessions_dir is None else base / "edit-backups")
         self._change_ledger_store = ChangeLedgerStore(root_dir=None if sessions_dir is None else base / "change-ledger")
         self._run_store = RunStore(root_dir=base / "runs")
-        self._pulse_store = PulseStore(path=base / "pulses.json")
         self._messaging_store = MessagingConfigStore(path=base / "messaging.json")
         self._route_store = TelegramSessionRouteStore(path=base / "telegram-routes.json")
         self._memory_store = MemoryStore(path=base / "memory.json")
@@ -376,10 +368,6 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
             emit_event=emit_event,
         )
 
-    def list_pulses(self) -> list[dict]:
-        """List active Inbox pulses."""
-        return list_pulses_record(self)
-
     def fetch_apod(self, *, date: str | None = None, refresh: bool = False) -> dict:
         """Fetch one NASA Astronomy Picture of the Day, persist it, and return it."""
         return fetch_apod_record(self, date=date, refresh=refresh)
@@ -396,54 +384,6 @@ class Orchestrator(HomeFacadeMixin, ObservabilityFacadeMixin, IdentityFacadeMixi
     def nasa_configured(self) -> bool:
         """True when NASA_API_KEY is present so the APOD surface can fetch."""
         return self._nasa_service.configured
-
-    async def create_pulse_from_session(
-        self,
-        *,
-        session_key: str,
-        provider: str,
-        model: str | None,
-        system_prompt_id: str | None,
-        task_prompt_id: str | None,
-        emit_event: SideEventEmit | None = None,
-    ) -> dict[str, object]:
-        """Create one durable Pulse from a source session."""
-        return await create_pulse_from_session_record(
-            self,
-            session_key=session_key,
-            provider=provider,
-            model=model,
-            system_prompt_id=system_prompt_id,
-            task_prompt_id=task_prompt_id,
-            emit_event=emit_event,
-        )
-
-    async def dismiss_pulse(self, *, pulse_id: str, emit_event: SideEventEmit | None = None) -> dict[str, object]:
-        """Dismiss one Pulse from the Inbox."""
-        return await dismiss_pulse_record(self, pulse_id=pulse_id, emit_event=emit_event)
-
-    async def save_pulses(
-        self,
-        *,
-        pulse_ids: list[str],
-        provider: str,
-        model: str | None,
-        system_prompt_id: str | None,
-        task_prompt_id: str | None,
-        workspace_root: str | None,
-        emit_event: SideEventEmit | None = None,
-    ) -> dict[str, object]:
-        """Save one or more pulses into a new Agent session/workspace."""
-        return await save_pulses_record(
-            self,
-            pulse_ids=pulse_ids,
-            provider=provider,
-            model=model,
-            system_prompt_id=system_prompt_id,
-            task_prompt_id=task_prompt_id,
-            workspace_root=workspace_root,
-            emit_event=emit_event,
-        )
 
     # --- Global shell allowlist (Access & Permissions — Brick E/F) ---
 

@@ -4,7 +4,7 @@ import { useAppStore } from '../store/useAppStore';
 import type { SessionArtifactRecord } from '../types/backend';
 import { buildInboxItems } from './inboxItems';
 import { mapRunToActivity } from './activityProof';
-import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload } from '../types/backend';
+import type { InboxItem, LiveToolCall, MessageDestination, MessagingConfig, ProviderAuthStatus, ReturnBriefingPayload } from '../types/backend';
 import type {
   ActivityBundle,
   ActivityReadBatch,
@@ -253,16 +253,15 @@ export function useReturnBriefing(): ReturnBriefingPayload | null {
 
 // ---------------------------------------------------------------------------
 // Returns a priority-ordered list of inbox items for the operator action center.
-// Aggregates: paused run, pending approvals, recently resolved approvals.
+// Aggregates paused runs, pending approvals, and recently resolved approvals.
 // When the backend ships, replace buildInboxItems() with a real RPC call.
 export function useInboxItems(sessionKey: string | null): InboxItem[] {
   const runPausedReason = useAppStore((s) => Object.values(s.pendingApprovalsById)
     .some((approval) => approval.sessionKey === sessionKey) ? 'awaiting_approval' as const : null);
   const approvalHistory = useApprovalHistory(sessionKey);
-  const pulses = useAppStore((s) => s.pulses);
   return useMemo(
-    () => [...mapPulsesToInboxItems(pulses), ...buildInboxItems(approvalHistory, runPausedReason)],
-    [approvalHistory, runPausedReason, pulses],
+    () => buildInboxItems(approvalHistory, runPausedReason),
+    [approvalHistory, runPausedReason],
   );
 }
 
@@ -270,20 +269,6 @@ export function useInboxItems(sessionKey: string | null): InboxItem[] {
 // Null until the backend pushes a real config.
 export function useMessagingConfig(): MessagingConfig | null {
   return useAppStore((s) => s.messagingConfig);
-}
-
-function mapPulsesToInboxItems(pulses: PulseRecord[]): InboxItem[] {
-  return pulses.map((pulse) => ({
-    id: `pulse:${pulse.pulseId}`,
-    priority: 'attention',
-    kind: 'pulse',
-    title: pulse.title,
-    subtitle: pulse.whyNow,
-    createdAt: pulse.createdAt,
-    sessionKey: pulse.sourceSessionKeys[0] || '__pulse__',
-    runId: pulse.sourceRunIds[0] || null,
-    pulseData: pulse,
-  }));
 }
 
 // ---------------------------------------------------------------------------

@@ -2,7 +2,6 @@ import { useAppStore } from '../store/useAppStore';
 import type {
   ApprovalRequest,
   MemoryItem,
-  PulseRecord,
   Session,
 } from '../types/backend';
 import {
@@ -13,7 +12,6 @@ import {
   normalizePersonaSettings,
   normalizePrompt,
   normalizeProvider,
-  normalizePulse,
   normalizeReturnBriefing,
   normalizeRuntimeContext,
   normalizeSession,
@@ -44,7 +42,6 @@ export async function bootstrapAction(
       memoryPayload,
       briefingPayload,
       runtimeContextPayload,
-      pulsePayload,
       messagingPayload,
       approvalsPayload,
       fleetPayload,
@@ -58,11 +55,10 @@ export async function bootstrapAction(
       request<{ items?: unknown[] }>('memory.list', { limit: 24 }),
       request<{ briefing?: unknown | null }>('briefing.get', {}),
       request<{ runtimeContext?: unknown | null }>('runtime.context', {}),
-      request<{ pulses?: unknown[] }>('pulse.list', {}),
       request<{ config?: unknown | null }>('messaging.config.get', {}),
       request<{ approvals?: unknown[] }>('approvals.list', {}),
       // Fleet is additive: an older backend without fleet.* must not take down
-      // the whole bootstrap (pulse, sessions, briefing) with one rejection.
+      // the whole bootstrap with one rejection.
       request<{ rooms?: unknown[] }>('fleet.list', {}).catch(() => ({ rooms: [] as unknown[] })),
     ]);
 
@@ -87,7 +83,6 @@ export async function bootstrapAction(
     void refreshMemoryDrafts();
     store.setReturnBriefing(normalizeReturnBriefing(briefingPayload.briefing));
     store.setRuntimeContext(normalizeRuntimeContext(runtimeContextPayload.runtimeContext));
-    store.setPulses(Array.isArray(pulsePayload.pulses) ? pulsePayload.pulses.map(normalizePulse).filter((item): item is PulseRecord => item != null) : []);
     const messagingConfig = normalizeMessagingConfig(messagingPayload.config);
     if (messagingConfig) {
       store.setMessagingConfig(messagingConfig);

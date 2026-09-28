@@ -1,7 +1,6 @@
 """Real isolated stores prove scan events reach notifications without new acquisition."""
 
 import asyncio
-from dataclasses import replace
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,7 +14,6 @@ from copenet.core.market.store import MarketStore
 from copenet.core.market.scans.service import resolve_scan_service
 from copenet.core.messaging.market_outbox import MarketOutbox
 from copenet.core.messaging.store import MessagingConfigRecord, MessageDestinationRecord
-from copenet.core.pulse import PulseStore
 
 
 @pytest.fixture
@@ -23,7 +21,7 @@ def context(tmp_path, monkeypatch):
     monkeypatch.delenv('COPNET_TELEGRAM_BOT_TOKEN', raising=False)
     runtime = MarketRuntime(store=MarketStore(tmp_path / 'market'))
     config = MessagingConfigRecord(destinations=[MessageDestinationRecord('test-destination', 'telegram', '@synthetic', 'Test chat')])
-    orchestrator = SimpleNamespace(_market_runtime=runtime, _pulse_store=PulseStore(tmp_path / 'pulse.json'),
+    orchestrator = SimpleNamespace(_market_runtime=runtime,
                                    _messaging_store=SimpleNamespace(load=lambda: config))
     rule = AlertRule('test-alert', 1, 'TEST', 'daily', 'morning', False, True, 'above',
                      {'kind': 'price'}, {'kind': 'constant', 'value': 105}, ['test-destination'], True,
@@ -39,18 +37,14 @@ def context(tmp_path, monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_scan_factory_callback_publishes_once_and_preserves_dismissed_pulse(context):
+async def test_scan_factory_callback_publishes_each_event_once(context):
     orchestrator, event = context
     service = resolve_scan_service(orchestrator)
     await service.post_prices([event])
     root = service.runtime.store.root_dir
     assert len(MarketOutbox(root).rows()) == 1
-    pulse = orchestrator._pulse_store.get(event['eventId'])
-    assert pulse.summary == event['condition']
-    orchestrator._pulse_store.save(replace(pulse, status='dismissed'))
     await service.post_prices([event])
     assert len(MarketOutbox(root).rows()) == 1
-    assert orchestrator._pulse_store.get(event['eventId']).status == 'dismissed'
 
 
 @pytest.mark.asyncio
@@ -65,7 +59,6 @@ async def test_tick_recovers_persisted_event_and_retries_delivery_without_scanni
     rows = MarketOutbox(runtime.store.root_dir).rows()
     assert rows[0]['status'] == 'failed'  # No bot credential in this isolated test.
     assert len(rows[0]['attempts']) == 1
-    assert orchestrator._pulse_store.get(event['eventId']) is not None
     await monitoring_delivery.monitoring_delivery_tick(orchestrator)
     assert len(MarketOutbox(runtime.store.root_dir).rows()[0]['attempts']) == 1
     runtime.refresh.assert_not_called()

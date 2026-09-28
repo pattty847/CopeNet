@@ -121,10 +121,6 @@ from .rpc_observability import (
 )
 from .rpc_sessions import (
     handle_approvals_list,
-    handle_pulse_create_from_session,
-    handle_pulse_dismiss,
-    handle_pulse_list,
-    handle_pulse_save,
     handle_sessions_archive,
     handle_sessions_artifacts,
     handle_sessions_create,
@@ -313,10 +309,6 @@ RPC_ROUTES = build_routes(
         ("sessions.state", RpcRoute(handle_sessions_state, "standard")),
         ("sessions.standing.list", RpcRoute(handle_sessions_standing_list, "standard")),
         ("sessions.resolve", RpcRoute(handle_sessions_resolve, "standard")),
-        ("pulse.list", RpcRoute(handle_pulse_list, "standard")),
-        ("pulse.create_from_session", RpcRoute(handle_pulse_create_from_session, "standard")),
-        ("pulse.save", RpcRoute(handle_pulse_save, "standard")),
-        ("pulse.dismiss", RpcRoute(handle_pulse_dismiss, "standard")),
         ("nasa.apod", RpcRoute(handle_nasa_apod, "standard")),
         ("nasa.apod.list", RpcRoute(handle_nasa_apod_list, "standard")),
         ("permissions.allowlist.list", RpcRoute(handle_permissions_allowlist_list, "without_params")),

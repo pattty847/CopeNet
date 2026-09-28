@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ChatAttachment, DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, PulseRecord, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
+import { ChatAttachment, DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
@@ -201,9 +201,6 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   sessionStanding: Record<string, SessionStanding>;
   setSessionStanding: (rows: SessionStanding[]) => void;
   upsertSessionState: (record: SessionStateRecord) => void;
-  pulses: PulseRecord[];
-  setPulses: (pulses: PulseRecord[]) => void;
-  upsertPulse: (pulse: PulseRecord) => void;
 
   messages: Record<string, Message[]>;
   setMessages: (sessionKey: string, messages: Message[]) => void;
@@ -515,16 +512,6 @@ export const useAppStore = create<AppState>((set) => ({
     set((state) => ({
       sessionStates: { ...state.sessionStates, [record.session_key]: record },
     })),
-  pulses: [],
-  setPulses: (pulses) => set({ pulses: [...pulses].sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))) }),
-  upsertPulse: (pulse) =>
-    set((state) => {
-      const next = state.pulses.filter((item) => item.pulseId !== pulse.pulseId);
-      if (pulse.status === 'new') next.push(pulse);
-      return {
-        pulses: next.sort((a, b) => String(b.updatedAt || '').localeCompare(String(a.updatedAt || ''))),
-      };
-    }),
 
   messages: {},
   setMessages: (sessionKey, messages) =>

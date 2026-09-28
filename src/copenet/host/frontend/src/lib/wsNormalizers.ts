@@ -15,7 +15,6 @@ import type {
   PersonaSettings,
   Provider,
   PublicMessagePayload,
-  PulseRecord,
   ReturnBriefingPayload,
   RuntimeContext,
   Session,
@@ -501,42 +500,6 @@ export function normalizeReturnBriefing(raw: unknown): ReturnBriefingPayload | n
       : [],
     noticeText: payload.noticeText ? String(payload.noticeText) : null,
     noticeSource: payload.noticeSource ? String(payload.noticeSource) : null,
-  };
-}
-
-export function normalizePulse(raw: unknown): PulseRecord | null {
-  if (!raw || typeof raw !== 'object') return null;
-  const payload = raw as Record<string, unknown>;
-  const pulseId = String(payload.pulseId || '').trim();
-  if (!pulseId) return null;
-  return {
-    pulseId,
-    status:
-      payload.status === 'saved' || payload.status === 'dismissed'
-        ? payload.status
-        : 'new',
-    title: String(payload.title || ''),
-    summary: String(payload.summary || ''),
-    whyNow: String(payload.whyNow || ''),
-    sourceSessionKeys: Array.isArray(payload.sourceSessionKeys) ? payload.sourceSessionKeys.map(String) : [],
-    sourceRunIds: Array.isArray(payload.sourceRunIds) ? payload.sourceRunIds.map(String) : [],
-    sourceSessions: Array.isArray(payload.sourceSessions)
-      ? payload.sourceSessions
-          .map((item) => {
-            const row = (item || {}) as Record<string, unknown>;
-            const sessionKey = String(row.sessionKey || '').trim();
-            if (!sessionKey) return null;
-            return {
-              sessionKey,
-              title: String(row.title || sessionKey),
-            };
-          })
-          .filter((item): item is { sessionKey: string; title: string } => item != null)
-      : [],
-    createdAt: String(payload.createdAt || new Date().toISOString()),
-    updatedAt: String(payload.updatedAt || new Date().toISOString()),
-    savedAt: payload.savedAt ? String(payload.savedAt) : null,
-    dismissedAt: payload.dismissedAt ? String(payload.dismissedAt) : null,
   };
 }
 

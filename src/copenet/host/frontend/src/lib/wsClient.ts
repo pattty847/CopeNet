@@ -20,7 +20,6 @@ import {
   PersonaSettings,
   ChatAttachment,
   PromptOptimizationResult,
-  PulseRecord,
   ProviderAuthStatus,
   PublicMessagePayload,
   RuntimeContext,
@@ -61,7 +60,6 @@ import {
   normalizeMessagingConfig,
   normalizePersonaContext,
   normalizePersonaFlavorDraft,
-  normalizePulse,
   normalizeReturnBriefing,
   normalizeSession,
   normalizeTelegramRoute,
@@ -99,10 +97,7 @@ import {
 } from './wsIdentityRpc';
 import {
   addShellAllowlistRpc,
-  createPulseFromSessionRpc,
-  dismissPulseRpc,
   fetchApodRpc,
-  listPulsesRpc,
   listShellAllowlistRpc,
   listWorkspaceFilesRpc,
   optimizePromptRpc,
@@ -112,7 +107,6 @@ import {
   readPersonaFileRpc,
   readWorkspaceFileRpc,
   removeShellAllowlistRpc,
-  savePulsesRpc,
   writePersonaFileRpc,
   writeWorkspaceFileRpc,
 } from './wsSupportRpc';
@@ -411,15 +405,6 @@ class WsClient {
           false,
         );
         useAppStore.getState().addMessage(sessionKey, message);
-      }
-      return;
-    }
-
-    if (frame.event === 'pulse.updated') {
-      const payload = (frame.payload || {}) as Record<string, unknown>;
-      const pulse = normalizePulse(payload.pulse);
-      if (pulse) {
-        useAppStore.getState().upsertPulse(pulse);
       }
       return;
     }
@@ -781,10 +766,6 @@ class WsClient {
     return marketSymbolsSearchRpc(this.request.bind(this), query, limit, allowFormula);
   }
 
-  async listPulses(): Promise<PulseRecord[]> {
-    return listPulsesRpc(this.request.bind(this));
-  }
-
   async getMessagingConfig(): Promise<MessagingConfig | null> {
     return getMessagingConfigRpc(this.request.bind(this));
   }
@@ -855,31 +836,6 @@ class WsClient {
 
   async deleteMessagingRoute(routeId: string): Promise<{ deleted: boolean; routes: TelegramSessionRoute[] }> {
     return deleteMessagingRouteRpc(this.request.bind(this), routeId);
-  }
-
-  async createPulseFromSession(params: {
-    sessionKey: string;
-    provider: string;
-    model: string;
-    systemPromptId: string;
-    taskPromptId: string;
-  }): Promise<PulseRecord> {
-    return createPulseFromSessionRpc(this.request.bind(this), params);
-  }
-
-  async dismissPulse(pulseId: string): Promise<PulseRecord> {
-    return dismissPulseRpc(this.request.bind(this), pulseId);
-  }
-
-  async savePulses(params: {
-    pulseIds: string[];
-    provider: string;
-    model: string;
-    systemPromptId: string;
-    taskPromptId: string;
-    workspaceRoot: string;
-  }): Promise<{ session: Session; mergeState: SessionMergeState | null }> {
-    return savePulsesRpc(this.request.bind(this), params);
   }
 
   async exportSession(key: string): Promise<SessionExportPayload> {

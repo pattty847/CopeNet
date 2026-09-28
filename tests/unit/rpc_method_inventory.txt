@@ -134,10 +134,6 @@ providerAuth.completeLogin
 providerAuth.logout
 providerAuth.status
 providers.list
-pulse.create_from_session
-pulse.dismiss
-pulse.list
-pulse.save
 runtime.context
 runtime.workspace.browse
 runtime.workspace.set

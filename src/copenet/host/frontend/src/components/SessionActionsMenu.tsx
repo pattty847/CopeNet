@@ -1,5 +1,5 @@
 import type React from 'react';
-import { Archive, Copy, CopyPlus, Download, Sparkles } from 'lucide-react';
+import { Archive, Copy, CopyPlus, Download } from 'lucide-react';
 
 type CopiedAction = 'chat' | 'chat_activity' | null;
 
@@ -11,14 +11,12 @@ interface SessionActionsMenuProps {
   onCopyConversation: () => void;
   onCopyConversationWithToolActivity: () => void;
   onExportConversation: () => void;
-  onCreatePulse: () => void;
   onArchiveConversation: () => void;
 }
 
 const actionClass = {
   inspect: 'border-sky-400/25 bg-sky-400/8 text-sky-500 group-hover/menuitem:border-sky-400/45 group-hover/menuitem:bg-sky-400/14',
   copy: 'border-emerald-400/25 bg-emerald-400/8 text-emerald-600 group-hover/menuitem:border-emerald-400/45 group-hover/menuitem:bg-emerald-400/14',
-  pulse: 'border-operator-accent/25 bg-operator-accent/10 text-operator-accent group-hover/menuitem:border-operator-accent/45 group-hover/menuitem:bg-operator-accent/16',
   manage: 'border-rose-400/25 bg-rose-400/8 text-rose-500 group-hover/menuitem:border-rose-400/45 group-hover/menuitem:bg-rose-400/14',
 };
 
@@ -64,7 +62,6 @@ export function SessionActionsMenu({
   onCopyConversation,
   onCopyConversationWithToolActivity,
   onExportConversation,
-  onCreatePulse,
   onArchiveConversation,
 }: SessionActionsMenuProps) {
   return (
@@ -97,13 +94,6 @@ export function SessionActionsMenu({
         tone="copy"
         icon={<Download className="h-3.5 w-3.5" />}
         onClick={onExportConversation}
-      />
-      <MenuDivider />
-      <MenuItem
-        label="Create Pulse"
-        tone="pulse"
-        icon={<Sparkles className="h-3.5 w-3.5" />}
-        onClick={onCreatePulse}
       />
       {canArchive ? (
         <>
