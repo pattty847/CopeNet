@@ -1,4 +1,4 @@
-import { Copy, ExternalLink, LoaderCircle, MessagesSquare, PanelRightOpen, Sparkles, X } from 'lucide-react';
+import { Copy, ExternalLink, LoaderCircle, MessagesSquare, X } from 'lucide-react';
 import { formatMediaDuration, formatRoundedRelativeAge } from '../lib/formatting';
 import { MediaAssetDetail } from '../types/backend';
 import { MobileSheet } from './mobile/MobileSheet';
@@ -13,8 +13,6 @@ export function MediaAssetDrawer({
   onDiscuss,
   discussing,
   discussError,
-  onUseInAgents,
-  onOpenInMemeLab,
   mobile = false,
 }: {
   detail: MediaAssetDetail | null;
@@ -24,8 +22,6 @@ export function MediaAssetDrawer({
   onDiscuss: (detail: MediaAssetDetail) => void;
   discussing: boolean;
   discussError: string | null;
-  onUseInAgents: (detail: MediaAssetDetail) => void;
-  onOpenInMemeLab: (detail: MediaAssetDetail) => void;
   mobile?: boolean;
 }) {
   if (!detail && !loading && !error) return null;
@@ -88,24 +84,6 @@ export function MediaAssetDrawer({
         >
           <Copy className="h-4 w-4" />
           Copy transcript
-        </button>
-        <button
-          type="button"
-          onClick={() => detail && onUseInAgents(detail)}
-          disabled={!detail}
-          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50 ${mobile ? 'w-full' : ''}`}
-        >
-          <PanelRightOpen className="h-4 w-4" />
-          Meme brief in Agents
-        </button>
-        <button
-          type="button"
-          onClick={() => detail && onOpenInMemeLab(detail)}
-          disabled={!detail}
-          className={`inline-flex h-11 items-center justify-center gap-2 rounded-2xl border border-shell-border bg-shell-bg px-5 text-sm font-semibold text-shell-text transition hover:border-shell-border-strong disabled:cursor-not-allowed disabled:opacity-50 ${mobile ? 'w-full' : ''}`}
-        >
-          <Sparkles className="h-4 w-4" />
-          Open in Meme Lab
         </button>
         {discussError && <div className="w-full text-sm text-shell-muted">{discussError}</div>}
       </div>

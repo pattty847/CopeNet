@@ -9,7 +9,6 @@ const SECTION_HINTS = {
   home: 'Jump to a ticker, sector, or ask CopeNet…',
   agents: 'Search sessions, pinned agents, or a run you want to resume…',
   market: 'Jump to a ticker, sector, or the daily market read…',
-  workflows: 'Find a workflow, runbook, or recurring operation…',
   'data-tools': 'Search data feeds, knowledge bases, or tool integrations…',
   observability: 'Search traces, run logs, or blocked tool events…',
   experiments: 'Search comparisons, prompts, or benchmark runs…',

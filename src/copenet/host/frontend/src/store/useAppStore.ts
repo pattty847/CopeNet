@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { ChatAttachment, DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MediaAssetDetail, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
+import { ChatAttachment, DataToolsRoute, DraftSettings, IdentityContextRuntime, MediaAsset, MemoryChangeEvent, MemoryItem, Message, MessageDestination, MessagePart, MessagingConfig, Model, PersonaContextPayload, PersonaFlavorDraft, PersonaHomeSummary, PersonaSettings, PromptOption, Provider, ProviderAuthStatus, ReturnBriefingPayload, RunTimeline, RuntimeContext, Session, SessionMergeState, SessionStanding, SessionStateRecord, TextPart, ToolDescriptor, UserNoteProposal, WsStatus } from '../types/backend';
 import type { PersonalStarterIntentId } from '../lib/personalHistory';
 import type { InspectorTarget } from '../runtime/types';
 import { createSessionRuntimeSlice, type SessionRuntimeSlice } from './sessionRuntimeSlice';
@@ -13,10 +13,9 @@ import {
   type MarketSection,
 } from '../lib/appSectionRouting';
 
-export type AppSection = 'home' | 'agents' | 'market' | 'workflows' | 'data-tools' | 'observability' | 'experiments';
+export type AppSection = 'home' | 'agents' | 'market' | 'data-tools' | 'observability' | 'experiments';
 export type ThemeMode = 'light' | 'dark';
 export type RightPanelTab = 'inbox' | 'runtime' | 'approvals';
-export type WorkflowsRoute = 'hub' | 'meme-lab';
 
 const THEME_STORAGE_KEY = 'copenet.themeMode';
 const PINNED_SESSIONS_STORAGE_KEY = 'copenet.pinnedSessionKeys';
@@ -108,15 +107,11 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   toggleThemeMode: () => void;
   dataToolsRoute: DataToolsRoute;
   setDataToolsRoute: (route: DataToolsRoute) => void;
-  workflowsRoute: WorkflowsRoute;
-  setWorkflowsRoute: (route: WorkflowsRoute) => void;
   draftComposerSeed: string | null;
   setDraftComposerSeed: (seed: string | null) => void;
   /** An attachment (e.g. a discussed media transcript) the next draft composer picks up. */
   draftComposerAttachmentSeed: ChatAttachment | null;
   setDraftComposerAttachmentSeed: (attachment: ChatAttachment | null) => void;
-  memeLabSeedAsset: MediaAssetDetail | null;
-  setMemeLabSeedAsset: (asset: MediaAssetDetail | null) => void;
 
   primaryNavCollapsed: boolean;
   setPrimaryNavCollapsed: (collapsed: boolean) => void;
@@ -130,10 +125,6 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   setMobileSessionsOpen: (open: boolean) => void;
   mobileInspectorOpen: boolean;
   setMobileInspectorOpen: (open: boolean) => void;
-  mobileMemeHistoryOpen: boolean;
-  setMobileMemeHistoryOpen: (open: boolean) => void;
-  mobileMemeKeepersOpen: boolean;
-  setMobileMemeKeepersOpen: (open: boolean) => void;
   rightPanelOpen: boolean;
   setRightPanelOpen: (open: boolean) => void;
   commandPaletteOpen: boolean;
@@ -343,14 +334,10 @@ export const useAppStore = create<AppState>((set) => ({
     }),
   dataToolsRoute: 'hub',
   setDataToolsRoute: (route) => set({ dataToolsRoute: route }),
-  workflowsRoute: 'hub',
-  setWorkflowsRoute: (route) => set({ workflowsRoute: route }),
   draftComposerSeed: null,
   setDraftComposerSeed: (seed) => set({ draftComposerSeed: seed }),
   draftComposerAttachmentSeed: null,
   setDraftComposerAttachmentSeed: (attachment) => set({ draftComposerAttachmentSeed: attachment }),
-  memeLabSeedAsset: null,
-  setMemeLabSeedAsset: (asset) => set({ memeLabSeedAsset: asset }),
 
   primaryNavCollapsed: true,
   setPrimaryNavCollapsed: (collapsed) => set({ primaryNavCollapsed: collapsed }),
@@ -383,10 +370,6 @@ export const useAppStore = create<AppState>((set) => ({
   setMobileSessionsOpen: (open) => set({ mobileSessionsOpen: open }),
   mobileInspectorOpen: false,
   setMobileInspectorOpen: (open) => set({ mobileInspectorOpen: open }),
-  mobileMemeHistoryOpen: false,
-  setMobileMemeHistoryOpen: (open) => set({ mobileMemeHistoryOpen: open }),
-  mobileMemeKeepersOpen: false,
-  setMobileMemeKeepersOpen: (open) => set({ mobileMemeKeepersOpen: open }),
   rightPanelOpen: true,
   setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
   commandPaletteOpen: false,

@@ -33,7 +33,6 @@ const MOBILE_SECTION_SUMMARY: Record<AppSection, string> = {
   home: 'The market, your tape, and what your agents did.',
   agents: 'Sessions, composer, and runtime controls.',
   market: 'Regime, rotation, accumulation, and your book.',
-  workflows: 'Playbooks, Meme Lab, and repeatable flows.',
   'data-tools': 'Imports, source assets, and utility flows.',
   observability: 'Runs, traces, and live runtime signal.',
   experiments: 'Comparisons, matrices, and probe surfaces.',

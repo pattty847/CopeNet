@@ -4,7 +4,6 @@ export const APP_SECTION_PATHS: Record<AppSection, string> = {
   home: '/',
   agents: '/agents',
   market: '/market',
-  workflows: '/workflows',
   'data-tools': '/data-tools',
   observability: '/observability',
   experiments: '/experiments',

@@ -11,10 +11,8 @@ import {
 import { AppSection, useAppStore } from '../store/useAppStore';
 import { ThemeToggle } from './ThemeToggle';
 
-// Market sits directly under Home because it is what this workspace is for. Workflows and
-// Experiments are reachable at their routes and linked from Data & Tools, but neither has
-// earned permanent nav real estate: Workflows issues no RPC at all, and Experiments is one
-// matrix better read from the run inspector.
+// Market sits directly under Home because it is what this workspace is for. Experiments is
+// reachable from Data & Tools, but its matrix is usually better read from the run inspector.
 const NAV_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
   { id: 'home', label: 'Home', icon: Home },
   { id: 'market', label: 'Market', icon: CandlestickChart },

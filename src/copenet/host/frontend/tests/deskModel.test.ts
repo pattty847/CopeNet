@@ -103,7 +103,7 @@ test('quick launch never renders more than its slots', () => {
 
 test('every data-and-tools tile points at a destination that exists', () => {
   const marketViews = new Set(['briefing', 'structure', 'signals', 'portfolio', 'evidence', 'ledger', 'backtest', 'scans', 'watchlist']);
-  const sections = new Set(['home', 'agents', 'market', 'workflows', 'data-tools', 'observability', 'experiments']);
+  const sections = new Set(['home', 'agents', 'market', 'data-tools', 'observability', 'experiments']);
 
   for (const tool of TOOL_SHORTCUTS) {
     if (tool.destination.kind === 'market') assert.ok(marketViews.has(tool.destination.view), tool.id);

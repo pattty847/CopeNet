@@ -5,7 +5,6 @@ import {
   Database,
   FlaskConical,
   Home,
-  Layers3,
   Plus,
   Search,
   TrendingUp,
@@ -115,7 +114,6 @@ export function CommandPalette() {
   const navItems: PaletteItem[] = useMemo(() => [
     { id: 'nav-home', label: 'Go to Home', icon: Home, action: () => { setCurrentSection('home'); setOpen(false); }, group: 'Navigation' },
     { id: 'nav-agents', label: 'Go to Agents', hint: 'Sessions & chat', icon: Bot, action: () => { setCurrentSection('agents'); setOpen(false); }, group: 'Navigation' },
-    { id: 'nav-workflows', label: 'Go to Workflows', icon: Layers3, action: () => { setCurrentSection('workflows'); setOpen(false); }, group: 'Navigation' },
     { id: 'nav-data', label: 'Go to Data & Tools', icon: Wrench, action: () => { setCurrentSection('data-tools'); setOpen(false); }, group: 'Navigation' },
     { id: 'nav-observability', label: 'Go to Observability', icon: Activity, action: () => { setCurrentSection('observability'); setOpen(false); }, group: 'Navigation' },
     { id: 'nav-experiments', label: 'Go to Experiments', icon: FlaskConical, action: () => { setCurrentSection('experiments'); setOpen(false); }, group: 'Navigation' },

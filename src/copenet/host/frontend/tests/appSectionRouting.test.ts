@@ -18,7 +18,6 @@ test('top-level app sections map to stable reloadable paths', () => {
     home: '/',
     agents: '/agents',
     market: '/market',
-    workflows: '/workflows',
     'data-tools': '/data-tools',
     observability: '/observability',
     experiments: '/experiments',

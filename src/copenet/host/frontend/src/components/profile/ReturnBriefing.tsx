@@ -38,7 +38,7 @@ export const DEV_SKELETON_FOR_TEST: ReturnBriefingPayload = {
       id: 'attn_2',
       title: 'Sentinel Market Flows: 3 new probes ready for review',
       urgency: 'medium',
-      source: 'Workflows · Sentinel',
+      source: 'Market · Sentinel',
       detail: null,
     },
   ],

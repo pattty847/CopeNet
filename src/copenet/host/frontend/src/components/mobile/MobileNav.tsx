@@ -1,5 +1,5 @@
 import React from 'react';
-import { Activity, Bot, CandlestickChart, FlaskConical, Home, Layers3, MoreHorizontal, Search, Wrench } from 'lucide-react';
+import { Activity, Bot, CandlestickChart, FlaskConical, Home, MoreHorizontal, Search, Wrench } from 'lucide-react';
 import { getMobileSectionSummary } from '../../lib/mobileCopy';
 import { useAppStore, type AppSection } from '../../store/useAppStore';
 import { MobileSheet } from './MobileSheet';
@@ -13,7 +13,6 @@ const PRIMARY_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }>
 
 const MORE_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Activity }> = [
   { id: 'data-tools', label: 'Data & Tools', icon: Wrench },
-  { id: 'workflows', label: 'Workflows', icon: Layers3 },
   { id: 'experiments', label: 'Experiments', icon: FlaskConical },
 ];
 
@@ -21,7 +20,6 @@ const SECTION_TITLES: Record<AppSection, string> = {
   home: 'Home',
   agents: 'Agents',
   market: 'Market',
-  workflows: 'Workflows',
   'data-tools': 'Data & Tools',
   observability: 'Observability',
   experiments: 'Experiments',
@@ -115,7 +113,7 @@ export function MobileBottomNav() {
             aria-label="More"
             title="More"
             className={`flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-2xl px-2 py-2 ${
-              currentSection === 'data-tools' || currentSection === 'workflows' || currentSection === 'experiments' ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-muted'
+              currentSection === 'data-tools' || currentSection === 'experiments' ? 'bg-shell-accent-soft text-shell-accent' : 'text-shell-muted'
             }`}
           >
             <MoreHorizontal className="h-4 w-4" />

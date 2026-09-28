@@ -24,7 +24,7 @@ test('mobile bottom nav renders the primary phone sections', () => {
   assert.match(html, />Agents</);
 });
 
-test('workflows and experiments are reachable from the overflow sheet, not the bar', () => {
+test('experiments are reachable from the overflow sheet, not the bar', () => {
   useAppStore.setState({ currentSection: 'home', mobileOverflowOpen: false });
 
   const html = renderToStaticMarkup(<MobileBottomNav />);

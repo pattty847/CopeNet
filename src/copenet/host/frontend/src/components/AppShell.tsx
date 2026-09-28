@@ -15,7 +15,6 @@ import { SidebarNav } from './SidebarNav';
 import { SessionsPanel } from './session/SessionsPanel';
 import { SectionErrorBoundary } from './SectionErrorBoundary';
 import { TopCommandBar } from './TopCommandBar';
-import { WorkflowsPage } from './WorkflowsPage';
 import { useIsMobile } from '../lib/responsive';
 import { shouldShowMobileSectionHeader } from '../lib/mobileCopy';
 import { appSectionFromPathname } from '../lib/appSectionRouting';
@@ -34,7 +33,7 @@ const FIXED_HEIGHT_SECTIONS = new Set(['agents', 'market']);
 // The command row is redundant wherever the section already carries its own search: the
 // market workstation and ticker both have a symbol jump in their market bar, and Agents
 // has the session drawer. ⌘K still reaches the palette from all of them.
-const COMMAND_BAR_SECTIONS = new Set(['home', 'data-tools', 'observability', 'workflows', 'experiments']);
+const COMMAND_BAR_SECTIONS = new Set(['home', 'data-tools', 'observability', 'experiments']);
 
 function AppSectionContent() {
   const currentSection = useAppStore((state) => state.currentSection);
@@ -49,10 +48,6 @@ function AppSectionContent() {
 
   if (currentSection === 'market') {
     return <MarketMonitor />;
-  }
-
-  if (currentSection === 'workflows') {
-    return <WorkflowsPage />;
   }
 
   if (currentSection === 'data-tools') {

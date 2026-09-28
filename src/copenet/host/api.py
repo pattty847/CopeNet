@@ -25,7 +25,6 @@ _FRONTEND_DIST_DIR = Path(__file__).resolve().parent / "frontend" / "dist"
 _FRONTEND_SECTION_PATHS = {
     "agents",
     "market",
-    "workflows",
     "data-tools",
     "observability",
     "experiments",

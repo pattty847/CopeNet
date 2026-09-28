@@ -40,7 +40,7 @@ def test_frontend_public_images_are_served_when_present(
 
 @pytest.mark.parametrize(
     "path",
-    ["/agents", "/market", "/workflows", "/data-tools", "/observability", "/experiments"],
+    ["/agents", "/market", "/data-tools", "/observability", "/experiments"],
 )
 def test_frontend_section_paths_serve_the_spa(path: str) -> None:
     with TestClient(create_app()) as client:

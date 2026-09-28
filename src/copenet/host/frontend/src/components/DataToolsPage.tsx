@@ -19,7 +19,6 @@ import {
   Wrench,
 } from 'lucide-react';
 import { createMediaChatAttachment, downloadMediaFromUrl, extractWebPage, getMediaAssetDetail, importMediaFromUrl, listMediaAssets, uploadMediaFile } from '../lib/appApi';
-import { buildAttachedMedia, buildMemeAgentsDraftSeed } from '../lib/mediaMemeBridge';
 import { formatMediaDuration, formatRoundedRelativeAge } from '../lib/formatting';
 import { clampMediaAssetTitle, getMediaAssetCardBadgeLabel } from '../lib/mobileCopy';
 import { useIsMobile } from '../lib/responsive';
@@ -107,14 +106,12 @@ function DataToolsHub({
   openMessaging,
   openPersona,
   openPermissions,
-  openWorkflows,
   openExperiments,
 }: {
   openSources: () => void;
   openMessaging: () => void;
   openPersona: () => void;
   openPermissions: () => void;
-  openWorkflows: () => void;
   openExperiments: () => void;
 }) {
   return (
@@ -122,7 +119,6 @@ function DataToolsHub({
       <SectionHead icon={Wrench} title="Data &amp; Tools" context="what the workspace is grounded in" />
 
       <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-        <HubCard eyebrow="Ground" title="Knowledge Bases" body="Curated context that can refresh, evolve, and stay anchored to the workspace." accent="text-shell-accent" />
         <HubCard eyebrow="Ingest" title="Data Sources" body="Feed media, web pages, APIs, and local files into the workbench." accent="text-shell-accent" onClick={openSources} />
         <HubCard eyebrow="Operate" title="Tool Catalog" body="Available tool surfaces, their safety rules, and recent execution history." accent="text-shell-accent" />
         <HubCard eyebrow="Route" title="Messaging" body="Configure Telegram reachability, default runtimes, and chat-to-session routes." accent="text-shell-accent" onClick={openMessaging} />
@@ -130,16 +126,8 @@ function DataToolsHub({
         <HubCard eyebrow="Guard" title="Permissions" body="Manage the global shell allowlist — the commands you've told CopeNet it can always run." accent="text-shell-accent" onClick={openPermissions} />
       </section>
 
-      {/* Workflows and Experiments left the sidebar because neither has earned permanent
-          nav space — but they are still real routes, and this is where they live now. */}
+      {/* Experiments has not earned permanent nav space, but remains reachable here. */}
       <section className="grid gap-2.5 md:grid-cols-2 xl:grid-cols-5">
-        <HubCard
-          eyebrow="Bench"
-          title="Workflows"
-          body="Meme Lab and the recurring-run bench. Direction-setting — none of it issues a run yet."
-          accent="text-shell-muted"
-          onClick={openWorkflows}
-        />
         <HubCard
           eyebrow="Compare"
           title="Experiments"
@@ -569,13 +557,10 @@ function MediaImportsPage() {
   const setMediaImportStatus = useAppStore((state) => state.setMediaImportStatus);
   const setMediaImportProgress = useAppStore((state) => state.setMediaImportProgress);
   const setCurrentSection = useAppStore((state) => state.setCurrentSection);
-  const setWorkflowsRoute = useAppStore((state) => state.setWorkflowsRoute);
   const setDraftOpen = useAppStore((state) => state.setDraftOpen);
-  const setDraftComposerSeed = useAppStore((state) => state.setDraftComposerSeed);
   const setDraftComposerAttachmentSeed = useAppStore((state) => state.setDraftComposerAttachmentSeed);
   const [discussing, setDiscussing] = useState(false);
   const [discussError, setDiscussError] = useState<string | null>(null);
-  const setMemeLabSeedAsset = useAppStore((state) => state.setMemeLabSeedAsset);
   const [url, setUrl] = useState('');
   const [capturedChunks, setCapturedChunks] = useState<string[]>([]);
   const [selectedAsset, setSelectedAsset] = useState<MediaAsset | null>(null);
@@ -613,13 +598,6 @@ function MediaImportsPage() {
     }
   }
 
-  function useInAgents(detail: MediaAssetDetail) {
-    const seed = buildMemeAgentsDraftSeed({ attachedMedia: buildAttachedMedia(detail) });
-    setDraftComposerSeed(seed);
-    setDraftOpen(true);
-    setCurrentSection('agents');
-  }
-
   async function discussAsset(detail: MediaAssetDetail) {
     setDiscussing(true);
     setDiscussError(null);
@@ -633,12 +611,6 @@ function MediaImportsPage() {
     } finally {
       setDiscussing(false);
     }
-  }
-
-  function openInMemeLab(detail: MediaAssetDetail) {
-    setMemeLabSeedAsset(detail);
-    setCurrentSection('workflows');
-    setWorkflowsRoute('meme-lab');
   }
 
   async function handleTranscribe(event: React.FormEvent<HTMLFormElement>) {
@@ -957,8 +929,6 @@ function MediaImportsPage() {
         onDiscuss={(detail) => void discussAsset(detail)}
         discussing={discussing}
         discussError={discussError}
-        onUseInAgents={useInAgents}
-        onOpenInMemeLab={openInMemeLab}
       />
     </div>
   );
@@ -987,7 +957,6 @@ export function DataToolsPage() {
             openMessaging={() => setRoute('messaging')}
             openPersona={() => setRoute('persona')}
             openPermissions={() => setRoute('permissions')}
-            openWorkflows={() => setCurrentSection('workflows')}
             openExperiments={() => setCurrentSection('experiments')}
           />
           <WorkspaceFileViewer />

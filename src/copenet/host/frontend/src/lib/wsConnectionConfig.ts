@@ -1,7 +1,7 @@
 const DEFAULT_DEV_TOKEN = 'dev-token';
 
 /** The one place this key is spelled out for new code. `lib/appApi.ts`, `lib/useVoiceToText.ts`,
- *  and `workflows/meme/memeClient.ts` each still read `localStorage` for it under their own
+ *  and the REST client each still read `localStorage` for it under their own
  *  local copy of the string — pre-existing duplication this constant doesn't yet clean up. */
 export const TOKEN_STORAGE_KEY = 'copnet.token';
 
