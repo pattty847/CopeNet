@@ -63,6 +63,16 @@ def server(monkeypatch: pytest.MonkeyPatch):
                 status, response = 200, envelope({"timeBasis": "received",
                                                   "trades": [{"receivedAtMs": i, "price": 100 + i} for i in range(100)],
                                                   "summary": {"count": 100, "deltaQty": 5}, "retentionLimited": False})
+            elif parsed.path == "/api/v1/heatmap/walls":
+                status, response = 200, envelope({"basis": "recording-twap-sum", "bandTick": 0.5,
+                    "loadedRange": [1000, 6000], "recordedColumns": 5, "missingColumns": 1,
+                    "note": "Recording cells represent dominant-side aggregated resting size.",
+                    "walls": [
+                        {"side": "ask", "priceLow": 101, "priceHigh": 101.5, "qty": 90, "meanQty": 40,
+                         "firstSeenMs": 1000, "lastSeenMs": 5000, "columns": 3, "notional": 9112.5, "bucketStartMs": 3000},
+                        {"side": "bid", "priceLow": 99, "priceHigh": 99.5, "qty": 80, "meanQty": 64,
+                         "firstSeenMs": 1000, "lastSeenMs": 5000, "columns": 5, "notional": 7940, "bucketStartMs": 2000},
+                    ]})
             elif parsed.path == "/api/v1/screenshot":
                 status, response = 200, {"ok": True, "path": "./screenshots/review.png", "target": "heatmap",
                                          "frameId": "f9", "viewportVersion": "9", "selectionEpoch": "3"}
@@ -111,6 +121,7 @@ async def test_each_sentinel_read_preserves_meta_and_uses_expected_route(tmp_pat
         ("sentinel.candles", {"startMs": 1, "endMs": 1000, "timeframeMs": 60000, "limit": 100}, "/api/v1/candles"),
         ("sentinel.book", {"levels": 20}, "/api/v1/book"),
         ("sentinel.trades", {"windowMs": 60000, "limit": 100}, "/api/v1/trades"),
+        ("sentinel.walls", {}, "/api/v1/heatmap/walls"),
         ("sentinel.screenshot", {"name": "review", "target": "heatmap", "afterOperation": "o1", "waitMs": 100}, "/api/v1/screenshot"),
     ]
     for tool_id, args, route in cases:
@@ -125,6 +136,80 @@ async def test_each_sentinel_read_preserves_meta_and_uses_expected_route(tmp_pat
             assert result.output["meta"] == META
             assert json.loads(result.model_body)["meta"] == META
     assert requests[2][2] == {"startMs": ["1"], "endMs": ["1000"], "timeframeMs": ["60000"], "limit": ["100"]}
+
+
+@pytest.mark.asyncio
+async def test_sentinel_walls_preserve_api_ranking_and_summarize_price_levels(tmp_path: Path, server) -> None:
+    requests, _ = server
+    registry = ToolRegistry()
+    descriptor = registry.get_descriptor("sentinel.walls")
+    assert descriptor.side_effect == "read"
+    assert descriptor.requires_confirmation is False
+    assert "sentinel.walls" in {tool.id for tool in registry.list_tools()}
+    result = await registry.execute(ToolExecutionRequest("sentinel.walls", {
+        "symbol": "btc-usd", "startMs": 1000, "endMs": 6000, "priceMin": 90.5,
+        "priceMax": 110.5, "minQty": 2.5, "limit": 2,
+    }), context(tmp_path))
+    assert result.ok, result.error
+    assert requests[-1] == ("GET", "/api/v1/heatmap/walls", {
+        "symbol": ["BTC-USD"], "limit": ["2"], "startMs": ["1000"], "endMs": ["6000"],
+        "priceMin": ["90.5"], "priceMax": ["110.5"], "minQty": ["2.5"],
+    }, None)
+    assert [wall["qty"] for wall in result.output["data"]["walls"]] == [90, 80]
+    body = json.loads(result.model_body)
+    assert body["meta"] == META
+    assert {key: body["data"][key] for key in ("basis", "bandTick", "loadedRange", "recordedColumns", "missingColumns", "note")} == {
+        "basis": "recording-twap-sum", "bandTick": 0.5, "loadedRange": [1000, 6000],
+        "recordedColumns": 5, "missingColumns": 1,
+        "note": "Recording cells represent dominant-side aggregated resting size.",
+    }
+    assert body["data"]["wallCount"] == body["data"]["shownWalls"] == 2
+    assert body["data"]["rankedTable"].splitlines() == [
+        "rank | side | price range | peak qty | mean qty | persistence | notional",
+        "1 | ask | 101–101.5 | 90 | 40 | 3/5 | 9112.5",
+        "2 | bid | 99–99.5 | 80 | 64 | 5/5 | 7940",
+    ]
+    assert "not individual orders" in body["data"]["interpretation"]
+
+
+@pytest.mark.asyncio
+async def test_sentinel_walls_recording_required_explains_source_switch(tmp_path: Path, server) -> None:
+    _, behavior = server
+    behavior["error"] = (409, "recording_required")
+    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel.walls"), context(tmp_path))
+    assert result.ok is False
+    assert result.output["code"] == "recording_required"
+    assert "Switch Sentinel heatmap.source to recording" in result.error
+    assert "switch Sentinel heatmap.source to recording" in result.summary
+
+
+@pytest.mark.asyncio
+async def test_sentinel_walls_model_table_obeys_result_budget(tmp_path: Path, server, monkeypatch) -> None:
+    monkeypatch.setenv("COPNET_MODEL_TOOL_RESULT_CHARS", "700")
+    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel.walls"), context(tmp_path))
+    assert result.ok
+    assert len(json.dumps(result.model_body)) <= 700
+    body = json.loads(result.model_body)
+    assert body["meta"] == META
+    assert body["data"]["wallCount"] == 2
+    assert body["data"]["shownWalls"] < 2
+    assert result.output["data"]["walls"][1]["qty"] == 80
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("arguments", [
+    {"startMs": 1}, {"endMs": 2}, {"startMs": 2, "endMs": 1},
+    {"priceMin": 1}, {"priceMax": 2}, {"priceMin": 2, "priceMax": 1},
+    {"priceMin": 0, "priceMax": 1}, {"priceMin": float("inf"), "priceMax": 2},
+    {"minQty": -1}, {"minQty": float("nan")}, {"minQty": True},
+    {"limit": 0}, {"limit": 101}, {"limit": True},
+])
+async def test_sentinel_walls_reject_invalid_parameters_before_io(tmp_path: Path, server, arguments: dict) -> None:
+    requests, _ = server
+    result = await ToolRegistry().execute(ToolExecutionRequest("sentinel.walls", arguments), context(tmp_path))
+    assert result.ok is False
+    assert result.output["code"] == "invalid_arguments"
+    assert requests == []
 
 
 @pytest.mark.asyncio

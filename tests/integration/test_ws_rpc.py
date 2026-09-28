@@ -528,6 +528,7 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
             "sentinel.candles",
             "sentinel.book",
             "sentinel.trades",
+            "sentinel.walls",
             "sentinel.screenshot",
             "sentinel.view.set",
         }

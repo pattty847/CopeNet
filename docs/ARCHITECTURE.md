@@ -351,12 +351,16 @@ The harness keeps provider execution normalized and prepares for richer capabili
   `ToolRegistry.list_tools()` returns that policy-filtered manifest;
   `list_registered_tools()` returns the larger internal/compatibility set.
 - **Sentinel GUI tools** (`sentinel.state`, `sentinel.viewport`, `sentinel.candles`,
-  `sentinel.book`, `sentinel.trades`, `sentinel.screenshot`, `sentinel.view.set`)
+  `sentinel.book`, `sentinel.trades`, `sentinel.walls`, `sentinel.screenshot`, `sentinel.view.set`)
   use Sentinel's local Agent API. `COPNET_SENTINEL_URL` defaults to
   `http://127.0.0.1:17100` and accepts only a loopback HTTP origin. Read results
   retain Sentinel's freshness and coverage metadata; large rows are summarized
-  for the model while full output can be inspected as a tool artifact. Every
-  `sentinel.view.set` call pauses for operator approval, then waits for a rendered
+  for the model while full output can be inspected as a tool artifact.
+  The `sentinel.walls` read reports ranked price-level peaks and mean quantity from
+  the loaded recording heatmap, with persistence relative to recorded columns.
+  Its sizes are aggregated resting cells, not individual orders; Sentinel requires
+  `heatmap.source: recording` for this read. Every `sentinel.view.set` call pauses
+  for operator approval, then waits for a rendered
   operation before claiming the frame was shown. Screenshot paths are owned by
   the Sentinel GUI; CopeNet returns the path and frame metadata without resolving
   a relative path against CopeNet's workspace.

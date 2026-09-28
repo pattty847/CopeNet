@@ -77,6 +77,7 @@ MANIFEST_TOOL_IDS = {
     "sentinel.candles",
     "sentinel.book",
     "sentinel.trades",
+    "sentinel.walls",
     "sentinel.screenshot",
     "sentinel.view.set",
     "persona.author",
