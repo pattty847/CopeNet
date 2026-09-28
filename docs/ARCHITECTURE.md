@@ -347,9 +347,19 @@ The harness keeps provider execution normalized and prepares for richer capabili
 - **Persistent terminal sessions** are explicit `terminal.start` / `terminal.exec` / `terminal.read` / `terminal.interrupt` / `terminal.close` tools. A session belongs to one active run, retains normal shell state only during that run, and the harness terminates its process group when the run stream ends.
 - **Model-facing manifest** is the explicit `MANIFEST_TOOL_IDS` set in
   `core/tools/builtin_readonly.py`. It includes the core file/shell/plan/web tools plus
-  approved domain tools for Market, personas, memory, and user-note proposals.
+  approved domain tools for Market, Sentinel, personas, memory, and user-note proposals.
   `ToolRegistry.list_tools()` returns that policy-filtered manifest;
   `list_registered_tools()` returns the larger internal/compatibility set.
+- **Sentinel GUI tools** (`sentinel_state`, `sentinel_viewport`, `sentinel_candles`,
+  `sentinel_book`, `sentinel_trades`, `sentinel_screenshot`, `sentinel_set_view`)
+  use Sentinel's local Agent API. `COPNET_SENTINEL_URL` defaults to
+  `http://127.0.0.1:17100` and accepts only a loopback HTTP origin. Read results
+  retain Sentinel's freshness and coverage metadata; large rows are summarized
+  for the model while full output can be inspected as a tool artifact. Every
+  `sentinel_set_view` call pauses for operator approval, then waits for a rendered
+  operation before claiming the frame was shown. Screenshot paths are owned by
+  the Sentinel GUI; CopeNet returns the path and frame metadata without resolving
+  a relative path against CopeNet's workspace.
 - **`ToolExecutionContext`** carries **`task_prompt_id`**, **`run_id`**, and optional **`artifact_store`** so prompts and artifact writes stay session-scoped.
 - Prompted tool use accepts exact JSON tool objects such as `{"tool_id":"files.read","arguments":{"path":"README.md"}}`. The current permissive shorthand parser is retained for compatibility, but the target contract is exact tool ids and structured arguments.
 - Tool manifests attach deterministic capability metadata: registered id, JSON schema, category, evidence role, side effect, and confirmation posture. The harness branches on these enum/id fields and policy decisions, not prose explanations.

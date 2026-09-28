@@ -523,6 +523,13 @@ def test_catalog_and_session_rpcs_expose_public_shapes(rpc_client: TestClient, t
                 "market.chart.undo",
                 "market.forecast.read",
                 "market.forecast.submit",
+            "sentinel_state",
+            "sentinel_viewport",
+            "sentinel_candles",
+            "sentinel_book",
+            "sentinel_trades",
+            "sentinel_screenshot",
+            "sentinel_set_view",
         }
         assert {"id", "name", "description", "category", "inputSchema", "safetyLevel", "capabilities"} <= set(tool_rows[0])
 

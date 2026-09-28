@@ -8,6 +8,7 @@ _TOOL_APPROVAL_ACTION_CLASSES = {
     "market.chart.apply": "chart_annotation",
     "market.chart.undo": "chart_annotation",
     "web.fetch": "network_side_effect",
+    "sentinel_set_view": "sentinel_view_control",
 }
 
 

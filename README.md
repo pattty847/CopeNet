@@ -160,6 +160,7 @@ Environment variables:
 - `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
 - `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
 - `COPNET_TRACE` (`1` to enable per-run JSONL traces)
+- `COPNET_SENTINEL_URL` (default: `http://127.0.0.1:17100`; loopback Sentinel GUI Agent API only)
 
 Example:
 
