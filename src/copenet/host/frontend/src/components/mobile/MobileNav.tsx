@@ -1,7 +1,9 @@
 import React from 'react';
-import { Activity, Bot, CandlestickChart, FlaskConical, Home, MoreHorizontal, Search, Wrench } from 'lucide-react';
+import { Activity, Bell, BookOpen, Bot, CandlestickChart, FlaskConical, Home, MoreHorizontal, Search, Settings, Wrench } from 'lucide-react';
 import { getMobileSectionSummary } from '../../lib/mobileCopy';
-import { useAppStore, type AppSection } from '../../store/useAppStore';
+import { useAppStore, type AppSection, type ChromePanel } from '../../store/useAppStore';
+import { useUnseenAlertCount } from '../chrome/alertInbox';
+import { pendingNotebookCount } from '../chrome/NotebookPanel';
 import { MobileSheet } from './MobileSheet';
 
 const PRIMARY_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }> = [
@@ -14,6 +16,12 @@ const PRIMARY_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Home }>
 const MORE_ITEMS: Array<{ id: AppSection; label: string; icon: typeof Activity }> = [
   { id: 'data-tools', label: 'Data & Tools', icon: Wrench },
   { id: 'experiments', label: 'Experiments', icon: FlaskConical },
+];
+
+const CHROME_ITEMS: Array<{ id: ChromePanel; label: string; summary: string; icon: typeof Bell }> = [
+  { id: 'alerts', label: 'Alerts', summary: 'What fired, newest first.', icon: Bell },
+  { id: 'notebook', label: 'Notebook', summary: 'What CopeNet remembers, and proposals to review.', icon: BookOpen },
+  { id: 'settings', label: 'Settings', summary: 'Providers, data integrations, gateway token.', icon: Settings },
 ];
 
 const SECTION_TITLES: Record<AppSection, string> = {
@@ -83,6 +91,10 @@ export function MobileBottomNav() {
   const mobileOverflowOpen = useAppStore((state) => state.mobileOverflowOpen);
   const setMobileOverflowOpen = useAppStore((state) => state.setMobileOverflowOpen);
   const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
+  const setChromePanel = useAppStore((state) => state.setChromePanel);
+  const unseenAlerts = useUnseenAlertCount();
+  const pendingNotes = useAppStore((state) => pendingNotebookCount(state.memoryDrafts, state.userNoteDrafts));
+  const chromeCounts: Record<ChromePanel, number> = { alerts: unseenAlerts, notebook: pendingNotes, settings: 0 };
 
   return (
     <>
@@ -158,6 +170,30 @@ export function MobileBottomNav() {
                   <div className="text-[14px] font-medium">{item.label}</div>
                   <div className="text-[12px] text-shell-muted">{getMobileSectionSummary(item.id)}</div>
                 </div>
+              </button>
+            );
+          })}
+          {CHROME_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const count = chromeCounts[item.id];
+            return (
+              <button
+                key={item.id}
+                type="button"
+                onClick={() => {
+                  setChromePanel(item.id);
+                  setMobileOverflowOpen(false);
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl border border-shell-border bg-shell-bg px-4 py-3 text-left text-shell-text"
+              >
+                <Icon className="h-4 w-4 text-shell-accent" />
+                <div className="min-w-0 flex-1">
+                  <div className="text-[14px] font-medium">{item.label}</div>
+                  <div className="text-[12px] text-shell-muted">{item.summary}</div>
+                </div>
+                {count > 0 && (
+                  <span className="rounded-full bg-shell-accent px-2 text-[11px] font-semibold leading-5 text-shell-canvas">{count > 9 ? '9+' : count}</span>
+                )}
               </button>
             );
           })}

@@ -1,18 +1,29 @@
-import { useEffect, useRef, useState } from 'react';
-import { Bell, BookOpen, Command, Search, Sparkles, UserCircle2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { Bell, BookOpen, Command, Search, Settings } from 'lucide-react';
 import { useAppStore } from '../store/useAppStore';
 import { marketClock } from './home/deskModel';
 import { ThemeToggle } from './ThemeToggle';
-import { AccountMenu } from './AccountMenu';
+import { useUnseenAlertCount } from './chrome/alertInbox';
+import { pendingNotebookCount } from './chrome/NotebookPanel';
 
 const SECTION_HINTS = {
   home: 'Jump to a ticker, sector, or ask CopeNet…',
   agents: 'Search sessions, pinned agents, or a run you want to resume…',
   market: 'Jump to a ticker, sector, or the daily market read…',
-  'data-tools': 'Search data feeds, knowledge bases, or tool integrations…',
+  'data-tools': 'Search data feeds, media, or tool integrations…',
   observability: 'Search traces, run logs, or blocked tool events…',
   experiments: 'Search comparisons, prompts, or benchmark runs…',
 } as const;
+
+/** A count on a chrome button. Capped so a noisy week never widens the bar. */
+function Badge({ count }: { count: number }) {
+  if (count <= 0) return null;
+  return (
+    <span className="pointer-events-none absolute -right-1 -top-1 min-w-[16px] rounded-full bg-shell-accent px-1 text-center text-[9.5px] font-semibold leading-4 text-shell-canvas">
+      {count > 9 ? '9+' : count}
+    </span>
+  );
+}
 
 const iconBtn =
   'shell-icon-btn inline-flex h-9 w-9 items-center justify-center rounded-xl border border-shell-border bg-shell-panel text-shell-muted transition-all duration-150 hover:border-shell-border-strong hover:text-shell-text hover:shadow-shell';
@@ -51,8 +62,9 @@ export function TopCommandBar() {
   const currentSection = useAppStore((state) => state.currentSection);
   const setCommandPaletteOpen = useAppStore((state) => state.setCommandPaletteOpen);
 
-  const [accountOpen, setAccountOpen] = useState(false);
-  const accountButtonRef = useRef<HTMLButtonElement | null>(null);
+  const setChromePanel = useAppStore((state) => state.setChromePanel);
+  const unseenAlerts = useUnseenAlertCount();
+  const pendingNotes = useAppStore((state) => pendingNotebookCount(state.memoryDrafts, state.userNoteDrafts));
 
   return (
     <div className="shell-top-command-bar relative flex w-full items-center justify-center">
@@ -74,27 +86,28 @@ export function TopCommandBar() {
       </button>
 
       <div className="shell-command-actions absolute right-0 top-1/2 flex -translate-y-1/2 items-center justify-end gap-1.5">
-        <button type="button" className={iconBtn} title="Alerts">
+        <button
+          type="button"
+          className={`${iconBtn} relative`}
+          title={unseenAlerts ? `Alerts · ${unseenAlerts} new` : 'Alerts'}
+          onClick={() => setChromePanel('alerts')}
+        >
           <Bell className="h-3.5 w-3.5" />
+          <Badge count={unseenAlerts} />
         </button>
-        <button type="button" className={iconBtn} title="Notebook">
+        <button
+          type="button"
+          className={`${iconBtn} relative`}
+          title={pendingNotes ? `Notebook · ${pendingNotes} waiting for review` : 'Notebook'}
+          onClick={() => setChromePanel('notebook')}
+        >
           <BookOpen className="h-3.5 w-3.5" />
-        </button>
-        <button type="button" className={iconBtn} title="Inspiration">
-          <Sparkles className="h-3.5 w-3.5 text-shell-accent" />
+          <Badge count={pendingNotes} />
         </button>
         <ThemeToggle />
-        <button
-          ref={accountButtonRef}
-          type="button"
-          className={iconBtn}
-          title="Account & gateway token"
-          aria-expanded={accountOpen}
-          onClick={() => setAccountOpen((value) => !value)}
-        >
-          <UserCircle2 className="h-5 w-5" />
+        <button type="button" className={iconBtn} title="Settings" onClick={() => setChromePanel('settings')}>
+          <Settings className="h-3.5 w-3.5" />
         </button>
-        <AccountMenu anchorRef={accountButtonRef} open={accountOpen} onClose={() => setAccountOpen(false)} />
         <span className="mx-1 h-6 w-px bg-shell-border" />
         <MarketStatus />
       </div>
