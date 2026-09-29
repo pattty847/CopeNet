@@ -36,6 +36,10 @@ See [Fleet Rooms](plans/FLEET_ROOMS.md).
 
 Home is the operator launchpad. It summarizes active sessions, provider health, tools, recent activity, system health, quick actions, market context, and NASA's Picture of the Day.
 
+### Notebook
+
+The top bar's Notebook opens what CopeNet remembers about the operator: memory items every session can read, and the USER.md changes a model has proposed. Nothing a model proposes becomes durable until it is approved there; the badge counts proposals waiting for a decision.
+
 ### Observability
 
 The run inspector reconstructs one model turn from durable records. It exposes the effective model input, provider and model metadata, reasoning provenance, tool arguments and results, the final response, and the raw trace. The Usage view aggregates provider-reported token data without inventing missing values or subscription costs.
@@ -45,6 +49,10 @@ See [Observability](plans/OBSERVABILITY.md) and [Tracing](TRACING.md).
 ### Personas and profiles
 
 Personas give each runtime an explicit, editable identity backed by plain Markdown files such as `SOUL.md`, `IDENTITY.md`, and `USER.md`. Profiles provide the base behavior prompt. Access remains a separate permission axis, so a personality choice does not silently grant more authority.
+
+### Settings
+
+Settings holds both provider lanes (connect, recheck, sign out), the status of each optional data integration (SEC pack, FRED, Trading Economics, Webull, Telegram, NASA), and this browser's gateway token. Integration status is presence only: the panel names the variable to add to `.env` and never receives a key's value. Home shows provider setup only until the first provider is ready.
 
 ### Sessions
 
@@ -56,7 +64,7 @@ See [Session Continuity](SESSION-CONTINUITY.md).
 
 ### Alerts
 
-Technical alerts reuse the chart indicator implementation for completed daily, weekly, and monthly US-equity candles. Rules can observe a crossing, a first interaction with a forming candle, and the later close result. Each rule has explicit delivery consent, durable receipts, and optional cached-position context.
+Technical alerts reuse the chart indicator implementation for completed daily, weekly, and monthly US-equity candles. Rules can observe a crossing, a first interaction with a forming candle, and the later close result. Each rule has explicit delivery consent, durable receipts, and optional cached-position context. The top bar's bell is the inbox: fired events newest first, badged by what arrived since this browser last looked.
 
 Chart-created price alerts let the operator place a level directly on the candlestick chart and arm a daily-close crossing rule. Linked scans acquire the data and evaluate the rule; opening a browser quote does not trigger it.
 
