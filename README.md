@@ -2,290 +2,185 @@
 
 # CopeNet
 
-CopeNet is a *continuity engine* agent operator for people who want more than a chat box. It gives you a persistent workspace for running local and CLI-backed models, inspecting what they actually did, and turning useful sessions into repeatable workflows.
+**Your own stock market terminal, with an AI analyst built in and a ledger that holds its predictions to account.**
 
-## Product Tour
+CopeNet is a market cockpit you run on your own machine. It covers your portfolio and the whole market: dashboards, charts down to one-minute bars, SEC filings, screeners, alerts and macro. It uses free data sources and has no subscription tier. A full agent harness runs inside it. The AI sees the chart you're looking at, uses real tools, and makes forecasts that get checked against what the market actually did.
 
-CopeNet keeps the operator surface compact: start from Home, work with agents, investigate markets, and inspect the evidence behind every run. The full catalog lives in the [Feature Glossary](docs/FEATURE-GLOSSARY.md).
+You provide the intelligence: an existing Claude or ChatGPT subscription, or an Anthropic API key through Claude Code. There's nothing else to pay for.
 
-### Home
+## Paywalls you don't hit here
 
-Home is the launchpad for active sessions, provider health, recent work, quick actions, market context, and system status.
+Charting platforms keep adding paywalls: premium tiers for more indicators, fees to share scripts, per-exchange charges for real-time data. CopeNet uses public and free sources, and the whole terminal is yours:
 
-![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
+| What | Source | Cost |
+|---|---|---|
+| Daily history, split-adjusted, cached locally | Yahoo Finance | Free |
+| **Intraday bars from 1m to 4h** (1m reaches back 30 days, 5m 60 days, 1h two years) | Yahoo Finance | Free |
+| Live quotes on the ticker you're viewing | Yahoo Finance stream | Free |
+| 10-K/10-Q financials, 8-Ks, insider trades | SEC EDGAR | Free |
+| Screeners across the whole US market | TradingView screener (delayed) | Free |
+| Treasury yield curve | US Treasury | Free |
+| Macro series | FRED | Free API key |
+| Economic calendar | Trading Economics | Free API key |
+| Your positions and fills (read-only) | Webull OpenAPI | Free with an account |
 
-### Agents
+Unlimited indicators, unlimited drawings, unlimited alerts and unlimited charts, all running on your hardware. Nobody can take a feature away from you in a pricing change.
 
-Agents keeps persistent conversations beside their runtime context. Provider, model, profile, persona, Access, tools, and retained evidence stay visible instead of disappearing behind the answer.
+## The cockpit
 
-![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+### Market workstation
 
-### Market
-
-Market is a sectioned research workstation rather than a wall of tickers. The daily brief combines watchlists, SEC evidence, rotation, accumulation signals, macro context, and an accountable forward ledger.
+The Market landing page is a sectioned workstation built around a daily read. The morning brief combines your watchlists, SEC filings and insider activity, sector rotation, accumulation signals and macro context. For each call it also states what would prove it wrong. An unattended sweep refreshes it at 9:45 ET every weekday.
 
 ![CopeNet Market Monitor](docs/imgs/market-briefing.png)
 
 ### Ticker workspace
 
-Each ticker opens a chart-first workspace for price history, filings, financial overlays, alerts, comparisons, position context, and scoped agent research.
+Every symbol opens a chart-first workspace:
+- split-adjusted history and intraday intervals
+- registry-driven indicators, a TradingView-style drawing toolkit with magnet snapping, and bar replay
+- comparisons and formula symbols like `VOO/GLD` or `0.6*VOO + 0.4*TLT`
+- your cost basis and fill markers from your own account
+
+The financial explorer plots every SEC-reported line with a link to the filing it came from. Historical P/E uses the EPS that was public *on that date*, not a restated number that leaks the future.
 
 ![CopeNet ticker workspace](docs/imgs/market-ticker-workspace.png)
 
-### Observability
+### Screeners, scans and alerts
 
-Observability reconstructs the work behind a response: model input, provider metadata, tool arguments and results, reasoning provenance, final output, usage, and the raw trace.
+Screeners find names, scans collect their data, and alerts watch the result. Alerts use the exact indicator math the chart draws. They fire on completed candles and can send a chart image to your phone through Telegram, but only for rules you opted in.
+
+## The AI analyst
+
+### It sees what you see
+
+The chart agent receives a frozen snapshot of the candles, indicators, quote and panels on your screen when you hit send. It reads your drawings as a table and draws levels and zones tied to its evidence. It can research an event on the web. You can open the exact context it saw and confirm it didn't make anything up. Account data stays out unless you opt in.
+
+### It makes predictions and they get checked
+
+This is the part other terminals don't have:
+
+- **The forward ledger.** Every call in the daily brief is logged before the outcome is known and scored later against what happened. You get a running track record, not a feed of confident guesses.
+- **Chart forecasts.** Ask a model to forecast a chart. It commits to an entry, stop, targets and thesis, or declines. The setup is frozen and plotted, then tracked against real price as it arrives. You can run two models on the same chart and compare their records.
+
+### It's a real agent, not a chat box
+
+The analyst runs on a full agent harness: persistent sessions, real tools (files, shell, web, market data, memory) and explicit permissions. The same harness drives the **Agents** console, where Claude Code and Codex do general work: coding, research, and transcribing a podcast so you can discuss it.
+
+- **Access is policy, not prose.** Each session runs as **Read-only**, **Ask**, or **Full Access**. Risky commands stop and wait for your approval. The model can't talk its way past the gate.
+- **Every action leaves a receipt.** The thread shows each tool call in the order it happened, titled in the model's own words. Each call opens to its full output, arguments and policy decision.
+- **The agent remembers what it changed.** A change ledger follows every edit across turns. If you touch a file in between, the agent is told the file changed on disk and must read it again.
+- **Fleet rooms** give ChatGPT and Claude the same question. Each answers independently before either sees the other, then they critique each other.
+
+![CopeNet Agents Console](docs/imgs/copenet-agents-console.png)
+
+### And you can see how it worked
+
+Observability reconstructs any run from durable records: what the model saw, what it called, its reasoning provenance, and the raw trace. The Usage view shows only tokens the provider reported. Missing data shows as missing, never estimated, and there are no invented dollar figures.
 
 ![CopeNet Observability run inspector](docs/imgs/copenet-observability-run-inspector.jpg)
 
-## Why CopeNet
+Home ties it together: active sessions, the morning read, your watchlist, system health, and NASA's picture of the day.
 
-CopeNet started as a local-only project — small models on-device, no cloud dependency. That fell apart fast: small local models can't reliably plan multi-step tool use or hold an operator workflow together, so CopeNet grew a CLI-backed and subscription-backed provider layer (`claude-cli`, `openai-codex`) and, in September 2026, dropped the local runtimes entirely. Local-first is still the posture — sessions, transcripts, and control stay on your machine — but the models doing the reasoning are frontier-capable.
+![CopeNet Home Dashboard](docs/imgs/copenet-home-dashboard.png)
 
-Most local AI tools stop at “send a prompt, get a reply.” CopeNet is built for the workflows that happen after that:
+The full catalog lives in the **[Feature Glossary](docs/FEATURE-GLOSSARY.md)**.
 
-- **Operate locally**: keep models, transcripts, and sensitive context close to your machine
-- **Inspect runs**: see traces, tool activity, runtime drift, and session state instead of guessing
-- **Reuse workflows**: move from one-off chats to repeatable operator surfaces
-- **Compare runtimes**: lock sessions to provider/model combinations so behavior stays explainable
-- **Extend without cloud lock-in**: add prompts, tools, workflows, and knowledge sources without giving up local control
+## What it isn't
 
-## What You Can Do
-
-CopeNet is evolving into an operator workspace, not just a chat client. Today it already supports:
-
-- **Agent sessions** with persistent transcripts, first-send runtime binding (provider/profile lock; model + Access changeable mid-session), archive/restore, and inline tool execution
-- **Fleet rooms** where ChatGPT and Claude independently research the same question, share evidence receipts after reveal, and critique each other in attributed follow-up turns
-- **Observability** with a per-run timeline, provider reasoning provenance, exact tool evidence, model-input snapshots, and raw local traces
-- **Media imports** for transcription and download-first workflows, including mobile-friendly remote use over Tailscale
-- **Experiments** for comparing provider/model behavior across real runs
-- **Profile + Access layering**: behavioral Profiles (markdown presets) plus a separate **Read-only · Ask · Full Access** permission axis with operator approvals and a persisted shell allowlist
-- **Market Monitor**: a daily model-generated brief backed by live SEC filings, sector rotation, and a pre-registered forward ledger that scores its own calls
-
-## Providers
-
-CopeNet runs two frontier lanes through one shared harness:
-
-- `claude-cli` — local `claude` CLI subprocess
-- `openai-codex` — OpenAI Codex via OAuth (`uv run copenet auth login --provider openai-codex`)
-
-The goal is provider-agnostic operator tooling: one workspace, multiple runtimes, consistent session semantics. See [`docs/CAPABILITY-MATRIX.md`](docs/CAPABILITY-MATRIX.md) for tool-loop and feature support per provider.
+- **Not a hosted service.** It runs on your machine. Sessions, market data, traces and your account snapshot stay under `~/.copenet`. Reach it from your phone over your own Tailscale network.
+- **Not a trading bot (yet).** It researches, monitors, forecasts and keeps score. The broker connection is read-only, and no code path places an order.
+- **Not a local-model runner.** CopeNet started local-only. Small models couldn't hold a multi-step tool workflow together, so it moved to frontier models in September 2026. Your data stays local; the reasoning comes from the frontier.
+- **Not a toolkit.** It's one finished app, not a framework for building your own agent pipelines.
 
 ## Quickstart
 
-### 1) Prerequisites
-
-- Python 3.12+
-- [`uv`](https://docs.astral.sh/uv/)
-- Node.js 20+ and npm
-
-You do **not** need a model provider or the separate CopeTech-Edgar repository
-before installing. CopeNet starts first, then Home walks you through either OpenAI
-Codex OAuth or Claude CLI setup.
-
-### 2) Install dependencies
+**You need:** Python 3.12+, [`uv`](https://docs.astral.sh/uv/), Node.js 20+, and a Claude or ChatGPT subscription.
 
 ```bash
 git clone https://github.com/pattty847/CopeNet.git
 cd CopeNet
-./scripts/setup.sh
-```
-
-That one command installs the Python environment, installs the frontend packages,
-and builds the UI. To include SEC filings, fundamentals, and insider evidence in
-Market, use `./scripts/setup.sh --with-sec`. The optional package is fetched from
-GitHub; no sibling checkout is required. Market charts and price data still work
-without it.
-
-### 3) Run CopeNet
-
-```bash
+./scripts/setup.sh --with-sec
 uv run copenet
 ```
 
-Open the desktop UI at:
+Open **http://127.0.0.1:17123**. Home walks you through connecting a provider. You only need one:
 
-- `http://127.0.0.1:17123`
+- **ChatGPT (Codex):** choose **Start OpenAI OAuth** on Home.
+- **Claude (Claude Code):** install `claude` and run `claude auth login`. Claude Code also accepts an `ANTHROPIC_API_KEY`.
 
-On first launch, the Home page shows provider readiness:
+Charts, quotes and screeners work before you connect anything. `--with-sec` adds SEC filings, fundamentals and insider trades. Leave it off if you only want price data.
 
-- **OpenAI Codex:** choose **Start OpenAI OAuth** and finish in the browser.
-- **Claude CLI:** install `claude` if it is missing, then run `claude auth login`.
+### Use it from your phone
 
-You only need one ready provider to create a chat. The terminal equivalents are:
-
-```bash
-uv run copenet auth login --provider openai-codex
-claude auth login
-```
-
-### 4) Optional: open it remotely on your own devices
-
-CopeNet also works well over your tailnet for private mobile access:
+CopeNet is laid out for a phone screen and can be installed to your home screen. Serve it over your private Tailscale network:
 
 ```bash
-# One-time setup: keep a random token in the dedicated, gitignored host env file.
+# One-time: keep a random token in the gitignored host env file.
 umask 077
 printf 'COPNET_TOKEN="%s"\nCOPNET_PORT=17123\n' \
   "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" > .copenet.env
 
-# Launch on this Mac's Tailscale IPv4 only (not every local network interface).
+# Bind to this Mac's Tailscale address only.
 COPNET_HOST=tailscale uv run --env-file .copenet.env copenet
 ```
 
-Then open it from another device using your Tailscale hostname or tailnet IP. When
-the authentication banner appears, enter the same token once; CopeNet stores it
-only in that browser and reuses it on later visits. Do not embed the token in a
-shared URL.
+Open the tailnet address on another device and enter the token once. Never put the token in a URL.
 
-## Local Setup Notes
+### Drive it from the terminal
 
-1. Run `./scripts/setup.sh` once.
-2. Run `uv run copenet`.
-3. Open Home and finish setup for at least one provider.
-4. Create a new session and pick provider, model, profile, and Access.
-5. Send the first message to create the session and lock provider/profile/persona/workspace.
-
-The operator may change model within the same provider and may change Access on later
-runs. Start a new chat for another provider, profile, persona, or workspace.
+```bash
+uv run copenet chat send --session demo --provider openai-codex "What's the regime read this morning?"
+```
 
 ## Configuration
 
-Environment variables:
+| Variable | Default | Purpose |
+|---|---|---|
+| `COPNET_HOST` | `127.0.0.1` | Bind address. `tailscale` binds to this machine's Tailscale IPv4. |
+| `COPNET_PORT` | `17123` | HTTP / WebSocket port. |
+| `COPNET_TOKEN` | `dev-token` (loopback only) | A private token is required beyond localhost. |
+| `COPNET_ALLOWED_ORIGINS` | — | Extra browser origins allowed on `/ws` (comma-separated, with scheme). |
+| `COPNET_DATA_DIR` | `~/.copenet/sessions` | Session and transcript storage. |
+| `COPNET_MARKET_SENTINEL` | off on loopback | Scheduled market scans. On by default for Tailscale binds. |
+| `FRED_API_KEY` | — | FRED macro series. |
+| `TRADING_ECONOMICS_API_KEY` | — | Economic calendar in the morning brief. |
+| `COPNET_TRACE` | off | `1` starts with Debug capture on (prompt text, tool bodies). Lifecycle traces are always written. |
+| `COPNET_WHISPER_MODEL` | `turbo` | MLX Whisper model for transcription. |
+| `COPNET_SENTINEL_URL` | `http://127.0.0.1:17100` | Loopback bridge to the Sentinel order-flow app's agent API. |
 
-- `COPNET_HOST` (default: `127.0.0.1`)
-- `COPNET_PORT` (default: `17123`)
-- `COPNET_TOKEN` (default: `dev-token` on loopback only; a private token is required beyond localhost)
-- `COPNET_ALLOWED_ORIGINS` (optional comma-separated browser WebSocket origins, such as `https://host.example`; include scheme and port when applicable). CopeNet's bind origin and local Vite dev origins are allowed automatically. Connections without an `Origin` header remain available to CLI clients.
-- `COPNET_DATA_DIR` (default: `~/.copenet/sessions`)
-- `COPNET_EXECUTION_MODE` (`safe` | `tools-enabled` | `unrestricted`)
-- `COPNET_TRACE` (`1` to enable per-run JSONL traces)
-- `COPNET_SENTINEL_URL` (default: `http://127.0.0.1:17100`; loopback Sentinel GUI Agent API only)
+## Prompts are plain Markdown
 
-Example:
+Behavior comes from Markdown files you can open and edit:
 
-```bash
-umask 077
-printf 'COPNET_TOKEN="%s"\nCOPNET_PORT=17123\n' \
-  "$(python3 -c 'import secrets; print(secrets.token_urlsafe(32))')" > .copenet.env
-uv run --env-file .copenet.env copenet
-```
+- **Profiles** (`src/copenet/prompts/presets/profiles/`) set base behavior.
+- **Access overlays** (`src/copenet/prompts/presets/task-modes/`) state what the run may do.
+- **Personas** (`SOUL.md`, `IDENTITY.md`, `USER.md`) give each runtime an identity you can edit.
 
-## Bring Your Own Knowledge Base
-
-CopeNet can integrate with curated local knowledge sources, including markdown-based creative or research libraries. The public repo does **not** assume any personal vault or branded workflow setup.
-
-To sketch your own local setup, start with:
-
-- `config/knowledge-sources.example.toml`
-
-Then create your own ignored local override:
-
-- `config/knowledge-sources.local.toml`
-
-See [`docs/KNOWLEDGE-BASES.md`](docs/KNOWLEDGE-BASES.md) for the pattern.
-
-## Prompt Presets
-
-Prompt presets are markdown files under:
-
-- `src/copenet/prompts/presets/profiles/`
-- `src/copenet/prompts/presets/task-modes/`
-
-The loader composes:
-
-- **profile** for base behavior
-- **Access overlay** for runtime authority (`none`, `ask`, or `full-access`)
-
-Add your own by dropping `.md` files into those directories.
-
-## CLI Entry Points
-
-- Full app (recommended):
-
-```bash
-uv run copenet
-```
-
-- Direct module entrypoint (normally unnecessary):
-
-```bash
-python -m copenet.host
-```
-
-## Python Usage
-
-```python
-from copenet import GatewayClient, GatewayConfig, Orchestrator, CopeNetWsServer
-```
+Choosing a personality never grants more permissions. Access is a separate setting.
 
 ## Docs
 
-### Getting Started
+| Start here | Architecture | When something's wrong |
+|---|---|---|
+| [Feature Glossary](docs/FEATURE-GLOSSARY.md) | [Architecture](docs/ARCHITECTURE.md) | [Tracing](docs/TRACING.md) |
+| [Startup](docs/STARTUP.md) | [Session Continuity](docs/SESSION-CONTINUITY.md) | [Debugging](docs/DEBUGGING.md) |
+| [Testing](docs/TESTING.md) | [Capability Matrix](docs/CAPABILITY-MATRIX.md) | [Runbook](docs/RUNBOOK.md) |
+| [Target](docs/TARGET.md) — the north star | [Event Contract](docs/EVENT-CONTRACT.md) — `/ws` protocol | [Threat Model](docs/THREAT_MODEL.md) |
+| [Roadmap](docs/plans/ROADMAP.md) | [App API](docs/APP-API.md) — `/api/v1` REST + SSE | |
 
-- [Feature Glossary](docs/FEATURE-GLOSSARY.md)
-- [Startup](docs/STARTUP.md)
-- [Testing](docs/TESTING.md)
-- [Knowledge Bases](docs/KNOWLEDGE-BASES.md)
-
-### Architecture
-
-- [Architecture](docs/ARCHITECTURE.md)
-- [App API](docs/APP-API.md) — `/api/v1` REST + SSE for external apps
-- [Event Contract](docs/EVENT-CONTRACT.md) — `/ws` frame protocol
-- [Session Continuity](docs/SESSION-CONTINUITY.md)
-- [Capability Matrix](docs/CAPABILITY-MATRIX.md)
-- [Operator UX Model](docs/OPERATOR-UX-MODEL.md) — three-layer tool truth (transcript / activity / inspector)
-
-### Runtime Debugging
-
-- [Tracing](docs/TRACING.md)
-- [Debugging](docs/DEBUGGING.md)
-- [Runbook](docs/RUNBOOK.md)
-
-### Prototypes & Investigations
-
-- [Browser Agent Prototype](docs/BROWSER-AGENT-PROTOTYPE.md)
+Contributors and coding agents: read [AGENTS.md](AGENTS.md) first.
 
 ## Troubleshooting
 
-### Provider unavailable
+**Provider unavailable.** Check the provider panel on Home. It shows whether each provider is missing, signed out or ready. For Claude Code, `claude` must be on your `PATH` and logged in.
 
-- Check the provider setup panel on Home first; it shows whether each provider is
-  missing, signed out, or ready.
-- `claude-cli`: install Claude Code so `claude` is on PATH, then run `claude auth login`.
-- `openai-codex`: use **Start OpenAI OAuth** on Home, or run
-  `uv run copenet auth login --provider openai-codex`.
-- SEC-backed Market data missing: rerun `./scripts/setup.sh --with-sec`. A separate
-  CopeTech-Edgar checkout is not required.
+**A run did something strange.** Open it in Observability, or read the newest file in `~/.copenet/logs/runs/`. To capture prompt text and tool bodies, turn on **Debug capture** in the Observability header and run it again.
 
-### Debugging a weird run
+**SEC data missing in Market.** Run `./scripts/setup.sh --with-sec` again. You don't need a separate CopeTech-Edgar checkout.
 
-- Enable tracing: `COPNET_TRACE=1 uv run copenet`
-- Reproduce the run once
-- Open the newest file under `~/.copenet/logs/runs/`
-- Inspect the event order:
-  - `harness_planned`
-  - `tool_requested`
-  - `tool_executed` or `tool_blocked`
-  - `assistant_finalized`
+**Port in use.** `COPNET_PORT=17124 uv run copenet`
 
-See [`docs/TRACING.md`](docs/TRACING.md) for the trace schema and workflow.
+---
 
-### Prompt/profile changes not applying
-
-- Start a new session after changing the profile of a locked session
-- Change Access explicitly in the runtime control; it applies to the next run
-- Ensure preset markdown files are in the correct preset directories
-
-### Port already in use
-
-```bash
-COPNET_PORT=17124 uv run copenet
-```
-
-## Project Status
-
-CopeNet is actively evolving, but it is already a real operator workspace: persistent sessions, local-provider support, workflow surfaces, observability, and mobile-friendly remote access are all in place.
-
-The direction is simple: make local agent systems inspectable, composable, and actually useful for real workflows.
+*CopeNet is kept tidy by the Custodian, the append-only night-shift janitor. His badge says `ACCESS EVERYWHERE`. His patch says `DON'T WRITE. DELETE.` He's why nothing in your transcript gets rewritten.*
