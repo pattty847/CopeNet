@@ -32,7 +32,7 @@ Unlimited indicators, unlimited drawings, unlimited alerts and unlimited charts,
 
 The Market landing page is a sectioned workstation built around a daily read. The morning brief combines your watchlists, SEC filings and insider activity, sector rotation, accumulation signals and macro context. For each call it also states what would prove it wrong. An unattended sweep refreshes it at 9:45 ET every weekday.
 
-![CopeNet Market Monitor](docs/imgs/market-briefing.png)
+![CopeNet Market workstation: the morning briefing](docs/imgs/market-workstation.png)
 
 ### Ticker workspace
 
@@ -78,7 +78,9 @@ The analyst runs on a full agent harness: persistent sessions, real tools (files
 
 Observability reconstructs any run from durable records: what the model saw, what it called, its reasoning provenance, and the raw trace. The Usage view shows only tokens the provider reported. Missing data shows as missing, never estimated, and there are no invented dollar figures.
 
-![CopeNet Observability run inspector](docs/imgs/copenet-observability-run-inspector.jpg)
+![CopeNet Observability run inspector](docs/imgs/copenet-observability-run-inspector.png)
+
+![CopeNet Observability usage view](docs/imgs/copenet-observability-usage.png)
 
 Home ties it together: active sessions, the morning read, your watchlist, system health, and NASA's picture of the day.
 

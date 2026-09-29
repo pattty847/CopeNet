@@ -34,14 +34,15 @@ Run the named verifier before promoting a baseline image to fresh evidence.
 | Workflows | shell | [copenet-workflows.png](copenet-workflows.png) |
 | Experiments | matrix | [copenet-experiments-matrix.png](copenet-experiments-matrix.png) |
 | Observability | run explorer | [copenet-observability.png](copenet-observability.png) |
-| Observability | run inspector | [copenet-observability-run-inspector.jpg](copenet-observability-run-inspector.jpg) |
+| Observability | run inspector | [copenet-observability-run-inspector.png](copenet-observability-run-inspector.png) |
 | Fleet | room | [fleet/fleet-room.png](fleet/fleet-room.png) |
 
 ## Historical baseline: Market workstation — unsafe until sanitized
 
 | Surface | State | Image |
 | --- | --- | --- |
-| Market | briefing landing | [market-briefing.png](market-briefing.png) |
+| Market | briefing landing | [market-workstation.png](market-workstation.png) |
+| Observability | usage view | [copenet-observability-usage.png](copenet-observability-usage.png) |
 | Market | ticker workspace | [market-ticker-workspace.png](market-ticker-workspace.png) |
 | Market | live quote, wide/medium/narrow | [ticker-live-quote-1440.png](ticker-live-quote-1440.png), [ticker-live-quote-1100.png](ticker-live-quote-1100.png), [ticker-live-quote-390.png](ticker-live-quote-390.png) |
 | Market | loading workstation/ticker | [market-workspace-loading.png](market-workspace-loading.png), [ticker-workspace-loading.png](ticker-workspace-loading.png) |
