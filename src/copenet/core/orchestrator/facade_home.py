@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-from importlib.util import find_spec
-
 from copenet.core.home.desk import build_desk_snapshot
 from copenet.core.home.quotes import quote_for
 
@@ -30,19 +28,7 @@ class HomeFacadeMixin:
             quote=quote_for(),
             activity_limit=activity_limit,
         )
-        payload = snapshot.to_public_dict()
-        payload["extensions"] = {
-            "secMarket": {
-                "available": find_spec("copetech_sec") is not None,
-                "installCommand": "./scripts/setup.sh --with-sec",
-                "unavailableFeatures": [
-                    "SEC filings",
-                    "fundamentals and valuation history",
-                    "insider activity evidence",
-                ],
-            }
-        }
-        return payload
+        return snapshot.to_public_dict()
 
     # ---------------------------------------------------------------- focus list
 

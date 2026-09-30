@@ -139,7 +139,7 @@ export function HomeDesk() {
 
   return (
     <div className="hd">
-      <ProviderSetup secMarket={snapshot?.extensions.secMarket} />
+      <ProviderSetup />
 
       <BriefingCard
         dashboard={dashboard ?? null}

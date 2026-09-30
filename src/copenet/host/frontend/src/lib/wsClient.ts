@@ -6,6 +6,7 @@ import {
   ChatEventPayload,
   EventFrame,
   IncomingFrame,
+  IntegrationStatus,
   MemoryItem,
   UserNoteProposal,
   MessageDestination,
@@ -571,6 +572,11 @@ class WsClient {
 
   async archiveFleetRoom(roomId: string) {
     return archiveFleetRoomAction(this.request.bind(this), roomId);
+  }
+
+  async settingsIntegrations(): Promise<IntegrationStatus[]> {
+    const payload = await this.request<{ integrations: IntegrationStatus[] }>('settings.integrations.get', {});
+    return payload.integrations;
   }
 
   async loadModels(providerId: string): Promise<Model[]> {

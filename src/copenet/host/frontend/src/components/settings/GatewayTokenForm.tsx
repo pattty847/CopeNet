@@ -1,7 +1,6 @@
-import { FormEvent, useState, type RefObject } from 'react';
+import { FormEvent, useState } from 'react';
 import { KeyRound, Trash2 } from 'lucide-react';
-import { TOKEN_STORAGE_KEY } from '../lib/wsConnectionConfig';
-import { FloatingPopover } from './FloatingPopover';
+import { TOKEN_STORAGE_KEY } from '../../lib/wsConnectionConfig';
 
 function maskedToken(value: string): string {
   return value.length <= 4 ? '••••' : `•••• ${value.slice(-4)}`;
@@ -10,7 +9,7 @@ function maskedToken(value: string): string {
 /** The only place to change the gateway token once the initial auth banner is dismissed.
  *  Before this, a token typo or a rotated `.copenet.env` value had no in-app recovery path
  *  short of clearing site data. */
-export function AccountMenu({ anchorRef, open, onClose }: { anchorRef: RefObject<HTMLElement | null>; open: boolean; onClose: () => void }) {
+export function GatewayTokenForm() {
   const [stored] = useState(() => (typeof window !== 'undefined' ? window.localStorage.getItem(TOKEN_STORAGE_KEY) || '' : ''));
   const [token, setToken] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -32,16 +31,9 @@ export function AccountMenu({ anchorRef, open, onClose }: { anchorRef: RefObject
   };
 
   return (
-    <FloatingPopover
-      anchorRef={anchorRef}
-      open={open}
-      onClose={onClose}
-      width={288}
-      className="overflow-hidden rounded-xl border border-shell-border-strong bg-shell-panel-strong py-1 shadow-lg"
-    >
+    <div className="overflow-hidden rounded-xl border border-shell-border bg-shell-panel">
       <div className="px-3 py-2.5">
-        <div className="text-[11px] font-semibold uppercase tracking-wide text-shell-muted">Gateway token</div>
-        <div className="mt-0.5 text-[11px] text-shell-muted">{stored ? `Saved · ${maskedToken(stored)}` : 'No token saved in this browser.'}</div>
+        <div className="text-[12px] text-shell-muted">{stored ? `Saved · ${maskedToken(stored)}` : 'No token saved in this browser.'}</div>
       </div>
       <div className="border-t border-shell-border/60 px-3 py-2.5">
         <form onSubmit={handleSubmit} className="flex flex-col gap-2">
@@ -92,6 +84,6 @@ export function AccountMenu({ anchorRef, open, onClose }: { anchorRef: RefObject
         </form>
         <p className="mt-2 text-[10px] leading-4 text-shell-muted/70">Stays in this browser's storage only — never sent anywhere but this gateway.</p>
       </div>
-    </FloatingPopover>
+    </div>
   );
 }

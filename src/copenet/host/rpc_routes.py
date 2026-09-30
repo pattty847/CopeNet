@@ -29,6 +29,7 @@ from .rpc_market_intraday import (
     handle_market_ticker_profile_get,
 )
 from .rpc_home import handle_focus_get, handle_focus_update, handle_home_snapshot
+from .rpc_settings import handle_settings_integrations_get
 from .rpc_memory import (
     handle_memory_list,
     handle_memory_upsert,
@@ -229,6 +230,7 @@ RPC_ROUTES = build_routes(
         ("home.snapshot", RpcRoute(handle_home_snapshot, "standard")),
         ("home.focus.get", RpcRoute(handle_focus_get, "standard")),
         ("home.focus.update", RpcRoute(handle_focus_update, "standard")),
+        ("settings.integrations.get", RpcRoute(handle_settings_integrations_get, "without_params")),
         ("memory.list", RpcRoute(handle_memory_list, "standard")),
         ("memory.upsert", RpcRoute(handle_memory_upsert, "standard")),
         ("memory.archive", RpcRoute(handle_memory_archive, "standard")),

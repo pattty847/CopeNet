@@ -14,6 +14,8 @@ import {
 } from '../lib/appSectionRouting';
 
 export type AppSection = 'home' | 'agents' | 'market' | 'data-tools' | 'observability' | 'experiments';
+/** The app-chrome slide-over: one at a time, opened from the top bar or the phone's More sheet. */
+export type ChromePanel = 'settings' | 'alerts' | 'notebook';
 export type ThemeMode = 'light' | 'dark';
 export type RightPanelTab = 'inbox' | 'runtime' | 'approvals';
 
@@ -117,6 +119,8 @@ interface AppState extends SessionRuntimeSlice, FleetSlice, ComposerSlice {
   setPrimaryNavCollapsed: (collapsed: boolean) => void;
   sessionsPanelOpen: boolean;
   setSessionsPanelOpen: (open: boolean) => void;
+  chromePanel: ChromePanel | null;
+  setChromePanel: (panel: ChromePanel | null) => void;
   pinnedSessionKeys: string[];
   togglePinnedSessionKey: (key: string) => void;
   mobileOverflowOpen: boolean;
@@ -355,6 +359,8 @@ export const useAppStore = create<AppState>((set) => ({
     // two together read as one navigator, and each chevron closes its own half.
     set(open ? { sessionsPanelOpen: true, primaryNavCollapsed: true } : { sessionsPanelOpen: false });
   },
+  chromePanel: null,
+  setChromePanel: (chromePanel) => set({ chromePanel }),
   pinnedSessionKeys: readPinnedSessionKeys(),
   togglePinnedSessionKey: (key) =>
     set((state) => {

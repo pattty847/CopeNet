@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { wsClient } from '../lib/wsClient';
 import { useAppStore } from '../store/useAppStore';
 import { AgentsPage } from './AgentsPage';
+import { ChromePanels } from './chrome/ChromePanels';
 import { CommandPalette } from './CommandPalette';
 import { ConnectionBanner } from './ConnectionBanner';
 import { DataToolsPage } from './DataToolsPage';
@@ -91,6 +92,7 @@ export function AppShell() {
   return (
     <div className="flex h-[100dvh] w-full max-w-full overflow-x-hidden overflow-y-hidden bg-shell-bg text-shell-text">
       <CommandPalette />
+      <ChromePanels />
       <PersonaFlavorReviewModal />
       <div className="relative flex h-full w-full max-w-full overflow-x-hidden">
         {!isMobile && <SidebarNav />}

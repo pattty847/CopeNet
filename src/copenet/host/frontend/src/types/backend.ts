@@ -1108,6 +1108,16 @@ export interface RunTimeline {
 
 export type ProviderAuthType = 'oauth' | 'native-cli' | 'api_key' | 'none';
 
+/** `settings.integrations.get`: presence of an optional integration's config, never its value. */
+export interface IntegrationStatus {
+  id: string;
+  label: string;
+  purpose: string;
+  ready: boolean;
+  /** An env variable to set or a command to run when not ready. */
+  setup: string;
+}
+
 export interface ProviderAuthStatus {
   provider: string;                   // e.g. "openai-codex"
   profileId: string;                  // e.g. "openai-codex:default"
@@ -1355,13 +1365,6 @@ export interface DeskSnapshot {
   activity: DeskActivityEntry[];
   health: DeskHealth;
   quote: { text: string; attribution: string } | null;
-  extensions: {
-    secMarket: {
-      available: boolean;
-      installCommand: string;
-      unavailableFeatures: string[];
-    };
-  };
 }
 
 export interface FocusItem {

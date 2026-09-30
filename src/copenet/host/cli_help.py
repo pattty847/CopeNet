@@ -25,7 +25,7 @@ _RECIPES: list[tuple[str, list[tuple[str, str]]]] = [
             ("copenet", "serve on 127.0.0.1:17123 — open http://localhost:17123"),
             ("COPNET_PORT=17124 copenet", "use a custom port"),
             ("COPNET_WORKDIR=/path/to/repo copenet", "set the workspace root for full-access tools"),
-            ("COPNET_TRACE=1 copenet", "write per-run JSONL traces to ~/.copenet/logs/runs/"),
+            ("COPNET_TRACE=1 copenet", "start with Debug capture on (prompt text and tool bodies in ~/.copenet/logs/runs/)"),
         ],
     ),
     (
@@ -73,7 +73,7 @@ _ENV_VARS: list[tuple[str, str]] = [
     ("COPNET_WORKDIR", "workspace root for tools (default: current directory)"),
     ("COPNET_TOKEN", "gateway auth token (default: dev-token)"),
     ("COPNET_ALLOWED_ORIGINS", "extra browser WebSocket origins, comma-separated (scheme, host, and port)"),
-    ("COPNET_TRACE", "set to 1 to write per-run JSONL traces"),
+    ("COPNET_TRACE", "set to 1 to start with Debug capture on; lifecycle traces are always written"),
     ("COPNET_MARKET_SENTINEL", "0/1 to force scheduled market scans off/on (default: on unless bound to loopback)"),
     ("COPNET_WEB_FETCH_ALLOWLIST", "comma-separated domains web.fetch/web.search may reach (default: unrestricted)"),
     ("SEC_API_USER_AGENT", "contact SEC requires, e.g. 'Your Name you@email.com' — a placeholder risks a 403"),

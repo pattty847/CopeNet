@@ -109,10 +109,10 @@ models.list
 nasa.apod
 nasa.apod.list
 observability.run.get
-observability.usage.get
 observability.settings.get
 observability.settings.update
 observability.traces.purge
+observability.usage.get
 permissions.allowlist.add
 permissions.allowlist.list
 permissions.allowlist.remove
@@ -150,7 +150,9 @@ sessions.resolve
 sessions.revertEdit
 sessions.run
 sessions.runs
+sessions.standing.list
 sessions.state
+settings.integrations.get
 tools.list
 userNotes.approve
 userNotes.discard
@@ -158,4 +160,3 @@ userNotes.list
 workspace.listFiles
 workspace.readFile
 workspace.writeFile
-sessions.standing.list
