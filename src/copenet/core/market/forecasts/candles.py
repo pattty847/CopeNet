@@ -92,15 +92,3 @@ def forecast_candles(forecast: dict, history, now: datetime) -> ForecastCandles:
         bars.append(normalized)
     return ForecastCandles(bars, sessions, endpoints, health, reason, source)
 
-
-def history_revision(previous: list[dict], current: list[dict]) -> bool:
-    """Tolerance only accommodates arithmetic reversing a later split; gaps block scoring."""
-    by_day = {bar['date']: bar for bar in current}
-    for old in previous:
-        new = by_day.get(old['date'])
-        if new is None:
-            return True
-        if old['v'] != new['v'] or any(not math.isclose(old[key], new[key], rel_tol=1e-10, abs_tol=1e-10)
-                                      for key in ('o', 'h', 'l', 'c')):
-            return True
-    return False
