@@ -4,7 +4,8 @@ from __future__ import annotations
 from copy import deepcopy
 from datetime import datetime
 
-from .candles import digest, forecast_candles, history_revision
+from .candles import digest, forecast_candles
+from .revisions import bar_revisions, missing_sessions, outcome_changed, outcome_view, revision_event, same_prices
 
 POLICY_VERSION = 'daily-ohlcv-1'
 TERMINAL_STATES = {'target_complete', 'stopped', 'deadline_exit', 'expired_unfilled', 'gapped_past_setup', 'ambiguous', 'no_setup'}
@@ -21,25 +22,31 @@ def evaluate_forecast(forecast: dict, history, now: datetime) -> dict:
               'evaluatedAt': now.isoformat(), 'entryPrice': None, 'entryDate': None,
               'exitDate': None, 'remainingFraction': 0.0, 'realizedPnl': None, 'plannedRiskR': None,
               'holdingSessions': None, 'activationDate': candles.sessions[0]['date'] if candles.sessions else None}
-    # Once a consumed revision changes, do not blend corrected history with old outcomes.
-    revised = history_revision(previous.get('consumedBars', []), candles.bars)
-    if candles.health in {'revision_review', 'unsupported'} or revised or previous.get('health') == 'revision_review':
+    if candles.health in {'revision_review', 'unsupported'}:
+        # Split provenance the publication basis cannot explain: nothing can be replayed.
         if previous:
             result = deepcopy(previous)
-        result.update(health='revision_review' if revised or previous.get('health') == 'revision_review' else candles.health,
-                      reason='Previously consumed history changed or became unavailable; original evaluation retained' if revised else previous.get('reason') or candles.reason,
+            result.update(health=candles.health, reason=candles.reason, evaluatedAt=now.isoformat())
+        return result
+    consumed = previous.get('consumedBars', [])
+    missing = missing_sessions(consumed, candles.bars)
+    if missing:
+        # An evaluated session vanished from the cache. Replaying without it would unwind
+        # fills that happened, so hold the last evaluation until the bar returns.
+        result = deepcopy(previous)
+        result.update(health=candles.health if candles.health != 'ready' else 'data_gap',
+                      reason=f'Previously evaluated session {missing[0]} is missing from price history; last evaluation retained',
                       evaluatedAt=now.isoformat())
-        if result['health'] == 'revision_review':
-            identity = digest([forecast['forecastId'], 'revision_notice', digest(candles.bars), candles.source.get('splitFingerprint')])
-            if not any(item['eventId'] == identity for item in result['events']):
-                result['events'].append({'eventId': identity, 'type': 'revision_notice', 'date': now.date().isoformat(),
-                                         'recordedAt': now.isoformat(), 'reason': result['reason'], 'policyVersion': POLICY_VERSION})
         return result
 
-    # Reversing a split may differ by a floating-point ulp. Keep exact already-consumed
-    # numbers after the revision check so event identities and fills remain immutable.
-    known_bars = {bar['date']: bar for bar in previous.get('consumedBars', [])}
-    candles.bars[:] = [known_bars.get(bar['date'], bar) for bar in candles.bars]
+    # The cache is authoritative: replay from the current bars, never a blend of old and new.
+    # Unrevised sessions keep their exact recorded rows, so a split reversal's float ulps
+    # cannot move an event price; revised sessions replay on the corrected values.
+    changes = bar_revisions(consumed, candles.bars)
+    known_bars = {bar['date']: bar for bar in consumed}
+    candles.bars[:] = [known_bars[bar['date']] if bar['date'] in known_bars and same_prices(known_bars[bar['date']], bar) else bar
+                       for bar in candles.bars]
+    result['consumedBars'] = candles.bars
     result['barsHash'] = digest(candles.bars)
     previous_events = {item['eventId']: item for item in previous.get('events', [])}
     def event(kind, bar, **fields):
@@ -50,16 +57,25 @@ def evaluate_forecast(forecast: dict, history, now: datetime) -> dict:
                                  'recordedAt': recorded, 'sessionClose': bar['sessionClose'],
                                  'policyVersion': POLICY_VERSION, **fields})
 
-    # Split reversal can introduce tiny floating differences. Once verified equal,
-    # replay the exact retained rows so existing event prices stay byte-for-byte stable.
-    retained = {bar['date']: bar for bar in previous.get('consumedBars', [])}
-    candles.bars[:] = [retained.get(bar['date'], bar) for bar in candles.bars]
-    result['consumedBars'] = candles.bars
-    result['barsHash'] = digest(candles.bars)
     if ta and ta['kind'] == 'setup':
         _evaluate_trade(ta, forecast['entryExpirySessions'], candles, result, event)
     _evaluate_horizons(forecast, candles, now, result)
+    _record_revision(forecast, previous, consumed, changes, result, now)
     return result
+
+
+def _record_revision(forecast, previous, consumed, changes, result, now):
+    """Carry earlier revision events forward and add one when this replay changed an outcome."""
+    result['events'].extend(item for item in previous.get('events', []) if item['type'] == 'revision')
+    result['revisions'] = list(previous.get('revisions', []))
+    if changes:
+        through = consumed[-1]['date'] if consumed else None
+        before, after = outcome_view(previous, through), outcome_view(result, through)
+        changed = outcome_changed(before, after)
+        result['revisions'].append({'recordedAt': now.isoformat(), 'bars': changes, 'outcomeChanged': changed})
+        if changed:
+            result['events'].append(revision_event(forecast['forecastId'], changes, before, after, now, POLICY_VERSION))
+    result['events'].sort(key=lambda item: item['date'])
 
 
 def _evaluate_trade(setup, entry_expiry, candles, result, event):

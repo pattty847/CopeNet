@@ -235,9 +235,17 @@ or returns; expose current-basis display equivalents without mutating the origin
 Use the shared split history, not a second vendor adjustment implementation. Missing or
 contradictory action history sets `revision_review` and blocks further scoring.
 
-If already-consumed history changes, preserve the earlier evaluation and append a revision
-notice. Build any corrected replay as an explicitly versioned evaluation; never silently
-overwrite a published result or combine old and corrected bars in one state transition.
+If already-consumed history changes, the current cache is authoritative: the whole trade
+replays on the corrected bars, never a blend of old and corrected bars. A revision is judged
+by its effect, not its size. When the replay reproduces every recorded event on the
+already-evaluated sessions and every resolved horizon, it passes quietly and is logged in
+`evaluation.revisions`. When it moves a fill, an exit or a resolved horizon, the new result
+is accepted and a visible `revision` event records the bars that changed plus the before and
+after outcome, so nothing is overwritten silently. Volume is never compared (no rule reads
+it). A previously evaluated session that disappears is a `data_gap` that holds the last
+evaluation until the bar returns. (Changed 2026-09-29: the earlier rule froze the forecast
+on ANY revision, and a two-cent vendor correction to one low froze the first live forecast
+for three weeks while price gapped through its stop.)
 
 ## Directional comparison and honest scorecards
 

@@ -161,15 +161,87 @@ def test_split_rebase_preserves_frozen_levels_and_consumed_history():
     assert result['events'][0]['recordedAt'] == item['evaluation']['events'][0]['recordedAt']
 
 
-def test_revised_consumed_history_retains_original_evaluation():
-    item = forecast()
-    item['evaluation'] = evaluate_forecast(item, history(), instant('2024-03-01T22:00:00'))
-    raw = history({'2024-01-03': (100, 101, 90, 100)})
-    result = evaluate_forecast(item, raw, instant('2024-03-02T22:00:00'))
-    assert result['health'] == 'revision_review'
+def evaluated(rows=None, at='2024-03-01T22:00:00', item=None):
+    item = item or forecast()
+    item['evaluation'] = evaluate_forecast(item, history(rows), instant(at))
+    return item
+
+
+def test_revision_that_changes_nothing_replays_quietly_on_the_corrected_bars():
+    item = evaluated()
+    result = evaluate_forecast(item, history({'2024-01-04': (100, 101, 98.98, 100)}), instant('2024-03-02T22:00:00'))
+    assert result['health'] == 'ready'
     assert result['state'] == item['evaluation']['state']
+    assert not [event for event in result['events'] if event['type'] == 'revision']
+    assert result['revisions'][-1]['outcomeChanged'] is False
+    assert result['revisions'][-1]['bars'] == [{'date': '2024-01-04', 'field': 'low', 'before': 99, 'after': 98.98}]
+    assert next(bar for bar in result['consumedBars'] if bar['date'] == '2024-01-04')['l'] == 98.98
+
+
+def test_revision_that_moves_an_exit_is_accepted_and_recorded_with_both_outcomes():
+    item = evaluated()
+    assert item['evaluation']['state'] == 'deadline_exit'
+    result = evaluate_forecast(item, history({'2024-01-05': (100, 101, 94, 96)}), instant('2024-03-02T22:00:00'))
+    assert result['health'] == 'ready'
+    assert result['state'] == 'stopped'
+    revision = next(event for event in result['events'] if event['type'] == 'revision')
+    assert revision['before']['state'] == 'deadline_exit'
+    assert revision['after']['state'] == 'stopped'
+    assert '2024-01-05 low 99 → 94' in revision['reason']
+    again = evaluate_forecast({**item, 'evaluation': result}, history({'2024-01-05': (100, 101, 94, 96)}), instant('2024-03-03T22:00:00'))
+    assert [event['eventId'] for event in again['events'] if event['type'] == 'revision'] == [revision['eventId']]
+    assert len(again['revisions']) == 1
+
+
+def test_revision_that_changes_a_resolved_horizon_is_recorded():
+    item = evaluated()
+    endpoint = item['evaluation']['horizons']['4w']['endpointDate']
+    assert item['evaluation']['horizons']['4w']['members']['ta']['outcome'] == 'push'
+    result = evaluate_forecast(item, history({endpoint: (100, 101, 99, 99.5)}), instant('2024-03-02T22:00:00'))
+    assert result['horizons']['4w']['members']['ta']['outcome'] == 'incorrect'
+    assert any(event['type'] == 'revision' for event in result['events'])
+
+
+def test_volume_revisions_are_not_price_revisions():
+    item = evaluated()
+    raw = history()
+    raw.bars[:] = [MarketBar(bar.t, bar.o, bar.h, bar.l, bar.c, bar.v + 5) for bar in raw.bars]
+    result = evaluate_forecast(item, raw, instant('2024-03-02T22:00:00'))
+    assert result['revisions'] == []
     assert result['consumedBars'] == item['evaluation']['consumedBars']
-    assert result['events'][-1]['type'] == 'revision_notice'
+
+
+def test_a_forecast_frozen_by_the_old_revision_rule_resumes_on_current_bars():
+    # Shape of a real case: a gap-up stop entry on day one, a cent-level vendor revision to
+    # that day's low, then a gap down through the stop. The old rule froze the trade at the
+    # entry and logged a notice every day; the replay scores the stop the market printed.
+    item = forecast()
+    item['members']['ta']['result'].update(entry={'kind': 'stop', 'price': 102}, stop=95, targets=[{'price': 115, 'fraction': 1.0}])
+    first = {'2024-01-03': (104, 106, 103.02, 104)}
+    item['evaluation'] = evaluate_forecast(item, history(first, until='2024-01-03', fetched='2024-01-03T22:00:00+00:00'), instant('2024-01-03T22:00:00'))
+    item['evaluation'].update(health='revision_review', reason='Previously consumed history changed or became unavailable; original evaluation retained')
+    item['evaluation']['events'].append({'eventId': 'legacy', 'type': 'revision_notice', 'date': '2024-01-04', 'recordedAt': '2024-01-04T22:00:00+00:00', 'reason': 'legacy'})
+    later = {'2024-01-03': (104, 106, 103.0, 104), '2024-01-10': (93, 94, 92, 93)}
+    result = evaluate_forecast(item, history(later), instant('2024-03-01T22:00:00'))
+    assert result['health'] == 'ready'
+    assert result['state'] == 'stopped'
+    assert result['entryPrice'] == 104
+    assert [event['type'] for event in result['events']] == ['entry', 'stop']
+    assert next(event for event in result['events'] if event['type'] == 'stop')['price'] == 93
+    assert result['revisions'][-1]['outcomeChanged'] is False
+
+
+def test_an_evaluated_session_that_disappears_holds_the_last_evaluation_until_it_returns():
+    item = evaluated()
+    raw = history()
+    raw.bars[:] = [bar for bar in raw.bars if datetime.fromtimestamp(bar.t, timezone.utc).date().isoformat() != '2024-01-04']
+    held = evaluate_forecast(item, raw, instant('2024-03-02T22:00:00'))
+    assert held['health'] == 'data_gap'
+    assert '2024-01-04' in held['reason']
+    assert held['state'] == item['evaluation']['state']
+    resumed = evaluate_forecast({**item, 'evaluation': held}, history(), instant('2024-03-03T22:00:00'))
+    assert resumed['health'] == 'ready'
+    assert resumed['revisions'] == []
 
 
 def test_reordered_and_duplicate_identical_bars_are_idempotent():
@@ -227,15 +299,6 @@ def test_missing_deadline_never_uses_an_older_close():
     assert result['state'] == 'active'
     assert result['horizons']['8w']['endpointClose'] is None
     assert result['horizons']['4w']['status'] == 'resolved'
-
-
-def test_revision_review_does_not_silently_resume_when_cache_changes_back():
-    item = forecast()
-    item['evaluation'] = evaluate_forecast(item, history(), instant('2024-03-01T22:00:00'))
-    item['evaluation'] = evaluate_forecast(item, history({'2024-01-03': (100, 101, 90, 100)}), instant('2024-03-02T22:00:00'))
-    result = evaluate_forecast(item, history(), instant('2024-03-03T22:00:00'))
-    assert result['health'] == 'revision_review'
-    assert result['reason']
 
 
 def test_gap_entry_uses_actual_price_but_original_planned_risk():
