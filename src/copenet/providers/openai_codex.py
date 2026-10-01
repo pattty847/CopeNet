@@ -4,12 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import re
 from typing import Any, AsyncIterator
 
 from copenet.core.provider_auth import OPENAI_CODEX_PROVIDER_ID, OpenAICodexAuthService
 from copenet.providers.base import ProviderEvent, ProviderModel
 from .codex_transport import stream_responses
+from .responses_stream import responses_safe_name, sanitize_input_function_names
 
 logger = logging.getLogger(__name__)
 
@@ -221,31 +221,6 @@ def _resolve_model(model: str | None) -> str:
     return normalized
 
 
-# Responses function names must match ^[a-zA-Z0-9_-]+$ (dots rejected — confirmed
-# live with HTTP 400). Must match copenet.core.tools.contracts.responses_safe_tool_name;
-# duplicated here as a one-liner to avoid a providers <-> core.tools import cycle.
-_RESPONSES_NAME_INVALID = re.compile(r"[^a-zA-Z0-9_-]")
-
-
-def _responses_safe_name(name: str) -> str:
-    return _RESPONSES_NAME_INVALID.sub("_", name)
-
-
-def _sanitize_input_function_names(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Return input[] with every function_call item's name made Responses-safe.
-
-    The messages array carries canonical dotted tool ids (for flatten/display);
-    only the names actually sent to the API are sanitized here. function_call and
-    function_call_output pair by call_id, not name, so this is safe.
-    """
-    out: list[dict[str, Any]] = []
-    for item in messages:
-        if isinstance(item, dict) and item.get("type") == "function_call" and item.get("name"):
-            item = {**item, "name": _responses_safe_name(str(item["name"]))}
-        out.append(item)
-    return out
-
-
 def _build_responses_payload(
     *,
     model: str,
@@ -257,7 +232,7 @@ def _build_responses_payload(
     parallel_tool_calls: bool,
 ) -> dict[str, Any]:
     safe_input = (
-        _sanitize_input_function_names(list(messages))
+        sanitize_input_function_names(list(messages))
         if messages
         else [{"role": "user", "content": [{"type": "input_text", "text": " "}]}]
     )
@@ -277,7 +252,7 @@ def _build_responses_payload(
         # arrive pre-sanitized from build_responses_tool_schemas).
         payload["tools"] = [
             (
-                {**tool, "name": _responses_safe_name(str(tool["name"]))}
+                {**tool, "name": responses_safe_name(str(tool["name"]))}
                 if isinstance(tool, dict) and tool.get("name")
                 else tool
             )

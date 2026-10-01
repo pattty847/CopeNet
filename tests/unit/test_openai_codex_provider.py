@@ -224,10 +224,10 @@ def test_openai_codex_payload_passes_caller_instructions_through() -> None:
 @pytest.mark.parametrize("content_type", ["text/event-stream", ""])
 def test_completed_body_uses_streamed_deltas_with_or_without_header(content_type):
     from io import BytesIO
-    from copenet.providers.codex_transport import classify_responses_body
-    from copenet.providers.codex_responses import parse_responses_sse
+    from copenet.providers.responses_stream import classify_responses_body
+    from copenet.providers.responses_stream import parse_responses_sse
     raw = b'data: {"type":"response.output_text.delta","delta":"hello"}\n\ndata: {"type":"response.completed","response":{"output":[]}}\n\n'
     kind, body = classify_responses_body(BytesIO(raw), content_type)
     assert kind == "sse"
-    events = list(parse_responses_sse(response=body, abort_event=asyncio.Event()))
+    events = list(parse_responses_sse(response=body, abort_event=asyncio.Event(), label="openai-codex"))
     assert [e.text for e in events if e.kind == "delta"] == ["hello"]

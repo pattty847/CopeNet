@@ -1,8 +1,13 @@
-"""Responses protocol state: terminal authorization and item-scoped output."""
+"""Responses protocol state: terminal authorization and item-scoped output.
+
+Shared by every provider that speaks the OpenAI Responses stream (openai-codex,
+lm-studio). `label` is the provider id that error messages name.
+"""
 
 from __future__ import annotations
 import asyncio
 import json
+import re
 from dataclasses import dataclass, field
 from http.client import IncompleteRead
 from typing import Any, Iterator
@@ -16,13 +21,38 @@ _REASONING_DELTAS = {
 }
 
 
-def failure_message(event: dict) -> str:
+# Responses function names must match ^[a-zA-Z0-9_-]+$ (dots rejected — confirmed
+# live with HTTP 400). Must match copenet.core.tools.contracts.responses_safe_tool_name;
+# duplicated here as a one-liner to avoid a providers <-> core.tools import cycle.
+_RESPONSES_NAME_INVALID = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def responses_safe_name(name: str) -> str:
+    return _RESPONSES_NAME_INVALID.sub("_", name)
+
+
+def sanitize_input_function_names(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Return input[] with every function_call item's name made Responses-safe.
+
+    The messages array carries canonical dotted tool ids (for flatten/display);
+    only the names actually sent to the API are sanitized here. function_call and
+    function_call_output pair by call_id, not name, so this is safe.
+    """
+    out: list[dict[str, Any]] = []
+    for item in messages:
+        if isinstance(item, dict) and item.get("type") == "function_call" and item.get("name"):
+            item = {**item, "name": responses_safe_name(str(item["name"]))}
+        out.append(item)
+    return out
+
+
+def failure_message(event: dict, label: str) -> str:
     response = event.get("response") or {}
     error = event.get("error") or response.get("error") or {}
-    return error.get("message") or event.get("message") or "openai-codex request failed"
+    return error.get("message") or event.get("message") or f"{label} request failed"
 
 
-def decode_event(raw: bytes | str) -> dict | None:
+def decode_event(raw: bytes | str, label: str) -> dict | None:
     line = raw.decode("utf-8", errors="replace") if isinstance(raw, bytes) else raw
     if not line.startswith("data:"):
         return None
@@ -32,14 +62,15 @@ def decode_event(raw: bytes | str) -> dict | None:
     try:
         event = json.loads(data)
     except json.JSONDecodeError as exc:
-        raise RuntimeError("openai-codex returned malformed SSE data") from exc
+        raise RuntimeError(f"{label} returned malformed SSE data") from exc
     if not isinstance(event, dict):
-        raise RuntimeError("openai-codex returned invalid SSE data")
+        raise RuntimeError(f"{label} returned invalid SSE data")
     return event
 
 
 @dataclass
 class ResponseState:
+    label: str
     calls: dict[str, dict[str, str]] = field(default_factory=dict)
     completed_calls: set[str] = field(default_factory=set)
     reasoning_text: dict[tuple[str, str, int], str] = field(default_factory=dict)
@@ -52,7 +83,7 @@ class ResponseState:
         source = _REASONING_DELTAS[event["type"]]
         delta = event.get("delta", "")
         if not isinstance(delta, str):
-            raise RuntimeError("openai-codex returned invalid reasoning text")
+            raise RuntimeError(f"{self.label} returned invalid reasoning text")
         if delta:
             key = (
                 event.get("item_id", ""),
@@ -89,13 +120,13 @@ class ResponseState:
     def add_call(self, item: dict, *, complete: bool) -> None:
         item_id = item.get("id")
         if not isinstance(item_id, str) or not item_id:
-            raise RuntimeError("openai-codex function call has no item id")
+            raise RuntimeError(f"{self.label} function call has no item id")
         if item_id in self.completed_calls:
             return
         tracked = self.calls.get(item_id, {})
         call = {key: item.get(key) or tracked.get(key, "") for key in ("id", "call_id", "name", "arguments")}
         if not all(isinstance(value, str) for value in call.values()):
-            raise RuntimeError("openai-codex returned invalid function call fields")
+            raise RuntimeError(f"{self.label} returned invalid function call fields")
         self.calls[item_id] = call
         if complete:
             self.completed_calls.add(item_id)
@@ -133,7 +164,7 @@ class ResponseState:
         if event_type == "response.output_text.delta":
             delta = event.get("delta", "")
             if not isinstance(delta, str):
-                raise RuntimeError("openai-codex returned invalid output text")
+                raise RuntimeError(f"{self.label} returned invalid output text")
             if delta:
                 self.saw_text_delta = True
                 yield ProviderEvent(kind="delta", text=delta)
@@ -146,35 +177,35 @@ class ResponseState:
         elif event_type == "response.function_call_arguments.delta":
             call = self.calls.get(event.get("item_id"))
             if call is None:
-                raise RuntimeError("openai-codex arguments have no matching function call")
+                raise RuntimeError(f"{self.label} arguments have no matching function call")
             call["arguments"] += event.get("delta", "")
         elif event_type == "response.output_item.done":
             yield from self.output_item(event.get("item", {}))
         elif event_type in {"response.failed", "error"}:
-            raise RuntimeError(failure_message(event))
+            raise RuntimeError(failure_message(event, self.label))
         elif event_type == "response.incomplete":
-            raise RuntimeError("openai-codex response incomplete")
+            raise RuntimeError(f"{self.label} response incomplete")
 
     def finish(self, response: dict) -> Iterator[ProviderEvent]:
         if response.get("status", "completed") != "completed":
-            raise RuntimeError("openai-codex response incomplete")
+            raise RuntimeError(f"{self.label} response incomplete")
         for item in response.get("output", []):
             yield from self.output_item(item)
         # Added+deltas alone are not a completed function call. Recovery requires
         # an authoritative item in the successful terminal response's output.
         if set(self.calls) - self.completed_calls:
-            raise RuntimeError("openai-codex response contains incomplete function calls")
+            raise RuntimeError(f"{self.label} response contains incomplete function calls")
         if not self.saw_text_delta and not self.text_items and response.get("output_text"):
             yield ProviderEvent(kind="delta", text=response["output_text"])
         for call in self.calls.values():
             if not call["name"] or not call["call_id"]:
-                raise RuntimeError("openai-codex function call has no name or call id")
+                raise RuntimeError(f"{self.label} function call has no name or call id")
             try:
                 arguments = json.loads(call["arguments"])
             except json.JSONDecodeError as exc:
-                raise RuntimeError("openai-codex function call arguments are incomplete") from exc
+                raise RuntimeError(f"{self.label} function call arguments are incomplete") from exc
             if not isinstance(arguments, dict):
-                raise RuntimeError("openai-codex function call arguments must be an object")
+                raise RuntimeError(f"{self.label} function call arguments must be an object")
         for call in self.calls.values():
             yield ProviderEvent(kind="meta", metadata={"responsesFunctionCall": dict(call)})
         usage = responses_usage_event(response.get("usage"))
@@ -197,13 +228,13 @@ def responses_usage_event(usage) -> ProviderEvent | None:
     )
 
 
-def parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterator[ProviderEvent]:
-    state = ResponseState()
+def parse_responses_sse(*, response: Any, abort_event: asyncio.Event, label: str) -> Iterator[ProviderEvent]:
+    state = ResponseState(label=label)
     try:
         for raw in response:
             if abort_event.is_set():
                 return
-            event = decode_event(raw)
+            event = decode_event(raw, label)
             if event is None:
                 continue
             yield from state.consume(event)
@@ -212,15 +243,70 @@ def parse_responses_sse(*, response: Any, abort_event: asyncio.Event) -> Iterato
                 return
     except IncompleteRead as exc:
         if not abort_event.is_set():
-            raise RuntimeError("openai-codex stream ended incomplete") from exc
+            raise RuntimeError(f"{label} stream ended incomplete") from exc
     if not abort_event.is_set():
-        raise RuntimeError("openai-codex stream ended incomplete")
+        raise RuntimeError(f"{label} stream ended incomplete")
 
 
-def parse_responses_json(raw: str) -> Iterator[ProviderEvent]:
+def parse_responses_json(raw: str, *, label: str) -> Iterator[ProviderEvent]:
     response = json.loads(raw)
     if not isinstance(response, dict) or response.get("status") != "completed":
-        raise RuntimeError("openai-codex JSON response incomplete")
-    state = ResponseState()
+        raise RuntimeError(f"{label} JSON response incomplete")
+    state = ResponseState(label=label)
     yield from state.consume({"type": "response.created", "response": response})
     yield from state.finish(response)
+
+
+def classify_responses_body(response: Any, content_type: str) -> tuple[str, Any]:
+    """Decide whether the body should be streamed as SSE or parsed as JSON.
+
+    Returns ``("sse", iterable_of_lines)`` for SSE bodies and
+    ``("json", raw_text)`` otherwise. The live codex backend sometimes returns
+    SSE bodies with a missing or non-event-stream Content-Type header, so we
+    sniff the first non-blank line when the header is ambiguous.
+    """
+    if "text/event-stream" in content_type.lower():
+        return "sse", response
+    buffered: list[Any] = []
+    while True:
+        line = response.readline()
+        if not line:
+            break
+        text_line = (
+            line.decode("utf-8", errors="replace") if isinstance(line, (bytes, bytearray)) else str(line)
+        )
+        buffered.append(line)
+        if text_line.strip():
+            stripped = text_line.lstrip()
+            if stripped.startswith("event:") or stripped.startswith("data:"):
+                return "sse", _ChainedLines(buffered, response)
+            # Not SSE — fall through and assemble JSON body below.
+            break
+    remaining = response.read() if hasattr(response, "read") else b""
+    full = _join_lines(buffered + [remaining]) if remaining else _join_lines(buffered)
+    if isinstance(full, (bytes, bytearray)):
+        return "json", full.decode("utf-8", errors="replace")
+    return "json", str(full)
+
+
+def _join_lines(parts: list[Any]) -> Any:
+    if not parts:
+        return b""
+    if any(isinstance(p, (bytes, bytearray)) for p in parts):
+        return b"".join(p if isinstance(p, (bytes, bytearray)) else str(p).encode("utf-8") for p in parts)
+    return "".join(str(p) for p in parts)
+
+
+class _ChainedLines:
+    """Iterates the buffered prelude lines then the remaining lines of ``response``."""
+
+    def __init__(self, buffered: list[Any], response: Any) -> None:
+        self._buffered = list(buffered)
+        self._response = response
+
+    def __iter__(self) -> Iterator[Any]:
+        for line in self._buffered:
+            yield line
+        self._buffered = []
+        for line in self._response:
+            yield line

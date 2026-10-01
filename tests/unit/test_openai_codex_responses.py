@@ -6,7 +6,7 @@ import asyncio
 import json
 
 from copenet.providers.openai_codex import _build_responses_payload
-from copenet.providers.codex_responses import parse_responses_sse
+from copenet.providers.responses_stream import parse_responses_sse
 
 
 def _sse(events: list[dict]) -> list[bytes]:
@@ -105,7 +105,7 @@ def testparse_responses_sse_matches_reasoning_delta_name_variants() -> None:
         "response.reasoning.delta",
     ):
         events = _sse([{"type": ev_type, "delta": "mid-thought"}, {"type": "response.completed", "response": {}}])
-        out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+        out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
         assert any(e.kind == "reasoning_delta" and e.text == "mid-thought" for e in out), ev_type
         reasoning = next(e for e in out if e.kind == "reasoning_delta")
         expected_source = "raw" if ev_type == "response.reasoning_text.delta" else "summary"
@@ -131,7 +131,7 @@ def testparse_responses_sse_emits_text_reasoning_and_function_call() -> None:
             {"type": "response.completed", "response": {"id": "resp_0"}},
         ]
     )
-    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
     kinds = [e.kind for e in out]
     assert "reasoning_delta" in kinds
     text = "".join(e.text or "" for e in out if e.kind == "delta")
@@ -156,7 +156,7 @@ def testparse_responses_sse_flushes_function_call_without_done() -> None:
             {"type": "response.completed", "response": {"output": [{"type": "function_call", "id": "fc_1", "call_id": "call_1", "name": "shell.exec", "arguments": '{"command":"ls"}'}]}},
         ]
     )
-    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
     fcs = [e.metadata["responsesFunctionCall"] for e in out if e.kind == "meta" and e.metadata and e.metadata.get("responsesFunctionCall")]
     assert len(fcs) == 1
     assert fcs[0]["name"] == "shell.exec"
@@ -183,7 +183,7 @@ def testparse_responses_sse_surfaces_reasoning_output_item() -> None:
             {"type": "response.completed", "response": {}},
         ]
     )
-    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
     assert any(e.kind == "reasoning_delta" and "read the file" in (e.text or "") for e in out)
     replay = next(e.metadata["responsesOutputItem"] for e in out if e.metadata and e.metadata.get("responsesOutputItem"))
     assert replay["id"] == "rs_0"
@@ -206,7 +206,7 @@ def testparse_responses_sse_preserves_assistant_phase_for_replay() -> None:
         ]
     )
 
-    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
 
     replay_items = [e.metadata["responsesOutputItem"] for e in out if e.metadata and e.metadata.get("responsesOutputItem")]
     assert replay_items == [message]
@@ -233,7 +233,7 @@ def testparse_responses_sse_does_not_double_emit_streamed_reasoning() -> None:
             {"type": "response.completed", "response": {}},
         ]
     )
-    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+    out = list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
     reasoning = [e for e in out if e.kind == "reasoning_delta"]
     # Two streamed deltas, and the redundant output_item must be suppressed.
     assert len(reasoning) == 2
@@ -245,7 +245,7 @@ def testparse_responses_sse_raises_on_failure_event() -> None:
     import pytest
 
     with pytest.raises(RuntimeError, match="boom"):
-        list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event()))
+        list(parse_responses_sse(response=iter(events), abort_event=asyncio.Event(), label="openai-codex"))
 
 
 def testclassify_responses_body_sniffs_sse_when_header_missing() -> None:
@@ -255,8 +255,8 @@ def testclassify_responses_body_sniffs_sse_when_header_missing() -> None:
     Regression for the "openai-codex returned no assistant text" failure mode.
     """
     from io import BytesIO
-    from copenet.providers.codex_transport import classify_responses_body
-    from copenet.providers.codex_responses import parse_responses_sse
+    from copenet.providers.responses_stream import classify_responses_body
+    from copenet.providers.responses_stream import parse_responses_sse
 
     body = (
         b"\n"
@@ -288,7 +288,7 @@ def testclassify_responses_body_sniffs_sse_when_header_missing() -> None:
 
     kind, payload = classify_responses_body(_LineStream(body), content_type="")
     assert kind == "sse"
-    events = list(parse_responses_sse(response=payload, abort_event=asyncio.Event()))
+    events = list(parse_responses_sse(response=payload, abort_event=asyncio.Event(), label="openai-codex"))
     assert any(
         e.kind == "meta" and e.metadata and isinstance(e.metadata.get("responsesFunctionCall"), dict)
         and e.metadata["responsesFunctionCall"].get("name") == "files_read"
@@ -298,7 +298,7 @@ def testclassify_responses_body_sniffs_sse_when_header_missing() -> None:
 
 def testclassify_responses_body_returns_json_for_non_sse() -> None:
     from io import BytesIO
-    from copenet.providers.codex_transport import classify_responses_body
+    from copenet.providers.responses_stream import classify_responses_body
 
     class _LineStream:
         def __init__(self, raw: bytes) -> None:
@@ -319,7 +319,7 @@ def testclassify_responses_body_returns_json_for_non_sse() -> None:
 
 def test_completed_response_usage_is_forwarded_as_token_usage() -> None:
     from copenet.providers import TOKEN_USAGE_META_KEY
-    from copenet.providers.codex_responses import parse_responses_json
+    from copenet.providers.responses_stream import parse_responses_json
 
     response = {
         "status": "completed", "model": "gpt-5.5", "output": [
@@ -329,7 +329,7 @@ def test_completed_response_usage_is_forwarded_as_token_usage() -> None:
                   "output_tokens": 1830, "output_tokens_details": {"reasoning_tokens": 512}, "total_tokens": 53909},
     }
 
-    events = list(parse_responses_json(json.dumps(response)))
+    events = list(parse_responses_json(json.dumps(response), label="openai-codex"))
     usage = [event.metadata[TOKEN_USAGE_META_KEY] for event in events
              if event.kind == "meta" and event.metadata and TOKEN_USAGE_META_KEY in event.metadata]
 

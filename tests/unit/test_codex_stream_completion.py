@@ -3,13 +3,13 @@
 import asyncio
 import json
 import pytest
-from copenet.providers.codex_responses import parse_responses_sse
+from copenet.providers.responses_stream import parse_responses_sse
 
 
 def parse(events, abort=None):
     return list(
         parse_responses_sse(
-            response=(f"data: {json.dumps(e)}".encode() for e in events), abort_event=abort or asyncio.Event()
+            response=(f"data: {json.dumps(e)}".encode() for e in events), abort_event=abort or asyncio.Event(), label="openai-codex"
         )
     )
 
@@ -34,6 +34,7 @@ def test_incomplete_response_never_releases_calls(suffix):
                 for e in [{"type": "response.output_item.done", "item": call()}, *suffix]
             ),
             abort_event=asyncio.Event(),
+            label="openai-codex",
         ):
             seen.append(event)
     assert not any((e.metadata or {}).get("responsesFunctionCall") for e in seen)
@@ -47,7 +48,7 @@ def test_abort_discards_pending_calls():
         abort.set()
         yield b'data: {"type":"response.completed"}'
 
-    out = list(parse_responses_sse(response=stream(), abort_event=abort))
+    out = list(parse_responses_sse(response=stream(), abort_event=abort, label="openai-codex"))
     assert not any((e.metadata or {}).get("responsesFunctionCall") for e in out)
 
 
