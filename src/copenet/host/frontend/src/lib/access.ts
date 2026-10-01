@@ -6,9 +6,9 @@
 //   - `full-access` → Full Access (writes + unrestricted shell)
 // Behavioral presets (planning/debug/code-review/refactor) are Profile concerns now.
 //
-// Every registered provider may be granted Full Access (the local runtimes that were
-// denied it were removed 2026-09-13); the server enforces Access in
-// src/copenet/core/tools/policy.py regardless of what the UI offers.
+// Every registered provider, local lm-studio models included, may be granted Full Access;
+// the server enforces Access in src/copenet/core/tools/policy.py regardless of what the
+// UI offers.
 
 export interface AccessOption {
   id: string;

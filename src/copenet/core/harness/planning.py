@@ -64,9 +64,9 @@ async def plan_turn(
         prompted_tool_use=caps.get("promptedToolUse", caps.get("toolCalls", False)),
         responses_api=caps.get("responsesApi", False),
     )
-    # Two lanes: the native Responses-API loop when the provider declares it
-    # (openai-codex), otherwise the prompted text protocol (claude-cli), else none.
-    # The Chat Completions loop was removed with the local runtimes (2026-09-13).
+    # Two loops: the native Responses-API loop when the provider declares it
+    # (openai-codex, lm-studio), otherwise the prompted text protocol (claude-cli),
+    # else none. A new provider joins one of these; it does not get a third loop.
     use_responses_tools = bool(tools and profile.responses_api)
     use_prompted_tools = bool(tools and not use_responses_tools and profile.prompted_tool_use)
     if use_responses_tools:

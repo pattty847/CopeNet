@@ -8,7 +8,7 @@ from typing import Protocol
 
 from copenet.core.model_request import ProviderTextRequest, collect_provider_text
 from copenet.prompts import PromptPurpose
-from copenet.providers import OpenAICodexProvider, Provider
+from copenet.providers import LmStudioProvider, OpenAICodexProvider, Provider
 
 from .models import ActionDecision, BROWSER_ACTION_JSON_SCHEMA, BrowserAction, PageState
 
@@ -152,6 +152,8 @@ def provider_from_name(name: str) -> Provider:
     normalized = name.strip().lower()
     if normalized in {"copenet", "codex", "openai-codex"}:
         return OpenAICodexProvider()
+    if normalized in {"lmstudio", "lm-studio"}:
+        return LmStudioProvider()
     raise ValueError(f"unknown browser-agent provider: {name}")
 
 

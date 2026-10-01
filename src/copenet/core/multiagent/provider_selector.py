@@ -41,8 +41,8 @@ class ProviderRoleMap:
     """Maps abstract orchestration roles to concrete CopeNet provider ids.
 
     Heavy lifting -> openai-codex, thinking -> claude-cli. Breadth has no default
-    provider since the local runtimes were removed (2026-09-13); an empty role is
-    skipped, and callers may still map it to a registered provider.
+    provider; an empty role is skipped, and callers may map it to any registered
+    provider (lm-studio included).
     """
 
     heavy_lifting: str = "openai-codex"

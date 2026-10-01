@@ -18,7 +18,8 @@ The current product direction is:
 
 - sessions lock provider/profile/persona/workspace after first send; the operator may
   change model within that provider and may change Access
-- two frontier lanes, Codex and Claude CLI; the local runtimes (LM Studio, Ollama) were removed 2026-09-13 as unused
+- two frontier lanes, Codex and Claude CLI, plus LM Studio for local models; LM Studio speaks
+  the Responses API, so it runs on the same tool loop as Codex rather than a loop of its own
 - prompt behavior should be layered but simple
 - harness/tooling should stay provider-agnostic
 
@@ -46,7 +47,7 @@ The current product direction is:
 | Web ingest     | `src/copenet/core/web_ingest.py`             | Web URL ingestion service |
 | External apps  | `src/copenet/core/apps/`                     | Bearer-token registry for `/api/v1` consumers |
 | Provider auth  | `src/copenet/core/provider_auth/`            | Provider-owned auth state (e.g. OpenAI Codex OAuth) |
-| Providers      | `src/copenet/providers/`                     | Adapters: `claude-cli`, `openai-codex` |
+| Providers      | `src/copenet/providers/`                     | Adapters: `claude-cli`, `openai-codex`, `lm-studio` |
 | CLI runner     | `src/copenet/runner/cli_runner.py`           | Shared CLI subprocess runner used by Codex/Claude CLI providers |
 | Prompts        | `src/copenet/prompts/`                       | Profile + Access-overlay loaders, optimizer, preset markdown |
 | Client         | `src/copenet/client.py`                      | Programmatic GatewayClient |

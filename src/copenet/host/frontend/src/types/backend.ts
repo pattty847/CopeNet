@@ -358,6 +358,9 @@ export interface Provider {
   authInstructions?: string;
   authStatusError?: string;
   capabilities?: Record<string, boolean>;
+  // Local runtimes (lm-studio): where the server is and what is loaded right now.
+  baseUrl?: string;
+  loadedModels?: { id: string; contextLength: number | null }[];
 }
 
 export interface Model {

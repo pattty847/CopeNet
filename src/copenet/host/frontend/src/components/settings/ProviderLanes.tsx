@@ -4,6 +4,9 @@ import { useProviderReadiness } from './useProviderReadiness';
 
 const CLAUDE_SETUP_URL = 'https://docs.anthropic.com/en/docs/claude-code/getting-started';
 
+// Below this the harness's own instructions and tool schemas crowd out the conversation.
+const LM_STUDIO_MIN_CONTEXT = 16_384;
+
 const code = 'self-start rounded border border-shell-border bg-shell-canvas px-1.5 py-1 font-mono text-[11px] text-shell-text';
 
 function Lane({ title, ready, children }: { title: string; ready: boolean; children: React.ReactNode }) {
@@ -18,10 +21,10 @@ function Lane({ title, ready, children }: { title: string; ready: boolean; child
   );
 }
 
-/** Both provider lanes with their setup steps. Home shows these only until one is ready;
+/** Every provider lane with its setup steps. Home shows these only until one is ready;
  *  after that they live in Settings, where a connected lane also offers sign-out. */
 export function ProviderLanes({ columns = 2 }: { columns?: 1 | 2 }) {
-  const { codexReady, claudeReady, claudeInstalled } = useProviderReadiness();
+  const { codexReady, claudeReady, claudeInstalled, lmStudio, lmStudioReady } = useProviderReadiness();
 
   return (
     <div className="flex flex-col gap-2.5">
@@ -52,6 +55,20 @@ export function ProviderLanes({ columns = 2 }: { columns?: 1 | 2 }) {
             </>
           )}
         </Lane>
+
+        {lmStudio && (
+          <Lane title="Local · LM Studio" ready={lmStudioReady}>
+            {lmStudioReady ? (
+              <LmStudioLoaded models={lmStudio.loadedModels ?? []} />
+            ) : (
+              <>
+                <p>Not reachable. Start the LM Studio server; on another machine, turn on Serve on Local Network and point CopeNet at it.</p>
+                <code className={code}>COPNET_LM_STUDIO_BASE_URL=http://&lt;gpu-host&gt;:1234</code>
+              </>
+            )}
+            {lmStudio.baseUrl && <span className="font-mono text-[11px]">{lmStudio.baseUrl}</span>}
+          </Lane>
+        )}
       </div>
       {!codexReady && (
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-shell-muted">
@@ -60,5 +77,27 @@ export function ProviderLanes({ columns = 2 }: { columns?: 1 | 2 }) {
         </div>
       )}
     </div>
+  );
+}
+
+function LmStudioLoaded({ models }: { models: { id: string; contextLength: number | null }[] }) {
+  if (models.length === 0) {
+    return <p>Connected, nothing loaded. Load a model in LM Studio, or pick one in a new chat and LM Studio loads it on first use.</p>;
+  }
+  return (
+    <ul className="flex flex-col gap-1">
+      {models.map((model) => {
+        const short = model.contextLength !== null && model.contextLength < LM_STUDIO_MIN_CONTEXT;
+        return (
+          <li key={model.id} className="flex flex-col">
+            <span className="font-mono text-[11px] text-shell-text">{model.id}</span>
+            <span className={short ? 'text-shell-error' : undefined}>
+              {model.contextLength === null ? 'context unknown' : `${model.contextLength.toLocaleString()} token context`}
+              {short && ' — reload it with at least 16K, or tool turns will drop history'}
+            </span>
+          </li>
+        );
+      })}
+    </ul>
   );
 }

@@ -22,6 +22,14 @@ Provider/runtime capabilities as of 2026-09-13. Update it whenever provider beha
 - Claude Code's built-in tools are disabled (`--tools ""`) and settings sources isolated, so CopeNet remains the tool and permission authority
 - conversation continuity uses Claude's own session resume; Claude Code's internal context compaction runs on its side, invisible to CopeNet's trace
 
+### `lm-studio`
+
+- local models over LM Studio's OpenAI-compatible `/v1/responses`, so it runs on the same Responses tool loop as `openai-codex` (function tools, `function_call_output` replay, activity titles, `tools.load`, provider-reported usage)
+- the server may live on another machine: `COPNET_LM_STUDIO_BASE_URL` (default `http://127.0.0.1:1234`), with LM Studio's Serve on Local Network turned on
+- the model list comes from LM Studio's native `/api/v1/models`; a loaded model's budget uses the context it was LOADED with (LM Studio defaults to 4096), not the architecture maximum — load coding models with 16K+ or tool turns drop history
+- `reasoning` and `prompt_cache_key` are not sent: both are model- or vendor-specific and would be guesses on an arbitrary local model
+- Access is the only gate, same as the other lanes
+
 ## Removed lanes
 
-`lm-studio` and `ollama` (local HTTP runtimes) and `codex-cli` (Codex CLI subprocess) were removed. The local runtimes were never granted Full Access and were the only users of the Chat Completions tool loop; `codex-cli` was superseded by the OAuth lane. Git history keeps the adapters.
+`ollama` (local HTTP runtime), the Chat Completions tool loop that served it and the old `lm-studio` adapter, and `codex-cli` (Codex CLI subprocess) were removed. LM Studio came back on the Responses loop; `codex-cli` was superseded by the OAuth lane. Git history keeps the adapters.

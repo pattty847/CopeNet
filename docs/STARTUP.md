@@ -30,11 +30,17 @@ there is no required sibling repository.
 uv run copenet
 ```
 
-Open `http://127.0.0.1:17123`. The Home page presents both supported paths and
-their live readiness state:
+Open `http://127.0.0.1:17123`. The Home page presents every supported path and
+its live readiness state:
 
 - **OpenAI Codex:** click **Start OpenAI OAuth** and finish in the browser.
 - **Claude CLI:** install Claude Code if needed, then run `claude auth login`.
+- **LM Studio (local models):** start LM Studio's server (Developer tab, or
+  `lms server start`). When LM Studio runs on another machine, turn on **Serve on
+  Local Network** there and start CopeNet with
+  `COPNET_LM_STUDIO_BASE_URL=http://<that-host>:1234`. Load models with at least
+  16K context; LM Studio's default of 4096 leaves no room for history once the
+  harness instructions and tool schemas are in.
 
 Only one provider needs to be ready. Terminal-only OpenAI setup remains available:
 

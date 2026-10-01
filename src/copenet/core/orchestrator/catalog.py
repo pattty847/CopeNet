@@ -8,7 +8,7 @@ from typing import TYPE_CHECKING
 
 from copenet.core.orchestrator.starter_intent import normalize_starter_intent, starter_intent_tags
 from copenet.core.sessions import SessionStateRecord
-from copenet.providers import ClaudeCliProvider, OpenAICodexProvider, Provider
+from copenet.providers import ClaudeCliProvider, LmStudioProvider, OpenAICodexProvider, Provider
 
 if TYPE_CHECKING:
     from . import Orchestrator
@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
 _PROVIDER_CLASSES: tuple[type, ...] = (
     ClaudeCliProvider,
+    LmStudioProvider,
     OpenAICodexProvider,
 )
 
@@ -31,8 +32,9 @@ def build_default_provider_registry() -> tuple[dict[str, Provider], dict[str, st
     except Exception as exc:
         init_errors["claude-cli"] = str(exc)
     providers["openai-codex"] = OpenAICodexProvider()
-    # lm-studio and ollama were removed 2026-09-13: never used in practice, never
-    # granted Full Access, and they were the only reason a third tool loop existed.
+    # LM Studio speaks the Responses API, so it runs on the openai-codex tool loop.
+    # The server is often a GPU box elsewhere on the tailnet: COPNET_LM_STUDIO_BASE_URL.
+    providers["lm-studio"] = LmStudioProvider()
     return providers, init_errors
 
 

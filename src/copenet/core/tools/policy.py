@@ -67,8 +67,9 @@ def policy_for_task_mode(task_prompt_id: str | None) -> ToolPolicy:
                         anything outside it (approval is the gate)
       - anything else → read-only (the default)
 
-    Every registered provider is a frontier lane now (the local runtimes that were
-    denied Full Access were removed 2026-09-13), so Access is the only gate.
+    Access is the only gate, for every provider including local lm-studio models:
+    the operator picks it per session, and a small local model is exactly what the
+    coding benchmark needs to exercise with writes.
     """
     normalized = (task_prompt_id or "none").strip().lower() or "none"
     base = {"repo-read", "shell-read", "context", "artifact", "web"}
