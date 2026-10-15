@@ -68,7 +68,7 @@ class StooqArchive:
         return len(self.paths)
 
     def read(self, symbol: str, *, limit: int | None = None) -> list[StooqBar]:
-        """Bars for one symbol, oldest first. Unparseable rows are skipped, not guessed."""
+        """Bars for one symbol, oldest first. Unparsable rows are skipped, not guessed."""
         path = self.paths.get(symbol.strip().upper())
         if path is None:
             return []
