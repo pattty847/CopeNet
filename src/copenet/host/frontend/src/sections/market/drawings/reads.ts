@@ -29,7 +29,7 @@ export interface DrawingRead {
 
 /** The operator says "the red line"; the nearest palette name is what lets the model resolve it. */
 export function colorName(hex: string): string {
-  // Registry colors are not all six-digit hex; an unparseable one travels as written.
+  // Registry colors are not all six-digit hex; an unparsable one travels as written.
   if (!/^#[0-9a-f]{6}$/i.test(hex)) return hex;
   const value = parseInt(hex.slice(1), 16);
   const rgb = [(value >> 16) & 255, (value >> 8) & 255, value & 255];
