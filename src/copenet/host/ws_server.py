@@ -73,7 +73,7 @@ class CopeNetWsServer:
                 continue
 
     async def handle(self, websocket: WebSocket) -> None:
-        """Accept and serve one websocket session."""
+        """Accept and serve one WebSocket session."""
         origin = websocket.headers.get("origin")
         if origin is not None and origin not in _allowed_websocket_origins(websocket):
             await websocket.close(code=1008)
